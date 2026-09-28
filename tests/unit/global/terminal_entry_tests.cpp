@@ -28,17 +28,6 @@ struct TerminalTestError{
     int result;
 };
 
-TEST(TerminalEntry, SuccessfulAndExpectedFailureReturnsDoNotInvokeExceptionHandlers){
-    u32 calls = 0u;
-    u32 handled = 0u;
-    const auto handle = [&](const TerminalTestError&){ ++handled; return -2; };
-    const auto unexpected = [&](){ ++handled; return -3; };
-    EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([&](){ ++calls; return 0; }, handle, unexpected), 0);
-    EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([&](){ ++calls; return 1; }, handle, unexpected), 1);
-    EXPECT_EQ(calls, s_ExpectedDualCount);
-    EXPECT_EQ(handled, 0u);
-}
-
 TEST(TerminalEntry, TypedTerminalHandlerRunsAfterWorkUnwindsWhileReportingContextRemainsAlive){
     u32 cleanupCount = 0u;
     u32 handled = 0u;

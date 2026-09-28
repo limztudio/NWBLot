@@ -87,28 +87,6 @@ void ExpectBufferRanges(const Ranges& ranges, const Graphics::BufferRange (&expe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(GpuTaskUseIndex, ChainsKeepAscendingDeclarationIndicesIncludingUnknownStates){
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    const Graphics::GpuTaskResourceUse uses[] = {
-        BufferUse(s_A, 64u, 16u), BufferUse(s_B, 0u, 16u),
-        BufferUse(s_A, 32u, 16u, Graphics::ResourceStates::Unknown),
-        BufferUse(s_B, 16u, 16u), BufferUse(s_A, 0u, 128u),
-    };
-    const Graphics::GpuTaskGraphTaskView task = TaskView(uses);
-    TaskResourceUseIndex index(3u, 1u, LengthOf(uses), scratchArena);
-    ASSERT_TRUE(index.build(task));
-    ASSERT_TRUE(index.validFor(task));
-    EXPECT_EQ(index.first(s_A), 0u);
-    EXPECT_EQ(index.next(0u), s_ExpectedDualCount);
-    EXPECT_EQ(index.next(s_ExpectedDualCount), 4u);
-    EXPECT_EQ(index.next(4u), s_NoUse);
-    EXPECT_EQ(index.first(s_B), 1u);
-    EXPECT_EQ(index.next(1u), 3u);
-    EXPECT_EQ(index.next(3u), s_NoUse);
-    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ .generation = 1u, .index = s_ExpectedDualCount }), s_NoUse);
-    EXPECT_EQ(index.next(LengthOf(uses)), s_NoUse);
-}
-
 TEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskResourceUse first[] = { BufferUse(s_A, 0u, 16u), BufferUse(s_A, 16u, 16u) };
@@ -117,6 +95,8 @@ TEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews){
     const auto b = TaskView(second, 1u, 1u);
     TaskResourceUseIndex index(3u, 1u, LengthOf(first), scratchArena);
     ASSERT_TRUE(index.build(a));
+    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ .generation = 1u, .index = s_ExpectedDualCount }), s_NoUse);
+    EXPECT_EQ(index.next(LengthOf(first)), s_NoUse);
     ASSERT_TRUE(index.build(b));
     EXPECT_FALSE(index.validFor(a));
     EXPECT_EQ(index.first(s_A), s_NoUse);

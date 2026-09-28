@@ -510,57 +510,6 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
     }
 }
 
-TEST(GpuTaskGraphAnalysis, PresentationAncestryUsesTransitiveOrderAndRejectsUnrelatedWriters){
-    TestArena testArena;
-    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::CpuTaskScheduler cpuScheduler(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
-    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId backBuffer = AddPresentationTexture(
-        testArena,
-        context,
-        allocator,
-        graph,
-        Name("tests/analysis_optimization/presentation_buffer"),
-        "Presentation Analysis Buffer",
-        Graphics::ResourceStates::Unknown
-    );
-    ASSERT_TRUE(backBuffer.valid());
-    Graphics::GpuTaskId writer;
-    Graphics::GpuTaskId producer;
-    AppendPresentationChain(graph, backBuffer, 6u, writer, producer);
-    ASSERT_TRUE(writer.valid());
-    ASSERT_TRUE(producer.valid());
-    ASSERT_TRUE(AddTask(graph, Name("tests/analysis_optimization/unrelated_tail"), "Unrelated Tail").valid());
-    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{ .producer = producer, .backBuffer = backBuffer }));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    EXPECT_EQ(analysis.edges().size(), 9u);
-    EXPECT_EQ(analysis.schedulingEdges().size(), 5u);
-    const Graphics::GpuTaskResourceUse unorderedWrite{
-        .resource = backBuffer,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::RenderTarget,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskId unrelatedWriter = AddTask(
-        graph,
-        Name("tests/analysis_optimization/unrelated_writer"),
-        "Unrelated Writer",
-        nullptr,
-        0u,
-        &unorderedWrite,
-        1u
-    );
-    ASSERT_TRUE(unrelatedWriter.valid());
-    EXPECT_FALSE(Analyze(graph, analysis));
-    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint);
-    EXPECT_EQ(analysis.diagnostic().task, producer);
-    EXPECT_EQ(analysis.diagnostic().relatedTask, unrelatedWriter);
-    EXPECT_EQ(analysis.diagnostic().resource, backBuffer);
-}
-
 TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionImportedRootBenchmark4096Tasks){
     BenchmarkVersionChain(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
 }

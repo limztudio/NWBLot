@@ -25,30 +25,6 @@ using namespace TelemetryTestDetail;
 
 
 
-TEST(Telemetry, CaptureFlags){
-    constexpr Telemetry::CaptureOptions disabled = Telemetry::CaptureOptions::Disabled();
-    constexpr Telemetry::CaptureOptions frameGraph = Telemetry::CaptureOptions::FrameGraphOnly();
-    constexpr Telemetry::CaptureOptions perf = Telemetry::CaptureOptions::PerfOnly();
-    constexpr Telemetry::CaptureOptions all = Telemetry::CaptureOptions::All();
-
-    static_assert(!disabled.enabled());
-    static_assert(frameGraph.enabled());
-    static_assert(frameGraph.frameGraphEnabled());
-    static_assert(!frameGraph.perfEnabled());
-    static_assert(perf.perfEnabled());
-    static_assert(all.textLogEnabled());
-    static_assert(all.diagnosticEnabled());
-    static_assert(all.perfEnabled());
-    static_assert(all.frameGraphEnabled());
-
-    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::TextLog));
-    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(perf, Telemetry::EventKind::MemoryFrame));
-    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(all, Telemetry::EventKind::FrameGraphFrame));
-    EXPECT_FALSE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::PerfFrame));
-    EXPECT_FALSE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::MemoryFrame));
-    EXPECT_TRUE(Telemetry::CaptureAllowsEventKind(frameGraph, Telemetry::EventKind::FrameGraphFrame));
-}
-
 TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);

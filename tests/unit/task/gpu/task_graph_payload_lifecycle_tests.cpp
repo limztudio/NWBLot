@@ -145,37 +145,19 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     EXPECT_EQ(discardedCount, 0u);
 }
 
-TEST(GpuTaskGraph, RegistersNoexceptTypedAcceptedPayloadLifecycle){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/noexcept_accepted_lifecycle"))
-        .setMarkerLabel("Noexcept Accepted Lifecycle")
-    ;
-    const Graphics::GpuTaskId task = graph.addTask<NoexceptAcceptedLifecycleTask>(
-        desc,
-        NoexceptAcceptedLifecycleTask::Payload{}
-    );
-    ASSERT_TRUE(task.valid());
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
-    EXPECT_TRUE(declarations.taskAt(task.index).hasAcceptedPayload);
-}
-
-TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
+TEST(GpuTaskGraph, RegistersNoexceptTypedPayloadLifecycle){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     u32 recordCount = 0u;
     u32 discardedCount = 0u;
     Graphics::GpuTaskDesc desc;
     desc
-        .setIdentity(Name("tests/task_graph/noexcept_record_discard_lifecycle"))
-        .setMarkerLabel("Noexcept Record And Discard Lifecycle")
+        .setIdentity(Name("tests/task_graph/noexcept_payload_lifecycle"))
+        .setMarkerLabel("Noexcept Payload Lifecycle")
     ;
-    const Graphics::GpuTaskId task = graph.addTask<NoexceptRecordDiscardLifecycleTask>(
+    const Graphics::GpuTaskId task = graph.addTask<NoexceptLifecycleTask>(
         desc,
-        NoexceptRecordDiscardLifecycleTask::Payload{
+        NoexceptLifecycleTask::Payload{
             .recordCount = &recordCount,
             .discardedCount = &discardedCount,
         }
@@ -185,6 +167,7 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
         EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
+        EXPECT_TRUE(declarations.taskAt(task.index).hasAcceptedPayload);
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();

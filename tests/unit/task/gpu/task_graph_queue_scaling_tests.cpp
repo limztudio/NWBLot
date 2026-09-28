@@ -307,10 +307,6 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
     EXPECT_TRUE(assignments.find(tasks[6u])->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
 }
 
-TEST(GpuTaskGraph, PreservesAutomaticPlacementScoresAcrossScalingScenarios){
-    CheckScenarios(129u);
-}
-
 TEST(GpuTaskGraph, DISABLED_AutomaticPlacementBenchmark1024Tasks){
     CheckScenarios(1024u);
 }

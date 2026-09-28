@@ -311,43 +311,12 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
     EXPECT_EQ(before.sets, s_Count);
 }
 
-TEST(TaskGraphImportIndex, RejectedAppendDoesNotReserveIdentityOrAcquireOwnership){
-    ImportContext context;
-    context.prepare(s_ExpectedDualCount);
-    const GraphStamp empty = ReadStamp(context.graph);
-    auto invalidBuffer = context.typedDescriptions[0u];
-    invalidBuffer.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
-    auto invalidTexture = context.typedDescriptions[1u];
-    invalidTexture.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
-    EXPECT_FALSE(context.graph.importBuffer(context.buffers[0u], invalidBuffer).valid());
-    EXPECT_FALSE(context.graph.importTexture(context.textures[1u], invalidTexture).valid());
-    auto invalidGeneric = context.genericDescriptions[0u];
-    invalidGeneric.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
-    EXPECT_FALSE(context.graph.importResource(invalidGeneric).valid());
-    ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, empty));
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
-    EXPECT_EQ(context.textures[1u]->getReferenceCount(), 1u);
-    context.resources[0u] = context.importTyped(0u);
-    context.resources[1u] = context.importTyped(1u);
-    ASSERT_TRUE(context.resources[0u].valid());
-    ASSERT_TRUE(context.resources[1u].valid());
-    ASSERT_TRUE(context.graph.importResource(context.genericDescriptions[0u]).valid());
-    const GraphStamp populated = ReadStamp(context.graph);
-    const Core::GpuGraphResourceId invalidMember{ .generation = populated.generation, .index = 999u };
-    auto invalidSet = context.setDescriptions[0u];
-    invalidSet.setMembers(&invalidMember, 1u);
-    EXPECT_FALSE(context.graph.importResourceSet(invalidSet).valid());
-    ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, populated));
-    ASSERT_TRUE(context.graph.importResourceSet(context.setDescriptions[0u]).valid());
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
-    EXPECT_EQ(context.textures[1u]->getReferenceCount(), s_ExpectedDualCount);
-}
-
-TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSidesOfTheSmallRegistryBoundary){
-    constexpr usize s_PrefixCounts[]{ 32u, 33u };
+TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipForEmptyAndBoundaryRegistries){
+    constexpr usize s_PrefixCounts[]{ 0u, 32u, 33u };
     for(const usize prefixCount : s_PrefixCounts){
+        SCOPED_TRACE(prefixCount);
         ImportContext context;
-        context.prepare(prefixCount);
+        context.prepare(prefixCount > 0u ? prefixCount : s_ExpectedDualCount);
         for(usize index = 0u; index < prefixCount; ++index){
             context.resources[index] = context.importTyped(index);
             ASSERT_TRUE(context.resources[index].valid());
@@ -370,21 +339,16 @@ TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSides
         EXPECT_FALSE(context.graph.importBuffer(buffer, invalidBuffer).valid());
         EXPECT_FALSE(context.graph.importTexture(texture, invalidTexture).valid());
         EXPECT_FALSE(context.graph.importResource(invalidGeneric).valid());
-        EXPECT_FALSE(context.graph.importBuffer(buffer, context.typedDescriptions[0u]).valid());
-        EXPECT_FALSE(context.graph.importBuffer(context.buffers[0u], bufferDescription).valid());
-        auto wrongType = context.typedDescriptions[0u];
-        wrongType.type = Core::GpuGraphResourceType::Texture;
-        EXPECT_FALSE(context.graph.importResource(wrongType).valid());
-        auto conflictingSet = context.setDescriptions[0u];
-        conflictingSet.setMembers(&context.resources[1u], 1u);
-        EXPECT_FALSE(context.graph.importResourceSet(conflictingSet).valid());
-        const Core::GpuGraphResourceId invalidMember{ .generation = before.generation, .index = 999u };
-        auto newSet = Core::GpuGraphResourceSetDesc{}
-            .setIdentity(Name("tests/graph_import_index/boundary_new_set"))
-            .setMarkerLabel("Boundary New Set")
-            .setMembers(&invalidMember, 1u)
-        ;
-        EXPECT_FALSE(context.graph.importResourceSet(newSet).valid());
+        if(prefixCount > 0u){
+            EXPECT_FALSE(context.graph.importBuffer(buffer, context.typedDescriptions[0u]).valid());
+            EXPECT_FALSE(context.graph.importBuffer(context.buffers[0u], bufferDescription).valid());
+            auto wrongType = context.typedDescriptions[0u];
+            wrongType.type = Core::GpuGraphResourceType::Texture;
+            EXPECT_FALSE(context.graph.importResource(wrongType).valid());
+            auto conflictingSet = context.setDescriptions[0u];
+            conflictingSet.setMembers(&context.resources[1u], 1u);
+            EXPECT_FALSE(context.graph.importResourceSet(conflictingSet).valid());
+        }
         ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, before));
         EXPECT_EQ(buffer->getReferenceCount(), 1u);
         EXPECT_EQ(texture->getReferenceCount(), 1u);
@@ -393,12 +357,23 @@ TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSides
         EXPECT_EQ(bufferId.index, prefixCount);
         ASSERT_TRUE(context.graph.importTexture(texture, textureDescription).valid());
         ASSERT_TRUE(context.graph.importResource(context.genericDescriptions[0u]).valid());
+        const GraphStamp populated = ReadStamp(context.graph);
+        const Core::GpuGraphResourceId invalidMember{ .generation = populated.generation, .index = 999u };
+        auto newSet = Core::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/graph_import_index/boundary_new_set"))
+            .setMarkerLabel("Boundary New Set")
+            .setMembers(&invalidMember, 1u)
+        ;
+        EXPECT_FALSE(context.graph.importResourceSet(newSet).valid());
+        ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, populated));
         newSet.setMembers(&bufferId, 1u);
         const auto setId = context.graph.importResourceSet(newSet);
         ASSERT_TRUE(setId.valid());
         EXPECT_EQ(setId.index, prefixCount);
-        EXPECT_EQ(context.importTyped(0u), context.resources[0u]);
-        EXPECT_EQ(context.graph.importResourceSet(context.setDescriptions[0u]), context.sets[0u]);
+        if(prefixCount > 0u){
+            EXPECT_EQ(context.importTyped(0u), context.resources[0u]);
+            EXPECT_EQ(context.graph.importResourceSet(context.setDescriptions[0u]), context.sets[0u]);
+        }
         EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
         EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
         const Core::GpuTaskGraph::DeclarationReadView view(context.graph);

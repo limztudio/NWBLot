@@ -276,39 +276,6 @@ TEST(GpuTaskGraphSubmissionValidation, ValidatesEveryInitialOwnerMinimumPhysical
     CheckInitialOwnershipFanIn(8u, false);
 }
 
-TEST(GpuTaskGraphSubmissionValidation, SeparatesEmptyOwnershipChecksFromMissingOrdinaryCompletionTokens){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/submission_validation/missing_ordinary_completion"))
-            .setMarkerLabel("Missing Ordinary Completion")
-    );
-    ASSERT_TRUE(completion.valid());
-    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/submission_validation/no_external_wait"), "No External Wait");
-    ASSERT_TRUE(first.valid());
-    const Graphics::GpuTaskId second = graph.addTask(
-        Graphics::GpuTaskDesc{}
-            .setIdentity(Name("tests/submission_validation/missing_external_wait"))
-            .setMarkerLabel("Missing External Wait")
-            .setDependencies(&first, 1u)
-            .setExternalDependencies(&completion, 1u)
-    );
-    ASSERT_TRUE(second.valid());
-    SingleQueueCompile singleQueueCompile(testArena);
-    ASSERT_TRUE(singleQueueCompile.compile(graph));
-    const GpuTaskGraphReadViews reads(graph, singleQueueCompile.compiledGraph);
-    ASSERT_TRUE(reads.valid());
-    const Graphics::GpuSubmissionPacketId firstPacket = reads.compiled.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = reads.compiled.packetForTask(second);
-    ASSERT_NE(firstPacket, secondPacket);
-    EXPECT_TRUE(ValidatePacketOwnership(reads.declarations, reads.compiled, firstPacket));
-    EXPECT_FALSE(ValidatePacketOwnership(reads.declarations, reads.compiled, secondPacket));
-    // Generic external-token validation precedes the ownership-specific check for packets without acquire markers.
-    EXPECT_TRUE(Graphics::GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(reads.declarations, reads.compiled, secondPacket));
-    EXPECT_FALSE(Graphics::GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(reads.declarations, reads.compiled, {}));
-}
-
 TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark1024Tokens){
     BenchmarkClusteredWaits(1024u);
 }

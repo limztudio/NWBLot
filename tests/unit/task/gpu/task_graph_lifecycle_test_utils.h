@@ -182,14 +182,7 @@ struct ReentrantTelemetryDuringDeclarationTask{
     };
 };
 
-struct NoexceptAcceptedLifecycleTask{
-    struct Payload{};
-
-    static void accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
-    }
-};
-
-struct NoexceptRecordDiscardLifecycleTask{
+struct NoexceptLifecycleTask{
     static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
     struct Payload{
         u32* recordCount = nullptr;
@@ -201,6 +194,10 @@ struct NoexceptRecordDiscardLifecycleTask{
             ++*payload.recordCount;
         return true;
     }
+
+    static void accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
+    }
+
     static void discarded(Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;

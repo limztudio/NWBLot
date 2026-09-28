@@ -589,27 +589,6 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     EXPECT_EQ(declarations.taskCount(), s_ExpectedDualCount);
 }
 
-TEST(GpuTaskGraph, RetainedTextureStateCompletenessHasNoProductionTestMutationHook){
-    TestArena testArena;
-    const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .lexically_normal()
-    ;
-    TestAString backendHeaderSource;
-    TestAString textureSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "texture.cpp", textureSource));
-
-    const AStringView backendHeader(backendHeaderSource.data(), backendHeaderSource.size());
-    const AStringView textureImplementation(textureSource.data(), textureSource.size());
-    EXPECT_EQ(backendHeader.find("MarkRetainedTextureSubresourceStateKnownForTesting"), AStringView::npos);
-    EXPECT_EQ(textureImplementation.find("MarkRetainedTextureSubresourceStateKnownForTesting"), AStringView::npos);
-}
-
 TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);

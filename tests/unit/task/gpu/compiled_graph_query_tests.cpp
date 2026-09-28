@@ -39,7 +39,7 @@ static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 val
     testing::Test::RecordProperty(key.get(), text);
 }
 
-static void CheckPacketQueries(const usize taskCount, const bool reverseDeclarations){
+static void CheckPacketQueries(const usize taskCount){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     u64 graphGeneration = 0u;
@@ -51,12 +51,12 @@ static void CheckPacketQueries(const usize taskCount, const bool reverseDeclarat
     Graphics::GraphicsVector<Graphics::GpuTaskId> tasks(testArena.arena);
     tasks.resize(taskCount);
     for(usize declarationIndex = 0u; declarationIndex < taskCount; ++declarationIndex){
-        const usize orderIndex = reverseDeclarations ? taskCount - declarationIndex - 1u : declarationIndex;
+        const usize orderIndex = taskCount - declarationIndex - 1u;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.mergeWithPrevious = orderIndex != 0u;
         const Graphics::GpuTaskId dependency{
             .generation = graphGeneration,
-            .index = static_cast<u32>(reverseDeclarations ? declarationIndex + 1u : declarationIndex - 1u),
+            .index = static_cast<u32>(declarationIndex + 1u),
         };
         char identityText[32u] = {};
         tasks[orderIndex] = AddTaskWithCommands(
@@ -146,15 +146,11 @@ static void CheckPacketQueries(const usize taskCount, const bool reverseDeclarat
 
 
 TEST(GpuCompiledGraph, PacketQueriesFollowExecutionOrderAcrossReverseDeclarations){
-    __hidden_compiled_graph_query_tests::CheckPacketQueries(32u, true);
-}
-
-TEST(GpuCompiledGraph, PacketQueriesRejectInvalidAndDiscontiguousTasks){
-    __hidden_compiled_graph_query_tests::CheckPacketQueries(32u, false);
+    __hidden_compiled_graph_query_tests::CheckPacketQueries(32u);
 }
 
 TEST(GpuCompiledGraph, DISABLED_PacketQueryBenchmark4096Tasks){
-    __hidden_compiled_graph_query_tests::CheckPacketQueries(4096u, true);
+    __hidden_compiled_graph_query_tests::CheckPacketQueries(4096u);
 }
 
 

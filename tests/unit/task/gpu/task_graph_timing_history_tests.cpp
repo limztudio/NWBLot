@@ -176,7 +176,11 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
     ASSERT_NE(snapshot.find(first.key, first.queue), nullptr);
     EXPECT_DOUBLE_EQ(snapshot.find(first.key, first.queue)->averageSeconds, 1.0);
     GpuTaskTimingHistoryStore replacement(storeArena);
+    ASSERT_TRUE(replacement.recordSample(first.key, first.queue, 3.0, 30u));
     replacement.reset(snapshot);
+    EXPECT_EQ(snapshot.deviceGeneration(), 0u);
+    EXPECT_EQ(replacement.deviceGeneration(), 0u);
+    EXPECT_EQ(replacement.historyCount(), 0u);
     EXPECT_FALSE(snapshot.valid());
     EXPECT_EQ(snapshot.find(first.key, first.queue), nullptr);
     replacement.resetForDeviceGeneration(s_ExpectedDualCount);

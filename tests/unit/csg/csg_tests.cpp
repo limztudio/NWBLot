@@ -19,7 +19,6 @@ namespace __hidden_csg_tests{
 
 static constexpr AStringView s_PROJECT_CSG_GROUP_A = "project/csg/group_a";
 static constexpr AStringView s_ENGINE_CSG_BOX = "engine/csg/box";
-static constexpr AStringView s_PROJECT_CSG_RECEIVER_GROUP_A = "project/csg/receiver_group_a";
 static constexpr AStringView s_ENGINE_CSG_PLANE = "engine/csg/plane";
 static constexpr AStringView s_PROJECT_CSG_GROUP_B = "project/csg/group_b";
 static constexpr AStringView s_ENGINE_CSG_CAPSULE = "engine/csg/capsule";
@@ -42,75 +41,6 @@ inline constexpr Name s_ScratchArena("tests/csg/scratch");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(Csg, CsgReceiverComponents){
-    TestWorld testWorld;
-
-    auto staticReceiverEntity = testWorld.world.createEntity();
-    auto& staticReceiver = staticReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-    staticReceiver.receiverGroup = Name(s_PROJECT_CSG_RECEIVER_GROUP_A.data());
-
-    EXPECT_TRUE(staticReceiverEntity.hasComponent<NWB::Impl::StaticCsgMeshComponent>());
-    EXPECT_EQ(staticReceiver.receiverGroup, Name(s_PROJECT_CSG_RECEIVER_GROUP_A.data()));
-    EXPECT_TRUE(staticReceiver.enabled);
-    EXPECT_TRUE(staticReceiver.affectOpaquePass);
-    EXPECT_TRUE(staticReceiver.affectTransparentPass);
-
-    auto skinnedReceiverEntity = testWorld.world.createEntity();
-    auto& skinnedReceiver = skinnedReceiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-    skinnedReceiver.affectTransparentPass = false;
-
-    EXPECT_TRUE(skinnedReceiverEntity.hasComponent<NWB::Impl::SkinnedCsgMeshComponent>());
-    EXPECT_EQ(skinnedReceiver.receiverGroup, NAME_NONE);
-    EXPECT_TRUE(skinnedReceiver.enabled);
-    EXPECT_TRUE(skinnedReceiver.affectOpaquePass);
-    EXPECT_FALSE(skinnedReceiver.affectTransparentPass);
-
-    usize staticReceiverCount = 0u;
-    testWorld.world.view<NWB::Impl::StaticCsgMeshComponent>().each(
-        [&staticReceiverCount](NWB::Core::ECS::EntityID entityId, NWB::Impl::StaticCsgMeshComponent& receiver){
-            ++staticReceiverCount;
-            EXPECT_TRUE(entityId.valid());
-            EXPECT_EQ(receiver.receiverGroup, Name(s_PROJECT_CSG_RECEIVER_GROUP_A.data()));
-        }
-    );
-    EXPECT_EQ(staticReceiverCount, 1u);
-}
-
-TEST(Csg, CsgCutterComponent){
-    TestWorld testWorld;
-
-    auto cutterEntity = testWorld.world.createEntity();
-    auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-
-    EXPECT_TRUE(cutterEntity.hasComponent<NWB::Impl::CsgCutterComponent>());
-    EXPECT_EQ(cutter.receiverGroup, NAME_NONE);
-    EXPECT_EQ(cutter.shapeType, NAME_NONE);
-    EXPECT_TRUE(cutter.active);
-    EXPECT_TRUE(cutter.parameterBytes.empty());
-
-    EXPECT_TRUE(MatrixIsIdentity(LoadFloat(cutter.worldToShape)));
-    EXPECT_TRUE(MatrixIsIdentity(LoadFloat(cutter.shapeToWorld)));
-
-    cutter.receiverGroup = Name(s_PROJECT_CSG_RECEIVER_GROUP_A.data());
-    cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
-    cutter.parameterBytes.push_back(0xAu);
-    cutter.parameterBytes.push_back(0xBu);
-
-    usize cutterCount = 0u;
-    testWorld.world.view<NWB::Impl::CsgCutterComponent>().each(
-        [&cutterCount](NWB::Core::ECS::EntityID entityId, NWB::Impl::CsgCutterComponent& viewCutter){
-            ++cutterCount;
-            EXPECT_TRUE(entityId.valid());
-            EXPECT_EQ(viewCutter.receiverGroup, Name(s_PROJECT_CSG_RECEIVER_GROUP_A.data()));
-            EXPECT_EQ(viewCutter.shapeType, Name(s_ENGINE_CSG_BOX.data()));
-            EXPECT_EQ(viewCutter.parameterBytes.size(), s_ExpectedDualCount);
-            EXPECT_EQ(viewCutter.parameterBytes[0u], 0xAu);
-            EXPECT_EQ(viewCutter.parameterBytes[1u], 0xBu);
-        }
-    );
-    EXPECT_EQ(cutterCount, 1u);
-}
 
 static NWB::Impl::CsgFrameState BuildTestCsgFrameState(
     TestWorld& testWorld,

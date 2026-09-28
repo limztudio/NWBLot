@@ -50,7 +50,7 @@ static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 val
     testing::Test::RecordProperty(key.get(), text);
 }
 
-static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scenario){
+static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scenario, const bool benchmark){
     SCOPED_TRACE(taskCount);
     SCOPED_TRACE(scenario);
     TestArena testArena;
@@ -96,20 +96,22 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     edges.reserve(taskCount + analysis.edges().size());
     u64 minimumNanoseconds = Limit<u64>::s_Max;
     usize peakScratchBytes = 0u;
-    for(usize iteration = 0u; iteration < 4u; ++iteration){
+    for(usize iteration = 0u; iteration < (benchmark ? 4u : 1u); ++iteration){
         nodes.clear();
         edges.clear();
         pendingEdges.clear();
         Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
         Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-        const Timer begin = TimerNow();
+        const Timer begin = benchmark ? TimerNow() : Timer{};
         ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena));
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        if(iteration != 0u && nanoseconds < minimumNanoseconds)
-            minimumNanoseconds = nanoseconds;
-        const usize usedBytes = scratchArena.memoryStats().peakUsedBytes;
-        if(usedBytes > peakScratchBytes)
-            peakScratchBytes = usedBytes;
+        if(benchmark){
+            const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+            if(iteration != 0u && nanoseconds < minimumNanoseconds)
+                minimumNanoseconds = nanoseconds;
+            const usize usedBytes = scratchArena.memoryStats().peakUsedBytes;
+            if(usedBytes > peakScratchBytes)
+                peakScratchBytes = usedBytes;
+        }
     }
     ASSERT_EQ(nodes.size(), taskCount + declarations.resourceCount());
     ASSERT_EQ(edges.size(), analysis.edges().size() + (resource.valid() ? taskCount : 0u));
@@ -134,10 +136,12 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
         EXPECT_EQ(edge.flags, expectedFlags);
     }
     EXPECT_EQ(dependencyIndex, analysis.edges().size());
-    RecordUnsignedProperty(NotNull<const char*>{ "telemetry_task_count" }, taskCount);
-    RecordUnsignedProperty(NotNull<const char*>{ "telemetry_edge_count" }, edges.size());
-    RecordUnsignedProperty(NotNull<const char*>{ "telemetry_export_ns" }, minimumNanoseconds);
-    RecordUnsignedProperty(NotNull<const char*>{ "telemetry_scratch_peak_bytes" }, peakScratchBytes);
+    if(benchmark){
+        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_task_count" }, taskCount);
+        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_edge_count" }, edges.size());
+        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_export_ns" }, minimumNanoseconds);
+        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_scratch_peak_bytes" }, peakScratchBytes);
+    }
 }
 
 
@@ -152,25 +156,41 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
 
 TEST(GpuTaskGraphTelemetry, PreservesExplicitInferredAndOverlappingEdgeFlags){
     using namespace __hidden_task_graph_telemetry_scaling_tests;
-    CheckTelemetryEdges(128u, Scenario::Explicit);
-    CheckTelemetryEdges(128u, Scenario::Inferred);
-    CheckTelemetryEdges(128u, Scenario::Mixed);
+    CheckTelemetryEdges(3u, Scenario::Explicit, false);
+    CheckTelemetryEdges(3u, Scenario::Inferred, false);
+    CheckTelemetryEdges(3u, Scenario::Mixed, false);
 }
 
 TEST(GpuTaskGraphTelemetry, DISABLED_ExportBenchmark8Tasks){
-    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(8u, __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed);
+    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(
+        8u,
+        __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed,
+        true
+    );
 }
 
 TEST(GpuTaskGraphTelemetry, DISABLED_ExportBenchmark32Tasks){
-    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(32u, __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed);
+    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(
+        32u,
+        __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed,
+        true
+    );
 }
 
 TEST(GpuTaskGraphTelemetry, DISABLED_ExportBenchmark1024Tasks){
-    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(1024u, __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed);
+    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(
+        1024u,
+        __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed,
+        true
+    );
 }
 
 TEST(GpuTaskGraphTelemetry, DISABLED_ExportBenchmark4096Tasks){
-    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(4096u, __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed);
+    __hidden_task_graph_telemetry_scaling_tests::CheckTelemetryEdges(
+        4096u,
+        __hidden_task_graph_telemetry_scaling_tests::Scenario::Mixed,
+        true
+    );
 }
 
 

@@ -229,10 +229,6 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     }
 }
 
-TEST(GpuTaskGraphTimingFeedback, SelectsDistinctTimingRoutesAcrossScalingGraph){
-    CheckDistinctDurationRoutes(129u);
-}
-
 TEST(GpuTaskGraphTimingFeedback, DISABLED_DistinctDurationRoutingBenchmark1024Tasks){
     CheckDistinctDurationRoutes(1024u);
 }

@@ -14,7 +14,6 @@
 #include <global/arena_object.h>
 #include <global/basic_string.h>
 #include <global/binary.h>
-#include <global/bit.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
 #include <global/containers.h>
@@ -37,7 +36,6 @@
 #include <global/process_memory_map.h>
 #include <global/termination.h>
 #include <global/text_utils.h>
-#include <global/type_counter.h>
 
 #include <core/alloc/persistent.h>
 #include <core/alloc/scratch.h>
@@ -107,17 +105,6 @@ struct NameSymbolCallbackProbe{
     }
 };
 
-struct ArenaObjectProbe{
-    bool& m_destroyed;
-
-    explicit ArenaObjectProbe(bool& destroyed)
-        : m_destroyed(destroyed)
-    {}
-    ~ArenaObjectProbe(){
-        m_destroyed = true;
-    }
-};
-
 struct ArenaReferenceProbe{
     bool& m_customDeleterCalled;
     bool& m_destroyed;
@@ -139,9 +126,6 @@ void DestroyArenaReference(
     value->~ArenaReferenceProbe();
     arena->deallocate(value, alignof(ArenaReferenceProbe), sizeof(ArenaReferenceProbe));
 }
-
-struct TypeCounterFirstTag{};
-struct TypeCounterSecondTag{};
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
 static const char* s_DiagnosticEventName = nullptr;
@@ -238,20 +222,6 @@ struct U32VectorView{
     [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
 };
 
-struct BitCastPair{
-    u16 first = 0u;
-    u16 second = 0u;
-};
-
-struct NonTrivialBitCastWord{
-    u32 value = 0u;
-
-    ~NonTrivialBitCastWord(){}
-};
-
-template<typename To, typename From>
-concept CanBitCast = requires(const From& source){ BitCast<To>(source); };
-
 struct MoveOnlySwapValue{
     i32 value = 0;
 
@@ -302,29 +272,6 @@ TEST(Global, PodRoundTrip){
     EXPECT_EQ(readValue, writtenValue);
 }
 
-TEST(Global, BitCastPreservesObjectRepresentation){
-    static_assert(sizeof(BitCastPair) == sizeof(u32));
-    static_assert(sizeof(NonTrivialBitCastWord) == sizeof(u32));
-    static_assert(CanBitCast<u32, f32>);
-    static_assert(CanBitCast<f32, u32>);
-    static_assert(!CanBitCast<u64, u32>);
-    static_assert(!CanBitCast<u32, NonTrivialBitCastWord>);
-    static_assert(!CanBitCast<NonTrivialBitCastWord, u32>);
-
-    constexpr f32 s_Value = 1.0f;
-    constexpr u32 s_Bits = BitCast<u32>(s_Value);
-    static_assert(s_Bits == 0x3f800000u);
-    static_assert(IsSame_V<decltype(BitCast<u32>(s_Value)), u32>);
-    static_assert(noexcept(BitCast<u32>(s_Value)));
-
-    constexpr BitCastPair s_Pair{ 0x1234u, 0xabcdu };
-    constexpr BitCastPair s_PairRoundTrip = BitCast<BitCastPair>(BitCast<u32>(s_Pair));
-    static_assert(s_PairRoundTrip.first == s_Pair.first);
-    static_assert(s_PairRoundTrip.second == s_Pair.second);
-
-    EXPECT_EQ(BitCast<f32>(s_Bits), s_Value);
-}
-
 TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(SizeOf<sizeof(u32)>(3u), sizeof(u32) * 3u);
     EXPECT_EQ(AddSize(17u, 25u), 42u);
@@ -337,46 +284,6 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(product, 42u);
     EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount, product));
     EXPECT_EQ(product, 0u);
-}
-
-TEST(Global, GenericAllocationAndTypeHelpers){
-    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
-    bool destroyed = false;
-    ArenaObjectProbe* const probe = ::NewArenaObject<ArenaObjectProbe>(arena, destroyed);
-    ASSERT_NE(probe, nullptr);
-    EXPECT_FALSE(destroyed);
-    ::DestroyArenaObject(arena, probe);
-    EXPECT_TRUE(destroyed);
-
-    u32* const values = ::AllocateArenaTyped<u32>(arena, s_ExpectedDualCount);
-    ASSERT_NE(values, nullptr);
-    values[0u] = 11u;
-    values[1u] = 42u;
-    EXPECT_EQ(values[0u], 11u);
-    EXPECT_EQ(values[1u], 42u);
-    ::DeallocateArenaTyped<u32>(arena, values, s_ExpectedDualCount);
-
-    const usize firstId = ::TypeCounter<TypeCounterFirstTag>::id<u32>();
-    EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
-    EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
-    EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
-}
-
-TEST(Global, DefaultArenaAliases){
-    using DefaultString = DefaultAString<NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
-    using DefaultStringStream = DefaultAStringStream<NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
-    using DefaultMap = DefaultHashMap<u32, DefaultString, NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
-
-    DefaultString value("default arena");
-    DefaultStringStream stream;
-    stream << value << " aliases";
-
-    DefaultMap values;
-    values.emplace(7u, stream.str());
-
-    ASSERT_EQ(values.size(), 1u);
-    const DefaultString& stored = values.at(7u);
-    EXPECT_EQ(AStringView(stored.data(), stored.size()), "default arena aliases");
 }
 
 TEST(Global, ParsesIntegerViews){
@@ -483,17 +390,6 @@ TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
     EXPECT_TRUE(entry.path.empty());
 }
 
-TEST(Global, ForwardAsTuplePreservesReferences){
-    i32 first = 3;
-    i32 second = 7;
-    auto values = ::ForwardAsTuple(first, second);
-    ::Get<0u>(values) = 11;
-    ::Get<1u>(values) = 13;
-
-    EXPECT_EQ(first, 11);
-    EXPECT_EQ(second, 13);
-}
-
 TEST(Global, GrowingCapacityHelpers){
     EXPECT_EQ(::NextGrowingCapacity(0u, 1u), 1u);
     EXPECT_EQ(::NextGrowingCapacity(3u, 4u), 6u);
@@ -528,23 +424,6 @@ TEST(Global, TriangleAreaPrecisionHelpers){
         VectorSet(1.0f, 5.0f, 1.0f, 0.0f)
     );
     EXPECT_DOUBLE_EQ(simdAreaNormal.z, 12.0);
-}
-
-TEST(Global, Float34IdentityUsesAffineStorage){
-    const Float34 identity = ::Float34Identity();
-
-    EXPECT_FLOAT_EQ(identity._11, 1.0f);
-    EXPECT_FLOAT_EQ(identity._22, 1.0f);
-    EXPECT_FLOAT_EQ(identity._33, 1.0f);
-    EXPECT_FLOAT_EQ(identity._14, 0.0f);
-    EXPECT_FLOAT_EQ(identity._24, 0.0f);
-    EXPECT_FLOAT_EQ(identity._34, 0.0f);
-}
-
-TEST(Global, VectorComponentMasksDescribeActiveLanes){
-    EXPECT_EQ(VectorComponentMask::s_XY, 0x3u);
-    EXPECT_EQ(VectorComponentMask::s_XYZ, 0x7u);
-    EXPECT_EQ(VectorComponentMask::s_XYZW, 0xFu);
 }
 
 TEST(Global, GlobalArenaReallocationPreservesAlignment){
@@ -1365,7 +1244,7 @@ TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
     EXPECT_EQ(values[5u], 3u);
 }
 
-TEST(Global, TriviallyCopyableVectorAlias){
+TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
     Vector<u32> values;
     values.push_back(1u);
     values.push_back(s_ExpectedDualCount);

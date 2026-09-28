@@ -32,6 +32,8 @@ namespace RayTracingShadowVisibilityTaskDetail{
 // fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never
 // survives acceptance or a retry.
 struct ShadowVisibilityOpaqueGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -170,6 +172,8 @@ struct ShadowVisibilityOpaqueGraphTask{
 // owns their sampled entry before temporal merge and, unless fused later, the first wavelet. Its tail retains dynamic ping-pong and
 // upsample work, while the terminal transparent fold remains the output/acceptance owner.
 struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -274,6 +278,8 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
 
 
 struct ShadowVisibilityOpaqueResolveTailGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -360,6 +366,11 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
 // The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output
 // from UAV to shader-read between them. The terminal resolve task retains the legacy timing and acceptance owner.
 struct ShadowTransparentSoftTraceGraphTask{
+    // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
+        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
+    };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -420,6 +431,8 @@ struct ShadowTransparentSoftTraceGraphTask{
 // The transparent trace publishes RGB half-resolution visibility. On temporal frames this task freezes the selected
 // history pair, publishes the next pair for the wavelet, and starts the resolve timing envelope.
 struct ShadowTransparentSoftTemporalMergeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -507,6 +520,8 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
 // The transparent trace or temporal merge publishes the first RGB wavelet input. The terminal fold keeps the final
 // upsample plus the established output/acceptance endpoint.
 struct ShadowTransparentSoftFirstWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -616,6 +631,8 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
 
 
 struct ShadowTransparentSoftFoldGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -723,6 +740,11 @@ struct ShadowTransparentSoftFoldGraphTask{
 
 // Shadow visibility owns its graph task; pipeline composes the caustics successor.
 struct ShadowVisibilityGraphTask{
+    // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
+        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
+    };
+
     struct Payload{
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;

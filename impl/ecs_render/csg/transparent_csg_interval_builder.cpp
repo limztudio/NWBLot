@@ -11,7 +11,6 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/material_typed_private.h>
@@ -253,7 +252,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgInstanceUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.material_instances_upload"))
                 .setMarkerLabel("Transparent CSG Material Instances Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgFirstUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -274,7 +272,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgMaterialTypedUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.material_typed_upload"))
                 .setMarkerLabel("Transparent CSG Material Typed Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -295,7 +292,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgReceiverRangesUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.receiver_ranges_upload"))
                 .setMarkerLabel("Transparent CSG Receiver Ranges Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -316,7 +312,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgCuttersUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.cutters_upload"))
                 .setMarkerLabel("Transparent CSG Cutters Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -337,7 +332,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgClipContextSlotsUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.clip_context_slots_upload"))
                 .setMarkerLabel("Transparent CSG Clip Context Slots Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -358,7 +352,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgIntervalSampleStateUploadDesc
                 .setIdentity(Name("render.avboit.transparent_csg.interval_sample_state_upload"))
                 .setMarkerLabel("Transparent CSG Interval State Upload")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgUploadScheduling)
                 .setDependencies(&outResult.uploadTask, 1u)
             ;
@@ -424,7 +417,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             clearDesc
                 .setIdentity(identity)
                 .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(transparentCsgIntervalClearScheduling)
                 .setDependencies(&dependency, 1u)
             ;
@@ -469,7 +461,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
         transparentCsgIntervalClearTailDesc
             .setIdentity(Name("render.avboit.transparent_csg.receiver_event_count_clear"))
             .setMarkerLabel("Transparent CSG Receiver Event Count Clear")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(transparentCsgIntervalClearTailScheduling)
             .setDependencies(&m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask, 1u)
         ;

@@ -30,7 +30,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
+TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
     Core::CpuTaskScheduler cpuScheduler(0u);
@@ -112,12 +112,6 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     transferDesc
         .setIdentity(Name("tests/task_graph/full_clear_transfer_input"))
         .setMarkerLabel("Full Clear Transfer Input")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
 
     Graphics::GpuTaskGraph colorGraph(testArena.arena);
@@ -140,8 +134,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(colorTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(colorTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 
@@ -163,7 +157,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(colorRectTask.index).queue.requiredCapabilities,
+            declarations.taskAt(colorRectTask.index).commands.requiredCapabilities,
             Graphics::GpuQueueCapability::Transfer
         );
     }
@@ -189,7 +183,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(rectGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(isolatedRectTask.index).queue.requiredCapabilities,
+            declarations.taskAt(isolatedRectTask.index).commands.requiredCapabilities,
             Graphics::GpuQueueCapability::Transfer
         );
     }
@@ -217,7 +211,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(compressedGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(compressedTask.index).queue.requiredCapabilities,
+            declarations.taskAt(compressedTask.index).commands.requiredCapabilities,
             Graphics::GpuQueueCapability::Transfer
         );
     }
@@ -243,8 +237,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(depthGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(depthTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(depthTask.index).commands.requiredCapabilities,
+            Graphics::GpuQueueCapability::Graphics
         );
     }
 
@@ -269,8 +263,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleColorGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(multisampleColorTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(multisampleColorTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 
@@ -295,8 +289,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleDepthGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(multisampleDepthTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(multisampleDepthTask.index).commands.requiredCapabilities,
+            Graphics::GpuQueueCapability::Graphics
         );
     }
 
@@ -454,12 +448,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
     transferDesc
         .setIdentity(Name("tests/task_graph/depth_upload_exact_queue"))
         .setMarkerLabel("Depth Upload Exact Queue")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
 
     Graphics::TextureDesc uploadDescription = Graphics::TextureDesc()
@@ -500,7 +488,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(uploadGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(uploadTask.index).queue.requiredCapabilities,
+            declarations.taskAt(uploadTask.index).commands.requiredCapabilities,
             QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
         );
     }
@@ -560,8 +548,8 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(copyGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(copyTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(copyTask.index).commands.requiredCapabilities,
+            Graphics::GpuQueueCapability::Graphics
         );
     }
 
@@ -646,8 +634,8 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(partialTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
     expectCompiledOn(partialGraph, partialTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
@@ -677,10 +665,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
     partialGraphicsRegion.source = partialGraphicsSource;
     partialGraphicsRegion.destination = partialGraphicsDestination;
     Graphics::GpuTaskDesc partialGraphicsTaskDesc = partialTaskDesc;
-    partialGraphicsTaskDesc.queue.requiredCapabilities = QueueCapabilities(
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueueCapability::Graphics
-    );
     const Graphics::GpuTaskId partialGraphicsTask = partialGraphicsGraph.addCopyTextureTask(
         partialGraphicsTaskDesc,
         Graphics::GpuCopyTextureTaskDesc{
@@ -693,8 +677,8 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraphicsGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(partialGraphicsTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(partialGraphicsTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
     expectCompiledOn(

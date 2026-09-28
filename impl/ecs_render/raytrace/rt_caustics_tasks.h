@@ -49,6 +49,8 @@ static void ConfirmCausticAccumulatorClears(Payload& payload){
 
 // A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
 struct CausticAccumulatorDecayGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -119,6 +121,8 @@ struct CausticAccumulatorDecayGraphTask{
 // Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain.
 // The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
 struct SoftwareCausticsGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -186,6 +190,8 @@ struct SoftwareCausticsGraphTask{
 
 
 struct HardwareCausticsGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -254,6 +260,8 @@ struct HardwareCausticsGraphTask{
 // Geometry downsample follows the selected photon producer in the same graph packet.
 // Its timing begin is retained until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
 struct CausticGeometryDownsampleGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -300,6 +308,8 @@ struct CausticGeometryDownsampleGraphTask{
 
 // Resolve prepare owns the first half-resolution ping-pong write. The following wavelet body receives its input and output states from graph barriers, while the later alternating passes stay inside the native callback.
 struct CausticResolvePrepareGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -332,6 +342,8 @@ struct CausticResolvePrepareGraphTask{
 
 // The first wavelet pass consumes the prepare output and writes its counterpart. The next four alternating passes stay in separate graph callbacks, while only the upsample body stays native
 struct CausticResolveWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -365,6 +377,8 @@ struct CausticResolveWaveletGraphTask{
 // The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface.
 // The next three alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveSecondWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -398,6 +412,8 @@ struct CausticResolveSecondWaveletGraphTask{
 // The third wavelet pass consumes the second graph-owned output and writes its counterpart.
 // The next two alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveThirdWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -431,6 +447,8 @@ struct CausticResolveThirdWaveletGraphTask{
 // The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface.
 // The final alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
 struct CausticResolveFourthWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -464,6 +482,8 @@ struct CausticResolveFourthWaveletGraphTask{
 // The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input.
 // This final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
 struct CausticResolveFifthWaveletGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -496,6 +516,8 @@ struct CausticResolveFifthWaveletGraphTask{
 
 // Upsample consumes the fifth-wavelet output after the compiler has lowered the final ping-pong UAV-to-SRV handoff. The following empty callback only closes the retained full-resolve timing interval.
 struct CausticResolveUpsampleGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -528,6 +550,8 @@ struct CausticResolveUpsampleGraphTask{
 
 // The empty timing-close callback follows graph-owned upsample and finishes the retained full-resolve interval.
 struct CausticResolveGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* causticProducerDispatched = nullptr;

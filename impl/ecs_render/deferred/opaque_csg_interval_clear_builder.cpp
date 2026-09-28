@@ -4,7 +4,6 @@
 
 #include "opaque_csg_interval_clear_builder.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 
 #include <core/graphics/vulkan/backend.h>
@@ -34,7 +33,6 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
     GraphClearTimingRecordState& clearTimingState,
     OpaqueCsgIntervalClearResult& outResult
 ){
-    using namespace RendererTaskGraphDetail;
     outResult = OpaqueCsgIntervalClearResult{};
     if(!inputs.targets || !inputs.csgFrameData || !inputs.dependencyTask.valid())
         return false;
@@ -57,7 +55,6 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
         clearDesc
             .setIdentity(identity)
             .setMarkerLabel(markerLabel)
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(csgIntervalClearScheduling)
             .setDependencies(&dependency, 1u)
         ;
@@ -104,7 +101,6 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
     csgIntervalClearTailDesc
         .setIdentity(Name("render.graphics_prefix.csg_receiver_event_count_clear"))
         .setMarkerLabel("CSG Receiver Event Count Clear")
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(csgIntervalClearTailScheduling)
         .setDependencies(&clearTask, 1u)
     ;

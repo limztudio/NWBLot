@@ -100,7 +100,6 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         || copyDesc.regionCount == 0u
         || copyDesc.regionCount > Limit<u32>::s_Max
         || copyDesc.regionCount > Limit<usize>::s_Max / 2u
-        || !GpuTaskGraphBuiltinDetail::BuiltinCopyDeclarationRequiresTransferCapability(desc)
     )
         return {};
 

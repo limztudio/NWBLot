@@ -26,6 +26,8 @@ namespace ECSRenderDetail{
 
 
 struct ShadowPrepareAccelStructFinalizeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{};
 
     [[nodiscard]] static bool record(

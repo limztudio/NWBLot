@@ -461,20 +461,14 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
             .access = Graphics::GpuTaskResourceAccess::Read,
         };
     }
-    const Graphics::GpuQueueRequest queue{
-        .requiredCapabilities = Graphics::GpuQueueCapability::Graphics,
-        .preferredQueue = Graphics::GpuQueuePreference::Graphics,
-        .allowFallback = false,
-        .compilerMayOverridePreference = false,
-    };
+    const Graphics::GpuTaskCommandRequirements queue{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskDesc wholeDesc;
     wholeDesc
         .setIdentity(Name("tests/fragment_order/whole"))
         .setMarkerLabel("Whole Writer")
         .setResourceUses(wholeUses, LengthOf(wholeUses))
-        .setQueue(queue)
     ;
-    const Graphics::GpuTaskId whole = graph.addTask(wholeDesc);
+    const Graphics::GpuTaskId whole = graph.addTask(wholeDesc, queue);
     ASSERT_TRUE(whole.valid());
     Graphics::GpuTaskDesc cutsDesc;
     cutsDesc
@@ -482,9 +476,8 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
         .setMarkerLabel("Partial Writers")
         .setDependencies(&whole, 1u)
         .setResourceUses(cutUses, LengthOf(cutUses))
-        .setQueue(queue)
     ;
-    const Graphics::GpuTaskId cuts = graph.addTask(cutsDesc);
+    const Graphics::GpuTaskId cuts = graph.addTask(cutsDesc, queue);
     ASSERT_TRUE(cuts.valid());
     Graphics::GpuTaskDesc readerDesc;
     readerDesc
@@ -492,14 +485,13 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
         .setMarkerLabel("Gap Reader")
         .setDependencies(&cuts, 1u)
         .setResourceUses(readUses, LengthOf(readUses))
-        .setQueue(queue)
     ;
-    const Graphics::GpuTaskId reader = graph.addTask(readerDesc);
+    const Graphics::GpuTaskId reader = graph.addTask(readerDesc, queue);
     ASSERT_TRUE(reader.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const Graphics::GpuTaskId expectedTasks[] = { whole, whole, cuts, cuts, reader };
     const Graphics::BufferRange expectedRanges[] = {

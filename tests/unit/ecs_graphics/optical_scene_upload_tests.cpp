@@ -316,10 +316,7 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     EXPECT_EQ(task.identity, Name("render.raytrace.optical_scene_upload"));
     EXPECT_TRUE(task.hasRecordPayload);
     EXPECT_TRUE(task.hasAcceptedPayload);
-    EXPECT_EQ(task.queue.preferredQueue, Core::GpuQueuePreference::Graphics);
-    EXPECT_EQ(task.queue.requiredCapabilities, Core::GpuQueueCapability::Transfer);
-    EXPECT_FALSE(task.queue.allowFallback);
-    EXPECT_FALSE(task.queue.compilerMayOverridePreference);
+    EXPECT_EQ(task.commands.requiredCapabilities, Core::GpuQueueCapability::Transfer);
     EXPECT_FALSE(task.scheduling.allowSameClassQueueRouting);
     ASSERT_EQ(task.resourceUseCount, s_ExpectedDualCount);
     for(usize index = 0u; index < task.resourceUseCount; ++index){

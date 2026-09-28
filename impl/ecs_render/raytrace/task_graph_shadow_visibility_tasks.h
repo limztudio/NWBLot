@@ -26,6 +26,11 @@ namespace ECSRenderDetail{
 
 
 struct ShadowVisibilityAllLitClearGraphTask{
+    // Native uncompressed color clears accept either Compute or Graphics commands.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
+        Core::GpuQueueCapability::None, false, Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute,
+    };
+
     struct Payload{
         Core::GpuGraphResourceId destination;
     };

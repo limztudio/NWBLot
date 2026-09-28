@@ -88,13 +88,15 @@ namespace FrameGraphQueueAssignmentModifier{
         DebugTimingOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
+        QueueOverride = 1u << 6u,
 
         All = DirectDependencyAffinity
             | SameClassLoadBalance
             | NonPrimaryPreference
             | DebugTimingOverride
             | TimingCalibration
-            | TimingFeedback,
+            | TimingFeedback
+            | QueueOverride,
     };
 };
 

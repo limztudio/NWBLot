@@ -24,6 +24,27 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] Core::GpuTaskSchedulingHint UiDetail::UploadScheduling(const usize byteCount){
+    constexpr usize s_ParallelUploadMinimumBytes = 1024u * 1024u;
+    const bool largeUpload = byteCount >= s_ParallelUploadMinimumBytes;
+    Core::GpuTaskSchedulingHint scheduling;
+    // Tiny deltas favor fewer queue crossings; large refreshes allow overlap.
+    scheduling.cost = largeUpload ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
+    scheduling.overlapPreferred = largeUpload;
+    scheduling.avoidQueueCrossing = !largeUpload;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowSameClassQueueRouting = largeUpload;
+    scheduling.preferNonPrimarySameClassQueue = largeUpload;
+    scheduling.allowCrossFamilySameClassQueueRouting = largeUpload;
+    scheduling.allowParallelRecording = true;
+    return scheduling;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_ui{
 
 
@@ -273,7 +294,6 @@ bool UiSystem::declareTaskGraphTextureUploads(
         desc
             .setIdentity(Name("ui.imgui_texture_upload"))
             .setMarkerLabel("ImGui Texture Upload")
-            .setQueue(UiDetail::UploadQueueRequest())
             .setScheduling(UiDetail::UploadScheduling(uploadByteCount))
         ;
         if(previousTask.valid())

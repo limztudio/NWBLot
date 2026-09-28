@@ -83,19 +83,6 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
     ;
 }
 
-[[nodiscard]] static bool MatchesPreferredQueueClass(
-    const GpuQueuePreference::Enum preference,
-    const CommandQueue::Enum queueClass
-)noexcept{
-    switch(preference){
-    case GpuQueuePreference::Graphics: return queueClass == CommandQueue::Graphics;
-    case GpuQueuePreference::Compute: return queueClass == CommandQueue::Compute;
-    case GpuQueuePreference::Transfer: return queueClass == CommandQueue::Transfer;
-    case GpuQueuePreference::Any: return false;
-    default: return false;
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,13 +106,53 @@ bool IsLegalQueueAssignmentCandidate(
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
-    if(!HasCapabilities(candidate.capabilities, task.queue.requiredCapabilities))
+    if(
+        !HasCapabilities(candidate.capabilities, task.commands.requiredCapabilities)
+        || (task.commands.externalQueue.valid() && task.commands.externalQueue != candidate.id)
+        || (
+            task.commands.alternativeCapabilities != GpuQueueCapability::None
+            && (candidate.capabilities & task.commands.alternativeCapabilities) == GpuQueueCapability::None
+        )
+        || (
+            task.commands.additionalAlternativeCapabilities != GpuQueueCapability::None
+            && (candidate.capabilities & task.commands.additionalAlternativeCapabilities) == GpuQueueCapability::None
+        )
+    )
         return false;
+
+    const GpuPresentEndpoint* const presentEndpoint = graph.presentEndpoint();
+    bool requiresPrimaryGraphicsQueue = task.commands.requiresPrimaryGraphicsQueue
+        || (presentEndpoint && presentEndpoint->producer == task.id)
+    ;
+    if(presentEndpoint){
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex)
+            requiresPrimaryGraphicsQueue = requiresPrimaryGraphicsQueue
+                || task.resourceUses[useIndex].resource == presentEndpoint->backBuffer
+            ;
+    }
+    if(requiresPrimaryGraphicsQueue){
+        const GpuPhysicalQueueInfo* const primaryGraphics = FindBestCompatibleQueue(
+            topology,
+            GpuQueueCapability::Graphics,
+            CommandQueue::Graphics
+        );
+        if(!primaryGraphics || primaryGraphics->id != candidate.id)
+            return false;
+    }
 
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(task.resourceUses[useIndex].resource.index);
         if(resource.type == GpuGraphResourceType::HazardDomain)
             continue;
+        if(resource.directConsumerQueue.valid()){
+            const GpuPhysicalQueueInfo* const consumerQueue = FindPhysicalQueueInfo(topology, resource.directConsumerQueue);
+            if(
+                !consumerQueue
+                || !ResourceSharingAdmitsQueue(resource, topology, *consumerQueue)
+                || (!ResourceUsesConcurrentQueueSharing(resource, topology) && consumerQueue->familyIndex != candidate.familyIndex)
+            )
+                return false;
+        }
         if(
             ResourceUsesConcurrentQueueSharing(resource, topology)
             && !ResourceSharingAdmitsQueue(resource, topology, candidate)
@@ -133,29 +160,6 @@ bool IsLegalQueueAssignmentCandidate(
             return false;
     }
     return true;
-}
-
-
-const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
-    const CommandQueue::Enum requiredClass,
-    const bool dedicatedOnly
-)noexcept{
-    const GpuPhysicalQueueInfo* result = nullptr;
-    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
-        if(
-            (requiredClass != CommandQueue::kCount && candidate.queueClass != requiredClass)
-            || (dedicatedOnly && !candidate.dedicated)
-            || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate)
-            || !IsBetterQueue(candidate, result)
-        )
-            continue;
-        result = &candidate;
-    }
-    return result;
 }
 
 
@@ -228,25 +232,6 @@ bool BuildGpuTaskSchedulingReachability(
 }
 
 
-bool HasTransitivelyIndependentRequiredGraphicsTask(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskSchedulingReachability& schedulingReachability,
-    const GpuTaskGraphTaskView& task
-)noexcept{
-    for(const GpuTaskId otherTaskID : analysis.topologicalOrder()){
-        if(otherTaskID == task.id)
-            continue;
-
-        const GpuTaskGraphTaskView otherTask = graph.taskAt(otherTaskID.index);
-        if(
-            RequiresGraphics(otherTask.queue.requiredCapabilities)
-            && schedulingReachability.transitivelyIndependent(task.id, otherTask.id)
-        )
-            return true;
-    }
-    return false;
-}
 
 const GpuTaskQueueAssignment* FindQueueAssignment(
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
@@ -350,14 +335,20 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
-    const GpuPhysicalQueueInfo& candidate
-)noexcept{
+    const GpuPhysicalQueueInfo& candidate,
+    const usize ignoredAssignmentOffset,
+    const usize ignoredAssignmentCount)noexcept{
     GpuQueueAssignmentScore score;
-    score.preference = MatchesPreferredQueueClass(task.queue.preferredQueue, candidate.queueClass) ? 1 : 0;
 
     u64 overlap = 0u;
     u64 queueLoad = 0u;
-    for(const GpuTaskQueueAssignment& assignment : assignments){
+    for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
+        if(
+            assignmentIndex >= ignoredAssignmentOffset
+            && assignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
+        )
+            continue;
+        const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
         if(assignment.task == task.id)
             continue;
 
@@ -365,7 +356,8 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         if(assignment.queue == candidate.id)
             queueLoad = queueLoad > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : queueLoad + cost;
         if(
-            task.scheduling.overlapPreferred
+            ignoredAssignmentCount <= 1u
+            && task.scheduling.overlapPreferred
             && !task.scheduling.avoidQueueCrossing
             && assignment.queue != candidate.id
             && schedulingReachability.transitivelyIndependent(task.id, assignment.task)
@@ -385,6 +377,12 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
     for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
         const GpuTaskId producerTask{ .generation = task.id.generation, .index = static_cast<u32>(producerIndices[producerIndex]) };
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTask.index];
+        if(
+            producerAssignmentIndex >= ignoredAssignmentOffset
+            && producerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
+        )
+            continue;
         const GpuTaskQueueAssignment* const producer = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,
@@ -396,6 +394,12 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraphSchedulingTaskIndexView consumerIndices = analysis.schedulingConsumers(task.id);
     for(usize consumerIndex = 0u; consumerIndex < consumerIndices.taskCount; ++consumerIndex){
         const GpuTaskId consumerTask{ .generation = task.id.generation, .index = static_cast<u32>(consumerIndices[consumerIndex]) };
+        const u32 consumerAssignmentIndex = assignmentIndicesByTask[consumerTask.index];
+        if(
+            consumerAssignmentIndex >= ignoredAssignmentOffset
+            && consumerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
+        )
+            continue;
         const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,
@@ -414,6 +418,15 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         ++edgeIndex
     ){
         const GpuTaskDependencyEdge& edge = *scoringData.ownershipEdges[edgeIndex];
+        const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producer.index];
+        const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumer.index];
+        if(
+            producerAssignmentIndex >= ignoredAssignmentOffset
+            && producerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
+            && consumerAssignmentIndex >= ignoredAssignmentOffset
+            && consumerAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
+        )
+            continue;
         const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,
@@ -457,10 +470,25 @@ bool IsBetterAnyQueueAssignmentCandidate(
     const GpuQueueAssignmentScore& candidateScore,
     const GpuPhysicalQueueInfo& candidate,
     const GpuQueueAssignmentScore& currentScore,
-    const GpuPhysicalQueueInfo* const current
-)noexcept{
+    const GpuPhysicalQueueInfo* const current,
+    const bool compareTotalScore)noexcept{
     if(!current)
         return true;
+
+    if(compareTotalScore){
+        const auto total = [](const GpuQueueAssignmentScore& score){
+            return static_cast<i64>(score.overlap)
+                - static_cast<i64>(score.queueLoad)
+                - static_cast<i64>(score.incomingCrossings)
+                - static_cast<i64>(score.outgoingCrossings)
+                - static_cast<i64>(score.ownershipTransfers)
+            ;
+        };
+        const i64 candidateTotal = total(candidateScore);
+        const i64 currentTotal = total(currentScore);
+        if(candidateTotal != currentTotal)
+            return candidateTotal > currentTotal;
+    }
 
     const i64 candidateCrossings = static_cast<i64>(candidateScore.incomingCrossings)
         + static_cast<i64>(candidateScore.outgoingCrossings)
@@ -472,6 +500,10 @@ bool IsBetterAnyQueueAssignmentCandidate(
         return candidateCrossings < currentCrossings;
     if(candidateScore.ownershipTransfers != currentScore.ownershipTransfers)
         return candidateScore.ownershipTransfers < currentScore.ownershipTransfers;
+    const i64 candidateBenefit = static_cast<i64>(candidateScore.overlap) - static_cast<i64>(candidateScore.queueLoad);
+    const i64 currentBenefit = static_cast<i64>(currentScore.overlap) - static_cast<i64>(currentScore.queueLoad);
+    if(candidateBenefit != currentBenefit)
+        return candidateBenefit > currentBenefit;
     if(candidateScore.overlap != currentScore.overlap)
         return candidateScore.overlap > currentScore.overlap;
     if(candidateScore.queueLoad != currentScore.queueLoad)

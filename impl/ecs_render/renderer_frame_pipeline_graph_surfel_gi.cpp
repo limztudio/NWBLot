@@ -14,7 +14,7 @@
 
 #include <global/timer.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/surfel_gi_lifecycle_builder.h>
 
@@ -457,7 +457,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     surfelIrradianceClearDesc
         .setIdentity(Name("render.surfel_gi.irradiance_clear"))
         .setMarkerLabel("Surfel Irradiance Clear")
-        .setQueue(ComputePacketQueueRequest())
         .setScheduling(surfelIrradianceClearScheduling)
         .setDependencies(&surfelGiDependency, 1u)
         .setResourceUses(&surfelIrradianceClearResourceUse, 1u)
@@ -493,7 +492,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         ageFreeDesc
             .setIdentity(Name("render.surfel_gi.age_free"))
             .setMarkerLabel("Surfel GI Age Free")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&surfelGiDependency, 1u)
             .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
@@ -521,7 +519,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         cellHeadClearDesc
             .setIdentity(Name("render.surfel_gi.cell_head_clear"))
             .setMarkerLabel("Surfel GI Cell Head Clear")
-            .setQueue(ComputeTransferQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiAgeFreeTask, 1u)
             .setExternalStateSources(
@@ -548,7 +545,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         hashBuildDesc
             .setIdentity(Name("render.surfel_gi.hash_build"))
             .setMarkerLabel("Surfel GI Hash Build")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiCellHeadClearTask, 1u)
             .setResourceUses(hashBuildResourceUses.data(), hashBuildResourceUses.size())
@@ -578,7 +574,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         spawnDesc
             .setIdentity(Name("render.surfel_gi.spawn"))
             .setMarkerLabel("Surfel GI Spawn")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiHashBuildTask, 1u)
             .setResourceUses(spawnResourceUses.data(), spawnResourceUses.size())
@@ -604,7 +599,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceBuildArgsDesc
             .setIdentity(Name("render.surfel_gi.trace_build_args"))
             .setMarkerLabel("Surfel GI Trace Build Args")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiSpawnTask, 1u)
             .setExternalStateSources(
@@ -631,7 +625,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceDesc
             .setIdentity(Name("render.surfel_gi.trace"))
             .setMarkerLabel("Surfel GI Trace")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiTraceBuildArgsTask, 1u)
             .setExternalStateSources(
@@ -662,7 +655,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         resolveDesc
             .setIdentity(Name("render.surfel_gi.resolve"))
             .setMarkerLabel("Surfel GI Resolve")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiTraceTask, 1u)
             .setExternalStateSources(
@@ -695,7 +687,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     desc
         .setIdentity(Name("render.surfel_gi"))
         .setMarkerLabel("Surfel GI")
-        .setQueue(ComputeQueueRequest())
         .setScheduling(surfelGiScheduling)
         .setDependencies(&surfelGiDependency, 1u)
         .setExternalDependencies(

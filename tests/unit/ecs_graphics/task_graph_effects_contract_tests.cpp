@@ -4,6 +4,8 @@
 
 #include "task_graph_contract_test_helpers.h"
 
+#include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,7 +122,7 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     const AStringView readback = readbackOwner.substr(readbackOffset);
     EXPECT_TRUE(ContainsText(readback, "rayTracingSurfelResources.counterBuffer"));
     EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
-    EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
+    EXPECT_TRUE(ContainsText(readback, "addCopyBufferTask("));
     EXPECT_FALSE(ContainsText(readback, ".acceptedToken ="));
 
     EXPECT_TRUE(ContainsText(surfelTaskGraph, ".states = m_surfelGiCounterPersistentState.source(),"));
@@ -146,8 +148,11 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
 }
 
 
-// The full irradiance clear is deliberately renderer-local: the generic helper conservatively declares Graphics for render-pass lowering, while this native clear is constrained to the direct Compute GI packet and captures the same typed command-IR record after the graph-owned CopyDest transition.
-TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
+// The renderer-local irradiance clear captures the typed command-IR record after the graph-owned CopyDest transition and permits either Compute or Graphics transport.
+TEST(EcsGraphics, SurfelIrradianceClearOwnsShaderCommandContractAndNativeCapture){
+    const NWB::Core::GpuTaskCommandRequirements commands = NWB::Impl::ECSRenderDetail::SurfelIrradianceClearGraphTask::s_CommandRequirements;
+    EXPECT_EQ(commands.requiredCapabilities, NWB::Core::GpuQueueCapability::None);
+    EXPECT_EQ(commands.alternativeCapabilities, NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics);
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -176,7 +181,7 @@ TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
     const AStringView irradianceClear = surfelGi.substr(resourceUseOffset, giSchedulingOffset - resourceUseOffset);
 
     EXPECT_TRUE(ContainsText(irradianceClear, "WriteTextureUse(\n        surfelIrradiance,\n        ECSRenderDetail::s_FramebufferSubresources,\n        Core::ResourceStates::CopyDest\n    )"));
-    EXPECT_TRUE(ContainsText(irradianceClear, ".setQueue(ComputePacketQueueRequest())"));
+    EXPECT_TRUE(ContainsText(irradianceClear, ".setScheduling(surfelIrradianceClearScheduling)"));
     EXPECT_TRUE(ContainsText(irradianceClear, ".setResourceUses(&surfelIrradianceClearResourceUse, 1u)"));
     EXPECT_TRUE(ContainsText(irradianceClear, "addTask<ECSRenderDetail::SurfelIrradianceClearGraphTask>("));
     EXPECT_FALSE(ContainsText(irradianceClear, "addClearTextureTask("));
@@ -585,7 +590,7 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
 }
 
 
-// Depth Warp and Integration are each declared once as merge-capable, Compute-preferred semantic tasks. The compiler may independently retain or collapse either stage, while any retained Compute route keeps the explicit same-family and cross-family auxiliary-transport opt-ins.
+// Depth Warp and Integration each declare their Compute commands once. The scheduler selects their physical transport and retains the explicit packet merge and timing feedback contracts.
 TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -645,10 +650,9 @@ TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
         ASSERT_NE(guard, AStringView::npos);
         ASSERT_LT(desc, guard);
         const AStringView declaration = body.substr(desc, guard - desc);
-        EXPECT_TRUE(ContainsText(declaration, ".setQueue(RendererTaskGraphDetail::ComputeQueueRequest())"));
+        EXPECT_TRUE(ContainsText(declaration, "graph.addTask<"));
         EXPECT_TRUE(ContainsText(declaration, ".setScheduling(avboitComputeScheduling)"));
         EXPECT_TRUE(ContainsText(declaration, ".setTimingMetadata(avboitComputeStageTiming)"));
-        EXPECT_FALSE(ContainsText(declaration, "GraphicsComputeQueueRequest()"));
         EXPECT_EQ(CountText(declaration, stage.identity), 1u);
         EXPECT_TRUE(ContainsText(body.substr(guard), "return false;"));
         const usize callerBegin = caller.find(stage.callerGuard);

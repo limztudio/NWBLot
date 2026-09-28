@@ -90,6 +90,7 @@ namespace __hidden_task_graph_telemetry{
         | GpuTaskQueueAssignmentModifier::DebugTimingOverride
         | GpuTaskQueueAssignmentModifier::TimingCalibration
         | GpuTaskQueueAssignmentModifier::TimingFeedback
+        | GpuTaskQueueAssignmentModifier::QueueOverride
     ;
     if((static_cast<u8>(modifiers) & static_cast<u8>(~s_KnownModifiers)) != 0u)
         return false;
@@ -107,6 +108,8 @@ namespace __hidden_task_graph_telemetry{
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
     if(modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
+    if(modifiers & GpuTaskQueueAssignmentModifier::QueueOverride)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::QueueOverride;
     outModifiers = static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(translated);
     return true;
 }

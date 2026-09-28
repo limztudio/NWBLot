@@ -75,12 +75,6 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     taskDesc
         .setIdentity(Name("tests/command_ir_replay/full_multisample_clear_task"))
         .setMarkerLabel("Replay Full Multisample Clear Task")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     Graphics::GpuClearTextureTaskDesc clearDesc;
     clearDesc.destination = resource;
@@ -175,7 +169,12 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
         .setMarkerLabel("Replay Compressed Multisample Clear Task")
         .setResourceUses(&compressedUse, 1u)
     ;
-    const Graphics::GpuTaskId compressedTask = compressedGraph.addTask(compressedTaskDesc);
+    const Graphics::GpuTaskId compressedTask = compressedGraph.addTask(
+        compressedTaskDesc,
+        Graphics::GpuTaskCommandRequirements{
+            .alternativeCapabilities = Graphics::GpuQueueCapability::Compute | Graphics::GpuQueueCapability::Graphics,
+        }
+    );
     ASSERT_TRUE(compressedTask.valid());
     Graphics::GpuTaskGraphAnalysis compressedAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments compressedAssignments(testArena.arena);
@@ -282,12 +281,6 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     taskDesc
         .setIdentity(Name("tests/command_ir_replay/texture_copy"))
         .setMarkerLabel("Replay Texture Copy")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuTaskId task = graph.addCopyTextureTask(
         taskDesc,
@@ -300,7 +293,7 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-        ASSERT_EQ(declarations.taskAt(task.index).queue.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
+        ASSERT_EQ(declarations.taskAt(task.index).commands.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -387,7 +380,10 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
             .setMarkerLabel("Replay Immutable Texture Copy Rejection")
             .setResourceUses(replayUses, LengthOf(replayUses))
         ;
-        const Graphics::GpuTaskId rejectedTask = rejectedGraph.addTask(rejectedTaskDesc);
+        const Graphics::GpuTaskId rejectedTask = rejectedGraph.addTask(
+            rejectedTaskDesc,
+            Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer }
+        );
         ASSERT_TRUE(rejectedTask.valid());
         Graphics::GpuTaskGraphAnalysis rejectedAnalysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments rejectedAssignments(testArena.arena);
@@ -479,8 +475,8 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
 
         EXPECT_EQ(
-            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(partialTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
     Graphics::GpuTaskGraphAnalysis partialAnalysis(testArena.arena);
@@ -520,6 +516,16 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         Graphics::GpuQueueCapability::Transfer,
         Graphics::GpuQueueCapability::Graphics
     );
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(
+            partialCapture.commandBytes(),
+            reads.declarations,
+            reads.compiled,
+            partialPacket
+        ).error,
+        Graphics::GpuCommandIrReplayError::None
+    );
+    corruptedQueue->capabilities = Graphics::GpuQueueCapability::Transfer;
     EXPECT_EQ(
         Graphics::PreflightGpuCommandIrPacket(
             partialCapture.commandBytes(),
@@ -605,15 +611,9 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     desc
         .setIdentity(Name("tests/command_ir_replay/copy"))
         .setMarkerLabel("Replay Copy")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
         .setResourceUses(uses, LengthOf(uses))
     ;
-    const Graphics::GpuTaskId task = graph.addTask(desc);
+    const Graphics::GpuTaskId task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer });
     ASSERT_TRUE(task.valid());
     const Graphics::GpuTaskId secondDependencies[] = { task };
     Graphics::GpuTaskDesc secondDesc = desc;
@@ -622,7 +622,10 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
         .setMarkerLabel("Replay Copy Second")
         .setDependencies(secondDependencies, LengthOf(secondDependencies))
     ;
-    const Graphics::GpuTaskId secondTask = graph.addTask(secondDesc);
+    const Graphics::GpuTaskId secondTask = graph.addTask(
+        secondDesc,
+        Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer }
+    );
     ASSERT_TRUE(secondTask.valid());
 
     SingleQueueCompile singleQueueCompile(testArena);

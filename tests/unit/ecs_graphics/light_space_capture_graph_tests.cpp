@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -116,10 +116,9 @@ public:
         Core::GpuTaskDesc prefixDesc;
         prefixDesc
             .setIdentity(Name("tests/light_space/prefix")).setMarkerLabel("Current Frame Prefix")
-            .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
             .setResourceUses(&boundsWrite, reuse ? 0u : 1u)
         ;
-        prefix = graph.addTask(prefixDesc);
+        prefix = graph.addTask(prefixDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer });
         const Core::GpuTaskExternalStateSource sources[] = { { .states = &acceptedState } };
         const LightSpaceShadowGraph maps = DeclareLightSpaceShadowMaps(graph, LightSpaceShadowGraphInputs{
             .graphics = graphics, .arena = testArena.arena, .scratchArena = scratch, .shadowPrepared = shadowPrepared,
@@ -137,10 +136,10 @@ public:
         Core::GpuTaskDesc receiverDesc;
         receiverDesc
             .setIdentity(Name("tests/light_space/receiver")).setMarkerLabel("Current Receiver Shading")
-            .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest()).setDependencies(&maps.ready, 1u)
+            .setDependencies(&maps.ready, 1u)
             .setExternalStateSources(sources, 1u).setResourceUses(uses, LengthOf(uses))
         ;
-        receiver = graph.addTask(receiverDesc);
+        receiver = graph.addTask(receiverDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer });
         return maps;
     }
 };

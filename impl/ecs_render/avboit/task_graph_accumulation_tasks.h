@@ -42,6 +42,8 @@ namespace RendererTaskGraphDetail{
 
 
 struct AvboitAccumulationComputeEmulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
@@ -106,6 +108,10 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         Phase phase = Phase::Generate;
     };
 
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+        return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+    }
+
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
@@ -119,6 +125,8 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
 
 
 struct AvboitAccumulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -156,6 +164,8 @@ struct AvboitAccumulationGraphTask{
 
 // Keep ShaderResource handoffs in a Graphics task right after rasterization; barriers are the contract.
 struct AvboitAccumulationFinalizeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{};
 
     [[nodiscard]] static bool record(

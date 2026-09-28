@@ -284,19 +284,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
     ASSERT_TRUE(rectBadDestinationResource.valid());
 
     Graphics::GpuTaskDesc desc;
-    desc.setQueue(Graphics::GpuQueueRequest{
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
-        true,
-        true,
-    });
     Graphics::GpuTaskDesc resolveTaskDesc = desc;
-    resolveTaskDesc.setQueue(Graphics::GpuQueueRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        true,
-        true,
-    });
     const Graphics::GpuCopyTextureTaskRegion copyBadSourceRegions[]{
         Graphics::GpuCopyTextureTaskRegion{
             .source = copySourceResource,
@@ -553,12 +541,6 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     uploadTaskDesc
         .setIdentity(Name("tests/task_graph/fresh_retained_upload"))
         .setMarkerLabel("Fresh Retained Upload")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuUploadTextureTaskDesc validUploadDesc{
         .source = source,
@@ -800,12 +782,6 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     copyTaskDesc
         .setIdentity(Name("tests/task_graph/unknown_retained_copy"))
         .setMarkerLabel("Unknown Retained Copy")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuCopyTextureTaskRegion rejectedSourceRegion{
         .source = unknownCopySourceResource,
@@ -825,12 +801,6 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
     resolveTaskDesc
         .setIdentity(Name("tests/task_graph/unknown_retained_resolve_destination"))
         .setMarkerLabel("Unknown Retained Resolve Destination")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuResolveTextureTaskRegion rejectedResolveDestinationRegion{
         .source = resolveSourceResource,

@@ -47,11 +47,8 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     );
     ASSERT_TRUE(buffer.valid());
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -66,11 +63,10 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     producerDesc
         .setIdentity(Name("tests/task_graph/same_class_producer"))
         .setMarkerLabel("Same Class Producer")
-        .setQueue(graphicsRequest)
         .setScheduling(producerScheduling)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint consumerScheduling;
@@ -87,12 +83,11 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     consumerDesc
         .setIdentity(Name("tests/task_graph/same_class_consumer"))
         .setMarkerLabel("Same Class Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
@@ -186,18 +181,15 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
 TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuQueueRequest queueRequest;
-    queueRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    queueRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    queueRequest.allowFallback = false;
-    queueRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements commands;
+    commands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/external_load_same_class"),
         "External Load Same Class",
-        queueRequest,
+        commands,
         scheduling
     );
     ASSERT_TRUE(task.valid());
@@ -236,42 +228,39 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
     scheduling.allowSameClassQueueRouting = true;
     const Graphics::GpuTaskId tasks[] = {
-        AddTaskWithQueue(
+        AddTaskWithCommands(
             graph,
             Name("tests/task_graph/multi_auxiliary_same_class_first"),
             "Multi Auxiliary Same Class First",
-            graphicsRequest,
+            graphicsCommands,
             scheduling
         ),
-        AddTaskWithQueue(
+        AddTaskWithCommands(
             graph,
             Name("tests/task_graph/multi_auxiliary_same_class_second"),
             "Multi Auxiliary Same Class Second",
-            graphicsRequest,
+            graphicsCommands,
             scheduling
         ),
-        AddTaskWithQueue(
+        AddTaskWithCommands(
             graph,
             Name("tests/task_graph/multi_auxiliary_same_class_third"),
             "Multi Auxiliary Same Class Third",
-            graphicsRequest,
+            graphicsCommands,
             scheduling
         ),
-        AddTaskWithQueue(
+        AddTaskWithCommands(
             graph,
             Name("tests/task_graph/multi_auxiliary_same_class_fourth"),
             "Multi Auxiliary Same Class Fourth",
-            graphicsRequest,
+            graphicsCommands,
             scheduling
         ),
     };
@@ -314,7 +303,6 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
 TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
     const auto runCase = [](
         const Graphics::GpuQueueCapability::Mask requiredCapabilities,
-        const Graphics::GpuQueuePreference::Enum preference,
         const Graphics::GpuPhysicalQueueInfo& primary,
         const Graphics::GpuPhysicalQueueInfo& firstAuxiliary,
         const Graphics::GpuPhysicalQueueInfo& secondAuxiliary,
@@ -324,20 +312,17 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
 
-        Graphics::GpuQueueRequest queueRequest;
-        queueRequest.requiredCapabilities = requiredCapabilities;
-        queueRequest.preferredQueue = preference;
-        queueRequest.allowFallback = false;
-        queueRequest.compilerMayOverridePreference = false;
+        Graphics::GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = requiredCapabilities;
 
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = Graphics::GpuTaskCostHint::Large;
         scheduling.allowSameClassQueueRouting = true;
         const Graphics::GpuTaskId tasks[] = {
-            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_first"), "Multi Auxiliary Dedicated First", queueRequest, scheduling),
-            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_second"), "Multi Auxiliary Dedicated Second", queueRequest, scheduling),
-            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_third"), "Multi Auxiliary Dedicated Third", queueRequest, scheduling),
-            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_fourth"), "Multi Auxiliary Dedicated Fourth", queueRequest, scheduling),
+            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_first"), "Multi Auxiliary Dedicated First", commands, scheduling),
+            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_second"), "Multi Auxiliary Dedicated Second", commands, scheduling),
+            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_third"), "Multi Auxiliary Dedicated Third", commands, scheduling),
+            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_fourth"), "Multi Auxiliary Dedicated Fourth", commands, scheduling),
         };
         for(const Graphics::GpuTaskId task : tasks)
             ASSERT_TRUE(task.valid());
@@ -377,12 +362,11 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
     thirdComputeAuxiliary.queueIndex = 3u;
     runCase(
         Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
         DedicatedComputeQueue(),
         firstComputeAuxiliary,
         secondComputeAuxiliary,
         thirdComputeAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+        Graphics::GpuTaskQueueAssignmentReason::ScoredAny
     );
 
     Graphics::GpuPhysicalQueueInfo firstTransferAuxiliary = DedicatedTransferQueue(3u);
@@ -393,12 +377,11 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
     thirdTransferAuxiliary.queueIndex = 3u;
     runCase(
         Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
         DedicatedTransferQueue(),
         firstTransferAuxiliary,
         secondTransferAuxiliary,
         thirdTransferAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer
+        Graphics::GpuTaskQueueAssignmentReason::ScoredAny
     );
 }
 
@@ -406,11 +389,8 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
 
     Graphics::GpuTaskSchedulingHint uploadScheduling;
     uploadScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -421,10 +401,9 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     uploadDesc
         .setIdentity(Name("tests/task_graph/isolated_same_class_offload"))
         .setMarkerLabel("Isolated Same Class Offload")
-        .setQueue(graphicsRequest)
         .setScheduling(uploadScheduling)
     ;
-    const Graphics::GpuTaskId upload = graph.addTask(uploadDesc);
+    const Graphics::GpuTaskId upload = graph.addTask(uploadDesc, graphicsCommands);
     ASSERT_TRUE(upload.valid());
 
     Graphics::GpuTaskSchedulingHint bridgeScheduling;
@@ -437,11 +416,10 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     bridgeDesc
         .setIdentity(Name("tests/task_graph/isolated_same_class_primary_bridge"))
         .setMarkerLabel("Isolated Same Class Primary Bridge")
-        .setQueue(graphicsRequest)
         .setScheduling(bridgeScheduling)
         .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
     ;
-    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc);
+    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc, graphicsCommands);
     ASSERT_TRUE(bridge.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
@@ -468,7 +446,7 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     ASSERT_NE(uploadAssignment, nullptr);
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(uploadAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
     EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
     EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
@@ -485,11 +463,8 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -498,11 +473,11 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     firstScheduling.allowCrossFamilySameClassQueueRouting = true;
     firstScheduling.forceSubmissionBoundary = true;
     firstScheduling.allowPacketMerge = false;
-    const Graphics::GpuTaskId first = AddTaskWithQueue(
+    const Graphics::GpuTaskId first = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/serial_same_class_offload_first"),
         "Serial Same Class Offload First",
-        graphicsRequest,
+        graphicsCommands,
         firstScheduling
     );
     ASSERT_TRUE(first.valid());
@@ -516,11 +491,10 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     secondDesc
         .setIdentity(Name("tests/task_graph/serial_same_class_offload_second"))
         .setMarkerLabel("Serial Same Class Offload Second")
-        .setQueue(graphicsRequest)
         .setScheduling(secondScheduling)
         .setDependencies(secondDependencies, LengthOf(secondDependencies))
     ;
-    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc, graphicsCommands);
     ASSERT_TRUE(second.valid());
 
     Graphics::GpuTaskSchedulingHint bridgeScheduling;
@@ -533,11 +507,10 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     bridgeDesc
         .setIdentity(Name("tests/task_graph/serial_same_class_primary_bridge"))
         .setMarkerLabel("Serial Same Class Primary Bridge")
-        .setQueue(graphicsRequest)
         .setScheduling(bridgeScheduling)
         .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
     ;
-    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc);
+    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc, graphicsCommands);
     ASSERT_TRUE(bridge.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
@@ -565,7 +538,7 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(firstAssignment->queue, auxiliaryGraphicsQueue.id);
     EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ConservativeAny);
     EXPECT_TRUE(secondAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
@@ -585,27 +558,24 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
     producerScheduling.allowSameClassQueueRouting = true;
-    const Graphics::GpuTaskId first = AddTaskWithQueue(
+    const Graphics::GpuTaskId first = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/direct_affinity_order_first"),
         "Direct Affinity Order First",
-        graphicsRequest,
+        graphicsCommands,
         producerScheduling
     );
-    const Graphics::GpuTaskId second = AddTaskWithQueue(
+    const Graphics::GpuTaskId second = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/direct_affinity_order_second"),
         "Direct Affinity Order Second",
-        graphicsRequest,
+        graphicsCommands,
         producerScheduling
     );
     ASSERT_TRUE(first.valid());
@@ -616,11 +586,11 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     consumerScheduling.allowSameClassQueueRouting = true;
     consumerScheduling.preserveSameClassQueueWithDirectDependency = true;
     const Graphics::GpuTaskId consumerDependencies[] = { second, first };
-    const Graphics::GpuTaskId consumer = AddTaskWithQueue(
+    const Graphics::GpuTaskId consumer = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/direct_affinity_order_consumer"),
         "Direct Affinity Order Consumer",
-        graphicsRequest,
+        graphicsCommands,
         consumerScheduling,
         {},
         consumerDependencies,
@@ -667,11 +637,8 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -679,18 +646,18 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     Graphics::GpuTaskSchedulingHint secondScheduling;
     secondScheduling.cost = Graphics::GpuTaskCostHint::Medium;
     secondScheduling.allowSameClassQueueRouting = true;
-    const Graphics::GpuTaskId first = AddTaskWithQueue(
+    const Graphics::GpuTaskId first = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/cross_family_not_opted_first"),
         "Cross Family Not Opted First",
-        graphicsRequest,
+        graphicsCommands,
         firstScheduling
     );
-    const Graphics::GpuTaskId second = AddTaskWithQueue(
+    const Graphics::GpuTaskId second = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/cross_family_not_opted_second"),
         "Cross Family Not Opted Second",
-        graphicsRequest,
+        graphicsCommands,
         secondScheduling
     );
     ASSERT_TRUE(first.valid());
@@ -729,11 +696,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     );
     ASSERT_TRUE(buffer.valid());
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -749,11 +713,10 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     producerDesc
         .setIdentity(Name("tests/task_graph/cross_family_same_class_producer"))
         .setMarkerLabel("Cross Family Same Class Producer")
-        .setQueue(graphicsRequest)
         .setScheduling(producerScheduling)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint consumerScheduling;
@@ -771,12 +734,11 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     consumerDesc
         .setIdentity(Name("tests/task_graph/cross_family_same_class_consumer"))
         .setMarkerLabel("Cross Family Same Class Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
@@ -866,11 +828,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     );
     ASSERT_TRUE(buffer.valid());
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -886,11 +845,10 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     producerDesc
         .setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_producer"))
         .setMarkerLabel("Cross Family Same Class Concurrent Producer")
-        .setQueue(graphicsRequest)
         .setScheduling(producerScheduling)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint consumerScheduling;
@@ -908,12 +866,11 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     consumerDesc
         .setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_consumer"))
         .setMarkerLabel("Cross Family Same Class Concurrent Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
@@ -957,7 +914,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
 TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnershipHandoffs){
     const auto runCase = [](
         const Graphics::GpuQueueCapability::Mask capabilities,
-        const Graphics::GpuQueuePreference::Enum preference,
         const Graphics::GpuPhysicalQueueInfo& primaryQueue,
         const Graphics::GpuPhysicalQueueInfo& auxiliaryQueue,
         const Name& resourceIdentity,
@@ -973,11 +929,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         );
         ASSERT_TRUE(buffer.valid());
 
-        Graphics::GpuQueueRequest queueRequest;
-        queueRequest.requiredCapabilities = capabilities;
-        queueRequest.preferredQueue = preference;
-        queueRequest.allowFallback = false;
-        queueRequest.compilerMayOverridePreference = false;
+        Graphics::GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = capabilities;
 
         Graphics::GpuTaskSchedulingHint producerScheduling;
         producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -993,11 +946,10 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         producerDesc
             .setIdentity(producerIdentity)
             .setMarkerLabel("Cross Family Same Class Producer")
-            .setQueue(queueRequest)
             .setScheduling(producerScheduling)
             .setResourceUses(&producerUse, 1u)
         ;
-        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc, commands);
         ASSERT_TRUE(producer.valid());
 
         Graphics::GpuTaskSchedulingHint consumerScheduling;
@@ -1015,12 +967,11 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         consumerDesc
             .setIdentity(consumerIdentity)
             .setMarkerLabel("Cross Family Same Class Consumer")
-            .setQueue(queueRequest)
             .setScheduling(consumerScheduling)
             .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
             .setResourceUses(&consumerUse, 1u)
         ;
-        const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+        const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, commands);
         ASSERT_TRUE(consumer.valid());
 
         const Graphics::GpuPhysicalQueueInfo queues[] = { primaryQueue, auxiliaryQueue };
@@ -1047,9 +998,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
         EXPECT_EQ(
             consumerAssignment->reason,
-            preference == Graphics::GpuQueuePreference::Compute
-                ? Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
-                : Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer
+            Graphics::GpuTaskQueueAssignmentReason::ScoredAny
         );
         EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
         EXPECT_EQ(compiledProducer->queue, primaryQueue.id);
@@ -1077,7 +1026,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
     auxiliaryCompute.familyIndex = 3u;
     runCase(
         Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
         DedicatedComputeQueue(),
         auxiliaryCompute,
         Name("tests/task_graph/cross_family_same_class_compute_buffer"),
@@ -1089,7 +1037,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
     auxiliaryTransfer.familyIndex = 4u;
     runCase(
         Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
         DedicatedTransferQueue(),
         auxiliaryTransfer,
         Name("tests/task_graph/cross_family_same_class_transfer_buffer"),
@@ -1116,8 +1063,8 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
-    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
-    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
+    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
+    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     const Graphics::GpuTaskResourceUse producerUse{
         .resource = accelStruct,
         .range = {},
@@ -1128,10 +1075,9 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     producerDesc
         .setIdentity(Name("tests/task_graph/cross_family_accel_struct_producer"))
         .setMarkerLabel("Cross Family Accel Struct Producer")
-        .setQueue(graphicsRequest)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     const Graphics::GpuTaskId consumerDependencies[] = { producer };
@@ -1145,17 +1091,20 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     consumerDesc
         .setIdentity(Name("tests/task_graph/cross_family_accel_struct_consumer"))
         .setMarkerLabel("Cross Family Accel Struct Consumer")
-        .setQueue(computeRequest)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = consumer, .queue = queues[1u].id };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.queueAssignmentOptions.queueOverrides = &route;
+    options.queueAssignmentOptions.queueOverrideCount = 1u;
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 

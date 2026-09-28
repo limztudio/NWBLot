@@ -5,7 +5,7 @@
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 
 #include <core/task/gpu/compiler_internal.h>
 
@@ -68,9 +68,9 @@ struct ShadowPacketPlan{
                 Core::GpuTaskDesc{}
                     .setIdentity(identities[index])
                     .setMarkerLabel(labels[index])
-                    .setQueue(Impl::RendererTaskGraphDetail::GraphicsQueueRequest())
                     .setScheduling(scheduling)
-                    .setDependencies(previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u)
+                    .setDependencies(previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u),
+                Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
             );
             if(!stages[index].valid()){
                 ADD_FAILURE() << "stage declaration=" << index;

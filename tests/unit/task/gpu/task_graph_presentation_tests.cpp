@@ -55,12 +55,7 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
         EXPECT_EQ(declarations.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
     }
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Medium;
     scheduling.overlapPreferred = false;
@@ -80,23 +75,21 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     sceneOutputDesc
         .setIdentity(Name("tests/task_graph/scene_output"))
         .setMarkerLabel("Scene Output")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setResourceUses(backbufferWrite, LengthOf(backbufferWrite))
     ;
-    const Graphics::GpuTaskId sceneOutput = graph.addTask(sceneOutputDesc);
+    const Graphics::GpuTaskId sceneOutput = graph.addTask(sceneOutputDesc, graphicsCommands);
     ASSERT_TRUE(sceneOutput.valid());
 
     Graphics::GpuTaskDesc overlayDesc;
     overlayDesc
         .setIdentity(Name("tests/task_graph/presentation_overlay"))
         .setMarkerLabel("Presentation Overlay")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setDependencies(&sceneOutput, 1u)
         .setResourceUses(backbufferWrite, LengthOf(backbufferWrite))
     ;
-    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc);
+    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc, graphicsCommands);
     ASSERT_TRUE(overlay.valid());
 
     // The published producer only confirms that the final presentation contributor recorded. It deliberately has
@@ -105,11 +98,10 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     terminalDesc
         .setIdentity(Name("tests/task_graph/presentation_terminal"))
         .setMarkerLabel("Presentation Terminal")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setDependencies(&overlay, 1u)
     ;
-    const Graphics::GpuTaskId terminal = graph.addTask(terminalDesc);
+    const Graphics::GpuTaskId terminal = graph.addTask(terminalDesc, graphicsCommands);
     ASSERT_TRUE(terminal.valid());
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -124,10 +116,9 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     lateTailDesc
         .setIdentity(Name("tests/task_graph/presentation_late_tail"))
         .setMarkerLabel("Presentation Late Tail")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
     ;
-    const Graphics::GpuTaskId lateTail = graph.addTask(lateTailDesc);
+    const Graphics::GpuTaskId lateTail = graph.addTask(lateTailDesc, graphicsCommands);
     ASSERT_TRUE(lateTail.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
@@ -244,15 +235,9 @@ TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     writerDesc
         .setIdentity(Name("tests/task_graph/present_acquisition_writer"))
         .setMarkerLabel("Present Acquisition Writer")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setResourceUses(&writerUse, 1u)
     ;
-    const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+    const Graphics::GpuTaskId writer = graph.addTask(writerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(writer.valid());
     ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
         .producer = writer,
@@ -289,12 +274,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         .queues = &queue,
         .queueCount = 1u,
     };
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     const auto expectInvalidEndpoint = [&](
         Graphics::GpuTaskGraph& graph,
         const Graphics::GpuTaskId producer,
@@ -328,11 +308,11 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
             "Presentation Declaration Back Buffer",
             Graphics::ResourceStates::Unknown
         );
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_declaration_terminal"),
             "Presentation Declaration Terminal",
-            graphicsRequest
+            graphicsCommands
         );
         const Graphics::GpuGraphResourceId foreignBackbuffer = AddPresentationTexture(
             testArena,
@@ -343,11 +323,11 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
             "Presentation Declaration Foreign Back Buffer",
             Graphics::ResourceStates::Present
         );
-        const Graphics::GpuTaskId foreignProducer = AddTaskWithQueue(
+        const Graphics::GpuTaskId foreignProducer = AddTaskWithCommands(
             foreignGraph,
             Name("tests/task_graph/presentation_declaration_foreign_terminal"),
             "Presentation Declaration Foreign Terminal",
-            graphicsRequest
+            graphicsCommands
         );
         ASSERT_TRUE(backbuffer.valid());
         ASSERT_TRUE(producer.valid());
@@ -395,16 +375,15 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_hazard_domain_writer"))
             .setMarkerLabel("Presentation Hazard Domain Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         ASSERT_TRUE(writer.valid());
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_hazard_domain_terminal"),
             "Presentation Hazard Domain Terminal",
-            graphicsRequest,
+            graphicsCommands,
             {},
             {},
             &writer,
@@ -436,16 +415,15 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_invalid_buffer_writer"))
             .setMarkerLabel("Presentation Invalid Buffer Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         ASSERT_TRUE(writer.valid());
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_invalid_buffer_terminal"),
             "Presentation Invalid Buffer Terminal",
-            graphicsRequest
+            graphicsCommands
         );
         ASSERT_TRUE(producer.valid());
         EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
@@ -485,29 +463,23 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_non_graphics_writer"))
             .setMarkerLabel("Presentation Non-Graphics Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         ASSERT_TRUE(writer.valid());
-        const Graphics::GpuQueueRequest transferRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            false,
-            false,
-        };
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskCommandRequirements transferCommands{ Graphics::GpuQueueCapability::Transfer };
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_non_graphics_terminal"),
             "Presentation Non-Graphics Terminal",
-            transferRequest
+            transferCommands
         );
         ASSERT_TRUE(producer.valid());
         ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
             .producer = producer,
             .backBuffer = backbuffer,
         }));
-        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+        expectInvalidEndpoint(graph, producer, writer, backbuffer);
     }
 
     {
@@ -522,11 +494,11 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
             Graphics::ResourceStates::Present
         );
         ASSERT_TRUE(backbuffer.valid());
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_unwritten_terminal"),
             "Presentation Unwritten Terminal",
-            graphicsRequest
+            graphicsCommands
         );
         ASSERT_TRUE(producer.valid());
         ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
@@ -558,16 +530,15 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_disconnected_writer"))
             .setMarkerLabel("Presentation Disconnected Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         ASSERT_TRUE(writer.valid());
-        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        const Graphics::GpuTaskId producer = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_disconnected_terminal"),
             "Presentation Disconnected Terminal",
-            graphicsRequest
+            graphicsCommands
         );
         ASSERT_TRUE(producer.valid());
         ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
@@ -599,28 +570,25 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         reachableWriterDesc
             .setIdentity(Name("tests/task_graph/presentation_mixed_writer_reachable"))
             .setMarkerLabel("Presentation Mixed Writer Reachable")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId reachableWriter = graph.addTask(reachableWriterDesc);
+        const Graphics::GpuTaskId reachableWriter = graph.addTask(reachableWriterDesc, graphicsCommands);
         ASSERT_TRUE(reachableWriter.valid());
         Graphics::GpuTaskDesc producerDesc;
         producerDesc
             .setIdentity(Name("tests/task_graph/presentation_mixed_writer_terminal"))
             .setMarkerLabel("Presentation Mixed Writer Terminal")
-            .setQueue(graphicsRequest)
             .setDependencies(&reachableWriter, 1u)
         ;
-        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
         ASSERT_TRUE(producer.valid());
         Graphics::GpuTaskDesc unrelatedWriterDesc;
         unrelatedWriterDesc
             .setIdentity(Name("tests/task_graph/presentation_mixed_writer_unrelated"))
             .setMarkerLabel("Presentation Mixed Writer Unrelated")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId unrelatedWriter = graph.addTask(unrelatedWriterDesc);
+        const Graphics::GpuTaskId unrelatedWriter = graph.addTask(unrelatedWriterDesc, graphicsCommands);
         ASSERT_TRUE(unrelatedWriter.valid());
         ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
             .producer = producer,
@@ -641,12 +609,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         .queues = &queue,
         .queueCount = 1u,
     };
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     const auto expectInvalidEndpoint = [&](
         Graphics::GpuTaskGraph& graph,
         const Graphics::GpuTaskId producer,
@@ -668,11 +631,11 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         EXPECT_FALSE(compiledPlan.valid());
     };
     const auto addTerminal = [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskId dependency){
-        return AddTaskWithQueue(
+        return AddTaskWithCommands(
             graph,
             Name("tests/task_graph/presentation_texture_contract_terminal"),
             "Presentation Texture Contract Terminal",
-            graphicsRequest,
+            graphicsCommands,
             {},
             {},
             dependency.valid() ? &dependency : nullptr,
@@ -706,10 +669,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_metadata_writer"))
             .setMarkerLabel("Presentation Metadata Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         const Graphics::GpuTaskId producer = addTerminal(graph, writer);
         ASSERT_TRUE(writer.valid());
         ASSERT_TRUE(producer.valid());
@@ -750,10 +712,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_state_contract_writer"))
             .setMarkerLabel("Presentation State Contract Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         const Graphics::GpuTaskId producer = addTerminal(graph, writer);
         ASSERT_TRUE(writer.valid());
         ASSERT_TRUE(producer.valid());
@@ -818,10 +779,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_present_state_writer"))
             .setMarkerLabel("Presentation Present State Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         const Graphics::GpuTaskId producer = addTerminal(graph, writer);
         ASSERT_TRUE(writer.valid());
         ASSERT_TRUE(producer.valid());
@@ -864,10 +824,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         readerDesc
             .setIdentity(Name("tests/task_graph/presentation_read_only_reader"))
             .setMarkerLabel("Presentation Read Only Reader")
-            .setQueue(graphicsRequest)
             .setResourceUses(&readerUse, 1u)
         ;
-        const Graphics::GpuTaskId reader = graph.addTask(readerDesc);
+        const Graphics::GpuTaskId reader = graph.addTask(readerDesc, graphicsCommands);
         const Graphics::GpuTaskId producer = addTerminal(graph, reader);
         ASSERT_TRUE(reader.valid());
         ASSERT_TRUE(producer.valid());
@@ -900,10 +859,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         writerDesc
             .setIdentity(Name("tests/task_graph/presentation_later_read_writer"))
             .setMarkerLabel("Presentation Later Read Writer")
-            .setQueue(graphicsRequest)
             .setResourceUses(&writerUse, 1u)
         ;
-        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
         const Graphics::GpuTaskId producer = addTerminal(graph, writer);
         ASSERT_TRUE(writer.valid());
         ASSERT_TRUE(producer.valid());
@@ -917,10 +875,9 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
         laterReaderDesc
             .setIdentity(Name("tests/task_graph/presentation_later_read_reader"))
             .setMarkerLabel("Presentation Later Read Reader")
-            .setQueue(graphicsRequest)
             .setResourceUses(&laterReaderUse, 1u)
         ;
-        const Graphics::GpuTaskId laterReader = graph.addTask(laterReaderDesc);
+        const Graphics::GpuTaskId laterReader = graph.addTask(laterReaderDesc, graphicsCommands);
         ASSERT_TRUE(laterReader.valid());
         ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
             .producer = producer,
@@ -930,7 +887,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
     }
 }
 
-TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuringFinalization){
+TEST(GpuTaskGraph, AutomaticallyCoLocatesPresentationEndpointUsersOnPrimaryGraphics){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
     Core::CpuTaskScheduler cpuScheduler(0u);
@@ -948,12 +905,7 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
     );
     ASSERT_TRUE(backbuffer.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskSchedulingHint writerScheduling;
     writerScheduling.cost = Graphics::GpuTaskCostHint::Large;
     writerScheduling.allowSameClassQueueRouting = true;
@@ -968,11 +920,10 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
     writerDesc
         .setIdentity(Name("tests/task_graph/presentation_queue_mismatch_writer"))
         .setMarkerLabel("Presentation Queue Mismatch Writer")
-        .setQueue(graphicsRequest)
         .setScheduling(writerScheduling)
         .setResourceUses(&writerUse, 1u)
     ;
-    const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+    const Graphics::GpuTaskId writer = graph.addTask(writerDesc, graphicsCommands);
     ASSERT_TRUE(writer.valid());
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
@@ -983,11 +934,10 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
     producerDesc
         .setIdentity(Name("tests/task_graph/presentation_queue_mismatch_terminal"))
         .setMarkerLabel("Presentation Queue Mismatch Terminal")
-        .setQueue(graphicsRequest)
         .setScheduling(producerScheduling)
         .setDependencies(&writer, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
         .producer = producer,
@@ -1018,17 +968,17 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
     ASSERT_NE(writerAssignment, nullptr);
     ASSERT_NE(producerAssignment, nullptr);
     EXPECT_EQ(writerAssignment->queue, queues[0u].id);
-    EXPECT_EQ(producerAssignment->queue, queues[1u].id);
-    EXPECT_NE(writerAssignment->queue, producerAssignment->queue);
+    EXPECT_EQ(producerAssignment->queue, queues[0u].id);
+    EXPECT_EQ(writerAssignment->queue, producerAssignment->queue);
 
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_TRUE(analysis.validFor(declarations));
-    EXPECT_FALSE(assignments.validFor(declarations));
-    EXPECT_FALSE(compiledPlan.valid());
+    EXPECT_TRUE(assignments.validFor(declarations));
+    EXPECT_TRUE(compiledPlan.valid());
 }
 
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
@@ -1068,18 +1018,8 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     ASSERT_TRUE(indices.valid());
     ASSERT_TRUE(fontTexture.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest uploadRequest{
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
-        true,
-        true,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements uploadCommands{ Graphics::GpuQueueCapability::Transfer };
     Graphics::GpuTaskSchedulingHint graphicsScheduling;
     graphicsScheduling.cost = Graphics::GpuTaskCostHint::Small;
     graphicsScheduling.avoidQueueCrossing = true;
@@ -1108,11 +1048,10 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     sceneDesc
         .setIdentity(Name("tests/task_graph/setup_upload_scene"))
         .setMarkerLabel("Setup Upload Scene")
-        .setQueue(graphicsRequest)
         .setScheduling(graphicsScheduling)
         .setResourceUses(sceneUses, LengthOf(sceneUses))
     ;
-    const Graphics::GpuTaskId scene = graph.addTask(sceneDesc);
+    const Graphics::GpuTaskId scene = graph.addTask(sceneDesc, graphicsCommands);
     ASSERT_TRUE(scene.valid());
 
     const Graphics::GpuTaskId sceneDependencies[] = { scene };
@@ -1128,12 +1067,11 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     vertexUploadDesc
         .setIdentity(Name("tests/task_graph/setup_upload_vertices_task"))
         .setMarkerLabel("Setup Upload Vertices")
-        .setQueue(uploadRequest)
         .setScheduling(smallUploadScheduling)
         .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
         .setResourceUses(vertexUploadUses, LengthOf(vertexUploadUses))
     ;
-    const Graphics::GpuTaskId vertexUpload = graph.addTask(vertexUploadDesc);
+    const Graphics::GpuTaskId vertexUpload = graph.addTask(vertexUploadDesc, uploadCommands);
     ASSERT_TRUE(vertexUpload.valid());
 
     const Graphics::GpuTaskResourceUse indexUploadUses[] = {
@@ -1148,12 +1086,11 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     indexUploadDesc
         .setIdentity(Name("tests/task_graph/setup_upload_indices_task"))
         .setMarkerLabel("Setup Upload Indices")
-        .setQueue(uploadRequest)
         .setScheduling(smallUploadScheduling)
         .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
         .setResourceUses(indexUploadUses, LengthOf(indexUploadUses))
     ;
-    const Graphics::GpuTaskId indexUpload = graph.addTask(indexUploadDesc);
+    const Graphics::GpuTaskId indexUpload = graph.addTask(indexUploadDesc, uploadCommands);
     ASSERT_TRUE(indexUpload.valid());
 
     const Graphics::GpuTaskResourceUse fontUploadUses[] = {
@@ -1168,12 +1105,11 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     fontUploadDesc
         .setIdentity(Name("tests/task_graph/setup_upload_font_task"))
         .setMarkerLabel("Setup Upload Font")
-        .setQueue(uploadRequest)
         .setScheduling(largeUploadScheduling)
         .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
         .setResourceUses(fontUploadUses, LengthOf(fontUploadUses))
     ;
-    const Graphics::GpuTaskId fontUpload = graph.addTask(fontUploadDesc);
+    const Graphics::GpuTaskId fontUpload = graph.addTask(fontUploadDesc, uploadCommands);
     ASSERT_TRUE(fontUpload.valid());
 
     const Graphics::GpuTaskId overlayDependencies[] = {
@@ -1212,12 +1148,11 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     overlayDesc
         .setIdentity(Name("tests/task_graph/setup_upload_overlay"))
         .setMarkerLabel("Setup Upload Overlay")
-        .setQueue(graphicsRequest)
         .setScheduling(graphicsScheduling)
         .setDependencies(overlayDependencies, LengthOf(overlayDependencies))
         .setResourceUses(overlayUses, LengthOf(overlayUses))
     ;
-    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc);
+    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc, graphicsCommands);
     ASSERT_TRUE(overlay.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = {
@@ -1248,11 +1183,37 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     ASSERT_TRUE(fontPacket.valid());
     ASSERT_TRUE(overlayPacket.valid());
     EXPECT_EQ(compiledPlan.packet(scenePacket).plan->queue, queues[0].id);
-    // Tiny vertex/index deltas avoid a queue crossing, but an amortizable texture upload follows Transfer first.
+    // Tiny vertex/index uploads stay on Graphics; the font upload overlaps those independent uploads on Transfer.
     EXPECT_EQ(compiledPlan.packet(vertexPacket).plan->queue, queues[0].id);
     EXPECT_EQ(compiledPlan.packet(indexPacket).plan->queue, queues[0].id);
     EXPECT_EQ(compiledPlan.packet(fontPacket).plan->queue, queues[1].id);
     EXPECT_EQ(compiledPlan.packet(overlayPacket).plan->queue, queues[0].id);
+
+    const Graphics::GpuCompiledPacketView fontPlan = compiledPlan.packet(fontPacket);
+    const Graphics::GpuCompiledPacketView overlayPlan = compiledPlan.packet(overlayPacket);
+    ASSERT_TRUE(fontPlan.valid());
+    ASSERT_TRUE(overlayPlan.valid());
+    bool fontWaitsForScene = false;
+    for(u32 dependencyIndex = 0u; dependencyIndex < fontPlan.plan->dependencyCount; ++dependencyIndex)
+        fontWaitsForScene = fontWaitsForScene || fontPlan.dependencies[dependencyIndex].producer == scenePacket;
+    EXPECT_TRUE(fontWaitsForScene);
+    bool overlayWaitsForFont = false;
+    for(u32 dependencyIndex = 0u; dependencyIndex < overlayPlan.plan->dependencyCount; ++dependencyIndex)
+        overlayWaitsForFont = overlayWaitsForFont || overlayPlan.dependencies[dependencyIndex].producer == fontPacket;
+    EXPECT_TRUE(overlayWaitsForFont);
+
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuCompiledOwnershipTransfer* const fontOwnership = compiledPlan.logicalOwnershipTransferAt(0u);
+    ASSERT_NE(fontOwnership, nullptr);
+    EXPECT_TRUE(fontOwnership->valid());
+    EXPECT_EQ(fontOwnership->resource, fontTexture);
+    EXPECT_EQ(fontOwnership->sourceTask, fontUpload);
+    EXPECT_EQ(fontOwnership->destinationTask, overlay);
+    EXPECT_EQ(fontOwnership->sourcePacket, fontPacket);
+    EXPECT_EQ(fontOwnership->destinationPacket, overlayPacket);
+    EXPECT_EQ(fontOwnership->sourceQueue, queues[1].id);
+    EXPECT_EQ(fontOwnership->destinationQueue, queues[0].id);
+    EXPECT_EQ(fontOwnership->route, Graphics::GpuOwnershipTransferRoute::Internal);
     EXPECT_GT(vertexPacket.index, scenePacket.index);
     EXPECT_GT(indexPacket.index, scenePacket.index);
     EXPECT_GT(fontPacket.index, scenePacket.index);

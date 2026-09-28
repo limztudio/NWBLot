@@ -43,10 +43,10 @@ namespace Graphics = Core;
 inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_version_scratch");
 
 
-using TaskGraphTestUtils::ComputeRequest;
+using TaskGraphTestUtils::ComputeCommands;
 using TaskGraphTestUtils::DedicatedComputeQueue;
 using TaskGraphTestUtils::GraphicsQueue;
-using TaskGraphTestUtils::GraphicsRequest;
+using TaskGraphTestUtils::GraphicsCommands;
 
 [[nodiscard]] inline Graphics::GpuTaskResourceRange BufferRange(const u64 byteOffset, const u64 byteSize){
     Graphics::GpuTaskResourceRange range;
@@ -185,12 +185,13 @@ struct VersionConsumerUses{
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuTaskGraphQueueTopology& topology,
-    Graphics::GpuTaskGraphQueueAssignments& assignments
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 ){
     Core::Alloc::ScratchArena scratchArena(s_ResourceVersionScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena);
+    return compiler.assignQueues(declarations, analysis, topology, assignments, scratchArena, options);
 }
 
 [[nodiscard]] inline bool Compile(

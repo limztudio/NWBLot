@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/task_graph_software_scene_refit.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -105,10 +105,9 @@ struct RefitContext{
         desc
             .setIdentity(Name("tests/software_scene_refit/predecessor"))
             .setMarkerLabel("Prepared Mesh and Scene Producer")
-            .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
             .setResourceUses(uses, importRoot && meshBuild ? s_ExpectedDualCount : 1u)
         ;
-        predecessor = graph.addTask(desc);
+        predecessor = graph.addTask(desc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer });
     }
 };
 
@@ -126,12 +125,11 @@ void ExpectCompiledHandoff(RefitContext& context, const SoftwareSceneRefitGraphT
     endpointDesc
         .setIdentity(Name("tests/software_scene_refit/endpoint"))
         .setMarkerLabel("Accepting Scene Preparation")
-        .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&tasks.refit, 1u)
         .setResourceUses(&use, 1u)
     ;
-    const Core::GpuTaskId endpoint = context.graph.addTask(endpointDesc);
+    const Core::GpuTaskId endpoint = context.graph.addTask(endpointDesc, Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer });
     ASSERT_TRUE(endpoint.valid());
     const Core::GpuPhysicalQueueInfo queue{
         .familyIndex = 0u,

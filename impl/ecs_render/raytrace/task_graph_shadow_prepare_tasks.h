@@ -32,6 +32,9 @@ namespace ECSRenderDetail{
 
 
 struct ShadowPrepareGraphTask{
+    // Frame timing begins here and retires through the primary presentation/recovery timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -63,6 +66,8 @@ struct ShadowPrepareGraphTask{
 // Pure-software preparation shares scratch between every frozen mesh build. Keep each typed sentinel setup next to
 // its matching compute callback so a later mesh cannot clear a prior mesh's sort/payload rendezvous state.
 struct ShadowPrepareSoftwareBvhBuildGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         PreparedMeshSwBvhBuild build;

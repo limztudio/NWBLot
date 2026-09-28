@@ -99,20 +99,6 @@ static bool HasTextureRequests(const ImDrawData& drawData){
     return true;
 }
 
-// Opaque callbacks need broader queues; preserve the primary-Graphics contract.
-[[nodiscard]] static Core::GpuQueueRequest OpaquePresentationQueueRequest(){
-    return Core::GpuQueueRequest{
-        static_cast<Core::GpuQueueCapability::Mask>(
-            static_cast<u8>(Core::GpuQueueCapability::Graphics)
-            | static_cast<u8>(Core::GpuQueueCapability::Compute)
-            | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-        ),
-        Core::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-}
-
 [[nodiscard]] static Core::GpuGraphResourceDesc BufferResourceDesc(
     const Name& identity,
     const AStringView label,
@@ -712,7 +698,6 @@ bool UiSystem::declareTaskGraphDrawUploads(
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
-            .setQueue(UiDetail::UploadQueueRequest())
             .setScheduling(UiDetail::UploadScheduling(bytes.size()))
         ;
         if(previousTask.valid())
@@ -998,12 +983,6 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     desc
         .setIdentity(Name("ui.imgui_overlay"))
         .setMarkerLabel("ImGui Overlay")
-        .setQueue(Core::GpuQueueRequest{
-            Core::GpuQueueCapability::Graphics,
-            Core::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(scheduling)
         .setDependencies(dependencies.data(), dependencies.size())
         .setResourceUses(resourceUses.data(), resourceUses.size())
@@ -1274,7 +1253,6 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     desc
         .setIdentity(Name("ui.imgui_standalone_legacy_presentation"))
         .setMarkerLabel("Standalone ImGui Opaque Callback Presentation")
-        .setQueue(__hidden_ui::OpaquePresentationQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(uploadTasks.data(), uploadTasks.size())
         .setResourceUses(resourceUses.data(), resourceUses.size())

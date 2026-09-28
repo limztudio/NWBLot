@@ -6,7 +6,7 @@
 #include <tests/common/test_context.h>
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
@@ -77,8 +77,7 @@ TEST(MaterialBufferRangeUses, ActiveFramePrefixesDoNotSynchronizeUnusedCapacity)
         const Core::GpuTaskId upload = graph.addUploadBufferTask(
             Core::GpuTaskDesc{}
                 .setIdentity(Name("tests/material_buffer_range_uses/upload"))
-                .setMarkerLabel("Frame Upload")
-                .setQueue(Impl::RendererTaskGraphDetail::GraphicsUploadQueueRequest()),
+                .setMarkerLabel("Frame Upload"),
             Core::GpuUploadBufferTaskDesc{
                 .source = uploadBlob,
                 .destination = resource,
@@ -96,8 +95,8 @@ TEST(MaterialBufferRangeUses, ActiveFramePrefixesDoNotSynchronizeUnusedCapacity)
             Core::GpuTaskDesc{}
                 .setIdentity(Name("tests/material_buffer_range_uses/tail"))
                 .setMarkerLabel("Unused Tail Write")
-                .setQueue(Impl::RendererTaskGraphDetail::GraphicsUploadQueueRequest())
-                .setResourceUses(&unusedTailUse, 1u)
+                .setResourceUses(&unusedTailUse, 1u),
+            Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Transfer }
         );
         ASSERT_TRUE(tailWrite.valid());
         const Core::BufferRange activeRange(0u, activeByteCount);
@@ -106,8 +105,8 @@ TEST(MaterialBufferRangeUses, ActiveFramePrefixesDoNotSynchronizeUnusedCapacity)
             Core::GpuTaskDesc{}
                 .setIdentity(Name("tests/material_buffer_range_uses/read"))
                 .setMarkerLabel("Frame Reader")
-                .setQueue(Impl::RendererTaskGraphDetail::GraphicsQueueRequest())
-                .setResourceUses(&readerUse, 1u)
+                .setResourceUses(&readerUse, 1u),
+            Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }
         );
         ASSERT_TRUE(reader.valid());
 

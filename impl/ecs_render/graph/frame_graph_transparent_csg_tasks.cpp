@@ -9,7 +9,6 @@
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
@@ -179,7 +178,6 @@ bool FrameGraphTransparentCsgTasks::declare(
     avboitIntervalDesc
         .setIdentity(Name("render.avboit.intervals"))
         .setMarkerLabel("Transparent CSG Intervals")
-        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitIntervalScheduling)
         .setDependencies(&intervalDependency, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
@@ -331,7 +329,6 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitIntervalSpanDesc
             .setIdentity(Name("render.avboit.transparent_csg.receiver_span"))
             .setMarkerLabel("Transparent CSG Receiver Span")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitIntervalSpanScheduling)
             .setDependencies(&m_avboitSystem.taskGraphStage().m_preTask, 1u)
             .setResourceUses(
@@ -361,7 +358,6 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitIntervalCombineDesc
             .setIdentity(Name("render.avboit.transparent_csg.interval_combine"))
             .setMarkerLabel("Transparent CSG Interval Combine")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitIntervalCombineScheduling)
             .setDependencies(&avboitIntervalCompletionTask, 1u)
             .setResourceUses(

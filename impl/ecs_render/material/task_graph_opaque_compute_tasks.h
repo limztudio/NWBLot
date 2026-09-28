@@ -36,6 +36,8 @@ namespace ECSRenderDetail{
 
 
 struct OpaqueRegularComputeEmulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -86,6 +88,10 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         bool finishTiming = false;
         Phase phase = Phase::Generate;
     };
+
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+        return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+    }
 
     [[nodiscard]] static bool record(
         const Payload& payload,

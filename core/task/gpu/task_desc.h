@@ -41,11 +41,25 @@ using GpuTaskDiscardedThunk = void(*)(void* payload);
 using GpuTaskPayloadDestroyThunk = void(*)(GraphicsArena& arena, void* payload)noexcept;
 
 
-struct GpuQueueRequest{
+// The task implementation owns its command contract; graph callers do not select a queue.
+// Every required capability and at least one capability from each nonempty alternative mask must be supported.
+struct GpuTaskCommandRequirements{
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
-    GpuQueuePreference::Enum preferredQueue = GpuQueuePreference::Any;
-    bool allowFallback = true;
-    bool compilerMayOverridePreference = true;
+    // External frame timing uses the primary graphics submission timeline.
+    bool requiresPrimaryGraphicsQueue = false;
+    GpuQueueCapability::Mask alternativeCapabilities = GpuQueueCapability::None;
+    // Built-ins preserve an independent hook alternative when composing their native command contract.
+    GpuQueueCapability::Mask additionalAlternativeCapabilities = GpuQueueCapability::None;
+    // A framework-owned bridge can target an existing external consumer timeline.
+    GpuPhysicalQueueId externalQueue = {};
+
+    [[nodiscard]] constexpr GpuQueueCapability::Mask allowedCapabilities()const noexcept{
+        return static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(requiredCapabilities)
+            | static_cast<u8>(alternativeCapabilities)
+            | static_cast<u8>(additionalAlternativeCapabilities)
+        );
+    }
 };
 
 struct GpuTaskSchedulingHint{
@@ -91,8 +105,8 @@ struct GpuTaskSchedulingHint{
     // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a deliberate
     // dual opt-in before the compiler plans any ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
-    // Extends timing feedback to another queue class that the queue request and resource declarations already
-    // permit. This never relaxes required capabilities or a strict concrete preference; it only lets accepted,
+    // Extends timing feedback to another queue class that the command contract and resource declarations already
+    // permit. This never relaxes command capabilities or external timeline constraints; it only lets accepted,
     // class-specific history replace an otherwise legal static Graphics/Compute/Transfer placement.
     bool allowCrossClassTimingFeedbackRouting = false;
     // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the
@@ -173,6 +187,8 @@ struct GpuGraphResourceDesc{
     // Pure availability is independent of queue-family ownership and native state. The compiler attaches this
     // completion to every first consumer range and lets packet submission elide same-queue waits normally.
     GpuExternalCompletionId initialAvailabilityCompletion;
+    // A direct native consumer cannot acquire a graph-exported ownership handoff. Exclusive imports stay in its family.
+    GpuPhysicalQueueId directConsumerQueue = {};
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -195,6 +211,7 @@ struct GpuGraphResourceDesc{
     }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialAvailabilityCompletion(const GpuExternalCompletionId value){ initialAvailabilityCompletion = value; return *this; }
+    constexpr GpuGraphResourceDesc& setDirectConsumerQueue(const GpuPhysicalQueueId value){ directConsumerQueue = value; return *this; }
 };
 
 // A version identifies one semantic value of one exact physical resource range. Imported roots enter the graph
@@ -255,7 +272,6 @@ struct GpuExternalCompletionDesc{
 struct GpuTaskDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    GpuQueueRequest queue;
     GpuTaskSchedulingHint scheduling;
     const GpuTaskId* dependencies = nullptr;
     usize dependencyCount = 0u;
@@ -274,7 +290,6 @@ struct GpuTaskDesc{
 
     constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuTaskDesc& setQueue(const GpuQueueRequest& value){ queue = value; return *this; }
     constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value){ scheduling = value; return *this; }
     constexpr GpuTaskDesc& setDependencies(const GpuTaskId* values, const usize count){ dependencies = values; dependencyCount = count; return *this; }
     constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count){
@@ -417,6 +432,8 @@ struct GpuClearTextureTaskRecordHooks{
     GpuClearTextureTaskRecordHook beforeClear = nullptr;
     GpuClearTextureTaskRecordHook afterClear = nullptr;
     GpuClearTextureTaskDiscardedHook discarded = nullptr;
+    // The hook implementation owns any additional commands or external timeline contract.
+    GpuTaskCommandRequirements commands = {};
 };
 
 struct GpuClearTextureTaskDesc{
@@ -436,7 +453,7 @@ struct GpuClearTextureTaskDesc{
     UIntColor uintValue{};
     IntColor intValue{};
 };
-static constexpr usize s_GpuClearTextureTaskDescByteSize = 128u;
+static constexpr usize s_GpuClearTextureTaskDescByteSize = 136u;
 static_assert(sizeof(GpuClearTextureTaskDesc) == s_GpuClearTextureTaskDescByteSize, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
 // A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general

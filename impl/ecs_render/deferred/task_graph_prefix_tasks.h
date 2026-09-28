@@ -33,6 +33,8 @@ namespace ECSRenderDetail{
 
 
 struct SceneShadingSetupGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         RendererDeferredSystem* deferredSystem = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;

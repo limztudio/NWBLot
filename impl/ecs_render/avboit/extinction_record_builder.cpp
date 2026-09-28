@@ -11,7 +11,7 @@
 
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -395,7 +395,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured
                 ? "AVBOIT Extinction CSG Compute Emulation"
                 : "AVBOIT Extinction Compute Emulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(extinctionComputeEmulationScheduling)
             .setDependencies(&extinctionDependency, 1u)
             .setResourceUses(
@@ -601,7 +600,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     extinctionDesc
         .setIdentity(Name("render.avboit.extinction"))
         .setMarkerLabel("AVBOIT Extinction")
-        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitExtinctionScheduling)
         .setDependencies(rasterDependencies, rasterDependencyCount)
         .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())

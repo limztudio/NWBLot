@@ -37,6 +37,8 @@ namespace ECSRenderDetail{
 
 
 struct AvboitCsgReceiverSpanGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;
         RendererCsgSystem* csgSystem = nullptr;
@@ -67,6 +69,8 @@ struct AvboitCsgReceiverSpanGraphTask{
 
 // Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;
         RendererCsgSystem* csgSystem = nullptr;

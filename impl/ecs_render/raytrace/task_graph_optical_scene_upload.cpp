@@ -5,7 +5,6 @@
 #include "task_graph_optical_scene_upload.h"
 #include "task_graph_optical_bounds_finalize.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/common/log.h>
@@ -28,6 +27,8 @@ namespace __hidden_task_graph_optical_scene_upload{
 
 
 struct OpticalUploadTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
+
     struct Payload{
         Core::BufferHandle destination;
         Core::GpuUploadBlobId source;
@@ -141,7 +142,6 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     desc
         .setIdentity(Name("render.raytrace.optical_scene_upload"))
         .setMarkerLabel("Ray Optical Scene Upload")
-        .setQueue(RendererTaskGraphDetail::GraphicsUploadQueueRequest())
         .setScheduling(scheduling)
         .setResourceUses(uses, LengthOf(uses))
     ;

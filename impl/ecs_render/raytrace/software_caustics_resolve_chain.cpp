@@ -8,7 +8,6 @@
 
 #include <core/graphics/vulkan/backend.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
 
@@ -38,7 +37,6 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
     SoftwareCausticsResolveChainResult& outResult,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    using namespace RendererTaskGraphDetail;
     CausticsResolveChainInputs sharedInputs;
     sharedInputs.targets = inputs.targets;
     sharedInputs.geometryTask = inputs.geometryTask;
@@ -67,7 +65,7 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
     CausticsResolveChainResult sharedResult;
-    if(!sharedBuilder.declare(sharedInputs, naming, ComputeQueueRequest(), ComputeQueueRequest(), sharedResult, scratchArena))
+    if(!sharedBuilder.declare(sharedInputs, naming, sharedResult, scratchArena))
         return false;
     outResult.causticResolvePrepareTask = sharedResult.causticResolvePrepareTask;
     outResult.causticResolveWaveletTask = sharedResult.causticResolveWaveletTask;

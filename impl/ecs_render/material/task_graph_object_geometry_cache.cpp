@@ -7,7 +7,6 @@
 #include "material_system.h"
 #include "task_graph_resource_sets.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
@@ -66,11 +65,13 @@ using namespace RendererTaskGraphDetail;
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setQueue(GraphicsComputeQueueRequest()).setScheduling(scheduling);
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
     return desc;
 }
 
 struct DecodeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererMaterialSystem& materialSystem;
         RendererMeshSystem& meshSystem;
@@ -111,6 +112,8 @@ struct DecodeTask{
 };
 
 struct ReadyTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{};
     [[nodiscard]] static bool record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&){ return true; }
 };

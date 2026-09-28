@@ -44,6 +44,8 @@ namespace RendererTaskGraphDetail{
 
 
 struct AvboitExtinctionComputeEmulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;
@@ -108,6 +110,10 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         Phase phase = Phase::Generate;
     };
 
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+        return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+    }
+
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
@@ -121,6 +127,8 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
 
 
 struct AvboitExtinctionGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -157,6 +165,8 @@ struct AvboitExtinctionGraphTask{
 
 
 struct AvboitIntegrationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         AvboitFrameTargets* targets = nullptr;

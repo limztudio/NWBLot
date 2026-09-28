@@ -28,6 +28,46 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(
+    const GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Enum requirement)noexcept{
+    GpuTaskCommandRequirements commands;
+    switch(requirement){
+    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Transfer:
+        commands.requiredCapabilities = GpuQueueCapability::Transfer;
+        break;
+    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Graphics:
+        commands.requiredCapabilities = GpuQueueCapability::Graphics;
+        break;
+    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics:
+        commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
+        break;
+    default:
+        NWB_ASSERT(false);
+        break;
+    }
+    return commands;
+}
+
+[[nodiscard]] static bool IncludeHookCommandRequirements(
+    GpuTaskCommandRequirements& commands,
+    const GpuTaskCommandRequirements& hookCommands)noexcept{
+    // A hook declares one alternative clause; the additional clause belongs to the composed built-in contract.
+    if(hookCommands.additionalAlternativeCapabilities != GpuQueueCapability::None)
+        return false;
+    commands.requiredCapabilities |= hookCommands.requiredCapabilities;
+    commands.requiresPrimaryGraphicsQueue = commands.requiresPrimaryGraphicsQueue || hookCommands.requiresPrimaryGraphicsQueue;
+    commands.externalQueue = hookCommands.externalQueue;
+    if(commands.alternativeCapabilities == GpuQueueCapability::None)
+        commands.alternativeCapabilities = hookCommands.alternativeCapabilities;
+    else if(hookCommands.alternativeCapabilities != commands.alternativeCapabilities)
+        commands.additionalAlternativeCapabilities = hookCommands.alternativeCapabilities;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ClearBufferPayload{
     GpuGraphResourceId destinationResource;
     BufferHandle destination;
@@ -254,7 +294,6 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     if(
         !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validResource(clearDesc.destination)
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
         return {};
 
@@ -310,7 +349,6 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
             && !clearDesc.clearDepth
             && !clearDesc.clearStencil
         )
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
         return {};
 
@@ -362,19 +400,16 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    if(clearContract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Graphics)
-        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
-    else if(
+    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(
         clearContract.queueRequirement
-            == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics
-        && (
-            static_cast<u8>(resolvedDesc.queue.requiredCapabilities)
-            & static_cast<u8>(GpuQueueCapability::Graphics)
-        ) == 0u
-    )
-        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
+    );
+    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(
+        commands,
+        clearDesc.recordHooks.commands
+    ))
+        return {};
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
 }
 
 GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
@@ -393,7 +428,6 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         || !validResource(clearDesc.destination)
         || clearDesc.rect.maxX <= clearDesc.rect.minX
         || clearDesc.rect.maxY <= clearDesc.rect.minY
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
         return {};
 
@@ -450,16 +484,16 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
             clearBox
         )
     ;
-    if(
-        queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics
-        && (
-            static_cast<u8>(resolvedDesc.queue.requiredCapabilities)
-            & static_cast<u8>(GpuQueueCapability::Graphics)
-        ) == 0u
-    )
-        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
+    GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(
+        queueRequirement
+    );
+    if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(
+        commands,
+        clearDesc.recordHooks.commands
+    ))
+        return {};
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation, commands);
 }
 
 

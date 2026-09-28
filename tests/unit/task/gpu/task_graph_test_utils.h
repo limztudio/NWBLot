@@ -142,11 +142,11 @@ struct ImportedTexturePair{
     const usize resourceSetUseCount = 0u
 );
 
-[[nodiscard]] Graphics::GpuTaskId AddTaskWithQueue(
+[[nodiscard]] Graphics::GpuTaskId AddTaskWithCommands(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::GpuQueueRequest& queue,
+    const Graphics::GpuTaskCommandRequirements& commands,
     const Graphics::GpuTaskSchedulingHint& scheduling = {},
     const Graphics::GpuTaskTimingMetadata& timing = {},
     const Graphics::GpuTaskId* const dependencies = nullptr,
@@ -167,6 +167,16 @@ struct ImportedTexturePair{
 );
 
 [[nodiscard]] bool Compile(
+    const Graphics::GpuTaskGraph& graph,
+    Graphics::GpuTaskGraphAnalysis& analysis,
+    const Graphics::GpuTaskGraphQueueTopology& topology,
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuTaskGraphCompileOptions& options = {}
+);
+
+// Synthetic ownership and packet fixtures require distinct transports independent of automatic placement scores.
+[[nodiscard]] bool CompileWithSeparatedCommandQueues(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuTaskGraphQueueTopology& topology,
@@ -256,22 +266,12 @@ struct ThreeQueueCompile{
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u);
 
-[[nodiscard]] inline Graphics::GpuQueueRequest GraphicsRequest(){
-    return Graphics::GpuQueueRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+[[nodiscard]] inline Graphics::GpuTaskCommandRequirements GraphicsCommands(){
+    return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics };
 }
 
-[[nodiscard]] inline Graphics::GpuQueueRequest ComputeRequest(){
-    return Graphics::GpuQueueRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+[[nodiscard]] inline Graphics::GpuTaskCommandRequirements ComputeCommands(){
+    return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute };
 }
 
 [[nodiscard]] Telemetry::FrameGraphQueueAssignmentModifier::Mask ExpectedTelemetryModifiers(
@@ -293,8 +293,7 @@ struct TransferOwnershipPair{
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
     Graphics::GpuTaskGraph& graph,
-    const Graphics::ResourceQueueSharing::Mask queueSharing,
-    const bool allowFallback = true
+    const Graphics::ResourceQueueSharing::Mask queueSharing
 );
 
 [[nodiscard]] const Graphics::GpuTaskDependencyEdge* FindEdge(

@@ -13,7 +13,7 @@
 
 #include <global/timer.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/software_caustics_resolve_chain.h>
 
@@ -472,7 +472,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     irradianceClearDesc
         .setIdentity(Name("render.software_caustics.irradiance_clear"))
         .setMarkerLabel("Software Caustics Irradiance Clear")
-        .setQueue(ComputeTransferQueueRequest())
         .setScheduling(irradianceClearScheduling)
         .setDependencies(shadowVisibilityDependency, LengthOf(shadowVisibilityDependency))
         .setExternalStateSources(irradianceReturnStateSources, irradianceReturnStateSourceCount)
@@ -504,7 +503,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorNonTemporalClearDesc
             .setIdentity(Name("render.software_caustics.accumulator_non_temporal_clear"))
             .setMarkerLabel("Software Caustics Accumulator Clear")
-            .setQueue(ComputeTransferQueueRequest())
             .setScheduling(accumulatorNonTemporalClearScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
@@ -542,7 +540,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorBootstrapClearDesc
             .setIdentity(Name("render.software_caustics.accumulator_bootstrap_clear"))
             .setMarkerLabel("Software Caustics Accumulator Bootstrap Clear")
-            .setQueue(ComputeTransferQueueRequest())
             .setScheduling(accumulatorBootstrapClearScheduling)
             .setDependencies(&irradianceClearTask, 1u)
             .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
@@ -588,7 +585,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorDecayDesc
             .setIdentity(Name("render.software_caustics.accumulator_decay"))
             .setMarkerLabel("Software Caustics Accumulator Decay")
-            .setQueue(ComputePacketQueueRequest())
             .setScheduling(accumulatorDecayScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
@@ -624,7 +620,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     photonDesc
         .setIdentity(Name("render.software_caustics.photons"))
         .setMarkerLabel("Software Caustic Photons")
-        .setQueue(ComputeQueueRequest())
         .setScheduling(causticsScheduling)
         .setDependencies(&causticsDependency, 1u)
         .setResourceUses(photonResourceUses.data(), photonResourceUses.size())
@@ -660,7 +655,6 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     geometryDesc
         .setIdentity(Name("render.software_caustics.geometry_downsample"))
         .setMarkerLabel("Software Caustics Geometry Downsample")
-        .setQueue(ComputeQueueRequest())
         .setScheduling(geometryScheduling)
         .setDependencies(&m_deferredCausticPhotonTask, 1u)
         .setExternalStateSources(scratchStateSources, scratchStateSourceCount)

@@ -7,7 +7,6 @@
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/lighting_content_stamp.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 
@@ -63,7 +62,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
 
     const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;
     const bool meshViewUploadRequired = inputs.meshViewUploadRequired;
-    using namespace RendererTaskGraphDetail;
 
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
     ECSRenderDetail::SceneShadingGpuData sceneShadingState;
@@ -94,7 +92,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     meshViewSetupDesc
         .setIdentity(Name("render.graphics_prefix.mesh_view_setup"))
         .setMarkerLabel("Mesh View Setup")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(meshViewSetupScheduling)
         .setDependencies(&inputs.shadowPrepareTask, 1u)
     ;
@@ -128,7 +125,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         meshViewUploadDesc
             .setIdentity(Name("render.graphics_prefix.mesh_view_upload"))
             .setMarkerLabel("Mesh View Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&outResult.meshViewSetupTask, 1u)
         ;
@@ -155,7 +151,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     meshViewCommitDesc
         .setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit"))
         .setMarkerLabel("Mesh View Upload Commit")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(meshViewCommitScheduling)
         .setDependencies(&meshViewUploadTask, 1u)
     ;
@@ -183,7 +178,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         sceneLightUploadDesc
             .setIdentity(Name("render.graphics_prefix.scene_lights_upload"))
             .setMarkerLabel("Scene Lights Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&sceneUploadTask, 1u)
         ;
@@ -214,7 +208,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         sceneShadingUploadDesc
             .setIdentity(Name("render.graphics_prefix.scene_shading_upload"))
             .setMarkerLabel("Scene Shading Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&sceneUploadTask, 1u)
         ;
@@ -244,7 +237,6 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     sceneShadingSetupDesc
         .setIdentity(Name("render.graphics_prefix.scene_shading_setup"))
         .setMarkerLabel("Scene Shading Setup")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(sceneShadingSetupScheduling)
         .setDependencies(&sceneUploadTask, 1u)
     ;

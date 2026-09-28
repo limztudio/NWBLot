@@ -164,10 +164,9 @@ struct TextureUploadBatchSubmissionData{
     const GraphicsRuntime::TextureUploadBatchDesc& setupDesc;
     const TextureDesc& textureDesc;
     ResourceStates::Mask graphInitialState = ResourceStates::Unknown;
-    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
-    bool requiresGraphicsQueue = false;
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting;
     QueueSubmissionToken& uploadToken;
+    GpuPhysicalQueueId directConsumerQueue;
 };
 
 [[nodiscard]] static GpuTaskId DeclareTextureUploadBatch(void* const userData, GpuTaskGraph& graph){
@@ -180,6 +179,7 @@ struct TextureUploadBatchSubmissionData{
             .setType(GpuGraphResourceType::Texture)
             .setInitialState(submissionData.graphInitialState)
             .setQueueSharing(submissionData.textureDesc.queueSharing)
+            .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
     if(!destination.valid())
         return {};
@@ -208,10 +208,6 @@ struct TextureUploadBatchSubmissionData{
         uploadTaskDesc
             .setIdentity(s_UploadTextureBatchUploadIdentity)
             .setMarkerLabel("Texture Upload Batch")
-            .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(
-                submissionData.uploadQueue,
-                submissionData.requiresGraphicsQueue
-            ))
             .setScheduling(scheduling)
         ;
         if(previousTask.valid())
@@ -258,7 +254,6 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         return false;
 
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
-    const bool requiresGraphicsQueue = __hidden_graphics_texture_upload::TextureUploadRequiresGraphicsQueue(textureDesc);
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState
         ? desc.physicalInitialState
         : textureDesc.initialState
@@ -285,10 +280,9 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         .setupDesc = desc,
         .textureDesc = textureDesc,
         .graphInitialState = graphInitialState,
-        .uploadQueue = uploadQueue,
-        .requiresGraphicsQueue = requiresGraphicsQueue,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
@@ -298,7 +292,6 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         &submissionData,
         &__hidden_graphics_texture_upload::DeclareTextureUploadBatch,
         uploadToken,
-        sameClassRouting.enabled,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){

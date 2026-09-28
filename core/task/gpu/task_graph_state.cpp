@@ -709,12 +709,17 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
         if(!validStateSource(source.states))
             return false;
     }
+    for(const GpuTaskNode& task : m_tasks){
+        if(task.commands.externalQueue.valid() && task.commands.externalQueue.deviceGeneration != deviceGeneration)
+            return false;
+    }
     for(const GpuGraphResourceNode& resource : m_resources){
         if(
             (resource.texture != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.buffer != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.accelStruct != nullptr && resource.deviceGeneration != deviceGeneration)
             || !validStateSource(resource.initialOwnerStateSource)
+            || (resource.directConsumerQueue.valid() && resource.directConsumerQueue.deviceGeneration != deviceGeneration)
         )
             return false;
     }

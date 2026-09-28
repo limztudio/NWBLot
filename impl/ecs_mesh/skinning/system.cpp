@@ -54,16 +54,6 @@ static void ResolveSkeletonComponents(
 static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
 static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
 
-[[nodiscard]] static Core::GpuQueueRequest JointPaletteUploadQueueRequest(){
-    Core::GpuQueueRequest request;
-    request.requiredCapabilities = Core::GpuQueueCapability::Transfer;
-    request.preferredQueue = Core::GpuQueuePreference::Graphics;
-    request.allowFallback = false;
-    // Compute continuation merges with uploads on Graphics; keep the chain there.
-    request.compilerMayOverridePreference = false;
-    return request;
-}
-
 [[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(){
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -71,18 +61,10 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
+    // The external renderer consumes one accepted skinning state on this serial timeline.
+    scheduling.mergeWithPrevious = true;
     scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
-}
-
-[[nodiscard]] static Core::GpuQueueRequest SkinningDispatchQueueRequest(){
-    Core::GpuQueueRequest request;
-    request.requiredCapabilities = Core::GpuQueueCapability::Compute;
-    request.preferredQueue = Core::GpuQueuePreference::Graphics;
-    request.allowFallback = false;
-    // Skinning stays just before the renderer on Graphics; graph owns the ordering.
-    request.compilerMayOverridePreference = false;
-    return request;
 }
 
 [[nodiscard]] static Core::GpuTaskSchedulingHint SkinningDispatchScheduling(){
@@ -92,6 +74,8 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
+    // The external renderer consumes one accepted skinning state on this serial timeline.
+    scheduling.mergeWithPrevious = true;
     scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
 }
@@ -108,6 +92,8 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
 
 // Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plans(arena)
@@ -138,6 +124,8 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 
 // Bounds/repack consume deformation and publish UAV outputs for the local-bounds reduction.
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plans(arena)
@@ -168,6 +156,9 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
 
 // Outputs end in ShaderResource state; only complete accepted bounds/repack/reduction publish a geometry generation.
 struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
+    // Native-state publication feeds the renderer without a separate cross-graph readiness edge.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
+
     struct Payload{
         MeshSkinningSystem& system;
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
@@ -633,7 +624,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 selectorUploadDesc
                     .setIdentity(uploadIdentity)
                     .setMarkerLabel("Skinning Bindless Slots Upload")
-                    .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
                     .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(terminalTask.valid())
@@ -698,7 +688,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                         "mesh_skinning_rest_to_skinned_copy"
                     ))
                     .setMarkerLabel("Skinning Rest-to-Skinned Copy")
-                    .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
                     .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!copyDesc.identity){
@@ -754,7 +743,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                         "mesh_skinning_joint_palette_upload"
                     ))
                     .setMarkerLabel("Skinning Joint Palette Upload")
-                    .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
                     .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!jointPaletteUploadDesc.identity){
@@ -850,7 +838,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         deformationDesc
             .setIdentity(Name("mesh_skinning.frame_deformation"))
             .setMarkerLabel("Runtime Skinning Deformation")
-            .setQueue(__hidden_system::SkinningDispatchQueueRequest())
             .setScheduling(__hidden_system::SkinningDispatchScheduling())
             .setResourceUses(resourceUses.deformation.data(), resourceUses.deformation.size())
         ;
@@ -877,7 +864,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     postDispatchDesc
         .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
         .setMarkerLabel("Runtime Skinning Bounds and Repack")
-        .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setResourceUses(resourceUses.postDispatch.data(), resourceUses.postDispatch.size())
     ;
@@ -898,7 +884,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     localBoundsDesc
         .setIdentity(Name("mesh_skinning.frame_local_bounds"))
         .setMarkerLabel("Runtime Skinning Local Bounds")
-        .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setDependencies(&postDispatchTask, 1u)
         .setResourceUses(resourceUses.localBounds.data(), resourceUses.localBounds.size())
@@ -914,7 +899,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
         .setIdentity(Name("mesh_skinning.frame_finalize_states"))
         .setMarkerLabel("Runtime Skinning Finalize States")
-        .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setDependencies(&localBoundsTask, 1u)
         .setResourceUses(resourceUses.finalizer.data(), resourceUses.finalizer.size())

@@ -158,9 +158,7 @@ struct GpuTaskGraphResourceStatePlan{
 )noexcept;
 
 [[nodiscard]] bool RequiresGraphics(GpuQueueCapability::Mask requiredCapabilities)noexcept;
-[[nodiscard]] bool ShouldUseDedicatedCompute(const GpuTaskSchedulingHint& hint)noexcept;
-[[nodiscard]] bool ShouldUseDedicatedTransfer(const GpuTaskSchedulingHint& hint)noexcept;
-[[nodiscard]] bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept;
+[[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept;
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
 
@@ -174,14 +172,6 @@ struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
-)noexcept;
-
-[[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
-    const GpuTaskGraphTaskView& task,
-    CommandQueue::Enum requiredClass = CommandQueue::kCount,
-    bool dedicatedOnly = false
 )noexcept;
 
 class GpuTaskSchedulingReachability final : NoCopy{
@@ -213,13 +203,6 @@ private:
     const GpuTaskGraphAnalysis& analysis,
     GpuTaskSchedulingReachability& outReachability
 );
-
-[[nodiscard]] bool HasTransitivelyIndependentRequiredGraphicsTask(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskSchedulingReachability& schedulingReachability,
-    const GpuTaskGraphTaskView& task
-)noexcept;
 
 [[nodiscard]] const GpuTaskQueueAssignment* FindQueueAssignment(
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
@@ -254,6 +237,46 @@ struct GpuTaskQueueScoringData{
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& candidate,
+    usize ignoredAssignmentOffset = 0u,
+    usize ignoredAssignmentCount = 0u
+)noexcept;
+
+struct GpuTaskQueuePlacementGroup{
+    usize assignmentOffset = 0u;
+    usize assignmentCount = 0u;
+    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
+    GpuPhysicalQueueId requiredQueue;
+    GpuPhysicalQueueId overrideQueue;
+};
+
+[[nodiscard]] bool BuildQueuePlacementGroups(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphQueueAssignmentOptions& options,
+    Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
+    GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
+    Alloc::ScratchArena& scratchArena
+);
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskQueuePlacementGroup& group,
+    CommandQueue::Enum requiredClass = CommandQueue::kCount
+)noexcept;
+
+[[nodiscard]] GpuQueueAssignmentScore BuildQueuePlacementGroupScore(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
+    const GpuTaskQueuePlacementGroup& group,
     const GpuPhysicalQueueInfo& candidate
 )noexcept;
 
@@ -341,7 +364,8 @@ struct GpuTaskQueueScoringData{
     const GpuQueueAssignmentScore& candidateScore,
     const GpuPhysicalQueueInfo& candidate,
     const GpuQueueAssignmentScore& currentScore,
-    const GpuPhysicalQueueInfo* current
+    const GpuPhysicalQueueInfo* current,
+    bool compareTotalScore
 )noexcept;
 
 

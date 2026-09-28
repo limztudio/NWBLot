@@ -12,7 +12,7 @@
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -411,7 +411,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured
                 ? "AVBOIT Accumulation CSG Compute Emulation"
                 : "AVBOIT Accumulation Compute Emulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(accumulationComputeEmulationScheduling)
             .setDependencies(&accumulationDependency, 1u)
             .setResourceUses(
@@ -603,7 +602,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         accumulationDesc
             .setIdentity(Name("render.avboit.accumulation"))
             .setMarkerLabel("AVBOIT Accumulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitAccumulationScheduling)
             .setDependencies(rasterDependencies, rasterDependencyCount)
             .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
@@ -639,7 +637,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     accumulationFinalizeDesc
         .setIdentity(Name("render.avboit.accumulation_finalize"))
         .setMarkerLabel("AVBOIT Accumulation Finalize")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(accumulationFinalizeScheduling)
         .setDependencies(&m_avboitSystem.taskGraphStage().m_accumulationTask, 1u)
         .setResourceUses(accumulationFinalizeResourceUses, LengthOf(accumulationFinalizeResourceUses))

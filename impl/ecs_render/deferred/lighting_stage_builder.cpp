@@ -8,7 +8,6 @@
 
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -110,7 +109,6 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
         uploadDesc
             .setIdentity(Name("render.lagged_lighting.bindless_slots_upload"))
             .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
-            .setQueue(ComputeUploadQueueRequest())
             .setScheduling(uploadScheduling)
             .setDependencies(
                 laggedLightingSelectorUploadDependencies,
@@ -207,7 +205,6 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
     desc
         .setIdentity(Name("render.deferred_lighting"))
         .setMarkerLabel("Deferred Lighting")
-        .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(resolvedLightingDependencies, lightingDependencyCount)
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)

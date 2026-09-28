@@ -76,6 +76,8 @@ namespace RayTracingSurfelGiTaskDetail{
 
 
 struct SurfelGiAgeFreeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
@@ -140,6 +142,8 @@ struct SurfelGiAgeFreeGraphTask{
 
 
 struct SurfelGiHashBuildGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -193,6 +197,8 @@ struct SurfelGiHashBuildGraphTask{
 
 
 struct SurfelGiSpawnGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -246,6 +252,8 @@ struct SurfelGiSpawnGraphTask{
 
 
 struct SurfelGiTraceBuildArgsGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -299,6 +307,8 @@ struct SurfelGiTraceBuildArgsGraphTask{
 
 
 struct SurfelGiTraceGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -352,6 +362,8 @@ struct SurfelGiTraceGraphTask{
 
 
 struct SurfelGiResolveGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -420,6 +432,13 @@ struct SurfelGiGraphTask{
         bool graphOwnsTrace = false;
         bool graphOwnsResolve = false;
     };
+
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+        return { payload.graphOwnsCellHeadClear
+            ? Core::GpuQueueCapability::Compute
+            : Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
+        };
+    }
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -508,6 +527,8 @@ struct SurfelGiGraphTask{
 // The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task
 // the renderer's CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared packet accepts.
 struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
     };

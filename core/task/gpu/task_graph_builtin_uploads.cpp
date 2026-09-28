@@ -286,7 +286,6 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
         return {};
 
@@ -366,7 +365,6 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
         return {};
 
@@ -441,10 +439,11 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     };
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
+    GpuTaskCommandRequirements commands{ GpuQueueCapability::Transfer };
     if(resolvedAspect != TextureUploadAspect::Color)
-        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
+        commands.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
+    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation, commands);
 }
 
 

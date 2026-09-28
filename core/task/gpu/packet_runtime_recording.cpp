@@ -494,7 +494,7 @@ bool GpuNativePacketRecorder::recordPacket(
 #if defined(NWB_DEBUG)
         bool taskCapabilityTrackingStarted = false;
         if(recorded){
-            commandList->beginTaskCapabilityTracking(taskView.queue.requiredCapabilities);
+            commandList->beginTaskCapabilityTracking(taskView.commands.allowedCapabilities());
             taskCapabilityTrackingStarted = true;
         }
 #endif
@@ -549,7 +549,7 @@ bool GpuNativePacketRecorder::recordPacket(
             recorded
             && (
                 !GpuPacketRecordingDetail::HasQueueCapabilities(
-                    taskView.queue.requiredCapabilities,
+                    taskView.commands.allowedCapabilities(),
                     usedCapabilities
                 )
                 || !GpuPacketRecordingDetail::HasQueueCapabilities(queue->capabilities, usedCapabilities)
@@ -559,7 +559,7 @@ bool GpuNativePacketRecorder::recordPacket(
                 NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
                 StringConvert(taskView.markerLabel),
                 static_cast<u32>(usedCapabilities),
-                static_cast<u32>(taskView.queue.requiredCapabilities),
+                static_cast<u32>(taskView.commands.allowedCapabilities()),
                 static_cast<u32>(queue->queueClass),
                 queue->id.index,
                 static_cast<u32>(queue->capabilities)

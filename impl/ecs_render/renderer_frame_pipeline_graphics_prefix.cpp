@@ -17,7 +17,6 @@
 
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
@@ -252,7 +251,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     deferredClearDesc
         .setIdentity(Name("render.graphics_prefix.deferred_clear_opaque_color"))
         .setMarkerLabel("Deferred Clear Opaque Color")
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(clearScheduling)
         .setDependencies(&m_graphicsPrefixSceneShadingSetupTask, 1u)
     ;
@@ -874,7 +872,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueComputeEmulationDesc
             .setIdentity(Name("render.graphics_prefix.opaque_compute_emulation"))
             .setMarkerLabel("Opaque Compute Emulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(opaqueComputeEmulationScheduling)
             .setDependencies(&gbufferDependency, 1u)
             .setResourceUses(
@@ -969,7 +966,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueCsgReceiverComputeEmulationDesc
             .setIdentity(Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation"))
             .setMarkerLabel("Opaque CSG Receiver Compute Emulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(opaqueCsgReceiverComputeEmulationScheduling)
             .setDependencies(&gbufferDependency, 1u)
             .setResourceUses(
@@ -1011,7 +1007,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferDesc
         .setIdentity(Name("render.graphics_prefix.gbuffer"))
         .setMarkerLabel("Opaque G-Buffer")
-        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(gbufferScheduling)
         .setDependencies(&gbufferDependency, 1u)
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
@@ -1130,7 +1125,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             desc
                 .setIdentity(identity)
                 .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsComputeQueueRequest())
                 .setScheduling(opaqueSharedComputeEmulationScheduling)
                 .setDependencies(&dependency, 1u)
                 .setResourceUses(resourceUses.data(), resourceUses.size())
@@ -1229,7 +1223,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgReceiverSpanDesc
             .setIdentity(Name("render.graphics_prefix.csg_receiver_span"))
             .setMarkerLabel("Opaque CSG Receiver Span")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgReceiverSpanScheduling)
             .setDependencies(&gbufferCompletionTask, 1u)
             .setResourceUses(csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUses.size())
@@ -1254,7 +1247,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalCombineDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_combine"))
             .setMarkerLabel("Opaque CSG Interval Combine")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgIntervalCombineScheduling)
             .setDependencies(&m_graphicsPrefixCsgReceiverSpanTask, 1u)
             .setResourceUses(csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUses.size())
@@ -1543,7 +1535,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             opaqueCsgIntervalSampleComputeEmulationDesc
                 .setIdentity(Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation"))
                 .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
-                .setQueue(GraphicsComputeQueueRequest())
                 .setScheduling(opaqueCsgIntervalSampleComputeEmulationScheduling)
                 .setDependencies(&csgIntervalSampleDependency, 1u)
                 .setResourceUses(
@@ -1583,7 +1574,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalSampleDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_sample"))
             .setMarkerLabel("Opaque CSG Interval Sample")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgIntervalSampleScheduling)
             .setDependencies(&csgIntervalSampleDependency, 1u)
             .setResourceUses(csgIntervalSampleResourceUses.data(), csgIntervalSampleResourceUses.size())
@@ -1644,7 +1634,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     normalizeDesc
         .setIdentity(Name("render.graphics_prefix.normalize"))
         .setMarkerLabel("Post-G-Buffer Normalize")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(normalizeScheduling)
         .setDependencies(&gbufferCompletionTask, 1u)
         .setResourceUses(normalizeResourceUses.data(), normalizeResourceUses.size())

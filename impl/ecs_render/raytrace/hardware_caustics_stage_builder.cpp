@@ -8,7 +8,7 @@
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
@@ -485,7 +485,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         irradianceClearDesc
             .setIdentity(Name("render.hardware_caustics.irradiance_clear"))
             .setMarkerLabel("Hardware Caustics Irradiance Clear")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(irradianceClearScheduling)
             .setDependencies(hardwareDependencies, LengthOf(hardwareDependencies))
             .setExternalDependencies(hardwareExternalDependencies, hardwareExternalDependencyCount)
@@ -517,7 +516,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorNonTemporalClearDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_non_temporal_clear"))
                 .setMarkerLabel("Hardware Caustics Accumulator Clear")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(accumulatorNonTemporalClearScheduling)
                 .setDependencies(&causticsDependency, 1u)
                 .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
@@ -555,7 +553,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorBootstrapClearDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_bootstrap_clear"))
                 .setMarkerLabel("Hardware Caustics Accumulator Bootstrap Clear")
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(accumulatorBootstrapClearScheduling)
                 .setDependencies(&irradianceClearTask, 1u)
                 .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
@@ -601,7 +598,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             accumulatorDecayDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_decay"))
                 .setMarkerLabel("Hardware Caustics Accumulator Decay")
-                .setQueue(GraphicsPreferredComputeQueueRequest())
                 .setScheduling(accumulatorDecayScheduling)
                 .setDependencies(&causticsDependency, 1u)
                 .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
@@ -637,7 +633,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         hardwarePhotonDesc
             .setIdentity(Name("render.hardware_caustics.photons"))
             .setMarkerLabel("Hardware Caustic Photons")
-            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareCausticsScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
@@ -673,7 +668,6 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         hardwareGeometryDesc
             .setIdentity(Name("render.hardware_caustics.geometry_downsample"))
             .setMarkerLabel("Hardware Caustics Geometry Downsample")
-            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareGeometryScheduling)
             .setDependencies(&outResult.causticPhotonTask, 1u)
             .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())

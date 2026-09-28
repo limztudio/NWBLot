@@ -16,7 +16,7 @@
 
 #include <global/timer.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -897,7 +897,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         opaqueDesc
             .setIdentity(Name("render.shadow_visibility.opaque"))
             .setMarkerLabel("Shadow Visibility Opaque")
-            .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(opaqueScheduling)
             .setDependencies(&shadowTraceDependency, 1u)
             .setExternalDependencies(
@@ -946,7 +945,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setIdentity(combinedSoftWavelet
                     ? Name("render.shadow_visibility.opaque_temporal_merge") : Name("render.shadow_visibility.opaque_first_wavelet"))
                 .setMarkerLabel(combinedSoftWavelet ? "Shadow Opaque Temporal Merge" : "Shadow Opaque First Wavelet")
-                .setQueue(ComputeQueueRequest())
                 .setScheduling(tailScheduling)
                 .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
                 .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
@@ -981,7 +979,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             opaqueResolveDesc
                 .setIdentity(Name("render.shadow_visibility.opaque_soft_resolve"))
                 .setMarkerLabel("Shadow Opaque Soft Resolve")
-                .setQueue(ComputeQueueRequest())
                 .setScheduling(tailScheduling)
                 .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
                 .setResourceUses(opaqueResolveResourceUses.data(), opaqueResolveResourceUses.size())
@@ -1015,7 +1012,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         traceDesc
             .setIdentity(Name("render.shadow_visibility.soft_transparent_trace"))
             .setMarkerLabel("Shadow Transparent Soft Trace")
-            .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(traceDependencies, LengthOf(traceDependencies))
             .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
@@ -1052,7 +1048,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 .setIdentity(combinedSoftTemporal
                     ? Name("render.shadow_visibility.combined_temporal_merge") : Name("render.shadow_visibility.transparent_temporal_merge"))
                 .setMarkerLabel(combinedSoftTemporal ? "Shadow Combined Temporal Merge" : "Shadow Transparent Temporal Merge")
-                .setQueue(ComputeQueueRequest())
                 .setScheduling(tailScheduling)
                 .setDependencies(transparentTemporalMergeDependencies, LengthOf(transparentTemporalMergeDependencies))
                 .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
@@ -1091,7 +1086,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setIdentity(combinedSoftWavelet
                 ? Name("render.shadow_visibility.combined_first_wavelet") : Name("render.shadow_visibility.transparent_first_wavelet"))
             .setMarkerLabel(combinedSoftWavelet ? "Shadow Combined First Wavelet" : "Shadow Transparent First Wavelet")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
             .setResourceUses(transparentFirstWaveletResourceUses.data(), transparentFirstWaveletResourceUses.size())
@@ -1121,7 +1115,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         foldDesc
             .setIdentity(Name("render.shadow_visibility.soft_transparent_fold"))
             .setMarkerLabel("Shadow Transparent Soft Fold")
-            .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(foldDependencies, LengthOf(foldDependencies))
             .setResourceUses(transparentFoldResourceUses.data(), transparentFoldResourceUses.size())
@@ -1171,7 +1164,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             counterClearDesc
                 .setIdentity(Name("render.shadow_visibility.adaptive_counter_clear"))
                 .setMarkerLabel("Shadow Adaptive Counter Clear")
-                .setQueue(ComputeTransferPacketQueueRequest())
                 .setScheduling(counterClearScheduling)
                 .setDependencies(&shadowVisibilityDependency, 1u)
             ;
@@ -1212,7 +1204,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     allLitClearDesc
         .setIdentity(Name("render.shadow_visibility.all_lit_clear"))
         .setMarkerLabel("Shadow Visibility All-Lit Clear")
-        .setQueue(ComputePacketQueueRequest())
         .setScheduling(allLitClearScheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setExternalDependencies(
@@ -1246,7 +1237,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     desc
         .setIdentity(Name("render.shadow_visibility"))
         .setMarkerLabel("Shadow Visibility")
-        .setQueue(ComputeTransferPacketQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)

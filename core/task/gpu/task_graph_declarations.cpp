@@ -115,11 +115,11 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
 }
 
 
-GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
+GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
-    return appendTaskWithinMutation(desc, nullptr, nullptr, nullptr, nullptr, nullptr, 0u, mutation);
+    return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, nullptr, 0u, mutation);
 }
 
 GpuGraphResourceVersionId GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){

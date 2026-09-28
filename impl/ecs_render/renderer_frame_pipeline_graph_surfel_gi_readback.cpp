@@ -13,7 +13,6 @@
 
 #include <global/timer.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -72,7 +71,6 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(
     desc
         .setIdentity(Name("render.surfel_gi.counter_readback"))
         .setMarkerLabel("Surfel Counter Readback")
-        .setQueue(TransferQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(dependencies, LengthOf(dependencies))
     ;

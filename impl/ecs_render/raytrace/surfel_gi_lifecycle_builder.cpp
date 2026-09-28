@@ -5,7 +5,6 @@
 #include "surfel_gi_lifecycle_builder.h"
 
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
@@ -69,7 +68,6 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
         poolClearDesc
             .setIdentity(Name("render.surfel_gi.initialize_pool_clear"))
             .setMarkerLabel("Surfel GI Initialize Pool Clear")
-            .setQueue(ComputeTransferQueueRequest())
             .setScheduling(initializationScheduling)
             .setDependencies(&dependency, 1u)
             .setExternalDependencies(inputs.externalDependencies, inputs.externalDependencyCount)
@@ -108,7 +106,6 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
             clearDesc
                 .setIdentity(identity)
                 .setMarkerLabel(label)
-                .setQueue(ComputeTransferQueueRequest())
                 .setScheduling(chainedInitializationScheduling)
                 .setDependencies(&initializationDependency, 1u)
                 .setExternalStateSources(externalStateSources, externalStateSourceCount)
@@ -158,7 +155,6 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
         initializationLifecycleDesc
             .setIdentity(Name("render.surfel_gi.initialize_lifecycle"))
             .setMarkerLabel("Surfel GI Initialize Lifecycle")
-            .setQueue(ComputeTransferQueueRequest())
             .setScheduling(chainedInitializationScheduling)
             .setDependencies(&initializationDependency, 1u)
         ;
@@ -190,7 +186,6 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
     snapshotDesc
         .setIdentity(Name("render.surfel_gi.snapshot_copy"))
         .setMarkerLabel("Surfel GI Snapshot Copy")
-        .setQueue(TransferQueueRequest())
         .setScheduling(inputs.scheduling)
         .setDependencies(&dependency, 1u)
         .setExternalStateSources(

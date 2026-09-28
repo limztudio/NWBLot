@@ -7,7 +7,6 @@
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
@@ -68,8 +67,6 @@ struct ResolveStageDesc{
 [[nodiscard]] bool CausticsResolveChainBuilder::declare(
     const CausticsResolveChainInputs& inputs,
     const CausticsResolveChainNaming& naming,
-    const Core::GpuQueueRequest& stageQueue,
-    const Core::GpuQueueRequest& timingCloseQueue,
     CausticsResolveChainResult& outResult,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -122,7 +119,6 @@ struct ResolveStageDesc{
         stageDesc
             .setIdentity(stage.naming->identity)
             .setMarkerLabel(stage.naming->label)
-            .setQueue(stageQueue)
             .setScheduling(stageScheduling)
             .setDependencies(&previousTask, 1u)
             .setResourceUses(stage.stageUses->uses, stage.stageUses->useCount)
@@ -158,7 +154,6 @@ struct ResolveStageDesc{
     timingCloseDesc
         .setIdentity(naming.timingClose.identity)
         .setMarkerLabel(naming.timingClose.label)
-        .setQueue(timingCloseQueue)
         .setScheduling(stageScheduling)
         .setDependencies(&outResult.causticResolveUpsampleTask, 1u)
     ;

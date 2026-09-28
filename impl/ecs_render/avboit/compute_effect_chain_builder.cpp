@@ -10,7 +10,7 @@
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/kernel/timing_names.h>
@@ -84,7 +84,6 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
         depthWarpDesc
             .setIdentity(Name("render.avboit.depth_warp"))
             .setMarkerLabel("AVBOIT Depth Warp")
-            .setQueue(RendererTaskGraphDetail::ComputeQueueRequest())
             .setScheduling(avboitComputeScheduling)
             .setTimingMetadata(avboitComputeStageTiming)
             .setDependencies(preDependency, LengthOf(preDependency))
@@ -162,7 +161,6 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     integrationDesc
         .setIdentity(Name("render.avboit.integration"))
         .setMarkerLabel("AVBOIT Integration")
-        .setQueue(RendererTaskGraphDetail::ComputeQueueRequest())
         .setScheduling(avboitComputeScheduling)
         .setTimingMetadata(avboitComputeStageTiming)
         .setDependencies(integrationDependency, LengthOf(integrationDependency))

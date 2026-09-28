@@ -33,6 +33,8 @@ namespace RendererTaskGraphDetail{
 
 
 struct PostGbufferNormalizeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;

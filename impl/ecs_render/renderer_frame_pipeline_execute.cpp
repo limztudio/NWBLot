@@ -740,7 +740,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             !m_deferredHardwareCausticsTask.valid()
             || !taskIsCompiled(m_deferredHardwareCausticsTask)
             || !hardwareCausticsQueue
-            || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
+            || (static_cast<u8>(hardwareCausticsQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
         ))
         || !avboitValidation.valid()
         || !m_deferredLightingTask.valid()
@@ -786,8 +787,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
         || terminalPresentationQueue->id != primaryGraphicsQueue
         || !surfelGiSnapshotCopyAndTimingPacketsAreDistinct
-        || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
-        || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
+        || (static_cast<u8>(deferredLightingQueue->capabilities)
+            & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
+        || (static_cast<u8>(deferredCompositeQueue->capabilities)
+            & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
         || (m_deferredPresentationOverlayRequired
             && deferredPresentationOverlayQueue->queueClass != Core::CommandQueue::Graphics)

@@ -83,12 +83,6 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     desc
         .setIdentity(Name("tests/task_graph/upload_buffer_alignment"))
         .setMarkerLabel("Upload Buffer Alignment")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     EXPECT_FALSE(graph.addUploadBufferTask(
         desc,
@@ -274,12 +268,6 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     ASSERT_TRUE(laterDestinationResource.valid());
 
     Graphics::GpuTaskDesc desc;
-    desc.setQueue(Graphics::GpuQueueRequest{
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
-        true,
-        true,
-    });
     const Graphics::GpuCopyBufferTaskRegion badSourceRegions[]{
         Graphics::GpuCopyBufferTaskRegion{
             .source = sourceResource,
@@ -509,12 +497,6 @@ TEST(GpuTaskGraph, CopyBufferRegionsDeclareExactIntervalsAndReplayOnlyCoveredByt
     desc
         .setIdentity(Name("tests/task_graph/copy_buffer_regions"))
         .setMarkerLabel("Copy Buffer Regions")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuTaskId task = graph.addCopyBufferTask(
         desc,
@@ -612,12 +594,6 @@ TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
     desc
         .setIdentity(Name("tests/task_graph/built_in_buffer_copy"))
         .setMarkerLabel("Built-In Buffer Copy")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuCopyBufferTaskRegion region{
         .source = source,

@@ -7,7 +7,6 @@
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
@@ -181,7 +180,7 @@ bool FrameGraphReflectionResolve::declare(
         };
         Core::GpuTaskDesc refractionDesc;
         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
-            .setMarkerLabel("AVBOIT Refraction Resolve").setQueue(ComputeQueueRequest())
+            .setMarkerLabel("AVBOIT Refraction Resolve")
             .setDependencies(refractionDependencies, LengthOf(refractionDependencies))
             .setResourceUses(refractionUses.data(), refractionUses.size())
             .setResourceSetUses(refractionSets, refractionSetCount);
@@ -197,7 +196,7 @@ bool FrameGraphReflectionResolve::declare(
     else{
         Core::GpuTaskDesc clearDesc;
         clearDesc.setIdentity(Name("render.avboit.refraction_resolve_clear"))
-            .setMarkerLabel("AVBOIT Refraction Resolve Clear").setQueue(GraphicsUploadQueueRequest())
+            .setMarkerLabel("AVBOIT Refraction Resolve Clear")
             .setDependencies(&inputs.avboitFinalTask, 1u);
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = refractionResolve;

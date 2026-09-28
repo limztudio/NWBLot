@@ -113,14 +113,14 @@ void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
 
 GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     const GpuTaskDesc& desc,
+    const GpuTaskCommandRequirements& commands,
     void* const payload,
     const GpuTaskRecordThunk recordPayload,
     const GpuTaskAcceptedThunk acceptPayload,
     const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload,
     const usize payloadObjectSize,
-    const DeclarationMutationScope& mutationAccess
-){
+    const DeclarationMutationScope& mutationAccess){
     if(!mutationAccess.validFor(*this))
         return {};
 
@@ -225,7 +225,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     GpuTaskNode task;
     task.identity = desc.identity;
-    task.queue = desc.queue;
+    task.commands = commands;
     task.scheduling = desc.scheduling;
     task.timing = desc.timing;
     task.markerLabelOffset = markerLabelOffset;
@@ -550,6 +550,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
     resource.initialOwnerMinimumCompletionToken = desc.initialOwnerMinimumCompletionToken;
     resource.initialAvailabilityCompletion = desc.initialAvailabilityCompletion;
+    resource.directConsumerQueue = desc.directConsumerQueue;
     resource.initialOwnerStateSource = initialOwnerStateSnapshot.get();
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
     resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);

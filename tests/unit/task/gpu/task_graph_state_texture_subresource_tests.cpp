@@ -119,24 +119,9 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest transferRequest{
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueuePreference::Transfer,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
+    const Graphics::GpuTaskCommandRequirements transferCommands{ Graphics::GpuQueueCapability::Transfer };
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
@@ -191,7 +176,6 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     transferDesc
         .setIdentity(Name("tests/task_graph/fragment_fan_in_transfer"))
         .setMarkerLabel("Fragment Fan-In Transfer")
-        .setQueue(transferRequest)
         .setScheduling(scheduling)
         .setResourceUses(&transferUse, 1u)
     ;
@@ -199,7 +183,6 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     computeDesc
         .setIdentity(Name("tests/task_graph/fragment_fan_in_compute"))
         .setMarkerLabel("Fragment Fan-In Compute")
-        .setQueue(computeRequest)
         .setScheduling(scheduling)
         .setResourceUses(&computeUse, 1u)
     ;
@@ -207,13 +190,12 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     consumerDesc
         .setIdentity(Name("tests/task_graph/fragment_fan_in_consumer"))
         .setMarkerLabel("Fragment Fan-In Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId transferTask = graph.addTask(transferDesc);
-    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc);
-    const Graphics::GpuTaskId consumerTask = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId transferTask = graph.addTask(transferDesc, transferCommands);
+    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc, computeCommands);
+    const Graphics::GpuTaskId consumerTask = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(transferTask.valid());
     ASSERT_TRUE(computeTask.valid());
     ASSERT_TRUE(consumerTask.valid());
@@ -221,7 +203,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -423,7 +405,7 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 

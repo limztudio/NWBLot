@@ -9,7 +9,6 @@
 
 #include <core/graphics/vulkan/backend.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/common/log.h>
@@ -73,13 +72,15 @@ namespace __hidden_reflection_tasks{
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setQueue(GraphicsPreferredComputeQueueRequest()).setScheduling(scheduling);
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
     if(dependency.valid())
         desc.setDependencies(&dependency, 1u);
     return desc;
 }
 
 struct UploadParametersTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
+
     struct Payload{
         Core::BufferHandle buffer;
         ReflectionFrameParameters parameters;
@@ -120,6 +121,8 @@ struct DepthReduceParameters{
 static_assert(sizeof(DepthReduceParameters) == NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES);
 
 struct DepthReduceTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;
@@ -155,6 +158,8 @@ namespace DispatchStage{
 };
 
 struct DispatchTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         ReflectionFrameSnapshot resources;
@@ -241,6 +246,8 @@ struct DispatchTask{
 };
 
 struct StatisticsReadbackTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
+
     struct Payload{
         Core::BufferHandle source;
         Core::BufferHandle destination;
@@ -290,6 +297,8 @@ struct StatisticsReadbackTask{
 };
 
 struct FinalizeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{};
     [[nodiscard]] static bool record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
@@ -354,7 +363,6 @@ ReflectionGraphResult DeclareReflectionTasks(
         return {};
 
     Core::GpuTaskDesc desc = TaskDesc(Name("render.reflection.parameters_upload"), "Reflection Parameters Upload", dependency);
-    desc.setQueue(GraphicsUploadQueueRequest());
     const Core::GpuTaskResourceUse parameterWrite = WriteUse(result.frameParameters, Core::ResourceStates::CopyDest);
     desc.setResourceUses(&parameterWrite, 1u);
     dependency = graph.addTask<UploadParametersTask>(
@@ -368,7 +376,6 @@ ReflectionGraphResult DeclareReflectionTasks(
         return {};
 
     desc = TaskDesc(Name("render.reflection.clear_counters"), "Reflection Clear Counters", dependency);
-    desc.setQueue(GraphicsUploadQueueRequest());
     dependency = graph.addClearBufferTask(desc, Core::GpuClearBufferTaskDesc{.destination = result.counters, .clearValue = 0u});
     if(!dependency.valid())
         return {};
@@ -511,7 +518,7 @@ ReflectionGraphResult DeclareReflectionTasks(
                 },
             };
             Core::GpuTaskDesc copyDesc = TaskDesc(Name("render.reflection.statistics"), "Reflection Statistics Readback", dependency);
-            copyDesc.setQueue(GraphicsUploadQueueRequest()).setResourceUses(copyUses, LengthOf(copyUses));
+            copyDesc.setResourceUses(copyUses, LengthOf(copyUses));
             dependency = graph.addTask<StatisticsReadbackTask>(
                 copyDesc,
                 StatisticsReadbackTask::Payload{

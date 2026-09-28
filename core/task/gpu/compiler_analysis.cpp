@@ -272,7 +272,7 @@ bool GpuTaskGraphCompiler::analyze(
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
         if(
             !task.identity
-            || !IsValidQueueRequest(task.queue)
+            || !IsValidCommandRequirements(task.commands)
             || !IsValidSchedulingHint(task.scheduling)
             || task.timing.policy >= GpuTaskTimingPolicy::kCount
         )
@@ -640,10 +640,6 @@ bool GpuTaskGraphCompiler::analyze(
                 && backBuffer.initialState != ResourceStates::Present
             )
             || backBuffer.externalFinalState != ResourceStates::Present
-            || !HasCapabilities(
-                producer.queue.requiredCapabilities,
-                GpuQueueCapability::Graphics
-            )
         )
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, producer.id, {}, backBuffer.id);
 

@@ -12,7 +12,6 @@
 #include <core/graphics/vulkan/backend.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
@@ -78,7 +77,7 @@ namespace __hidden_refraction_capture{
     scheduling.mergeWithPrevious = true;
     scheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc desc;
-    desc.setIdentity(identity).setMarkerLabel(label).setQueue(GraphicsQueueRequest()).setScheduling(scheduling);
+    desc.setIdentity(identity).setMarkerLabel(label).setScheduling(scheduling);
     if(dependency.valid())
         desc.setDependencies(&dependency, 1u);
     return desc;
@@ -101,6 +100,10 @@ struct CaptureDrawTask{
 
         explicit Payload(Core::Alloc::GlobalArena& arena) : drawItems(arena){}
     };
+
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+        return { payload.generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
+    }
 
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.materialSystem || !payload.deferredTargets || !payload.avboitTargets.refractionFramebuffer
@@ -163,6 +166,8 @@ struct CaptureDrawTask{
 };
 
 struct FinalizeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{};
     [[nodiscard]] static bool record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
@@ -211,7 +216,6 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         const bool isDepth,
         const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
         Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Clear", dependency);
-        desc.setQueue(GraphicsUploadQueueRequest());
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = destination;
         clear.subresources = Core::TextureSubresourceSet(0u, 1u, 0u, 1u);
@@ -300,7 +304,6 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         if(!blob.valid())
             return false;
         Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Upload", dependency);
-        desc.setQueue(GraphicsUploadQueueRequest());
         dependency = graph.addUploadBufferTask(desc, Core::GpuUploadBufferTaskDesc{
             .source = blob, .destination = destination, .finalState = Core::ResourceStates::Common,
         });
@@ -386,7 +389,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         }
         const auto identityText = StringFormat(scratch, "render.refraction.capture.draw_{}", drawTaskIndex++);
         Core::GpuTaskDesc desc = TaskDesc(ToName(identityText), generate ? "Refraction Capture Generate" : "Refraction Capture Raster", dependency);
-        desc.setQueue(GraphicsComputeQueueRequest()).setResourceUses(uses.data(), uses.size()).setResourceSetUses(setUses, setUseCount);
+        desc.setResourceUses(uses.data(), uses.size()).setResourceSetUses(setUses, setUseCount);
         CaptureDrawTask::Payload payload{arena};
         payload.materialSystem = &materialSystem;
         payload.deferredTargets = &targets;

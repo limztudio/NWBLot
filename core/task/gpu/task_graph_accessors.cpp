@@ -56,7 +56,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .id = GpuTaskId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = task.identity,
         .markerLabel = markerLabel(task.markerLabelOffset, task.markerLabelSize),
-        .queue = task.queue,
+        .commands = task.commands,
         .scheduling = task.scheduling,
         .timing = task.timing,
         .dependencies = task.dependencyCount > 0u ? m_dependencies.data() + task.dependencyOffset : nullptr,
@@ -105,6 +105,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
             : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .initialAvailabilityCompletion = resource.initialAvailabilityCompletion,
+        .directConsumerQueue = resource.directConsumerQueue,
         .queueAdmission = ResourceQueueAdmissionSnapshot{
             .queueFamilyIndices = resource.queueFamilyIndexCount != 0u
                 ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset

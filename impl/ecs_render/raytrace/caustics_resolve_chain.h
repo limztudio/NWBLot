@@ -33,7 +33,7 @@ struct CausticsResolveStageUses{
 };
 
 // Shared stage-use core for the hardware/software resolve-chain input structs below. Both chains carry the same
-// prepare plus five-wavelet plus upsample use ranges and differ only in naming, queues, and state sources.
+// prepare plus five-wavelet plus upsample use ranges and differ only in naming and state sources.
 struct CausticsResolveChainStageUseInputs{
     CausticsResolveStageUses prepare;
     CausticsResolveStageUses wavelet;
@@ -107,8 +107,6 @@ public:
     [[nodiscard]] bool declare(
         const CausticsResolveChainInputs& inputs,
         const CausticsResolveChainNaming& naming,
-        const Core::GpuQueueRequest& stageQueue,
-        const Core::GpuQueueRequest& timingCloseQueue,
         CausticsResolveChainResult& outResult,
         Core::Alloc::ScratchArena& scratchArena
     );

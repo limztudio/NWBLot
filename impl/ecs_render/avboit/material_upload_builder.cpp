@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 
 #include <core/graphics/vulkan/backend.h>
 
@@ -116,7 +115,6 @@ struct UploadIdentities{
     Core::GpuTaskId& inOutUploadTask,
     bool& outCsgStreamsUploaded
 ){
-    using namespace RendererTaskGraphDetail;
     outCsgStreamsUploaded = false;
     if(
         !inputs.targets
@@ -160,7 +158,6 @@ struct UploadIdentities{
     instanceUploadDesc
         .setIdentity(Name(identities.instanceIdentity))
         .setMarkerLabel(identities.instanceLabel)
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(uploadScheduling)
         .setDependencies(&inOutUploadTask, 1u)
     ;
@@ -181,7 +178,6 @@ struct UploadIdentities{
     materialTypedUploadDesc
         .setIdentity(Name(identities.typedIdentity))
         .setMarkerLabel(identities.typedLabel)
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(uploadScheduling)
         .setDependencies(&inOutUploadTask, 1u)
     ;
@@ -240,7 +236,6 @@ struct UploadIdentities{
     receiverRangesUploadDesc
         .setIdentity(Name(identities.receiverIdentity))
         .setMarkerLabel(identities.receiverLabel)
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(uploadScheduling)
         .setDependencies(&inOutUploadTask, 1u)
     ;
@@ -261,7 +256,6 @@ struct UploadIdentities{
     cuttersUploadDesc
         .setIdentity(Name(identities.cutterIdentity))
         .setMarkerLabel(identities.cutterLabel)
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(uploadScheduling)
         .setDependencies(&inOutUploadTask, 1u)
     ;
@@ -282,7 +276,6 @@ struct UploadIdentities{
     clipContextSlotsUploadDesc
         .setIdentity(Name(identities.clipIdentity))
         .setMarkerLabel(identities.clipLabel)
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(uploadScheduling)
         .setDependencies(&inOutUploadTask, 1u)
     ;

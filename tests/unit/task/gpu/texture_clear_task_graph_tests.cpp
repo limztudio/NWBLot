@@ -92,17 +92,11 @@ struct TextureClearTestContext{
     );
 }
 
-[[nodiscard]] Graphics::GpuTaskDesc MakeTransferTaskDesc(const Name& identity, const AStringView markerLabel){
+[[nodiscard]] Graphics::GpuTaskDesc MakeTaskDesc(const Name& identity, const AStringView markerLabel){
     Graphics::GpuTaskDesc desc;
     desc
         .setIdentity(identity)
         .setMarkerLabel(markerLabel)
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
-        })
     ;
     return desc;
 }
@@ -125,6 +119,60 @@ struct TextureClearTestContext{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(GpuTextureClearContract, PreservesIndependentShaderClearAndHookCapabilityAlternatives){
+    TextureClearTestContext testContext;
+    const Graphics::TextureHandle texture = testContext.createTexture(
+        Graphics::TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Graphics::Format::RGBA8_UINT)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(texture);
+    Graphics::GpuTaskGraph graph(testContext.testArena.arena);
+    const Graphics::GpuGraphResourceId destination = ImportTexture(graph, texture, Name("tests/texture_clear_contract/alternative_hooks"), "Clear With Alternative Hook Commands");
+    ASSERT_TRUE(destination.valid());
+    Graphics::GpuClearTextureRectUIntTaskDesc clear;
+    clear.destination = destination;
+    clear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clear.rect = Graphics::Rect(2, 2);
+    clear.recordHooks.commands.alternativeCapabilities = QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer);
+    const Graphics::GpuTaskId task = graph.addClearTextureRectUIntTask(
+        MakeTaskDesc(Name("tests/texture_clear_contract/alternative_hooks_task"), "Alternative Hook Clear"),
+        clear
+    );
+    ASSERT_TRUE(task.valid());
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuTaskCommandRequirements commands = declarations.taskAt(task.index).commands;
+        EXPECT_EQ(commands.requiredCapabilities, Graphics::GpuQueueCapability::None);
+        EXPECT_EQ(commands.alternativeCapabilities, QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics));
+        EXPECT_EQ(commands.additionalAlternativeCapabilities, QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Transfer));
+    }
+    Graphics::GpuPhysicalQueueInfo computeOnly = TaskGraphTestUtils::DedicatedComputeQueue();
+    computeOnly.capabilities = Graphics::GpuQueueCapability::Compute;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        computeOnly,
+        TaskGraphTestUtils::DedicatedTransferQueue(),
+        GraphicsQueue(0u, QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)),
+    };
+    const bool expected[] = { true, false, true };
+    for(usize queueIndex = 0u; queueIndex < LengthOf(queues); ++queueIndex){
+        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queues[queueIndex], .queueCount = 1u };
+        Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);
+        Core::Alloc::ScratchArena scratchArena(s_TextureClearScratchArena);
+        EXPECT_EQ(Compile(graph, analysis, topology, assignments, compiledGraph, scratchArena), expected[queueIndex]);
+        if(expected[queueIndex]){
+            ASSERT_NE(assignments.find(task), nullptr);
+            EXPECT_EQ(assignments.find(task)->queue, queues[queueIndex].id);
+        }
+        else
+            EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
+    }
+}
 
 TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlternatives){
     TextureClearTestContext testContext;
@@ -150,7 +198,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
     partialClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     partialClear.rect = Graphics::Rect(2, 2);
     const Graphics::GpuTaskId partialTask = partialGraph.addClearTextureRectUIntTask(
-        MakeTransferTaskDesc(
+        MakeTaskDesc(
             Name("tests/task_graph/partial_texture_clear_task"),
             "Partial Texture Clear Task"
         ),
@@ -161,8 +209,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
         ASSERT_TRUE(declarations.valid());
         EXPECT_EQ(
-            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(partialTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 
@@ -196,13 +244,9 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         "Graphics Texture Clear"
     );
     ASSERT_TRUE(graphicsResource.valid());
-    Graphics::GpuTaskDesc graphicsFullDesc = MakeTransferTaskDesc(
+    Graphics::GpuTaskDesc graphicsFullDesc = MakeTaskDesc(
         Name("tests/task_graph/graphics_full_texture_clear_task"),
         "Graphics Full Texture Clear Task"
-    );
-    graphicsFullDesc.queue.requiredCapabilities = QueueCapabilities(
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueueCapability::Graphics
     );
     Graphics::GpuClearTextureTaskDesc graphicsFullClear;
     graphicsFullClear.destination = graphicsResource;
@@ -217,18 +261,14 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graphicsGraph);
         ASSERT_TRUE(declarations.valid());
         EXPECT_EQ(
-            declarations.taskAt(graphicsFullTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(graphicsFullTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 
-    Graphics::GpuTaskDesc graphicsRectDesc = MakeTransferTaskDesc(
+    Graphics::GpuTaskDesc graphicsRectDesc = MakeTaskDesc(
         Name("tests/task_graph/graphics_partial_texture_clear_task"),
         "Graphics Partial Texture Clear Task"
-    );
-    graphicsRectDesc.queue.requiredCapabilities = QueueCapabilities(
-        Graphics::GpuQueueCapability::Transfer,
-        Graphics::GpuQueueCapability::Graphics
     );
     Graphics::GpuClearTextureRectUIntTaskDesc graphicsRectClear = partialClear;
     graphicsRectClear.destination = graphicsResource;
@@ -241,8 +281,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graphicsGraph);
         ASSERT_TRUE(declarations.valid());
         EXPECT_EQ(
-            declarations.taskAt(graphicsRectTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+            declarations.taskAt(graphicsRectTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 }
@@ -271,7 +311,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     fullRectClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     fullRectClear.rect = Graphics::Rect(4, 4);
     const Graphics::GpuTaskId fullRectTask = fullRectGraph.addClearTextureRectUIntTask(
-        MakeTransferTaskDesc(
+        MakeTaskDesc(
             Name("tests/command_ir_replay/full_rect_texture_clear_task"),
             "Replay Full Rect Texture Clear Task"
         ),
@@ -282,7 +322,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(fullRectGraph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_EQ(
-            declarations.taskAt(fullRectTask.index).queue.requiredCapabilities,
+            declarations.taskAt(fullRectTask.index).commands.requiredCapabilities,
             Graphics::GpuQueueCapability::Transfer
         );
     }
@@ -387,7 +427,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     Graphics::GpuClearTextureRectUIntTaskDesc partialClear = undeclaredPartialClear;
     partialClear.destination = partialResource;
     const Graphics::GpuTaskId partialTask = partialGraph.addClearTextureRectUIntTask(
-        MakeTransferTaskDesc(
+        MakeTaskDesc(
             Name("tests/command_ir_replay/partial_texture_clear_task"),
             "Replay Partial Texture Clear Task"
         ),
@@ -398,8 +438,8 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_EQ(
-            declarations.taskAt(partialTask.index).queue.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+            declarations.taskAt(partialTask.index).commands.alternativeCapabilities,
+            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
         );
     }
 
@@ -484,6 +524,25 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
             partialViews.compiled,
             partialPacket
         ).error,
+        Graphics::GpuCommandIrReplayError::None
+    );
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(
+            fullCapture.commandBytes(),
+            partialViews.declarations,
+            partialViews.compiled,
+            partialPacket
+        ).error,
+        Graphics::GpuCommandIrReplayError::None
+    );
+    corruptedQueue->capabilities = Graphics::GpuQueueCapability::Transfer;
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(
+            partialCapture.commandBytes(),
+            partialViews.declarations,
+            partialViews.compiled,
+            partialPacket
+        ).error,
         Graphics::GpuCommandIrReplayError::InvalidTextureClear
     );
     EXPECT_EQ(
@@ -522,7 +581,7 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
     supportedClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     supportedClear.valueType = Graphics::GpuClearTextureTaskValueType::Float;
     const Graphics::GpuTaskId supportedTask = supportedGraph.addClearTextureTask(
-        MakeTransferTaskDesc(
+        MakeTaskDesc(
             Name("tests/texture_clear_contract/supported_bc1_task"),
             "Supported BC1 Clear Task"
         ),
@@ -533,7 +592,7 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(supportedGraph);
         ASSERT_TRUE(declarations.valid());
         ASSERT_EQ(
-            declarations.taskAt(supportedTask.index).queue.requiredCapabilities,
+            declarations.taskAt(supportedTask.index).commands.requiredCapabilities,
             Graphics::GpuQueueCapability::Transfer
         );
     }
@@ -604,7 +663,7 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         rejectedClear.destination = rejectedResource;
         rejectedClear.acceptedToken = &acceptedToken;
         EXPECT_FALSE(rejectedGraph.addClearTextureTask(
-            MakeTransferTaskDesc(
+            MakeTaskDesc(
                 Name("tests/texture_clear_contract/rejected_compressed_task"),
                 "Rejected Compressed Clear Task"
             ),
@@ -624,12 +683,17 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
             .requiredState = Graphics::ResourceStates::CopyDest,
             .access = Graphics::GpuTaskResourceAccess::Write,
         };
-        Graphics::GpuTaskDesc replayTaskDesc = MakeTransferTaskDesc(
+        Graphics::GpuTaskDesc replayTaskDesc = MakeTaskDesc(
             Name("tests/texture_clear_contract/rejected_compressed_replay_task"),
             "Rejected Compressed Clear Replay Task"
         );
         replayTaskDesc.setResourceUses(&replayUse, 1u);
-        const Graphics::GpuTaskId replayTask = rejectedGraph.addTask(replayTaskDesc);
+        const Graphics::GpuTaskId replayTask = rejectedGraph.addTask(
+            replayTaskDesc,
+            Graphics::GpuTaskCommandRequirements{
+                .alternativeCapabilities = Graphics::GpuQueueCapability::Compute | Graphics::GpuQueueCapability::Graphics,
+            }
+        );
         ASSERT_TRUE(replayTask.valid());
         Graphics::GpuTaskGraphAnalysis replayAnalysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments replayAssignments(testContext.testArena.arena);

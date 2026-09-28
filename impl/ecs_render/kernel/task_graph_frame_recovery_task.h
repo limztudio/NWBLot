@@ -27,6 +27,9 @@ namespace ECSRenderDetail{
 
 
 struct FrameRecoveryGraphTask{
+    // Frame timing must end on the same primary physical queue that recorded its beginning.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::None, true };
+
     struct Payload{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         bool* armed = nullptr;

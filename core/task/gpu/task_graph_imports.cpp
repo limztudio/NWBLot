@@ -60,6 +60,7 @@ namespace __hidden_gpu_task_graph_imports{
         && initialOwnerStateEquivalent
         && resource.queueSharing == desc.queueSharing
         && resource.initialAvailabilityCompletion == desc.initialAvailabilityCompletion
+        && resource.directConsumerQueue == desc.directConsumerQueue
     ;
 }
 

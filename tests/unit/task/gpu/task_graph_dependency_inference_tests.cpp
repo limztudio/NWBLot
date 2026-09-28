@@ -500,8 +500,8 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     );
     ASSERT_TRUE(handoff.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
-    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
+    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
+    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     const Name mergeDomain("tests/task_graph/transitive_reduction_merge_domain");
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
@@ -517,11 +517,10 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     firstDesc
         .setIdentity(Name("tests/task_graph/transitive_reduction_first"))
         .setMarkerLabel("Transitive Reduction First")
-        .setQueue(graphicsRequest)
         .setScheduling(firstScheduling)
         .setResourceUses(&firstUse, 1u)
     ;
-    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(first.valid());
 
     Graphics::GpuTaskSchedulingHint secondScheduling;
@@ -531,11 +530,10 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     secondDesc
         .setIdentity(Name("tests/task_graph/transitive_reduction_second"))
         .setMarkerLabel("Transitive Reduction Second")
-        .setQueue(graphicsRequest)
         .setScheduling(secondScheduling)
         .setDependencies(&first, 1u)
     ;
-    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc, graphicsCommands);
     ASSERT_TRUE(second.valid());
 
     const Graphics::GpuTaskResourceUse thirdUse{
@@ -548,11 +546,10 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     thirdDesc
         .setIdentity(Name("tests/task_graph/transitive_reduction_third"))
         .setMarkerLabel("Transitive Reduction Third")
-        .setQueue(computeRequest)
         .setDependencies(&second, 1u)
         .setResourceUses(&thirdUse, 1u)
     ;
-    const Graphics::GpuTaskId third = graph.addTask(thirdDesc);
+    const Graphics::GpuTaskId third = graph.addTask(thirdDesc, computeCommands);
     ASSERT_TRUE(third.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -589,7 +586,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphAnalysis separateAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments separateAssignments(testArena.arena);
     Graphics::GpuCompiledGraph separateGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, separateAnalysis, topology, separateAssignments, separateGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, separateAnalysis, topology, separateAssignments, separateGraph));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(separateGraph);
         ASSERT_EQ(compiledPlan.packetCount(), 3u);
@@ -611,7 +608,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuTaskGraphAnalysis scoredAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments scoredAssignments(testArena.arena);
     Graphics::GpuCompiledGraph scoredGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(scoredGraph);
     ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
     const Graphics::GpuSubmissionPacketId scoredFirstPacket = compiledPlan.packetForTask(first);
@@ -1035,7 +1032,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);

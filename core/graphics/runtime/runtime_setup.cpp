@@ -88,9 +88,9 @@ struct BufferSetupSubmissionData{
     BufferHandle& buffer;
     const GraphicsRuntime::BufferSetupDesc& setupDesc;
     const BufferDesc& uploadDesc;
-    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting;
     QueueSubmissionToken& uploadToken;
+    GpuPhysicalQueueId directConsumerQueue;
 };
 
 [[nodiscard]] static GpuTaskId DeclareBufferSetupUpload(void* const userData, GpuTaskGraph& graph){
@@ -103,6 +103,7 @@ struct BufferSetupSubmissionData{
             .setType(GpuGraphResourceType::Buffer)
             .setInitialState(submissionData.uploadDesc.initialState)
             .setQueueSharing(submissionData.uploadDesc.queueSharing)
+            .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
     const GpuUploadBlobId source = graph.copyUploadData(
         submissionData.setupDesc.data,
@@ -116,7 +117,6 @@ struct BufferSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupBufferUploadIdentity)
         .setMarkerLabel("Setup Buffer Upload")
-        .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(submissionData.uploadQueue))
         .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(
             submissionData.setupDesc.dataSize,
             submissionData.sameClassRouting.enabled,
@@ -140,10 +140,9 @@ struct TextureSetupSubmissionData{
     TextureHandle& texture;
     const GraphicsRuntime::TextureSetupDesc& setupDesc;
     const TextureDesc& uploadDesc;
-    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
-    bool requiresGraphicsQueue = false;
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting;
     QueueSubmissionToken& uploadToken;
+    GpuPhysicalQueueId directConsumerQueue;
 };
 
 [[nodiscard]] static GpuTaskId DeclareTextureSetupUpload(void* const userData, GpuTaskGraph& graph){
@@ -158,6 +157,7 @@ struct TextureSetupSubmissionData{
             // the task's finalState still publishes the caller-requested logical state.
             .setInitialState(ResourceStates::Unknown)
             .setQueueSharing(submissionData.uploadDesc.queueSharing)
+            .setDirectConsumerQueue(submissionData.directConsumerQueue)
     );
     const GpuUploadBlobId source = graph.copyUploadData(
         submissionData.setupDesc.data,
@@ -171,10 +171,6 @@ struct TextureSetupSubmissionData{
     uploadTaskDesc
         .setIdentity(s_SetupTextureUploadIdentity)
         .setMarkerLabel("Setup Texture Upload")
-        .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(
-            submissionData.uploadQueue,
-            submissionData.requiresGraphicsQueue
-        ))
         .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(
             submissionData.setupDesc.uploadDataSize,
             submissionData.sameClassRouting.enabled,
@@ -372,9 +368,9 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
         .buffer = buffer,
         .setupDesc = desc,
         .uploadDesc = uploadDesc,
-        .uploadQueue = uploadQueue,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
@@ -384,7 +380,6 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
         &submissionData,
         &__hidden_graphics_setup::DeclareBufferSetupUpload,
         uploadToken,
-        sameClassRouting.enabled,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
@@ -445,10 +440,9 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
         .texture = texture,
         .setupDesc = desc,
         .uploadDesc = uploadDesc,
-        .uploadQueue = uploadQueue,
-        .requiresGraphicsQueue = requiresGraphicsQueue,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
@@ -458,7 +452,6 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
         &submissionData,
         &__hidden_graphics_setup::DeclareTextureSetupUpload,
         uploadToken,
-        sameClassRouting.enabled,
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){

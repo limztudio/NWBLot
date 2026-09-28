@@ -78,6 +78,7 @@ namespace GpuTaskQueueAssignmentModifier{
         DebugTimingOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
+        QueueOverride = 1u << 6u,
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
@@ -91,6 +92,7 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         InvalidQueueTopology,
         InvalidQueueLoad,
         InvalidTimingFeedback,
+        InvalidQueueOverride,
         NoCompatibleQueue,
     };
 };
@@ -133,6 +135,12 @@ struct GpuTaskQueueLoad{
     u64 estimatedCost = 0u;
 };
 
+// Scheduler diagnostics may force a legal placement without adding queue choices to task declarations.
+struct GpuTaskQueueAssignmentOverride{
+    GpuTaskId task;
+    GpuPhysicalQueueId queue;
+};
+
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
     // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes
@@ -144,6 +152,8 @@ struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
     usize timingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;
+    const GpuTaskQueueAssignmentOverride* queueOverrides = nullptr;
+    usize queueOverrideCount = 0u;
 };
 
 // Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).

@@ -64,14 +64,8 @@ using TaskGraphTestUtils::TestArena;
         .setIdentity(identity)
         .setMarkerLabel("Buffer Range Task")
         .setResourceUses(uses, useCount)
-        .setQueue(Graphics::GpuQueueRequest{
-            compute ? Graphics::GpuQueueCapability::Compute : Graphics::GpuQueueCapability::Graphics,
-            compute ? Graphics::GpuQueuePreference::Compute : Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
     ;
-    return graph.addTask(desc);
+    return graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ compute ? Graphics::GpuQueueCapability::Compute : Graphics::GpuQueueCapability::Graphics });
 }
 
 [[nodiscard]] static const Graphics::GpuCompiledBarrier* FindRangeBarrier(
@@ -116,7 +110,7 @@ TEST(GpuTaskGraphBufferRange, IndependentIntervalsKeepSeparateInitialStates){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     EXPECT_EQ(FindEdge(analysis, first, tail), nullptr);
 
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
@@ -154,7 +148,7 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     EXPECT_NE(FindEdge(analysis, whole, reader), nullptr);
     EXPECT_NE(FindEdge(analysis, middle, reader), nullptr);
 
@@ -212,7 +206,7 @@ TEST(GpuTaskGraphBufferRange, SameTaskOverlappingDeclarationsSeedOnlyNewBytes){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const Graphics::GpuCompiledTaskView taskView = plan.findTask(task);
     ASSERT_TRUE(taskView.valid());
@@ -265,7 +259,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const Graphics::GpuCompiledExternalResourceExportView exportView = plan.externalResourceExport(buffer);
     ASSERT_TRUE(exportView.valid());
@@ -327,7 +321,7 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     EXPECT_EQ(FindEdge(analysis, graphics, compute), nullptr);
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const Graphics::GpuCompiledTaskView computeView = plan.findTask(compute);
@@ -406,7 +400,7 @@ TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingByt
         const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
         const Graphics::GpuCompiledTaskView taskView = plan.findTask(task);
         ASSERT_TRUE(taskView.valid());

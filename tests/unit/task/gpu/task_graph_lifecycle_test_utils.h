@@ -190,6 +190,7 @@ struct NoexceptAcceptedLifecycleTask{
 };
 
 struct NoexceptRecordDiscardLifecycleTask{
+    static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
     struct Payload{
         u32* recordCount = nullptr;
         u32* discardedCount = nullptr;
@@ -207,6 +208,7 @@ struct NoexceptRecordDiscardLifecycleTask{
 };
 
 struct NativeRecordProbeTask{
+    static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
     struct Payload{
         u32* recordCount = nullptr;
     };

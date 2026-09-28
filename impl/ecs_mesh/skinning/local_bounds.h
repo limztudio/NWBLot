@@ -9,7 +9,7 @@
 
 #include <core/alloc/general.h>
 #include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/types.h>
+#include <core/task/gpu/task_desc.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +56,8 @@ struct MeshSkinningLocalBoundsDispatch{
 };
 
 struct MeshSkinningLocalBoundsTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::GpuTimingSubmissionTicket& timingTicket;

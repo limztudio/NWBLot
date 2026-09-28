@@ -4,7 +4,6 @@
 
 #include "task_graph_software_scene_refit.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -36,6 +35,8 @@ struct PushConstants{
 static_assert(sizeof(PushConstants) == NWB_SCENE_BVH_REFIT_PUSH_BYTES);
 
 struct RefitTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         SoftwareSceneRefitHandle snapshot;
     };
@@ -117,7 +118,6 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
     uploadDesc
         .setIdentity(Name("render.shadow_prepare.scene_refit_inputs_upload"))
         .setMarkerLabel("Software Scene Refit Inputs Upload")
-        .setQueue(RendererTaskGraphDetail::GraphicsUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&dependency, 1u)
     ;
@@ -137,7 +137,6 @@ SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
     desc
         .setIdentity(Name("render.shadow_prepare.scene_refit"))
         .setMarkerLabel("Software Scene BVH Refit")
-        .setQueue(RendererTaskGraphDetail::GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.inputUpload, 1u)
         .setResourceUses(uses.data(), uses.size())

@@ -3,6 +3,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/persistent_state_subset_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/persistent_state_self_filter_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_analysis_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_automatic_placement_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_barrier_planning_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_buffer_range_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_command_ir_capture_tests.cpp"

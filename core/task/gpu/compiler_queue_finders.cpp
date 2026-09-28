@@ -127,7 +127,7 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 // Same-class routing retains its independent physical-queue opt-in. Every route into another Vulkan family keeps the separate family opt-in.
-// Cross-class timing is a stronger explicit opt-in and can only use classes already admitted by a flexible queue request
+// Cross-class timing is a stronger explicit opt-in and only uses command-compatible classes.
 [[nodiscard]] bool IsLegalTimingFeedbackRoute(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
@@ -146,12 +146,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(candidate.queueClass == incumbent.queueClass)
         return task.scheduling.allowSameClassQueueRouting;
 
-    return task.scheduling.allowCrossClassTimingFeedbackRouting
-        && (
-            task.queue.preferredQueue == GpuQueuePreference::Any
-            || (task.queue.allowFallback && task.queue.compilerMayOverridePreference)
-        )
-    ;
+    return task.scheduling.allowCrossClassTimingFeedbackRouting;
 }
 
 [[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(

@@ -12,7 +12,7 @@
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -399,7 +399,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             .setMarkerLabel(inputs.csgComputeEmulationPlanCaptured
                 ? "AVBOIT Occupancy CSG Compute Emulation"
                 : "AVBOIT Occupancy Compute Emulation")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(occupancyComputeEmulationScheduling)
             .setDependencies(&occupancyDependency, 1u)
             .setResourceUses(
@@ -609,7 +608,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         avboitOccupancyDesc
             .setIdentity(Name("render.avboit.pre"))
             .setMarkerLabel("AVBOIT Pre")
-            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitOccupancyScheduling)
             .setDependencies(rasterDependencies, rasterDependencyCount)
             .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())

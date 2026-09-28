@@ -17,7 +17,6 @@
 
 #include <global/timer.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -92,7 +91,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         uploadDesc
             .setIdentity(Name("render.deferred.bindless_slots_upload"))
             .setMarkerLabel("Deferred Bindless Slots Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(uploadScheduling)
         ;
         m_deferredBindlessSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
@@ -140,7 +138,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     materialContextUploadDesc
         .setIdentity(Name("render.raytrace.material_context_slots_upload"))
         .setMarkerLabel("Ray-Trace Material Context Slots Upload")
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(materialContextUploadScheduling)
         .setDependencies(materialContextUploadDependencies, materialContextUploadDependencyCount)
     ;
@@ -204,7 +201,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         causticEmissionTargetsUploadDesc
             .setIdentity(Name("render.raytrace.caustic_emission_targets_upload"))
             .setMarkerLabel("Caustic Emission Targets Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(causticEmissionTargetsUploadScheduling)
             .setDependencies(&m_rayTraceMaterialContextSlotsUploadTask, 1u)
         ;
@@ -261,7 +257,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         surfelFrameConstantsUploadDesc
             .setIdentity(Name("render.surfel_gi.constants_upload"))
             .setMarkerLabel("Surfel Frame Constants Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(surfelFrameConstantsUploadScheduling)
             .setDependencies(&shadowPrepareDependency, 1u)
         ;
@@ -350,7 +345,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowInstanceMaterialsUploadDesc
             .setIdentity(Name("render.deferred_effects.instance_material_upload"))
             .setMarkerLabel("Shadow Instance Materials Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(shadowMaterialContextUploadScheduling)
             .setDependencies(&shadowPrepareDependency, 1u)
         ;
@@ -371,7 +365,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowInstancesUploadDesc
             .setIdentity(Name("render.deferred_effects.shadow_instances_upload"))
             .setMarkerLabel("Shadow Instances Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(shadowMaterialContextUploadScheduling)
             .setDependencies(&m_shadowInstanceMaterialUploadTask, 1u)
         ;
@@ -392,7 +385,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowMaterialTypedUploadDesc
             .setIdentity(Name("render.deferred_effects.material_typed_upload"))
             .setMarkerLabel("Shadow Typed Materials Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(shadowMaterialContextUploadScheduling)
             .setDependencies(&m_shadowInstanceUploadTask, 1u)
         ;
@@ -466,7 +458,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         sceneBvhNodesUploadDesc
             .setIdentity(Name("render.shadow_visibility.scene_bvh_nodes_upload"))
             .setMarkerLabel("Scene BVH Nodes Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(sceneBvhUploadScheduling)
             .setDependencies(&shadowPrepareDependency, 1u)
         ;
@@ -488,7 +479,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         sceneBvhInstancesUploadDesc
             .setIdentity(Name("render.shadow_visibility.scene_instances_upload"))
             .setMarkerLabel("Scene BVH Instances Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(sceneBvhUploadScheduling)
             .setDependencies(&m_sceneBvhNodesUploadTask, 1u)
         ;
@@ -786,7 +776,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             clearDesc
                 .setIdentity(identity)
                 .setMarkerLabel(label)
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(clearScheduling)
                 .setDependencies(&buildDependency, 1u)
             ;
@@ -850,7 +839,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             buildDesc
                 .setIdentity(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_build")))
                 .setMarkerLabel("Shadow Prepare SW-BVH Build")
-                .setQueue(GraphicsPreferredComputeQueueRequest())
                 .setScheduling(buildScheduling)
                 .setDependencies(&buildDependency, 1u)
                 .setResourceUses(buildResourceUses, LengthOf(buildResourceUses))
@@ -916,7 +904,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
-        .setQueue(GraphicsComputeUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
         .setExternalStateSources(
@@ -995,7 +982,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         accelStructFinalizeDesc
             .setIdentity(Name("render.shadow_prepare.accel_struct_finalize"))
             .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
-            .setQueue(GraphicsQueueRequest())
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
             // The immutable typed final-state collection expands to the same compiler inputs. Retain the

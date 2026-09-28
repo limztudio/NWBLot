@@ -278,7 +278,7 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "\"plannedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
         "\"acceptedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
         "\"previousAcceptedQueue\": {\"index\": 2, \"deviceGeneration\": 17}, \"queueClass\": \"compute\", "
-        "\"reason\": \"fallback\", \"modifierMask\": 63, \"acceptance\": \"changed\", \"dedicated\": true, "
+        "\"reason\": \"fallback\", \"modifierMask\": 127, \"acceptance\": \"changed\", \"dedicated\": true, "
         "\"score\": {\"preference\": 11, \"overlap\": 7, \"queueLoad\": 3, \"incomingCrossings\": 2, "
         "\"outgoingCrossings\": 1, \"ownershipTransfers\": 4, \"total\": 8}}"
     ));
@@ -382,7 +382,7 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "queue_planned_index=3, queue_planned_device_generation=17, queue_accepted_index=3, "
         "queue_accepted_device_generation=17, queue_previous_accepted_index=2, "
         "queue_previous_accepted_device_generation=17, queue_class=\"compute\", queue_reason=\"fallback\", "
-        "queue_modifier_mask=63, queue_acceptance=\"changed\", queue_dedicated=true, queue_score_preference=11, "
+        "queue_modifier_mask=127, queue_acceptance=\"changed\", queue_dedicated=true, queue_score_preference=11, "
         "queue_score_overlap=7, queue_score_queue_load=3, queue_score_incoming_crossings=2, "
         "queue_score_outgoing_crossings=1, queue_score_ownership_transfers=4, queue_score_total=8"
     ));

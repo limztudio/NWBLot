@@ -102,7 +102,7 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -184,7 +184,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     {
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTaskView compiledTaskView = compiledPlan.findTask(task);
@@ -282,7 +282,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
         .queues = sameFamilyQueues,
         .queueCount = LengthOf(sameFamilyQueues),
     };
-    ASSERT_TRUE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferCount(), 0u);
@@ -334,7 +334,7 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -400,31 +400,29 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
         .requiredState = Graphics::ResourceStates::UnorderedAccess,
         .access = Graphics::GpuTaskResourceAccess::Write,
     };
-    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
-    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
+    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
+    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     Graphics::GpuTaskDesc graphicsDesc;
     graphicsDesc
         .setIdentity(Name("tests/task_graph/external_final_multiple_graphics"))
         .setMarkerLabel("External Final Multiple Graphics")
-        .setQueue(graphicsRequest)
         .setResourceUses(&graphicsUse, 1u)
     ;
     Graphics::GpuTaskDesc computeDesc;
     computeDesc
         .setIdentity(Name("tests/task_graph/external_final_multiple_compute"))
         .setMarkerLabel("External Final Multiple Compute")
-        .setQueue(computeRequest)
         .setResourceUses(&computeUse, 1u)
     ;
-    const Graphics::GpuTaskId graphicsTask = graph.addTask(graphicsDesc);
-    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc);
+    const Graphics::GpuTaskId graphicsTask = graph.addTask(graphicsDesc, graphicsCommands);
+    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc, computeCommands);
     ASSERT_TRUE(graphicsTask.valid());
     ASSERT_TRUE(computeTask.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -780,7 +778,7 @@ TEST(GpuTaskGraph, ElidesSamePacketReleaseOnlyExternalFinalizationSelfDependency
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -836,17 +834,11 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
     terminalDesc
         .setIdentity(Name("tests/task_graph/external_final_transitive_terminal_reader"))
         .setMarkerLabel("External Final Transitive Terminal Reader")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(terminalScheduling)
         .setDependencies(&pair.finalizingReader, 1u)
         .setResourceUses(&terminalUse, 1u)
     ;
-    const Graphics::GpuTaskId terminalReader = graph.addTask(terminalDesc);
+    const Graphics::GpuTaskId terminalReader = graph.addTask(terminalDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(terminalReader.valid());
 
     TwoQueueCompile twoQueueCompile(testArena);
@@ -902,31 +894,11 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     Graphics::GpuTaskSchedulingHint readerScheduling;
     readerScheduling.forceSubmissionBoundary = true;
     readerScheduling.allowPacketMerge = false;
-    const Graphics::GpuQueueRequest readerQueues[] = {
-        {
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        },
-        {
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueuePreference::Compute,
-            false,
-            false,
-        },
-        {
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        },
-        {
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueuePreference::Compute,
-            false,
-            false,
-        },
+    const Graphics::GpuTaskCommandRequirements readerQueues[] = {
+        { Graphics::GpuQueueCapability::Graphics },
+        { Graphics::GpuQueueCapability::Compute },
+        { Graphics::GpuQueueCapability::Graphics },
+        { Graphics::GpuQueueCapability::Compute },
     };
 
     Graphics::GpuTaskId readers[4u] = {};
@@ -937,12 +909,11 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
         readerDesc
             .setIdentity(DeriveName(readerBaseName, FormatDecimal(readerIndex, readerIndexBuffer)))
             .setMarkerLabel("Ordered Terminal Finalization Reader")
-            .setQueue(readerQueues[readerIndex])
             .setScheduling(readerScheduling)
             .setDependencies(readerIndex == 1u ? &readers[0u] : nullptr, readerIndex == 1u ? 1u : 0u)
             .setResourceUses(&readerUse, 1u)
         ;
-        readers[readerIndex] = graph.addTask(readerDesc);
+        readers[readerIndex] = graph.addTask(readerDesc, readerQueues[readerIndex]);
         ASSERT_TRUE(readers[readerIndex].valid());
     }
 
@@ -957,7 +928,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -1013,19 +984,14 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
     for(const usize prefixPacketCount : prefixPacketCounts){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuQueueRequest prefixQueue{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        };
+        const Graphics::GpuTaskCommandRequirements prefixQueue{ Graphics::GpuQueueCapability::Graphics };
         Graphics::GpuTaskSchedulingHint prefixScheduling;
         prefixScheduling.forceSubmissionBoundary = true;
         prefixScheduling.allowPacketMerge = false;
         const Name prefixBaseName("tests/task_graph/terminal_packed_reachability_prefix_");
         char taskIndexBuffer[32u] = {};
         for(usize taskIndex = 0u; taskIndex < prefixPacketCount; ++taskIndex){
-            const Graphics::GpuTaskId prefixTask = AddTaskWithQueue(
+            const Graphics::GpuTaskId prefixTask = AddTaskWithCommands(
                 graph,
                 DeriveName(prefixBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
                 "Terminal Packed Reachability Prefix",
@@ -1065,17 +1031,11 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         terminalDesc
             .setIdentity(Name("tests/task_graph/terminal_packed_reachability_reader"))
             .setMarkerLabel("Terminal Packed Reachability Reader")
-            .setQueue(Graphics::GpuQueueRequest{
-                Graphics::GpuQueueCapability::Graphics,
-                Graphics::GpuQueuePreference::Graphics,
-                false,
-                false,
-            })
             .setScheduling(terminalScheduling)
             .setDependencies(&pair.finalizingReader, 1u)
             .setResourceUses(&terminalUse, 1u)
         ;
-        const Graphics::GpuTaskId terminalReader = graph.addTask(terminalDesc);
+        const Graphics::GpuTaskId terminalReader = graph.addTask(terminalDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
         ASSERT_TRUE(terminalReader.valid());
 
         TwoQueueCompile twoQueueCompile(testArena);
@@ -1158,8 +1118,8 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         .requiredState = Graphics::ResourceStates::UnorderedAccess,
         .access = Graphics::GpuTaskResourceAccess::Write,
     };
-    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
-    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
+    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
+    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
@@ -1167,7 +1127,6 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     wholeWriterDesc
         .setIdentity(Name("tests/task_graph/external_final_fragmented_whole_writer"))
         .setMarkerLabel("External Final Fragmented Whole Writer")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setResourceUses(&wholeWriterUse, 1u)
     ;
@@ -1175,19 +1134,18 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     partialWriterDesc
         .setIdentity(Name("tests/task_graph/external_final_fragmented_partial_writer"))
         .setMarkerLabel("External Final Fragmented Partial Writer")
-        .setQueue(computeRequest)
         .setScheduling(scheduling)
         .setResourceUses(&partialWriterUse, 1u)
     ;
-    const Graphics::GpuTaskId wholeWriter = graph.addTask(wholeWriterDesc);
-    const Graphics::GpuTaskId partialWriter = graph.addTask(partialWriterDesc);
+    const Graphics::GpuTaskId wholeWriter = graph.addTask(wholeWriterDesc, graphicsCommands);
+    const Graphics::GpuTaskId partialWriter = graph.addTask(partialWriterDesc, computeCommands);
     ASSERT_TRUE(wholeWriter.valid());
     ASSERT_TRUE(partialWriter.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -1346,7 +1304,7 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
     EXPECT_FALSE(compiledPlan.valid());

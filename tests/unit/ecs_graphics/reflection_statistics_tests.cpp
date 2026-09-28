@@ -77,7 +77,6 @@ struct DestructorLeaseTask{
     desc
         .setIdentity(Name("tests.reflection.statistics.lease"))
         .setMarkerLabel("Statistics lease")
-        .setQueue(Core::GpuQueueRequest{Core::GpuQueueCapability::Compute, Core::GpuQueuePreference::Graphics, false, false})
     ;
     return desc;
 }

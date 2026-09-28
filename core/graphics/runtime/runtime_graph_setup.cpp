@@ -46,7 +46,15 @@ inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_tas
 // A returned setup resource has no external-completion object for later direct consumers.
 // Record one explicit graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
 struct SetupUploadReadinessBridgeGraphTask{
-    struct Payload{};
+    struct Payload{
+        GpuPhysicalQueueId consumerQueue;
+    };
+
+    [[nodiscard]] static GpuTaskCommandRequirements commandRequirements(const Payload& payload){
+        GpuTaskCommandRequirements commands;
+        commands.externalQueue = payload.consumerQueue;
+        return commands;
+    }
 
 
     [[nodiscard]] static bool record(
@@ -63,6 +71,8 @@ struct SetupUploadReadinessBridgeGraphTask{
 
 // A standalone graph owns no renderer finalization packet. Predeclare this no-op Graphics tail so a later rejection can join every accepted physical queue before this call returns.
 struct StandaloneTaskGraphRecoveryTask{
+    inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
+
     struct Payload{};
 
 
@@ -90,12 +100,6 @@ struct StandaloneTaskGraphRecoveryTask{
     recoveryDesc
         .setIdentity(s_StandaloneTaskGraphRecoveryIdentity)
         .setMarkerLabel("Standalone Task Graph Recovery")
-        .setQueue(GpuQueueRequest{
-            GpuQueueCapability::Graphics,
-            GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(scheduling)
     ;
     return graph.addTask<StandaloneTaskGraphRecoveryTask>(
@@ -109,9 +113,7 @@ struct StandaloneTaskGraphRecoveryTask{
     GraphicsBackend::Device& device,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum uploadQueue,
-    const GpuTaskId uploadTask,
-    const bool bridgePrimaryUploadQueue = false
-){
+    const GpuTaskId uploadTask){
     if(!uploadTask.valid())
         return {};
 
@@ -121,20 +123,19 @@ struct StandaloneTaskGraphRecoveryTask{
         CommandQueue::Compute,
         CommandQueue::Transfer,
     };
-    const auto appendBridge = [&graph, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
+    const auto appendBridge = [&graph, &device, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
         GpuTaskSchedulingHint scheduling = GraphicsModuleDetail::SetupUploadGraphScheduling(0u);
         scheduling.overlapPreferred = false;
         GpuTaskDesc bridgeDesc;
         bridgeDesc
             .setIdentity(s_SetupUploadReadinessBridgeIdentity)
             .setMarkerLabel("Setup Upload Readiness Bridge")
-            .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(consumerQueue))
             .setScheduling(scheduling)
             .setDependencies(&uploadTask, 1u)
         ;
         const GpuTaskId bridgeTask = graph.addTask<SetupUploadReadinessBridgeGraphTask>(
             bridgeDesc,
-            SetupUploadReadinessBridgeGraphTask::Payload{}
+            SetupUploadReadinessBridgeGraphTask::Payload{ device.getPrimaryPhysicalQueue(consumerQueue) }
         );
         if(!bridgeTask.valid())
             return false;
@@ -151,8 +152,8 @@ struct StandaloneTaskGraphRecoveryTask{
         if(!appendBridge(consumerQueue))
             return {};
     }
-    // Append this last so the synchronous standalone caller can verify that the returned-handle bridge resolved to the exact primary physical upload queue even when the descriptor names additional consumer classes.
-    if(bridgePrimaryUploadQueue && (!device.getQueue(uploadQueue) || !appendBridge(uploadQueue)))
+    // The returned resource is ready on its direct consumer timeline even when the scheduler offloads its producer.
+    if(!device.getQueue(uploadQueue) || !appendBridge(uploadQueue))
         return {};
     return terminalTask;
 }
@@ -164,7 +165,6 @@ struct SetupUploadSubmissionData{
     GraphicsModuleDetail::GraphTaskDeclaration declareTask = nullptr;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
-    bool bridgePrimaryUploadQueue = false;
 };
 
 [[nodiscard]] static GpuTaskId DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
@@ -178,13 +178,18 @@ struct SetupUploadSubmissionData{
         submissionData.device,
         submissionData.queueSharing,
         submissionData.uploadQueue,
-        uploadTask,
-        submissionData.bridgePrimaryUploadQueue
+        uploadTask
     );
 }
 
 
 struct FrameTimingResetGraphTask{
+    inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{
+        GpuQueueCapability::None,
+        true,
+        GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
+    };
+
     struct Payload{
         GpuTimingRecorder* timing = nullptr;
     };
@@ -214,15 +219,6 @@ struct FrameTimingResetGraphTask{
     }
 };
 
-[[nodiscard]] static GpuQueueRequest FrameTimingResetQueueRequest()noexcept{
-    return GpuQueueRequest{
-        GpuQueueCapability::Graphics,
-        GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-}
-
 [[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
@@ -243,7 +239,6 @@ struct FrameTimingResetSubmissionData{
     resetDesc
         .setIdentity(s_FrameTimingResetIdentity)
         .setMarkerLabel("Frame GPU-Timing Reset")
-        .setQueue(FrameTimingResetQueueRequest())
         .setScheduling(FrameTimingResetScheduling())
     ;
     return graph.addTask<FrameTimingResetGraphTask>(
@@ -364,42 +359,6 @@ CommandQueue::Enum ResolveSetupUploadQueue(
         NWB_ASSERT_MSG(false, NWB_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
         return CommandQueue::Graphics;
     }
-}
-
-GpuQueueRequest SetupUploadGraphQueueRequest(
-    const CommandQueue::Enum uploadQueue,
-    const bool requiresGraphicsQueue
-)noexcept{
-    GpuQueueRequest request;
-    request.requiredCapabilities = requiresGraphicsQueue
-        ? static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Transfer)
-            | static_cast<u8>(GpuQueueCapability::Graphics)
-        )
-        : GpuQueueCapability::Transfer
-    ;
-    request.allowFallback = false;
-    request.compilerMayOverridePreference = false;
-    if(requiresGraphicsQueue){
-        request.preferredQueue = GpuQueuePreference::Graphics;
-        return request;
-    }
-    switch(uploadQueue){
-    case CommandQueue::Graphics:
-        request.preferredQueue = GpuQueuePreference::Graphics;
-        break;
-    case CommandQueue::Compute:
-        request.preferredQueue = GpuQueuePreference::Compute;
-        break;
-    case CommandQueue::Transfer:
-        request.preferredQueue = GpuQueuePreference::Transfer;
-        break;
-    default:
-        request.requiredCapabilities = GpuQueueCapability::None;
-        request.preferredQueue = GpuQueuePreference::Any;
-        break;
-    }
-    return request;
 }
 
 GpuTaskSchedulingHint SetupUploadGraphScheduling(
@@ -561,7 +520,6 @@ bool SubmitGraphOwnedSetupUpload(
     void* const userData,
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outUploadToken,
-    const bool bridgePrimaryUploadQueue,
     const GpuPhysicalQueueId requiredTerminalQueue
 ){
     outUploadToken = {};
@@ -575,7 +533,6 @@ bool SubmitGraphOwnedSetupUpload(
         .declareTask = declareTask,
         .queueSharing = queueSharing,
         .uploadQueue = uploadQueue,
-        .bridgePrimaryUploadQueue = bridgePrimaryUploadQueue,
     };
     QueueSubmissionToken terminalToken;
     if(!SubmitGraphOwnedStandaloneTask(

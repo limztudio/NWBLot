@@ -236,11 +236,11 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return graph.addTask(desc);
 }
 
-[[nodiscard]] Graphics::GpuTaskId AddTaskWithQueue(
+[[nodiscard]] Graphics::GpuTaskId AddTaskWithCommands(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::GpuQueueRequest& queue,
+    const Graphics::GpuTaskCommandRequirements& commands,
     const Graphics::GpuTaskSchedulingHint& scheduling,
     const Graphics::GpuTaskTimingMetadata& timing,
     const Graphics::GpuTaskId* const dependencies,
@@ -249,12 +249,11 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     desc
         .setIdentity(identity)
         .setMarkerLabel(label)
-        .setQueue(queue)
         .setScheduling(scheduling)
         .setTimingMetadata(timing)
         .setDependencies(dependencies, dependencyCount)
     ;
-    return graph.addTask(desc);
+    return graph.addTask(desc, commands);
 }
 
 [[nodiscard]] bool Analyze(
@@ -296,6 +295,45 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
 }
 
+[[nodiscard]] bool CompileWithSeparatedCommandQueues(
+    const Graphics::GpuTaskGraph& graph,
+    Graphics::GpuTaskGraphAnalysis& analysis,
+    const Graphics::GpuTaskGraphQueueTopology& topology,
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    Graphics::GpuCompiledGraph& compiledGraph,
+    const Graphics::GpuTaskGraphCompileOptions& options){
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    Vector<Graphics::GpuTaskQueueAssignmentOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        overrides.reserve(declarations.taskCount());
+        for(usize taskIndex = 0u; taskIndex < declarations.taskCount(); ++taskIndex){
+            const Graphics::GpuTaskGraphTaskView task = declarations.taskAt(taskIndex);
+            const Graphics::GpuQueueCapability::Mask capabilities = task.commands.requiredCapabilities;
+            if(capabilities == Graphics::GpuQueueCapability::None || task.commands.requiresPrimaryGraphicsQueue || task.commands.externalQueue.valid())
+                continue;
+            const Graphics::CommandQueue::Enum queueClass = (capabilities & Graphics::GpuQueueCapability::Graphics)
+                ? Graphics::CommandQueue::Graphics
+                : ((capabilities & Graphics::GpuQueueCapability::Compute) ? Graphics::CommandQueue::Compute : Graphics::CommandQueue::Transfer)
+            ;
+            const Graphics::GpuPhysicalQueueInfo* selectedQueue = nullptr;
+            for(usize queueIndex = 0u; topology.queues && queueIndex < topology.queueCount; ++queueIndex){
+                const Graphics::GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+                if(queue.queueClass != queueClass || (queue.capabilities & capabilities) != capabilities)
+                    continue;
+                if(!selectedQueue || queue.id.index < selectedQueue->id.index)
+                    selectedQueue = &queue;
+            }
+            if(selectedQueue)
+                overrides.push_back({ .task = task.id, .queue = selectedQueue->id });
+        }
+    }
+    Graphics::GpuTaskGraphCompileOptions routedOptions = options;
+    routedOptions.queueAssignmentOptions.queueOverrides = overrides.data();
+    routedOptions.queueAssignmentOptions.queueOverrideCount = overrides.size();
+    return Compile(graph, analysis, topology, assignments, compiledGraph, routedOptions);
+}
+
 SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
     : singleQueue(GraphicsQueue())
     , topology{.queues = &singleQueue, .queueCount = 1u}
@@ -326,7 +364,7 @@ TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
-    return Compile(graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph, options);
 }
 
 ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
@@ -346,7 +384,7 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphCompileOptions& options
 ){
-    return Compile(graph, analysis, topology, assignments, compiledGraph, options);
+    return CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph, options);
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
@@ -403,6 +441,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::QueueOverride)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::QueueOverride;
     return static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(expected);
 }
 
@@ -435,8 +475,7 @@ void ExpectPlannedQueueAssignmentTelemetry(
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
     Graphics::GpuTaskGraph& graph,
-    const Graphics::ResourceQueueSharing::Mask queueSharing,
-    const bool allowFallback){
+    const Graphics::ResourceQueueSharing::Mask queueSharing){
     const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
         graph,
         Name("tests/task_graph/transfer_ownership_texture"),
@@ -471,12 +510,6 @@ void ExpectPlannedQueueAssignmentTelemetry(
     producerDesc
         .setIdentity(Name("tests/task_graph/transfer_ownership_producer"))
         .setMarkerLabel("Transfer Ownership Producer")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(scheduling)
         .setResourceUses(producerUses, LengthOf(producerUses))
     ;
@@ -484,20 +517,14 @@ void ExpectPlannedQueueAssignmentTelemetry(
     consumerDesc
         .setIdentity(Name("tests/task_graph/transfer_ownership_consumer"))
         .setMarkerLabel("Transfer Ownership Consumer")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            allowFallback,
-            allowFallback,
-        })
         .setScheduling(scheduling)
         .setResourceUses(consumerUses, LengthOf(consumerUses))
     ;
 
     return TransferOwnershipPair{
         .texture = texture,
-        .producer = graph.addTask(producerDesc),
-        .consumer = graph.addTask(consumerDesc),
+        .producer = graph.addTask(producerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics }),
+        .consumer = graph.addTask(consumerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Transfer }),
     };
 }
 
@@ -539,18 +566,8 @@ void ExpectPlannedQueueAssignmentTelemetry(
     if(!resource.valid())
         return {};
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
     Graphics::GpuTaskSchedulingHint earlierScheduling;
     earlierScheduling.forceSubmissionBoundary = !samePacket;
     earlierScheduling.allowPacketMerge = samePacket;
@@ -567,11 +584,10 @@ void ExpectPlannedQueueAssignmentTelemetry(
     earlierDesc
         .setIdentity(Name("tests/task_graph/external_final_earlier_reader"))
         .setMarkerLabel("External Final Earlier Reader")
-        .setQueue(graphicsRequest)
         .setScheduling(earlierScheduling)
         .setResourceUses(&earlierUse, 1u)
     ;
-    const Graphics::GpuTaskId earlierReader = graph.addTask(earlierDesc);
+    const Graphics::GpuTaskId earlierReader = graph.addTask(earlierDesc, graphicsCommands);
     if(!earlierReader.valid())
         return {};
 
@@ -586,7 +602,6 @@ void ExpectPlannedQueueAssignmentTelemetry(
     finalizingDesc
         .setIdentity(Name("tests/task_graph/external_final_terminal_reader"))
         .setMarkerLabel("External Final Terminal Reader")
-        .setQueue(samePacket ? graphicsRequest : computeRequest)
         .setScheduling(finalizingScheduling)
         .setDependencies(finalizerDependsOnEarlier ? &earlierReader : nullptr, finalizerDependsOnEarlier ? 1u : 0u)
         .setResourceUses(&finalizingUse, 1u)
@@ -594,7 +609,7 @@ void ExpectPlannedQueueAssignmentTelemetry(
     return ExternalFinalReadPair{
         .resource = resource,
         .earlierReader = earlierReader,
-        .finalizingReader = graph.addTask(finalizingDesc),
+        .finalizingReader = graph.addTask(finalizingDesc, samePacket ? graphicsCommands : computeCommands),
     };
 }
 

@@ -46,12 +46,6 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     desc
         .setIdentity(Name("tests/task_graph/non_recordable"))
         .setMarkerLabel("Non-recordable Task")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
     ;
     const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
         desc,

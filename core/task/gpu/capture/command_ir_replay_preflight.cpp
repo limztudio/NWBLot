@@ -342,7 +342,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     )
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
-    const u8 taskCapabilities = static_cast<u8>(task.queue.requiredCapabilities);
+    const u8 taskCapabilities = static_cast<u8>(task.commands.allowedCapabilities());
     const u8 physicalQueueCapabilities = static_cast<u8>(queue.capabilities);
     const bool taskAndQueueShareComputeOrGraphics = (
         taskCapabilities
@@ -453,7 +453,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         || clearContract.subresources != record.destinationSubresources
         || !GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirementSatisfied(
             clearContract.queueRequirement,
-            task.queue.requiredCapabilities,
+            task.commands.allowedCapabilities(),
             queue.capabilities
         )
     )
@@ -515,7 +515,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
                 clearContract.subresources,
                 clearBox
             ),
-            task.queue.requiredCapabilities,
+            task.commands.allowedCapabilities(),
             queue.capabilities
         )
     )

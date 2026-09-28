@@ -553,29 +553,31 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         taskDesc
             .setIdentity(Name("tests/task_graph/typed_concurrent_unadmitted_compute"))
             .setMarkerLabel("Typed Concurrent Unadmitted Compute")
-            .setQueue(Graphics::GpuQueueRequest{
-                Graphics::GpuQueueCapability::Compute,
-                Graphics::GpuQueuePreference::Compute,
-                false,
-                false,
-            })
             .setResourceUses(&use, 1u)
         ;
-        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute });
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Analyze(graph, analysis));
-        EXPECT_FALSE(Assign(graph, analysis, topology, assignments));
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+        ASSERT_NE(assignments.find(task), nullptr);
+        EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
+
+        const Graphics::GpuTaskQueueAssignmentOverride route{ .task = task, .queue = queues[1u].id };
+        Graphics::GpuTaskGraphQueueAssignmentOptions options;
+        options.queueOverrides = &route;
+        options.queueOverrideCount = 1u;
+        EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
         EXPECT_EQ(
             assignments.diagnostic().status,
-            Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
+            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
     }
 
-    const auto expectUnadmittedComputeRejected = [&](
+    const auto expectUnadmittedComputeRerouted = [&](
         const auto& import,
         const Graphics::GpuGraphResourceType::Enum type,
         const Graphics::ResourceStates::Mask requiredState,
@@ -583,8 +585,7 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         const Name& resourceIdentity,
         const AStringView resourceMarkerLabel,
         const Name& taskIdentity,
-        const AStringView taskMarkerLabel
-    ){
+        const AStringView taskMarkerLabel){
         Graphics::GpuTaskGraph graph(testArena.arena);
         const Graphics::GpuGraphResourceId resource = import(
             graph,
@@ -618,29 +619,31 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         taskDesc
             .setIdentity(taskIdentity)
             .setMarkerLabel(taskMarkerLabel)
-            .setQueue(Graphics::GpuQueueRequest{
-                Graphics::GpuQueueCapability::Compute,
-                Graphics::GpuQueuePreference::Compute,
-                false,
-                false,
-            })
             .setResourceUses(&use, 1u)
         ;
-        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute });
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Analyze(graph, analysis));
-        EXPECT_FALSE(Assign(graph, analysis, topology, assignments));
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+        ASSERT_NE(assignments.find(task), nullptr);
+        EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
+
+        const Graphics::GpuTaskQueueAssignmentOverride route{ .task = task, .queue = queues[1u].id };
+        Graphics::GpuTaskGraphQueueAssignmentOptions options;
+        options.queueOverrides = &route;
+        options.queueOverrideCount = 1u;
+        EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
         EXPECT_EQ(
             assignments.diagnostic().status,
-            Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
+            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
     };
 
-    expectUnadmittedComputeRejected(
+    expectUnadmittedComputeRerouted(
         [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
             return graph.importBuffer(buffer, desc);
         },
@@ -652,7 +655,7 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         Name("tests/task_graph/typed_concurrent_buffer_unadmitted_compute"),
         "Typed Concurrent Buffer Unadmitted Compute"
     );
-    expectUnadmittedComputeRejected(
+    expectUnadmittedComputeRerouted(
         [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
             return graph.importAccelStruct(accelStruct, desc);
         },
@@ -687,20 +690,14 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         taskDesc
             .setIdentity(Name("tests/task_graph/typed_concurrent_owned_graphics"))
             .setMarkerLabel("Typed Concurrent Owned Graphics")
-            .setQueue(Graphics::GpuQueueRequest{
-                Graphics::GpuQueueCapability::Graphics,
-                Graphics::GpuQueuePreference::Graphics,
-                false,
-                false,
-            })
             .setResourceUses(&use, 1u)
         ;
-        ASSERT_TRUE(graph.addTask(taskDesc).valid());
+        ASSERT_TRUE(graph.addTask(taskDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics }).valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -1175,12 +1172,12 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, sourceTopology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, sourceTopology, assignments, compiledGraph));
         {
             const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
             EXPECT_TRUE(compiledPlan.valid());
         }
-        EXPECT_FALSE(Compile(graph, analysis, targetTopology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, targetTopology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         EXPECT_FALSE(compiledPlan.valid());
     };
@@ -1267,7 +1264,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::GpuTaskGraphAnalysis metadataAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments metadataAssignments(testArena.arena);
     Graphics::GpuCompiledGraph metadataCompiledGraph(testArena.arena);
-    EXPECT_TRUE(Compile(
+    EXPECT_TRUE(CompileWithSeparatedCommandQueues(
         metadataGraph,
         metadataAnalysis,
         targetTopology,

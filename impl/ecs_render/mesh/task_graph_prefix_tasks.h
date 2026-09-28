@@ -51,6 +51,8 @@ namespace ECSRenderDetail{
 
 
 struct MeshViewSetupGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
@@ -69,6 +71,8 @@ struct MeshViewSetupGraphTask{
 
 // Update the CPU mirror after packet accepts so rejected recordings still retry.
 struct MeshViewUploadCommitGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
+
     struct Payload{
         RendererMeshSystem* meshSystem = nullptr;
         ECSRenderDetail::MeshViewGpuData viewState;

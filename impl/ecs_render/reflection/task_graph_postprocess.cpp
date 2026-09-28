@@ -9,7 +9,6 @@
 
 #include <impl/assets/graphics/reflection/temporal_constants.h>
 #include <impl/assets/graphics/reflection/spatial_constants.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -76,7 +75,6 @@ static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_
     desc
         .setIdentity(name)
         .setMarkerLabel(label)
-        .setQueue(GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&dependency, 1u)
     ;
@@ -84,6 +82,8 @@ static_assert(sizeof(SpatialParameters) == NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_
 }
 
 struct TemporalTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         ReflectionPostprocessSnapshot snapshot;
@@ -134,6 +134,8 @@ struct TemporalTask{
 };
 
 struct SpatialTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         Core::ComputePipelineHandle pipeline;

@@ -1,3 +1,29 @@
+# Automatic queue placement
+
+Task declarations describe work, resources, dependencies, and scheduling cost. They do not select a preferred or required lane. The compiler chooses a legal physical Graphics, Compute, or Transfer queue before command recording, using command capabilities, resource sharing and ownership, dependency crossings, and opportunities for overlap. Tiny tasks favor locality, and compatible tasks that explicitly merge with their predecessor are placed together.
+
+Built-in copies, uploads, clears, and resolves derive their command requirements internally. A custom recorded task declares its implementation's requirements once:
+
+```cpp
+struct ExampleComputeTask{
+    static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::Compute };
+
+    struct Payload{
+        // Task-specific data.
+    };
+
+    static bool record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
+};
+
+const GpuTaskId task = graph.addTask<ExampleComputeTask>(taskDesc, Move(payload));
+```
+
+When a task implementation records different command kinds depending on its payload, provide `static GpuTaskCommandRequirements commandRequirements(const Payload&)` instead. Every required capability must be supported; each nonempty alternative mask additionally requires at least one alternative. Built-ins preserve native and hook alternatives independently. A task that records native commands must declare one of these contracts. The metadata-only `addTask` overload accepts command requirements for analysis and tooling.
+
+Framework contracts for presentation, existing external submission timelines, and imported ownership remain hard constraints. They express real synchronization requirements and are owned by the task implementation or resource import. `GpuGraphResourceDesc::directConsumerQueue` keeps an exclusive native resource in the family of a consumer that cannot process graph ownership handoffs.
+
+Compiler `queueOverrides` provide exact physical assignments for diagnostics and synthetic fixtures. They are validated against the same command, resource, and external timeline constraints. Normal task construction does not use them. Optional same-class and timing-history routing continue to require their existing explicit scheduling opt-ins.
+
 # Buffer byte ranges
 
 GPU tasks synchronize the byte intervals declared in `GpuTaskResourceUse::range.bufferRange`:

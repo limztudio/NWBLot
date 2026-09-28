@@ -35,6 +35,9 @@ namespace RendererTaskGraphDetail{
 
 
 struct DeferredPresentGraphTask{
+    // Acquired backbuffer recording belongs to the primary presentation timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
+
     struct Payload{
         RendererDeferredSystem* deferredSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;

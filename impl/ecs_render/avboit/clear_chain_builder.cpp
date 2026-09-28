@@ -9,7 +9,6 @@
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +37,6 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
     GraphClearTimingRecordState& clearTimingState,
     AvboitClearChainResult& outResult
 ){
-    using namespace RendererTaskGraphDetail;
     outResult = AvboitClearChainResult{};
     if(!inputs.uploadTask.valid())
         return false;
@@ -77,7 +75,6 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             clearDesc
                 .setIdentity(identity)
                 .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(avboitClearScheduling)
                 .setDependencies(&dependency, 1u)
             ;

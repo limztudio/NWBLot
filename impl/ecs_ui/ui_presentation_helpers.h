@@ -73,7 +73,7 @@ inline void AppendTextureReadUse(
 }
 
 // Shared ImGui upload-completion declare: build the deduped texture-read uses plus the tiny Graphics completion
-// scheduling. The caller owns identities, queue choice, dependencies, and the final addTask call.
+// scheduling. The caller owns identities, dependencies, and the final addTask call.
 struct UploadCompletionDeclare{
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses;
     Core::GpuTaskSchedulingHint scheduling;
@@ -101,12 +101,6 @@ struct UploadCompletionDeclare{
     result.desc
         .setIdentity(identity)
         .setMarkerLabel(markerLabel.get())
-        .setQueue(Core::GpuQueueRequest{
-            Core::GpuQueueCapability::Graphics,
-            Core::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(result.scheduling)
     ;
     return result;

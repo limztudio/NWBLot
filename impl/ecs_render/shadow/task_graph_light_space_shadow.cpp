@@ -4,7 +4,6 @@
 
 #include "task_graph_light_space_shadow.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -84,6 +83,8 @@ namespace __hidden_task_graph_light_space_shadow{
 
 
 struct ViewTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime& graphics;
         const bool& shadowPrepared;
@@ -104,6 +105,8 @@ struct ViewTask{
 };
 
 struct ShadeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     using Payload = ViewTask::Payload;
 
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -149,6 +152,8 @@ struct CasterPayload{
 };
 
 struct CullTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     using Payload = CasterPayload;
 
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -165,6 +170,8 @@ struct CullTask{
 };
 
 struct CaptureTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics };
+
     struct Payload : CasterPayload{
         bool transparent;
 
@@ -253,7 +260,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     uploadDesc
         .setIdentity(Name("render.light_space_shadow.view_upload"))
         .setMarkerLabel("Light-Space View Upload")
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&inputs.dependency, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -283,7 +289,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     clearDesc
         .setIdentity(Name("render.light_space_shadow.counts_clear"))
         .setMarkerLabel("Light-Space Crossing Clear")
-        .setQueue(GraphicsUploadQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.viewUpload, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -306,7 +311,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     viewDesc
         .setIdentity(Name("render.light_space_shadow.view_fit"))
         .setMarkerLabel("Light-Space View Fit")
-        .setQueue(GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.countsClear, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -348,7 +352,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     cullDesc
         .setIdentity(Name("render.light_space_shadow.draw_cull"))
         .setMarkerLabel("Light-Space Meshlet Cull")
-        .setQueue(GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.viewFit, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -373,7 +376,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     opaqueDesc
         .setIdentity(Name("render.light_space_shadow.opaque_capture"))
         .setMarkerLabel("Light-Space Opaque Capture")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.drawCull, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -392,7 +394,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     transparentDesc
         .setIdentity(Name("render.light_space_shadow.transparent_capture"))
         .setMarkerLabel("Light-Space Transparent Capture")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.opaqueCapture, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
@@ -418,7 +419,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     shadeDesc
         .setIdentity(Name("render.light_space_shadow.shade"))
         .setMarkerLabel("Light-Space Crossing Shade")
-        .setQueue(GraphicsPreferredComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&result.transparentCapture, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)

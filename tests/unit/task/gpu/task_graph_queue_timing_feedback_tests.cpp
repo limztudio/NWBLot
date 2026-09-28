@@ -40,11 +40,8 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
@@ -54,11 +51,11 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
         .variant = 7u,
         .resolutionClass = 0x07800438u,
     };
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         taskIdentity,
         "Timing Feedback Hysteresis",
-        graphicsRequest,
+        graphicsCommands,
         scheduling,
         timingMetadata
     );
@@ -161,11 +158,8 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
@@ -176,11 +170,11 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
         .variant = 9u,
         .resolutionClass = 0x07800438u,
     };
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         taskIdentity,
         "Timing Feedback Calibration",
-        graphicsRequest,
+        graphicsCommands,
         scheduling,
         timingMetadata
     );
@@ -351,26 +345,20 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
 
-        Graphics::GpuQueueRequest graphicsRequest;
-        graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-        graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-        graphicsRequest.allowFallback = false;
-        graphicsRequest.compilerMayOverridePreference = false;
+        Graphics::GpuTaskCommandRequirements graphicsCommands;
+        graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
         if(staticCompute){
-            const Graphics::GpuTaskId independentGraphics = AddTaskWithQueue(
+            const Graphics::GpuTaskId independentGraphics = AddTaskWithCommands(
                 graph,
                 Name("tests/task_graph/cross_class_timing_independent_graphics"),
                 "Cross Class Timing Independent Graphics",
-                graphicsRequest
+                graphicsCommands
             );
             ASSERT_TRUE(independentGraphics.valid());
         }
 
-        Graphics::GpuQueueRequest computeRequest;
-        computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
-        computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
-        computeRequest.allowFallback = true;
-        computeRequest.compilerMayOverridePreference = true;
+        Graphics::GpuTaskCommandRequirements computeCommands;
+        computeCommands.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.allowSameClassQueueRouting = false;
         scheduling.allowCrossFamilySameClassQueueRouting = true;
@@ -385,11 +373,11 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
             .variant = staticCompute ? 11u : 12u,
             .resolutionClass = 0x07800438u,
         };
-        const Graphics::GpuTaskId task = AddTaskWithQueue(
+        const Graphics::GpuTaskId task = AddTaskWithCommands(
             graph,
             taskIdentity,
             "Cross Class Timing Target",
-            computeRequest,
+            computeCommands,
             scheduling,
             timingMetadata
         );
@@ -496,24 +484,18 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
-    const Graphics::GpuTaskId independentGraphics = AddTaskWithQueue(
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    const Graphics::GpuTaskId independentGraphics = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/cross_class_calibration_independent_graphics"),
         "Cross Class Calibration Independent Graphics",
-        graphicsRequest
+        graphicsCommands
     );
     ASSERT_TRUE(independentGraphics.valid());
 
-    Graphics::GpuQueueRequest computeRequest;
-    computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
-    computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
-    computeRequest.allowFallback = true;
-    computeRequest.compilerMayOverridePreference = true;
+    Graphics::GpuTaskCommandRequirements computeCommands;
+    computeCommands.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
     scheduling.allowCrossFamilySameClassQueueRouting = true;
@@ -524,11 +506,11 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
         .variant = 13u,
         .resolutionClass = 0x07800438u,
     };
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         taskIdentity,
         "Cross Class Timing Calibration",
-        computeRequest,
+        computeCommands,
         scheduling,
         timingMetadata
     );
@@ -636,18 +618,15 @@ TEST(GpuTaskGraph, IgnoresTimingFeedbackWithoutAnyEnabledRoute){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowTimingFeedbackRouting = true;
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/timing_feedback_without_enabled_route"),
         "Timing Feedback Without Enabled Route",
-        graphicsRequest,
+        graphicsCommands,
         scheduling
     );
     ASSERT_TRUE(task.valid());
@@ -685,36 +664,26 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
     const auto runCase = [](
         const bool allowCrossClassRouting,
         const bool allowCrossFamilyRouting,
-        const bool flexibleQueueRequest,
         const bool requireGraphicsCapability
     ){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
 
-        Graphics::GpuQueueRequest graphicsRequest;
-        graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-        graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-        graphicsRequest.allowFallback = false;
-        graphicsRequest.compilerMayOverridePreference = false;
-        const Graphics::GpuTaskId independentGraphics = AddTaskWithQueue(
+        Graphics::GpuTaskCommandRequirements graphicsCommands;
+        graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+        const Graphics::GpuTaskId independentGraphics = AddTaskWithCommands(
             graph,
             Name("tests/task_graph/rejected_cross_class_independent_graphics"),
             "Rejected Cross Class Independent Graphics",
-            graphicsRequest
+            graphicsCommands
         );
         ASSERT_TRUE(independentGraphics.valid());
 
-        Graphics::GpuQueueRequest queueRequest;
-        queueRequest.requiredCapabilities = requireGraphicsCapability
+        Graphics::GpuTaskCommandRequirements commands;
+        commands.requiredCapabilities = requireGraphicsCapability
             ? Graphics::GpuQueueCapability::Graphics
             : Graphics::GpuQueueCapability::Compute
         ;
-        queueRequest.preferredQueue = requireGraphicsCapability
-            ? Graphics::GpuQueuePreference::Graphics
-            : Graphics::GpuQueuePreference::Compute
-        ;
-        queueRequest.allowFallback = flexibleQueueRequest;
-        queueRequest.compilerMayOverridePreference = flexibleQueueRequest;
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.allowSameClassQueueRouting = true;
         scheduling.allowCrossFamilySameClassQueueRouting = allowCrossFamilyRouting;
@@ -725,13 +694,11 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
             taskIdentity = Name("tests/task_graph/rejected_missing_cross_class_timing_opt_in");
         else if(!allowCrossFamilyRouting)
             taskIdentity = Name("tests/task_graph/rejected_cross_family_cross_class_timing");
-        else if(!flexibleQueueRequest)
-            taskIdentity = Name("tests/task_graph/rejected_strict_cross_class_timing");
-        const Graphics::GpuTaskId task = AddTaskWithQueue(
+        const Graphics::GpuTaskId task = AddTaskWithCommands(
             graph,
             taskIdentity,
             "Rejected Cross Class Timing",
-            queueRequest,
+            commands,
             scheduling
         );
         ASSERT_TRUE(task.valid());
@@ -806,10 +773,9 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         EXPECT_EQ(assignments.find(task), nullptr);
     };
 
-    runCase(false, true, true, false);
-    runCase(true, false, true, false);
-    runCase(true, true, false, false);
-    runCase(true, true, true, true);
+    runCase(false, true, false);
+    runCase(true, false, false);
+    runCase(true, true, true);
 }
 
 TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
@@ -822,11 +788,8 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     );
     ASSERT_TRUE(handoff.valid());
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
@@ -842,11 +805,10 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     firstDesc
         .setIdentity(firstIdentity)
         .setMarkerLabel("Reduced Timing Score First")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setResourceUses(&firstUse, 1u)
     ;
-    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc, graphicsCommands);
     ASSERT_TRUE(first.valid());
 
     const Name secondIdentity("tests/task_graph/reduced_timing_score_second");
@@ -854,11 +816,10 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     secondDesc
         .setIdentity(secondIdentity)
         .setMarkerLabel("Reduced Timing Score Second")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setDependencies(&first, 1u)
     ;
-    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc, graphicsCommands);
     ASSERT_TRUE(second.valid());
 
     const Name thirdIdentity("tests/task_graph/reduced_timing_score_third");
@@ -872,12 +833,11 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     thirdDesc
         .setIdentity(thirdIdentity)
         .setMarkerLabel("Reduced Timing Score Third")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setDependencies(&second, 1u)
         .setResourceUses(&thirdUse, 1u)
     ;
-    const Graphics::GpuTaskId third = graph.addTask(thirdDesc);
+    const Graphics::GpuTaskId third = graph.addTask(thirdDesc, graphicsCommands);
     ASSERT_TRUE(third.valid());
 
     Graphics::GpuPhysicalQueueInfo firstAuxiliaryQueue = GraphicsQueue(1u);
@@ -962,21 +922,18 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskSchedulingHint preloadScheduling;
     preloadScheduling.cost = Graphics::GpuTaskCostHint::Large;
     preloadScheduling.allowSameClassQueueRouting = true;
     preloadScheduling.preferNonPrimarySameClassQueue = true;
-    const Graphics::GpuTaskId preload = AddTaskWithQueue(
+    const Graphics::GpuTaskId preload = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/timing_feedback_preload"),
         "Timing Feedback Preload",
-        graphicsRequest,
+        graphicsCommands,
         preloadScheduling
     );
     ASSERT_TRUE(preload.valid());
@@ -985,11 +942,11 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     targetScheduling.allowSameClassQueueRouting = true;
     targetScheduling.allowTimingFeedbackRouting = true;
     const Name targetIdentity("tests/task_graph/timing_feedback_equal_candidates");
-    const Graphics::GpuTaskId target = AddTaskWithQueue(
+    const Graphics::GpuTaskId target = AddTaskWithCommands(
         graph,
         targetIdentity,
         "Timing Feedback Equal Candidates",
-        graphicsRequest,
+        graphicsCommands,
         targetScheduling
     );
     ASSERT_TRUE(target.valid());
@@ -1131,11 +1088,11 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     crossFamilyScheduling.allowCrossFamilySameClassQueueRouting = true;
     crossFamilyScheduling.allowTimingFeedbackRouting = true;
     const Name crossFamilyIdentity("tests/task_graph/timing_feedback_cross_family_override");
-    const Graphics::GpuTaskId crossFamilyTask = AddTaskWithQueue(
+    const Graphics::GpuTaskId crossFamilyTask = AddTaskWithCommands(
         crossFamilyGraph,
         crossFamilyIdentity,
         "Timing Feedback Cross Family Override",
-        graphicsRequest,
+        graphicsCommands,
         crossFamilyScheduling
     );
     ASSERT_TRUE(crossFamilyTask.valid());
@@ -1178,11 +1135,8 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     );
     ASSERT_TRUE(buffer.valid());
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     const Graphics::GpuTaskResourceUse producerUse{
         .resource = buffer,
@@ -1194,10 +1148,9 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     producerDesc
         .setIdentity(Name("tests/task_graph/timing_feedback_cross_family_producer"))
         .setMarkerLabel("Timing Feedback Cross Family Producer")
-        .setQueue(graphicsRequest)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint consumerScheduling;
@@ -1217,12 +1170,11 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     consumerDesc
         .setIdentity(consumerIdentity)
         .setMarkerLabel("Timing Feedback Cross Family Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(consumerScheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumer.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
@@ -1314,11 +1266,8 @@ TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    Graphics::GpuQueueRequest graphicsRequest;
-    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
-    graphicsRequest.allowFallback = false;
-    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
 
     Graphics::GpuTaskTimingMetadata packetTiming;
     packetTiming.policy = Graphics::GpuTaskTimingPolicy::PacketOnly;
@@ -1326,20 +1275,20 @@ TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
     taskTiming.policy = Graphics::GpuTaskTimingPolicy::Task;
 
     const Name untimedIdentity("tests/task_graph/timing_policy_untimed");
-    const Graphics::GpuTaskId untimed = AddTaskWithQueue(
+    const Graphics::GpuTaskId untimed = AddTaskWithCommands(
         graph,
         untimedIdentity,
         "Timing Policy Untimed",
-        graphicsRequest
+        graphicsCommands
     );
     ASSERT_TRUE(untimed.valid());
 
     const Name packetOnlyIdentity("tests/task_graph/timing_policy_packet_only");
-    const Graphics::GpuTaskId packetOnly = AddTaskWithQueue(
+    const Graphics::GpuTaskId packetOnly = AddTaskWithCommands(
         graph,
         packetOnlyIdentity,
         "Timing Policy Packet Only",
-        graphicsRequest,
+        graphicsCommands,
         {},
         packetTiming,
         &untimed,
@@ -1350,11 +1299,11 @@ TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
     Graphics::GpuTaskSchedulingHint mergedTaskScheduling;
     mergedTaskScheduling.mergeWithPrevious = true;
     const Name taskIdentity("tests/task_graph/timing_policy_task");
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         taskIdentity,
         "Timing Policy Task",
-        graphicsRequest,
+        graphicsCommands,
         mergedTaskScheduling,
         taskTiming,
         &packetOnly,
@@ -1363,11 +1312,11 @@ TEST(GpuTaskGraph, CompilesHierarchicalGraphOwnedTimingPolicies){
     ASSERT_TRUE(task.valid());
 
     const Name finalUntimedIdentity("tests/task_graph/timing_policy_final_untimed");
-    const Graphics::GpuTaskId finalUntimed = AddTaskWithQueue(
+    const Graphics::GpuTaskId finalUntimed = AddTaskWithCommands(
         graph,
         finalUntimedIdentity,
         "Timing Policy Final Untimed",
-        graphicsRequest,
+        graphicsCommands,
         {},
         {},
         &task,
@@ -1422,7 +1371,7 @@ TEST(GpuTaskGraph, RejectsInvalidGraphOwnedTimingPolicy){
     invalidTiming.policy = static_cast<Graphics::GpuTaskTimingPolicy::Enum>(
         Graphics::GpuTaskTimingPolicy::kCount
     );
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/timing_policy_invalid"),
         "Timing Policy Invalid",

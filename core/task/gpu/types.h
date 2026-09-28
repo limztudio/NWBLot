@@ -18,17 +18,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuQueuePreference{
-    enum Enum : u8{
-        Graphics,
-        Compute,
-        Transfer,
-        Any,
-
-        kCount,
-    };
-};
-
 // The graph consumes the Device's immutable physical registry. Keep the existing name as a source-compatible
 // graph-facing alias while making the queue metadata itself part of the RHI command contract.
 using GpuTaskGraphQueueTopology = GpuPhysicalQueueTopology;

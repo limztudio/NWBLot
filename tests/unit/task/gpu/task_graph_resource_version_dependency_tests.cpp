@@ -257,12 +257,7 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     const VersionProducerUses producerUses = ProducerUses(resource, version);
     const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
     const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
@@ -270,18 +265,12 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     producerDesc
         .setIdentity(Name("tests/task_graph_resource_version/queue_score_producer"))
         .setMarkerLabel("Resource Version Queue Score Producer")
-        .setQueue(graphicsRequest)
         .setResourceUses(&producerResourceUse, 1u)
         .setResourceVersionUses(&producerVersionUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
 
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
     const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
     const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
     const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
@@ -289,11 +278,10 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
     consumerDesc
         .setIdentity(Name("tests/task_graph_resource_version/queue_score_consumer"))
         .setMarkerLabel("Resource Version Queue Score Consumer")
-        .setQueue(computeRequest)
         .setResourceUses(&consumerResourceUse, 1u)
         .setResourceVersionUses(&consumerVersionUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, computeCommands);
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
@@ -319,7 +307,11 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
         .queueCount = LengthOf(queues),
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = consumer, .queue = queues[1u].id };
+    Graphics::GpuTaskGraphQueueAssignmentOptions options;
+    options.queueOverrides = &route;
+    options.queueOverrideCount = 1u;
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);

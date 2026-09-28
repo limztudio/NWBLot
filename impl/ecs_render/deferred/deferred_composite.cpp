@@ -58,6 +58,8 @@ static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 5u);
 
 
 struct DeferredCompositeGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererDeferredSystem* deferredSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;

@@ -4,7 +4,6 @@
 
 #include "task_graph_optical_bounds_finalize.h"
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
@@ -40,6 +39,8 @@ struct PushConstants{
 static_assert(sizeof(PushConstants) == NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES);
 
 struct FinalizeTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
+
     struct Payload{
         Core::BufferHandle source;
         RayTracingOpticalBoundsFinalizeHandle finalize;
@@ -175,7 +176,6 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
     desc
         .setIdentity(Name("render.raytrace.optical_bounds_finalize"))
         .setMarkerLabel("Ray Optical Bounds Finalize")
-        .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
         .setScheduling(scheduling)
         .setResourceUses(uses.data(), uses.size())
     ;

@@ -37,7 +37,7 @@ struct GpuTaskGraphTaskView{
     GpuTaskId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    GpuQueueRequest queue;
+    GpuTaskCommandRequirements commands;
     GpuTaskSchedulingHint scheduling;
     GpuTaskTimingMetadata timing;
     const GpuTaskId* dependencies = nullptr;
@@ -87,6 +87,7 @@ struct GpuTaskGraphResourceView{
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     GpuExternalCompletionId initialAvailabilityCompletion;
+    GpuPhysicalQueueId directConsumerQueue;
     // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only resources have no snapshot and retain the logical queue-sharing resolver.
     ResourceQueueAdmissionSnapshot queueAdmission;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
@@ -627,7 +628,7 @@ private:
     struct GpuTaskNode{
         Name identity = NAME_NONE;
         GpuTaskTimingMetadata timing;
-        GpuQueueRequest queue;
+        GpuTaskCommandRequirements commands;
         GpuTaskSchedulingHint scheduling;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
@@ -672,6 +673,7 @@ private:
         GpuExternalCompletionId initialOwnerCompletion;
         QueueSubmissionToken initialOwnerMinimumCompletionToken;
         GpuExternalCompletionId initialAvailabilityCompletion;
+        GpuPhysicalQueueId directConsumerQueue;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
@@ -809,15 +811,15 @@ public:
 
 public:
     // Metadata-only tasks support graph analysis and scheduling. A task executed through scheduler-owned native recording must provide a payload thunk through the templated overload below.
-    [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc);
+    [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands = {});
 
-    // Adds a graph-owned native buffer-copy task. The helper derives CopySource/CopyDest resource uses from its regions and retains the imported buffers through recording, so desc must declare Transfer capability and must not provide separate resource uses.
+    // Adds a graph-owned native buffer copy. The helper derives command requirements and CopySource/CopyDest resource uses from its regions and retains the imported buffers through recording. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
 
-    // Adds a graph-owned native texture-copy task. The helper derives CopySource/CopyDest resource uses from its regions and retains the imported textures through recording, so desc must declare Transfer capability and must not provide separate resource uses.
+    // Adds a graph-owned native texture copy. The helper derives command requirements and CopySource/CopyDest resource uses from its regions and retains the imported textures through recording. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
-    // Adds a graph-owned native texture-resolve task. The helper derives ResolveSource/ResolveDest resource uses from its regions and retains the imported textures through recording, so desc must declare Graphics capability and must not provide separate resource uses.
+    // Adds a graph-owned native texture resolve. The helper derives Graphics command requirements and ResolveSource/ResolveDest resource uses, retaining the imported textures through recording. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
     // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs expose only an opaque byte view, so no typed-alignment promise escapes the graph. Built-in upload tasks resolve the immutable blob while recording, then use the ordinary CommandList staging allocator for GPU lifetime.
@@ -832,14 +834,13 @@ public:
     [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
     [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
-    // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives its CopyDest write declaration,
-    // desc must declare Transfer capability and must not provide separate resource uses.
+    // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives Transfer command requirements and its CopyDest write declaration. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
 
-    // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest write declaration, so desc must declare Transfer capability and must not provide separate resource uses. It adds Compute for ordinary color unless Graphics is declared, and adds Graphics for depth/stencil.
+    // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest write declaration and backend command requirements, including Compute or Graphics alternatives for shader clears. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
-    // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture and derives its exact subresource CopyDest write declaration, so desc must declare Transfer capability and must not provide separate resource uses. Partial regions additionally require Compute or Graphics.
+    // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture and derives its exact subresource CopyDest write declaration and backend command requirements. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(
         const GpuTaskDesc& desc,
         const GpuClearTextureRectUIntTaskDesc& clearDesc
@@ -873,6 +874,7 @@ public:
 
         const GpuTaskId task = appendTaskWithinMutation(
             desc,
+            GpuGraphTaskContract::CommandRequirements<TaskT>(*storedPayload.get()),
             storedPayload.get(),
             recordPayload,
             acceptPayload,
@@ -907,11 +909,13 @@ public:
     [[nodiscard]] GpuTaskId appendBuiltinTaskWithinMutation(
         const GpuTaskDesc& resolvedDesc,
         ProvisionalPayloadOwner<typename TaskT::Payload>& payload,
-        const DeclarationMutationScope& mutation
+        const DeclarationMutationScope& mutation,
+        const GpuTaskCommandRequirements& commands = { .requiredCapabilities = GpuQueueCapability::Transfer }
     ){
         using Payload = typename TaskT::Payload;
         const GpuTaskId task = appendTaskWithinMutation(
             resolvedDesc,
+            commands,
             payload.get(),
             &RecordPayload<TaskT>,
             &AcceptPayload<TaskT>,
@@ -1268,6 +1272,7 @@ private:
 
     [[nodiscard]] GpuTaskId appendTaskWithinMutation(
         const GpuTaskDesc& desc,
+        const GpuTaskCommandRequirements& commands,
         void* payload,
         GpuTaskRecordThunk recordPayload,
         GpuTaskAcceptedThunk acceptPayload,

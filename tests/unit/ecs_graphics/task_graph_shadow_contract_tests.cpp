@@ -4,6 +4,9 @@
 
 #include "task_graph_contract_test_helpers.h"
 
+#include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
+#include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -111,9 +114,12 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
 }
 
 
-// The retained monolithic soft-shadow route must clear all-lit visibility on the selected Compute packet.
-// Its renderer-local callback retains typed command-IR capture while avoiding the generic clear helper's Graphics path.
-TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
+// The renderer-local visibility clear retains typed command-IR capture after the graph-owned CopyDest transition.
+// Its task contract permits Compute or Graphics so the scheduler can keep the clear with its consumer.
+TEST(EcsGraphics, ShadowVisibilityAllLitClearOwnsShaderCommandContractAndNativeCapture){
+    const NWB::Core::GpuTaskCommandRequirements commands = NWB::Impl::ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask::s_CommandRequirements;
+    EXPECT_EQ(commands.requiredCapabilities, NWB::Core::GpuQueueCapability::None);
+    EXPECT_EQ(commands.alternativeCapabilities, NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics);
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -142,7 +148,7 @@ TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
     const AStringView allLitClear = shadowVisibility.substr(resourceUseOffset, shadowSchedulingOffset - resourceUseOffset);
 
     EXPECT_TRUE(ContainsText(allLitClear, "WriteTextureUse(\n        shadowVisibility,\n        ECSRenderDetail::s_ShadowVisibilitySubresources,\n        Core::ResourceStates::CopyDest\n    )"));
-    EXPECT_TRUE(ContainsText(allLitClear, ".setQueue(ComputePacketQueueRequest())"));
+    EXPECT_TRUE(ContainsText(allLitClear, ".setScheduling(allLitClearScheduling)"));
     EXPECT_TRUE(ContainsText(allLitClear, ".setResourceUses(&allLitClearResourceUse, 1u)"));
     EXPECT_TRUE(ContainsText(allLitClear, "m_deferredLightingTaskGraph.addTask<"));
     EXPECT_TRUE(ContainsText(allLitClear, "ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask"));
@@ -571,8 +577,14 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
 
 
 // The split software-BVH task records only compute commands after graph-owned clears.
-// The compatibility Shadow Preparation endpoint can still record both transfer clears and compute dispatches, while preferring Graphics.
-TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
+// Shadow Preparation owns transfer/compute requirements and its frame timing contract requires the primary Graphics timeline.
+TEST(EcsGraphics, ShadowPreparationTaskContractsOwnNativeCommandAndFrameTimingRequirements){
+    const NWB::Core::GpuTaskCommandRequirements buildCommands = NWB::Impl::ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::s_CommandRequirements;
+    const NWB::Core::GpuTaskCommandRequirements prepareCommands = NWB::Impl::ECSRenderDetail::ShadowPrepareGraphTask::s_CommandRequirements;
+    EXPECT_EQ(buildCommands.requiredCapabilities, NWB::Core::GpuQueueCapability::Compute);
+    EXPECT_FALSE(buildCommands.requiresPrimaryGraphicsQueue);
+    EXPECT_EQ(prepareCommands.requiredCapabilities, NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Transfer);
+    EXPECT_TRUE(prepareCommands.requiresPrimaryGraphicsQueue);
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -591,8 +603,7 @@ TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
         softwareBuildOffset,
         softwareBuildEndOffset - softwareBuildOffset
     );
-    EXPECT_TRUE(ContainsText(softwareBuild, ".setQueue(GraphicsPreferredComputeQueueRequest())"));
-    EXPECT_FALSE(ContainsText(softwareBuild, ".setQueue(GraphicsComputeQueueRequest())"));
+    EXPECT_TRUE(ContainsText(softwareBuild, ".setScheduling(buildScheduling)"));
 
     const usize shadowPrepareOffset = taskGraph.find(".setMarkerLabel(\"Shadow Preparation\")", softwareBuildEndOffset);
     const usize shadowPrepareEndOffset = taskGraph.find(
@@ -605,8 +616,7 @@ TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
         shadowPrepareOffset,
         shadowPrepareEndOffset - shadowPrepareOffset
     );
-    EXPECT_TRUE(ContainsText(shadowPrepare, ".setQueue(GraphicsComputeUploadQueueRequest())"));
-    EXPECT_FALSE(ContainsText(shadowPrepare, ".setQueue(GraphicsPreferredComputeQueueRequest())"));
+    EXPECT_TRUE(ContainsText(shadowPrepare, ".setScheduling(scheduling)"));
 }
 
 

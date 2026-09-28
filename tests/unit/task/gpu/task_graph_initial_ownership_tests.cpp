@@ -39,25 +39,14 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
-    const Graphics::GpuQueueRequest graphicsQueue{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeQueue{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsQueue{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements computeQueue{ Graphics::GpuQueueCapability::Compute };
     const auto addFirstUse = [&](
         Graphics::GpuTaskGraph& graph,
         const Graphics::GpuGraphResourceId resource,
         const Name& identity,
         const AStringView label,
-        const Graphics::GpuQueueRequest& queue
-    ){
+        const Graphics::GpuTaskCommandRequirements& queue){
         const Graphics::GpuTaskResourceUse use{
             .resource = resource,
             .range = {},
@@ -68,10 +57,9 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
-            .setQueue(queue)
             .setResourceUses(&use, 1u)
         ;
-        return graph.addTask(desc);
+        return graph.addTask(desc, queue);
     };
     const auto addBuffer = [&](
         Graphics::GpuTaskGraph& graph,
@@ -118,7 +106,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
         const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
 
@@ -146,7 +134,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -172,7 +160,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());
@@ -199,7 +187,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         EXPECT_FALSE(compiledPlan.valid());

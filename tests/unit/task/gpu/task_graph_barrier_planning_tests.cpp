@@ -474,7 +474,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -541,7 +541,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
         const Graphics::GpuCompiledTaskView compiledProducerView = compiledPlan.findTask(producer);
@@ -620,7 +620,7 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -700,15 +700,14 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
-    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
+    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
+    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
     const auto addReadTask = [&](
         const Name& identity,
         const AStringView label,
         const Graphics::GpuGraphResourceId resource,
-        const Graphics::GpuQueueRequest& queue,
-        const bool hasIndependentStateSource
-    ){
+        const Graphics::GpuTaskCommandRequirements& queue,
+        const bool hasIndependentStateSource){
         const Graphics::GpuTaskResourceUse uses[] = {
             Graphics::GpuTaskResourceUse{
                 .resource = resource,
@@ -722,52 +721,51 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
-            .setQueue(queue)
             .setScheduling(scheduling)
             .setResourceUses(uses, LengthOf(uses))
         ;
-        return graph.addTask(desc);
+        return graph.addTask(desc, queue);
     };
     const Graphics::GpuTaskId concurrentGraphics = addReadTask(
         Name("tests/task_graph/concurrent_read_graphics"),
         "Concurrent Graphics Read",
         concurrentTexture,
-        graphicsRequest,
+        graphicsCommands,
         false
     );
     const Graphics::GpuTaskId concurrentCompute = addReadTask(
         Name("tests/task_graph/concurrent_read_compute"),
         "Concurrent Compute Read",
         concurrentTexture,
-        computeRequest,
+        computeCommands,
         true
     );
     const Graphics::GpuTaskId defaultConcurrentGraphics = addReadTask(
         Name("tests/task_graph/default_concurrent_read_graphics"),
         "Default Concurrent Graphics Read",
         defaultConcurrentTexture,
-        graphicsRequest,
+        graphicsCommands,
         false
     );
     const Graphics::GpuTaskId defaultConcurrentCompute = addReadTask(
         Name("tests/task_graph/default_concurrent_read_compute"),
         "Default Concurrent Compute Read",
         defaultConcurrentTexture,
-        computeRequest,
+        computeCommands,
         false
     );
     const Graphics::GpuTaskId exclusiveGraphics = addReadTask(
         Name("tests/task_graph/exclusive_read_graphics"),
         "Exclusive Graphics Read",
         exclusiveTexture,
-        graphicsRequest,
+        graphicsCommands,
         false
     );
     const Graphics::GpuTaskId exclusiveCompute = addReadTask(
         Name("tests/task_graph/exclusive_read_compute"),
         "Exclusive Compute Read",
         exclusiveTexture,
-        computeRequest,
+        computeCommands,
         true
     );
     ASSERT_TRUE(concurrentGraphics.valid());
@@ -788,7 +786,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     EXPECT_EQ(FindEdge(analysis, concurrentGraphics, concurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute), nullptr);
     EXPECT_EQ(FindEdge(analysis, exclusiveGraphics, exclusiveCompute), nullptr);
@@ -890,7 +888,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskGraphAnalysis sameFamilyAnalysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
     Graphics::GpuCompiledGraph sameFamilyCompiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(
         graph,
         sameFamilyAnalysis,
         sameFamilyTopology,

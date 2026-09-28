@@ -39,6 +39,8 @@ namespace ECSRenderDetail{
 
 
 struct GbufferGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;

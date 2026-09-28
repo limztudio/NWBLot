@@ -10,7 +10,6 @@
 
 #include <core/graphics/vulkan/backend.h>
 
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -114,7 +113,6 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     compositeDesc
         .setIdentity(Name("render.deferred_composite"))
         .setMarkerLabel("Deferred Composite")
-        .setQueue(ComputeQueueRequest())
         .setScheduling(compositeScheduling)
         .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
@@ -188,7 +186,6 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     presentDesc
         .setIdentity(Name("render.deferred_present"))
         .setMarkerLabel("Deferred Present")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(presentScheduling)
         .setDependencies(presentDependencies, presentDependencyCount)
         .setResourceUses(presentResourceUses, LengthOf(presentResourceUses))
@@ -241,7 +238,6 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     frameTimingEndDesc
         .setIdentity(Name("render.frame_timing_end"))
         .setMarkerLabel("Frame Timing End")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(frameTimingEndScheduling)
         .setDependencies(&frameTimingEndDependency, 1u)
     ;

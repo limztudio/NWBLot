@@ -53,10 +53,6 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     bool hasKnownFinalState,
     bool requiresGraphicsQueue = false
 )noexcept;
-[[nodiscard]] GpuQueueRequest SetupUploadGraphQueueRequest(
-    CommandQueue::Enum uploadQueue,
-    bool requiresGraphicsQueue = false
-)noexcept;
 [[nodiscard]] GpuTaskSchedulingHint SetupUploadGraphScheduling(
     usize byteCount,
     bool sameClassRouting = false,
@@ -81,7 +77,6 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     void* userData,
     GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outUploadToken,
-    bool bridgePrimaryUploadQueue = false,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
 [[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(

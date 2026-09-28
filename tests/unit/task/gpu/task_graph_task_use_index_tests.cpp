@@ -316,9 +316,8 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
         .setMarkerLabel("Expanded Task")
         .setResourceUses(direct, LengthOf(direct))
         .setResourceSetUses(&expanded, 1u)
-        .setQueue(Graphics::GpuQueueRequest{ Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueuePreference::Graphics, false, false })
     ;
-    const auto task = graph.addTask(desc);
+    const auto task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };

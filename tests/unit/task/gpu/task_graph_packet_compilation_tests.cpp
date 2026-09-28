@@ -106,7 +106,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -152,12 +152,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     firstDesc
         .setIdentity(Name("tests/task_graph/packet_first"))
         .setMarkerLabel("Packet First")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueuePreference::Compute,
-            true,
-            true,
-        })
     ;
     const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
         firstDesc,
@@ -182,12 +176,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     transferDesc
         .setIdentity(Name("tests/task_graph/packet_transfer"))
         .setMarkerLabel("Packet Transfer")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
-            false,
-            false,
-        })
     ;
     const Graphics::GpuTaskId transfer = graph.addTask<PacketLifecycleTask>(
         transferDesc,
@@ -218,12 +206,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     recoveryDesc
         .setIdentity(Name("tests/task_graph/packet_recovery"))
         .setMarkerLabel("Frame Recovery")
-        .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(recoveryScheduling)
         .setResourceUses(recoveryUses, LengthOf(recoveryUses))
     ;
@@ -245,7 +227,16 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuTaskQueueAssignmentOverride routes[] = {
+        { .task = first, .queue = queues[1u].id },
+        { .task = second, .queue = queues[0u].id },
+        { .task = transfer, .queue = queues[s_ThirdElementIndex].id },
+        { .task = recovery, .queue = queues[0u].id },
+    };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.queueAssignmentOptions.queueOverrides = routes;
+    options.queueAssignmentOptions.queueOverrideCount = LengthOf(routes);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
         const Graphics::GpuTaskGraph::DeclarationReadView& declarations = reads.declarations;
@@ -539,7 +530,7 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 
@@ -581,12 +572,7 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     );
     ASSERT_TRUE(orderingProducer.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
@@ -602,11 +588,10 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     producerDesc
         .setIdentity(Name("tests/task_graph/recording_frontier_state_seed_producer"))
         .setMarkerLabel("Recording Frontier State Seed Producer")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setResourceUses(&producerUse, 1u)
     ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
     ASSERT_TRUE(producer.valid());
 
     const Graphics::GpuTaskId consumerDependencies[] = { producer, orderingProducer };
@@ -620,12 +605,11 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     consumerDesc
         .setIdentity(Name("tests/task_graph/recording_frontier_state_seed_consumer"))
         .setMarkerLabel("Recording Frontier State Seed Consumer")
-        .setQueue(graphicsRequest)
         .setScheduling(scheduling)
         .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
         .setResourceUses(&consumerUse, 1u)
     ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, graphicsCommands);
     ASSERT_TRUE(consumer.valid());
 
     SingleQueueCompile singleQueueCompile(testArena);
@@ -709,7 +693,7 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
@@ -766,21 +750,11 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     );
     ASSERT_TRUE(generatedVertexBuffer.valid());
 
-    const Graphics::GpuQueueRequest graphicsComputeQueue{
-        QueueCapabilities(
+    const Graphics::GpuTaskCommandRequirements graphicsComputeQueue{ QueueCapabilities(
             Graphics::GpuQueueCapability::Graphics,
             Graphics::GpuQueueCapability::Compute
-        ),
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest graphicsRasterQueue{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
+        ) };
+    const Graphics::GpuTaskCommandRequirements graphicsRasterQueue{ Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Small;
     producerScheduling.overlapPreferred = false;
@@ -800,9 +774,9 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
         Graphics::GpuTaskDesc{}
             .setIdentity(Name("tests/task_graph/generated_vertex_producer"))
             .setMarkerLabel("Generate Vertex Buffer")
-            .setQueue(graphicsComputeQueue)
             .setScheduling(producerScheduling)
-            .setResourceUses(producerUses, LengthOf(producerUses))
+            .setResourceUses(producerUses, LengthOf(producerUses)),
+        graphicsComputeQueue
     );
     ASSERT_TRUE(producer.valid());
 
@@ -821,10 +795,10 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
         Graphics::GpuTaskDesc{}
             .setIdentity(Name("tests/task_graph/generated_vertex_raster"))
             .setMarkerLabel("Raster Generated Vertex Buffer")
-            .setQueue(graphicsRasterQueue)
             .setScheduling(rasterScheduling)
             .setDependencies(&producer, 1u)
-            .setResourceUses(rasterUses, LengthOf(rasterUses))
+            .setResourceUses(rasterUses, LengthOf(rasterUses)),
+        graphicsRasterQueue
     );
     ASSERT_TRUE(raster.valid());
 
@@ -854,7 +828,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
 

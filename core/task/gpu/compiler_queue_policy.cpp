@@ -227,21 +227,12 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return HasCapabilities(requiredCapabilities, GpuQueueCapability::Graphics);
 }
 
-[[nodiscard]] bool ShouldUseDedicatedCompute(const GpuTaskSchedulingHint& hint)noexcept{
-    return hint.cost != GpuTaskCostHint::Tiny
-        && hint.overlapPreferred
-        && !hint.avoidQueueCrossing
-    ;
-}
 
-[[nodiscard]] bool ShouldUseDedicatedTransfer(const GpuTaskSchedulingHint& hint)noexcept{
-    // Dedicated copies buy queue overlap only when their synchronization cost is plausibly amortized. Keep the same conservative threshold as Compute until per-packet timing feeds a richer queue score.
-    return ShouldUseDedicatedCompute(hint);
-}
 
-[[nodiscard]] bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept{
-    return (static_cast<u8>(request.requiredCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
-        && request.preferredQueue < GpuQueuePreference::kCount;
+[[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept{
+    return (static_cast<u8>(commands.requiredCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
+        && (static_cast<u8>(commands.alternativeCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
+        && (static_cast<u8>(commands.additionalAlternativeCapabilities) & ~s_ValidQueueCapabilityMask) == 0u;
 }
 
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{

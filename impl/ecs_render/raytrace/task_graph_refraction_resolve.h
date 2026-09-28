@@ -26,6 +26,8 @@ namespace RendererTaskGraphDetail{
 
 
 struct RefractionResolveGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererRayTracingSystem* system = nullptr;
         const DeferredFrameTargets* targets = nullptr;

@@ -54,6 +54,8 @@ namespace ECSRenderDetail{
 
 
 struct OpaqueCsgReceiverComputeEmulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -83,6 +85,8 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
 
 // Split interval-sample emulation only for distinct outputs; keep timing in one packet.
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
         RendererMaterialSystem* materialSystem = nullptr;

@@ -179,17 +179,12 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
 TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        true,
-        true,
-    };
-    const Graphics::GpuTaskId task = AddTaskWithQueue(
+    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/same_graph_recompile"),
         "Same Graph Recompile",
-        computeRequest
+        computeCommands
     );
     ASSERT_TRUE(task.valid());
 

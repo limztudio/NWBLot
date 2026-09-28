@@ -81,6 +81,7 @@ namespace Tests::Smoke{
 
 
 struct FramebufferCapture::ReadbackTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::Transfer };
     struct Payload{
         Core::TextureHandle source;
         Core::TextureSlice sourceSlice;
@@ -396,12 +397,6 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
     taskDesc
         .setIdentity(Name("tests.smoke.framebuffer_capture"))
         .setMarkerLabel("Framebuffer Capture Readback")
-        .setQueue(Core::GpuQueueRequest{
-            Core::GpuQueueCapability::Transfer | Core::GpuQueueCapability::Graphics,
-            Core::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
         .setScheduling(scheduling)
         .setDependencies(&previousTask, 1u)
         .setResourceUses(resourceUses, LengthOf(resourceUses))

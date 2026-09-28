@@ -6,7 +6,6 @@
 
 #include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_frame_recovery_task.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 
@@ -60,7 +59,6 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
         historyCopyDesc
             .setIdentity(Name("render.lagged_history_copy"))
             .setMarkerLabel("Lagged Lighting History Copy")
-            .setQueue(TransferQueueRequest())
             .setScheduling(historyCopyScheduling)
             .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
         ;
@@ -102,7 +100,6 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
     recoveryDesc
         .setIdentity(Name("render.frame_recovery"))
         .setMarkerLabel("Frame Recovery")
-        .setQueue(GraphicsQueueRequest())
         .setScheduling(recoveryScheduling)
         .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
     ;

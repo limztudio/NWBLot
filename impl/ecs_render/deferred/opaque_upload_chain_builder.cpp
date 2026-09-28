@@ -8,7 +8,6 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
-#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
@@ -43,7 +42,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
     const OpaqueUploadChainInputs& inputs,
     OpaqueUploadChainResult& outResult
 ){
-    using namespace RendererTaskGraphDetail;
     outResult = OpaqueUploadChainResult{};
     if(
         !inputs.targets
@@ -109,7 +107,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         instanceUploadDesc
             .setIdentity(Name("render.graphics_prefix.material_instances_upload"))
             .setMarkerLabel("Material Instances Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&materialDrawUploadTask, 1u)
         ;
@@ -130,7 +127,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         materialTypedUploadDesc
             .setIdentity(Name("render.graphics_prefix.material_typed_upload"))
             .setMarkerLabel("Material Typed Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&materialDrawUploadTask, 1u)
         ;
@@ -222,7 +218,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         receiverRangesUploadDesc
             .setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload"))
             .setMarkerLabel("CSG Receiver Ranges Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&csgFrameUploadTask, 1u)
         ;
@@ -243,7 +238,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         cuttersUploadDesc
             .setIdentity(Name("render.graphics_prefix.csg_cutters_upload"))
             .setMarkerLabel("CSG Cutters Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&csgFrameUploadTask, 1u)
         ;
@@ -262,7 +256,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         clipContextSlotsUploadDesc
             .setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload"))
             .setMarkerLabel("CSG Clip Context Slots Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&csgFrameUploadTask, 1u)
         ;
@@ -281,7 +274,6 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         intervalSampleStateUploadDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload"))
             .setMarkerLabel("CSG Interval Sample State Upload")
-            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(immutableUploadScheduling)
             .setDependencies(&csgFrameUploadTask, 1u)
         ;

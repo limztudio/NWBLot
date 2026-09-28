@@ -132,7 +132,7 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
     if(inOutText.size() < s_DebugHashTextLength)
         return;
 
-    BasicString<CharT, ArenaT> decoded(arena);
+    Optional<BasicString<CharT, ArenaT>> decoded;
     usize copiedUntil = 0u;
     const usize lastTokenOffset = inOutText.size() - s_DebugHashTextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
@@ -144,10 +144,12 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
             && DecodeDebugHashText(AStringView(hashText, s_DebugHashTextLength), hash)
             && Resolve(hash, resolvedText, sizeof(resolvedText))
         ){
-            if(copiedUntil == 0u)
-                decoded.reserve(inOutText.size());
-            decoded.append(inOutText.data() + copiedUntil, i - copiedUntil);
-            AppendResolvedText(arena, decoded, AStringView(resolvedText));
+            if(!decoded){
+                decoded.emplace(arena);
+                decoded->reserve(inOutText.size());
+            }
+            decoded->append(inOutText.data() + copiedUntil, i - copiedUntil);
+            AppendResolvedText(arena, *decoded, AStringView(resolvedText));
             i += s_DebugHashTextLength;
             copiedUntil = i;
             continue;
@@ -156,9 +158,9 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
         ++i;
     }
 
-    if(copiedUntil != 0u){
-        decoded.append(inOutText.data() + copiedUntil, inOutText.size() - copiedUntil);
-        inOutText = Move(decoded);
+    if(decoded){
+        decoded->append(inOutText.data() + copiedUntil, inOutText.size() - copiedUntil);
+        inOutText = Move(*decoded);
     }
 }
 

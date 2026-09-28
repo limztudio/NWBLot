@@ -46,6 +46,29 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         mesh.runtimeLocalBoundsHeapHandle = handle;
     }
 
+    if(
+        mesh.runtimeMesh && mesh.runtimeGeometryContentRevision != 0u && mesh.runtimeMeshletLocalBoundsBuffer
+        && !mesh.runtimeMeshletLocalBoundsHeapHandle.valid()
+    ){
+        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+        const Core::BufferDesc& desc = mesh.runtimeMeshletLocalBoundsBuffer->getCreationDescription();
+        const u64 requiredBytes = static_cast<u64>(mesh.meshletCount) * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
+        if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
+            const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+            if(handle.valid()){
+                if(heap.write(handle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
+                    mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
+                else
+                    heap.free(handle);
+            }
+        }
+        if(!mesh.runtimeMeshletLocalBoundsHeapHandle.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' could not register optional meshlet bounds; retaining whole-caster shadows")
+                , StringConvert(mesh.meshName.c_str())
+            );
+        }
+    }
+
     NWB_ASSERT(meshRenderBindingsReady(mesh));
     return true;
 }
@@ -373,6 +396,8 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
             heap.free(mesh.emulationVertexHeapHandle);
         if(mesh.runtimeLocalBoundsHeapHandle.valid())
             heap.free(mesh.runtimeLocalBoundsHeapHandle);
+        if(mesh.runtimeMeshletLocalBoundsHeapHandle.valid())
+            heap.free(mesh.runtimeMeshletLocalBoundsHeapHandle);
         if(mesh.objectGeometryCache.heapHandle.valid())
             heap.free(mesh.objectGeometryCache.heapHandle);
         mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -381,6 +406,7 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
         mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.objectGeometryCache.acceptedContent = false;
         return;
@@ -394,6 +420,7 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
     mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.objectGeometryCache.acceptedContent = false;
 }

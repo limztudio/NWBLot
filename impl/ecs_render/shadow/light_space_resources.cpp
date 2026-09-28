@@ -31,7 +31,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     if(state.m_pipelineFailed)
         return false;
     if(
-        snapshot.viewPipeline && snapshot.opaqueResolve && snapshot.transparentResolve
+        snapshot.viewPipeline && snapshot.cullPipeline && snapshot.opaqueResolve && snapshot.transparentResolve
         && snapshot.opaqueFallback && snapshot.transparentFallback && snapshot.shadePipeline
         && snapshot.opaqueCapture && snapshot.transparentCapture
         && (!csg || (snapshot.csgShadePipeline && snapshot.csgOpaqueResolve && snapshot.csgTransparentResolve
@@ -57,11 +57,11 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
         AssetsGraphicsShadow::s_LightSpaceShadeShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
         AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
-        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName };
+        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceCullShaderName };
     const Core::ShaderType::Mask stages[] = { Core::ShaderType::Compute, Core::ShaderType::Vertex, Core::ShaderType::Pixel,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
-        Core::ShaderType::Compute, Core::ShaderType::Compute };
+        Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute };
     const AStringView variants[] = { ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant,
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
@@ -71,8 +71,10 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1"),
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1") };
-    for(u32 index = 0u; index < (csg ? LengthOf(state.m_shaders) : 8u); ++index){
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1"), ::__hidden_light_space::s_DefaultLightVariant };
+    for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
+        if(!csg && index >= 8u && index <= 12u)
+            continue;
         if(
             !state.m_shaders[index] && !m_shaderSystem.loadShader(state.m_shaders[index], names[index], variants[index], stages[index],
             Name("ECSRender_LightSpaceShadow"))
@@ -83,9 +85,11 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     }
     Core::ComputePipelineHandle* outputs[] = { &snapshot.viewPipeline, &snapshot.opaqueResolve, &snapshot.transparentResolve,
         &snapshot.opaqueFallback, &snapshot.transparentFallback, &snapshot.shadePipeline, &snapshot.csgShadePipeline,
-        &snapshot.csgOpaqueResolve, &snapshot.csgTransparentResolve, &snapshot.csgOpaqueFallback, &snapshot.csgTransparentFallback };
-    const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u };
-    for(u32 index = 0u; index < (csg ? LengthOf(outputs) : 6u); ++index){
+        &snapshot.csgOpaqueResolve, &snapshot.csgTransparentResolve, &snapshot.csgOpaqueFallback, &snapshot.csgTransparentFallback, &snapshot.cullPipeline };
+    const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u };
+    for(u32 index = 0u; index < LengthOf(outputs); ++index){
+        if(!csg && index >= 6u && index <= 10u)
+            continue;
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;

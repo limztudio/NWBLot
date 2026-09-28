@@ -3,7 +3,6 @@
 
 
 #include "light_space_scene.slangi"
-#include "light_space_cull.slangi"
 
 #define NWB_LIGHT_SPACE_DEFERRED NwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
@@ -138,7 +137,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!nwbLightSpaceBuildView(view))
         view.depthRange.w = 0.0;
     nwbLightSpaceStoreView(dispatchThreadID.x, view);
-    nwbLightSpaceWriteDrawArguments(view, dispatchThreadID.x);
 }
 
 

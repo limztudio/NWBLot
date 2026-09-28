@@ -60,6 +60,7 @@ inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pr
         && mesh.triangleIndexBuffer == desc.triangleIndexBuffer
         && mesh.attributeBuffer == desc.attributeBuffer
         && mesh.runtimeLocalBoundsBuffer == desc.localBoundsBuffer
+        && mesh.runtimeMeshletLocalBoundsBuffer == desc.meshletLocalBoundsBuffer
         && mesh.meshletCount == desc.meshletCount
         && mesh.meshletPrimitiveIndexCount == desc.meshletPrimitiveIndexCount
     ;
@@ -595,6 +596,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.triangleIndexBuffer = desc.triangleIndexBuffer;
     createdMesh.attributeBuffer = desc.attributeBuffer;
     createdMesh.runtimeLocalBoundsBuffer = desc.localBoundsBuffer;
+    createdMesh.runtimeMeshletLocalBoundsBuffer = desc.meshletLocalBoundsBuffer;
     createdMesh.blasBuildPending = (desc.triangleIndexBuffer != nullptr);
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.meshletPrimitiveIndexCount = desc.meshletPrimitiveIndexCount;

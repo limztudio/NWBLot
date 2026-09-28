@@ -362,6 +362,39 @@ TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCur
     EXPECT_TRUE(description.dynamicMeshletConesFresh);
 }
 
+TEST(RuntimeMeshPruning, AcceptedDeformationPublishesWholeAndMeshletBoundsTogether){
+    PruneContext context;
+    const auto entity = context.addBinding();
+    auto& instance = context.world.entity(entity).getComponent<RuntimePayload>().instance;
+    RuntimeMeshDesc description;
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, false, false, description));
+    EXPECT_EQ(description.geometryContentRevision, 0u);
+    EXPECT_EQ(description.localBoundsBuffer, nullptr);
+    EXPECT_EQ(description.meshletLocalBoundsBuffer, nullptr);
+
+    const MeshSkinningDeformationInputs inputs{
+        .resourceSlotsBuffer = context.buffer,
+        .editRevision = instance.editRevision,
+    };
+    const u64 candidate = instance.deformationState.stage(inputs, nullptr, 0u);
+    ASSERT_NE(candidate, 0u);
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, false, false, description));
+    EXPECT_EQ(description.meshletLocalBoundsBuffer, nullptr);
+    ASSERT_TRUE(instance.deformationState.accept(candidate));
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, false, false, description));
+    EXPECT_NE(description.geometryContentRevision, 0u);
+    EXPECT_EQ(description.localBoundsBuffer, instance.localBoundsBuffer);
+    EXPECT_EQ(description.meshletLocalBoundsBuffer, instance.meshletLocalBoundsBuffer);
+    EXPECT_EQ(description.meshletDescBuffer, instance.meshletDescBuffer);
+    EXPECT_EQ(description.meshletCount, instance.meshlets.size());
+
+    instance.deformationState.invalidateCurrent();
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, false, false, description));
+    EXPECT_EQ(description.geometryContentRevision, 0u);
+    EXPECT_EQ(description.localBoundsBuffer, nullptr);
+    EXPECT_EQ(description.meshletLocalBoundsBuffer, nullptr);
+}
+
 TEST(RuntimeMeshPruning, StaticResourcesAvoidProviderQueriesAndMissingSystemRetiresOnlyRuntimeMeshes){
     PruneContext context;
     Core::Alloc::ScratchArena scratch(Name("tests/runtime_mesh_pruning/static_scratch"));

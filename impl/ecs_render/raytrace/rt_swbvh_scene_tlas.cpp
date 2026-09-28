@@ -236,10 +236,25 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
         if(!commandList && m_lightSpaceShadow.m_csg.gathering){
             AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, LoadFloat(instanceDesc.transform), mesh);
-            m_lightSpaceShadow.m_casters.push_back({ meshInstanceIndex, mesh.meshletPrimitiveIndexCount, transparent, false, mesh.triangleIndexBuffer });
+            m_lightSpaceShadow.m_casters.push_back({
+                .instanceIndex = meshInstanceIndex,
+                .indexCount = mesh.meshletPrimitiveIndexCount,
+                .transparent = transparent,
+                .csg = false,
+                .triangleIndexBuffer = mesh.triangleIndexBuffer,
+                .meshletCount = mesh.meshletCount,
+                .meshletDescSlot = mesh.meshletCount != 0u ? mesh.meshletDescHeapHandle.slot() : 0u,
+                .meshletBoundsSlot = mesh.meshletCount != 0u ? mesh.meshletLocalBoundsHeapHandle.slot() : 0u,
+                .meshletDescBuffer = mesh.meshletDescBuffer,
+                .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
+            });
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
+            if(mesh.meshletCount != 0u){
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletDescBuffer);
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletLocalBoundsBuffer);
+            }
             if(mesh.runtimeLocalBoundsBuffer)
                 m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.runtimeLocalBoundsBuffer);
             if(mesh.swBvhNodeBuffer)
@@ -547,6 +562,11 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             Fnv64AppendValue(captureIdentity, csg.identity);
             for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
                 Fnv64AppendValue(captureIdentity, buffer.get());
+            for(const auto& caster : m_lightSpaceShadow.m_casters){
+                Fnv64AppendValue(captureIdentity, caster.meshletCount);
+                Fnv64AppendValue(captureIdentity, caster.meshletDescSlot);
+                Fnv64AppendValue(captureIdentity, caster.meshletBoundsSlot);
+            }
             bool captureTrusted = staticScene && contentComplete;
             if(
                 m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame

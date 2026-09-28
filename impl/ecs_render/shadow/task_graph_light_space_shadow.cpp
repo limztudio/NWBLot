@@ -11,6 +11,8 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/gpu_timing.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -121,26 +123,55 @@ struct ShadeTask{
     }
 };
 
+struct CasterPayload{
+    Core::GraphicsRuntime& graphics;
+    const bool& shadowPrepared;
+    LightSpaceShadowSnapshot snapshot;
+    Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> casters;
+
+    explicit CasterPayload(const LightSpaceShadowGraphInputs& inputs)
+        : graphics(inputs.graphics)
+        , shadowPrepared(inputs.shadowPrepared)
+        , snapshot(inputs.snapshot)
+        , casters(inputs.arena)
+    {
+        casters.assign(inputs.snapshot.casters, inputs.snapshot.casters + inputs.snapshot.casterCount);
+        snapshot.casters = nullptr;
+        snapshot.casterCount = 0u;
+    }
+
+    [[nodiscard]] LightSpaceShadowSnapshot frozenSnapshot()const{
+        LightSpaceShadowSnapshot result = snapshot;
+        result.casters = casters.data();
+        result.casterCount = casters.size();
+        return result;
+    }
+};
+
+struct CullTask{
+    using Payload = CasterPayload;
+
+    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        if(context.commandIrCapture)
+            return false;
+        if(!payload.shadowPrepared)
+            return true;
+        Core::GpuTimingMeasure timing(
+            payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowCull, payload.graphics.getDevice(), commandList
+        );
+
+        return RecordLightSpaceCull(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.frozenSnapshot());
+    }
+};
+
 struct CaptureTask{
-    struct Payload{
-        Core::GraphicsRuntime& graphics;
-        const bool& shadowPrepared;
-        LightSpaceShadowSnapshot snapshot;
-        Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> casters;
+    struct Payload : CasterPayload{
         bool transparent;
 
         Payload(const LightSpaceShadowGraphInputs& inputs, const bool transparent)
-            : graphics(inputs.graphics)
-            , shadowPrepared(inputs.shadowPrepared)
-            , snapshot(inputs.snapshot)
-            , casters(inputs.arena)
+            : CasterPayload(inputs)
             , transparent(transparent)
-        {
-            casters.reserve(inputs.snapshot.casterCount);
-            casters.assign(inputs.snapshot.casters, inputs.snapshot.casters + inputs.snapshot.casterCount);
-            snapshot.casters = nullptr;
-            snapshot.casterCount = 0u;
-        }
+        {}
     };
 
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
@@ -148,9 +179,7 @@ struct CaptureTask{
             return false;
         if(!payload.shadowPrepared)
             return true;
-        LightSpaceShadowSnapshot snapshot = payload.snapshot;
-        snapshot.casters = payload.casters.data();
-        snapshot.casterCount = payload.casters.size();
+        const LightSpaceShadowSnapshot snapshot = payload.frozenSnapshot();
         const auto& scope = payload.transparent
             ? RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture : RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture;
         Core::GpuTimingMeasure timing(payload.graphics.gpuTiming(), scope, payload.graphics.getDevice(), commandList);
@@ -273,7 +302,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     if(csg)
         uses.push_back(ReadUse(result.csgContext, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(result.views, Core::ResourceStates::UnorderedAccess));
-    uses.push_back(WriteUse(result.drawArguments, Core::ResourceStates::UnorderedAccess));
     Core::GpuTaskDesc viewDesc;
     viewDesc
         .setIdentity(Name("render.light_space_shadow.view_fit"))
@@ -292,6 +320,46 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     if(!result.viewFit.valid())
         return {};
 
+    uses.pop_back();
+    uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
+    uses.push_back(WriteUse(result.drawArguments, Core::ResourceStates::UnorderedAccess));
+    for(usize index = 0u; index < snapshot.casterCount; ++index){
+        const auto& caster = snapshot.casters[index];
+        if(caster.meshletCount == 0u)
+            continue;
+        const Core::BufferHandle buffers[] = { caster.meshletDescBuffer, caster.meshletBoundsBuffer };
+        for(const auto& buffer : buffers){
+            if(!buffer)
+                return {};
+            Core::GpuGraphResourceId resource;
+            {
+                const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+                resource = declarations.findImportedBuffer(buffer);
+            }
+            if(!resource.valid())
+                resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "Light-Space Meshlet Bounds");
+            if(!resource.valid())
+                return {};
+            if(FindIf(uses.begin(), uses.end(), [&](const auto& use){ return use.resource == resource; }) == uses.end())
+                uses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
+    }
+    Core::GpuTaskDesc cullDesc;
+    cullDesc
+        .setIdentity(Name("render.light_space_shadow.draw_cull"))
+        .setMarkerLabel("Light-Space Meshlet Cull")
+        .setQueue(GraphicsPreferredComputeQueueRequest())
+        .setScheduling(scheduling)
+        .setDependencies(&result.viewFit, 1u)
+        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
+        .setResourceUses(uses.data(), uses.size())
+        .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
+    ;
+    result.drawCull = graph.addTask<__hidden_task_graph_light_space_shadow::CullTask>(cullDesc,
+        __hidden_task_graph_light_space_shadow::CullTask::Payload(inputs));
+    if(!result.drawCull.valid())
+        return {};
+
     const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, snapshot.plan.viewCount };
     if(!__hidden_task_graph_light_space_shadow::GatherCaptureReads(graph, inputs, uses))
         return {};
@@ -307,7 +375,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setMarkerLabel("Light-Space Opaque Capture")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
-        .setDependencies(&result.viewFit, 1u)
+        .setDependencies(&result.drawCull, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses.data(), uses.size())
     ;

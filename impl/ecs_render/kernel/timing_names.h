@@ -42,6 +42,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowCull("render.shadow.light_space_cull");
 inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowViews("render.shadow.light_space_views");
 inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowOpaqueCapture("render.shadow.light_space_opaque_capture");
 inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowTransparentCapture("render.shadow.light_space_transparent_capture");

@@ -51,11 +51,19 @@ struct CaptureContext{
     Core::GpuTaskId receiver;
     bool shadowPrepared = true;
 
+
+public:
     CaptureContext(){
         snapshot.counts = makeBuffer(Name("tests/light_space/counts"));
         snapshot.events = makeBuffer(Name("tests/light_space/events"));
         snapshot.views = makeBuffer(Name("tests/light_space/views"));
         snapshot.drawArguments = makeBuffer(Name("tests/light_space/draw_arguments"));
+        caster.triangleIndexBuffer = makeBuffer(Name("tests/light_space/triangle_indices"));
+        caster.meshletDescBuffer = makeBuffer(Name("tests/light_space/meshlet_descriptors"));
+        caster.meshletBoundsBuffer = makeBuffer(Name("tests/light_space/meshlet_bounds"));
+        caster.indexCount = 36u;
+        caster.meshletCount = 3u;
+        snapshot.push.captureDrawCount = LightSpaceShadowDrawCount(&caster, 1u);
         Core::TextureDesc depth;
         depth
             .setName(Name("tests/light_space/depth")).setWidth(32u).setHeight(32u).setArraySize(1u)
@@ -77,6 +85,8 @@ struct CaptureContext{
         Access::validateStateHandoff(acceptedState, 1u);
     }
 
+
+public:
     [[nodiscard]] Core::BufferHandle makeBuffer(const Name identity){
         Core::BufferDesc description;
         description
@@ -87,17 +97,34 @@ struct CaptureContext{
         return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
     }
 
-    [[nodiscard]] LightSpaceShadowGraph declareReuse(){
+    [[nodiscard]] LightSpaceShadowGraph declareMaps(const bool reuse){
+        snapshot.captureTicket.reuse = reuse;
+        Core::GpuTaskResourceUse sceneReads[3];
+        Core::GpuTaskResourceUse boundsWrite;
+        if(!reuse){
+            const Core::BufferHandle buffers[] = { caster.triangleIndexBuffer, caster.meshletDescBuffer, caster.meshletBoundsBuffer };
+            for(usize index = 0u; index < LengthOf(buffers); ++index){
+                const auto resource = graph.importBuffer(buffers[index],
+                    RendererTaskGraphDetail::BufferResourceDesc(buffers[index]->getCreationDescription().debugName, "Capture Scene Buffer")
+                        .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
+                if(!resource.valid())
+                    return {};
+                sceneReads[index] = RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource);
+            }
+            boundsWrite = RendererTaskGraphDetail::WriteUse(sceneReads[2u].resource, Core::ResourceStates::UnorderedAccess);
+        }
         Core::GpuTaskDesc prefixDesc;
         prefixDesc
             .setIdentity(Name("tests/light_space/prefix")).setMarkerLabel("Current Frame Prefix")
             .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
+            .setResourceUses(&boundsWrite, reuse ? 0u : 1u)
         ;
         prefix = graph.addTask(prefixDesc);
         const Core::GpuTaskExternalStateSource sources[] = { { .states = &acceptedState } };
         const LightSpaceShadowGraph maps = DeclareLightSpaceShadowMaps(graph, LightSpaceShadowGraphInputs{
             .graphics = graphics, .arena = testArena.arena, .scratchArena = scratch, .shadowPrepared = shadowPrepared,
-            .snapshot = snapshot, .dependency = prefix, .stateSources = sources, .stateSourceCount = 1u,
+            .snapshot = snapshot, .dependency = prefix, .sceneReads = sceneReads, .sceneReadCount = reuse ? 0u : LengthOf(sceneReads),
+            .stateSources = sources, .stateSourceCount = 1u,
         });
         if(!maps.valid())
             return maps;
@@ -122,7 +149,7 @@ struct CaptureContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ExpectCompilation(CaptureContext& context, const bool expected){
+void ExpectCompilation(CaptureContext& context, const bool expected, const LightSpaceShadowGraph* const maps = nullptr){
     const Core::GpuPhysicalQueueInfo queue{
         .familyIndex = 0u, .queueIndex = 0u, .id = { .index = 0u, .deviceGeneration = 1u },
         .queueClass = Core::CommandQueue::Graphics,
@@ -152,7 +179,33 @@ void ExpectCompilation(CaptureContext& context, const bool expected){
         if(barrier.resource == depth && barrier.before == Core::ResourceStates::Unknown && barrier.isGraphInitialState)
             requiresAcceptedDepthState = true;
     }
-    EXPECT_TRUE(requiresAcceptedDepthState);
+    EXPECT_EQ(requiresAcceptedDepthState, maps == nullptr);
+    if(!maps)
+        return;
+    const auto cull = plan.findTask(maps->drawCull);
+    const auto capture = plan.findTask(maps->opaqueCapture);
+    ASSERT_TRUE(cull.valid());
+    ASSERT_TRUE(capture.valid());
+    bool publishesFittedViews = false;
+    for(u32 index = 0u; index < cull.plan->prologueBarrierCount; ++index){
+        const auto& barrier = cull.prologueBarriers[index];
+        if(
+            barrier.resource == maps->views && barrier.before == Core::ResourceStates::UnorderedAccess
+            && barrier.after == Core::ResourceStates::ShaderResource
+        )
+            publishesFittedViews = true;
+    }
+    EXPECT_TRUE(publishesFittedViews);
+    bool publishesDrawArguments = false;
+    for(u32 index = 0u; index < capture.plan->prologueBarrierCount; ++index){
+        const auto& barrier = capture.prologueBarriers[index];
+        if(
+            barrier.resource == maps->drawArguments && barrier.before == Core::ResourceStates::UnorderedAccess
+            && barrier.after == Core::ResourceStates::IndirectArgument
+        )
+            publishesDrawArguments = true;
+    }
+    EXPECT_TRUE(publishesDrawArguments);
 }
 
 
@@ -161,7 +214,7 @@ void ExpectCompilation(CaptureContext& context, const bool expected){
 
 TEST(LightSpaceCaptureGraph, ReuseCompilesWithoutCaptureOnlyImportsAndRetainsAcceptedDepthProof){
     CaptureContext context;
-    const auto maps = context.declareReuse();
+    const auto maps = context.declareMaps(true);
     ASSERT_TRUE(maps.valid());
     ASSERT_TRUE(context.receiver.valid());
     EXPECT_EQ(maps.ready, context.prefix);
@@ -169,12 +222,16 @@ TEST(LightSpaceCaptureGraph, ReuseCompilesWithoutCaptureOnlyImportsAndRetainsAcc
     EXPECT_FALSE(maps.viewUpload.valid());
     EXPECT_FALSE(maps.countsClear.valid());
     EXPECT_FALSE(maps.viewFit.valid());
+    EXPECT_FALSE(maps.drawCull.valid());
     EXPECT_FALSE(maps.opaqueCapture.valid());
     EXPECT_FALSE(maps.transparentCapture.valid());
     EXPECT_FALSE(maps.shade.valid());
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
         EXPECT_FALSE(declarations.findImportedBuffer(context.snapshot.drawArguments).valid());
+        EXPECT_FALSE(declarations.findImportedBuffer(context.caster.triangleIndexBuffer).valid());
+        EXPECT_FALSE(declarations.findImportedBuffer(context.caster.meshletDescBuffer).valid());
+        EXPECT_FALSE(declarations.findImportedBuffer(context.caster.meshletBoundsBuffer).valid());
         EXPECT_EQ(declarations.uploadBlobCount(), 0u);
         EXPECT_EQ(declarations.taskCount(), 2u);
         const auto receiver = declarations.taskAt(context.receiver.index);
@@ -199,9 +256,75 @@ TEST(LightSpaceCaptureGraph, ReuseCompilesWithoutCaptureOnlyImportsAndRetainsAcc
     ASSERT_NO_FATAL_FAILURE(ExpectCompilation(context, true));
 }
 
+TEST(LightSpaceCaptureGraph, RefreshOrdersMeshletCullingBetweenFittedViewsAndIndirectCapture){
+    CaptureContext context;
+    const auto maps = context.declareMaps(false);
+    ASSERT_TRUE(maps.valid());
+    ASSERT_TRUE(maps.drawCull.valid());
+    ASSERT_TRUE(maps.opaqueCapture.valid());
+    ASSERT_TRUE(maps.transparentCapture.valid());
+    const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
+    const auto cull = declarations.taskAt(maps.drawCull.index);
+    ASSERT_EQ(cull.dependencyCount, 1u);
+    EXPECT_EQ(cull.dependencies[0u], maps.viewFit);
+    const Core::GpuGraphResourceId reads[] = {
+        maps.views,
+        declarations.findImportedBuffer(context.caster.meshletDescBuffer),
+        declarations.findImportedBuffer(context.caster.meshletBoundsBuffer),
+    };
+    for(const auto resource : reads){
+        ASSERT_TRUE(resource.valid());
+        bool found = false;
+        for(usize index = 0u; index < cull.resourceUseCount; ++index){
+            const auto& use = cull.resourceUses[index];
+            if(
+                use.resource == resource && use.access == Core::GpuTaskResourceAccess::Read
+                && use.requiredState == Core::ResourceStates::ShaderResource
+            )
+                found = true;
+        }
+        EXPECT_TRUE(found);
+    }
+    bool writesDrawArguments = false;
+    for(usize index = 0u; index < cull.resourceUseCount; ++index){
+        const auto& use = cull.resourceUses[index];
+        if(
+            use.resource == maps.drawArguments && use.access == Core::GpuTaskResourceAccess::Write
+            && use.requiredState == Core::ResourceStates::UnorderedAccess
+        )
+            writesDrawArguments = true;
+    }
+    EXPECT_TRUE(writesDrawArguments);
+    const auto canonicalIndices = declarations.findImportedBuffer(context.caster.triangleIndexBuffer);
+    const Core::GpuTaskId captures[] = { maps.opaqueCapture, maps.transparentCapture };
+    for(usize index = 0u; index < LengthOf(captures); ++index){
+        const auto capture = declarations.taskAt(captures[index].index);
+        ASSERT_EQ(capture.dependencyCount, 1u);
+        EXPECT_EQ(capture.dependencies[0u], index == 0u ? maps.drawCull : maps.opaqueCapture);
+        bool readsDrawArguments = false;
+        bool readsCanonicalIndices = false;
+        for(usize useIndex = 0u; useIndex < capture.resourceUseCount; ++useIndex){
+            const auto& use = capture.resourceUses[useIndex];
+            if(
+                use.resource == maps.drawArguments && use.access == Core::GpuTaskResourceAccess::Read
+                && use.requiredState == Core::ResourceStates::IndirectArgument
+            )
+                readsDrawArguments = true;
+            if(
+                use.resource == canonicalIndices && use.access == Core::GpuTaskResourceAccess::Read
+                && use.requiredState == (Core::ResourceStates::ShaderResource | Core::ResourceStates::IndexBuffer)
+            )
+                readsCanonicalIndices = true;
+        }
+        EXPECT_TRUE(readsDrawArguments);
+        EXPECT_TRUE(readsCanonicalIndices);
+    }
+    ASSERT_NO_FATAL_FAILURE(ExpectCompilation(context, true, &maps));
+}
+
 TEST(LightSpaceCaptureGraph, UntouchedDrawArgumentExportReproducesTheRejectedReuseGraph){
     CaptureContext context;
-    ASSERT_TRUE(context.declareReuse().valid());
+    ASSERT_TRUE(context.declareMaps(true).valid());
     const auto importedArguments = context.graph.importBuffer(context.snapshot.drawArguments,
         RendererTaskGraphDetail::BufferResourceDesc(Name("tests/light_space/unused_arguments"), "Unused Capture Draw Arguments")
             .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));

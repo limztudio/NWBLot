@@ -277,19 +277,19 @@ TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
 }
 
 
-TEST(LightSpacePlan, ChargesActualCasterArgumentsAndEnforcesTheirDescriptorRange){
+TEST(LightSpacePlan, ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange){
     SoftwareShadowSettings settings;
     settings.directionalResolution = 32u;
     settings.memoryBudgetBytes = 16u * 1024u * 1024u;
     const LightSpaceLightRequest light{};
-    constexpr u32 casterCount = 65536u;
-    constexpr u64 argumentBytes = static_cast<u64>(casterCount) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
+    constexpr u32 drawCount = 65536u;
+    constexpr u64 argumentBytes = static_cast<u64>(drawCount) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
     LightSpacePlan plan;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, argumentBytes, casterCount, plan));
+    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, argumentBytes, drawCount, plan));
     ASSERT_EQ(plan.lightCount, 1u);
     EXPECT_EQ(plan.drawArgumentByteSize, argumentBytes);
     EXPECT_EQ(plan.totalByteSize, plan.eventByteSize + plan.countByteSize + plan.viewByteSize + plan.depthByteSize + argumentBytes);
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, argumentBytes - 1u, casterCount, plan));
+    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, argumentBytes - 1u, drawCount, plan));
     EXPECT_EQ(plan.lightCount, 0u);
     plan.totalByteSize = 123u;
     EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 0u, plan));

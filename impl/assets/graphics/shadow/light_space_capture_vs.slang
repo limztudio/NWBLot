@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID){
+NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID, uint primitiveBase : SV_StartInstanceLocation){
     NwbLightSpaceCaptureVertex output = (NwbLightSpaceCaptureVertex)0;
     output.position = float4(2.0, 2.0, 2.0, 1.0);
     const NwbLightSpaceView view = nwbLightSpaceLoadView(g_NwbLightSpacePush.viewIndex);
@@ -20,6 +20,7 @@ NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID){
     const float3 local = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(vertex * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     output.worldPosition = nwbLightSpaceWorldPosition(local, g_NwbLightSpacePush.instanceIndex);
     output.position = nwbLightSpaceProject(view, output.worldPosition);
+    output.primitiveBase = primitiveBase;
     return output;
 }
 

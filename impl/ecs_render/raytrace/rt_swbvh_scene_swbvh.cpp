@@ -36,13 +36,13 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, false);
-    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? 5u : 3u));
+    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? 7u : 5u));
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
     Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::ScratchArena> sceneRefitInputs{ scratchArena };
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sceneRefitRoots{ scratchArena };
-    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> lightSpaceIndexBuffers{ scratchArena };
+    Vector<LightSpaceShadowCaster, Core::Alloc::ScratchArena> lightSpaceCasters{ scratchArena };
     Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
     // Parallel material records index scene-BVH leaves.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -59,7 +59,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
     sceneRefitRoots.reserve(candidateCount);
-    lightSpaceIndexBuffers.reserve(candidateCount);
+    lightSpaceCasters.reserve(candidateCount);
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
@@ -282,6 +282,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         Fnv64AppendValue(captureSceneIdentity, mesh.positionBuffer.get());
         Fnv64AppendValue(captureSceneIdentity, mesh.triangleIndexBuffer.get());
         Fnv64AppendValue(captureSceneIdentity, mesh.attributeBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletCount);
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletDescBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletLocalBoundsBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletDescHeapHandle.value);
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletLocalBoundsHeapHandle.value);
         Fnv64AppendValue(captureSceneIdentity, mesh.meshletPrimitiveIndexCount);
         Fnv64AppendValue(captureSceneIdentity, mesh.runtimeMeshVersion);
         Fnv64AppendValue(captureSceneIdentity, mesh.runtimeGeometryContentRevision);
@@ -294,6 +299,10 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
+        if(mesh.meshletCount != 0u){
+            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletDescBuffer);
+            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletLocalBoundsBuffer);
+        }
         if(m_lightSpaceShadow.m_csg.gathering){
             if(mesh.runtimeLocalBoundsBuffer)
                 m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.runtimeLocalBoundsBuffer);
@@ -304,7 +313,14 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, mesh);
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
-        lightSpaceIndexBuffers.push_back(mesh.triangleIndexBuffer);
+        lightSpaceCasters.push_back({
+            .triangleIndexBuffer = mesh.triangleIndexBuffer,
+            .meshletCount = mesh.meshletCount,
+            .meshletDescSlot = mesh.meshletCount != 0u ? mesh.meshletDescHeapHandle.slot() : 0u,
+            .meshletBoundsSlot = mesh.meshletCount != 0u ? mesh.meshletLocalBoundsHeapHandle.slot() : 0u,
+            .meshletDescBuffer = mesh.meshletDescBuffer,
+            .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
+        });
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
@@ -329,7 +345,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_lightSpaceShadow.m_casters.reserve(instanceCount);
     for(u32 index = 0u; index < instanceCount; ++index){
         const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * 3u;
-        const Core::BufferHandle& indexBuffer = lightSpaceIndexBuffers[index];
+        LightSpaceShadowCaster& caster = lightSpaceCasters[index];
+        const Core::BufferHandle& indexBuffer = caster.triangleIndexBuffer;
         if(
             indexCount == 0u || indexCount > Limit<u32>::s_Max || !indexBuffer
             || !indexBuffer->getCreationDescription().isIndexBuffer
@@ -339,8 +356,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         const bool csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
         if(csgReceiver)
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
-        m_lightSpaceShadow.m_casters.push_back({ index, static_cast<u32>(indexCount),
-            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u, csgReceiver, indexBuffer });
+        caster.instanceIndex = index;
+        caster.indexCount = static_cast<u32>(indexCount);
+        caster.transparent = (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
+        caster.csg = csgReceiver;
+        m_lightSpaceShadow.m_casters.push_back(Move(caster));
     }
     if(instanceCount == 0u){
         m_rayTracingState.m_sceneBvhInstanceCount = 0u;

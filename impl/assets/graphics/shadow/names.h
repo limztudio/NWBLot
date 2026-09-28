@@ -43,6 +43,7 @@ inline constexpr Name s_HardwareTransparentGatherShaderName("engine/graphics/sha
 inline constexpr Name s_HardwareTransparentEvaluateShaderName("engine/graphics/shadow/hardware_transparent_evaluate_cs");
 inline constexpr Name s_HardwareTransparentOverflowShaderName("engine/graphics/shadow/hardware_transparent_overflow_cs");
 inline constexpr Name s_LightSpaceViewShaderName("engine/graphics/shadow/light_space_view_cs");
+inline constexpr Name s_LightSpaceCullShaderName("engine/graphics/shadow/light_space_cull_cs");
 inline constexpr Name s_LightSpaceCaptureVertexShaderName("engine/graphics/shadow/light_space_capture_vs");
 inline constexpr Name s_LightSpaceCapturePixelShaderName("engine/graphics/shadow/light_space_capture_ps");
 inline constexpr Name s_LightSpaceResolveShaderName("engine/graphics/shadow/light_space_resolve_cs");

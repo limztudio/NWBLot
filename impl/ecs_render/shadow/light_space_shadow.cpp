@@ -9,6 +9,7 @@
 
 #include <core/graphics/vulkan/backend.h>
 #include <global/hash_utils.h>
+#include <global/limit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +30,24 @@ bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceSha
         && plan.textureResolution <= capacity.textureResolution
         && plan.viewCount <= capacity.arrayLayers
     ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* const casters, const usize casterCount)noexcept{
+    if(casterCount != 0u && !casters)
+        return 0u;
+    u64 drawCount = 0u;
+    for(usize index = 0u; index < casterCount; ++index){
+        const u32 meshletCount = casters[index].meshletCount;
+        drawCount += meshletCount == 0u ? 1u : meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW
+            + (meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
+        if(drawCount > Limit<u32>::s_Max)
+            return 0u;
+    }
+    return static_cast<u32>(drawCount);
 }
 
 
@@ -117,7 +136,7 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
     }
     return
         BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
-            static_cast<u32>(state.m_casters.size()), plan, state.m_csg.snapshot.hasCsg)
+            LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), plan, state.m_csg.snapshot.hasCsg)
         && plan.viewCount != 0u
     ;
 }
@@ -147,7 +166,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     auto& snapshot = state.m_snapshot;
     snapshot.ready = false;
     if(
-        !state.m_resourcesPrepared || !snapshot.layout || !snapshot.viewPipeline || !snapshot.opaqueResolve
+        !state.m_resourcesPrepared || !snapshot.layout || !snapshot.viewPipeline || !snapshot.cullPipeline || !snapshot.opaqueResolve
         || !snapshot.transparentResolve || !snapshot.opaqueFallback || !snapshot.transparentFallback || !snapshot.shadePipeline
         || !snapshot.opaqueCapture || !snapshot.transparentCapture
         || !snapshot.counts || !snapshot.events || !snapshot.views || !snapshot.drawArguments || !snapshot.depth
@@ -207,6 +226,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.eventsSlot = snapshot.eventsDescriptor.slot();
     snapshot.push.depthSlot = snapshot.depthDescriptor.slot();
     snapshot.push.instanceCount = static_cast<u32>(state.m_casters.size());
+    snapshot.push.captureDrawCount = LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size());
     snapshot.push.width = targets.width;
     snapshot.push.receiverFactor = targets.shadowReceiverFactor;
     snapshot.push.height = targets.height;

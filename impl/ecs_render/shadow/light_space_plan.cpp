@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 
 bool BuildLightSpacePlan(
     const SoftwareShadowSettings& settings, const LightSpaceLightRequest* const requests, const usize requestCount,
-    const u64 maxStorageBufferRange, const u32 casterCount, LightSpacePlan& outPlan, const bool csgIntervalDepth){
+    const u64 maxStorageBufferRange, const u32 drawCount, LightSpacePlan& outPlan, const bool csgIntervalDepth){
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT || (requestCount != 0u && !requests))
         return false;
     u32 seenSlots = 0u;
@@ -44,7 +44,7 @@ bool BuildLightSpacePlan(
         const auto& request = requests[index];
         if(!request.eligible || request.type == Scene::LightType::Spot)
             continue;
-        if(casterCount == 0u)
+        if(drawCount == 0u)
             return false;
         const bool point = request.type == Scene::LightType::Point;
         const u32 resolution = point ? settings.pointResolution : settings.directionalResolution;
@@ -58,7 +58,7 @@ bool BuildLightSpacePlan(
         // Every D32 array layer uses the largest selected extent, even when its viewport is smaller.
         const u64 depthBytes = static_cast<u64>(textureResolution) * textureResolution * newViewCount * sizeof(f32);
         const u64 viewBytes = static_cast<u64>(newViewCount) * sizeof(LightSpaceViewGpu);
-        const u64 drawArgumentBytes = static_cast<u64>(newViewCount) * casterCount * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
+        const u64 drawArgumentBytes = static_cast<u64>(newViewCount) * drawCount * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
         const u64 totalBytes = eventBytes + countBytes + depthBytes + viewBytes + drawArgumentBytes
             + (csgIntervalDepth ? countBytes : 0u);
         if(

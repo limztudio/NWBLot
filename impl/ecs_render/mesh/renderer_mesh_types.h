@@ -66,6 +66,8 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle runtimeLocalBoundsBuffer;
     Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::BufferHandle runtimeMeshletLocalBoundsBuffer;
+    Core::GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
     // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.

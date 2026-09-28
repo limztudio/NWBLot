@@ -77,6 +77,11 @@ void AppendLightSpaceCsgReceiver(
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.positionBuffer.get());
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.triangleIndexBuffer.get());
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.attributeBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletCount);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletDescBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletLocalBoundsBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletDescHeapHandle.value);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletLocalBoundsHeapHandle.value);
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsBuffer.get());
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsHeapHandle);
     Fnv64AppendValue(state.captureGeometryIdentity, mesh.swBvhNodeBuffer.get());

@@ -33,6 +33,37 @@ namespace __hidden_mesh_raytracing_snapshots{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] bool RuntimeMeshletBoundsReady(const MeshResources& mesh){
+    const Core::GpuDescriptorHandle descriptor = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
+    const Core::GpuDescriptorHandle bounds = mesh.runtimeMeshletLocalBoundsHeapHandle;
+    if(
+        !mesh.runtimeMesh || mesh.runtimeGeometryContentRevision == 0u || mesh.meshletCount == 0u
+        || !mesh.meshletDescBuffer || !mesh.runtimeMeshletLocalBoundsBuffer
+        || !descriptor.valid() || descriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+        || !bounds.valid() || bounds.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+    )
+        return false;
+    return true;
+}
+
+[[nodiscard]] bool RuntimeMeshletSnapshotMatches(
+    const MeshResources& mesh,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot){
+    if(!RuntimeMeshletBoundsReady(mesh)){
+        return
+            snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer
+            && !snapshot.meshletDescHeapHandle.valid() && !snapshot.meshletLocalBoundsHeapHandle.valid()
+        ;
+    }
+    return
+        snapshot.meshletCount == mesh.meshletCount
+        && snapshot.meshletDescBuffer == mesh.meshletDescBuffer
+        && snapshot.meshletLocalBoundsBuffer == mesh.runtimeMeshletLocalBoundsBuffer
+        && snapshot.meshletDescHeapHandle == mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC]
+        && snapshot.meshletLocalBoundsHeapHandle == mesh.runtimeMeshletLocalBoundsHeapHandle
+    ;
+}
+
 void CaptureRayTracingResourceSnapshot(
     const MeshResources& mesh,
     ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
@@ -44,6 +75,11 @@ void CaptureRayTracingResourceSnapshot(
         .attributeBuffer = mesh.attributeBuffer,
         .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
         .runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle,
+        .meshletDescBuffer = {},
+        .meshletLocalBoundsBuffer = {},
+        .meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid(),
+        .meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid(),
+        .meshletCount = 0u,
         .blas = mesh.blas,
         .swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle,
         .swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
@@ -68,6 +104,13 @@ void CaptureRayTracingResourceSnapshot(
         .swBvhBuildAccepted = mesh.swBvhBuildAccepted,
         .csgLocalBounds = mesh.csgLocalBounds,
     };
+    if(RuntimeMeshletBoundsReady(mesh)){
+        outSnapshot.meshletCount = mesh.meshletCount;
+        outSnapshot.meshletDescBuffer = mesh.meshletDescBuffer;
+        outSnapshot.meshletLocalBoundsBuffer = mesh.runtimeMeshletLocalBoundsBuffer;
+        outSnapshot.meshletDescHeapHandle = mesh.geometryHeapHandles[NWB_MESH_BINDING_MESHLET_DESC];
+        outSnapshot.meshletLocalBoundsHeapHandle = mesh.runtimeMeshletLocalBoundsHeapHandle;
+    }
 }
 
 [[nodiscard]] bool RayTracingResourceSnapshotMatches(
@@ -81,6 +124,7 @@ void CaptureRayTracingResourceSnapshot(
         && mesh.attributeBuffer.get() == snapshot.attributeBuffer.get()
         && mesh.runtimeLocalBoundsBuffer == snapshot.runtimeLocalBoundsBuffer
         && mesh.runtimeLocalBoundsHeapHandle == snapshot.runtimeLocalBoundsHeapHandle
+        && RuntimeMeshletSnapshotMatches(mesh, snapshot)
         && mesh.blas.get() == snapshot.blas.get()
         && mesh.swBvhPositionHeapHandle == snapshot.swBvhPositionHeapHandle
         && mesh.swBvhTriangleIndexHeapHandle == snapshot.swBvhTriangleIndexHeapHandle
@@ -119,6 +163,11 @@ void CaptureRayTracingResourceSnapshot(
         && lhs.attributeBuffer.get() == rhs.attributeBuffer.get()
         && lhs.runtimeLocalBoundsBuffer == rhs.runtimeLocalBoundsBuffer
         && lhs.runtimeLocalBoundsHeapHandle == rhs.runtimeLocalBoundsHeapHandle
+        && lhs.meshletCount == rhs.meshletCount
+        && lhs.meshletDescBuffer == rhs.meshletDescBuffer
+        && lhs.meshletLocalBoundsBuffer == rhs.meshletLocalBoundsBuffer
+        && lhs.meshletDescHeapHandle == rhs.meshletDescHeapHandle
+        && lhs.meshletLocalBoundsHeapHandle == rhs.meshletLocalBoundsHeapHandle
         && lhs.swBvhPositionHeapHandle == rhs.swBvhPositionHeapHandle
         && lhs.swBvhTriangleIndexHeapHandle == rhs.swBvhTriangleIndexHeapHandle
         && lhs.meshletPrimitiveIndexCount == rhs.meshletPrimitiveIndexCount
@@ -187,6 +236,7 @@ bool RendererMeshSystem::findRenderableRayTracingResourceSnapshot(
             || mesh.triangleIndexBuffer != desc.runtimeMesh.triangleIndexBuffer
             || mesh.attributeBuffer != desc.runtimeMesh.attributeBuffer
             || mesh.runtimeLocalBoundsBuffer != desc.runtimeMesh.localBoundsBuffer
+            || mesh.runtimeMeshletLocalBoundsBuffer != desc.runtimeMesh.meshletLocalBoundsBuffer
             || mesh.meshletPrimitiveIndexCount != desc.runtimeMesh.meshletPrimitiveIndexCount
         ))
         || !meshRenderBindingsReady(mesh)

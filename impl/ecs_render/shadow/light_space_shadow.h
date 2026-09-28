@@ -62,9 +62,19 @@ struct LightSpaceShadowPush{
     u32 csgOpaqueDepthSlot = 0u;
     u32 csgFlags = 0u;
     u32 receiverFactor = 2u;
+    u32 captureDrawCount = 0u;
+    u32 casterDrawOffset = 0u;
+    u32 meshletDescSlot = 0u;
+    u32 meshletBoundsSlot = 0u;
+    u32 meshletCount = 0u;
 };
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
 static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
+static_assert(offsetof(LightSpaceShadowPush, captureDrawCount) == 80u);
+static_assert(offsetof(LightSpaceShadowPush, casterDrawOffset) == 84u);
+static_assert(offsetof(LightSpaceShadowPush, meshletDescSlot) == 88u);
+static_assert(offsetof(LightSpaceShadowPush, meshletBoundsSlot) == 92u);
+static_assert(offsetof(LightSpaceShadowPush, meshletCount) == 96u);
 
 struct LightSpaceShadowStorageCapacity{
     u64 countBytes = 0u;
@@ -83,7 +93,14 @@ struct LightSpaceShadowCaster{
     bool transparent = false;
     bool csg = false;
     Core::BufferHandle triangleIndexBuffer;
+    u32 meshletCount = 0u;
+    u32 meshletDescSlot = 0u;
+    u32 meshletBoundsSlot = 0u;
+    Core::BufferHandle meshletDescBuffer;
+    Core::BufferHandle meshletBoundsBuffer;
 };
+
+[[nodiscard]] u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;
 
 // Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.
 struct LightSpaceShadowSnapshot{
@@ -106,6 +123,7 @@ struct LightSpaceShadowSnapshot{
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparentFramebuffers;
     Core::BindingLayoutHandle layout;
     Core::ComputePipelineHandle viewPipeline;
+    Core::ComputePipelineHandle cullPipeline;
     Core::ComputePipelineHandle opaqueResolve;
     Core::ComputePipelineHandle transparentResolve;
     Core::ComputePipelineHandle opaqueFallback;
@@ -131,7 +149,7 @@ struct LightSpaceShadowSnapshot{
 };
 
 struct LightSpaceShadowState{
-    static constexpr usize s_LightSpaceShaderCount = 13u;
+    static constexpr usize s_LightSpaceShaderCount = 14u;
 
 
 public:
@@ -169,6 +187,7 @@ public:
 
 // Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.
 [[nodiscard]] bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
+[[nodiscard]] bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot);
 [[nodiscard]] bool RecordLightSpaceCapture(
     Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot, u32 viewIndex, bool transparent
 );

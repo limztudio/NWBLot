@@ -40,6 +40,11 @@ struct NwbLightSpacePushConstants{
     uint csgOpaqueDepthSlot;
     uint csgFlags;
     uint receiverFactor;
+    uint captureDrawCount;
+    uint casterDrawOffset;
+    uint meshletDescSlot;
+    uint meshletBoundsSlot;
+    uint meshletCount;
 };
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 

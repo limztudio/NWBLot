@@ -64,6 +64,7 @@ struct LightSpaceShadowGraph{
     Core::GpuTaskId viewUpload;
     Core::GpuTaskId countsClear;
     Core::GpuTaskId viewFit;
+    Core::GpuTaskId drawCull;
     Core::GpuTaskId opaqueCapture;
     Core::GpuTaskId transparentCapture;
     Core::GpuTaskId shade;

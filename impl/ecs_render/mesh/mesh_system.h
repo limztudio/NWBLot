@@ -61,6 +61,12 @@ namespace ECSRenderDetail{
         Core::BufferHandle attributeBuffer;
         Core::BufferHandle runtimeLocalBoundsBuffer;
         Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
+        Core::BufferHandle meshletDescBuffer;
+        Core::BufferHandle meshletLocalBoundsBuffer;
+        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        u32 meshletCount = 0u;
         Core::RayTracingAccelStructHandle blas;
         Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();

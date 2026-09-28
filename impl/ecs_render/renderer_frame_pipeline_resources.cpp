@@ -211,6 +211,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_DeferredClear, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowVisibility, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_LightSpaceShadowViews, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_LightSpaceShadowCull, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_LightSpaceShadowOpaqueCapture, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_LightSpaceShadowTransparentCapture, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_LightSpaceShadowShade, s_GpuTimingQueriesPerRange },

@@ -112,6 +112,8 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     RuntimeMeshLocalBounds localBounds;
     // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
     Core::BufferHandle localBoundsBuffer;
+    // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
+    Core::BufferHandle meshletLocalBoundsBuffer;
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.

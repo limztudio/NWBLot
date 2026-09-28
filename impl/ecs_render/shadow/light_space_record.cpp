@@ -31,6 +31,29 @@ bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHe
     return true;
 }
 
+bool RecordLightSpaceCull(Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot){
+    if(!snapshot.ready || !snapshot.cullPipeline || !snapshot.drawArguments || !snapshot.casters || snapshot.plan.viewCount == 0u)
+        return false;
+    commandList.setComputeState(Core::ComputeState{}.setPipeline(snapshot.cullPipeline.get()));
+    heap.bindCompute(commandList, *snapshot.cullPipeline);
+    LightSpaceShadowPush push = snapshot.push;
+    push.casterDrawOffset = 0u;
+    for(usize index = 0u; index < snapshot.casterCount; ++index){
+        const auto& caster = snapshot.casters[index];
+        const u32 drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        push.instanceIndex = caster.instanceIndex;
+        push.meshletDescSlot = caster.meshletDescSlot;
+        push.meshletBoundsSlot = caster.meshletBoundsSlot;
+        push.meshletCount = caster.meshletCount;
+        commandList.setPushConstants(&push, sizeof(push));
+        const u32 groups = DivideUp(drawCount, static_cast<u32>(NWB_LIGHT_SPACE_CULL_GROUP_SIZE));
+        commandList.dispatch(Min(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)), snapshot.plan.viewCount,
+            DivideUp(groups, static_cast<u32>(NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X)));
+        push.casterDrawOffset += drawCount;
+    }
+    return true;
+}
+
 bool RecordLightSpaceCapture(
     Core::CommandList& commandList,
     Core::GpuDescriptorHeap& heap,
@@ -65,8 +88,12 @@ bool RecordLightSpaceCapture(
 
     LightSpaceShadowPush push = snapshot.push;
     push.viewIndex = viewIndex;
+    u32 drawOffset = viewIndex * snapshot.push.captureDrawCount;
     for(usize index = 0u; index < snapshot.casterCount; ++index){
         const LightSpaceShadowCaster& caster = snapshot.casters[index];
+        const u32 drawCount = LightSpaceShadowDrawCount(&caster, 1u);
+        const u32 argumentOffset = drawOffset * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
+        drawOffset += drawCount;
         if((caster.transparent || caster.csg) != transparent || caster.indexCount == 0u
             || ((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u && !caster.csg))
             continue;
@@ -75,8 +102,13 @@ bool RecordLightSpaceCapture(
         heap.bindGraphics(commandList, *pipeline);
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(&push, sizeof(push));
-        const u32 argumentOffset = (viewIndex * snapshot.push.instanceCount + caster.instanceIndex) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-        commandList.drawIndexedIndirect(argumentOffset);
+        const u32 captureCount = (snapshot.plan.views[viewIndex].light[3] & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? drawCount : 1u;
+        constexpr u32 s_MaxIndirectDraws = 65535u;
+        for(u32 firstDraw = 0u; firstDraw < captureCount;){
+            const u32 batchCount = Min(captureCount - firstDraw, s_MaxIndirectDraws);
+            commandList.drawIndexedIndirect(argumentOffset + firstDraw * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES, batchCount);
+            firstDraw += batchCount;
+        }
     }
     commandList.endRenderPass();
     return true;

@@ -77,9 +77,12 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     uploadScheduling.allowSameClassQueueRouting = true;
     uploadScheduling.preferNonPrimarySameClassQueue = true;
     FixedVector<Core::GpuTaskId, 3u> dependencies;
-    FixedVector<Core::GpuTaskResourceUse, 4u> uses;
+    GpuRasterResourceUses uses;
+    GpuGlyphGraphResources glyphPages;
     uses.push_back({ color, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write });
     uses.push_back({ skin, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
+    if(!declareGlyphPages(graph, frame, glyphPages, uses))
+        return false;
     if(!frame->m_snapshot.vertices().empty()){
         const Core::GpuGraphResourceId vertices = graph.importBuffer(
             frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer)
@@ -147,7 +150,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuRasterTask::Payload{ frame, color, skin }
+        GpuRasterTask::Payload{ frame, color, skin, Move(glyphPages) }
     );
     if(!raster.valid())
         return false;

@@ -31,6 +31,7 @@ namespace UiLayerPresentation{
 class UiLayerSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
     using ShaderPathResolveCallback = Function<bool(const Name&, AStringView, const Name&, Name&)>;
+    using FontReferences = Vector<Core::Assets::AssetRef<Font>, Core::Alloc::GlobalArena>;
 
 
 public:
@@ -42,6 +43,7 @@ public:
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver,
         const Core::Assets::AssetRef<UiSkin>& skin,
+        const FontReferences& fonts,
         UiLayerPresentation::Enum presentation
     );
     virtual ~UiLayerSystem()override;
@@ -60,6 +62,10 @@ public:
 
 
 private:
+    [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
+
+
+private:
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     Core::IClipboardService& m_clipboard;
@@ -67,7 +73,9 @@ private:
     Core::Assets::AssetRef<UiSkin> m_skinRef;
     UiLayerPresentation::Enum m_presentation;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
+    FontReferences m_fontRefs;
     Ui::PaintBuilder m_paint;
+    Ui::TextService m_text;
     Ui::GpuRenderer m_renderer;
     Ui::DisplayMetrics m_display;
     u64 m_frameGeneration = 0u;
@@ -75,6 +83,7 @@ private:
     u32 m_width = 0u;
     u32 m_height = 0u;
     bool m_resourcesReady = false;
+    bool m_fontsReady = false;
 };
 
 

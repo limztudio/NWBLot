@@ -10,6 +10,7 @@
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
 #include <impl/assets_texture/loader.h>
+#include <impl/ui/text/glyph_page.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/presentation_contributor.h>
@@ -57,6 +58,11 @@ static_assert(offsetof(GpuOutputPushConstants, presentationMode) == NWB_UI_OUTPU
 static_assert(offsetof(GpuOutputPushConstants, reserved) == NWB_UI_OUTPUT_PUSH_CONSTANTS_RESERVED_BYTE_OFFSET);
 static_assert(static_cast<u32>(PaintMaterial::Solid) == NWB_UI_MATERIAL_SOLID);
 static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
+static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);
+
+inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxGlyphPages;
+using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + 4u>;
+using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
 
 
 template<typename T>
@@ -82,6 +88,17 @@ struct GpuSkinVersion : NoCopy{
     Core::GraphicsRuntime& m_graphics;
     SkinBinding m_binding;
     TextureGpuResource m_texture;
+};
+
+struct GpuGlyphVersion : NoCopy{
+    GpuGlyphVersion(Core::GraphicsRuntime& graphics, SharedGlyphPage page);
+    ~GpuGlyphVersion()noexcept;
+
+    Core::GraphicsRuntime& m_graphics;
+    SharedGlyphPage m_page;
+    Core::TextureHandle m_texture;
+    Core::GpuDescriptorHandle m_sampledImage;
+    Core::QueueSubmissionToken m_readinessToken;
 };
 
 struct GpuTargetVersion : NoCopy{
@@ -114,13 +131,14 @@ struct GpuSharedResources : NoCopy{
 };
 
 struct GpuFrameData : NoCopy{
-    GpuFrameData(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
+    GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin);
     [[nodiscard]] bool prefixComplete(Core::Device& device)const;
     [[nodiscard]] bool complete(Core::Device& device)const;
 
     // Strong version owners keep descriptors allocated through pending recording and final GPU completion.
     DrawSnapshot m_snapshot;
     GpuVersion<GpuSkinVersion> m_skin;
+    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphPages;
     GpuVersion<GpuTargetVersion> m_target;
     GpuVersion<GpuSharedResources> m_resources;
     Core::BufferHandle m_vertices;
@@ -157,6 +175,7 @@ struct GpuRasterTask{
         GpuFrame frame;
         Core::GpuGraphResourceId color;
         Core::GpuGraphResourceId skin;
+        GpuGlyphGraphResources glyphPages;
     };
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
@@ -193,6 +212,15 @@ struct GpuRendererState final : NoCopy{
     );
     [[nodiscard]] bool createResources();
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
+    [[nodiscard]] static bool validateGlyphPages(const DrawSnapshot& snapshot);
+    [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
+    [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
+    [[nodiscard]] bool declareGlyphPages(
+        Core::GpuTaskGraph& graph,
+        const GpuFrame& frame,
+        GpuGlyphGraphResources& resources,
+        GpuRasterResourceUses& uses
+    );
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
@@ -205,6 +233,7 @@ struct GpuRendererState final : NoCopy{
     GpuRenderer::ShaderPathResolveCallback m_resolver;
     GpuVersion<GpuSharedResources> m_resources;
     GpuVersion<GpuSkinVersion> m_skin;
+    Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
     Array<GpuFrameSlot, 3u> m_slots;
     GpuFrame m_pending;
     Core::AcquiredPresentationFrame m_lastAcceptedAcquired;

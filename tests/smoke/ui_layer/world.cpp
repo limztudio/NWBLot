@@ -4,6 +4,7 @@
 
 #include "world.h"
 #include "paint_scene.h"
+#include "text_samples.h"
 
 #include <impl/ecs_ui/layer_system.h>
 
@@ -30,6 +31,8 @@ namespace Tests::Smoke{
 
 namespace __hidden_ui_layer_smoke_world{
 static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"engine/ui/skins/default/atlas"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
 };
 
 
@@ -48,6 +51,9 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         return false;
     }
 
+    const Impl::UiLayerSystem::FontReferences fonts{
+        { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultKorean }, context.objectArena
+    };
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -55,11 +61,12 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         context.assetManager,
         context.shaderPathResolver,
         __hidden_ui_layer_smoke_world::s_DefaultSkin,
+        fonts,
         Impl::UiLayerPresentation::Standalone
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    paint.paint = [paintFrame = 0u](Impl::UiPaintContext& paintContext)mutable{
+    paint.paint = [textSamples = CreateUiTextSmokeSamples(context.objectArena), paintFrame = 0u](Impl::UiPaintContext& paintContext)mutable{
         if(paintFrame < 3u){
             ++paintFrame;
             if(paintFrame <= 2u)
@@ -67,6 +74,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
         }
         PaintUiLayerSmokeScene(paintContext);
+        if(!textSamples->paint(paintContext))
+            NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
     };
 
     context.graphics.addRenderPassToBack(layer);

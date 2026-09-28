@@ -32,7 +32,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     m_paint.begin(m_display, m_frameGeneration, m_skinGeneration, m_skinRef, *skin);
     m_paint.reserve(256u);
     const f32 safeDelta = IsFinite(delta) && delta >= 0.0f ? delta : 0.0f;
-    UiPaintContext context{ m_world, m_clipboard, m_paint, m_display, Core::ECS::ENTITY_ID_INVALID, safeDelta };
+    UiPaintContext context{ m_world, m_clipboard, m_paint, m_text, m_display, Core::ECS::ENTITY_ID_INVALID, safeDelta };
     m_world.view<UiPaintComponent>().each([&context](const Core::ECS::EntityID entity, UiPaintComponent& component){
         if(component.visible && component.paint){
             context.entity = entity;

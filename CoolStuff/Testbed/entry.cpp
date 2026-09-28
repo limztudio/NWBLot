@@ -26,6 +26,8 @@ static constexpr tchar s_WorldAllocFailed[] = NWB_TEXT("CreateInitialProjectWorl
 static constexpr tchar s_ResolverNull[] = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 static constexpr tchar s_DestroyRequiresIdleOrLoss[] = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
 };
 
 
@@ -99,6 +101,9 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.assetManager,
         context.shaderPathResolver
     );
+    const Impl::UiLayerSystem::FontReferences fonts{
+        { __hidden_testbed_entry::s_DefaultLatin, __hidden_testbed_entry::s_DefaultKorean }, context.objectArena
+    };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -106,6 +111,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.assetManager,
         context.shaderPathResolver,
         __hidden_testbed_entry::s_DefaultUiSkin,
+        fonts,
         NWB::Impl::UiLayerPresentation::Scene
     );
     context.graphics.addRenderPassToBack(meshSkinningSystem);

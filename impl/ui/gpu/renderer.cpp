@@ -94,9 +94,10 @@ GpuSharedResources::~GpuSharedResources()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuFrameData::GpuFrameData(DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)
+GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)
     : m_snapshot(Move(snapshot))
     , m_skin(Move(skin))
+    , m_glyphPages(arena)
 {}
 
 bool GpuFrameData::prefixComplete(Core::Device& device)const{
@@ -109,7 +110,13 @@ bool GpuFrameData::prefixComplete(Core::Device& device)const{
 }
 
 bool GpuFrameData::complete(Core::Device& device)const{
-    return m_finalConsumer.valid() && __hidden_ui_gpu::TokenComplete(device, m_finalConsumer) && prefixComplete(device);
+    if(!m_finalConsumer.valid() || !__hidden_ui_gpu::TokenComplete(device, m_finalConsumer) || !prefixComplete(device))
+        return false;
+    for(const auto& page : m_glyphPages){
+        if(!__hidden_ui_gpu::TokenComplete(device, page->m_readinessToken))
+            return false;
+    }
+    return true;
 }
 
 
@@ -125,7 +132,10 @@ GpuRendererState::GpuRendererState(
     , m_graphics(graphics)
     , m_assets(assets)
     , m_resolver(Move(resolver))
-{}
+    , m_glyphCache(arena)
+{
+    m_glyphCache.reserve(s_GpuMaxGlyphPages);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,6 +182,7 @@ void GpuRenderer::invalidateResources(){
     for(auto& slot : m_state->m_slots)
         slot = {};
     m_state->m_skin.reset();
+    m_state->m_glyphCache.clear();
     m_state->m_resources.reset();
     m_state->m_width = 0u;
     m_state->m_height = 0u;
@@ -237,8 +248,10 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
         || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f
     )
         return false;
+    if(!GpuRendererState::validateGlyphPages(snapshot))
+        return false;
     m_state->m_pending = MakeGpuVersion<GpuFrameData>(
-        m_state->m_arena, Move(snapshot), m_state->m_skin
+        m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin
     );
     m_state->m_claimed = false;
     return m_state->m_pending != nullptr;

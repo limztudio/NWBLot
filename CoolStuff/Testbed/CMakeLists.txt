@@ -4,6 +4,7 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_controls.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.h"
     "${CMAKE_CURRENT_LIST_DIR}/project.h"
 )
 set_target_properties(testbed PROPERTIES
@@ -19,6 +20,7 @@ nwb_target_link_libraries_whole_archive(testbed
     nwb_assets_shader
     nwb_assets_texture
     nwb_assets_ui_skin
+    nwb_assets_font
     nwb_assets_sampler
 )
 target_link_libraries(testbed PRIVATE
@@ -34,6 +36,7 @@ target_link_libraries(testbed PRIVATE
     nwb_ecs_model_renderer
     nwb_ecs_ui
     nwb_assets_graphics
+    nwb_ui_widgets
 )
 
 # Place the NVIDIA Aftermath runtime next to testbed so the device-side dynamic load resolves it.

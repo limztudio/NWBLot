@@ -27,6 +27,7 @@ UiLayerSystem::UiLayerSystem(
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
+    const FontReferences& fonts,
     const UiLayerPresentation::Enum presentation)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
@@ -36,7 +37,9 @@ UiLayerSystem::UiLayerSystem(
     , m_assetManager(assetManager)
     , m_skinRef(skin)
     , m_presentation(presentation)
+    , m_fontRefs(fonts, arena)
     , m_paint(arena)
+    , m_text(arena)
     , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
 {
     readAccess<UiPaintComponent>();
@@ -65,6 +68,11 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     }
     const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
     NWB_FATAL_ASSERT(skin);
+    if(!m_fontsReady){
+        Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/load_fonts"));
+        if(!loadFonts(scratchArena))
+            return false;
+    }
     if(!m_renderer.validateResources(width, height) || !m_renderer.setSkin(m_skinRef, *skin, m_skinGeneration))
         return false;
 

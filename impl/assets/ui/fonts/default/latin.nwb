@@ -1,0 +1,4 @@
+font asset;
+asset.schema_version = 1;
+asset.source = "NotoSans-Regular.ttf";
+asset.face_index = 0;

@@ -1,6 +1,7 @@
 if(TARGET nwb_assets_volume_cook)
     add_subdirectory(assets_graphics)
     add_subdirectory(assets_ui_skin)
+    add_subdirectory(assets_font)
 endif()
 
 if(TARGET nwb_crash)

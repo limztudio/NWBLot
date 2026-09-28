@@ -1,6 +1,7 @@
 add_subdirectory(assets_shader)
 add_subdirectory(assets_texture)
 add_subdirectory(assets_ui_skin)
+add_subdirectory(assets_font)
 add_subdirectory(assets_sampler)
 add_subdirectory(assets_csg)
 add_subdirectory(assets_material)

@@ -37,6 +37,8 @@ add_subdirectory(tinyxml2)
 add_subdirectory(nlohmann_json)
 add_subdirectory(rapidjson)
 add_subdirectory(zlib)
+add_subdirectory(freetype)
+add_subdirectory(harfbuzz)
 add_subdirectory(vulkan_headers)
 add_subdirectory(volk)
 add_subdirectory(aftermath)
@@ -59,6 +61,8 @@ foreach(_nwb_engine_static_vendor_target
     nwb_vendor_curl
     nwb_vendor_microhttpd
     nwb_vendor_miniz
+    nwb_vendor_freetype
+    nwb_vendor_harfbuzz
 )
     nwb_match_engine_runtime(${_nwb_engine_static_vendor_target})
 endforeach()

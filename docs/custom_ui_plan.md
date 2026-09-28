@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88` and GPU composition commit `37a37a0f6` are pushed. The architecture and milestones below describe the full migration; the implementation increments are described separately.
+Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. The font/text foundation is described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
 
 Implemented in the first increment:
 
@@ -59,6 +59,26 @@ Validation for the OS increment:
 The next toolkit increment should add font/text resources, stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
 
 Build an engine-owned UI toolkit under `impl/ui/`, keep `impl/ecs_ui/` as the ECS/runtime adapter, and render UI into a transparent texture through the existing GPU task graph. Join that texture with the scene in the final output pass, after scene display mapping and before output encoding. IME, clipboard/native selection exchange, and other window-system services belong to a separate OS feature layer that `ecs_ui` borrows. Controls use a customizable skin texture plus atlas information authored in an `.nwb` file; the engine ships one default texture/atlas pair. Remove ImGui once current application behavior is covered; continue the larger widget library independently.
+
+Implemented in the font/text foundation increment:
+
+- `impl/assets_font/` and `impl/assets/ui/fonts/default/`: typed static SFNT font assets with strict cook/load validation, original source-byte ownership, pinned Noto Latin/Korean defaults, and retained licences. FreeType 2.14.3 and HarfBuzz 14.5.0 are explicit static packages independent of ImGui and platform text APIs.
+- `impl/ui/text/`: separately owned native font versions, `interface ITextShaper`, HarfBuzz shaping/fallback, failure-atomic multiline label layout, advance and ink measurement, UTF-8 source clusters, hit testing, and available caret edges. Direction, script and language are explicit; paragraph bidi, automatic wrapping, grapheme editing, selection/undo, and IME remain future work.
+- `impl/ui/widgets/label*`: a passive label with owned text/style and cached logical layout, invalidated by text/style or text-service identity/font-generation changes. This does not implement button/edit/combo interaction.
+- `impl/ui/paint_glyph*` and the GPU glyph resource domain: separate linear R8 coverage pages, append-only coordinates, immutable page versions, adjacent glyph batching, bounded GPU caching, retained upload readiness, and graph dependencies. Snapshot-local page identities keep different Latin/Korean/fixture resources distinct. Each glyph multiplies premultiplied color and alpha by coverage once.
+- `impl/ecs_ui/layer_system_fonts.cpp`: explicit project-supplied typed font stack, loaded once using caller scratch storage and copied into owned CPU font versions. Paint callbacks borrow the text service alongside paint/display/OS services.
+- Testbed's separate skin-preview class now paints persistent Latin and Korean labels. The UI-only smoke adds ligature/combining-mark text, Korean fallback, clipped text, and independent zero/half/full coverage samples.
+
+Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
+
+- Production libraries, the font asset tests, UI tests, ECS graphics tests, UI-only executable, and Testbed build. Asset pipelines cook/gather 134 Testbed assets and 117 engine-only smoke assets, including both font defaults and the recooked glyph shader.
+- All 26 UI checks pass: the five original paint checks, five glyph snapshot checks, eight layout checks, and eight real-font/shaping/atlas checks. Eight font asset checks and eight related composition/glyph shader checks also pass.
+- Both GPU-validation UI smoke tests pass. The acquired-backbuffer capture validates 19 numeric probes at 960 x 540; resize validates 38 probes across 960 x 540 and 800 x 600. Each capture additionally checks Latin/Korean/clipped ink, varied antialiased edges, and absence of ink beyond the text clip. Maximum channel error is two byte values.
+- A GPU-validation Testbed capture succeeds at 1280 x 900 and after a 901 x 607 resize, showing the custom labels alongside the existing scene and ImGui overlay. Captures were visually inspected. Live HDR remains unqualified on this host.
+- All 22 affected font/text/paint/ECS/GPU production translation units and four new test translation units pass actual Linux x86_64 syntax checks with genuine native headers and the Linux sysroot. This host has no Linux runtime; this is not a Linux link or native-execution claim.
+- The known unrelated stale surfel normal source-text expectation recorded above is unchanged; this increment runs the affected ECS composition/glyph checks rather than asserting that the whole ECS suite passes.
+
+The current text renderer uses native grayscale coverage. The user's proposed offline RGBA SDF baker is adopted as the next font-rendering design in [font_atlas_plan.md](font_atlas_plan.md). That utility and `FontAtlas` format are explicitly unimplemented. It will pack four scalar distance pages into RGBA, emit lossless atlas payloads and `.nwb` metadata including scoped kerning, and retain HarfBuzz shaping. The existing native coverage path supplies a foundation and fallback; it does not claim distance-field zoom behavior.
 
 ## 1. Starting point and scope
 

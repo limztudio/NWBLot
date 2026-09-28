@@ -4,6 +4,7 @@ target_sources(nwb_ui_gpu PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_glyph_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_raster.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_standalone.cpp"

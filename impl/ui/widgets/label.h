@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ui/text/service.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A passive label caches logical layout; each paint rasterizes at the current display scale.
+class Label final : NoCopy{
+public:
+    explicit Label(Core::Alloc::GlobalArena& arena);
+
+
+public:
+    [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request);
+    [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, Point topLeft, const Color& color = {});
+    [[nodiscard]] const TextLayout& layout()const{ return m_layout; }
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_text;
+    AString<Core::Alloc::GlobalArena> m_language;
+    TextLayout m_layout;
+    u64 m_serviceIdentity = 0u;
+    u64 m_fontGeneration = 0u;
+    f32 m_fontSize = 16.0f;
+    u32 m_scriptTag = TextScriptTag('L', 'a', 't', 'n');
+    TextDirection::Enum m_direction = TextDirection::LeftToRight;
+    bool m_dirty = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

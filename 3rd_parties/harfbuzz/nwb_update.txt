@@ -1,0 +1,5 @@
+package: HarfBuzz
+version: 14.5.0
+updated_utc: 2026-09-29
+source: https://github.com/harfbuzz/harfbuzz/tree/863d3f7787c6df18d20e4535c5906bf3eb803bd5
+notes: Pin tag 14.5.0 at the source commit above. Preserve upstream src/ plus COPYING, AUTHORS, CONFIG.md, NEWS, and README.md; prune tests, fuzzing, benchmarks, utilities, docs, and upstream build systems. Rewritten CMake builds the main harfbuzz.cc amalgamation as a static library with internal Unicode and OpenType shaping/font functions. Optional HAVE_* integrations are disabled (no generated config.h), including FreeType, ICU, GLib, Graphite, platform text APIs, and WASM. Subset/raster/vector/GPU auxiliary libraries are not compiled. Preserve COPYING and every upstream per-file license notice.

@@ -1,0 +1,5 @@
+package: FreeType
+version: 2.14.3
+updated_utc: 2026-09-29
+source: https://github.com/freetype/freetype/tree/0a0221a1347e2f1e07c395263540026e9a0aa7c7
+notes: Pin VER-2-14-3 at the source commit above. Preserve upstream include/, src/base, autofit, cff, psaux, pshinter, psnames, raster, sfnt, smooth, and truetype plus LICENSE.TXT, docs/FTL.TXT, docs/GPLv2.TXT, docs/CHANGES, README, and README.git. Other drivers, tests, build systems, documentation, and nested compression libraries are pruned. Rewritten CMake builds static TrueType/CFF/SFNT rasterization, generates its limited ftmodule.h, and disables LZW, Zlib, BZip2, PNG, Brotli, and HarfBuzz integration in generated ftoption.h. Use the FreeType License (FTL.TXT); preserve both upstream offered licenses. Source archive SHA256 a4c2b6f10c8c78013b410b1ed861485b1be413f424bf9a6f92aaba844e13c934.

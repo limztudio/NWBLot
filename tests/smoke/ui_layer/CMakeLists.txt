@@ -13,6 +13,8 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/world.h"
     "${CMAKE_CURRENT_LIST_DIR}/paint_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_samples.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_samples.h"
     "${CMAKE_CURRENT_LIST_DIR}/../framebuffer_capture.cpp"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES
@@ -24,9 +26,10 @@ nwb_target_link_libraries_whole_archive(nwb_ui_layer_smoke
     nwb_assets_shader
     nwb_assets_texture
     nwb_assets_ui_skin
+    nwb_assets_font
     nwb_assets_sampler
 )
-target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui)
+target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui nwb_ui_widgets)
 if(COMMAND nwb_copy_aftermath_runtime)
     nwb_copy_aftermath_runtime(nwb_ui_layer_smoke)
 endif()

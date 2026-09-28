@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "ui_skin_preview.h"
+
 #include <loader/project_entry.h>
 
 #include <impl/ecs_ui/components.h>
@@ -56,6 +58,7 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    TestbedUiSkinPreview m_uiPreview;
     f64 m_lastMouseX = 0.0;
     f64 m_lastMouseY = 0.0;
     f32 m_pendingMouseDeltaX = 0.0f;

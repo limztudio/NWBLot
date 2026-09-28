@@ -1,0 +1,126 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "shaper.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct PlacedGlyph{
+    SharedFontFace face;
+    u32 glyphId = 0u;
+    u32 byteBegin = 0u;
+    u32 byteEnd = 0u;
+    Point position;
+};
+
+struct TextCluster{
+    u32 byteBegin = 0u;
+    u32 byteEnd = 0u;
+    u32 firstGlyph = 0u;
+    u32 glyphCount = 0u;
+    u32 lineIndex = 0u;
+    f32 leadingX = 0.0f;
+    f32 trailingX = 0.0f;
+};
+
+struct TextLine{
+    u32 byteBegin = 0u;
+    u32 byteEnd = 0u;
+    u32 breakEnd = 0u;
+    u32 firstGlyph = 0u;
+    u32 glyphCount = 0u;
+    u32 firstCluster = 0u;
+    u32 clusterCount = 0u;
+    f32 top = 0.0f;
+    f32 baseline = 0.0f;
+    f32 height = 0.0f;
+    f32 advance = 0.0f;
+};
+
+struct TextHit{
+    u32 byteOffset = 0u;
+    u32 lineIndex = 0u;
+    TextCaretEdge::Enum edge = TextCaretEdge::Leading;
+    bool inside = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Owns source bytes, layout data, and the exact immutable CPU font versions needed for later glyph rasterization.
+class TextLayout final{
+    friend class TextLayoutBuilder;
+
+
+public:
+    explicit TextLayout(Core::Alloc::GlobalArena& arena);
+    TextLayout(TextLayout&&) = default;
+    TextLayout& operator=(TextLayout&&) = default;
+
+
+public:
+    TextLayout(const TextLayout&) = delete;
+    TextLayout& operator=(const TextLayout&) = delete;
+
+
+public:
+    [[nodiscard]] StringView utf8()const{ return { m_text.data(), m_text.size() }; }
+    [[nodiscard]] f32 fontSize()const{ return m_fontSize; }
+    [[nodiscard]] Point measure()const{ return m_measure; }
+    [[nodiscard]] Rect inkBounds()const{ return m_inkBounds; }
+    [[nodiscard]] const PaintVector<PlacedGlyph>& glyphs()const{ return m_glyphs; }
+    [[nodiscard]] const PaintVector<TextCluster>& clusters()const{ return m_clusters; }
+    [[nodiscard]] const PaintVector<TextLine>& lines()const{ return m_lines; }
+    [[nodiscard]] TextHit hitTest(Point point)const;
+    [[nodiscard]] bool caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const;
+
+
+private:
+    AString<Core::Alloc::GlobalArena> m_text;
+    PaintVector<PlacedGlyph> m_glyphs;
+    PaintVector<TextCluster> m_clusters;
+    PaintVector<TextLine> m_lines;
+    Point m_measure;
+    Rect m_inkBounds;
+    f32 m_fontSize = 0.0f;
+    TextDirection::Enum m_direction = TextDirection::LeftToRight;
+};
+
+class TextLayoutBuilder final : NoCopy{
+public:
+    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper);
+
+
+public:
+    // Failure leaves output unchanged. Line breaks are LF/CRLF; there is no automatic wrap or paragraph bidi.
+    [[nodiscard]] TextLayoutStatus::Enum layout(const ShapeRequest& request, TextLayout& output);
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    ITextShaper& m_shaper;
+    ShapedRun m_run;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

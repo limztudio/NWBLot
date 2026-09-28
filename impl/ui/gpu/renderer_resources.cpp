@@ -323,7 +323,7 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
     for(auto& slot : m_slots){
         if(slot.inFlight && !slot.inFlight->complete(device))
             continue;
-        if(!prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired))
+        if(!prepareGlyphPages(*m_pending) || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired))
             return false;
         slot.inFlight.reset();
         m_pending->m_target = slot.target;

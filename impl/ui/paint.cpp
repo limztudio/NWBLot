@@ -58,6 +58,7 @@ DrawSnapshot::DrawSnapshot(Core::Alloc::GlobalArena& arena)
     : m_vertices(arena)
     , m_indices(arena)
     , m_commands(arena)
+    , m_glyphPages(arena)
 {}
 
 
@@ -96,6 +97,7 @@ void PaintBuilder::begin(
     m_snapshot.m_vertices.clear();
     m_snapshot.m_indices.clear();
     m_snapshot.m_commands.clear();
+    m_snapshot.m_glyphPages.clear();
     m_regions.assign(skin.regions().begin(), skin.regions().end());
     m_clips.clear();
     m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
@@ -157,7 +159,12 @@ DrawSnapshot PaintBuilder::freeze(){
     return Move(m_snapshot);
 }
 
-void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, const PaintMaterial::Enum material){
+void PaintBuilder::emitQuad(
+    const Rect& rectangle,
+    const Rect& uv,
+    const Color& color,
+    const PaintMaterial::Enum material,
+    const u32 glyphPageIndex){
     NWB_ASSERT(m_recording);
     NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
     NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
@@ -186,12 +193,12 @@ void PaintBuilder::emitQuad(const Rect& rectangle, const Rect& uv, const Color& 
     m_snapshot.m_indices.insert(m_snapshot.m_indices.end(), indices, indices + 6u);
     if(!m_snapshot.m_commands.empty()){
         auto& previous = m_snapshot.m_commands.back();
-        if(previous.material == material && __hidden_ui_paint::EqualClip(previous.clip, clip)){
+        if(previous.material == material && previous.glyphPageIndex == glyphPageIndex && __hidden_ui_paint::EqualClip(previous.clip, clip)){
             previous.indexCount += 6u;
             return;
         }
     }
-    m_snapshot.m_commands.push_back({ firstIndex, 6u, clip, material });
+    m_snapshot.m_commands.push_back({ firstIndex, 6u, clip, material, glyphPageIndex });
 }
 
 void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){

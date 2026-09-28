@@ -29,6 +29,12 @@ bool GpuRasterTask::record(
         || context.declarations.textureForResource(payload.skin) != frame->m_skin->m_texture.texture.get()
     )
         return false;
+    if(payload.glyphPages.size() != frame->m_glyphPages.size())
+        return false;
+    for(usize index = 0u; index < payload.glyphPages.size(); ++index){
+        if(context.declarations.textureForResource(payload.glyphPages[index]) != frame->m_glyphPages[index]->m_texture.get())
+            return false;
+    }
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const DisplayMetrics& display = frame->m_snapshot.displayMetrics();
     GpuPaintPushConstants push;
@@ -61,7 +67,14 @@ bool GpuRasterTask::record(
         commands.setGraphicsState(state);
         heap.bindGraphics(commands, *frame->m_resources->m_pipeline);
         push.material = static_cast<u32>(draw.material);
-        push.textureSlot = draw.material == PaintMaterial::Skin ? frame->m_skin->m_texture.sampledImageHeapHandle.slot() : NWB_UI_INVALID_HEAP_SLOT;
+        push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
+        if(draw.material == PaintMaterial::Skin)
+            push.textureSlot = frame->m_skin->m_texture.sampledImageHeapHandle.slot();
+        else if(draw.material == PaintMaterial::Glyph){
+            if(draw.glyphPageIndex >= frame->m_glyphPages.size())
+                return false;
+            push.textureSlot = frame->m_glyphPages[draw.glyphPageIndex]->m_sampledImage.slot();
+        }
         commands.setPushConstants(&push, sizeof(push));
         Core::DrawArguments arguments;
         arguments.setVertexCount(draw.indexCount).setStartIndexLocation(draw.firstIndex);

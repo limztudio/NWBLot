@@ -120,15 +120,12 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-// Beginner boundary for CameraProjection storage: the single LoadFloat call site for validation.
-// Keep this wrapper thin; the SIMD-domain composition lives in CameraProjectionValuesValid.
-[[nodiscard]] inline bool LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane){
+inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane){
     outProjectionParams = LoadFloat(projection.projectionParams);
     outAspectRatio = VectorReplicate(projection.aspectRatio);
     outTanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
     outNearPlane = VectorReplicate(projection.nearPlane);
     outFarPlane = VectorReplicate(projection.farPlane);
-    return true;
 }
 
 [[nodiscard]] inline bool CameraProjectionStorageValid(const CameraProjection& projection){

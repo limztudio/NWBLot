@@ -133,9 +133,9 @@ using namespace GpuTaskGraphCompilerDetail;
             if(!history.append(TrackedCompiledResourceState{
                 .resource = use.resource,
                 .range = plannedRange,
+                .task = taskID,
                 .state = use.requiredState,
                 .access = use.access,
-                .task = taskID,
                 .queue = {},
             }))
                 return false;

@@ -559,10 +559,10 @@ private:
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredFrameRecoveryArmed = false;
     bool m_deferredFrameRecoveryRetiresTiming = false;
-    f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     bool m_deferredLightingTaskGraphDeclared = false;
     bool m_deferredLightingTaskGraphScheduled = false;
     bool m_deferredPresentationOverlayRequired = false;
+    f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
 
 private:

@@ -379,10 +379,10 @@ private:
     VolatileBufferState m_volatileState;
     Futex m_bufferViewsMutex;
 
+    const bool m_creationInitialStateKnown;
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
     bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
-    const bool m_creationInitialStateKnown;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -570,7 +570,6 @@ private:
     VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
     u64 m_totalByteSize = 0;
-    ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
     VkSharingMode m_creationSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
     VulkanDetail::StagingTextureQueueFamilyVector m_admittedQueueFamilies;
@@ -581,6 +580,7 @@ private:
     void* m_mappedMemory = nullptr;
 
     u32 m_bufferOffsetAlignment = 0;
+    ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
     CpuAccessMode::Enum m_cpuAccess{};
     bool m_requiresInvalidate = false;
     const VulkanContext& m_context;

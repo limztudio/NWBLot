@@ -88,16 +88,16 @@ struct LightSpaceShadowStorageCapacity{
 [[nodiscard]] bool LightSpaceShadowStorageFits(const LightSpacePlan& plan, const LightSpaceShadowStorageCapacity& capacity)noexcept;
 
 struct LightSpaceShadowCaster{
+    Core::BufferHandle triangleIndexBuffer;
+    Core::BufferHandle meshletDescBuffer;
+    Core::BufferHandle meshletBoundsBuffer;
     u32 instanceIndex = 0u;
     u32 indexCount = 0u;
-    bool transparent = false;
-    bool csg = false;
-    Core::BufferHandle triangleIndexBuffer;
     u32 meshletCount = 0u;
     u32 meshletDescSlot = 0u;
     u32 meshletBoundsSlot = 0u;
-    Core::BufferHandle meshletDescBuffer;
-    Core::BufferHandle meshletBoundsBuffer;
+    bool transparent = false;
+    bool csg = false;
 };
 
 [[nodiscard]] u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;

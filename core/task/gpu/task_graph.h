@@ -74,17 +74,17 @@ struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    ResourceStates::Mask initialState = ResourceStates::Unknown;
-    ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
-    GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
-    GpuPhysicalQueueId initialOwnerQueue;
     // Each first-use range must be covered by one source naming its exact physical consumer queue.
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     GpuExternalCompletionId initialAvailabilityCompletion;
-    GpuPhysicalQueueId directConsumerQueue;
     // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only resources have no snapshot and retain the logical queue-sharing resolver.
     ResourceQueueAdmissionSnapshot queueAdmission;
+    ResourceStates::Mask initialState = ResourceStates::Unknown;
+    ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+    GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
+    GpuPhysicalQueueId initialOwnerQueue;
+    GpuPhysicalQueueId directConsumerQueue;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasQueueAdmission = false;
@@ -110,16 +110,16 @@ struct GpuTaskGraphPipelineView{
     GpuGraphPipelineId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
     bool hasBackendPipeline = false;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
 };
 
 struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    QueueSubmissionToken token;
     bool hasToken = false;
+    QueueSubmissionToken token;
 };
 
 // Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the Graphics producer on its exact queue; producer may skip direct use for terminal publish.
@@ -664,15 +664,15 @@ private:
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
         GpuExternalCompletionId initialAvailabilityCompletion;
-        GpuPhysicalQueueId directConsumerQueue;
-        ResourceStates::Mask initialState = ResourceStates::Unknown;
-        ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 initialOwnerHandoffSourceOffset = 0u;
         u32 initialOwnerHandoffSourceCount = 0u;
         u32 queueFamilyIndexOffset = 0u;
         u32 queueFamilyIndexCount = 0u;
+        ResourceStates::Mask initialState = ResourceStates::Unknown;
+        ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+        GpuPhysicalQueueId directConsumerQueue;
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         u16 deviceGeneration = 0u;
@@ -767,9 +767,9 @@ private:
 
     struct GpuExternalCompletionNode{
         Name identity = NAME_NONE;
-        QueueSubmissionToken token;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
+        QueueSubmissionToken token;
         bool hasToken = false;
     };
 
@@ -1378,19 +1378,19 @@ private:
     GpuPresentEndpoint m_presentEndpoint;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
-    mutable u32 m_activeDeclarationAccessCount = 0u;
-    mutable u32 m_activeDeclarationReadCount = 0u;
-    mutable u32 m_activeDiscardNotificationCount = 0u;
-    mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
     mutable u64 m_activeRecordingAttemptGeneration = 0u;
     mutable u64 m_activeRecordingPlanGeneration = 0u;
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
+    mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
+    mutable u32 m_activeDeclarationAccessCount = 0u;
+    mutable u32 m_activeDeclarationReadCount = 0u;
+    mutable u32 m_activeDiscardNotificationCount = 0u;
+    mutable Atomic<u32> m_activePacketRecordingClaimCount{ 0u };
     mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
     u16 m_externalCompletionDeviceGeneration = 0u;
     bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;
-    mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
 };
 
 

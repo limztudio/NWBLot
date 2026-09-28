@@ -283,9 +283,9 @@ bool GpuTimingMetricCorrelator::preparePacketEnvelopeMetrics(
     candidate.remainingScopeCount = scopeCount;
     for(usize scopeIndex = 0u; scopeIndex < scopeCount; ++scopeIndex){
         candidate.scopes.push_back(PacketEnvelopeMetricScopeRecord{
+            .range = {},
             .scopeName = scopes[scopeIndex].scopeName,
             .physicalQueue = scopes[scopeIndex].physicalQueue,
-            .range = {},
             .received = false,
         });
     }

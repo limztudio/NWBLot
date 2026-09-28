@@ -287,7 +287,6 @@ private:
     usize m_indexBufferCapacity = 0;
     u64 m_taskGraphPresentationGraphGeneration = 0u;
     u64 m_frameGeneration = 0u;
-    f32 m_deltaSeconds = 0.0f;
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
@@ -303,6 +302,7 @@ private:
     bool m_wantsKeyboardCapture = false;
     bool m_wantsMouseCapture = false;
     bool m_wantsTextInput = false;
+    f32 m_deltaSeconds = 0.0f;
 };
 
 

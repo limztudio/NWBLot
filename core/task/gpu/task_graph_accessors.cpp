@@ -92,16 +92,11 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .id = GpuGraphResourceId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = resource.identity,
         .markerLabel = markerLabel(resource.markerLabelOffset, resource.markerLabelSize),
-        .initialState = resource.initialState,
-        .externalFinalState = resource.externalFinalState,
-        .externalFinalReleaseDestinationQueue = resource.externalFinalReleaseDestinationQueue,
-        .initialOwnerQueue = resource.initialOwnerQueue,
         .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u
             ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
             : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .initialAvailabilityCompletion = resource.initialAvailabilityCompletion,
-        .directConsumerQueue = resource.directConsumerQueue,
         .queueAdmission = ResourceQueueAdmissionSnapshot{
             .queueFamilyIndices = resource.queueFamilyIndexCount != 0u
                 ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset
@@ -110,6 +105,11 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
             .admittedQueueClasses = resource.queueSharing,
             .usesConcurrentSharing = resource.usesConcurrentSharing,
         },
+        .initialState = resource.initialState,
+        .externalFinalState = resource.externalFinalState,
+        .externalFinalReleaseDestinationQueue = resource.externalFinalReleaseDestinationQueue,
+        .initialOwnerQueue = resource.initialOwnerQueue,
+        .directConsumerQueue = resource.directConsumerQueue,
         .type = resource.type,
         .queueSharing = resource.queueSharing,
         .hasQueueAdmission = resource.hasQueueAdmission,
@@ -147,11 +147,11 @@ GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const{
         .id = GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = pipeline.identity,
         .markerLabel = markerLabel(pipeline.markerLabelOffset, pipeline.markerLabelSize),
-        .type = pipeline.type,
         .hasBackendPipeline = pipeline.graphicsPipeline != nullptr
             || pipeline.computePipeline != nullptr
             || pipeline.meshletPipeline != nullptr
             || pipeline.rayTracingPipeline != nullptr,
+        .type = pipeline.type,
     };
 }
 
@@ -162,8 +162,8 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
         .id = GpuExternalCompletionId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = completion.identity,
         .markerLabel = markerLabel(completion.markerLabelOffset, completion.markerLabelSize),
-        .token = completion.token,
         .hasToken = completion.hasToken,
+        .token = completion.token,
     };
 }
 

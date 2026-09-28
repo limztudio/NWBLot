@@ -215,10 +215,10 @@ struct GpuTaskTimingFeedbackPolicy{
     f64 minimumRelativeBenefit = 0.0;
     u64 minimumFramesBetweenSwitches = GpuTaskTimingFeedbackPolicyDetail::s_MinFramesBetweenSwitches;
     u32 minimumSampleCount = GpuTaskTimingFeedbackPolicyDetail::s_MinSwitchSamples;
+    u32 calibrationIntervalFrames = 1u;
     // While a legal candidate lacks enough samples, one opted-in route is selected every N frames. Every
     // cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class
     // timing opt-in. Zero disables calibration. Probes stop after every legal route reaches minimumSampleCount.
-    u32 calibrationIntervalFrames = 1u;
     bool enabled = false;
 
     [[nodiscard]] bool valid()const noexcept;

@@ -44,19 +44,19 @@ class RendererMaterialSystem;
 
 // Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
 struct CoincidentOpticalVolumeCandidate{
-    Core::ECS::EntityID entity;
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Material> material;
-    Name group = NAME_NONE;
-    i32 priority = 0;
-    // Identical-material grouping also requires the same authored medium semantics.
-    u32 boundaryMode = 0u;
-    i32 mediumPriority = 0;
     Float3U position = Float3U(0.f, 0.f, 0.f);
     Float4U rotation = Float4U(0.f, 0.f, 0.f, 1.f);
     Float3U scale = Float3U(1.f, 1.f, 1.f);
     const u8* mutableTypedBytes = nullptr;
     usize mutableTypedByteCount = 0u;
+    Name group = NAME_NONE;
+    Core::ECS::EntityID entity;
+    i32 priority = 0;
+    // Identical-material grouping also requires the same authored medium semantics.
+    u32 boundaryMode = 0u;
+    i32 mediumPriority = 0;
 };
 
 

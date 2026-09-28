@@ -57,9 +57,9 @@ public:
 
 private:
     MHD_Daemon* m_daemon = nullptr;
-    Atomic<bool> m_delayedFirstRequest = false;
     Atomic<u32> m_requestCount = 0u;
     u16 m_port = 0u;
+    Atomic<bool> m_delayedFirstRequest = false;
 };
 
 

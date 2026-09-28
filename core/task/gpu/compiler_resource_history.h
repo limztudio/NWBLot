@@ -28,9 +28,9 @@ namespace GpuTaskGraphCompilerDetail{
 struct TrackedCompiledResourceState{
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
+    GpuTaskId task;
     ResourceStates::Mask state = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
-    GpuTaskId task;
     GpuPhysicalQueueId queue;
 };
 

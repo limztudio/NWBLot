@@ -45,9 +45,6 @@ struct MaterialCookEntry{
     MaterialCookString bxdfSource;
     // Surface hook; empty when explicit `shaders` are declared instead.
     MaterialCookString surfaceSource;
-    u32 shadingModelId = 0u;
-    // Shadow-transmittance id, deduped over the `surface` source set.
-    u32 shadowTransmittanceModelId = 0u;
     StageShaderMap stageShaders;
     // Generated AVBOIT accumulate PS name; empty for opaque materials.
     MaterialCookString avboitAccumulatePixelShaderName;
@@ -55,6 +52,9 @@ struct MaterialCookEntry{
     MaterialCookString avboitOccupancyPixelShaderName;
     MaterialCookString avboitExtinctionPixelShaderName;
     ParameterMap parameters;
+    u32 shadingModelId = 0u;
+    // Shadow-transmittance id, deduped over the `surface` source set.
+    u32 shadowTransmittanceModelId = 0u;
     bool transparent = false;
     bool twoSided = false;
     // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.

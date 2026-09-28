@@ -388,9 +388,9 @@ struct RenderPassAttachmentActions{
 struct RenderPassParameters{
     Color colorClearValues[s_MaxRenderTargets]{};
     RenderPassAttachmentActions colorAttachmentActions[s_MaxRenderTargets]{};
-    f32 depthClearValue = s_DepthClearValue;
     RenderPassAttachmentActions depthAttachmentActions;
     RenderPassAttachmentActions stencilAttachmentActions;
+    f32 depthClearValue = s_DepthClearValue;
     u8 stencilClearValue = 0;
 };
 

@@ -125,10 +125,9 @@ namespace BindlessLayoutType{
 struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 maxCapacity = 0;
-
-    // This resource-bearing layout takes an explicit SPIR-V descriptor set; push-only BindingLayouts take none.
     u32 descriptorSetIndex = Limit<u32>::s_Max;
 
+    // This resource-bearing layout takes an explicit SPIR-V descriptor set; push-only BindingLayouts take none.
     ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 

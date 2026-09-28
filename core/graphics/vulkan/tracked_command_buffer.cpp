@@ -32,9 +32,9 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_pendingAccelStructBuildCommits(context.objectArena)
     , m_pendingOpacityMicromapBuildCommits(context.objectArena)
     , m_timerQueryRecordingClaims(context.objectArena)
+    , m_ownsCmdPool(ownsCommandPool)
     , m_context(context)
     , m_queue(queue)
-    , m_ownsCmdPool(ownsCommandPool)
 {
     if(m_ownsCmdPool){
         auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);

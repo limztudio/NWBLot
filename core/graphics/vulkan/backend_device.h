@@ -588,16 +588,16 @@ private:
 
 
 private:
-    bool m_gpuCrashDiagnosticsEnabled = false;
-    bool m_queueRegistryReady = false;
+    Atomic<u64> m_submissionOperationState = 0u;
+    Atomic<u64> m_nextTimerQueryIncarnation = 0u;
     u16 m_deviceGeneration = 0u;
     // Actual Vulkan loss and logical quarantine remain distinct so only proven loss may bypass an idle teardown join.
     Atomic<bool> m_deviceLost = false;
     Atomic<bool> m_deviceQuarantined = false;
-    Atomic<u64> m_submissionOperationState = 0u;
     Atomic<bool> m_lifecycleDestructionPrepared = false;
     Atomic<bool> m_gpuCrashCaptured = false;
-    Atomic<u64> m_nextTimerQueryIncarnation = 0u;
+    bool m_gpuCrashDiagnosticsEnabled = false;
+    bool m_queueRegistryReady = false;
     GpuCrashTracker m_gpuCrashTracker;
     // Pre-reserved crash-capture arena.
     Alloc::PersistentArena m_gpuCrashReportArena;

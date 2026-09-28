@@ -115,8 +115,10 @@ template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
 
 Device::Device(const DeviceDesc& desc)
     : RefCounter<GraphicsResource>(desc.cpuScheduler)
-    , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
+    , m_submissionOperationState(0u)
+    , m_nextTimerQueryIncarnation(0u)
     , m_deviceGeneration(__hidden_vulkan_device::AllocateDeviceGeneration())
+    , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
     , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))

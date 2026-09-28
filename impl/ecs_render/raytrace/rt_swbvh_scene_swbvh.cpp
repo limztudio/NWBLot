@@ -315,11 +315,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
         lightSpaceCasters.push_back({
             .triangleIndexBuffer = mesh.triangleIndexBuffer,
+            .meshletDescBuffer = mesh.meshletDescBuffer,
+            .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
             .meshletCount = mesh.meshletCount,
             .meshletDescSlot = mesh.meshletCount != 0u ? mesh.meshletDescHeapHandle.slot() : 0u,
             .meshletBoundsSlot = mesh.meshletCount != 0u ? mesh.meshletLocalBoundsHeapHandle.slot() : 0u,
-            .meshletDescBuffer = mesh.meshletDescBuffer,
-            .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
         });
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);

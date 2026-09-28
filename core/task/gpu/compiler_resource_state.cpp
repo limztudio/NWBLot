@@ -209,9 +209,9 @@ namespace GpuTaskGraphCompilerDetail{
                 if(!resourceHistory.append(TrackedCompiledResourceState{
                     .resource = use.resource,
                     .range = plannedRange,
+                    .task = taskID,
                     .state = use.requiredState,
                     .access = use.access,
-                    .task = taskID,
                     .queue = compiledTask->queue,
                 }))
                     return false;
@@ -451,9 +451,9 @@ namespace GpuTaskGraphCompilerDetail{
                 if(!resourceHistory.append(TrackedCompiledResourceState{
                     .resource = use.resource,
                     .range = plannedRange,
+                    .task = taskID,
                     .state = use.requiredState,
                     .access = use.access,
-                    .task = taskID,
                     .queue = compiledTask->queue,
                 }))
                     return false;
@@ -641,9 +641,9 @@ namespace GpuTaskGraphCompilerDetail{
             if(!resourceHistory.append(TrackedCompiledResourceState{
                 .resource = use.resource,
                 .range = use.range,
+                .task = taskID,
                 .state = use.requiredState,
                 .access = use.access,
-                .task = taskID,
                 .queue = compiledTask->queue,
             }))
                 return false;

@@ -85,9 +85,9 @@ public:
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
         usize regionCount = 0u;
+        QueueSubmissionToken* acceptedToken = nullptr;
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
-        QueueSubmissionToken* acceptedToken = nullptr;
         // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
         CommandQueue::Enum queue = CommandQueue::kCount;
         bool hasPhysicalInitialState = false;
@@ -96,14 +96,14 @@ public:
     struct MeshSetupDesc{
         const void* vertexData = nullptr;
         usize vertexDataSize = 0;
-        Name vertexBufferName;
         const void* indexData = nullptr;
         usize indexDataSize = 0;
+        Name vertexBufferName;
         Name indexBufferName;
         u32 vertexStride = 0;
-        bool use32BitIndices = true;
         // Forwarded to the constituent buffer setups' native consumer readiness contracts.
         CommandQueue::Enum queue = CommandQueue::kCount;
+        bool use32BitIndices = true;
     };
 
     struct MeshResource{

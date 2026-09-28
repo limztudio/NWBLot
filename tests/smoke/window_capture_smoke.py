@@ -14,6 +14,39 @@ import sys
 import tempfile
 import time
 
+# Shared literals (no inline hardcodes below this block).
+LIT_N_127_0_0_1 = "127.0.0.1"
+LIT_RB = "rb"
+LIT_UTF_8 = "utf-8"
+LIT_REPLACE = "replace"
+LIT_WINDOWS = "Windows"
+LIT_LINUX = "Linux"
+LIT_NWB_OUTPUT_CAPTURE = "_nwb_output_capture"
+LIT_OFF = "off"
+LIT_ON = "on"
+LIT_RESIZE_CLIENT = "resize_client"
+LIT_N_2SIHHI = "<2sIHHI"
+LIT_WIDTH = "width"
+LIT_HEIGHT = "height"
+LIT_DEPTH = "depth"
+LIT_ROOT = "root"
+LIT_TYPE = "type"
+LIT_SAME_SCREEN = "same_screen"
+LIT_DWMAPI = "dwmapi"
+LIT_LOGSERVER = "logserver"
+LIT_P = "-p"
+LIT_A = "-a"
+LIT_TESTBED = "testbed"
+LIT_BEFORE_LOG_COLLECTION = "before log collection"
+LIT_TIMEOUT = "--timeout"
+LIT_SETTLE_SECONDS = "--settle-seconds"
+LIT_RENDER_READY_TIMEOUT = "--render-ready-timeout"
+LIT_STORE_TRUE = "store_true"
+LIT_APPLICATION_CAPTURE_FRAME_COUNT = "--application-capture-frame-count"
+LIT_APPEND = "append"
+LIT_MAIN = "__main__"
+LIT_HWND_CLIENT_RECT_UNAVAILABLE = "HWND 0x{hwnd:x} client rect is unavailable"
+
 
 SKIP_EXIT_CODE = 77
 STRICT_LOG_FAILURE_MESSAGES = (
@@ -127,7 +160,7 @@ def parse_int(value):
 
 def choose_free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
+        sock.bind((LIT_N_127_0_0_1, 0))
         return sock.getsockname()[1]
 
 
@@ -137,7 +170,7 @@ def wait_for_tcp_port(port, timeout_seconds):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.settimeout(0.2)
             try:
-                sock.connect(("127.0.0.1", port))
+                sock.connect((LIT_N_127_0_0_1, port))
                 return
             except OSError:
                 time.sleep(0.05)
@@ -158,9 +191,9 @@ def read_log_delta(path, offset):
         if size <= offset:
             return ""
 
-        with path.open("rb") as log_file:
+        with path.open(LIT_RB) as log_file:
             log_file.seek(offset)
-            return log_file.read().decode("utf-8", "replace")
+            return log_file.read().decode(LIT_UTF_8, LIT_REPLACE)
     except OSError:
         return ""
 
@@ -341,7 +374,7 @@ def terminate_process(process, name, window_handle=None):
         if process.poll() is None:
             # Graceful exit writes Name-symbol sidecars; forced termination can skip the normal exit path.
             host_platform = platform.system()
-            if host_platform == "Windows":
+            if host_platform == LIT_WINDOWS:
                 try:
                     if request_windows_graceful_exit(process.pid):
                         try:
@@ -351,7 +384,7 @@ def terminate_process(process, name, window_handle=None):
                 except OSError as error:
                     write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
 
-            elif host_platform == "Linux" and window_handle is not None:
+            elif host_platform == LIT_LINUX and window_handle is not None:
                 if request_linux_graceful_exit(window_handle):
                     try:
                         process.wait(timeout=10.0)
@@ -370,7 +403,7 @@ def terminate_process(process, name, window_handle=None):
         exit_code = process.poll()
         if exit_code is not None:
             tail = read_process_tail(process)
-            capture = getattr(process, "_nwb_output_capture", None)
+            capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
             process._nwb_output_capture = None
             dispose_process_output_capture(capture)
 
@@ -395,11 +428,11 @@ def require_non_negative_arg(parser, name, value):
 
 def read_file_tail(path, max_bytes=65536):
     try:
-        with path.open("rb") as log_file:
+        with path.open(LIT_RB) as log_file:
             log_file.seek(0, os.SEEK_END)
             start = max(log_file.tell() - max_bytes, 0)
             log_file.seek(start)
-            return log_file.read().decode("utf-8", "replace")
+            return log_file.read().decode(LIT_UTF_8, LIT_REPLACE)
     except OSError:
         return ""
 
@@ -408,7 +441,7 @@ def read_process_tail(process):
     if process is None:
         return ""
 
-    capture = getattr(process, "_nwb_output_capture", None)
+    capture = getattr(process, LIT_NWB_OUTPUT_CAPTURE, None)
     if capture is None:
         return ""
 
@@ -421,7 +454,7 @@ def read_process_tail(process):
 
 
 def executable_sibling(executable, name):
-    suffix = ".exe" if platform.system() == "Windows" else ""
+    suffix = ".exe" if platform.system() == LIT_WINDOWS else ""
     candidate = executable.parent / f"{name}{suffix}"
     return candidate if candidate.exists() else None
 
@@ -448,7 +481,7 @@ def make_runtime_launch_args(args: argparse.Namespace) -> SimpleNamespace:
         working_directory=args.runtime_dir,
         timeout=args.startup_timeout,
         application_arg=["--gpudbg"] if args.gpu_validation else [],
-        software_vulkan="off",
+        software_vulkan=LIT_OFF,
     )
 
 
@@ -456,19 +489,19 @@ def build_launch_environment(args):
     env = os.environ.copy()
     system = platform.system()
 
-    if system == "Linux":
+    if system == LIT_LINUX:
         if not env.get("DISPLAY"):
             raise SmokeSkip("DISPLAY is not set; X11 window capture is unavailable")
 
         env.setdefault("NWB_LINUX_BACKEND", "x11")
-        if args.software_vulkan != "off":
+        if args.software_vulkan != LIT_OFF:
             lavapipe_icd = resolve_lavapipe_icd()
             if lavapipe_icd:
                 env["VK_ICD_FILENAMES"] = str(lavapipe_icd)
-            elif args.software_vulkan == "on":
+            elif args.software_vulkan == LIT_ON:
                 raise SmokeSkip("Mesa lavapipe Vulkan ICD was requested but is not installed")
 
-    if getattr(args, "resize_client", None):
+    if getattr(args, LIT_RESIZE_CLIENT, None):
         validate_resize_environment(env)
     return env
 
@@ -522,7 +555,7 @@ def write_bmp_24(path, width, height, rows_rgb):
     padding = b"\0" * (row_stride - width * 3)
 
     with path.open("wb") as out:
-        out.write(struct.pack("<2sIHHI", b"BM", file_size, 0, 0, 14 + 40))
+        out.write(struct.pack(LIT_N_2SIHHI, b"BM", file_size, 0, 0, 14 + 40))
         out.write(struct.pack("<IIIHHIIIIII", 40, width, height, 1, 24, 0, image_size, 0, 0, 0, 0))
         for row in reversed(rows_rgb):
             encoded = bytearray()
@@ -568,7 +601,7 @@ def read_bmp_24_rows(path):
     if len(data) < 54:
         raise SmokeFailure(f"application capture BMP '{path}' is shorter than the required headers")
 
-    signature, declared_file_size, _, _, pixel_offset = struct.unpack_from("<2sIHHI", data, 0)
+    signature, declared_file_size, _, _, pixel_offset = struct.unpack_from(LIT_N_2SIHHI, data, 0)
     if signature != b"BM":
         raise SmokeFailure(f"application capture BMP '{path}' has an invalid signature")
     if declared_file_size != len(data):
@@ -861,12 +894,12 @@ class LinuxXWindowAttributes(ctypes.Structure):
     _fields_ = [
         ("x", ctypes.c_int),
         ("y", ctypes.c_int),
-        ("width", ctypes.c_int),
-        ("height", ctypes.c_int),
+        (LIT_WIDTH, ctypes.c_int),
+        (LIT_HEIGHT, ctypes.c_int),
         ("border_width", ctypes.c_int),
-        ("depth", ctypes.c_int),
+        (LIT_DEPTH, ctypes.c_int),
         ("visual", ctypes.c_void_p),
-        ("root", ctypes.c_ulong),
+        (LIT_ROOT, ctypes.c_ulong),
         ("class", ctypes.c_int),
         ("bit_gravity", ctypes.c_int),
         ("win_gravity", ctypes.c_int),
@@ -901,8 +934,8 @@ class LinuxXImage(ctypes.Structure):
 
 
 LinuxXImage._fields_ = [
-    ("width", ctypes.c_int),
-    ("height", ctypes.c_int),
+    (LIT_WIDTH, ctypes.c_int),
+    (LIT_HEIGHT, ctypes.c_int),
     ("xoffset", ctypes.c_int),
     ("format", ctypes.c_int),
     ("data", ctypes.c_void_p),
@@ -910,7 +943,7 @@ LinuxXImage._fields_ = [
     ("bitmap_unit", ctypes.c_int),
     ("bitmap_bit_order", ctypes.c_int),
     ("bitmap_pad", ctypes.c_int),
-    ("depth", ctypes.c_int),
+    (LIT_DEPTH, ctypes.c_int),
     ("bytes_per_line", ctypes.c_int),
     ("bits_per_pixel", ctypes.c_int),
     ("red_mask", ctypes.c_ulong),
@@ -922,12 +955,12 @@ LinuxXImage._fields_ = [
 
 
 LINUX_X_INPUT_EVENT_PREFIX = [
-    ("type", ctypes.c_int),
+    (LIT_TYPE, ctypes.c_int),
     ("serial", ctypes.c_ulong),
     ("send_event", ctypes.c_int),
     ("display", ctypes.c_void_p),
     ("window", ctypes.c_ulong),
-    ("root", ctypes.c_ulong),
+    (LIT_ROOT, ctypes.c_ulong),
     ("subwindow", ctypes.c_ulong),
     ("time", ctypes.c_ulong),
     ("x", ctypes.c_int),
@@ -941,27 +974,27 @@ LINUX_X_INPUT_EVENT_PREFIX = [
 class LinuxXKeyEvent(ctypes.Structure):
     _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("keycode", ctypes.c_uint),
-        ("same_screen", ctypes.c_int),
+        (LIT_SAME_SCREEN, ctypes.c_int),
     ]
 
 
 class LinuxXButtonEvent(ctypes.Structure):
     _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("button", ctypes.c_uint),
-        ("same_screen", ctypes.c_int),
+        (LIT_SAME_SCREEN, ctypes.c_int),
     ]
 
 
 class LinuxXMotionEvent(ctypes.Structure):
     _fields_ = LINUX_X_INPUT_EVENT_PREFIX + [
         ("is_hint", ctypes.c_char),
-        ("same_screen", ctypes.c_int),
+        (LIT_SAME_SCREEN, ctypes.c_int),
     ]
 
 
 class LinuxXEvent(ctypes.Union):
     _fields_ = [
-        ("type", ctypes.c_int),
+        (LIT_TYPE, ctypes.c_int),
         ("xkey", LinuxXKeyEvent),
         ("xbutton", LinuxXButtonEvent),
         ("xmotion", LinuxXMotionEvent),
@@ -1146,7 +1179,7 @@ class LinuxX11Capture:
             return None
 
         try:
-            return value.value.decode("utf-8", "replace") if value.value else None
+            return value.value.decode(LIT_UTF_8, LIT_REPLACE) if value.value else None
         finally:
             self.x11.XFree(value)
 
@@ -1669,7 +1702,7 @@ class WindowsCapture:
     def client_size(self, hwnd):
         rect = self._client_rect(hwnd)
         if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return rect.right - rect.left, rect.bottom - rect.top
 
     def resize_client(self, hwnd, width, height):
@@ -1704,11 +1737,11 @@ class WindowsCapture:
         time.sleep(0.1)
 
     def _raw_client_dwmapi(self):
-        if getattr(self, "dwmapi", None) is not None:
+        if getattr(self, LIT_DWMAPI, None) is not None:
             return self.dwmapi
 
         try:
-            dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+            dwmapi = ctypes.WinDLL(LIT_DWMAPI, use_last_error=True)
         except OSError as error:
             raise SmokeFailure("Windows raw client capture requires DwmSetWindowAttribute from dwmapi") from error
 
@@ -1811,7 +1844,7 @@ class WindowsCapture:
         self._prepare_capture_window(hwnd)
         rect = self._client_rect(hwnd)
         if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
 
         return self._capture_screen_rect(hwnd, rect, output_path)
 
@@ -1820,22 +1853,22 @@ class WindowsCapture:
         self._prepare_capture_window(hwnd)
         rect = self._client_rect(hwnd)
         if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return self._capture_screen_rect(hwnd, rect, output_path)
 
     def capture_prepared_raw_client_window(self, hwnd, output_path):
         """Capture the full raw client area after prepare_raw_client_window."""
         rect = self._client_rect(hwnd)
         if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+            raise SmokeFailure(LIT_HWND_CLIENT_RECT_UNAVAILABLE.format(hwnd=hwnd))
         return self._capture_screen_rect(hwnd, rect, output_path)
 
 
 def create_capture_backend():
     system = platform.system()
-    if system == "Linux":
+    if system == LIT_LINUX:
         return LinuxX11Capture()
-    if system == "Windows":
+    if system == LIT_WINDOWS:
         return WindowsCapture()
     raise SmokeSkip(f"window handle capture is not implemented for {system}")
 
@@ -1849,7 +1882,7 @@ def launch_logserver(args, executable, env):
     # The process runs from the test runtime directory, so resolve an explicitly supplied relative path before Popen
     # changes cwd. CTest supplies an absolute path, while direct smoke-script users commonly supply a repository-relative
     # path.
-    logserver = Path(args.logserver_executable).resolve() if args.logserver_executable else executable_sibling(executable, "logserver")
+    logserver = Path(args.logserver_executable).resolve() if args.logserver_executable else executable_sibling(executable, LIT_LOGSERVER)
     if not logserver:
         write_status("INFO: logserver executable was not found; using standalone loader logs")
         log_directory = executable.resolve().parent
@@ -1861,16 +1894,16 @@ def launch_logserver(args, executable, env):
     log_baseline = snapshot_log_files(log_directory, log_pattern)
     port = args.log_port if args.log_port else choose_free_port()
     process = launch_captured_process(
-        [str(logserver), "-p", str(port)],
+        [str(logserver), LIT_P, str(port)],
         args.working_directory,
         env,
-        "logserver",
+        LIT_LOGSERVER,
     )
     try:
         wait_for_tcp_port(port, min(args.timeout, 10.0))
     except Exception as error:
         tail = read_process_tail(process)
-        terminate_process(process, "logserver")
+        terminate_process(process, LIT_LOGSERVER)
         if tail:
             raise SmokeFailure(f"{error}\n{tail}") from error
         raise
@@ -1881,16 +1914,16 @@ def launch_logserver(args, executable, env):
 def launch_testbed(args, executable, env, log_port):
     command = [str(executable)]
     if log_port:
-        command.extend(["-a", "http://localhost", "-p", str(log_port)])
+        command.extend([LIT_A, "http://localhost", LIT_P, str(log_port)])
     else:
-        command.extend(["-a", "", "-p", "0"])
+        command.extend([LIT_A, "", LIT_P, "0"])
     command.extend(args.application_arg)
 
     return launch_captured_process(
         command,
         args.working_directory,
         env,
-        "testbed",
+        LIT_TESTBED,
     )
 
 
@@ -1910,7 +1943,7 @@ def wait_for_application_capture_exit(process, output_path, timeout_seconds):
     )
 
 
-def ensure_process_running(process, stage, process_name="testbed"):
+def ensure_process_running(process, stage, process_name=LIT_TESTBED):
     if process is None or process.poll() is None:
         return
 
@@ -1929,11 +1962,11 @@ def require_normal_process_exit(exit_code, tail, process_name):
     raise SmokeFailure(f"{process_name} exited during graceful shutdown (exit {exit_code}){detail}")
 
 
-def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdown_name="logserver"):
+def shutdown_logserver_and_collect(process, directory, baseline, pattern, shutdown_name=LIT_LOGSERVER):
     if process is not None:
-        ensure_process_running(process, "before log collection", "logserver")
+        ensure_process_running(process, LIT_BEFORE_LOG_COLLECTION, LIT_LOGSERVER)
         exit_code, tail = terminate_process(process, shutdown_name)
-        require_normal_process_exit(exit_code, tail, "logserver")
+        require_normal_process_exit(exit_code, tail, LIT_LOGSERVER)
     wait_for_log_drain(directory, baseline, pattern)
     return collect_log_delta(directory, baseline, pattern) if directory else ""
 
@@ -2181,7 +2214,7 @@ def launch_and_capture(args, backend):
                 raise SmokeFailure(f"testbed exited before a window was visible (exit {exit_code})\n{tail}")
             raise SmokeFailure("timed out waiting for a visible testbed window")
 
-        if getattr(args, "resize_client", None):
+        if getattr(args, LIT_RESIZE_CLIENT, None):
             result = capture_resized_window(
                 args, backend, handle, testbed_process, log_directory, log_baseline, log_pattern,
             )
@@ -2189,14 +2222,14 @@ def launch_and_capture(args, backend):
             time.sleep(args.settle_seconds)
             ensure_process_running(testbed_process, "before checked capture")
             result = capture_render_ready_window(args, backend, handle, testbed_process)
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED, handle)
         testbed_process = None
-        require_normal_process_exit(testbed_exit_code, testbed_exit_tail, "testbed")
+        require_normal_process_exit(testbed_exit_code, testbed_exit_tail, LIT_TESTBED)
         if logserver_process is not None:
-            ensure_process_running(logserver_process, "before log collection", "logserver")
-            logserver_exit_code, logserver_exit_tail = terminate_process(logserver_process, "logserver")
+            ensure_process_running(logserver_process, LIT_BEFORE_LOG_COLLECTION, LIT_LOGSERVER)
+            logserver_exit_code, logserver_exit_tail = terminate_process(logserver_process, LIT_LOGSERVER)
             logserver_process = None
-            require_normal_process_exit(logserver_exit_code, logserver_exit_tail, "logserver")
+            require_normal_process_exit(logserver_exit_code, logserver_exit_tail, LIT_LOGSERVER)
         wait_for_log_drain(log_directory, log_baseline, log_pattern)
         skip_reason = validate_expected_log_messages(
             log_directory,
@@ -2209,9 +2242,9 @@ def launch_and_capture(args, backend):
         )
     finally:
         if testbed_process is not None:
-            terminate_process(testbed_process, "testbed", handle)
+            terminate_process(testbed_process, LIT_TESTBED, handle)
         if logserver_process is not None:
-            terminate_process(logserver_process, "logserver")
+            terminate_process(logserver_process, LIT_LOGSERVER)
 
     if skip_reason:
         raise SmokeSkip(skip_reason)
@@ -2248,7 +2281,7 @@ def launch_and_capture_application(args):
         except SmokeFailure as error:
             wait_failure = error
 
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed")
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, LIT_TESTBED)
         testbed_process = None
         log_text = shutdown_logserver_and_collect(
             logserver_process,
@@ -2259,14 +2292,14 @@ def launch_and_capture_application(args):
         logserver_process = None
     finally:
         if testbed_process is not None:
-            terminate_process(testbed_process, "testbed")
+            terminate_process(testbed_process, LIT_TESTBED)
         if logserver_process is not None:
-            terminate_process(logserver_process, "logserver")
+            terminate_process(logserver_process, LIT_LOGSERVER)
 
     log_output = getattr(args, "log_output", None)
     if log_output:
         log_output.parent.mkdir(parents=True, exist_ok=True)
-        log_output.write_bytes(log_text.encode("utf-8"))
+        log_output.write_bytes(log_text.encode(LIT_UTF_8))
     if wait_failure:
         raise wait_failure
     if testbed_exit_code != 0:
@@ -2294,61 +2327,61 @@ def parse_args(argv):
     parser.add_argument("--output", type=Path, required=True, help="Screenshot output path. The script writes a 24-bit BMP.")
     parser.add_argument("--window-handle", type=parse_int, help="Capture an existing native window handle instead of launching testbed.")
     parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
-    parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
-    parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
+    parser.add_argument(LIT_TIMEOUT, type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
+    parser.add_argument(LIT_SETTLE_SECONDS, type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"),
         help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
     parser.add_argument("--resize-settle-seconds", type=float,
         help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
     parser.add_argument(
-        "--render-ready-timeout",
+        LIT_RENDER_READY_TIMEOUT,
         type=float,
         default=RENDER_READY_TIMEOUT_SECONDS,
         help="Seconds to wait for a blank visible window to publish its first rendered frame.",
     )
     parser.add_argument(
         "--application-capture",
-        action="store_true",
+        action=LIT_STORE_TRUE,
         help="Use the application's Vulkan framebuffer readback instead of desktop window capture.",
     )
     parser.add_argument(
-        "--application-capture-frame-count",
+        LIT_APPLICATION_CAPTURE_FRAME_COUNT,
         type=int,
         default=360,
         help="Positive rendered frame count at which application capture is requested. Defaults to 360.",
     )
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
+    parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--log-output", type=Path,
         help="For application capture, save the exact collected per-launch log text before validation.")
-    parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
+    parser.add_argument("--expect-log-message", action=LIT_APPEND, default=[], help="Required substring in the logserver output.")
     parser.add_argument(
         "--reject-log-message",
-        action="append",
+        action=LIT_APPEND,
         default=list(STRICT_LOG_FAILURE_MESSAGES),
         help="Forbidden substring in the logserver output. Runtime warnings, assertions, errors, and validation failures are always rejected.",
     )
     parser.add_argument(
         "--skip-log-message",
-        action="append",
+        action=LIT_APPEND,
         default=[],
         help="Log substring that classifies the launched smoke as unsupported instead of failed.",
     )
     parser.add_argument(
         "--skip-blocking-log-message",
-        action="append",
+        action=LIT_APPEND,
         default=list(STRICT_LOG_FAILURE_MESSAGES),
         help="Log substring that remains a failure even when an explicit capability-skip marker is present. Runtime warnings, assertions, errors, and validation failures always block skips.",
     )
     parser.add_argument(
         "--expect-transparent-multi",
-        action="store_true",
+        action=LIT_STORE_TRUE,
         help="Assert that the captured scene contains multiple distinct transparent mesh colors.",
     )
     parser.add_argument(
         "--expect-transparent-csg",
-        action="store_true",
+        action=LIT_STORE_TRUE,
         help="Assert that the captured transparent center mesh contains a clipped CSG void.",
     )
     parser.add_argument(
@@ -2358,18 +2391,18 @@ def parse_args(argv):
     )
     parser.add_argument(
         "--expect-texture-smoke",
-        action="store_true",
+        action=LIT_STORE_TRUE,
         help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",
     )
     parser.add_argument(
         "--software-vulkan",
-        choices=("auto", "on", "off"),
-        default="off",
+        choices=("auto", LIT_ON, LIT_OFF),
+        default=LIT_OFF,
         help="On Linux, optionally use Mesa lavapipe. Defaults to the system Vulkan ICD.",
     )
     parser.add_argument(
         "--application-arg",
-        action="append",
+        action=LIT_APPEND,
         default=[],
         help="Extra argument to pass to the launched application. Repeat for multiple arguments.",
     )
@@ -2385,14 +2418,14 @@ def parse_args(argv):
         parser.error("--log-output requires --application-capture")
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
-    require_positive_arg(parser, "--timeout", args.timeout)
-    require_positive_arg(parser, "--render-ready-timeout", args.render_ready_timeout)
+    require_positive_arg(parser, LIT_TIMEOUT, args.timeout)
+    require_positive_arg(parser, LIT_RENDER_READY_TIMEOUT, args.render_ready_timeout)
     require_positive_arg(
         parser,
-        "--application-capture-frame-count",
+        LIT_APPLICATION_CAPTURE_FRAME_COUNT,
         args.application_capture_frame_count,
     )
-    require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
+    require_non_negative_arg(parser, LIT_SETTLE_SECONDS, args.settle_seconds)
 
     if args.resize_client is not None:
         if args.application_capture or args.window_handle is not None:
@@ -2465,5 +2498,5 @@ def main(argv):
             backend.close()
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main(sys.argv[1:]))

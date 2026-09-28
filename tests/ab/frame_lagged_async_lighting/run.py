@@ -39,6 +39,25 @@ from window_capture_smoke import (  # noqa: E402
     terminate_process,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE = "lagged lighting-history capture skipped because its source state was unavailable"
+LIT_BOOTSTRAP = "bootstrap"
+LIT_ACTIVE_HISTORY = "active history"
+LIT_CURRENT_FRAME = "current frame"
+LIT_SELF_TEST = "--self-test"
+LIT_STORE_TRUE = "store_true"
+LIT_STARTUP_TIMEOUT = "--startup-timeout"
+LIT_TRANSITION_TIMEOUT = "--transition-timeout"
+LIT_F1 = "F1"
+LIT_LAGGED_LIGHTING_SMOKE = "lagged-lighting smoke"
+LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER = "lagged-lighting smoke logserver"
+LIT_APP_STOP = "app-stop"
+LIT_CLEANUP_NONE = "cleanup-none"
+LIT_LOGSERVER_LOG = "logserver_*.log"
+LIT_LOGSERVER_HELPER = "logserver-helper"
+LIT_MAIN = "__main__"
+LIT_TARGET_GENERATION_7 = " (target generation 7)"
+
 
 NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"
 BOOTSTRAP_ACCEPTED = "RendererSystem: frame-lagged async lighting bootstrap accepted"
@@ -49,18 +68,18 @@ FORBIDDEN_LOG_MESSAGES = (
     "cannot safely continue after an unresolved frame recovery submission",
     "deferred graph build with optional lagged lighting-history capture failed",
     "deferred lagged lighting-history tail was unavailable",
-    "lagged lighting-history capture skipped because its source state was unavailable",
+    LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE,
     "graph-owned lagged lighting-history capture record/submission was rejected",
 )
 
 # A successful target run has exactly this accepted lifecycle.  Keep the sequence as data so the live poller and
 # the no-Vulkan self-test use the same verdict rather than independently counting markers.
 LAGGED_LIGHTING_LIFECYCLE = (
-    ("bootstrap", BOOTSTRAP_ACCEPTED),
-    ("active history", ACTIVE_HISTORY_ACCEPTED),
-    ("current frame", CURRENT_FRAME_ACCEPTED),
-    ("bootstrap", BOOTSTRAP_ACCEPTED),
-    ("active history", ACTIVE_HISTORY_ACCEPTED),
+    (LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED),
+    (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED),
+    (LIT_CURRENT_FRAME, CURRENT_FRAME_ACCEPTED),
+    (LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED),
+    (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED),
 )
 
 
@@ -72,9 +91,9 @@ def accepted_lifecycle_events(log_text: str) -> tuple[str, ...]:
     """Return accepted lifecycle markers in log order, including repeated transition types."""
     occurrences: list[tuple[int, str]] = []
     for event_name, marker in (
-        ("bootstrap", BOOTSTRAP_ACCEPTED),
-        ("active history", ACTIVE_HISTORY_ACCEPTED),
-        ("current frame", CURRENT_FRAME_ACCEPTED),
+        (LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED),
+        (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED),
+        (LIT_CURRENT_FRAME, CURRENT_FRAME_ACCEPTED),
     ):
         offset = 0
         while True:
@@ -170,19 +189,19 @@ def require_positive(parser: argparse.ArgumentParser, option: str, value: float)
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--self-test", action="store_true", help="Run parser/state-machine checks without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/state-machine checks without Vulkan.")
     parser.add_argument("--executable", type=Path, help="Path to nwb_frame_lagged_async_lighting_smoke.")
     parser.add_argument("--runtime-dir", type=Path, help="Cooked smoke runtime root used as the process working directory.")
     parser.add_argument("--logserver-executable", help="Optional path to nwb_logserver/logserver.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs rather than a logserver.")
+    parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs rather than a logserver.")
     parser.add_argument(
         "--window-title",
         default="NWB Frame Lagged Async Lighting Smoke",
         help="Native window title used for F1 delivery and graceful exit.",
     )
-    parser.add_argument("--startup-timeout", type=float, default=45.0, help="Timeout for device creation and window visibility.")
-    parser.add_argument("--transition-timeout", type=float, default=20.0, help="Timeout for each accepted transition.")
-    parser.add_argument("--gpu-validation", action="store_true", help="Pass --gpudbg to the loader process.")
+    parser.add_argument(LIT_STARTUP_TIMEOUT, type=float, default=45.0, help="Timeout for device creation and window visibility.")
+    parser.add_argument(LIT_TRANSITION_TIMEOUT, type=float, default=20.0, help="Timeout for each accepted transition.")
+    parser.add_argument("--gpu-validation", action=LIT_STORE_TRUE, help="Pass --gpudbg to the loader process.")
     args = parser.parse_args(argv)
 
     if args.self_test:
@@ -191,8 +210,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     missing = [option for option in ("executable", "runtime_dir") if getattr(args, option) is None]
     if missing:
         parser.error(f"missing required arguments: {', '.join('--' + option.replace('_', '-') for option in missing)}")
-    require_positive(parser, "--startup-timeout", args.startup_timeout)
-    require_positive(parser, "--transition-timeout", args.transition_timeout)
+    require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)
+    require_positive(parser, LIT_TRANSITION_TIMEOUT, args.transition_timeout)
     args.executable = args.executable.resolve()
     args.runtime_dir = args.runtime_dir.resolve()
     return args
@@ -251,7 +270,7 @@ def run(args: argparse.Namespace) -> int:
                 "while waiting for the first accepted history use",
             )
         if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
-            capture_backend.send_named_key(window, "F1")
+            capture_backend.send_named_key(window, LIT_F1)
             final_log = wait_for_lifecycle_stage(
                 app_process,
                 log_directory,
@@ -262,7 +281,7 @@ def run(args: argparse.Namespace) -> int:
                 "while waiting for the accepted current-frame path",
             )
         if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
-            capture_backend.send_named_key(window, "F1")
+            capture_backend.send_named_key(window, LIT_F1)
             final_log = wait_for_lifecycle_stage(
                 app_process,
                 log_directory,
@@ -282,19 +301,19 @@ def run(args: argparse.Namespace) -> int:
                 args.transition_timeout,
                 "while waiting for the second accepted history use",
             )
-        app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
+        app_exit_code, app_exit_tail = terminate_process(app_process, LIT_LAGGED_LIGHTING_SMOKE, window)
         app_process = None
         final_log = shutdown_logserver_and_collect(
             logserver_process,
             log_directory,
             log_baseline,
             log_pattern,
-            "lagged-lighting smoke logserver",
+            LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER,
         )
         logserver_process = None
     finally:
-        terminate_process(app_process, "lagged-lighting smoke", window)
-        terminate_process(logserver_process, "lagged-lighting smoke logserver")
+        terminate_process(app_process, LIT_LAGGED_LIGHTING_SMOKE, window)
+        terminate_process(logserver_process, LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER)
         if capture_backend:
             capture_backend.close()
 
@@ -306,23 +325,23 @@ def run(args: argparse.Namespace) -> int:
 def run_self_test() -> int:
     assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     log = "\n".join((
-        f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
-        f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
-        f"{CURRENT_FRAME_ACCEPTED} (target generation 7)",
-        f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
-        f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
+        f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+        f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+        f"{CURRENT_FRAME_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+        f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+        f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}",
     ))
     assert accepted_lifecycle_events(log) == tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
     assert validate_lifecycle_order(log) == accepted_lifecycle_events(log)
     assert require_lifecycle_stage(log, len(LAGGED_LIGHTING_LIFECYCLE)) == accepted_lifecycle_events(log)
     for invalid_log in (
         "\n".join((
-            f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
-            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
+            f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+            f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
         )),
         "\n".join((
-            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
-            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
+            f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
+            f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
         )),
     ):
         try:
@@ -356,7 +375,7 @@ def run_self_test() -> int:
     current_history_warnings = (
         "deferred graph build with optional lagged lighting-history capture failed; retrying without the tail",
         "deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting",
-        "lagged lighting-history capture skipped because its source state was unavailable",
+        LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE,
         "graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting",
     )
     for warning in current_history_warnings:
@@ -384,7 +403,7 @@ def run_self_test() -> int:
         root = Path(directory)
         executable = root / "orchestration.exe"
         executable.write_bytes(b"exe")
-        args = parse_args(["--self-test"])
+        args = parse_args([LIT_SELF_TEST])
         args.executable = executable
         args.runtime_dir = root
         app = SimpleNamespace(pid=4321, poll=lambda: None)
@@ -396,24 +415,24 @@ def run_self_test() -> int:
 
         def terminate(process, name, window_handle=None):
             if process is app:
-                events.append(("app-stop", name, window_handle))
+                events.append((LIT_APP_STOP, name, window_handle))
                 return 7, "simulated abnormal exit"
             assert process is None
-            events.append(("cleanup-none", name, window_handle))
+            events.append((LIT_CLEANUP_NONE, name, window_handle))
             return None, ""
 
         def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver
             assert log_directory == root
             assert received_baseline == baseline
-            assert pattern == "logserver_*.log"
-            assert events == [("app-stop", "lagged-lighting smoke", 17)]
-            events.append(("logserver-helper", shutdown_name))
+            assert pattern == LIT_LOGSERVER_LOG
+            assert events == [(LIT_APP_STOP, LIT_LAGGED_LIGHTING_SMOKE, 17)]
+            events.append((LIT_LOGSERVER_HELPER, shutdown_name))
             return NO_DEDICATED_ASYNC_COMPUTE
 
         with mock.patch.object(module, "build_launch_environment", return_value={}), \
              mock.patch.object(module, "create_capture_backend", return_value=backend), \
-             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
              mock.patch.object(module, "launch_testbed", return_value=app), \
              mock.patch.object(module, "wait_for_lifecycle_stage", return_value=NO_DEDICATED_ASYNC_COMPUTE), \
              mock.patch.object(module.time, "sleep"), \
@@ -427,18 +446,18 @@ def run_self_test() -> int:
                 raise AssertionError("lagged-lighting orchestration accepted an abnormal Testbed exit")
 
         assert events == [
-            ("app-stop", "lagged-lighting smoke", 17),
-            ("logserver-helper", "lagged-lighting smoke logserver"),
-            ("cleanup-none", "lagged-lighting smoke", 17),
-            ("cleanup-none", "lagged-lighting smoke logserver", None),
+            (LIT_APP_STOP, LIT_LAGGED_LIGHTING_SMOKE, 17),
+            (LIT_LOGSERVER_HELPER, LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER),
+            (LIT_CLEANUP_NONE, LIT_LAGGED_LIGHTING_SMOKE, 17),
+            (LIT_CLEANUP_NONE, LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER, None),
         ]
         assert terminate_mock.mock_calls == [
-            mock.call(app, "lagged-lighting smoke", 17),
-            mock.call(None, "lagged-lighting smoke", 17),
-            mock.call(None, "lagged-lighting smoke logserver"),
+            mock.call(app, LIT_LAGGED_LIGHTING_SMOKE, 17),
+            mock.call(None, LIT_LAGGED_LIGHTING_SMOKE, 17),
+            mock.call(None, LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER),
         ]
         shutdown_mock.assert_called_once_with(
-            logserver, root, baseline, "logserver_*.log", "lagged-lighting smoke logserver"
+            logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_LAGGED_LIGHTING_SMOKE_LOGSERVER
         )
         backend.close.assert_called_once_with()
 
@@ -463,5 +482,5 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main(sys.argv[1:]))

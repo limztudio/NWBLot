@@ -25,13 +25,29 @@ sys.path.insert(0, str(REPO))
 
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_EXECUTABLE = "--executable"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_ADAPTER_INDEX = "--adapter-index"
+LIT_RECORDS = "--records"
+LIT_WARMUP = "--warmup"
+LIT_SAMPLES = "--samples"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_NO_GPU_VALIDATION = "--no-gpu-validation"
+LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_STORE_TRUE = "store_true"
+LIT_SELF_TEST = "--self-test"
+LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
+LIT_MAIN = "__main__"
+LIT_ON = "ON"
+
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "command_ir" / "run.py"
 PROFILE_TARGET = "nwb_command_ir_profile"
 MAX_RECORDS = 65536
 MAX_SAMPLES = 64
 REQUIRED_DEFINES = {
-    "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_TESTS": LIT_ON,
 }
 
 
@@ -66,19 +82,19 @@ def runner_command(args: argparse.Namespace, paths: ProfilePaths) -> List[object
     command: List[object] = [
         sys.executable,
         REPO / RUNNER_SCRIPT,
-        "--executable",
+        LIT_EXECUTABLE,
         paths.executable,
-        "--output-dir",
+        LIT_OUTPUT_DIR,
         paths.output_directory,
-        "--adapter-index",
+        LIT_ADAPTER_INDEX,
         args.adapter_index,
-        "--records",
+        LIT_RECORDS,
         args.records,
-        "--warmup",
+        LIT_WARMUP,
         args.warmup,
-        "--samples",
+        LIT_SAMPLES,
         args.samples,
-        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",
+        LIT_GPU_VALIDATION if args.gpu_validation else LIT_NO_GPU_VALIDATION,
     ]
     command += list(args.runner_args)
     return command
@@ -87,32 +103,32 @@ def runner_command(args: argparse.Namespace, paths: ProfilePaths) -> List[object
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--executable", type=Path, help="Override the command-IR profile executable.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for logs and the profile report.")
+    parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the command-IR profile executable.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for logs and the profile report.")
     parser.add_argument(
-        "--adapter-index",
+        LIT_ADAPTER_INDEX,
         type=int,
         default=0,
         help="Pinned Vulkan adapter enumeration index (default: 0).",
     )
-    parser.add_argument("--records", type=int, default=4096, help="Copy-buffer records per measured sample (default: 4096).")
-    parser.add_argument("--warmup", type=int, default=3, help="Unmeasured priming samples (default: 3).")
-    parser.add_argument("--samples", type=int, default=11, help="Measured samples per stage (default: 11).")
+    parser.add_argument(LIT_RECORDS, type=int, default=4096, help="Copy-buffer records per measured sample (default: 4096).")
+    parser.add_argument(LIT_WARMUP, type=int, default=3, help="Unmeasured priming samples (default: 3).")
+    parser.add_argument(LIT_SAMPLES, type=int, default=11, help="Measured samples per stage (default: 11).")
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        "--gpu-validation",
-        dest="gpu_validation",
-        action="store_true",
+        LIT_GPU_VALIDATION,
+        dest=LIT_GPU_VALIDATION_2,
+        action=LIT_STORE_TRUE,
         help="Enable Vulkan validation in the profile process (the default).",
     )
     validation_group.add_argument(
-        "--no-gpu-validation",
-        dest="gpu_validation",
+        LIT_NO_GPU_VALIDATION,
+        dest=LIT_GPU_VALIDATION_2,
         action="store_false",
         help="Run without Vulkan validation when the target cannot expose the validation layer.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action="store_true", help="Validate launcher command composition without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -132,7 +148,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run_self_test() -> int:
-    assert parse_args(["--self-test"]).records == 4096
+    assert parse_args([LIT_SELF_TEST]).records == 4096
     root = Path("/nwb")
     settings = ROOT_LAUNCHER.LaunchSettings(
         root=root,
@@ -140,8 +156,8 @@ def run_self_test() -> int:
         arch="x64",
         domain="full",
         config="dbg",
-        configure_preset="windows-clang-x64",
-        build_dir=root / "__cmake" / "build" / "windows-clang-x64",
+        configure_preset=LIT_WINDOWS_CLANG_X64,
+        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
         cmake=("cmake",),
     )
     args = SimpleNamespace(
@@ -153,18 +169,18 @@ def run_self_test() -> int:
         records=8192,
         warmup=2,
         samples=7,
-        runner_args=["--samples", "9"],
+        runner_args=[LIT_SAMPLES, "9"],
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert command[command.index("--executable") + 1].endswith("command_ir_profile.exe")
+    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("command_ir_profile.exe")
     assert "/.cozter/out/ab-results/command-ir/" in paths.output_directory.as_posix()
-    assert command[command.index("--adapter-index") + 1] == "1"
-    assert command[command.index("--records") + 1] == "8192"
-    assert command[command.index("--warmup") + 1] == "2"
-    assert command[command.index("--samples") + 1] == "7"
-    assert "--gpu-validation" in command
-    assert command[-2:] == ["--samples", "9"]
+    assert command[command.index(LIT_ADAPTER_INDEX) + 1] == "1"
+    assert command[command.index(LIT_RECORDS) + 1] == "8192"
+    assert command[command.index(LIT_WARMUP) + 1] == "2"
+    assert command[command.index(LIT_SAMPLES) + 1] == "7"
+    assert LIT_GPU_VALIDATION in command
+    assert command[-2:] == [LIT_SAMPLES, "9"]
     print("command-IR launcher self-test passed")
     return 0
 
@@ -192,5 +208,5 @@ def main(argv: Sequence[str]) -> int:
     return run(args)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

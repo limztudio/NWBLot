@@ -13,6 +13,78 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ASCII = "ascii"
+LIT_X00 = b"\x00"
+LIT_COMPRESSION = "compression"
+LIT_BOX2I = "box2i"
+LIT_N_4I = "<4i"
+LIT_LINEORDER = "lineOrder"
+LIT_FLOAT = "float"
+LIT_F = "<f"
+LIT_SIZE_BYTES = "size_bytes"
+LIT_LINEAR = "linear"
+LIT_ASSET_BLOCK_WIDTH_4 = "asset.block_width = 4;"
+LIT_ASSET_BLOCK_HEIGHT_4 = "asset.block_height = 4;"
+LIT_ASSET_BYTES_PER_BLOCK_16 = "asset.bytes_per_block = 16;"
+LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS = "mip_major_slice_major_blocks"
+LIT_CLAMP = "clamp"
+LIT_CHECKER_TEX = "checker.tex"
+LIT_CUBE_TEX = "cube.tex"
+LIT_VOLUME_TEX = "volume.tex"
+LIT_RADIANCE_TEX = "radiance.tex"
+LIT_OPENEXR_TEX = "openexr.tex"
+LIT_HDR_CUBE_TEX = "hdr_cube.tex"
+LIT_HDR_VOLUME_TEX = "hdr_volume.tex"
+LIT_ORIGINAL = "original"
+LIT_ORIGINAL_MASK = "original_mask"
+LIT_MASK = "mask"
+LIT_MASK_REFERENCE = "mask_reference"
+LIT_WHITE = "white"
+LIT_WHITE_REFERENCE = "white_reference"
+LIT_BLACK = "black"
+LIT_BLACK_REFERENCE = "black_reference"
+LIT_NO_ALPHA = "no_alpha"
+LIT_NWB = ".nwb"
+LIT_TEX = ".tex"
+LIT_NWB_TMP_SUFFIX = ".nwb.tmp"
+LIT_TEX_TMP_SUFFIX = ".tex.tmp"
+LIT_TMP_SUFFIX = ".tmp"
+LIT_UTF_8 = "utf-8"
+LIT_ASSET_VERSION_1 = "asset.version = 1;"
+LIT_UASTC_LDR_4X4 = "uastc_ldr_4x4"
+LIT_B624C07AD3C659E7B0F0BADCB36E9A6B8820A9 = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d"
+LIT_N_2D = "2d"
+LIT_ASSET_DEPTH_1 = "asset.depth = 1;"
+LIT_ASSET_HAS_ALPHA_1 = "asset.has_alpha = 1;"
+LIT_ASSET_MIP_COUNT_3 = "asset.mip_count = 3;"
+LIT_LEVEL = "level"
+LIT_WIDTH = "width"
+LIT_HEIGHT = "height"
+LIT_BLOCKS_X = "blocks_x"
+LIT_BLOCKS_Y = "blocks_y"
+LIT_OFFSET_BYTES = "offset_bytes"
+LIT_SLICES = "slices"
+LIT_OUTPUT = "--output"
+LIT_LINEAR_2 = "--linear"
+LIT_ALPHA = "--alpha"
+LIT_ASSET_HAS_ALPHA_0 = "asset.has_alpha = 0;"
+LIT_ASSET_WIDTH_4 = "asset.width = 4;"
+LIT_ASSET_HEIGHT_2 = "asset.height = 2;"
+LIT_OPAQUE = "opaque"
+LIT_ASSET_ALPHA_CONSTANT_UNORM8 = "asset.alpha_constant_unorm8"
+LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES = "asset.alpha_payload_offset_bytes"
+LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT = "asset.alpha_payload_byte_count"
+LIT_ASSET_ALPHA_UASTC_SPEC_REVISION = "asset.alpha_uastc_spec_revision"
+LIT_CUBE = "--cube"
+LIT_CUBE_2 = "cube"
+LIT_ASSET_WIDTH_2 = "asset.width = 2;"
+LIT_ASSET_MIP_COUNT_2 = "asset.mip_count = 2;"
+LIT_VOLUME = "--volume"
+LIT_VOLUME_2 = "volume"
+LIT_ASSET_DEPTH_3 = "asset.depth = 3;"
+LIT_MAIN = "__main__"
+
 
 def write_checker_png(path: pathlib.Path) -> None:
     width = 7
@@ -110,7 +182,7 @@ def write_radiance_hdr_pixels(
 ) -> None:
     if len(pixels) != width * height:
         raise AssertionError("Radiance fixture dimensions do not match the supplied pixel count")
-    payload = bytearray(f"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {height} +X {width}\n".encode("ascii"))
+    payload = bytearray(f"#?RADIANCE\nFORMAT=32-bit_rle_rgbe\n\n-Y {height} +X {width}\n".encode(LIT_ASCII))
     for red, green, blue, _alpha in pixels:
         payload.extend(float_to_rgbe(red, green, blue))
     path.write_bytes(payload)
@@ -134,7 +206,7 @@ def write_radiance_hdr(path: pathlib.Path) -> None:
 
 
 def exr_attribute(name: str, kind: str, value: bytes) -> bytes:
-    return name.encode("ascii") + b"\x00" + kind.encode("ascii") + b"\x00" + struct.pack("<I", len(value)) + value
+    return name.encode(LIT_ASCII) + LIT_X00 + kind.encode(LIT_ASCII) + LIT_X00 + struct.pack("<I", len(value)) + value
 
 
 def write_openexr(path: pathlib.Path) -> None:
@@ -155,19 +227,19 @@ def write_openexr(path: pathlib.Path) -> None:
     )
     channels = bytearray()
     for channel in ("A", "B", "G", "R"):
-        channels.extend(channel.encode("ascii") + b"\x00")
+        channels.extend(channel.encode(LIT_ASCII) + LIT_X00)
         channels.extend(struct.pack("<iB3xii", 2, 0, 1, 1))
     channels.append(0)
 
     header = bytearray()
     header.extend(exr_attribute("channels", "chlist", bytes(channels)))
-    header.extend(exr_attribute("compression", "compression", b"\x00"))
-    header.extend(exr_attribute("dataWindow", "box2i", struct.pack("<4i", 0, 0, width - 1, height - 1)))
-    header.extend(exr_attribute("displayWindow", "box2i", struct.pack("<4i", 0, 0, width - 1, height - 1)))
-    header.extend(exr_attribute("lineOrder", "lineOrder", b"\x00"))
-    header.extend(exr_attribute("pixelAspectRatio", "float", struct.pack("<f", 1.0)))
+    header.extend(exr_attribute(LIT_COMPRESSION, LIT_COMPRESSION, LIT_X00))
+    header.extend(exr_attribute("dataWindow", LIT_BOX2I, struct.pack(LIT_N_4I, 0, 0, width - 1, height - 1)))
+    header.extend(exr_attribute("displayWindow", LIT_BOX2I, struct.pack(LIT_N_4I, 0, 0, width - 1, height - 1)))
+    header.extend(exr_attribute(LIT_LINEORDER, LIT_LINEORDER, LIT_X00))
+    header.extend(exr_attribute("pixelAspectRatio", LIT_FLOAT, struct.pack(LIT_F, 1.0)))
     header.extend(exr_attribute("screenWindowCenter", "v2f", struct.pack("<2f", 0.0, 0.0)))
-    header.extend(exr_attribute("screenWindowWidth", "float", struct.pack("<f", 1.0)))
+    header.extend(exr_attribute("screenWindowWidth", LIT_FLOAT, struct.pack(LIT_F, 1.0)))
     header.append(0)
 
     chunk_data_size = width * 4 * 4
@@ -206,7 +278,7 @@ def require_metadata_field_absent(metadata: str, field: str) -> None:
 
 
 def metadata_mip_payload_byte_count(metadata: str) -> int:
-    mip_sizes = [int(size) for size in re.findall(r'"size_bytes": (\d+)', metadata)]
+    mip_sizes = [int(size) for size in re.findall(r'LIT_SIZE_BYTES: (\d+)', metadata)]
     if not mip_sizes:
         raise AssertionError(f"metadata does not contain mip byte sizes\n{metadata}")
     return sum(mip_sizes)
@@ -229,12 +301,12 @@ def require_uastc_hdr_metadata(metadata: str) -> None:
     for fragment in (
         "asset.version = 2;",
         'asset.format = "uastc_hdr_4x4";',
-        'asset.color_space = "linear";',
-        "asset.block_width = 4;",
-        "asset.block_height = 4;",
-        "asset.bytes_per_block = 16;",
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        'asset.mip_address_mode = "clamp";',
+        'asset.color_space = LIT_LINEAR;',
+        LIT_ASSET_BLOCK_WIDTH_4,
+        LIT_ASSET_BLOCK_HEIGHT_4,
+        LIT_ASSET_BYTES_PER_BLOCK_16,
+        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        'asset.mip_address_mode = LIT_CLAMP;',
     ):
         require_metadata_fragment(metadata, fragment)
     require_metadata_string_field(metadata, "asset.uastc_hdr_spec_revision")
@@ -251,27 +323,27 @@ def main() -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
     source_path = output_dir / "checker.png"
     metadata_path = output_dir / "checker.nwb"
-    texture_path = output_dir / "checker.tex"
+    texture_path = output_dir / LIT_CHECKER_TEX
     linear_metadata_path = output_dir / "linear.nwb"
     linear_texture_path = output_dir / "linear.tex"
     cube_metadata_path = output_dir / "cube.nwb"
-    cube_texture_path = output_dir / "cube.tex"
+    cube_texture_path = output_dir / LIT_CUBE_TEX
     volume_metadata_path = output_dir / "volume.nwb"
-    volume_texture_path = output_dir / "volume.tex"
+    volume_texture_path = output_dir / LIT_VOLUME_TEX
     radiance_source_path = output_dir / "radiance.hdr"
     radiance_metadata_path = output_dir / "radiance.nwb"
-    radiance_texture_path = output_dir / "radiance.tex"
+    radiance_texture_path = output_dir / LIT_RADIANCE_TEX
     radiance_white_metadata_path = output_dir / "radiance_white.nwb"
     radiance_white_texture_path = output_dir / "radiance_white.tex"
     radiance_black_metadata_path = output_dir / "radiance_black.nwb"
     radiance_black_texture_path = output_dir / "radiance_black.tex"
     openexr_source_path = output_dir / "openexr.exr"
     openexr_metadata_path = output_dir / "openexr.nwb"
-    openexr_texture_path = output_dir / "openexr.tex"
+    openexr_texture_path = output_dir / LIT_OPENEXR_TEX
     hdr_cube_metadata_path = output_dir / "hdr_cube.nwb"
-    hdr_cube_texture_path = output_dir / "hdr_cube.tex"
+    hdr_cube_texture_path = output_dir / LIT_HDR_CUBE_TEX
     hdr_volume_metadata_path = output_dir / "hdr_volume.nwb"
-    hdr_volume_texture_path = output_dir / "hdr_volume.tex"
+    hdr_volume_texture_path = output_dir / LIT_HDR_VOLUME_TEX
     alpha_source_path = output_dir / "alpha_source.png"
     alpha_mask_path = output_dir / "alpha_mask.png"
     alpha_original_mask_path = output_dir / "alpha_original_mask.png"
@@ -280,15 +352,15 @@ def main() -> int:
     alpha_black_reference_path = output_dir / "alpha_black_reference.png"
     alpha_no_alpha_source_path = output_dir / "alpha_no_alpha_source.png"
     alpha_output_bases = {
-        "original": output_dir / "alpha_original",
-        "original_mask": output_dir / "alpha_original_mask",
-        "mask": output_dir / "alpha_mask",
-        "mask_reference": output_dir / "alpha_mask_reference",
-        "white": output_dir / "alpha_white",
-        "white_reference": output_dir / "alpha_white_reference",
-        "black": output_dir / "alpha_black",
-        "black_reference": output_dir / "alpha_black_reference",
-        "no_alpha": output_dir / "alpha_no_alpha",
+        LIT_ORIGINAL: output_dir / "alpha_original",
+        LIT_ORIGINAL_MASK: output_dir / "alpha_original_mask",
+        LIT_MASK: output_dir / "alpha_mask",
+        LIT_MASK_REFERENCE: output_dir / "alpha_mask_reference",
+        LIT_WHITE: output_dir / "alpha_white",
+        LIT_WHITE_REFERENCE: output_dir / "alpha_white_reference",
+        LIT_BLACK: output_dir / "alpha_black",
+        LIT_BLACK_REFERENCE: output_dir / "alpha_black_reference",
+        LIT_NO_ALPHA: output_dir / "alpha_no_alpha",
     }
     alpha_input_paths = (
         alpha_source_path,
@@ -303,10 +375,10 @@ def main() -> int:
         path
         for base in alpha_output_bases.values()
         for path in (
-            base.with_suffix(".nwb"),
-            base.with_suffix(".tex"),
-            pathlib.Path(f"{base}.nwb.tmp"),
-            pathlib.Path(f"{base}.tex.tmp"),
+            base.with_suffix(LIT_NWB),
+            base.with_suffix(LIT_TEX),
+            pathlib.Path(f"{base}" + LIT_NWB_TMP_SUFFIX),
+            pathlib.Path(f"{base}" + LIT_TEX_TMP_SUFFIX),
         )
     )
     cube_face_paths = [output_dir / f"cube_face_{face}.png" for face in range(6)]
@@ -339,22 +411,22 @@ def main() -> int:
         hdr_volume_texture_path,
         *alpha_input_paths,
         *alpha_output_paths,
-        pathlib.Path(f"{metadata_path}.tmp"),
-        pathlib.Path(f"{texture_path}.tmp"),
-        pathlib.Path(f"{linear_metadata_path}.tmp"),
-        pathlib.Path(f"{linear_texture_path}.tmp"),
-        pathlib.Path(f"{cube_metadata_path}.tmp"),
-        pathlib.Path(f"{cube_texture_path}.tmp"),
-        pathlib.Path(f"{volume_metadata_path}.tmp"),
-        pathlib.Path(f"{volume_texture_path}.tmp"),
-        pathlib.Path(f"{radiance_metadata_path}.tmp"),
-        pathlib.Path(f"{radiance_texture_path}.tmp"),
-        pathlib.Path(f"{radiance_white_metadata_path}.tmp"),
-        pathlib.Path(f"{radiance_white_texture_path}.tmp"),
-        pathlib.Path(f"{radiance_black_metadata_path}.tmp"),
-        pathlib.Path(f"{radiance_black_texture_path}.tmp"),
-        pathlib.Path(f"{openexr_metadata_path}.tmp"),
-        pathlib.Path(f"{openexr_texture_path}.tmp"),
+        pathlib.Path(str(metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(linear_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(linear_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(cube_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(cube_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(volume_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(volume_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_white_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_white_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_black_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(radiance_black_texture_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(openexr_metadata_path) + LIT_TMP_SUFFIX),
+        pathlib.Path(str(openexr_texture_path) + LIT_TMP_SUFFIX),
         *cube_face_paths,
         *volume_slice_paths,
         *hdr_cube_face_paths,
@@ -376,28 +448,28 @@ def main() -> int:
     if not metadata_path.is_file() or not texture_path.is_file():
         raise AssertionError(f"tex_conv did not create {metadata_path} and {texture_path}")
 
-    metadata = metadata_path.read_text(encoding="utf-8")
+    metadata = metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
         "texture asset;",
-        "asset.version = 1;",
-        'asset.format = "uastc_ldr_4x4";',
-        'asset.uastc_spec_revision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";',
+        LIT_ASSET_VERSION_1,
+        'asset.format = LIT_UASTC_LDR_4X4;',
+        'asset.uastc_spec_revision = LIT_B624C07AD3C659E7B0F0BADCB36E9A6B8820A9;',
         'asset.color_space = "srgb";',
-        'asset.dimension = "2d";',
-        "asset.depth = 1;",
+        'asset.dimension = LIT_N_2D;',
+        LIT_ASSET_DEPTH_1,
         "asset.width = 7;",
         "asset.height = 5;",
-        "asset.block_width = 4;",
-        "asset.block_height = 4;",
-        "asset.bytes_per_block = 16;",
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        'asset.mip_address_mode = "clamp";',
-        "asset.has_alpha = 1;",
-        "asset.mip_count = 3;",
-        'asset.data = "checker.tex";',
-        '{ "level": 0, "width": 7, "height": 5, "blocks_x": 2, "blocks_y": 2, "offset_bytes": 0, "size_bytes": 64, "slices": 1 }',
-        '{ "level": 1, "width": 3, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 64, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 80, "size_bytes": 16, "slices": 1 }',
+        LIT_ASSET_BLOCK_WIDTH_4,
+        LIT_ASSET_BLOCK_HEIGHT_4,
+        LIT_ASSET_BYTES_PER_BLOCK_16,
+        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        'asset.mip_address_mode = LIT_CLAMP;',
+        LIT_ASSET_HAS_ALPHA_1,
+        LIT_ASSET_MIP_COUNT_3,
+        'asset.data = LIT_CHECKER_TEX;',
+        '{ LIT_LEVEL: 0, LIT_WIDTH: 7, LIT_HEIGHT: 5, LIT_BLOCKS_X: 2, LIT_BLOCKS_Y: 2, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 64, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 1, LIT_WIDTH: 3, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 64, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 80, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
     ):
         require_metadata_fragment(metadata, fragment)
 
@@ -428,7 +500,7 @@ def main() -> int:
         )
 
     linear = subprocess.run(
-        [args.tex_conv, str(source_path), "--output", str(output_dir / "linear"), "--linear"],
+        [args.tex_conv, str(source_path), LIT_OUTPUT, str(output_dir / LIT_LINEAR), LIT_LINEAR_2],
         cwd=output_dir,
         text=True,
         capture_output=True,
@@ -440,8 +512,8 @@ def main() -> int:
     if not linear_metadata_path.is_file() or not linear_texture_path.is_file():
         raise AssertionError("tex_conv --output did not create the requested pair")
     require_metadata_fragment(
-        linear_metadata_path.read_text(encoding="utf-8"),
-        'asset.color_space = "linear";',
+        linear_metadata_path.read_text(encoding=LIT_UTF_8),
+        'asset.color_space = LIT_LINEAR;',
     )
 
     # Keep the LDR alpha cases at one UASTC block per level. The expected payloads are
@@ -488,7 +560,7 @@ def main() -> int:
 
     def convert_alpha_fixture(name: str, source: pathlib.Path, *arguments: str) -> None:
         result = subprocess.run(
-            [args.tex_conv, str(source), *arguments, "--output", str(alpha_output_bases[name])],
+            [args.tex_conv, str(source), *arguments, LIT_OUTPUT, str(alpha_output_bases[name])],
             cwd=output_dir,
             text=True,
             capture_output=True,
@@ -500,48 +572,48 @@ def main() -> int:
             )
 
     def alpha_metadata(name: str) -> str:
-        return alpha_output_bases[name].with_suffix(".nwb").read_text(encoding="utf-8")
+        return alpha_output_bases[name].with_suffix(LIT_NWB).read_text(encoding=LIT_UTF_8)
 
     def alpha_texture(name: str) -> pathlib.Path:
-        return alpha_output_bases[name].with_suffix(".tex")
+        return alpha_output_bases[name].with_suffix(LIT_TEX)
 
     # With no --alpha flag, an input alpha channel is retained.
-    convert_alpha_fixture("original", alpha_source_path)
-    convert_alpha_fixture("original_mask", alpha_source_path, "--alpha", str(alpha_original_mask_path))
+    convert_alpha_fixture(LIT_ORIGINAL, alpha_source_path)
+    convert_alpha_fixture(LIT_ORIGINAL_MASK, alpha_source_path, LIT_ALPHA, str(alpha_original_mask_path))
     require_matching_payloads(
-        alpha_texture("original"), alpha_texture("original_mask"), "the original-alpha fallback"
+        alpha_texture(LIT_ORIGINAL), alpha_texture(LIT_ORIGINAL_MASK), "the original-alpha fallback"
     )
-    require_metadata_fragment(alpha_metadata("original"), "asset.has_alpha = 1;")
+    require_metadata_fragment(alpha_metadata(LIT_ORIGINAL), LIT_ASSET_HAS_ALPHA_1)
 
     # A mask uses its red channel, not its own alpha, green, or blue channels.
-    convert_alpha_fixture("mask", alpha_source_path, "--alpha", str(alpha_mask_path))
-    convert_alpha_fixture("mask_reference", alpha_mask_reference_path)
-    require_matching_payloads(alpha_texture("mask"), alpha_texture("mask_reference"), "the red-channel alpha mask")
-    require_metadata_fragment(alpha_metadata("mask"), "asset.has_alpha = 1;")
+    convert_alpha_fixture(LIT_MASK, alpha_source_path, LIT_ALPHA, str(alpha_mask_path))
+    convert_alpha_fixture(LIT_MASK_REFERENCE, alpha_mask_reference_path)
+    require_matching_payloads(alpha_texture(LIT_MASK), alpha_texture(LIT_MASK_REFERENCE), "the red-channel alpha mask")
+    require_metadata_fragment(alpha_metadata(LIT_MASK), LIT_ASSET_HAS_ALPHA_1)
 
-    convert_alpha_fixture("white", alpha_source_path, "--alpha", "white")
-    convert_alpha_fixture("white_reference", alpha_white_reference_path)
-    require_matching_payloads(alpha_texture("white"), alpha_texture("white_reference"), "--alpha white")
-    require_metadata_fragment(alpha_metadata("white"), "asset.has_alpha = 0;")
+    convert_alpha_fixture(LIT_WHITE, alpha_source_path, LIT_ALPHA, LIT_WHITE)
+    convert_alpha_fixture(LIT_WHITE_REFERENCE, alpha_white_reference_path)
+    require_matching_payloads(alpha_texture(LIT_WHITE), alpha_texture(LIT_WHITE_REFERENCE), "--alpha white")
+    require_metadata_fragment(alpha_metadata(LIT_WHITE), LIT_ASSET_HAS_ALPHA_0)
 
-    convert_alpha_fixture("black", alpha_source_path, "--alpha", "black")
-    convert_alpha_fixture("black_reference", alpha_black_reference_path)
-    require_matching_payloads(alpha_texture("black"), alpha_texture("black_reference"), "--alpha black")
-    require_metadata_fragment(alpha_metadata("black"), "asset.has_alpha = 1;")
+    convert_alpha_fixture(LIT_BLACK, alpha_source_path, LIT_ALPHA, LIT_BLACK)
+    convert_alpha_fixture(LIT_BLACK_REFERENCE, alpha_black_reference_path)
+    require_matching_payloads(alpha_texture(LIT_BLACK), alpha_texture(LIT_BLACK_REFERENCE), "--alpha black")
+    require_metadata_fragment(alpha_metadata(LIT_BLACK), LIT_ASSET_HAS_ALPHA_1)
 
     # A source with no alpha channel falls back to opaque alpha when --alpha is omitted.
-    convert_alpha_fixture("no_alpha", alpha_no_alpha_source_path)
-    require_matching_payloads(alpha_texture("no_alpha"), alpha_texture("white_reference"), "the no-alpha fallback")
-    require_metadata_fragment(alpha_metadata("no_alpha"), "asset.has_alpha = 0;")
+    convert_alpha_fixture(LIT_NO_ALPHA, alpha_no_alpha_source_path)
+    require_matching_payloads(alpha_texture(LIT_NO_ALPHA), alpha_texture(LIT_WHITE_REFERENCE), "the no-alpha fallback")
+    require_metadata_fragment(alpha_metadata(LIT_NO_ALPHA), LIT_ASSET_HAS_ALPHA_0)
 
     write_radiance_hdr(radiance_source_path)
     radiance = subprocess.run(
         [
             args.tex_conv,
             str(radiance_source_path),
-            "--output",
+            LIT_OUTPUT,
             str(output_dir / "radiance"),
-            "--linear",
+            LIT_LINEAR_2,
         ],
         cwd=output_dir,
         text=True,
@@ -551,32 +623,32 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv Radiance HDR failed with {radiance.returncode}\nstdout:\n{radiance.stdout}\nstderr:\n{radiance.stderr}"
     )
-    radiance_metadata = radiance_metadata_path.read_text(encoding="utf-8")
+    radiance_metadata = radiance_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(radiance_metadata)
     for fragment in (
-        'asset.dimension = "2d";',
-        "asset.depth = 1;",
-        "asset.width = 4;",
-        "asset.height = 2;",
-        'asset.alpha_mode = "opaque";',
-        "asset.mip_count = 3;",
-        'asset.data = "radiance.tex";',
-        '{ "level": 0, "width": 4, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 0, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 1, "width": 2, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 16, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 32, "size_bytes": 16, "slices": 1 }',
+        'asset.dimension = LIT_N_2D;',
+        LIT_ASSET_DEPTH_1,
+        LIT_ASSET_WIDTH_4,
+        LIT_ASSET_HEIGHT_2,
+        'asset.alpha_mode = LIT_OPAQUE;',
+        LIT_ASSET_MIP_COUNT_3,
+        'asset.data = LIT_RADIANCE_TEX;',
+        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 16, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 32, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
     ):
         require_metadata_fragment(radiance_metadata, fragment)
     for field in (
-        "asset.alpha_constant_unorm8",
-        "asset.alpha_payload_offset_bytes",
-        "asset.alpha_payload_byte_count",
-        "asset.alpha_uastc_spec_revision",
+        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
+        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
+        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
+        LIT_ASSET_ALPHA_UASTC_SPEC_REVISION,
     ):
         require_metadata_field_absent(radiance_metadata, field)
     require_texture_payload_matches_metadata(radiance_metadata, radiance_texture_path)
 
     radiance_white = subprocess.run(
-        [args.tex_conv, str(radiance_source_path), "--alpha", "white", "--output", str(output_dir / "radiance_white")],
+        [args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_WHITE, LIT_OUTPUT, str(output_dir / "radiance_white")],
         cwd=output_dir,
         text=True,
         capture_output=True,
@@ -586,22 +658,22 @@ def main() -> int:
             f"tex_conv HDR --alpha white failed with {radiance_white.returncode}"
             f"\nstdout:\n{radiance_white.stdout}\nstderr:\n{radiance_white.stderr}"
         )
-    radiance_white_metadata = radiance_white_metadata_path.read_text(encoding="utf-8")
+    radiance_white_metadata = radiance_white_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(radiance_white_metadata)
-    require_metadata_fragment(radiance_white_metadata, "asset.has_alpha = 0;")
-    require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = "opaque";')
+    require_metadata_fragment(radiance_white_metadata, LIT_ASSET_HAS_ALPHA_0)
+    require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = LIT_OPAQUE;')
     for field in (
-        "asset.alpha_constant_unorm8",
-        "asset.alpha_payload_offset_bytes",
-        "asset.alpha_payload_byte_count",
-        "asset.alpha_uastc_spec_revision",
+        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
+        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
+        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
+        LIT_ASSET_ALPHA_UASTC_SPEC_REVISION,
     ):
         require_metadata_field_absent(radiance_white_metadata, field)
     require_texture_payload_matches_metadata(radiance_white_metadata, radiance_white_texture_path)
     require_matching_payloads(radiance_white_texture_path, radiance_texture_path, "HDR --alpha white")
 
     radiance_black = subprocess.run(
-        [args.tex_conv, str(radiance_source_path), "--alpha", "black", "--output", str(output_dir / "radiance_black")],
+        [args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_BLACK, LIT_OUTPUT, str(output_dir / "radiance_black")],
         cwd=output_dir,
         text=True,
         capture_output=True,
@@ -611,15 +683,15 @@ def main() -> int:
             f"tex_conv HDR --alpha black failed with {radiance_black.returncode}"
             f"\nstdout:\n{radiance_black.stdout}\nstderr:\n{radiance_black.stderr}"
         )
-    radiance_black_metadata = radiance_black_metadata_path.read_text(encoding="utf-8")
+    radiance_black_metadata = radiance_black_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(radiance_black_metadata)
-    require_metadata_fragment(radiance_black_metadata, "asset.has_alpha = 1;")
+    require_metadata_fragment(radiance_black_metadata, LIT_ASSET_HAS_ALPHA_1)
     require_metadata_fragment(radiance_black_metadata, 'asset.alpha_mode = "constant_unorm8";')
-    require_metadata_unsigned_field(radiance_black_metadata, "asset.alpha_constant_unorm8", 0)
+    require_metadata_unsigned_field(radiance_black_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8, 0)
     for field in (
-        "asset.alpha_payload_offset_bytes",
-        "asset.alpha_payload_byte_count",
-        "asset.alpha_uastc_spec_revision",
+        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
+        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
+        LIT_ASSET_ALPHA_UASTC_SPEC_REVISION,
     ):
         require_metadata_field_absent(radiance_black_metadata, field)
     require_texture_payload_matches_metadata(radiance_black_metadata, radiance_black_texture_path)
@@ -627,7 +699,7 @@ def main() -> int:
 
     write_openexr(openexr_source_path)
     openexr = subprocess.run(
-        [args.tex_conv, str(openexr_source_path), "--output", str(output_dir / "openexr")],
+        [args.tex_conv, str(openexr_source_path), LIT_OUTPUT, str(output_dir / "openexr")],
         cwd=output_dir,
         text=True,
         capture_output=True,
@@ -636,33 +708,33 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv OpenEXR failed with {openexr.returncode}\nstdout:\n{openexr.stdout}\nstderr:\n{openexr.stderr}"
     )
-    openexr_metadata = openexr_metadata_path.read_text(encoding="utf-8")
+    openexr_metadata = openexr_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(openexr_metadata)
     for fragment in (
-        'asset.dimension = "2d";',
-        "asset.depth = 1;",
-        "asset.width = 4;",
-        "asset.height = 2;",
-        'asset.alpha_mode = "uastc_ldr_4x4";',
-        "asset.mip_count = 3;",
-        'asset.data = "openexr.tex";',
-        '{ "level": 0, "width": 4, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 0, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 1, "width": 2, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 16, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 32, "size_bytes": 16, "slices": 1 }',
+        'asset.dimension = LIT_N_2D;',
+        LIT_ASSET_DEPTH_1,
+        LIT_ASSET_WIDTH_4,
+        LIT_ASSET_HEIGHT_2,
+        'asset.alpha_mode = LIT_UASTC_LDR_4X4;',
+        LIT_ASSET_MIP_COUNT_3,
+        'asset.data = LIT_OPENEXR_TEX;',
+        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 16, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 32, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
     ):
         require_metadata_fragment(openexr_metadata, fragment)
     openexr_rgb_payload_bytes = metadata_mip_payload_byte_count(openexr_metadata)
     require_metadata_unsigned_field(
-        openexr_metadata, "asset.alpha_payload_offset_bytes", openexr_rgb_payload_bytes
+        openexr_metadata, LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES, openexr_rgb_payload_bytes
     )
     require_metadata_unsigned_field(
-        openexr_metadata, "asset.alpha_payload_byte_count", openexr_rgb_payload_bytes
+        openexr_metadata, LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT, openexr_rgb_payload_bytes
     )
     require_metadata_fragment(
         openexr_metadata,
-        'asset.alpha_uastc_spec_revision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";',
+        'asset.alpha_uastc_spec_revision = LIT_B624C07AD3C659E7B0F0BADCB36E9A6B8820A9;',
     )
-    require_metadata_field_absent(openexr_metadata, "asset.alpha_constant_unorm8")
+    require_metadata_field_absent(openexr_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_matches_metadata(openexr_metadata, openexr_texture_path)
 
     for face_index, face_path in enumerate(hdr_cube_face_paths):
@@ -680,9 +752,9 @@ def main() -> int:
     hdr_cube = subprocess.run(
         [
             args.tex_conv,
-            "--cube",
+            LIT_CUBE,
             *(str(face_path) for face_path in hdr_cube_face_paths),
-            "--output",
+            LIT_OUTPUT,
             str(output_dir / "hdr_cube"),
         ],
         cwd=output_dir,
@@ -693,25 +765,25 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv HDR cube failed with {hdr_cube.returncode}\nstdout:\n{hdr_cube.stdout}\nstderr:\n{hdr_cube.stderr}"
     )
-    hdr_cube_metadata = hdr_cube_metadata_path.read_text(encoding="utf-8")
+    hdr_cube_metadata = hdr_cube_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(hdr_cube_metadata)
     for fragment in (
-        'asset.dimension = "cube";',
-        "asset.depth = 1;",
-        "asset.width = 2;",
-        "asset.height = 2;",
-        'asset.alpha_mode = "opaque";',
-        "asset.mip_count = 2;",
-        'asset.data = "hdr_cube.tex";',
-        '{ "level": 0, "width": 2, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 0, "size_bytes": 96, "slices": 6 }',
-        '{ "level": 1, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 96, "size_bytes": 96, "slices": 6 }',
+        'asset.dimension = LIT_CUBE_2;',
+        LIT_ASSET_DEPTH_1,
+        LIT_ASSET_WIDTH_2,
+        LIT_ASSET_HEIGHT_2,
+        'asset.alpha_mode = LIT_OPAQUE;',
+        LIT_ASSET_MIP_COUNT_2,
+        'asset.data = LIT_HDR_CUBE_TEX;',
+        '{ LIT_LEVEL: 0, LIT_WIDTH: 2, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 96, LIT_SLICES: 6 }',
+        '{ LIT_LEVEL: 1, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 96, LIT_SIZE_BYTES: 96, LIT_SLICES: 6 }',
     ):
         require_metadata_fragment(hdr_cube_metadata, fragment)
     for field in (
-        "asset.alpha_constant_unorm8",
-        "asset.alpha_payload_offset_bytes",
-        "asset.alpha_payload_byte_count",
-        "asset.alpha_uastc_spec_revision",
+        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
+        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
+        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
+        LIT_ASSET_ALPHA_UASTC_SPEC_REVISION,
     ):
         require_metadata_field_absent(hdr_cube_metadata, field)
     require_texture_payload_matches_metadata(hdr_cube_metadata, hdr_cube_texture_path)
@@ -721,9 +793,9 @@ def main() -> int:
     hdr_volume = subprocess.run(
         [
             args.tex_conv,
-            "--volume",
+            LIT_VOLUME,
             *(str(slice_path) for slice_path in hdr_volume_slice_paths),
-            "--output",
+            LIT_OUTPUT,
             str(output_dir / "hdr_volume"),
         ],
         cwd=output_dir,
@@ -734,26 +806,26 @@ def main() -> int:
         raise AssertionError(
             f"tex_conv HDR volume failed with {hdr_volume.returncode}\nstdout:\n{hdr_volume.stdout}\nstderr:\n{hdr_volume.stderr}"
     )
-    hdr_volume_metadata = hdr_volume_metadata_path.read_text(encoding="utf-8")
+    hdr_volume_metadata = hdr_volume_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(hdr_volume_metadata)
     for fragment in (
-        'asset.dimension = "volume";',
-        "asset.depth = 3;",
-        "asset.width = 4;",
-        "asset.height = 2;",
-        'asset.alpha_mode = "opaque";',
-        "asset.mip_count = 3;",
-        'asset.data = "hdr_volume.tex";',
-        '{ "level": 0, "width": 4, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 0, "size_bytes": 48, "slices": 3 }',
-        '{ "level": 1, "width": 2, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 48, "size_bytes": 16, "slices": 1 }',
-        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 64, "size_bytes": 16, "slices": 1 }',
+        'asset.dimension = LIT_VOLUME_2;',
+        LIT_ASSET_DEPTH_3,
+        LIT_ASSET_WIDTH_4,
+        LIT_ASSET_HEIGHT_2,
+        'asset.alpha_mode = LIT_OPAQUE;',
+        LIT_ASSET_MIP_COUNT_3,
+        'asset.data = LIT_HDR_VOLUME_TEX;',
+        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 48, LIT_SLICES: 3 }',
+        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 48, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 64, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
     ):
         require_metadata_fragment(hdr_volume_metadata, fragment)
     for field in (
-        "asset.alpha_constant_unorm8",
-        "asset.alpha_payload_offset_bytes",
-        "asset.alpha_payload_byte_count",
-        "asset.alpha_uastc_spec_revision",
+        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
+        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
+        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
+        LIT_ASSET_ALPHA_UASTC_SPEC_REVISION,
     ):
         require_metadata_field_absent(hdr_volume_metadata, field)
     require_texture_payload_matches_metadata(hdr_volume_metadata, hdr_volume_texture_path)
@@ -764,10 +836,10 @@ def main() -> int:
     cube = subprocess.run(
         [
             args.tex_conv,
-            "--cube",
+            LIT_CUBE,
             *(str(face_path) for face_path in cube_face_paths),
-            "--output",
-            str(output_dir / "cube"),
+            LIT_OUTPUT,
+            str(output_dir / LIT_CUBE_2),
         ],
         cwd=output_dir,
         text=True,
@@ -779,19 +851,19 @@ def main() -> int:
         )
     if not cube_metadata_path.is_file() or not cube_texture_path.is_file():
         raise AssertionError("tex_conv --cube did not create the requested pair")
-    cube_metadata = cube_metadata_path.read_text(encoding="utf-8")
+    cube_metadata = cube_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
-        "asset.version = 1;",
-        'asset.dimension = "cube";',
-        "asset.depth = 1;",
-        "asset.width = 2;",
-        "asset.height = 2;",
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        "asset.mip_count = 2;",
-        '"level": 0, "width": 2, "height": 2',
-        '"level": 1, "width": 1, "height": 1',
-        '"slices": 6',
-        'asset.data = "cube.tex";',
+        LIT_ASSET_VERSION_1,
+        'asset.dimension = LIT_CUBE_2;',
+        LIT_ASSET_DEPTH_1,
+        LIT_ASSET_WIDTH_2,
+        LIT_ASSET_HEIGHT_2,
+        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        LIT_ASSET_MIP_COUNT_2,
+        'LIT_LEVEL: 0, LIT_WIDTH: 2, LIT_HEIGHT: 2',
+        'LIT_LEVEL: 1, LIT_WIDTH: 1, LIT_HEIGHT: 1',
+        'LIT_SLICES: 6',
+        'asset.data = LIT_CUBE_TEX;',
     ):
         require_metadata_fragment(cube_metadata, fragment)
     if cube_texture_path.stat().st_size != 192:
@@ -803,10 +875,10 @@ def main() -> int:
     volume = subprocess.run(
         [
             args.tex_conv,
-            "--volume",
+            LIT_VOLUME,
             *(str(slice_path) for slice_path in volume_slice_paths),
-            "--output",
-            str(output_dir / "volume"),
+            LIT_OUTPUT,
+            str(output_dir / LIT_VOLUME_2),
         ],
         cwd=output_dir,
         text=True,
@@ -818,20 +890,20 @@ def main() -> int:
         )
     if not volume_metadata_path.is_file() or not volume_texture_path.is_file():
         raise AssertionError("tex_conv --volume did not create the requested pair")
-    volume_metadata = volume_metadata_path.read_text(encoding="utf-8")
+    volume_metadata = volume_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
-        "asset.version = 1;",
-        'asset.dimension = "volume";',
-        "asset.depth = 3;",
-        "asset.width = 4;",
-        "asset.height = 2;",
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        "asset.mip_count = 3;",
-        '"level": 0, "width": 4, "height": 2',
-        '"level": 1, "width": 2, "height": 1',
-        '"level": 2, "width": 1, "height": 1',
-        '"slices": 3',
-        'asset.data = "volume.tex";',
+        LIT_ASSET_VERSION_1,
+        'asset.dimension = LIT_VOLUME_2;',
+        LIT_ASSET_DEPTH_3,
+        LIT_ASSET_WIDTH_4,
+        LIT_ASSET_HEIGHT_2,
+        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        LIT_ASSET_MIP_COUNT_3,
+        'LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2',
+        'LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1',
+        'LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1',
+        'LIT_SLICES: 3',
+        'asset.data = LIT_VOLUME_TEX;',
     ):
         require_metadata_fragment(volume_metadata, fragment)
     if volume_texture_path.stat().st_size != 80:
@@ -839,7 +911,7 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     try:
         raise SystemExit(main())
     except Exception as exception:

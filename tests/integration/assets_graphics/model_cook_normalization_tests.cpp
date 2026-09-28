@@ -19,6 +19,18 @@
 namespace __hidden_model_cook_normalization_tests{
 
 
+static constexpr AStringView s_SKELETON = "skeleton";
+static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
+static constexpr AStringView s_TESTS_MODEL_COOK_NORMALIZATION_MESH = "tests/model_cook_normalization/mesh";
+static constexpr AStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = "targets a missing skeleton object";
+static constexpr AStringView s_SHARED = "shared";
+static constexpr AStringView s_RIG_A = "rig_a";
+static constexpr AStringView s_RIG_B = "rig_b";
+static constexpr AStringView s_UNKNOWN_MESH = "unknown_mesh";
+static constexpr AStringView s_RIG = "rig";
+static constexpr AStringView s_BODY = "body";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,14 +55,14 @@ struct ModelMetadata{
 
     void addSkeleton(const AStringView objectName, const AStringView skeletonAsset){
         Value& object = asset.field("skeletons").field(objectName);
-        object.field("skeleton").setString(skeletonAsset);
+        object.field(s_SKELETON).setString(skeletonAsset);
     }
 
     void addSkinnedMesh(const AStringView objectName, const AStringView skeleton, const AStringView expectedObject){
-        Value& object = asset.field("skinned_meshes").field(objectName);
-        object.field("mesh").setString("tests/model_cook_normalization/mesh");
+        Value& object = asset.field(s_SKINNED_MESHES).field(objectName);
+        object.field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
         object.field("skin").setString("tests/model_cook_normalization/skin");
-        object.field("skeleton").setString(skeleton);
+        object.field(s_SKELETON).setString(skeleton);
         expectedSkeletons.insert_or_assign(Name(objectName), Name(expectedObject));
     }
 
@@ -64,7 +76,7 @@ struct ModelMetadata{
             const auto expected = expectedSkeletons.find(object.name);
             ASSERT_NE(expected, expectedSkeletons.end());
             EXPECT_EQ(object.skeletonObject, expected->second);
-            EXPECT_EQ(object.mesh.name(), Name("tests/model_cook_normalization/mesh"));
+            EXPECT_EQ(object.mesh.name(), Name(s_TESTS_MODEL_COOK_NORMALIZATION_MESH.data()));
             EXPECT_EQ(object.skin.name(), Name("tests/model_cook_normalization/skin"));
         }
     }
@@ -132,11 +144,11 @@ static void BenchmarkNormalization(const usize count, const bool useAliases, con
 
 TEST(ModelCookNormalization, DirectObjectNamesTakePrecedenceOverAmbiguousAssetAliases){
     ModelMetadata metadata;
-    metadata.addSkeleton("shared", "tests/model_cook_normalization/direct");
+    metadata.addSkeleton(s_SHARED, "tests/model_cook_normalization/direct");
     metadata.addSkeleton("other_a", "SHARED");
-    metadata.addSkeleton("other_b", "shared");
+    metadata.addSkeleton("other_b", s_SHARED);
     metadata.addSkeleton("unique_rig", "Tests/Model_Cook_Normalization/Unique");
-    metadata.addSkinnedMesh("direct_mesh", "ShArEd", "shared");
+    metadata.addSkinnedMesh("direct_mesh", "ShArEd", s_SHARED);
     metadata.addSkinnedMesh("alias_mesh", "tests/model_cook_normalization/unique", "unique_rig");
     metadata.addSkinnedMesh("other_direct_mesh", "OTHER_A", "other_a");
     ASSERT_TRUE(metadata.parse());
@@ -149,14 +161,14 @@ TEST(ModelCookNormalization, ResolvesRepeatedAliasesWithoutChangingMetadataOrObj
     AddIndexedObjects(metadata, 33u, 257u, true);
     ASSERT_TRUE(metadata.parse());
     metadata.verifyNormalizedMeshes();
-    const Value* meshes = metadata.asset.findField("skinned_meshes");
+    const Value* meshes = metadata.asset.findField(s_SKINNED_MESHES);
     ASSERT_NE(meshes, nullptr);
     usize index = 0u;
     for(const auto& [objectName, object] : meshes->asMap()){
         ASSERT_LT(index, metadata.entry.skinnedMeshObjects.size());
         const auto& normalized = metadata.entry.skinnedMeshObjects[index++];
         EXPECT_EQ(normalized.name, Name(AStringView(objectName)));
-        const Value* skeleton = object.findField("skeleton");
+        const Value* skeleton = object.findField(s_SKELETON);
         ASSERT_NE(skeleton, nullptr);
         EXPECT_NE(Name(skeleton->asString()), normalized.skeletonObject);
     }
@@ -168,17 +180,17 @@ TEST(ModelCookNormalization, AmbiguousAliasesFailBeforeMissingTargetValidationAn
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton("rig_a", "tests/model_cook_normalization/shared");
-    metadata.addSkeleton("rig_b", "TESTS/MODEL_COOK_NORMALIZATION/SHARED");
-    metadata.addSkinnedMesh("unknown_mesh", "missing_rig", "missing_rig");
-    metadata.addSkinnedMesh("ambiguous_mesh", "tests/model_cook_normalization/shared", "rig_a");
+    metadata.addSkeleton(s_RIG_A, "tests/model_cook_normalization/shared");
+    metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_NORMALIZATION/SHARED");
+    metadata.addSkinnedMesh(s_UNKNOWN_MESH, "missing_rig", "missing_rig");
+    metadata.addSkinnedMesh("ambiguous_mesh", "tests/model_cook_normalization/shared", s_RIG_A);
     EXPECT_FALSE(metadata.parse());
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("targets a missing skeleton object")));
-    metadata.asset.field("skinned_meshes").field("unknown_mesh").field("skeleton").setString("rig_b");
-    metadata.asset.field("skinned_meshes").field("ambiguous_mesh").field("skeleton").setString("rig_a");
-    metadata.expectedSkeletons.at(Name("unknown_mesh")) = Name("rig_b");
+    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
+    metadata.asset.field(s_SKINNED_MESHES).field(s_UNKNOWN_MESH).field(s_SKELETON).setString(s_RIG_B);
+    metadata.asset.field(s_SKINNED_MESHES).field("ambiguous_mesh").field(s_SKELETON).setString(s_RIG_A);
+    metadata.expectedSkeletons.at(Name(s_UNKNOWN_MESH)) = Name(s_RIG_B);
     ASSERT_TRUE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -188,12 +200,12 @@ TEST(ModelCookNormalization, UnknownAliasesRemainUnchangedForPayloadValidation){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton("rig", "tests/model_cook_normalization/known");
-    metadata.addSkinnedMesh("body", "tests/model_cook_normalization/unknown", "tests/model_cook_normalization/unknown");
+    metadata.addSkeleton(s_RIG, "tests/model_cook_normalization/known");
+    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_normalization/unknown", "tests/model_cook_normalization/unknown");
     EXPECT_FALSE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("targets a missing skeleton object")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
     EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
 }
 
@@ -201,9 +213,9 @@ TEST(ModelCookNormalization, CanonicalDuplicateObjectNamesRemainValidatorErrors)
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton("rig", "tests/model_cook_normalization/first");
+    metadata.addSkeleton(s_RIG, "tests/model_cook_normalization/first");
     metadata.addSkeleton("RIG", "tests/model_cook_normalization/second");
-    metadata.addSkinnedMesh("body", "RiG", "rig");
+    metadata.addSkinnedMesh(s_BODY, "RiG", s_RIG);
     EXPECT_FALSE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -214,15 +226,15 @@ TEST(ModelCookNormalization, HandlesStaticOnlyAndMissingSkeletonCollections){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.asset.field("static_meshes").field("prop").field("mesh").setString("tests/model_cook_normalization/mesh");
+    metadata.asset.field("static_meshes").field("prop").field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
     ASSERT_TRUE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-    metadata.addSkinnedMesh("body", "missing", "missing");
+    metadata.addSkinnedMesh(s_BODY, "missing", "missing");
     EXPECT_FALSE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("targets a missing skeleton object")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
 }
 
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.

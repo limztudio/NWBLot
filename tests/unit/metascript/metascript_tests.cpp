@@ -17,6 +17,16 @@
 namespace __hidden_metascript_tests{
 
 
+static constexpr char s_MODEL[] = "model";
+static constexpr char s_MESH[] = "mesh";
+static constexpr char s_NAME[] = "name";
+static constexpr char s_TYPE[] = "type";
+static constexpr AStringView s_STRUCT_NWB_DUP = "struct NwbDup{\n";
+static constexpr AStringView s_FLOAT_VALUE_LINE = "    float value;\n";
+static constexpr AStringView s_NWB_DUP_RUNTIME = "NwbDup runtime;\n";
+static constexpr AStringView s_CLOSE_BRACE = "};\n";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -413,7 +423,7 @@ TEST(Metascript, BindStyleStructDeclarations){
     ASSERT_NE(surfaceAttributes, nullptr);
     ASSERT_TRUE(surfaceAttributes->isList());
     ASSERT_EQ(surfaceAttributes->asList().size(), 1u);
-    CheckStringField(surfaceAttributes->asList()[0u], LiteralView("name"), LiteralView("material_constant"));
+    CheckStringField(surfaceAttributes->asList()[0u], LiteralView(s_NAME), LiteralView("material_constant"));
 
     const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
     ASSERT_NE(surfaceFields, nullptr);
@@ -421,15 +431,15 @@ TEST(Metascript, BindStyleStructDeclarations){
     ASSERT_EQ(surfaceFields->asList().size(), s_ExpectedDualCount);
 
     const Value& baseColorField = surfaceFields->asList()[0u];
-    CheckStringField(baseColorField, LiteralView("type"), LiteralView("float4"));
-    CheckStringField(baseColorField, LiteralView("name"), LiteralView("base_color"));
+    CheckStringField(baseColorField, LiteralView(s_TYPE), LiteralView("float4"));
+    CheckStringField(baseColorField, LiteralView(s_NAME), LiteralView("base_color"));
 
     const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
     ASSERT_NE(baseColorAttributes, nullptr);
     ASSERT_TRUE(baseColorAttributes->isList());
     ASSERT_EQ(baseColorAttributes->asList().size(), 1u);
     const Value& defaultAttribute = baseColorAttributes->asList()[0u];
-    CheckStringField(defaultAttribute, LiteralView("name"), LiteralView("default"));
+    CheckStringField(defaultAttribute, LiteralView(s_NAME), LiteralView("default"));
 
     const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
     ASSERT_NE(arguments, nullptr);
@@ -442,37 +452,23 @@ TEST(Metascript, BindStyleStructDeclarations){
     ASSERT_TRUE(instances->isList());
     ASSERT_EQ(instances->asList().size(), s_ExpectedDualCount);
 
-    CheckStringField(instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
-    CheckStringField(instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
-    CheckStringField(instances->asList()[1u], LiteralView("type"), LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    CheckStringField(instances->asList()[1u], LiteralView("name"), LiteralView("runtime"));
+    CheckStringField(instances->asList()[0u], LiteralView(s_TYPE), LiteralView("NwbProjectBxdfSurfaceMaterial"));
+    CheckStringField(instances->asList()[0u], LiteralView(s_NAME), LiteralView("surface"));
+    CheckStringField(instances->asList()[1u], LiteralView(s_TYPE), LiteralView("NwbProjectBxdfRuntimeMaterial"));
+    CheckStringField(instances->asList()[1u], LiteralView(s_NAME), LiteralView("runtime"));
 }
 
 TEST(Metascript, BindStyleStructDuplicateRejections){
-    const AString duplicateFieldSource =
-        "struct NwbDup{\n"
-        "    float value;\n"
-        "    float value;\n"
-        "};\n"
-    ;
+    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE
+        + s_FLOAT_VALUE_LINE + s_CLOSE_BRACE;
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateFieldSource, LiteralView("duplicate struct field declaration"));
 
-    const AString duplicateInstanceSource =
-        "struct NwbDup{\n"
-        "    float value;\n"
-        "};\n"
-        "NwbDup runtime;\n"
-        "NwbDup runtime;\n"
-    ;
+    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE
+        + s_CLOSE_BRACE + s_NWB_DUP_RUNTIME + s_NWB_DUP_RUNTIME;
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
 
-    const AString existingInstanceSource =
-        "asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n"
-        "struct NwbDup{\n"
-        "    float value;\n"
-        "};\n"
-        "NwbDup runtime;\n"
-    ;
+    const AString existingInstanceSource = AString("asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n")
+        + s_STRUCT_NWB_DUP + s_FLOAT_VALUE_LINE + s_CLOSE_BRACE + s_NWB_DUP_RUNTIME;
     CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
 }
 
@@ -497,10 +493,10 @@ TEST(Metascript, GenericDeclarationsAndReferences){
 
     ASSERT_EQ(document.declarations().size(), 3u);
 
-    EXPECT_EQ(document.declarations()[0u].type, LiteralView("model"));
-    EXPECT_EQ(document.declarations()[0u].variable, LiteralView("model"));
-    EXPECT_EQ(document.declarations()[1u].type, LiteralView("mesh"));
-    EXPECT_EQ(document.declarations()[1u].variable, LiteralView("mesh"));
+    EXPECT_EQ(document.declarations()[0u].type, LiteralView(s_MODEL));
+    EXPECT_EQ(document.declarations()[0u].variable, LiteralView(s_MODEL));
+    EXPECT_EQ(document.declarations()[1u].type, LiteralView(s_MESH));
+    EXPECT_EQ(document.declarations()[1u].variable, LiteralView(s_MESH));
     EXPECT_EQ(document.declarations()[s_ThirdElementIndex].type, LiteralView("asset_bunch"));
     EXPECT_EQ(document.declarations()[s_ThirdElementIndex].variable, LiteralView("bunch"));
 
@@ -510,13 +506,13 @@ TEST(Metascript, GenericDeclarationsAndReferences){
     ASSERT_EQ(bunch->asList().size(), s_ExpectedDualCount);
 
     CheckReferenceListElement(bunch->asList()[0u], LiteralView("model"));
-    CheckReferenceListElement(bunch->asList()[1u], LiteralView("mesh"));
+    CheckReferenceListElement(bunch->asList()[1u], LiteralView(s_MESH));
 
-    const Value* modelValue = document.findVariable(LiteralView("model"));
+    const Value* modelValue = document.findVariable(LiteralView(s_MODEL));
     ASSERT_NE(modelValue, nullptr);
-    CheckStringField(*modelValue, LiteralView("mesh"), LiteralView("project/body/mesh"));
+    CheckStringField(*modelValue, LiteralView(s_MESH), LiteralView("project/body/mesh"));
 
-    const Value* meshValue = document.findVariable(LiteralView("mesh"));
+    const Value* meshValue = document.findVariable(LiteralView(s_MESH));
     ASSERT_NE(meshValue, nullptr);
 
     const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
@@ -580,4 +576,3 @@ TEST(Metascript, TextureConverterMetadataSchema){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

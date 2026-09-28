@@ -54,6 +54,22 @@
 namespace __hidden_global_tests{
 
 
+static constexpr AStringView s_ALPHA = "alpha";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/namesymbols/before_registry_live";
+static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
+static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
+static constexpr AStringView s_BETA = "beta";
+static constexpr AStringView s_OK = "ok";
+static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
+static constexpr AStringView s_GRAPHICSVOLUME = "GraphicsVolume";
+static constexpr AStringView s_UNCHANGED = "unchanged";
+static constexpr AStringView s_UNIT = "unit";
+static constexpr char s_BIN_SH[] = "/bin/sh";
+static constexpr char s_C[] = "-c";
+static constexpr tchar s_PARALLEL_LOGGER_MESSAGE[] = NWB_TEXT("parallel logger message");
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -600,8 +616,8 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(first, same);
     EXPECT_NE(first, second);
     EXPECT_TRUE(first < second || second < first);
-    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash("identity/first")));
-    EXPECT_EQ(first.identityHash(), ComputeNameHash("identity/first"));
+    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST.data())));
+    EXPECT_EQ(first.identityHash(), ComputeNameHash(s_IDENTITY_FIRST.data()));
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         NameHash changed = first.identityHash();
         changed.qwords[lane] ^= 1u;
@@ -612,7 +628,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(NWB_BUILDMODE)
-    EXPECT_EQ(first.hash(), ComputeNameHash("identity/first"));
+    EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST.data()));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
 }
@@ -759,14 +775,14 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     NameSymbols::Serialize(namesymText);
 #if defined(NWB_BUILDMODE)
     EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "tests/namesymbols/before_registry_live");
+    EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "tests/namesymbols/before_registry_retired");
+    EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_HeapHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "core/alloc/heap_backing");
-    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+    EXPECT_STREQ(resolvedText, s_CORE_ALLOC_HEAP_BACKING.data());
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #else
     EXPECT_FALSE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_FALSE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -787,13 +803,13 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     namesymText.clear();
     ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
 #if defined(NWB_BUILDMODE)
-    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
-    EXPECT_NE(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
+    EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #else
-    EXPECT_EQ(namesymText.find("tests/namesymbols/before_registry_live"), decltype(namesymText)::npos);
-    EXPECT_EQ(namesymText.find("tests/namesymbols/before_registry_retired"), decltype(namesymText)::npos);
-    EXPECT_EQ(namesymText.find("core/alloc/heap_backing"), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
+    EXPECT_EQ(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #endif
     ErrorCode removeError;
     if(!RemoveFile(namesymPath, removeError))
@@ -818,19 +834,19 @@ TEST(Global, RejectedStringReadsDoNotAdvanceCursor){
     truncated.push_back(static_cast<u8>('x'));
 
     usize cursor = 0u;
-    AString parsed("unchanged");
+    AString parsed(s_UNCHANGED);
     EXPECT_FALSE(ReadString(truncated, cursor, parsed));
     EXPECT_EQ(cursor, 0u);
-    EXPECT_EQ(parsed, "unchanged");
+    EXPECT_EQ(parsed, s_UNCHANGED);
 
     Vector<u8> embeddedNull;
     const char textWithNull[] = { 'a', '\0', 'b' };
     EXPECT_TRUE(AppendString(embeddedNull, AStringView(textWithNull, sizeof(textWithNull))));
 
-    ACompactString compact("unchanged");
+    ACompactString compact(s_UNCHANGED);
     EXPECT_FALSE(ReadString(embeddedNull, cursor, compact));
     EXPECT_EQ(cursor, 0u);
-    EXPECT_EQ(compact.view(), AStringView("unchanged"));
+    EXPECT_EQ(compact.view(), AStringView(s_UNCHANGED));
 }
 
 TEST(Global, RejectedACompactStringAssignResetsText){
@@ -944,7 +960,7 @@ TEST(Global, TextUtilityHelpers){
 
     EXPECT_EQ(AStringView(genericPathText.data(), genericPathText.size()), AStringView("alpha/beta/file.txt"));
     EXPECT_EQ(TrimLeftView(AStringView(" \talpha ")), AStringView("alpha "));
-    EXPECT_EQ(TrimView(AStringView(" \talpha \r\n")), AStringView("alpha"));
+    EXPECT_EQ(TrimView(AStringView(" \talpha \r\n")), s_ALPHA);
     EXPECT_EQ(TrimCopy(AString(" \tMiXeD \r\n")), AString("MiXeD"));
     EXPECT_EQ(ToAsciiLowerCopy(AString("MiXeD")), AString("mixed"));
     EXPECT_EQ(UnquoteMatchingAsciiQuotes(AString(" 'asset path' ")), AString("asset path"));
@@ -958,13 +974,13 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
     EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
     EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
-    EXPECT_TRUE(StartsWith(AStringView("alpha"), AStringView("alp")));
-    EXPECT_TRUE(StartsWith(AStringView("alpha"), "al"));
-    EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
-    EXPECT_FALSE(StartsWith(AStringView("al"), AStringView("alpha")));
-    EXPECT_TRUE(EqualsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("graphicsvolume")));
-    EXPECT_TRUE(ContainsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("volume")));
-    EXPECT_FALSE(ContainsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("shader")));
+    EXPECT_TRUE(StartsWith(s_ALPHA, AStringView("alp")));
+    EXPECT_TRUE(StartsWith(s_ALPHA, "al"));
+    EXPECT_FALSE(StartsWith(s_ALPHA, s_BETA));
+    EXPECT_FALSE(StartsWith(AStringView("al"), s_ALPHA));
+    EXPECT_TRUE(EqualsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("graphicsvolume")));
+    EXPECT_TRUE(ContainsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("volume")));
+    EXPECT_FALSE(ContainsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("shader")));
 
     AString jsonText;
     AppendJsonQuotedText(jsonText, AStringView("a\"b\\c\n\t"));
@@ -998,12 +1014,12 @@ TEST(Global, TextUtilityHelpers){
 
     constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
     AStringView textValue;
-    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "alpha", textValue));
+    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, s_ALPHA, textValue));
     EXPECT_EQ(textValue, AStringView("one"));
     EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "empty", textValue));
     EXPECT_TRUE(textValue.empty());
     EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing", textValue));
-    EXPECT_TRUE(FindLineKeyValueU64(s_KeyValueText, "beta", value));
+    EXPECT_TRUE(FindLineKeyValueU64(s_KeyValueText, s_BETA, value));
     EXPECT_EQ(value, 42u);
 }
 
@@ -1027,8 +1043,8 @@ TEST(Global, BlockingFileDescriptorRoundTrip){
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const char* const argv[] = {
-        "/bin/sh",
-        "-c",
+        s_BIN_SH,
+        s_C,
         "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done",
         nullptr
     };
@@ -1057,8 +1073,8 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
 
 TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     const char* const argv[] = {
-        "/bin/sh",
-        "-c",
+        s_BIN_SH,
+        s_C,
         "while :; do printf x; done",
         nullptr
     };
@@ -1080,8 +1096,8 @@ TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
     const char* const argv[] = {
-        "/bin/sh",
-        "-c",
+        s_BIN_SH,
+        s_C,
         "printf stdout; printf stderr >&2; exit 23",
         nullptr
     };
@@ -1132,7 +1148,7 @@ TEST(Global, FilesystemUtilityHelpers){
     EXPECT_TRUE(EnsureEmptyDirectory(root, error));
     EXPECT_TRUE(WaitForDirectory(root, 0u));
     EXPECT_TRUE(WriteTextFile(textFile, AStringView("alpha beta")));
-    EXPECT_TRUE(TextFileContains(textFile, AStringView("alpha")));
+    EXPECT_TRUE(TextFileContains(textFile, s_ALPHA));
     EXPECT_FALSE(TextFileContains(textFile, AStringView("gamma")));
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
@@ -1170,21 +1186,21 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
 #endif
 
 TEST(Global, FilesystemVolumeSegmentNaming){
-    EXPECT_TRUE(ValidVolumeName("graphics"));
+    EXPECT_TRUE(ValidVolumeName(s_GRAPHICS.data()));
     EXPECT_TRUE(ValidVolumeName("runtime_pipeline-cache"));
     EXPECT_FALSE(ValidVolumeName(""));
     EXPECT_FALSE(ValidVolumeName("graphics/cache"));
     EXPECT_FALSE(ValidVolumeName("graphics cache"));
 
-    const ACompactString firstSegment = MakeVolumeSegmentFileName("graphics", 0u);
-    const ACompactString sameSegment = MakeVolumeSegmentFileName("graphics", 0u);
-    const ACompactString nextSegment = MakeVolumeSegmentFileName("graphics", 1u);
+    const ACompactString firstSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 0u);
+    const ACompactString sameSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 0u);
+    const ACompactString nextSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 1u);
 
     EXPECT_EQ(firstSegment.view(), sameSegment.view());
     EXPECT_NE(firstSegment.view(), nextSegment.view());
     EXPECT_EQ(firstSegment.view().size(), s_HexU64DigitCount + AStringView(".vol").size());
     EXPECT_EQ(firstSegment.view().substr(s_HexU64DigitCount), AStringView(".vol"));
-    EXPECT_EQ(HashVolumeSegmentFileName("graphics", 0u), HashVolumeSegmentFileName("graphics", 0u));
+    EXPECT_EQ(HashVolumeSegmentFileName(s_GRAPHICS, 0u), HashVolumeSegmentFileName(s_GRAPHICS, 0u));
 
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/volume_segment_naming");
@@ -1192,10 +1208,10 @@ TEST(Global, FilesystemVolumeSegmentNaming){
     ErrorCode error;
 
     EXPECT_TRUE(EnsureEmptyDirectory(root, error));
-    EXPECT_FALSE(VolumeSegmentExists(root, "graphics"));
+    EXPECT_FALSE(VolumeSegmentExists(root, s_GRAPHICS));
     EXPECT_TRUE(WriteTextFile(firstSegmentPath, AStringView("segment")));
-    EXPECT_TRUE(VolumeSegmentExists(root, "graphics"));
-    EXPECT_FALSE(VolumeSegmentExists(root, "graphics", 1u));
+    EXPECT_TRUE(VolumeSegmentExists(root, s_GRAPHICS));
+    EXPECT_FALSE(VolumeSegmentExists(root, s_GRAPHICS, 1u));
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
@@ -1204,20 +1220,20 @@ TEST(Global, StringTableText){
     u32 alphaOffset = Limit<u32>::s_Max;
     u32 betaOffset = Limit<u32>::s_Max;
 
-    EXPECT_TRUE(AppendStringTableText(stringTable, AStringView("alpha"), alphaOffset));
-    EXPECT_TRUE(AppendStringTableText(stringTable, AStringView("beta"), betaOffset));
+    EXPECT_TRUE(AppendStringTableText(stringTable, s_ALPHA, alphaOffset));
+    EXPECT_TRUE(AppendStringTableText(stringTable, s_BETA, betaOffset));
     EXPECT_EQ(alphaOffset, 0u);
     EXPECT_EQ(betaOffset, 6u);
 
     ACompactString parsed;
     EXPECT_TRUE(ReadStringTableText(stringTable, 0u, stringTable.size(), alphaOffset, parsed));
-    EXPECT_EQ(parsed.view(), AStringView("alpha"));
+    EXPECT_EQ(parsed.view(), s_ALPHA);
 
     Vector<u8> prefixedBinary;
     prefixedBinary.push_back(0xFFu);
     prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
     EXPECT_TRUE(ReadStringTableText(prefixedBinary, 1u, stringTable.size(), betaOffset, parsed));
-    EXPECT_EQ(parsed.view(), AStringView("beta"));
+    EXPECT_EQ(parsed.view(), s_BETA);
 
     u32 emptyOffset = 0u;
     EXPECT_FALSE(AppendStringTableText(stringTable, AStringView(), emptyOffset));
@@ -1229,7 +1245,7 @@ TEST(Global, InvalidStringTableReads){
     unterminated.push_back(static_cast<u8>('a'));
     unterminated.push_back(static_cast<u8>('b'));
 
-    ACompactString parsed("unchanged");
+    ACompactString parsed(s_UNCHANGED);
     EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u, parsed));
     EXPECT_TRUE(parsed.empty());
 
@@ -1407,8 +1423,8 @@ TEST(Global, BoundedRuntimeWrappers){
     EXPECT_EQ(copiedValue, sourceValue);
 
     char copiedText[8] = {};
-    EXPECT_EQ(NWB_STRCPY(copiedText, sizeof(copiedText), "alpha"), 0);
-    EXPECT_STREQ(copiedText, "alpha");
+    EXPECT_EQ(NWB_STRCPY(copiedText, sizeof(copiedText), s_ALPHA.data()), 0);
+    EXPECT_STREQ(copiedText, s_ALPHA.data());
 
     char copiedPrefix[8] = {};
     EXPECT_EQ(NWB_STRNCPY(copiedPrefix, sizeof(copiedPrefix), "abcdef", 3u), 0);
@@ -1420,8 +1436,8 @@ TEST(Global, BoundedRuntimeWrappers){
     EXPECT_STREQ(appendedText, "abcd");
 
     char formattedText[8] = {};
-    EXPECT_EQ(NWB_SPRINTF(formattedText, sizeof(formattedText), "%s", "ok"), 2);
-    EXPECT_STREQ(formattedText, "ok");
+    EXPECT_EQ(NWB_SPRINTF(formattedText, sizeof(formattedText), "%s", s_OK.data()), 2);
+    EXPECT_STREQ(formattedText, s_OK.data());
 
     wchar wideText[8] = {};
     EXPECT_EQ(NWB_WSTRCPY(wideText, sizeof(wideText) / sizeof(wideText[0]), L"wide"), 0);
@@ -1501,9 +1517,9 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
                 )
             )
                 invalidObservation.store(true, MemoryOrder::relaxed);
-            if(logger.sawMessageContaining(NWB_TEXT("parallel logger message")))
+            if(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE))
                 sawConcurrentMessage = true;
-            if(logger.sawErrorContaining(NWB_TEXT("parallel logger message")))
+            if(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE))
                 sawConcurrentError = true;
             YieldThread();
         }while(activeWriters.load(MemoryOrder::acquire) != 0u);
@@ -1520,7 +1536,7 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
                 NWB::Core::Common::LoggerDetail::EnqueueMessage(
                     logger,
                     type,
-                    NWB_TEXT("parallel logger message")
+                    s_PARALLEL_LOGGER_MESSAGE
                 );
             }
             activeWriters.fetch_sub(1u, MemoryOrder::release);
@@ -1537,8 +1553,8 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
     EXPECT_TRUE(sawConcurrentError);
     EXPECT_EQ(logger.messageCount(), s_ExpectedMessageCount);
     EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
-    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("parallel logger message")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("parallel logger message")));
+    EXPECT_TRUE(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE));
+    EXPECT_TRUE(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE));
 }
 
 TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
@@ -1614,9 +1630,9 @@ TEST(Global, DiagnosticEventHook){
     };
 
     SetDiagnosticEventCallback(callback);
-    CaptureDiagnosticEvent("unit", "message", "diagnostics_test.cpp", 42u);
+    CaptureDiagnosticEvent(s_UNIT.data(), "message", "diagnostics_test.cpp", 42u);
     ClearDiagnosticEventCallback(callback);
-    CaptureDiagnosticEvent("unit", "ignored");
+    CaptureDiagnosticEvent(s_UNIT.data(), "ignored");
 
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
     ASSERT_NE(s_DiagnosticEventName, nullptr);

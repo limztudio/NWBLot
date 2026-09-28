@@ -28,16 +28,36 @@ sys.path.insert(0, str(REPO))
 
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ON = "ON"
+LIT_COZTER = ".cozter"
+LIT_OUT = "out"
+LIT_AB_RESULTS = "ab-results"
+LIT_ASYNC_SHADOW_M4 = "async-shadow-m4"
+LIT_SYNC_EXECUTABLE = "--sync-executable"
+LIT_ASYNC_EXECUTABLE = "--async-executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_NO_LOGSERVER = "--no-logserver"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_STORE_TRUE = "store_true"
+LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
+LIT_MEASURE_SECONDS = "--measure-seconds"
+LIT_N_30 = "30"
+LIT_MAIN = "__main__"
+
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "run.py"
 SYNC_TARGET = "nwb_async_shadow_m4_sync_benchmark"
 ASYNC_TARGET = "nwb_async_shadow_m4_async_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
 REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": "ON",
-    "NWB_BUILD_LOGSERVER": "ON",
-    "NWB_BUILD_PIPELINE": "ON",
-    "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_LOADER": LIT_ON,
+    "NWB_BUILD_LOGSERVER": LIT_ON,
+    "NWB_BUILD_PIPELINE": LIT_ON,
+    "NWB_BUILD_TESTS": LIT_ON,
 }
 
 
@@ -51,7 +71,7 @@ class M4Paths:
 
 def default_output_directory(root: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / ".cozter" / "out" / "ab-results" / "async-shadow-m4" / stamp
+    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_ASYNC_SHADOW_M4 / stamp
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
@@ -90,21 +110,21 @@ def runner_command(args: argparse.Namespace, paths: M4Paths) -> List[object]:
     command: List[object] = [
         sys.executable,
         REPO / RUNNER_SCRIPT,
-        "--sync-executable",
+        LIT_SYNC_EXECUTABLE,
         paths.sync_executable,
-        "--async-executable",
+        LIT_ASYNC_EXECUTABLE,
         paths.async_executable,
-        "--runtime-dir",
+        LIT_RUNTIME_DIR,
         paths.runtime_directory,
-        "--output-dir",
+        LIT_OUTPUT_DIR,
         paths.output_directory,
     ]
     if args.gpu_validation:
-        command.append("--gpu-validation")
+        command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
-        command.append("--no-logserver")
+        command.append(LIT_NO_LOGSERVER)
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -121,27 +141,27 @@ def run_runner(args: argparse.Namespace, paths: M4Paths) -> int:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--sync-executable", type=Path, help="Override the synchronous benchmark executable.")
-    parser.add_argument("--async-executable", type=Path, help="Override the asynchronous benchmark executable.")
-    parser.add_argument("--runtime-dir", type=Path, help="Override the cooked M4 runtime directory.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for M4 logs, captures, and reports.")
-    parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs instead of logserver.")
+    parser.add_argument(LIT_SYNC_EXECUTABLE, type=Path, help="Override the synchronous benchmark executable.")
+    parser.add_argument(LIT_ASYNC_EXECUTABLE, type=Path, help="Override the asynchronous benchmark executable.")
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked M4 runtime directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for M4 logs, captures, and reports.")
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
+    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        "--gpu-validation",
-        dest="gpu_validation",
-        action="store_true",
+        LIT_GPU_VALIDATION,
+        dest=LIT_GPU_VALIDATION_2,
+        action=LIT_STORE_TRUE,
         help="Enable Vulkan GPU validation (the default).",
     )
     validation_group.add_argument(
         "--no-gpu-validation",
-        dest="gpu_validation",
+        dest=LIT_GPU_VALIDATION_2,
         action="store_false",
         help="Do not pass --gpudbg to the paired benchmark processes.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action="store_true", help="Validate launcher command composition without building or running Vulkan.")
+    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Validate launcher command composition without building or running Vulkan.")
     return parser
 
 
@@ -160,28 +180,28 @@ def run_self_test() -> int:
         arch="x64",
         domain="full",
         config="dbg",
-        configure_preset="windows-clang-x64",
-        build_dir=root / "__cmake" / "build" / "windows-clang-x64",
+        configure_preset=LIT_WINDOWS_CLANG_X64,
+        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
         cmake=("cmake",),
     )
     args = SimpleNamespace(
         sync_executable=None,
         async_executable=None,
         runtime_dir=None,
-        output_dir=root / ".cozter" / "out" / "ab-results" / "async-shadow-m4" / "self-test",
+        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_ASYNC_SHADOW_M4 / "self-test",
         dry_run=True,
         gpu_validation=True,
         no_logserver=False,
         logserver_executable=None,
-        runner_args=["--measure-seconds", "30"],
+        runner_args=[LIT_MEASURE_SECONDS, LIT_N_30],
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
     assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
-    assert command[command.index("--sync-executable") + 1].endswith("async_shadow_m4_sync_benchmark.exe")
-    assert command[command.index("--async-executable") + 1].endswith("async_shadow_m4_async_benchmark.exe")
-    assert "--gpu-validation" in command
-    assert command[-2:] == ["--measure-seconds", "30"]
+    assert command[command.index(LIT_SYNC_EXECUTABLE) + 1].endswith("async_shadow_m4_sync_benchmark.exe")
+    assert command[command.index(LIT_ASYNC_EXECUTABLE) + 1].endswith("async_shadow_m4_async_benchmark.exe")
+    assert LIT_GPU_VALIDATION in command
+    assert command[-2:] == [LIT_MEASURE_SECONDS, LIT_N_30]
     print("async-shadow M4 launcher self-test passed")
     return 0
 
@@ -202,5 +222,5 @@ def main(argv: Sequence[str]) -> int:
     return run(args)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

@@ -10,6 +10,20 @@ import sys
 
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows, write_bmp_24
 
+# Shared literals (no inline hardcodes below this block).
+LIT_N = "\n"
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_TIMEOUT = "--timeout"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_DISABLED = "disabled"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_AVBOIT_REFRACTION_RESOLVE = "AVBOIT refraction resolve:"
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+LIT_STORE_TRUE = "store_true"
+LIT_APPEND = "append"
+
 
 GLASS_REGION = (0.39, 0.38, 0.61, 0.58)
 EXTERIOR_REGIONS = ((0.29, 0.35, 0.35, 0.68), (0.65, 0.35, 0.71, 0.68))
@@ -85,7 +99,7 @@ def compare_refraction_frames(reference, refracted):
     elif foreground_retained < foreground_before * 0.97 or foreground_added > foreground_before * 0.03:
         failures.append("foreground AVBOIT panel moved, disappeared, or bent through the glass")
     if failures:
-        raise SmokeFailure("; ".join(failures) + "\n" + json.dumps(metrics, indent=2))
+        raise SmokeFailure("; ".join(failures) + LIT_N + json.dumps(metrics, indent=2))
     return metrics
 
 
@@ -93,21 +107,21 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
     path = args.output_directory / f"refraction_{name}.bmp"
     command = [
         sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(path), "--application-capture",
-        "--application-capture-frame-count", str(args.frames), "--timeout", str(args.timeout),
-        "--expect-log-message", "RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created",
-        "--expect-log-message", "RefractionSmokeProject: refraction " + ("enabled" if enabled else "disabled"),
-        "--expect-log-message", "RefractionSmokeProject: shutdown",
+        "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created",
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + ("enabled" if enabled else LIT_DISABLED),
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",
     ]
     if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command += ["--no-logserver"]
     if expected_dispatch:
-        command += ["--expect-log-message", expected_dispatch]
+        command += [LIT_EXPECT_LOG_MESSAGE, expected_dispatch]
     else:
-        command += ["--reject-log-message", "AVBOIT refraction resolve:"]
+        command += ["--reject-log-message", LIT_AVBOIT_REFRACTION_RESOLVE]
     for argument in args.application_arg:
         command.append("--application-arg=" + argument)
 
@@ -129,14 +143,14 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", required=True, type=Path)
-    parser.add_argument("--working-directory", required=True, type=Path)
+    parser.add_argument(LIT_EXECUTABLE, required=True, type=Path)
+    parser.add_argument(LIT_WORKING_DIRECTORY, required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
-    parser.add_argument("--logserver-executable", type=Path)
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
     parser.add_argument("--frames", type=int, default=16)
-    parser.add_argument("--timeout", type=float, default=60.0)
-    parser.add_argument("--require-hardware", action="store_true", help="Require actual hardware ray-query dispatch in the automatic variant.")
-    parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument(LIT_TIMEOUT, type=float, default=60.0)
+    parser.add_argument("--require-hardware", action=LIT_STORE_TRUE, help="Require actual hardware ray-query dispatch in the automatic variant.")
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:
         parser.error("frames and timeout must be positive")
@@ -148,12 +162,12 @@ def main(argv):
     args = parse_args(argv)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     try:
-        baseline = capture_variant(args, "disabled", False, True, None)
+        baseline = capture_variant(args, LIT_DISABLED, False, True, None)
         if baseline is None:
             return SKIP_EXIT_CODE
         metrics = {}
         for name, hardware, diagnostic in (
-            ("automatic", True, "AVBOIT refraction resolve: hardware" if args.require_hardware else "AVBOIT refraction resolve:"),
+            ("automatic", True, "AVBOIT refraction resolve: hardware" if args.require_hardware else LIT_AVBOIT_REFRACTION_RESOLVE),
             ("screen_space", False, "AVBOIT refraction resolve: screen-space"),
         ):
             result = capture_variant(args, name, True, hardware, diagnostic)
@@ -165,7 +179,7 @@ def main(argv):
                 for before, after in zip(reference_row, output_row)]
                 for reference_row, output_row in zip(baseline[2], rows)]
             write_bmp_24(args.output_directory / f"refraction_{name}_difference.bmp", width, height, difference)
-        (args.output_directory / "refraction_metrics.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "refraction_metrics.json").write_text(json.dumps(metrics, indent=2) + LIT_N, encoding=LIT_UTF_8)
         print("PASS: clear-glass displacement, foreground AVBOIT preservation, exterior stability, and both resolve routes\n" + json.dumps(metrics, indent=2))
         return 0
     except (SmokeFailure, subprocess.TimeoutExpired) as exc:
@@ -173,5 +187,5 @@ def main(argv):
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

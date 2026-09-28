@@ -11,6 +11,13 @@
 namespace __hidden_ecs_graphics_task_graph_geometry_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_RAYTRACE = "raytrace";
+static constexpr AStringView s_RAYTRACING_SYSTEM_CPP = "raytracing_system.cpp";
+static constexpr AStringView s_MESH = "mesh";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -33,9 +40,9 @@ TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublish
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString freezeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "shadow_trace_geometry.h", rayTracingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "shadow_trace_geometry.cpp", freezeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "shadow_trace_geometry.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_CPP, rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "shadow_trace_geometry.cpp", freezeSource));
 
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
@@ -85,8 +92,8 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     AString rayTracingSource;
     AString swBvhSource;
     AString materialContextSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_CPP, rayTracingSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -100,7 +107,7 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
         },
         swBvhSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_shadow_material_context.cpp", materialContextSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_shadow_material_context.cpp", materialContextSource));
 
     const AStringView materialContext(materialContextSource.data(), materialContextSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
@@ -269,7 +276,7 @@ TEST(EcsGraphics, HardwareShadowPreparationKeepsSoftwareBvhsExclusiveToSoftwareD
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString rayTracingSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_CPP, rayTracingSource));
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const usize preflightOffset = rayTracing.find("bool RendererRayTracingSystem::preflightShadowVisibilityResources(");
     const usize recordOffset = rayTracing.find("bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(");
@@ -319,7 +326,7 @@ TEST(EcsGraphics, RayTracingMaterialAndSoftwareInputsExposeRawViews){
 
     AString meshResourcesSource;
     AString skinningRuntimeCacheSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MESH / "mesh_resources.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
         skinningRuntimeCacheSource
@@ -380,8 +387,8 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         taskGraphSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl/ecs_render/raytrace/task_graph_scene_resources.cpp", sceneGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_CPP, rayTracingSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -395,13 +402,13 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         },
         swBvhSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_raytracing_handoff.cpp", meshResourcesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", rendererStateHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MESH / "mesh_raytracing_handoff.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MESH / "renderer_mesh_types.h", meshTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "renderer_raytracing_state.h", rendererStateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "renderer_raytracing_state.cpp", rendererStateSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "prepared_builds.h", preparedBuildsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "prepared_builds.h", preparedBuildsSource));
     const AStringView hardwareCaustics(hardwareCausticsSource.data(), hardwareCausticsSource.size());
     const AStringView preparedBuilds(preparedBuildsSource.data(), preparedBuildsSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());

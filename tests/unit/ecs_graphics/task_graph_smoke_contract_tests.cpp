@@ -11,6 +11,19 @@
 namespace __hidden_ecs_graphics_task_graph_smoke_contract_tests{
 
 
+static constexpr AStringView s_TESTS = "tests";
+static constexpr AStringView s_SMOKE = "smoke";
+static constexpr AStringView s_AB = "ab";
+static constexpr AStringView s_RENDERER_BASELINE = "renderer_baseline";
+static constexpr AStringView s_PROFILES_PY = "profiles.py";
+static constexpr AStringView s_FIXED_DELTA_SECONDS_1_0_60_0 = "fixed_delta_seconds=1.0 / 60.0";
+static constexpr AStringView s_RENDERERBASELINECAPTUREFREEZEFRAME = "rendererBaselineCaptureFreezeFrame";
+static constexpr AStringView s_RENDERERBASELINEFIXEDDELTA = "rendererBaselineFixedDelta";
+static constexpr AStringView s_SETTLE_SECONDS_0_75 = "settle_seconds=0.75";
+static constexpr AStringView s_CAPTURE_FREEZE_FRAME_360 = "capture_freeze_frame=360";
+static constexpr AStringView s_TRANSPARENT_MULTI_PROJECT_CPP = "transparent_multi_project.cpp";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -32,7 +45,7 @@ TEST(EcsGraphics, FrameLaggedSmokeRendersWhenUnfocused){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "transparent_multi_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / s_TRANSPARENT_MULTI_PROJECT_CPP, smokeSource));
     const AStringView smoke(smokeSource.data(), smokeSource.size());
 
     EXPECT_TRUE(ContainsText(smoke, "class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass"));
@@ -62,22 +75,22 @@ TEST(EcsGraphics, TransparentAvboitBaselineCaptureIsFrameLockedAndTestOwned){
     AString profileSource;
     AString runnerSource;
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "run.py", runnerSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "transparent_multi_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / "run.py", runnerSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / s_TRANSPARENT_MULTI_PROJECT_CPP, smokeSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const AStringView runner(runnerSource.data(), runnerSource.size());
     const AStringView smoke(smokeSource.data(), smokeSource.size());
 
     EXPECT_TRUE(ContainsText(profiles, "capture_freeze_frame=96"));
     EXPECT_TRUE(ContainsText(profiles, "capture_ready_log=\"TransparentMultiSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(profiles, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(profiles, s_FIXED_DELTA_SECONDS_1_0_60_0));
     EXPECT_TRUE(ContainsText(runner, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
     EXPECT_TRUE(ContainsText(runner, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
     EXPECT_TRUE(ContainsText(runner, "wait_for_log_message("));
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINECAPTUREFREEZEFRAME));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINEFIXEDDELTA));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
     EXPECT_TRUE(ContainsText(smoke, "renderer baseline capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
@@ -92,17 +105,17 @@ TEST(EcsGraphics, SkinnedCsgBaselineCaptureIsFrameLockedAndTestOwned){
 
     AString profileSource;
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "csg_skinned_visible_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "csg_skinned_visible_project.cpp", smokeSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const AStringView smoke(smokeSource.data(), smokeSource.size());
 
     EXPECT_TRUE(ContainsText(profiles, "window_title=\"NWB Skinned CSG Smoke\""));
     EXPECT_TRUE(ContainsText(profiles, "capture_ready_log=\"CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(profiles, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(profiles, s_FIXED_DELTA_SECONDS_1_0_60_0));
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINECAPTUREFREEZEFRAME));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINEFIXEDDELTA));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
     EXPECT_TRUE(ContainsText(smoke, "CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
@@ -116,7 +129,7 @@ TEST(EcsGraphics, CausticBaselineUsesFixedTemporalWarmup){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString profileSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const usize causticsOffset = profiles.find("\"caustics\": BaselineProfile(");
     const usize surfelOffset = profiles.find("\"surfel-gi\": BaselineProfile(", causticsOffset);
@@ -125,10 +138,10 @@ TEST(EcsGraphics, CausticBaselineUsesFixedTemporalWarmup){
     ASSERT_LT(causticsOffset, surfelOffset);
     const AStringView caustics = profiles.substr(causticsOffset, surfelOffset - causticsOffset);
 
-    EXPECT_TRUE(ContainsText(caustics, "settle_seconds=0.75"));
-    EXPECT_TRUE(ContainsText(caustics, "capture_freeze_frame=360"));
+    EXPECT_TRUE(ContainsText(caustics, s_SETTLE_SECONDS_0_75));
+    EXPECT_TRUE(ContainsText(caustics, s_CAPTURE_FREEZE_FRAME_360));
     EXPECT_TRUE(ContainsText(caustics, "capture_ready_log=\"TransparentMultiSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(caustics, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(caustics, s_FIXED_DELTA_SECONDS_1_0_60_0));
 }
 
 
@@ -140,8 +153,8 @@ TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
 
     AString profileSource;
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "gi_test_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "gi_test_project.cpp", smokeSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const AStringView smoke(smokeSource.data(), smokeSource.size());
     const usize surfelOffset = profiles.find("\"surfel-gi\": BaselineProfile(");
@@ -151,13 +164,13 @@ TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
     ASSERT_LT(surfelOffset, stressOffset);
     const AStringView surfel = profiles.substr(surfelOffset, stressOffset - surfelOffset);
 
-    EXPECT_TRUE(ContainsText(surfel, "settle_seconds=0.75"));
-    EXPECT_TRUE(ContainsText(surfel, "capture_freeze_frame=360"));
+    EXPECT_TRUE(ContainsText(surfel, s_SETTLE_SECONDS_0_75));
+    EXPECT_TRUE(ContainsText(surfel, s_CAPTURE_FREEZE_FRAME_360));
     EXPECT_TRUE(ContainsText(surfel, "capture_ready_log=\"GiTestSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(surfel, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(surfel, s_FIXED_DELTA_SECONDS_1_0_60_0));
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINECAPTUREFREEZEFRAME));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINEFIXEDDELTA));
     EXPECT_TRUE(ContainsText(smoke, "GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
 }
 
@@ -170,8 +183,8 @@ TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
 
     AString profileSource;
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "soft_shadow_test_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "soft_shadow_test_project.cpp", smokeSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const AStringView smoke(smokeSource.data(), smokeSource.size());
     const usize softShadowOffset = profiles.find("\"soft-shadows\": BaselineProfile(");
@@ -181,13 +194,13 @@ TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
     ASSERT_LT(softShadowOffset, causticsOffset);
     const AStringView softShadows = profiles.substr(softShadowOffset, causticsOffset - softShadowOffset);
 
-    EXPECT_TRUE(ContainsText(softShadows, "settle_seconds=0.75"));
-    EXPECT_TRUE(ContainsText(softShadows, "capture_freeze_frame=360"));
+    EXPECT_TRUE(ContainsText(softShadows, s_SETTLE_SECONDS_0_75));
+    EXPECT_TRUE(ContainsText(softShadows, s_CAPTURE_FREEZE_FRAME_360));
     EXPECT_TRUE(ContainsText(softShadows, "capture_ready_log=\"SoftShadowTestSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(softShadows, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(softShadows, s_FIXED_DELTA_SECONDS_1_0_60_0));
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINECAPTUREFREEZEFRAME));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINEFIXEDDELTA));
     EXPECT_TRUE(ContainsText(
         smoke,
         "SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"
@@ -203,22 +216,22 @@ TEST(EcsGraphics, StressBaselineUsesSeparateFixedTemporalWarmup){
 
     AString profileSource;
     AString smokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "stress_test_project.cpp", smokeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_AB / s_RENDERER_BASELINE / s_PROFILES_PY, profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "stress_test_project.cpp", smokeSource));
     const AStringView profiles(profileSource.data(), profileSource.size());
     const AStringView smoke(smokeSource.data(), smokeSource.size());
     const usize stressOffset = profiles.find("\"stress\": BaselineProfile(");
     ASSERT_NE(stressOffset, AStringView::npos);
     const AStringView stress = profiles.substr(stressOffset);
 
-    EXPECT_TRUE(ContainsText(stress, "settle_seconds=0.75"));
+    EXPECT_TRUE(ContainsText(stress, s_SETTLE_SECONDS_0_75));
     EXPECT_TRUE(ContainsText(stress, "capture_freeze_frame=96"));
     EXPECT_TRUE(ContainsText(stress, "capture_ready_log=\"StressTestSmokeProject: renderer baseline capture ready after\""));
-    EXPECT_TRUE(ContainsText(stress, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(stress, s_FIXED_DELTA_SECONDS_1_0_60_0));
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "m4PixelCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
-    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINECAPTUREFREEZEFRAME));
+    EXPECT_TRUE(ContainsText(smoke, s_RENDERERBASELINEFIXEDDELTA));
     EXPECT_TRUE(ContainsText(smoke, "StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended"));
     EXPECT_TRUE(ContainsText(smoke, "StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
 }
@@ -241,13 +254,13 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime.h", moduleHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_feature_queries.cpp", moduleFeatureQueriesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "CoolStuff" / "Testbed" / "runtime.cpp", testbedRuntimeSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "smoke_scene_helpers.h", smokeHelperSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "CMakeLists.txt", smokeCmakeSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "launch.py", smokeLauncherSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "smoke_scene_helpers.h", smokeHelperSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "CMakeLists.txt", smokeCmakeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / "launch.py", smokeLauncherSource));
 
     static constexpr StringView s_SmokeProjectSourceNames[] = {
         "reflection_project.cpp",
-        "transparent_multi_project.cpp",
+        s_TRANSPARENT_MULTI_PROJECT_CPP,
         "csg_visible_project.cpp",
         "skinned_caustic_project.cpp",
         "stress_test_project.cpp",
@@ -257,7 +270,7 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     };
     for(const StringView sourceName : s_SmokeProjectSourceNames){
         AString source;
-        ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / sourceName.data(), source));
+        ASSERT_TRUE(ReadTextFile(repoRoot / s_TESTS / s_SMOKE / sourceName.data(), source));
         if(!smokeProjectSource.empty())
             smokeProjectSource += "\n\n";
         smokeProjectSource.append(source.data(), source.size());
@@ -352,13 +365,13 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ));
     EXPECT_GE(CountText(smokeCmake, "\"--skip-blocking-log-message\" \"VUID-\""), 4u);
 
-    EXPECT_EQ(CountText(smokeLauncher, "\"native\": SmokeExecutable("), 16u);
-    EXPECT_TRUE(ContainsText(smokeLauncher, "\"native\": SmokeExecutable(\"nwb_reflection_smoke\", \"reflection_smoke\")"));
-    EXPECT_TRUE(ContainsText(smokeLauncher, "\"native\": SmokeExecutable(\"nwb_refraction_smoke\", \"refraction_smoke\")"));
+    EXPECT_EQ(CountText(smokeLauncher, "BACKEND_NATIVE: SmokeExecutable("), 16u);
+    EXPECT_TRUE(ContainsText(smokeLauncher, "BACKEND_NATIVE: SmokeExecutable(\"nwb_reflection_smoke\", \"reflection_smoke\")"));
+    EXPECT_TRUE(ContainsText(smokeLauncher, "BACKEND_NATIVE: SmokeExecutable(\"nwb_refraction_smoke\", \"refraction_smoke\")"));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"hw\": SmokeExecutable("));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"sw\": SmokeExecutable("));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"compute\": SmokeExecutable("));
-    EXPECT_TRUE(ContainsText(smokeLauncher, "default=\"native\""));
+    EXPECT_TRUE(ContainsText(smokeLauncher, "default=BACKEND_NATIVE"));
 }
 
 

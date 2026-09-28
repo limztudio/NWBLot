@@ -21,6 +21,9 @@
 namespace __hidden_persistent_state_subset_tests{
 
 
+static constexpr AStringView s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION = "tests/persistent_state_subset/operation";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -166,7 +169,7 @@ void ExpectSameHandoff(const Handoff& actual, const Handoff& expected){
 
 
 TEST(PersistentStateSubset, PreservesSourceOrderSubresourcesAndAllFourStateCategories){
-    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION.data()));
     SubsetContext context;
     context.fillMixedStates();
     Handoff result(context.arena);
@@ -211,7 +214,7 @@ TEST(PersistentStateSubset, PreservesSourceOrderSubresourcesAndAllFourStateCateg
 }
 
 TEST(PersistentStateSubset, InvalidRawInputsPreserveTheDestinationSnapshot){
-    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION.data()));
     SubsetContext context;
     context.fillMixedStates();
     Handoff destination(context.arena);
@@ -229,7 +232,7 @@ TEST(PersistentStateSubset, InvalidRawInputsPreserveTheDestinationSnapshot){
 }
 
 TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchingState){
-    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION.data()));
     SubsetContext context;
     context.addBuffers(s_ExpectedDualCount);
     context.addTextures(s_ExpectedDualCount);
@@ -346,7 +349,7 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
 }
 
 TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandidateDies){
-    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION.data()));
     SubsetContext context;
     context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
@@ -480,7 +483,7 @@ TEST(PersistentStateSubset, MergeCapturesAnAliasedCandidateBeforeResetWhileFilte
 }
 
 TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPermanentStateInSourceOrder){
-    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_PERSISTENT_STATE_SUBSET_OPERATION.data()));
     SubsetContext context;
     context.addTextures(64u);
     context.addBuffers(s_ExpectedDualCount);

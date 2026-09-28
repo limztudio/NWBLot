@@ -14,6 +14,19 @@
 namespace __hidden_ecs_graphics_task_graph_shadow_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_RAYTRACE = "raytrace";
+static constexpr AStringView s_RT_SHADOW_TASKS_H = "raytrace/rt_shadow_tasks.h";
+static constexpr AStringView s_RT_SHADOW_MATERIAL_CONTEXT_CPP = "raytrace/rt_shadow_material_context.cpp";
+static constexpr AStringView s_RT_SHADOW_VISIBILITY_TARGET_CPP = "raytrace/rt_shadow_visibility_target.cpp";
+static constexpr AStringView s_RT_SHADOW_OPAQUE_CPP = "raytrace/rt_shadow_opaque.cpp";
+static constexpr AStringView s_RT_SHADOW_TRANSPARENT_CPP = "raytrace/rt_shadow_transparent.cpp";
+static constexpr AStringView s_RT_SHADOW_GPU_VISIBILITY_CPP = "raytrace/rt_shadow_gpu_visibility.cpp";
+static constexpr AStringView s_RT_SHADOW_PIPELINES_CPP = "raytrace/rt_shadow_pipelines.cpp";
+static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS = "renderer_frame_pipeline_graph_shadow_visibility.cpp";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -36,20 +49,20 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
     AString frameSource;
     AString graphSource;
     AString recordSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_pipelines.cpp", pipelineSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", graphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_softshadow_pipelines.cpp", pipelineSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_frame_resources.cpp", frameSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, graphSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow_tasks.h",
-            "raytrace/rt_shadow_material_context.cpp",
-            "raytrace/rt_shadow_visibility_target.cpp",
-            "raytrace/rt_shadow_opaque.cpp",
-            "raytrace/rt_shadow_transparent.cpp",
-            "raytrace/rt_shadow_gpu_visibility.cpp",
-            "raytrace/rt_shadow_pipelines.cpp",
+            s_RT_SHADOW_TASKS_H,
+            s_RT_SHADOW_MATERIAL_CONTEXT_CPP,
+            s_RT_SHADOW_VISIBILITY_TARGET_CPP,
+            s_RT_SHADOW_OPAQUE_CPP,
+            s_RT_SHADOW_TRANSPARENT_CPP,
+            s_RT_SHADOW_GPU_VISIBILITY_CPP,
+            s_RT_SHADOW_PIPELINES_CPP,
         },
         recordSource
     ));
@@ -125,8 +138,8 @@ TEST(EcsGraphics, ShadowVisibilityAllLitClearOwnsShaderCommandContractAndNativeC
 
     AString allLitClearTaskSource;
     AString shadowVisibilityTaskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility_tasks.cpp", allLitClearTaskSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "task_graph_shadow_visibility_tasks.cpp", allLitClearTaskSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilityTaskGraphSource));
     const AStringView callback(allLitClearTaskSource.data(), allLitClearTaskSource.size());
     const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
 
@@ -162,7 +175,7 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString shadowVisibilitySource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilitySource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(opaqueScheduling)"));
@@ -183,13 +196,13 @@ TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow_tasks.h",
-            "raytrace/rt_shadow_material_context.cpp",
-            "raytrace/rt_shadow_visibility_target.cpp",
-            "raytrace/rt_shadow_opaque.cpp",
-            "raytrace/rt_shadow_transparent.cpp",
-            "raytrace/rt_shadow_gpu_visibility.cpp",
-            "raytrace/rt_shadow_pipelines.cpp",
+            s_RT_SHADOW_TASKS_H,
+            s_RT_SHADOW_MATERIAL_CONTEXT_CPP,
+            s_RT_SHADOW_VISIBILITY_TARGET_CPP,
+            s_RT_SHADOW_OPAQUE_CPP,
+            s_RT_SHADOW_TRANSPARENT_CPP,
+            s_RT_SHADOW_GPU_VISIBILITY_CPP,
+            s_RT_SHADOW_PIPELINES_CPP,
         },
         shadowSource
     ));
@@ -300,22 +313,22 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     AString shadowSource;
     AString softShadowSource;
     AString frameResourcesSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilitySource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow_tasks.h",
-            "raytrace/rt_shadow_material_context.cpp",
-            "raytrace/rt_shadow_visibility_target.cpp",
-            "raytrace/rt_shadow_opaque.cpp",
-            "raytrace/rt_shadow_transparent.cpp",
-            "raytrace/rt_shadow_gpu_visibility.cpp",
-            "raytrace/rt_shadow_pipelines.cpp",
+            s_RT_SHADOW_TASKS_H,
+            s_RT_SHADOW_MATERIAL_CONTEXT_CPP,
+            s_RT_SHADOW_VISIBILITY_TARGET_CPP,
+            s_RT_SHADOW_OPAQUE_CPP,
+            s_RT_SHADOW_TRANSPARENT_CPP,
+            s_RT_SHADOW_GPU_VISIBILITY_CPP,
+            s_RT_SHADOW_PIPELINES_CPP,
         },
         shadowSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", softShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_softshadow_dispatch.cpp", softShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_frame_resources.cpp", frameResourcesSource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
     const AStringView shadowSourceView(shadowSource.data(), shadowSource.size());
     const AStringView softShadowSourceView(softShadowSource.data(), softShadowSource.size());
@@ -403,13 +416,13 @@ TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoute
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow_tasks.h",
-            "raytrace/rt_shadow_material_context.cpp",
-            "raytrace/rt_shadow_visibility_target.cpp",
-            "raytrace/rt_shadow_opaque.cpp",
-            "raytrace/rt_shadow_transparent.cpp",
-            "raytrace/rt_shadow_gpu_visibility.cpp",
-            "raytrace/rt_shadow_pipelines.cpp",
+            s_RT_SHADOW_TASKS_H,
+            s_RT_SHADOW_MATERIAL_CONTEXT_CPP,
+            s_RT_SHADOW_VISIBILITY_TARGET_CPP,
+            s_RT_SHADOW_OPAQUE_CPP,
+            s_RT_SHADOW_TRANSPARENT_CPP,
+            s_RT_SHADOW_GPU_VISIBILITY_CPP,
+            s_RT_SHADOW_PIPELINES_CPP,
         },
         shadowSource
     ));
@@ -450,7 +463,7 @@ TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString shadowVisibilitySource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilitySource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
     const usize opaqueHistoryHelperOffset = shadowVisibility.find("const auto appendOptionalOpaqueTemporalHistoryTexture");

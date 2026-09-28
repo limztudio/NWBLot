@@ -31,6 +31,18 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_shader{
 
 
+static constexpr AStringView s_PS = "ps";
+static constexpr AStringView s_PROJECT_SHADERS_TEST_SHADER = "project/shaders/test_shader";
+static constexpr AStringView s_PROJECT_SHADERS_STANDALONE_PS = "project/shaders/standalone_ps";
+static constexpr AStringView s_MAINCASE = "MainCase";
+static constexpr AStringView s_SHADER_ASSET_HEAD = "shader asset;\n\n";
+static constexpr AStringView s_ASSET_STAGE_PS = "asset.stage = \"ps\";\n";
+static constexpr AStringView s_ASSET_TARGET_SPIRV = "asset.target_profile = \"spirv_1_5\";\n";
+static constexpr AStringView s_ASSET_ENTRY_MAIN = "asset.entry_point = \"main\";\n";
+static constexpr AStringView s_MAIN = "main";
+static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -46,42 +58,42 @@ TEST(AssetsGraphics, ShaderArchiveVariantLookupIsExact){
     TestArena testArena;
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     NWB::Core::ShaderArchive::Record defaultRecord(testArena.arena);
-    defaultRecord.shaderName = Name("project/shaders/test_shader");
+    defaultRecord.shaderName = Name(s_PROJECT_SHADERS_TEST_SHADER.data());
     defaultRecord.variantName.assign(NWB::Core::ShaderArchive::s_DefaultVariant);
-    defaultRecord.stage = Name("ps");
+    defaultRecord.stage = Name(s_PS.data());
     defaultRecord.virtualPathHash = Name("shader/test_shader/default/ps").hash();
     records.push_back(Move(defaultRecord));
 
     Name virtualPath = NAME_NONE;
     EXPECT_TRUE(NWB::Core::ShaderArchive::findVirtualPath(
         records,
-        Name("project/shaders/test_shader"),
+        Name(s_PROJECT_SHADERS_TEST_SHADER.data()),
         NWB::Core::ShaderArchive::s_DefaultVariant,
-        Name("ps"),
+        Name(s_PS.data()),
         virtualPath
     ));
     EXPECT_EQ(virtualPath, Name(records[0].virtualPathHash));
     EXPECT_EQ(NWB::Core::ShaderArchive::buildVirtualPathName(
-        Name("project/shaders/test_shader"),
+        Name(s_PROJECT_SHADERS_TEST_SHADER.data()),
         "",
-        Name("ps")
+        Name(s_PS.data())
     ), NAME_NONE);
 
     virtualPath = NAME_NONE;
     EXPECT_FALSE(NWB::Core::ShaderArchive::findVirtualPath(
         records,
-        Name("project/shaders/test_shader"),
+        Name(s_PROJECT_SHADERS_TEST_SHADER.data()),
         "NWB_FEATURE=1",
-        Name("ps"),
+        Name(s_PS.data()),
         virtualPath
     ));
     EXPECT_EQ(virtualPath, NAME_NONE);
 
     EXPECT_FALSE(NWB::Core::ShaderArchive::findVirtualPath(
         records,
-        Name("project/shaders/test_shader"),
+        Name(s_PROJECT_SHADERS_TEST_SHADER.data()),
         "",
-        Name("ps"),
+        Name(s_PS.data()),
         virtualPath
     ));
     EXPECT_EQ(virtualPath, NAME_NONE);
@@ -117,16 +129,16 @@ TEST(AssetsGraphics, SpirvEntryPointLookup){
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             words,
             LengthOf(words),
-            "main",
+            s_MAIN,
             NWB::Core::ShaderType::Pixel,
             entryPoint
         ), NWB::Core::SpirvEntryPointLookupResult::Found);
-    EXPECT_EQ(entryPoint, "main");
+    EXPECT_EQ(entryPoint, s_MAIN);
 
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             words,
             LengthOf(words),
-            "main",
+            s_MAIN,
             NWB::Core::ShaderType::Compute,
             entryPoint
         ), NWB::Core::SpirvEntryPointLookupResult::NotFound);
@@ -147,7 +159,7 @@ TEST(AssetsGraphics, SpirvEntryPointLookup){
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             invalidWords,
             LengthOf(invalidWords),
-            "main",
+            s_MAIN,
             NWB::Core::ShaderType::Pixel,
             entryPoint
         ), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
@@ -170,7 +182,7 @@ TEST(AssetsGraphics, SpirvEntryPointLookup){
     EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
             malformedOtherStageEntryWords,
             LengthOf(malformedOtherStageEntryWords),
-            "main",
+            s_MAIN,
             NWB::Core::ShaderType::Pixel,
             entryPoint
         ), NWB::Core::SpirvEntryPointLookupResult::InvalidSpirv);
@@ -221,11 +233,11 @@ TEST(AssetsGraphics, ShaderMetadataParsesOptimizationLevel){
     const Path shaderMetaPath = assetRoot / "shaders" / "optimization_level_ps.nwb";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
         shaderMetaPath,
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
+        s_SHADER_ASSET_HEAD
+        s_ASSET_STAGE_PS
+        s_ASSET_TARGET_SPIRV
         "asset.optimization_level = \"none\";\n"
-        "asset.entry_point = \"main\";\n"
+        s_ASSET_ENTRY_MAIN
     ));
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
         assetRoot / "shaders" / "optimization_level_ps.slang",
@@ -258,8 +270,8 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_checksum_alias", root));
 
     const Path relativeIncludePath = Path(testArena.arena, "project") / "material_interfaces" / "test_surface.bind";
-    const Path firstGeneratedRoot = root / "first" / "material_bind_includes";
-    const Path secondGeneratedRoot = root / "second" / "material_bind_includes";
+    const Path firstGeneratedRoot = root / "first" / s_MATERIAL_BIND_INCLUDES;
+    const Path secondGeneratedRoot = root / "second" / s_MATERIAL_BIND_INCLUDES;
     const Path firstGeneratedInclude = firstGeneratedRoot / relativeIncludePath;
     const Path secondGeneratedInclude = secondGeneratedRoot / relativeIncludePath;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(firstGeneratedInclude, "generated include\n"));
@@ -278,7 +290,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_TRUE(shaderCook.computeDependencyChecksum(
         firstDependencies,
         {
-            { firstGeneratedRoot, "material_bind_includes" }
+            { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         firstChecksum,
         scratchArena
@@ -286,7 +298,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_TRUE(shaderCook.computeDependencyChecksum(
         secondDependencies,
         {
-            { secondGeneratedRoot, "material_bind_includes" }
+            { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         secondChecksum,
         scratchArena
@@ -298,7 +310,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_TRUE(shaderCook.computeDependencyChecksum(
         secondDependencies,
         {
-            { secondGeneratedRoot, "material_bind_includes" }
+            { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         changedChecksum,
         scratchArena
@@ -317,7 +329,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     EXPECT_FALSE(shaderCook.computeDependencyChecksum(
         unaliasedDependencies,
         {
-            { firstGeneratedRoot, "material_bind_includes" }
+            { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         rejectedChecksum,
         scratchArena
@@ -348,10 +360,10 @@ NwbStandalonePixelOutput main(){
 static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     if(!AssetsGraphicsFixture::WriteTextFile(
         assetRoot / "shaders" / "standalone_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
+        s_SHADER_ASSET_HEAD
+        s_ASSET_STAGE_PS
+        s_ASSET_TARGET_SPIRV
+        s_ASSET_ENTRY_MAIN
     ))
         return false;
 
@@ -383,10 +395,10 @@ NwbBomCompilerProbeOutput main(){
 static bool WriteBomCompilerProbe(const Path& assetRoot){
     if(!AssetsGraphicsFixture::WriteTextFile(
         assetRoot / "shaders" / "bom_compiler_probe_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
-        "asset.entry_point = \"main\";\n"
+        s_SHADER_ASSET_HEAD
+        s_ASSET_STAGE_PS
+        s_ASSET_TARGET_SPIRV
+        s_ASSET_ENTRY_MAIN
     ))
         return false;
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource))
@@ -410,9 +422,9 @@ NwbExactEntryPointPixelOutput MainCase(){
 static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     if(!AssetsGraphicsFixture::WriteTextFile(
         assetRoot / "shaders" / "exact_entry_point_ps.nwb",
-        "shader asset;\n\n"
-        "asset.stage = \"ps\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
+        s_SHADER_ASSET_HEAD
+        s_ASSET_STAGE_PS
+        s_ASSET_TARGET_SPIRV
         "asset.entry_point = \"MainCase\";\n"
     ))
         return false;
@@ -459,11 +471,11 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
     ASSERT_EQ(records.size(), s_ExpectedDualCount);
-    const Name shaderNames[] = { Name("project/shaders/standalone_ps"), Name("project/shaders/exact_entry_point_ps") };
+    const Name shaderNames[] = { Name(s_PROJECT_SHADERS_STANDALONE_PS.data()), Name("project/shaders/exact_entry_point_ps") };
     for(const Name& shaderName : shaderNames){
         Name virtualPath;
         ASSERT_TRUE(NWB::Core::ShaderArchive::findVirtualPath(
-            records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name("ps"), virtualPath
+            records, shaderName, NWB::Core::ShaderArchive::s_DefaultVariant, Name(s_PS.data()), virtualPath
         ));
         UniquePtr<NWB::Core::Assets::IAsset> shader;
         ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(testArena, outputDirectory, virtualPath, shader, 3u));
@@ -472,7 +484,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     EXPECT_EQ(logger.errorCount(), 0u);
 
     u64 originalChecksum = 0u;
-    ASSERT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name("ps"), originalChecksum));
+    ASSERT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_PS.data()), originalChecksum));
     options.inputs.emplace_back(PathToString(testArena.arena, conflictingBuilt));
     EXPECT_FALSE(NWB::Pipeline::AssetGatherer::GatherAssets(options));
     EXPECT_GT(logger.errorCount(), 0u);
@@ -480,7 +492,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
     ASSERT_EQ(records.size(), s_ExpectedDualCount);
     u64 preservedChecksum = 0u;
-    ASSERT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name("ps"), preservedChecksum));
+    ASSERT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name(s_PS.data()), preservedChecksum));
     EXPECT_EQ(preservedChecksum, originalChecksum);
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
@@ -515,8 +527,8 @@ TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
         u64 sourceChecksum = 0u;
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
             records,
-            Name("project/shaders/standalone_ps"),
-            Name("ps"),
+            Name(s_PROJECT_SHADERS_STANDALONE_PS.data()),
+            Name(s_PS.data()),
             sourceChecksum
         ));
     }
@@ -554,7 +566,7 @@ TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndInclude){
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
             records,
             Name("project/shaders/bom_compiler_probe_ps"),
-            Name("ps"),
+            Name(s_PS.data()),
             sourceChecksum
         ));
     }
@@ -588,7 +600,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
         const Name shaderVirtualPath = NWB::Core::ShaderArchive::buildVirtualPathName(
             Name("project/shaders/exact_entry_point_ps"),
             NWB::Core::ShaderArchive::s_DefaultVariant,
-            Name("ps")
+            Name(s_PS.data())
         );
         UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(
@@ -599,7 +611,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
         ));
         if(loadedShader){
             const NWB::Impl::Shader& shader = static_cast<const NWB::Impl::Shader&>(*loadedShader);
-            EXPECT_EQ(AStringView(shader.entryPoint()), "MainCase");
+            EXPECT_EQ(AStringView(shader.entryPoint()), s_MAINCASE);
 
             NWB::Core::GraphicsString resolvedEntryPoint(testArena.arena);
             NWB::Core::GraphicsVector<u32> words(testArena.arena);
@@ -612,11 +624,11 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
                     NWB::Core::ShaderType::Pixel,
                     resolvedEntryPoint
                 ), NWB::Core::SpirvEntryPointLookupResult::Found);
-            EXPECT_EQ(resolvedEntryPoint, "MainCase");
+            EXPECT_EQ(resolvedEntryPoint, s_MAINCASE);
             EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
                     words.data(),
                     words.size(),
-                    "main",
+                    s_MAIN,
                     NWB::Core::ShaderType::Pixel,
                     resolvedEntryPoint
                 ), NWB::Core::SpirvEntryPointLookupResult::NotFound);
@@ -634,7 +646,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
             ));
             if(reserializedShader){
                 const NWB::Impl::Shader& decodedShader = static_cast<const NWB::Impl::Shader&>(*reserializedShader);
-                EXPECT_EQ(AStringView(decodedShader.entryPoint()), "MainCase");
+                EXPECT_EQ(AStringView(decodedShader.entryPoint()), s_MAINCASE);
             }
         }
     }
@@ -700,9 +712,9 @@ TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
         EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
         const Name shaderVirtualPath = NWB::Core::ShaderArchive::buildVirtualPathName(
-            Name("project/shaders/standalone_ps"),
+            Name(s_PROJECT_SHADERS_STANDALONE_PS.data()),
             NWB::Core::ShaderArchive::s_DefaultVariant,
-            Name("ps")
+            Name(s_PS.data())
         );
         UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(

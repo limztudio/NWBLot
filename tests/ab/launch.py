@@ -14,9 +14,14 @@ sys.path.insert(0, str(REPO))
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
 
+TESTS_DIR_NAME = "tests"
+AB_SUBDIR_NAME = "ab"
+MAIN_ENTRY = "__main__"
+
+
 def main(argv: Sequence[str]) -> int:
-    return ROOT_LAUNCHER.run_directory_launcher(Path("tests") / "ab", argv)
+    return ROOT_LAUNCHER.run_directory_launcher(Path(TESTS_DIR_NAME) / AB_SUBDIR_NAME, argv)
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))

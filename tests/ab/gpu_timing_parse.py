@@ -12,6 +12,10 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 from name_symbols import known_name_symbols
 from window_capture_smoke import SmokeFailure
 
+# Shared literals (no inline hardcodes below this block).
+LIT_UTF_8 = "utf-8"
+LIT_REPLACE = "replace"
+
 
 INTERVAL_RE = re.compile(
     r"^=== interval:\s+(?P<frames>\d+)\s+frames\s+/\s+(?P<seconds>[-+0-9.eE]+)s\s+===$"
@@ -45,7 +49,7 @@ def load_name_symbols(
     if not path.is_file():
         raise SmokeFailure(missing_file_message.format(path=path))
 
-    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    for raw_line in path.read_text(encoding=LIT_UTF_8, errors=LIT_REPLACE).splitlines():
         fields = raw_line.split("\t")
         if len(fields) >= 3 and fields[2]:
             decoded[fields[0]] = fields[2]
@@ -67,7 +71,7 @@ def parse_timing_file(
 
     intervals: List[Dict[str, float]] = []
     current: Optional[Dict[str, float]] = None
-    for raw_line in raw_timing[start_byte_offset:].decode("utf-8", errors="replace").splitlines():
+    for raw_line in raw_timing[start_byte_offset:].decode(LIT_UTF_8, errors=LIT_REPLACE).splitlines():
         if INTERVAL_RE.match(raw_line):
             if current:
                 intervals.append(current)

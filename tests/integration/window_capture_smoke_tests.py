@@ -27,6 +27,98 @@ from window_capture_smoke import (  # noqa: E402
     validate_expected_log_messages,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_UNIT = "unit"
+LIT_CAPTURE_RESULT_FROM_RGB_ROWS = "capture_result_from_rgb_rows"
+LIT_CAPTURE = "capture"
+LIT_I = "<I"
+LIT_CAPTURE_BMP = "capture.bmp"
+LIT_PRESERVED = "PRESERVED"
+LIT_YES = "yes"
+LIT_APPLICATION_CAPTURE = "--application-capture"
+LIT_EXECUTABLE = "--executable"
+LIT_OUTPUT = "--output"
+LIT_LAUNCH_AND_CAPTURE_APPLICATION = "launch_and_capture_application"
+LIT_CREATE_CAPTURE_BACKEND = "create_capture_backend"
+LIT_WRITE_STATUS = "write_status"
+LIT_EARLY = "early"
+LIT_MID = "mid"
+LIT_CUT_VOID_0 = "cut_void=0"
+LIT_REMAINING_CENTER_0 = "remaining_center=0"
+LIT_WINDOW_HANDLE = "--window-handle"
+LIT_SYS_STDERR = "sys.stderr"
+LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR = "benchmark skipped because required hardware is unavailable"
+LIT_TEST_LOG = "test.log"
+LIT_UTF_8 = "utf-8"
+LIT_LOG = "*.log"
+LIT_REQUIRED_ROUTE_MARKER = "required route marker"
+LIT_MISSING_LOG_MESSAGE = "missing log message"
+LIT_ERROR = "[ERROR]"
+LIT_BLOCKING_LOG_MESSAGE = "blocking log message"
+LIT_LOGSERVER = "logserver"
+LIT_ORDINARY_STARTUP = "ordinary startup"
+LIT_SHUTDOWN = "shutdown"
+LIT_DRAIN = "drain"
+LIT_COLLECT = "collect"
+LIT_WARNING_SHUTDOWN_ONLY_WARNING = "[WARNING] shutdown-only warning"
+LIT_TERMINATE_PROCESS = "terminate_process"
+LIT_WAIT_FOR_LOG_DRAIN = "wait_for_log_drain"
+LIT_COLLECT_LOG_DELTA = "collect_log_delta"
+LIT_LOGS = "logs"
+LIT_SHUTDOWN_MARKER = "shutdown marker"
+LIT_WARNING = "[WARNING]"
+LIT_RUNTIME_EXIT = "runtime exit"
+LIT_LOGSERVER_SHUTDOWN_AND_COLLECT = "logserver shutdown and collect"
+LIT_VALIDATE = "validate"
+LIT_BUILD_LAUNCH_ENVIRONMENT = "build_launch_environment"
+LIT_LAUNCH_LOGSERVER = "launch_logserver"
+LIT_LAUNCH_TESTBED = "launch_testbed"
+LIT_SHUTDOWN_LOGSERVER_AND_COLLECT = "shutdown_logserver_and_collect"
+LIT_OFF = "off"
+LIT_TESTBED_SHUTDOWN = "testbed shutdown"
+LIT_LOGSERVER_SHUTDOWN = "logserver shutdown"
+LIT_LOG_DRAIN = "log drain"
+LIT_CAPTURE_RENDER_READY_WINDOW = "capture_render_ready_window"
+LIT_PROJECTTESTBED_SHUTDOWN = "ProjectTestbed: shutdown"
+LIT_MONOTONIC = "monotonic"
+LIT_SLEEP = "sleep"
+LIT_LOGSERVER_LAUNCH = "logserver launch"
+LIT_APPLICATION_LAUNCH = "application launch"
+LIT_APPLICATION_WAIT = "application wait"
+LIT_TESTBED = "testbed"
+LIT_APPLICATION_OUTPUT_COLLECT = "application output collect"
+LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT = "logserver shutdown and log collect"
+LIT_LOG_VALIDATION = "log validation"
+LIT_BMP_PARSE = "BMP parse"
+LIT_PIXEL_VALIDATION = "pixel validation"
+LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT = "wait_for_application_capture_exit"
+LIT_READ_BMP_24 = "read_bmp_24"
+LIT_LOGS_COLLECTED = "logs collected"
+LIT_APPLICATION_TERMINATED = "application terminated"
+LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT = "timed out waiting for self-exit"
+LIT_CAPTURE_ROOT = "capture-root"
+LIT_PREPARE = "prepare"
+LIT_POST_PREPARE_CLIENT_RECT = "post-prepare-client-rect"
+LIT_BITBLT = "BitBlt"
+LIT_RAISE = "raise"
+LIT_FOCUS = "focus"
+LIT_FLUSH = "flush"
+LIT_SYSTEM = "system"
+LIT_LINUX = "Linux"
+LIT_REQUEST_LINUX_GRACEFUL_EXIT = "request_linux_graceful_exit"
+LIT_WINDOWS = "Windows"
+LIT_RESIZE_CLIENT = "--resize-client"
+LIT_N_1001 = "1001"
+LIT_N_701 = "701"
+LIT_SETTLE_SECONDS = "--settle-seconds"
+LIT_NAN = "nan"
+LIT_RESIZE_SETTLE_SECONDS = "--resize-settle-seconds"
+LIT_INF = "inf"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_RESIZE = "resize"
+LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO = "GraphicsRuntime: Back buffer resized to 1001x701"
+LIT_MAIN = "__main__"
+
 
 class _FakeProcess:
     def __init__(self, graceful_exit=False, graceful_exit_code=0):
@@ -73,7 +165,7 @@ class ProcessOutputCaptureTests(unittest.TestCase):
                 [sys.executable, "-c", script],
                 working_directory,
                 os.environ.copy(),
-                "unit",
+                LIT_UNIT,
             )
             capture = process._nwb_output_capture
             try:
@@ -82,7 +174,7 @@ class ProcessOutputCaptureTests(unittest.TestCase):
                 self.assertTrue(capture.path.exists())
                 self.assertIn("window-capture-output-sentinel", read_process_tail(process))
             finally:
-                terminate_process(process, "unit")
+                terminate_process(process, LIT_UNIT)
 
             self.assertFalse(capture.path.exists())
 
@@ -114,10 +206,10 @@ class BmpReadbackTests(unittest.TestCase):
             window_capture_smoke.write_bmp_24(path, 3, 2, rows)
             with mock.patch.object(
                 window_capture_smoke,
-                "capture_result_from_rgb_rows",
-                return_value="capture",
+                LIT_CAPTURE_RESULT_FROM_RGB_ROWS,
+                return_value=LIT_CAPTURE,
             ) as analyze:
-                self.assertEqual(window_capture_smoke.read_bmp_24(path), "capture")
+                self.assertEqual(window_capture_smoke.read_bmp_24(path), LIT_CAPTURE)
 
         analyze.assert_called_once_with(0, 3, 2, rows)
 
@@ -131,10 +223,10 @@ class BmpReadbackTests(unittest.TestCase):
             self.write_top_down_bmp(path, rows)
             with mock.patch.object(
                 window_capture_smoke,
-                "capture_result_from_rgb_rows",
-                return_value="capture",
+                LIT_CAPTURE_RESULT_FROM_RGB_ROWS,
+                return_value=LIT_CAPTURE,
             ) as analyze:
-                self.assertEqual(window_capture_smoke.read_bmp_24(path), "capture")
+                self.assertEqual(window_capture_smoke.read_bmp_24(path), LIT_CAPTURE)
 
         analyze.assert_called_once_with(0, 2, 2, rows)
 
@@ -145,13 +237,13 @@ class BmpReadbackTests(unittest.TestCase):
             window_capture_smoke.write_bmp_24(path, 2, 1, rows)
             data = bytearray(path.read_bytes())
 
-            struct.pack_into("<I", data, 2, len(data) + 1)
+            struct.pack_into(LIT_I, data, 2, len(data) + 1)
             path.write_bytes(data)
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "declares .* but contains"):
                 window_capture_smoke.read_bmp_24(path)
 
-            struct.pack_into("<I", data, 2, len(data))
-            struct.pack_into("<I", data, 30, 1)
+            struct.pack_into(LIT_I, data, 2, len(data))
+            struct.pack_into(LIT_I, data, 30, 1)
             path.write_bytes(data)
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "must be uncompressed 24-bit"):
                 window_capture_smoke.read_bmp_24(path)
@@ -160,12 +252,12 @@ class BmpReadbackTests(unittest.TestCase):
 class ApplicationCaptureConfigurationTests(unittest.TestCase):
     def test_environment_removes_stale_final_and_partial_artifacts(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            output = Path(temp_dir) / "capture.bmp"
+            output = Path(temp_dir) / LIT_CAPTURE_BMP
             partial = window_capture_smoke.application_capture_partial_path(output)
             output.write_bytes(b"stale-final")
             partial.write_bytes(b"stale-partial")
             args = SimpleNamespace(output=output, application_capture_frame_count=27)
-            base_environment = {"PRESERVED": "yes"}
+            base_environment = {LIT_PRESERVED: LIT_YES}
 
             env = window_capture_smoke.prepare_application_capture_environment(args, base_environment)
 
@@ -173,37 +265,37 @@ class ApplicationCaptureConfigurationTests(unittest.TestCase):
             self.assertFalse(partial.exists())
             self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV], str(output))
             self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV], "27")
-            self.assertEqual(env["PRESERVED"], "yes")
-            self.assertEqual(base_environment, {"PRESERVED": "yes"})
+            self.assertEqual(env[LIT_PRESERVED], LIT_YES)
+            self.assertEqual(base_environment, {LIT_PRESERVED: LIT_YES})
 
     def test_application_capture_frame_count_defaults_to_360_and_must_be_positive(self):
         args = window_capture_smoke.parse_args(
-            ["--application-capture", "--executable", sys.executable, "--output", "capture.bmp"]
+            [LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
         )
         self.assertEqual(args.application_capture_frame_count, 360)
 
         with self.assertRaises(SystemExit):
             window_capture_smoke.parse_args(
                 [
-                    "--application-capture",
+                    LIT_APPLICATION_CAPTURE,
                     "--application-capture-frame-count",
                     "0",
-                    "--executable",
+                    LIT_EXECUTABLE,
                     sys.executable,
-                    "--output",
-                    "capture.bmp",
+                    LIT_OUTPUT,
+                    LIT_CAPTURE_BMP,
                 ]
             )
 
     def test_application_capture_main_never_creates_a_desktop_capture_backend(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            output = Path(temp_dir) / "capture.bmp"
+            output = Path(temp_dir) / LIT_CAPTURE_BMP
             capture = SimpleNamespace(width=3, height=2)
-            with mock.patch.object(window_capture_smoke, "launch_and_capture_application", return_value=capture), \
-                 mock.patch.object(window_capture_smoke, "create_capture_backend") as create_backend, \
-                 mock.patch.object(window_capture_smoke, "write_status"):
+            with mock.patch.object(window_capture_smoke, LIT_LAUNCH_AND_CAPTURE_APPLICATION, return_value=capture), \
+                 mock.patch.object(window_capture_smoke, LIT_CREATE_CAPTURE_BACKEND) as create_backend, \
+                 mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
                 exit_code = window_capture_smoke.main(
-                    ["--application-capture", "--executable", sys.executable, "--output", str(output)]
+                    [LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, str(output)]
                 )
 
         self.assertEqual(exit_code, 0)
@@ -211,15 +303,15 @@ class ApplicationCaptureConfigurationTests(unittest.TestCase):
 
     def test_application_capture_skip_reaches_process_exit_code_77_without_desktop_capture(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            output = Path(temp_dir) / "capture.bmp"
+            output = Path(temp_dir) / LIT_CAPTURE_BMP
             with mock.patch.object(
                 window_capture_smoke,
-                "launch_and_capture_application",
+                LIT_LAUNCH_AND_CAPTURE_APPLICATION,
                 side_effect=window_capture_smoke.SmokeSkip(window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE),
-            ), mock.patch.object(window_capture_smoke, "create_capture_backend") as create_backend, \
-                 mock.patch.object(window_capture_smoke, "write_status"):
+            ), mock.patch.object(window_capture_smoke, LIT_CREATE_CAPTURE_BACKEND) as create_backend, \
+                 mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
                 exit_code = window_capture_smoke.main(
-                    ["--application-capture", "--executable", sys.executable, "--output", str(output)]
+                    [LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, str(output)]
                 )
 
         self.assertEqual(exit_code, window_capture_smoke.SKIP_EXIT_CODE)
@@ -282,7 +374,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
         # Independent fixture projection: authored six-axis octahedron (.6), receiver scale .78, camera distance2.2,
         # vertical FOV60. Euler application is roll, pitch, then the combined local/parent yaw. Clipping local y>0
         # removes only the upper axis vertex; the equator and lower vertex form the retained convex pyramid.
-        yaw = {"early": 0.0, "mid": 1.0, "late": 2.0}[pose]
+        yaw = {LIT_EARLY: 0.0, LIT_MID: 1.0, "late": 2.0}[pose]
         pitch, roll = .32 * yaw, .16 * yaw
         points = []
         for axis in range(3):
@@ -367,7 +459,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
                 analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
                 self.assertEqual(analysis.cut_void_pixels, 0)
                 self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "cut_void=0"):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_CUT_VOID_0):
                     window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
 
     def test_all_three_missing_receiver_poses_reject_dense_non_green_neighbors(self):
@@ -380,19 +472,19 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
                 self.assertEqual(generic_foreground, analysis.remaining_region_pixels)
                 self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
                 self.assertEqual(analysis.remaining_center_pixels, 0)
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remaining_center=0"):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_REMAINING_CENTER_0):
                     window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
 
     def test_green_dominance_does_not_relax_foreground_contrast(self):
-        rows = self.synthetic_scene("early", receiver_color=(82, 102, 101))
-        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, "early")
+        rows = self.synthetic_scene(LIT_EARLY, receiver_color=(82, 102, 101))
+        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, LIT_EARLY)
         self.assertEqual(analysis.remaining_center_pixels, 0)
-        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remaining_center=0"):
-            window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", analysis), "early")
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_REMAINING_CENTER_0):
+            window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, analysis), LIT_EARLY)
 
     def test_original_density_thresholds_remain_required(self):
         accepted = window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000)
-        window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", accepted), "early")
+        window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, accepted), LIT_EARLY)
         for rejected in (
             window_capture_smoke.TransparentCsgAnalysis(199, 600, 200, 1000),
             window_capture_smoke.TransparentCsgAnalysis(200, 600, 199, 1000),
@@ -400,20 +492,20 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
             window_capture_smoke.TransparentCsgAnalysis(160, 300, 159, 500),
         ):
             with self.subTest(analysis=rejected), self.assertRaises(window_capture_smoke.SmokeFailure):
-                window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", rejected), "early")
+                window_capture_smoke.validate_transparent_csg_result(self.capture_result(LIT_EARLY, rejected), LIT_EARLY)
 
     def test_validation_never_substitutes_a_different_pose(self):
         result = SimpleNamespace(transparent_csg={
-            "early": window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000),
-            "mid": window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000),
+            LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000),
+            LIT_MID: window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000),
         })
-        window_capture_smoke.validate_transparent_csg_result(result, "mid")
+        window_capture_smoke.validate_transparent_csg_result(result, LIT_MID)
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "early pose"):
-            window_capture_smoke.validate_transparent_csg_result(result, "early")
+            window_capture_smoke.validate_transparent_csg_result(result, LIT_EARLY)
 
     def test_csg_cli_requires_one_explicit_pose(self):
-        base = ["--window-handle", "1", "--output", "capture.bmp", "--expect-transparent-csg"]
-        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+        base = [LIT_WINDOW_HANDLE, "1", LIT_OUTPUT, LIT_CAPTURE_BMP, "--expect-transparent-csg"]
+        with mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
             window_capture_smoke.parse_args(base)
         for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
             with self.subTest(pose=pose):
@@ -423,7 +515,7 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
 class RuntimeLogValidationTests(unittest.TestCase):
     def test_command_line_defaults_reject_every_strict_runtime_failure(self):
-        args = window_capture_smoke.parse_args(["--window-handle", "1", "--output", "capture.bmp"])
+        args = window_capture_smoke.parse_args([LIT_WINDOW_HANDLE, "1", LIT_OUTPUT, LIT_CAPTURE_BMP])
 
         self.assertEqual(args.reject_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
         self.assertEqual(args.skip_blocking_log_message, list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES))
@@ -431,15 +523,15 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_capability_marker_is_classified_before_required_log_validation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = "benchmark skipped because required hardware is unavailable"
-            (log_directory / "test.log").write_text(marker, encoding="utf-8")
+            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            (log_directory / LIT_TEST_LOG).write_text(marker, encoding=LIT_UTF_8)
 
             self.assertEqual(
                 validate_expected_log_messages(
                     log_directory,
                     {},
-                    "*.log",
-                    ["required route marker"],
+                    LIT_LOG,
+                    [LIT_REQUIRED_ROUTE_MARKER],
                     [],
                     [marker],
                 ),
@@ -449,14 +541,14 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_missing_required_marker_is_not_a_capability_skip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            (log_directory / "test.log").write_text("ordinary startup", encoding="utf-8")
+            (log_directory / LIT_TEST_LOG).write_text(LIT_ORDINARY_STARTUP, encoding=LIT_UTF_8)
 
-            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "missing log message"):
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_MISSING_LOG_MESSAGE):
                 validate_expected_log_messages(
                     log_directory,
                     {},
-                    "*.log",
-                    ["required route marker"],
+                    LIT_LOG,
+                    [LIT_REQUIRED_ROUTE_MARKER],
                     [],
                     ["benchmark skipped"],
                 )
@@ -464,21 +556,21 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_capability_marker_preempts_supported_route_rejection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = "benchmark skipped because required hardware is unavailable"
-            (log_directory / "test.log").write_text(
+            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            (log_directory / LIT_TEST_LOG).write_text(
                 f"{marker}\nsoftware traversal route",
-                encoding="utf-8",
+                encoding=LIT_UTF_8,
             )
 
             self.assertEqual(
                 validate_expected_log_messages(
                     log_directory,
                     {},
-                    "*.log",
+                    LIT_LOG,
                     ["required hardware route"],
                     ["software traversal route"],
                     [marker],
-                    ["[ERROR]"],
+                    [LIT_ERROR],
                 ),
                 marker,
             )
@@ -486,18 +578,18 @@ class RuntimeLogValidationTests(unittest.TestCase):
     def test_rejected_error_takes_precedence_over_capability_skip(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            marker = "benchmark skipped because required hardware is unavailable"
-            (log_directory / "test.log").write_text(f"{marker}\n[ERROR] device failure", encoding="utf-8")
+            marker = LIT_BENCHMARK_SKIPPED_BECAUSE_REQUIRED_HAR
+            (log_directory / LIT_TEST_LOG).write_text(f"{marker}\n[ERROR] device failure", encoding=LIT_UTF_8)
 
-            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking log message"):
+            with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_BLOCKING_LOG_MESSAGE):
                 validate_expected_log_messages(
                     log_directory,
                     {},
-                    "*.log",
-                    ["required route marker"],
-                    ["[ERROR]"],
+                    LIT_LOG,
+                    [LIT_REQUIRED_ROUTE_MARKER],
+                    [LIT_ERROR],
                     [marker],
-                    ["[ERROR]"],
+                    [LIT_ERROR],
                 )
 
     def test_reject_only_validation_requires_runtime_log_evidence(self):
@@ -506,9 +598,9 @@ class RuntimeLogValidationTests(unittest.TestCase):
                 validate_expected_log_messages(
                     Path(temp_dir),
                     {},
-                    "*.log",
+                    LIT_LOG,
                     [],
-                    ["[ERROR]"],
+                    [LIT_ERROR],
                 )
 
 
@@ -520,14 +612,14 @@ class ProcessLivenessTests(unittest.TestCase):
             window_capture_smoke.SmokeFailure,
             r"logserver exited before log validation \(exit 7\)",
         ):
-            ensure_process_running(process, "before log validation", "logserver")
+            ensure_process_running(process, "before log validation", LIT_LOGSERVER)
 
     def test_named_process_abnormal_graceful_exit_fails(self):
         with self.assertRaisesRegex(
             window_capture_smoke.SmokeFailure,
             r"logserver exited during graceful shutdown \(exit 7\)",
         ):
-            require_normal_process_exit(7, "", "logserver")
+            require_normal_process_exit(7, "", LIT_LOGSERVER)
 
 
 class LogserverCollectionTests(unittest.TestCase):
@@ -536,31 +628,31 @@ class LogserverCollectionTests(unittest.TestCase):
         events = []
 
         def terminate(_process, _name):
-            events.append("shutdown")
+            events.append(LIT_SHUTDOWN)
             return 0, ""
 
         def drain(*_args):
-            events.append("drain")
+            events.append(LIT_DRAIN)
 
         def collect(*_args):
-            events.append("collect")
-            return "[WARNING] shutdown-only warning"
+            events.append(LIT_COLLECT)
+            return LIT_WARNING_SHUTDOWN_ONLY_WARNING
 
-        with mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
-             mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain), \
-             mock.patch.object(window_capture_smoke, "collect_log_delta", side_effect=collect):
-            log_text = shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+        with mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
+             mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_LOG_DRAIN, side_effect=drain), \
+             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, side_effect=collect):
+            log_text = shutdown_logserver_and_collect(process, Path(LIT_LOGS), {}, LIT_LOG)
 
-        self.assertEqual(events, ["shutdown", "drain", "collect"])
-        self.assertEqual(log_text, "[WARNING] shutdown-only warning")
+        self.assertEqual(events, [LIT_SHUTDOWN, LIT_DRAIN, LIT_COLLECT])
+        self.assertEqual(log_text, LIT_WARNING_SHUTDOWN_ONLY_WARNING)
 
     def test_abnormal_logserver_exit_fails_before_collection(self):
         process = SimpleNamespace(poll=lambda: None)
-        with mock.patch.object(window_capture_smoke, "terminate_process", return_value=(7, "logserver tail")), \
-             mock.patch.object(window_capture_smoke, "wait_for_log_drain") as drain, \
-             mock.patch.object(window_capture_smoke, "collect_log_delta") as collect:
+        with mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(7, "logserver tail")), \
+             mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_LOG_DRAIN) as drain, \
+             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA) as collect:
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "logserver.*exit 7"):
-                shutdown_logserver_and_collect(process, Path("logs"), {}, "*.log")
+                shutdown_logserver_and_collect(process, Path(LIT_LOGS), {}, LIT_LOG)
 
         drain.assert_not_called()
         collect.assert_not_called()
@@ -574,50 +666,50 @@ class RuntimeLogSmokeTests(unittest.TestCase):
             logserver_process = SimpleNamespace(poll=lambda: None)
             args = SimpleNamespace(
                 executable=sys.executable,
-                expect_log_message=["shutdown marker"],
-                reject_log_message=["[WARNING]"],
+                expect_log_message=[LIT_SHUTDOWN_MARKER],
+                reject_log_message=[LIT_WARNING],
                 timeout=1.0,
             )
             events = []
 
             def wait_for_exit(_process, _timeout):
-                events.append("runtime exit")
+                events.append(LIT_RUNTIME_EXIT)
                 return 0
 
             def shutdown_and_collect(*_args):
-                events.append("logserver shutdown and collect")
-                return "shutdown marker"
+                events.append(LIT_LOGSERVER_SHUTDOWN_AND_COLLECT)
+                return LIT_SHUTDOWN_MARKER
 
             def validate(*_args):
-                events.append("validate")
+                events.append(LIT_VALIDATE)
 
-            with mock.patch.object(runtime_log_smoke, "build_launch_environment", return_value={}), \
+            with mock.patch.object(runtime_log_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
                  mock.patch.object(
                      runtime_log_smoke,
-                     "launch_logserver",
-                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                     LIT_LAUNCH_LOGSERVER,
+                     return_value=(logserver_process, 49152, log_directory, {}, LIT_LOG),
                  ), \
-                 mock.patch.object(runtime_log_smoke, "launch_testbed", return_value=runtime_process), \
+                 mock.patch.object(runtime_log_smoke, LIT_LAUNCH_TESTBED, return_value=runtime_process), \
                  mock.patch.object(runtime_log_smoke, "wait_for_process_exit", side_effect=wait_for_exit), \
                  mock.patch.object(runtime_log_smoke, "read_process_tail", return_value=""), \
                  mock.patch.object(
                      runtime_log_smoke,
-                     "shutdown_logserver_and_collect",
+                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
                      side_effect=shutdown_and_collect,
                  ), \
                  mock.patch.object(runtime_log_smoke, "validate_expected_log_messages", side_effect=validate), \
-                 mock.patch.object(runtime_log_smoke, "terminate_process", return_value=(0, "")), \
-                 mock.patch.object(runtime_log_smoke, "write_status"):
+                 mock.patch.object(runtime_log_smoke, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
+                 mock.patch.object(runtime_log_smoke, LIT_WRITE_STATUS):
                 self.assertEqual(runtime_log_smoke.run(args), 0)
 
-            self.assertEqual(events, ["runtime exit", "logserver shutdown and collect", "validate"])
+            self.assertEqual(events, [LIT_RUNTIME_EXIT, LIT_LOGSERVER_SHUTDOWN_AND_COLLECT, LIT_VALIDATE])
 
 
 class ShutdownLogValidationTests(unittest.TestCase):
     def run_capture_with_shutdown_log(self, shutdown_log, required=(), rejected=()):
         with tempfile.TemporaryDirectory() as temp_dir:
             log_directory = Path(temp_dir)
-            log_path = log_directory / "test.log"
+            log_path = log_directory / LIT_TEST_LOG
             args = SimpleNamespace(
                 application_arg=[],
                 executable=sys.executable,
@@ -628,13 +720,13 @@ class ShutdownLogValidationTests(unittest.TestCase):
                 log_port=0,
                 logserver_executable=None,
                 no_logserver=False,
-                output=log_directory / "capture.bmp",
+                output=log_directory / LIT_CAPTURE_BMP,
                 reject_log_message=list(rejected),
                 render_ready_timeout=1.0,
                 settle_seconds=0.0,
                 skip_blocking_log_message=[],
                 skip_log_message=[],
-                software_vulkan="off",
+                software_vulkan=LIT_OFF,
                 timeout=1.0,
                 window_title="NWB Test",
                 working_directory=log_directory,
@@ -647,39 +739,39 @@ class ShutdownLogValidationTests(unittest.TestCase):
 
             def terminate(process, name, _window_handle=None):
                 if process is testbed_process:
-                    events.append("testbed shutdown")
+                    events.append(LIT_TESTBED_SHUTDOWN)
                 else:
-                    events.append("logserver shutdown")
-                    log_path.write_text(shutdown_log, encoding="utf-8")
+                    events.append(LIT_LOGSERVER_SHUTDOWN)
+                    log_path.write_text(shutdown_log, encoding=LIT_UTF_8)
                 return 0, ""
 
             def drain(*_args):
-                events.append("log drain")
+                events.append(LIT_LOG_DRAIN)
 
-            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+            with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "launch_logserver",
-                     return_value=(logserver_process, 49152, log_directory, {}, "*.log"),
+                     LIT_LAUNCH_LOGSERVER,
+                     return_value=(logserver_process, 49152, log_directory, {}, LIT_LOG),
                  ), \
-                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=testbed_process), \
-                 mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value="capture"), \
-                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
-                 mock.patch.object(window_capture_smoke, "wait_for_log_drain", side_effect=drain):
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=testbed_process), \
+                 mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=LIT_CAPTURE), \
+                 mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
+                 mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_LOG_DRAIN, side_effect=drain):
                 result = window_capture_smoke.launch_and_capture(args, backend)
 
-            self.assertEqual(events, ["testbed shutdown", "logserver shutdown", "log drain"])
+            self.assertEqual(events, [LIT_TESTBED_SHUTDOWN, LIT_LOGSERVER_SHUTDOWN, LIT_LOG_DRAIN])
             return result
 
     def test_shutdown_marker_is_validated_after_graceful_exit(self):
         self.assertEqual(
-            self.run_capture_with_shutdown_log("ProjectTestbed: shutdown", required=("ProjectTestbed: shutdown",)),
-            "capture",
+            self.run_capture_with_shutdown_log(LIT_PROJECTTESTBED_SHUTDOWN, required=(LIT_PROJECTTESTBED_SHUTDOWN,)),
+            LIT_CAPTURE,
         )
 
     def test_teardown_warning_fails_after_graceful_exit(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "rejected log message"):
-            self.run_capture_with_shutdown_log("[WARNING] teardown failure", rejected=("[WARNING]",))
+            self.run_capture_with_shutdown_log("[WARNING] teardown failure", rejected=(LIT_WARNING,))
 
 
 class RenderReadyCaptureTests(unittest.TestCase):
@@ -689,7 +781,7 @@ class RenderReadyCaptureTests(unittest.TestCase):
             expect_texture_smoke=False,
             expect_transparent_csg=False,
             expect_transparent_multi=False,
-            output=directory / "capture.bmp",
+            output=directory / LIT_CAPTURE_BMP,
             render_ready_timeout=timeout,
         )
 
@@ -728,8 +820,8 @@ class RenderReadyCaptureTests(unittest.TestCase):
             backend.capture_window.side_effect = [white, rendered]
             process = SimpleNamespace(poll=lambda: None)
 
-            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
-                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+            with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
                 result = window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
 
             self.assertIs(result, rendered)
@@ -744,8 +836,8 @@ class RenderReadyCaptureTests(unittest.TestCase):
             backend.capture_window.return_value = white
             process = SimpleNamespace(poll=lambda: None)
 
-            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
-                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+            with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remained blank or white"):
                     window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
 
@@ -763,8 +855,8 @@ class RenderReadyCaptureTests(unittest.TestCase):
             process.returncode = 7
             process._nwb_output_capture = None
 
-            with mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=(10.0, 10.25)), \
-                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+            with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=(10.0, 10.25)), \
+                 mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
                 with self.assertRaisesRegex(
                     window_capture_smoke.SmokeFailure,
                     r"testbed exited while waiting for rendered window content \(exit 7\)",
@@ -778,15 +870,15 @@ class RenderReadyCaptureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
             args.expect_transparent_csg = True
-            args.transparent_csg_pose = "early"
+            args.transparent_csg_pose = LIT_EARLY
             uncut = self.make_capture(False, True)
-            uncut.transparent_csg = {"early": window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000)}
+            uncut.transparent_csg = {LIT_EARLY: window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000)}
             backend = mock.Mock()
             backend.capture_window.return_value = uncut
             process = SimpleNamespace(poll=lambda: None)
-            with mock.patch.object(window_capture_smoke.time, "monotonic", return_value=10.0), \
-                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "cut_void=0"):
+            with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, return_value=10.0), \
+                 mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_CUT_VOID_0):
                     window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
             backend.capture_window.assert_called_once()
             sleep.assert_not_called()
@@ -799,8 +891,8 @@ class RenderReadyCaptureTests(unittest.TestCase):
             backend.capture_window.return_value = flat
             process = SimpleNamespace(poll=lambda: None)
 
-            with mock.patch.object(window_capture_smoke.time, "monotonic", return_value=10.0), \
-                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+            with mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, return_value=10.0), \
+                 mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "image appears flat"):
                     window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
 
@@ -818,7 +910,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
             expect_texture_smoke=False,
             expect_transparent_csg=False,
             expect_transparent_multi=False,
-            output=directory / "capture.bmp",
+            output=directory / LIT_CAPTURE_BMP,
             reject_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
             skip_blocking_log_message=list(window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES),
             skip_log_message=[],
@@ -837,52 +929,52 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
             events = []
 
             def launch_logserver(*_args):
-                events.append("logserver launch")
-                return logserver_process, 49152, directory, {}, "*.log"
+                events.append(LIT_LOGSERVER_LAUNCH)
+                return logserver_process, 49152, directory, {}, LIT_LOG
 
             def launch_testbed(_args, _executable, env, _log_port):
-                events.append("application launch")
+                events.append(LIT_APPLICATION_LAUNCH)
                 self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_PATH_ENV], str(args.output))
                 self.assertEqual(env[window_capture_smoke.FRAMEBUFFER_CAPTURE_FRAME_COUNT_ENV], "12")
                 return testbed_process
 
             def wait_for_exit(*_args):
-                events.append("application wait")
+                events.append(LIT_APPLICATION_WAIT)
                 args.output.write_bytes(b"engine-bmp")
                 return 0, True
 
             def terminate(process, name):
                 self.assertIs(process, testbed_process)
-                self.assertEqual(name, "testbed")
-                events.append("application output collect")
+                self.assertEqual(name, LIT_TESTBED)
+                events.append(LIT_APPLICATION_OUTPUT_COLLECT)
                 return 0, ""
 
             def shutdown_and_collect(*_args):
-                events.append("logserver shutdown and log collect")
+                events.append(LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT)
                 return captured_log
 
             def validate_logs(log_text, _args):
-                events.append("log validation")
+                events.append(LIT_LOG_VALIDATION)
                 self.assertEqual(log_text, captured_log)
-                self.assertEqual(args.log_output.read_bytes(), captured_log.encode("utf-8"))
+                self.assertEqual(args.log_output.read_bytes(), captured_log.encode(LIT_UTF_8))
 
             def read_bmp(path):
-                events.append("BMP parse")
+                events.append(LIT_BMP_PARSE)
                 self.assertEqual(path, args.output)
                 return capture
 
             def validate_pixels(_args, result):
-                events.append("pixel validation")
+                events.append(LIT_PIXEL_VALIDATION)
                 self.assertIs(result, capture)
 
-            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
-                 mock.patch.object(window_capture_smoke, "launch_logserver", side_effect=launch_logserver), \
-                 mock.patch.object(window_capture_smoke, "launch_testbed", side_effect=launch_testbed), \
-                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", side_effect=wait_for_exit), \
-                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+            with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_LOGSERVER, side_effect=launch_logserver), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, side_effect=launch_testbed), \
+                 mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, side_effect=wait_for_exit), \
+                 mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "shutdown_logserver_and_collect",
+                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
                      side_effect=shutdown_and_collect,
                  ), \
                  mock.patch.object(
@@ -890,7 +982,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                      "validate_application_capture_log_text",
                      side_effect=validate_logs,
                  ), \
-                 mock.patch.object(window_capture_smoke, "read_bmp_24", side_effect=read_bmp), \
+                 mock.patch.object(window_capture_smoke, LIT_READ_BMP_24, side_effect=read_bmp), \
                  mock.patch.object(window_capture_smoke, "validate_capture_for_args", side_effect=validate_pixels):
                 result = window_capture_smoke.launch_and_capture_application(args)
 
@@ -898,14 +990,14 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
         self.assertEqual(
             events,
             [
-                "logserver launch",
-                "application launch",
-                "application wait",
-                "application output collect",
-                "logserver shutdown and log collect",
-                "log validation",
-                "BMP parse",
-                "pixel validation",
+                LIT_LOGSERVER_LAUNCH,
+                LIT_APPLICATION_LAUNCH,
+                LIT_APPLICATION_WAIT,
+                LIT_APPLICATION_OUTPUT_COLLECT,
+                LIT_LOGSERVER_SHUTDOWN_AND_LOG_COLLECT,
+                LIT_LOG_VALIDATION,
+                LIT_BMP_PARSE,
+                LIT_PIXEL_VALIDATION,
             ],
         )
 
@@ -913,25 +1005,25 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
             events = []
-            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+            with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "launch_logserver",
-                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                     LIT_LAUNCH_LOGSERVER,
+                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
                  ), \
-                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
-                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", return_value=(9, False)), \
-                 mock.patch.object(window_capture_smoke, "terminate_process", return_value=(9, "application tail")), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
+                 mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, return_value=(9, False)), \
+                 mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(9, "application tail")), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "shutdown_logserver_and_collect",
-                     side_effect=lambda *_args: events.append("logs collected") or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
+                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
+                     side_effect=lambda *_args: events.append(LIT_LOGS_COLLECTED) or window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
                  ), \
-                 mock.patch.object(window_capture_smoke, "read_bmp_24") as read_bmp:
+                 mock.patch.object(window_capture_smoke, LIT_READ_BMP_24) as read_bmp:
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, r"self-exited.*exit 9"):
                     window_capture_smoke.launch_and_capture_application(args)
 
-        self.assertEqual(events, ["logs collected"])
+        self.assertEqual(events, [LIT_LOGS_COLLECTED])
         read_bmp.assert_not_called()
 
     def test_application_timeout_terminates_then_collects_logs_before_failing(self):
@@ -941,70 +1033,70 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
             events = []
 
             def terminate(*_args):
-                events.append("application terminated")
+                events.append(LIT_APPLICATION_TERMINATED)
                 return -15, ""
 
             def shutdown_and_collect(*_args):
-                events.append("logs collected")
-                return "ordinary startup"
+                events.append(LIT_LOGS_COLLECTED)
+                return LIT_ORDINARY_STARTUP
 
-            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+            with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "launch_logserver",
-                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                     LIT_LAUNCH_LOGSERVER,
+                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
                  ), \
-                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "wait_for_application_capture_exit",
-                     side_effect=window_capture_smoke.SmokeFailure("timed out waiting for self-exit"),
+                     LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT,
+                     side_effect=window_capture_smoke.SmokeFailure(LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT),
                  ), \
-                 mock.patch.object(window_capture_smoke, "terminate_process", side_effect=terminate), \
+                 mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, side_effect=terminate), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "shutdown_logserver_and_collect",
+                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
                      side_effect=shutdown_and_collect,
                  ):
-                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "timed out waiting for self-exit"):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_TIMED_OUT_WAITING_FOR_SELF_EXIT):
                     window_capture_smoke.launch_and_capture_application(args)
-            self.assertEqual(args.log_output.read_bytes(), b"ordinary startup")
+            self.assertEqual(args.log_output.read_bytes(), LIT_ORDINARY_STARTUP.encode(LIT_UTF_8))
 
-        self.assertEqual(events, ["application terminated", "logs collected"])
+        self.assertEqual(events, [LIT_APPLICATION_TERMINATED, LIT_LOGS_COLLECTED])
 
     def test_capture_ready_marker_is_required_after_normal_exit(self):
-        args = self.make_args(Path("capture-root"))
+        args = self.make_args(Path(LIT_CAPTURE_ROOT))
         self.assertIsNone(
             window_capture_smoke.validate_application_capture_log_text(
                 window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE,
                 args,
             )
         )
-        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "missing log message"):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_MISSING_LOG_MESSAGE):
             window_capture_smoke.validate_application_capture_log_text("ordinary shutdown", args)
 
     def test_capability_skip_requires_no_strict_blocking_diagnostics(self):
-        args = self.make_args(Path("capture-root"))
+        args = self.make_args(Path(LIT_CAPTURE_ROOT))
         marker = window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE
         self.assertEqual(window_capture_smoke.validate_application_capture_log_text(marker, args), marker)
-        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "blocking log message"):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, LIT_BLOCKING_LOG_MESSAGE):
             window_capture_smoke.validate_application_capture_log_text(f"{marker}\n[WARNING] teardown failure", args)
 
     def test_capability_skip_does_not_require_a_capture_artifact(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
-            with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+            with mock.patch.object(window_capture_smoke, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "launch_logserver",
-                     return_value=(object(), 49152, Path(temp_dir), {}, "*.log"),
+                     LIT_LAUNCH_LOGSERVER,
+                     return_value=(object(), 49152, Path(temp_dir), {}, LIT_LOG),
                  ), \
-                 mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
-                 mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", return_value=(0, False)), \
-                 mock.patch.object(window_capture_smoke, "terminate_process", return_value=(0, "")), \
+                 mock.patch.object(window_capture_smoke, LIT_LAUNCH_TESTBED, return_value=object()), \
+                 mock.patch.object(window_capture_smoke, LIT_WAIT_FOR_APPLICATION_CAPTURE_EXIT, return_value=(0, False)), \
+                 mock.patch.object(window_capture_smoke, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
                  mock.patch.object(
                      window_capture_smoke,
-                     "shutdown_logserver_and_collect",
+                     LIT_SHUTDOWN_LOGSERVER_AND_COLLECT,
                      return_value=window_capture_smoke.FRAMEBUFFER_CAPTURE_SKIP_MESSAGE,
                  ):
                 with self.assertRaisesRegex(window_capture_smoke.SmokeSkip, "transfer-source usage is unavailable"):
@@ -1014,34 +1106,34 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
 class WindowsCaptureOrderingTests(unittest.TestCase):
     def test_capture_window_prepares_before_querying_the_client_screen_rect(self):
         hwnd = 0x4A
-        output_path = Path("capture.bmp")
+        output_path = Path(LIT_CAPTURE_BMP)
         calls = []
         expected_rect = object()
         capture = object.__new__(window_capture_smoke.WindowsCapture)
 
         def prepare(window):
-            calls.append(("prepare", window))
+            calls.append((LIT_PREPARE, window))
 
         def client_rect(window):
-            self.assertEqual(calls, [("prepare", hwnd)])
-            calls.append(("post-prepare-client-rect", window))
+            self.assertEqual(calls, [(LIT_PREPARE, hwnd)])
+            calls.append((LIT_POST_PREPARE_CLIENT_RECT, window))
             return expected_rect
 
         def screen_bitblt(window, rect, path):
-            calls.append(("BitBlt", window, rect, path))
-            return "capture"
+            calls.append((LIT_BITBLT, window, rect, path))
+            return LIT_CAPTURE
 
         capture._prepare_capture_window = prepare
         capture._client_rect = client_rect
         capture._capture_screen_rect = screen_bitblt
 
-        self.assertEqual(capture.capture_window(hwnd, output_path), "capture")
+        self.assertEqual(capture.capture_window(hwnd, output_path), LIT_CAPTURE)
         self.assertEqual(
             calls,
             [
-                ("prepare", hwnd),
-                ("post-prepare-client-rect", hwnd),
-                ("BitBlt", hwnd, expected_rect, output_path),
+                (LIT_PREPARE, hwnd),
+                (LIT_POST_PREPARE_CLIENT_RECT, hwnd),
+                (LIT_BITBLT, hwnd, expected_rect, output_path),
             ],
         )
 
@@ -1049,7 +1141,7 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
 class LinuxCaptureFallbackTests(unittest.TestCase):
     def test_white_direct_capture_defers_to_render_readiness_without_root_fallback(self):
         window = 0x4A
-        output_path = Path("capture.bmp")
+        output_path = Path(LIT_CAPTURE_BMP)
         capture = object.__new__(window_capture_smoke.LinuxX11Capture)
         capture.display = object()
         capture.root = 0x1
@@ -1059,7 +1151,7 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
         capture._capture_drawable_region = mock.Mock(return_value=white_capture)
         capture._window_root_region = mock.Mock()
 
-        with mock.patch.object(window_capture_smoke.time, "sleep"):
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP):
             result = capture.capture_window(window, output_path)
 
         self.assertIs(result, white_capture)
@@ -1076,13 +1168,13 @@ class CaptureFocusTests(unittest.TestCase):
 
         class FakeX11:
             def XRaiseWindow(self, received_display, received_window):
-                calls.append(("raise", received_display, received_window))
+                calls.append((LIT_RAISE, received_display, received_window))
 
             def XSetInputFocus(self, received_display, received_window, revert_to, timestamp):
-                calls.append(("focus", received_display, received_window, revert_to, timestamp))
+                calls.append((LIT_FOCUS, received_display, received_window, revert_to, timestamp))
 
             def XFlush(self, received_display):
-                calls.append(("flush", received_display))
+                calls.append((LIT_FLUSH, received_display))
 
         capture.x11 = FakeX11()
         capture.display = display
@@ -1092,9 +1184,9 @@ class CaptureFocusTests(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                ("raise", display, window),
-                ("focus", display, window, capture.REVERT_TO_PARENT, capture.CURRENT_TIME),
-                ("flush", display),
+                (LIT_RAISE, display, window),
+                (LIT_FOCUS, display, window, capture.REVERT_TO_PARENT, capture.CURRENT_TIME),
+                (LIT_FLUSH, display),
             ],
         )
 
@@ -1196,9 +1288,9 @@ class GracefulTerminationTests(unittest.TestCase):
 
     def test_linux_x11_close_waits_for_normal_exit_before_fallback(self):
         process = _FakeProcess(graceful_exit=True)
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True) as close:
-            terminate_process(process, "testbed", 0x4a)
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT, return_value=True) as close:
+            terminate_process(process, LIT_TESTBED, 0x4a)
 
         close.assert_called_once_with(0x4a)
         self.assertEqual(process.wait_timeouts, [10.0])
@@ -1206,10 +1298,10 @@ class GracefulTerminationTests(unittest.TestCase):
 
     def test_linux_x11_close_falls_back_to_sigterm_after_timeout(self):
         process = _FakeProcess()
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True), \
-             mock.patch.object(window_capture_smoke, "write_status") as write_status:
-            terminate_process(process, "testbed", 0x4a)
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT, return_value=True), \
+             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS) as write_status:
+            terminate_process(process, LIT_TESTBED, 0x4a)
 
         self.assertEqual(process.wait_timeouts, [10.0, 5.0])
         self.assertEqual(process.terminate_calls, 1)
@@ -1218,9 +1310,9 @@ class GracefulTerminationTests(unittest.TestCase):
 
     def test_linux_x11_helper_failure_falls_back_to_sigterm(self):
         process = _FakeProcess()
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=False) as close:
-            terminate_process(process, "testbed", 0x4a)
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT, return_value=False) as close:
+            terminate_process(process, LIT_TESTBED, 0x4a)
 
         close.assert_called_once_with(0x4a)
         self.assertEqual(process.wait_timeouts, [5.0])
@@ -1228,19 +1320,19 @@ class GracefulTerminationTests(unittest.TestCase):
 
     def test_linux_without_a_captured_handle_does_not_discover_a_window_by_title(self):
         process = _FakeProcess()
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit") as close:
-            terminate_process(process, "testbed")
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT) as close:
+            terminate_process(process, LIT_TESTBED)
 
         close.assert_not_called()
         self.assertEqual(process.terminate_calls, 1)
 
     def test_windows_keeps_existing_wm_close_path(self):
         process = _FakeProcess(graceful_exit=True)
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Windows"), \
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
              mock.patch.object(window_capture_smoke, "request_windows_graceful_exit", return_value=True) as windows_close, \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit") as linux_close:
-            terminate_process(process, "testbed", 0x4a)
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT) as linux_close:
+            terminate_process(process, LIT_TESTBED, 0x4a)
 
         windows_close.assert_called_once_with(process.pid)
         linux_close.assert_not_called()
@@ -1248,54 +1340,54 @@ class GracefulTerminationTests(unittest.TestCase):
 
     def test_nonzero_graceful_exit_is_reported_to_the_smoke_runner(self):
         process = _FakeProcess(graceful_exit=True, graceful_exit_code=-6)
-        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
-             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True):
-            exit_code, tail = terminate_process(process, "testbed", 0x4a)
+        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
+             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT, return_value=True):
+            exit_code, tail = terminate_process(process, LIT_TESTBED, 0x4a)
 
         self.assertEqual(exit_code, -6)
         self.assertEqual(tail, "")
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "exit -6"):
-            require_normal_process_exit(exit_code, tail, "testbed")
+            require_normal_process_exit(exit_code, tail, LIT_TESTBED)
 
     def test_missing_shutdown_exit_code_is_reported_to_the_smoke_runner(self):
         with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "did not exit"):
-            require_normal_process_exit(None, "", "testbed")
+            require_normal_process_exit(None, "", LIT_TESTBED)
 
 
 
 class ResizeCaptureConfigurationTests(unittest.TestCase):
     @staticmethod
     def base_args():
-        return ["--executable", sys.executable, "--output", "capture.bmp"]
+        return [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
 
     def test_resize_is_opt_in_and_has_two_meaningful_settle_intervals(self):
         ordinary = window_capture_smoke.parse_args(self.base_args())
         self.assertIsNone(ordinary.resize_client)
         self.assertIsNone(ordinary.resize_settle_seconds)
-        resized = window_capture_smoke.parse_args(self.base_args() + ["--resize-client", "1001", "701"])
+        resized = window_capture_smoke.parse_args(self.base_args() + [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701])
         self.assertEqual(resized.resize_client, [1001, 701])
         self.assertEqual(resized.settle_seconds, 2.0)
         self.assertEqual(resized.resize_settle_seconds, 2.0)
 
     def test_resize_rejects_incompatible_modes_and_invalid_limits(self):
         for extra in (
-            ["--resize-client", "1001", "701", "--application-capture"],
-            ["--resize-client", "1001", "701", "--window-handle", "1"],
-            ["--resize-client", "0", "701"],
-            ["--resize-client", "16385", "701"],
-            ["--resize-client", "1001", "701", "--settle-seconds", "0"],
-            ["--resize-client", "1001", "701", "--settle-seconds", "nan"],
-            ["--resize-client", "1001", "701", "--resize-settle-seconds", "0.5"],
-            ["--resize-client", "1001", "701", "--resize-settle-seconds", "inf"],
-            ["--resize-client", "1001", "701", "--render-ready-timeout", "inf"],
-            ["--resize-settle-seconds", "2"],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_APPLICATION_CAPTURE],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_WINDOW_HANDLE, "1"],
+            [LIT_RESIZE_CLIENT, "0", LIT_N_701],
+            [LIT_RESIZE_CLIENT, "16385", LIT_N_701],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, "0"],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_SETTLE_SECONDS, LIT_NAN],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, "0.5"],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, LIT_RESIZE_SETTLE_SECONDS, LIT_INF],
+            [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701, "--render-ready-timeout", LIT_INF],
+            [LIT_RESIZE_SETTLE_SECONDS, "2"],
         ):
-            with self.subTest(extra=extra), mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            with self.subTest(extra=extra), mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
                 window_capture_smoke.parse_args(self.base_args() + extra)
 
     def test_resize_rejects_active_freeze_and_application_self_capture(self):
-        for name in ("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
-            for value in ("1", "120", "nan", "bad"):
+        for name in (LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
+            for value in ("1", "120", LIT_NAN, "bad"):
                 with self.subTest(name=name, value=value), self.assertRaises(window_capture_smoke.SmokeFailure):
                     window_capture_smoke.validate_resize_environment({name: value})
             window_capture_smoke.validate_resize_environment({name: "0"})
@@ -1304,79 +1396,79 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
         window_capture_smoke.validate_resize_environment({})
 
     def test_launch_environment_checks_freeze_only_when_resize_is_requested(self):
-        args = SimpleNamespace(resize_client=[1001, 701], software_vulkan="off")
-        with mock.patch.dict(os.environ, {"NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "6"}, clear=True), \
-             mock.patch.object(window_capture_smoke.platform, "system", return_value="Windows"):
+        args = SimpleNamespace(resize_client=[1001, 701], software_vulkan=LIT_OFF)
+        with mock.patch.dict(os.environ, {LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "6"}, clear=True), \
+             mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS):
             with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "active or invalid"):
                 window_capture_smoke.build_launch_environment(args)
             args.resize_client = None
-            self.assertEqual(window_capture_smoke.build_launch_environment(args)["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"], "6")
+            self.assertEqual(window_capture_smoke.build_launch_environment(args)[LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F], "6")
 
 
 class ResizeCaptureLifecycleTests(unittest.TestCase):
     @staticmethod
     def make_args():
-        return SimpleNamespace(output=Path("capture.bmp"), resize_client=[1001, 701], settle_seconds=2.0,
+        return SimpleNamespace(output=Path(LIT_CAPTURE_BMP), resize_client=[1001, 701], settle_seconds=2.0,
             resize_settle_seconds=3.0, render_ready_timeout=1.0)
 
     def test_resize_waits_for_original_render_then_runtime_ack_and_final_render(self):
         args = self.make_args()
         events = []
         backend = mock.Mock()
-        backend.prepare_window.side_effect = lambda handle: events.append("prepare")
+        backend.prepare_window.side_effect = lambda handle: events.append(LIT_PREPARE)
         backend.client_size.side_effect = [(1280, 900), (1280, 900), (1001, 701), (1001, 701), (1001, 701)]
-        backend.resize_client.side_effect = lambda *values: events.append(("resize", values))
+        backend.resize_client.side_effect = lambda *values: events.append((LIT_RESIZE, values))
         process = SimpleNamespace(poll=lambda: None)
         before = SimpleNamespace(width=1280, height=900)
         after = SimpleNamespace(width=1001, height=701)
         def capture(capture_args, *_):
-            events.append(("capture", capture_args.output))
-            return before if len([event for event in events if isinstance(event, tuple) and event[0] == "capture"]) == 1 else after
-        with mock.patch.object(window_capture_smoke, "capture_render_ready_window", side_effect=capture), \
-             mock.patch.object(window_capture_smoke, "collect_log_delta", side_effect=["", "GraphicsRuntime: Back buffer resized to 1001x701"]), \
-             mock.patch.object(window_capture_smoke, "write_status"), \
-             mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=[10.0, 10.1]), \
-             mock.patch.object(window_capture_smoke.time, "sleep", side_effect=lambda seconds: events.append(("sleep", seconds))):
-            result = window_capture_smoke.capture_resized_window(args, backend, 42, process, Path("logs"), {}, "*.log")
+            events.append((LIT_CAPTURE, capture_args.output))
+            return before if len([event for event in events if isinstance(event, tuple) and event[0] == LIT_CAPTURE]) == 1 else after
+        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=capture), \
+             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO]), \
+             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+             mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 10.1]), \
+             mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda seconds: events.append((LIT_SLEEP, seconds))):
+            result = window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
         self.assertIs(result, after)
         backend.resize_client.assert_called_once_with(42, 1001, 701)
-        self.assertEqual(events, ["prepare", ("capture", Path("capture.before-resize.bmp")), ("sleep", 2.0),
-            ("resize", (42, 1001, 701)), ("sleep", 0.1), ("sleep", 3.0), ("capture", Path("capture.bmp"))])
+        self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_SLEEP, 2.0),
+            (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1), (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
     def test_resize_requires_both_client_extent_and_renderer_acknowledgement(self):
-        for client, log in (((1280, 900), "GraphicsRuntime: Back buffer resized to 1001x701"), ((1001, 701), "")):
+        for client, log in (((1280, 900), LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), ((1001, 701), "")):
             with self.subTest(client=client, log=log):
                 args = self.make_args()
                 backend = mock.Mock()
                 backend.client_size.side_effect = [(1280, 900), (1280, 900), client]
-                with mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value=SimpleNamespace(width=1280, height=900)), \
-                     mock.patch.object(window_capture_smoke, "collect_log_delta", return_value=log), \
-                     mock.patch.object(window_capture_smoke, "write_status"), \
-                     mock.patch.object(window_capture_smoke.time, "monotonic", side_effect=[10.0, 11.0]), \
-                     mock.patch.object(window_capture_smoke.time, "sleep"), \
+                with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+                     mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=log), \
+                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+                     mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, side_effect=[10.0, 11.0]), \
+                     mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
                      self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "resize did not produce"):
-                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path("logs"), {}, "*.log")
+                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
                 backend.resize_client.assert_called_once()
 
     def test_final_capture_cannot_keep_the_old_extent(self):
         args = self.make_args()
         backend = mock.Mock()
         backend.client_size.side_effect = [(1280, 900), (1280, 900), (1001, 701)]
-        with mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value=SimpleNamespace(width=1280, height=900)), \
-             mock.patch.object(window_capture_smoke, "collect_log_delta", return_value="GraphicsRuntime: Back buffer resized to 1001x701"), \
-             mock.patch.object(window_capture_smoke, "write_status"), \
-             mock.patch.object(window_capture_smoke.time, "monotonic", return_value=10.0), \
-             mock.patch.object(window_capture_smoke.time, "sleep"), \
+        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+             mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), \
+             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+             mock.patch.object(window_capture_smoke.time, LIT_MONOTONIC, return_value=10.0), \
+             mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "final client/capture extent"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path("logs"), {}, "*.log")
+            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
 
     def test_noop_resize_is_rejected_before_sleep_or_window_mutation(self):
         args = self.make_args()
         backend = mock.Mock()
-        with mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value=SimpleNamespace(width=1001, height=701)), \
-             mock.patch.object(window_capture_smoke.time, "sleep") as sleep, \
+        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1001, height=701)), \
+             mock.patch.object(window_capture_smoke.time, LIT_SLEEP) as sleep, \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "must change"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path("logs"), {}, "*.log")
+            window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
         sleep.assert_not_called()
         backend.resize_client.assert_not_called()
 
@@ -1385,11 +1477,11 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         backend = mock.Mock()
         backend.client_size.return_value = (1280, 900)
         process = SimpleNamespace(poll=lambda: 7, returncode=7, _nwb_output_capture=None)
-        with mock.patch.object(window_capture_smoke, "capture_render_ready_window", return_value=SimpleNamespace(width=1280, height=900)), \
-             mock.patch.object(window_capture_smoke, "write_status"), \
-             mock.patch.object(window_capture_smoke.time, "sleep"), \
+        with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
+             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+             mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "before client resize"):
-            window_capture_smoke.capture_resized_window(args, backend, 42, process, Path("logs"), {}, "*.log")
+            window_capture_smoke.capture_resized_window(args, backend, 42, process, Path(LIT_LOGS), {}, LIT_LOG)
         backend.resize_client.assert_not_called()
 
 
@@ -1425,5 +1517,5 @@ class ResizeCaptureBackendTests(unittest.TestCase):
             backend.resize_client(42, 1001, 701)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

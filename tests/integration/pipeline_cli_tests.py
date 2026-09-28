@@ -10,6 +10,32 @@ import sys
 import tempfile
 from unittest import mock
 
+# Shared literals (no inline hardcodes below this block).
+LIT_DEPENDENCY_COMPUTER = "--dependency-computer"
+LIT_ASSET_BUILDER = "--asset-builder"
+LIT_ASSET_GATHERER = "--asset-gatherer"
+LIT_REPO_ROOT = "--repo-root"
+LIT_UTF_8 = "utf-8"
+LIT_NWBA = "*.nwba"
+LIT_VOL = "*.vol"
+LIT_FILTERING = "{filtering}"
+LIT_LINEAR = "linear"
+LIT_CLAMP = "clamp"
+LIT_N = "\n"
+LIT_SKIP_BUILD = "--skip-build"
+LIT_ASSET_ROOT = "--asset-root"
+LIT_OUTPUT_DIRECTORY = "--output-directory"
+LIT_CACHE_DIRECTORY = "--cache-directory"
+LIT_CONFIGURATION = "--configuration"
+LIT_TESTS = "tests"
+LIT_ASSETS = "assets"
+LIT_SAMPLERS = "samplers"
+LIT_NEAREST = "nearest"
+LIT_INPUT = "--input"
+LIT_ASSET_TYPE = "--asset-type"
+LIT_INPUT_LIST = "--input-list"
+LIT_MAIN = "__main__"
+
 
 ASSET_TYPE_SENTINEL = "nwb_cli_test_unsupported"
 CHILD_TIMEOUT_SECONDS = 30.0
@@ -20,11 +46,11 @@ VOLUME_INDEX_ENTRY = struct.Struct("<64sQQ")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dependency-computer", type=pathlib.Path, required=True)
-    parser.add_argument("--asset-builder", type=pathlib.Path, required=True)
-    parser.add_argument("--asset-gatherer", type=pathlib.Path, required=True)
+    parser.add_argument(LIT_DEPENDENCY_COMPUTER, type=pathlib.Path, required=True)
+    parser.add_argument(LIT_ASSET_BUILDER, type=pathlib.Path, required=True)
+    parser.add_argument(LIT_ASSET_GATHERER, type=pathlib.Path, required=True)
     parser.add_argument("--pipeline-launcher", type=pathlib.Path, required=True)
-    parser.add_argument("--repo-root", type=pathlib.Path, required=True)
+    parser.add_argument(LIT_REPO_ROOT, type=pathlib.Path, required=True)
     return parser.parse_args()
 
 
@@ -36,7 +62,7 @@ def run_command(command: list[str], working_directory: pathlib.Path, failure: bo
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            encoding="utf-8",
+            encoding=LIT_UTF_8,
             errors="replace",
             timeout=CHILD_TIMEOUT_SECONDS,
             check=False,
@@ -54,7 +80,7 @@ def run_command(command: list[str], working_directory: pathlib.Path, failure: bo
 
 def read_artifacts(directory: pathlib.Path) -> dict[bytes, bytes]:
     artifacts = {}
-    for path in sorted(directory.rglob("*.nwba")):
+    for path in sorted(directory.rglob(LIT_NWBA)):
         binary = path.read_bytes()
         if len(binary) < ARTIFACT_HEADER.size:
             raise AssertionError(f"truncated asset artifact: {path}")
@@ -66,13 +92,13 @@ def read_artifacts(directory: pathlib.Path) -> dict[bytes, bytes]:
         artifacts[name_hash] = binary[ARTIFACT_HEADER.size:]
     if not artifacts:
         raise AssertionError(f"builder produced no runtime artifacts in {directory}")
-    if list(directory.rglob("*.vol")):
+    if list(directory.rglob(LIT_VOL)):
         raise AssertionError("asset builder unexpectedly produced a volume")
     return artifacts
 
 
 def read_volume(directory: pathlib.Path) -> dict[bytes, bytes]:
-    segments = sorted(directory.glob("*.vol"))
+    segments = sorted(directory.glob(LIT_VOL))
     if len(segments) != 1:
         raise AssertionError(f"expected one small graphics volume in {directory}, found {segments}")
     binary = segments[0].read_bytes()
@@ -104,18 +130,18 @@ def write_sampler(path: pathlib.Path, filtering: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     metadata = (
         "sampler asset;\n"
-        f'asset.min_filter = "{filtering}";\n'
-        f'asset.mag_filter = "{filtering}";\n'
-        'asset.mip_filter = "linear";\n'
-        'asset.address_u = "clamp";\n'
-        'asset.address_v = "clamp";\n'
-        'asset.address_w = "clamp";\n'
+        f'asset.min_filter = LIT_FILTERING;\n'
+        f'asset.mag_filter = LIT_FILTERING;\n'
+        'asset.mip_filter = LIT_LINEAR;\n'
+        'asset.address_u = LIT_CLAMP;\n'
+        'asset.address_v = LIT_CLAMP;\n'
+        'asset.address_w = LIT_CLAMP;\n'
         'asset.reduction = "standard";\n'
         "asset.max_anisotropy = 1.0;\n"
         "asset.mip_bias = 0.0;\n"
         "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n"
     )
-    path.write_bytes(metadata.replace("\n", "\r\n").encode("utf-8"))
+    path.write_bytes(metadata.replace(LIT_N, "\r\n").encode(LIT_UTF_8))
 
 
 def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_root: pathlib.Path, output: pathlib.Path) -> None:
@@ -125,10 +151,10 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
     pipeline_launcher = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(pipeline_launcher)
     options = pipeline_launcher.parse_arguments([
-        "--skip-build", "--repo-root", str(args.repo_root), "--asset-root", str(asset_root),
-        "--output-directory", str(output), "--cache-directory", str(root / "c"), "--configuration", "tests",
-        "--dependency-computer", str(args.dependency_computer), "--asset-builder", str(args.asset_builder),
-        "--asset-gatherer", str(args.asset_gatherer),
+        LIT_SKIP_BUILD, LIT_REPO_ROOT, str(args.repo_root), LIT_ASSET_ROOT, str(asset_root),
+        LIT_OUTPUT_DIRECTORY, str(output), LIT_CACHE_DIRECTORY, str(root / "c"), LIT_CONFIGURATION, LIT_TESTS,
+        LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer), LIT_ASSET_BUILDER, str(args.asset_builder),
+        LIT_ASSET_GATHERER, str(args.asset_gatherer),
     ])
     previous_volume = read_volume(output)
     with pipeline_launcher.os.scandir(asset_root) as entries:
@@ -155,28 +181,28 @@ def run_discovery_failures(args: argparse.Namespace, root: pathlib.Path, asset_r
 
 
 def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
-    first_root = root / "first project" / "assets"
-    second_root = root / "second project" / "assets"
-    first_asset = first_root / "samplers" / "first.nwb"
-    second_asset = second_root / "samplers" / "second.nwb"
-    write_sampler(first_asset, "linear")
-    write_sampler(second_asset, "nearest")
+    first_root = root / "first project" / LIT_ASSETS
+    second_root = root / "second project" / LIT_ASSETS
+    first_asset = first_root / LIT_SAMPLERS / "first.nwb"
+    second_asset = second_root / LIT_SAMPLERS / "second.nwb"
+    write_sampler(first_asset, LIT_LINEAR)
+    write_sampler(second_asset, LIT_NEAREST)
 
     manifest = root / "dependencies.txt"
     input_values = [str(second_asset), str(first_asset), str(second_asset)]
-    run_command([str(args.dependency_computer), "--input", *input_values, "--output", str(manifest)], root)
-    if manifest.read_text(encoding="utf-8").splitlines() != input_values:
+    run_command([str(args.dependency_computer), LIT_INPUT, *input_values, "--output", str(manifest)], root)
+    if manifest.read_text(encoding=LIT_UTF_8).splitlines() != input_values:
         raise AssertionError("dependency computation must preserve every input, its order, and duplicate values")
 
     build_options = [
-        "--repo-root", str(args.repo_root),
-        "--asset-root", str(first_root), str(second_root),
-        "--cache-directory", str(root / "c"),
-        "--configuration", "tests",
+        LIT_REPO_ROOT, str(args.repo_root),
+        LIT_ASSET_ROOT, str(first_root), str(second_root),
+        LIT_CACHE_DIRECTORY, str(root / "c"),
+        LIT_CONFIGURATION, LIT_TESTS,
     ]
     failure_output = run_command(
-        [str(args.asset_builder), *build_options, "--input", str(first_asset),
-         "--output-directory", str(root / "unsupported"), "--asset-type", ASSET_TYPE_SENTINEL],
+        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
+         LIT_OUTPUT_DIRECTORY, str(root / "unsupported"), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL],
         root,
         failure=True,
     )
@@ -184,16 +210,16 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if expected_message not in failure_output or "[ERROR]:" not in failure_output:
         raise AssertionError(f"builder did not preserve handled unsupported-type diagnostics:\n{failure_output[-4000:]}")
     run_command(
-        [str(args.asset_builder), *build_options, "--input", str(root / "missing.nwb"),
-         "--output-directory", str(root / "missing-output")],
+        [str(args.asset_builder), *build_options, LIT_INPUT, str(root / "missing.nwb"),
+         LIT_OUTPUT_DIRECTORY, str(root / "missing-output")],
         root,
         failure=True,
     )
 
     combined_directory = root / "combined artifacts"
     run_command(
-        [str(args.asset_builder), *build_options, "--input", str(first_asset), str(second_asset),
-         "--output-directory", str(combined_directory)],
+        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset), str(second_asset),
+         LIT_OUTPUT_DIRECTORY, str(combined_directory)],
         root,
     )
     combined_payloads = read_artifacts(combined_directory)
@@ -205,10 +231,10 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     for index, asset in enumerate((first_asset, second_asset)):
         directory = root / f"individual-{index}"
         list_path = root / f"input-{index}.txt"
-        list_path.write_text(str(asset) + "\n", encoding="utf-8")
+        list_path.write_text(str(asset) + LIT_N, encoding=LIT_UTF_8)
         run_command(
-            [str(args.asset_builder), *build_options, "--input-list", str(list_path),
-             "--output-directory", str(directory)],
+            [str(args.asset_builder), *build_options, LIT_INPUT_LIST, str(list_path),
+             LIT_OUTPUT_DIRECTORY, str(directory)],
             root,
         )
         payloads = read_artifacts(directory)
@@ -225,8 +251,8 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if sys.platform == "win32":
         case_directory = root / "case-input"
         run_command(
-            [str(args.asset_builder), *build_options, "--input", str(first_root).upper(),
-             "--output-directory", str(case_directory)],
+            [str(args.asset_builder), *build_options, LIT_INPUT, str(first_root).upper(),
+             LIT_OUTPUT_DIRECTORY, str(case_directory)],
             root,
         )
         if read_artifacts(case_directory) != read_artifacts(individual_directories[0]):
@@ -234,10 +260,10 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 
     cooked_directory = root / "cooked"
     run_command(
-        [sys.executable, str(args.pipeline_launcher), "--skip-build", *build_options,
-         "--dependency-computer", str(args.dependency_computer),
-         "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),
-         "--output-directory", str(cooked_directory)],
+        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
+         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
+         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory)],
         root,
     )
     if read_volume(cooked_directory) != combined_payloads:
@@ -247,33 +273,33 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     second_asset.unlink()
     gathered_directory = root / "gathered"
     run_command(
-        [str(args.asset_gatherer), "--input", *(str(path) for path in individual_directories),
-         "--output-directory", str(gathered_directory), "--configuration", "tests"],
+        [str(args.asset_gatherer), LIT_INPUT, *(str(path) for path in individual_directories),
+         LIT_OUTPUT_DIRECTORY, str(gathered_directory), LIT_CONFIGURATION, LIT_TESTS],
         root,
     )
     if read_volume(gathered_directory) != combined_payloads:
         raise AssertionError("gathering independent build outputs changed or dropped runtime payloads")
 
     gather_list = root / "gather.txt"
-    gather_list.write_text("".join(str(path) + "\n" for path in combined_directory.rglob("*.nwba")), encoding="utf-8")
+    gather_list.write_text("".join(str(path) + LIT_N for path in combined_directory.rglob(LIT_NWBA)), encoding=LIT_UTF_8)
     list_directory = root / "gathered-list"
     run_command(
-        [str(args.asset_gatherer), "--input-list", str(gather_list), "--output-directory", str(list_directory)],
+        [str(args.asset_gatherer), LIT_INPUT_LIST, str(gather_list), LIT_OUTPUT_DIRECTORY, str(list_directory)],
         root,
     )
     if read_volume(list_directory) != combined_payloads:
         raise AssertionError("gathering an explicit artifact list changed runtime payloads")
 
-    write_sampler(first_asset, "nearest")
+    write_sampler(first_asset, LIT_NEAREST)
     run_command(
-        [str(args.asset_builder), *build_options, "--input", str(first_asset),
-         "--output-directory", str(combined_directory)],
+        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
+         LIT_OUTPUT_DIRECTORY, str(combined_directory)],
         root,
     )
     refreshed_directory = root / "refreshed"
     run_command(
-        [str(args.asset_gatherer), "--input", str(combined_directory),
-         "--output-directory", str(refreshed_directory)],
+        [str(args.asset_gatherer), LIT_INPUT, str(combined_directory),
+         LIT_OUTPUT_DIRECTORY, str(refreshed_directory)],
         root,
     )
     refreshed_payloads = read_volume(refreshed_directory)
@@ -281,8 +307,8 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("gathering a rebuilt directory retained stale assets or an old runtime payload")
 
     run_command(
-        [str(args.asset_gatherer), "--input", str(individual_directories[0]), str(combined_directory),
-         "--output-directory", str(gathered_directory)],
+        [str(args.asset_gatherer), LIT_INPUT, str(individual_directories[0]), str(combined_directory),
+         LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
         root,
         failure=True,
     )
@@ -290,8 +316,8 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("conflicting duplicate assets changed an already published volume")
 
     run_command(
-        [str(args.asset_gatherer), "--input", str(root / "missing.nwba"),
-         "--output-directory", str(gathered_directory)],
+        [str(args.asset_gatherer), LIT_INPUT, str(root / "missing.nwba"),
+         LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
         root,
         failure=True,
     )
@@ -299,10 +325,10 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("a missing gather input changed an already published volume")
 
     run_command(
-        [sys.executable, str(args.pipeline_launcher), "--skip-build", *build_options,
-         "--dependency-computer", str(args.dependency_computer),
-         "--asset-builder", str(args.asset_builder), "--asset-gatherer", str(args.asset_gatherer),
-         "--output-directory", str(cooked_directory), "--asset-type", ASSET_TYPE_SENTINEL],
+        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
+         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
+         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, ASSET_TYPE_SENTINEL],
         root,
         failure=True,
     )
@@ -310,11 +336,11 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
         raise AssertionError("a failed build stage did not preserve the previously cooked volume")
 
     corrupt_path = root / "corrupt.nwba"
-    artifact_bytes = bytearray(next(combined_directory.rglob("*.nwba")).read_bytes())
+    artifact_bytes = bytearray(next(combined_directory.rglob(LIT_NWBA)).read_bytes())
     artifact_bytes[-1] ^= 0x01
     corrupt_path.write_bytes(artifact_bytes)
     run_command(
-        [str(args.asset_gatherer), "--input", str(corrupt_path), "--output-directory", str(gathered_directory)],
+        [str(args.asset_gatherer), LIT_INPUT, str(corrupt_path), LIT_OUTPUT_DIRECTORY, str(gathered_directory)],
         root,
         failure=True,
     )
@@ -323,12 +349,12 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
 
     moved_directory = root / "copied artifacts"
     shutil.copytree(combined_directory, moved_directory)
-    for artifact in combined_directory.glob("*.nwba"):
+    for artifact in combined_directory.glob(LIT_NWBA):
         artifact.unlink()
     moved_volume_directory = root / "copied-volume"
     run_command(
-        [str(args.asset_gatherer), "--input", str(moved_directory),
-         "--output-directory", str(moved_volume_directory)],
+        [str(args.asset_gatherer), LIT_INPUT, str(moved_directory),
+         LIT_OUTPUT_DIRECTORY, str(moved_volume_directory)],
         root,
     )
     if read_volume(moved_volume_directory) != refreshed_payloads:
@@ -357,5 +383,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main())

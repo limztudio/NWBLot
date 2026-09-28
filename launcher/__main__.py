@@ -6,5 +6,8 @@ import sys
 from launcher import main
 
 
-if __name__ == "__main__":
+MAIN_ENTRY = "__main__"
+
+
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))

@@ -13,6 +13,16 @@
 namespace __hidden_ecs_graphics_task_graph_effects_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_ = "renderer_frame_pipeline_graph_surfel_gi.cpp";
+static constexpr AStringView s_RAYTRACE = "raytrace";
+static constexpr AStringView s_NORMALIZE_RAWNORMAL_2_0_1_0 = "normalize(rawNormal * 2.0 - 1.0)";
+static constexpr AStringView s_SURFEL_GBUFFER_SLANGI = "surfel_gbuffer.slangi";
+static constexpr AStringView s_INCLUDE_SURFEL_GBUFFER_SLANGI = "#include \"surfel_gbuffer.slangi\"";
+static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_CAUSTICS_CPP = "renderer_frame_pipeline_graph_caustics.cpp";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -35,7 +45,7 @@ TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
     AString spawnSource;
     AString resolveSource;
     AString upsampleSource;
-    ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_gbuffer.slangi", gbufferSource));
+    ASSERT_TRUE(ReadTextFile(surfelDirectory / s_SURFEL_GBUFFER_SLANGI, gbufferSource));
     ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_spawn_cs.slang", spawnSource));
     ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_resolve_cs.slang", resolveSource));
     ASSERT_TRUE(ReadTextFile(surfelDirectory / "surfel_upsample_cs.slang", upsampleSource));
@@ -45,17 +55,17 @@ TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
     const AStringView upsample(upsampleSource.data(), upsampleSource.size());
 
     EXPECT_TRUE(ContainsText(gbuffer, "return normalize(packedNormal * 2.0 - 1.0);"));
-    EXPECT_TRUE(ContainsText(spawn, "#include \"surfel_gbuffer.slangi\""));
-    EXPECT_TRUE(ContainsText(resolve, "#include \"surfel_gbuffer.slangi\""));
-    EXPECT_TRUE(ContainsText(upsample, "#include \"surfel_gbuffer.slangi\""));
+    EXPECT_TRUE(ContainsText(spawn, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
+    EXPECT_TRUE(ContainsText(resolve, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
+    EXPECT_TRUE(ContainsText(upsample, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
     EXPECT_TRUE(ContainsText(spawn, "const float3 worldNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
     EXPECT_TRUE(ContainsText(resolve, "const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
     EXPECT_TRUE(ContainsText(upsample, "const float3 centerNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
     EXPECT_TRUE(ContainsText(upsample, "const float3 tapNormal = nwbSurfelDecodeGbufferNormal(tapRawNormal);"));
     EXPECT_FALSE(ContainsText(spawn, "normalize(rawNormal);"));
-    EXPECT_FALSE(ContainsText(spawn, "normalize(rawNormal * 2.0 - 1.0)"));
-    EXPECT_FALSE(ContainsText(resolve, "normalize(rawNormal * 2.0 - 1.0)"));
-    EXPECT_FALSE(ContainsText(upsample, "normalize(rawNormal * 2.0 - 1.0)"));
+    EXPECT_FALSE(ContainsText(spawn, s_NORMALIZE_RAWNORMAL_2_0_1_0));
+    EXPECT_FALSE(ContainsText(resolve, s_NORMALIZE_RAWNORMAL_2_0_1_0));
+    EXPECT_FALSE(ContainsText(upsample, s_NORMALIZE_RAWNORMAL_2_0_1_0));
 }
 
 
@@ -65,7 +75,7 @@ TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString surfelGiSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_, surfelGiSource));
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
 
     EXPECT_TRUE(ContainsText(surfelGi, "#include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>"));
@@ -97,10 +107,10 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
         },
         surfelSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_, surfelTaskGraphSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_frame_resources.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
     const AStringView readbackOwner(readbackSource.data(), readbackSource.size());
     const AStringView surfel(surfelSource.data(), surfelSource.size());
     const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
@@ -158,8 +168,8 @@ TEST(EcsGraphics, SurfelIrradianceClearOwnsShaderCommandContractAndNativeCapture
 
     AString surfelTasksSource;
     AString surfelGiSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_surfel_tasks.cpp", surfelTasksSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "task_graph_surfel_tasks.cpp", surfelTasksSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_, surfelGiSource));
     const AStringView callback(surfelTasksSource.data(), surfelTasksSource.size());
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
 
@@ -194,7 +204,7 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     const usize lightingOffset = taskGraph.find("bool HardwareCausticsStageBuilder::declare(");
@@ -219,11 +229,11 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     AString callerSource;
     AString systemSource;
     AString systemHeaderSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", softwareSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", callerSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_CAUSTICS_CPP, softwareSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", hardwareSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph.cpp", callerSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.h", systemHeaderSource));
     const AStringView softwareCaustics(softwareSource.data(), softwareSource.size());
     const AStringView hardwareCaustics(hardwareSource.data(), hardwareSource.size());
     const AStringView caller(callerSource.data(), callerSource.size());
@@ -350,14 +360,14 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     AString avboitClearSource;
     AString avboitOccupancySource;
     AString avboitAccumulationSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", softwareCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/software_caustics_resolve_chain.cpp", softwareResolveSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/hardware_caustics_resolve_chain.cpp", hardwareResolveSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/clear_chain_builder.cpp", avboitClearSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/occupancy_record_builder.cpp", avboitOccupancySource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/accumulation_record_builder.cpp", avboitAccumulationSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_CAUSTICS_CPP, softwareCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_, surfelGiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "raytrace/hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "raytrace/software_caustics_resolve_chain.cpp", softwareResolveSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "raytrace/hardware_caustics_resolve_chain.cpp", hardwareResolveSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit/clear_chain_builder.cpp", avboitClearSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit/occupancy_record_builder.cpp", avboitOccupancySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit/accumulation_record_builder.cpp", avboitAccumulationSource));
     const AStringView softwareCaustics(softwareCausticsSource.data(), softwareCausticsSource.size());
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
     const AStringView hardwareCaustics(hardwareCausticsSource.data(), hardwareCausticsSource.size());
@@ -411,8 +421,8 @@ TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
     AString shadowVisibilitySource;
     AString smokeCmakeSource;
     AString stressTestProjectSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", systemHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.cpp", systemSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp",
         shadowVisibilitySource
@@ -464,7 +474,7 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString sharedTaskGraphStageSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "task_graph_stage.h", sharedTaskGraphStageSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "shared" / "task_graph_stage.h", sharedTaskGraphStageSource));
     const AStringView sharedTaskGraphStage(sharedTaskGraphStageSource.data(), sharedTaskGraphStageSource.size());
 
     EXPECT_TRUE(ContainsText(sharedTaskGraphStage, "s_SharedComputeEmulationMaximumDrawCount = 5u;"));
@@ -514,7 +524,7 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     for(const ExpectedFifthDraw& draw : draws){
         SCOPED_TRACE(draw.path.data());
         AString source;
-        ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / draw.path.data(), source));
+        ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / draw.path.data(), source));
         const AStringView owner(source.data(), source.size());
         EXPECT_TRUE(ContainsText(owner, draw.generateIdentity));
         EXPECT_TRUE(ContainsText(owner, draw.rasterIdentity));
@@ -534,7 +544,7 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     AString causticsSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp",
+        repoRoot / "impl" / "ecs_render" / s_RENDERER_FRAME_PIPELINE_GRAPH_CAUSTICS_CPP,
         causticsSource
     ));
     const AStringView system(systemSource.data(), systemSource.size());
@@ -597,8 +607,8 @@ TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
 
     AString builderSource;
     AString callerSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "compute_effect_chain_builder.cpp", builderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", callerSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit" / "compute_effect_chain_builder.cpp", builderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph.cpp", callerSource));
     const AStringView builder(builderSource.data(), builderSource.size());
     const AStringView caller(callerSource.data(), callerSource.size());
     struct StageContract{

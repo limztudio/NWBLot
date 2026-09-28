@@ -17,6 +17,12 @@
 namespace __hidden_build_input_tests{
 
 
+static constexpr AStringView s_A_NWB = "a.nwb";
+static constexpr AStringView s_ASSETS = "assets";
+static constexpr AStringView s_PROJECT = "project";
+static constexpr AStringView s_ASSETS_A_NWB = "assets/a.nwb";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -41,9 +47,9 @@ protected:
         m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()
             / "__build_obj" / "build_input_tests";
         ErrorCode error;
-        ASSERT_TRUE(EnsureDirectories(m_root / "assets" / "empty", error));
+        ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty", error));
         m_paths.repoRoot = m_root;
-        m_paths.assetRoots.emplace_back(m_root / "assets", ACompactString("project"));
+        m_paths.assetRoots.emplace_back(m_root / s_ASSETS, ACompactString(s_PROJECT));
     }
 
     virtual void TearDown()override{
@@ -58,7 +64,7 @@ protected:
         ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexically_normal());
         CanonicalizeTextInPlace(normalized);
-        m_files.emplace_back(m_testArena.arena, m_root / "assets", path, normalized, ACompactString("project"));
+        m_files.emplace_back(m_testArena.arena, m_root / s_ASSETS, path, normalized, ACompactString(s_PROJECT));
     }
 
     void addInput(AStringView relativePath){
@@ -84,17 +90,17 @@ protected:
 
 TEST_F(BuildInputSelection, ExactInputsPreserveDiscoveredOrderAndDuplicateRecords){
     addFile("assets/z.nwb");
-    addFile("assets/a.nwb");
+    addFile(s_ASSETS_A_NWB);
     addFile("assets/excluded.nwb");
-    addFile("assets/a.nwb");
+    addFile(s_ASSETS_A_NWB);
     addInput("assets/./a.nwb");
     addInput("assets/z.nwb");
-    addInput("assets/a.nwb");
+    addInput(s_ASSETS_A_NWB);
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), 3u);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "z.nwb");
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), "a.nwb");
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filename()), "a.nwb");
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), s_A_NWB);
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[2].filePath.filename()), s_A_NWB);
 }
 
 TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
@@ -106,14 +112,14 @@ TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
     addInput("assets/empty");
     ASSERT_TRUE(select());
     ASSERT_EQ(m_files.size(), s_ExpectedDualCount);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "a.nwb");
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_A_NWB);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), "c.nwb");
 }
 
 TEST_F(BuildInputSelection, RejectedInputsLeaveDiscoveredFilesIntact){
-    addFile("assets/a.nwb");
+    addFile(s_ASSETS_A_NWB);
     addFile("outside/b.nwb");
-    addInput("assets/a.nwb");
+    addInput(s_ASSETS_A_NWB);
     addInput("outside");
     EXPECT_FALSE(select());
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
@@ -136,7 +142,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
 #else
     ASSERT_EQ(m_files.size(), 1u);
-    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "a.nwb");
+    EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), s_A_NWB);
 #endif
 }
 

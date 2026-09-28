@@ -19,6 +19,66 @@ from types import SimpleNamespace
 from smoke_volume_identity import file_identity
 from window_capture_smoke import STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text
 
+# Shared literals (no inline hardcodes below this block).
+LIT_GPUDBG = "--gpudbg"
+LIT_GPUDBG_2 = "--gpudbg="
+LIT_POPULATED = "populated"
+LIT_SPARSE = "sparse"
+LIT_CAMERA_HEIGHT = "camera_height"
+LIT_VERTICAL_FOV_DEGREES = "vertical_fov_degrees"
+LIT_SPHERE_RADIUS = "sphere_radius"
+LIT_SPHERE_EXCLUSION_MARGIN = "sphere_exclusion_margin"
+LIT_GROUND_Y = "ground_y"
+LIT_GROUND_X = "ground_x"
+LIT_GROUND_Z = "ground_z"
+LIT_RECEIVER_EDGE_MARGIN = "receiver_edge_margin"
+LIT_POSITIVE_CHANNEL_SUM_THRESHOLD = "positive_channel_sum_threshold"
+LIT_MINIMUM_POSITIVE_PIXELS = "minimum_positive_pixels"
+LIT_MINIMUM_CHANNEL_GAIN = "minimum_channel_gain"
+LIT_TILE_EXTENT = "tile_extent"
+LIT_MAXIMUM_SPARSE_PIXEL_RATIO = "maximum_sparse_pixel_ratio"
+LIT_MAXIMUM_SPARSE_TILE_RATIO = "maximum_sparse_tile_ratio"
+LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET = "NWB_CAUSTIC_SMOKE_CAMERA_PRESET"
+LIT_NWB_CAUSTIC_SMOKE_ENABLED = "NWB_CAUSTIC_SMOKE_ENABLED"
+LIT_DISABLED = "disabled"
+LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS = "CausticSphereSmokeProject: caustics "
+LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
+LIT_HARDWARE = "hardware"
+LIT_POSITIVE_PIXELS = "positive_pixels"
+LIT_POSITIVE_CHANNEL_GAIN = "positive_channel_gain"
+LIT_POSITIVE_TILES = "positive_tiles"
+LIT_UTF_8 = "utf-8"
+LIT_SCHEMA = "schema"
+LIT_POLICY = "policy"
+LIT_ARM = "arm"
+LIT_ON = "on"
+LIT_CAPTURES = "captures"
+LIT_QUALIFICATION_TOOL = "qualification_tool"
+LIT_LAUNCHER = "launcher"
+LIT_WINDOW_CAPTURE_SMOKE_PY = "window_capture_smoke.py"
+LIT_LOGSERVER_PATH = "logserver_path"
+LIT_LOGSERVER = "logserver"
+LIT_LOGSERVER_BINARIES = "logserver_binaries"
+LIT_SETTINGS = "settings"
+LIT_IMAGE = "image"
+LIT_LOG = "log"
+LIT_PATH = "path"
+LIT_IDENTITY = "identity"
+LIT_APPLICATION_ARGS = "application_args"
+LIT_RUNTIME = "runtime"
+LIT_EXECUTABLE = "executable"
+LIT_TIMEOUT_SECONDS = "timeout_seconds"
+LIT_COMMAND = "command"
+LIT_ON_2 = "_on"
+LIT_OFF = "_off"
+LIT_METRICS = "metrics"
+LIT_LOG_2 = ".log"
+LIT_TIMEOUT = "--timeout"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC = "frozen caustic arm or logger dependency inventory changed during capture"
+LIT_MAIN = "__main__"
+LIT_APPEND = "append"
+
 
 GPU_DEBUG_MARKERS = (
     "Loader: GPU debug validation enabled",
@@ -28,7 +88,7 @@ GPU_DEBUG_MARKERS = (
 
 
 def validate_gpu_debug(text, application_args):
-    requested = any(value == "--gpudbg" or value.startswith("--gpudbg=") for value in application_args)
+    requested = any(value == LIT_GPUDBG or value.startswith(LIT_GPUDBG_2) for value in application_args)
     if requested:
         lines = [line.strip() for line in text.splitlines()]
         if any(lines.count(marker) != 1 for marker in GPU_DEBUG_MARKERS):
@@ -45,18 +105,18 @@ def validate_output_path(output, protected_roots):
 
 PHOTONS = "render.caustic_photons"
 RESOLVE = "render.caustic_resolve"
-PRESETS = {"populated": 2.2, "sparse": 4.4}
+PRESETS = {LIT_POPULATED: 2.2, LIT_SPARSE: 4.4}
 FRAME_COUNT = 360
 WIDTH, HEIGHT = 1280, 900
 SCHEMA = "caustic-visible-footprint-v1"
 PRODUCER = re.compile(r"^RendererSystem: dispatched hardware caustic producer \((\d+) photons/frame, "
     r"(\d+) temporal phases, (\d+) full-grid budget, (\d+) caustic lights, (\d+) refractive instances\)$", re.MULTILINE)
-POLICY = {"width": WIDTH, "height": HEIGHT, "presentation_count": FRAME_COUNT, "camera_height": .85,
-    "camera_pitch": 0, "vertical_fov_degrees": 60, "sphere_center": [0, .85, 0], "sphere_radius": .7,
-    "sphere_exclusion_margin": .001,
-    "ground_y": -.08, "ground_x": [-1.75, 1.75], "ground_z": [-1.47, 1.63], "receiver_edge_margin": .02,
-    "positive_channel_sum_threshold": 24, "minimum_positive_pixels": 100, "minimum_channel_gain": 1500,
-    "tile_extent": 16, "maximum_sparse_pixel_ratio": .8, "maximum_sparse_tile_ratio": .8,
+POLICY = {"width": WIDTH, "height": HEIGHT, "presentation_count": FRAME_COUNT, LIT_CAMERA_HEIGHT: .85,
+    "camera_pitch": 0, LIT_VERTICAL_FOV_DEGREES: 60, "sphere_center": [0, .85, 0], LIT_SPHERE_RADIUS: .7,
+    LIT_SPHERE_EXCLUSION_MARGIN: .001,
+    LIT_GROUND_Y: -.08, LIT_GROUND_X: [-1.75, 1.75], LIT_GROUND_Z: [-1.47, 1.63], LIT_RECEIVER_EDGE_MARGIN: .02,
+    LIT_POSITIVE_CHANNEL_SUM_THRESHOLD: 24, LIT_MINIMUM_POSITIVE_PIXELS: 100, LIT_MINIMUM_CHANNEL_GAIN: 1500,
+    LIT_TILE_EXTENT: 16, LIT_MAXIMUM_SPARSE_PIXEL_RATIO: .8, LIT_MAXIMUM_SPARSE_TILE_RATIO: .8,
     "scope": "visible caustic contribution on unoccluded ground; no internal wavelet occupancy claim"}
 
 
@@ -64,9 +124,9 @@ def environment(preset, enabled=True):
     if preset not in PRESETS:
         raise SmokeFailure("unknown caustic camera preset")
     return {"NWB_CAUSTIC_SMOKE_TIMING": "1", "NWB_AVBOIT_SMOKE_TIMING": "1",
-        "NWB_CAUSTIC_SMOKE_CAMERA_PRESET": preset, "NWB_CAUSTIC_SMOKE_ENABLED": "1" if enabled else "0",
+        LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET: preset, LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1" if enabled else "0",
         "NWB_REFRACTION_SMOKE_ENABLED": "0", "NWB_REFRACTION_SMOKE_HARDWARE": "1",
-        "NWB_REFLECTION_SMOKE_MODE": "disabled", "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "0",
+        "NWB_REFLECTION_SMOKE_MODE": LIT_DISABLED, "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "0",
         "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0", "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0",
         "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "0", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667"}
 
@@ -81,31 +141,31 @@ def single_match(pattern, text, label):
 def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=False):
     text = text.replace("\r\n", "\n")
     lines = text.splitlines()
-    preset = settings["NWB_CAUSTIC_SMOKE_CAMERA_PRESET"]
-    enabled = settings["NWB_CAUSTIC_SMOKE_ENABLED"] == "1"
+    preset = settings[LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET]
+    enabled = settings[LIT_NWB_CAUSTIC_SMOKE_ENABLED] == "1"
     if settings != environment(preset, enabled):
         raise SmokeFailure("caustic settings differ from the complete fixed policy")
     required = ("AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1",
         "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0",
         "CausticSphereSmokeProject: camera refraction disabled",
-        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else "disabled"),
-        "CausticTimingProbe: scene single-static-sphere-ground-v1", "TransparentMultiSmokeProject: shutdown")
+        LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS + ("enabled" if enabled else LIT_DISABLED),
+        "CausticTimingProbe: scene single-static-sphere-ground-v1", LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN)
     for marker in required:
         if lines.count(marker) != 1:
             raise SmokeFailure("missing or repeated caustic lifecycle/policy: " + marker)
     route_messages = {
-        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": "hardware",
+        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": LIT_HARDWARE,
         "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": "hybrid",
     }
     routes = [route_messages[line] for line in lines if line in route_messages]
-    if len(routes) != 1 or (routes[0] != "hardware" and not allow_legacy_shadow_route):
+    if len(routes) != 1 or (routes[0] != LIT_HARDWARE and not allow_legacy_shadow_route):
         raise SmokeFailure("one supported caustic shadow route is required")
-    if routes == ["hardware"]:
+    if routes == [LIT_HARDWARE]:
         validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     # Reject contradictory values as well as requiring the selected value once.
     for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ",
         "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",
-        "CausticSphereSmokeProject: camera refraction ", "CausticSphereSmokeProject: caustics ",
+        "CausticSphereSmokeProject: camera refraction ", LIT_CAUSTICSPHERESMOKEPROJECT_CAUSTICS,
         "CausticTimingProbe: scene "):
         if sum(line.startswith(prefix) for line in lines) != 1:
             raise SmokeFailure("contradictory caustic policy: " + prefix)
@@ -147,9 +207,9 @@ def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=Fal
     if not capture:
         forbidden += ("FramebufferCapture:", "VK_LAYER_KHRONOS_validation", "Vulkan: enabled validation layer")
     validate_expected_log_text(text, [], forbidden)
-    result = {"camera_preset": preset, "camera_distance": actual[0], "camera_height": actual[1],
+    result = {"camera_preset": preset, "camera_distance": actual[0], LIT_CAMERA_HEIGHT: actual[1],
         "fixed_delta_seconds": actual[2], "yaw": actual[3], "sphere_scale": actual[4], "extent": [WIDTH, HEIGHT],
-        "shadow_route": routes[0], "reflection_mode": "disabled", "camera_refraction": False,
+        "shadow_route": routes[0], "reflection_mode": LIT_DISABLED, "camera_refraction": False,
         "caustics": enabled, "photon_schedule": list(map(int, phase)), "initial_producer": list(producers[0]) if producers else None,
         "timing_in_flight_ranges": 32, "directional_light": list(light), "vertical_fov_radians": fov}
     if capture:
@@ -164,23 +224,23 @@ def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=Fal
 
 def receiver_pixels(width, height, distance):
     """Pinhole ray/plane test excludes a conservative enclosing sphere and ground edges."""
-    tangent = math.tan(math.radians(POLICY["vertical_fov_degrees"]) * .5)
+    tangent = math.tan(math.radians(POLICY[LIT_VERTICAL_FOV_DEGREES]) * .5)
     for y in range(height // 2, height):
         dy = (1 - 2 * (y + .5) / height) * tangent
         if dy >= 0:
             continue
-        plane_t = (POLICY["ground_y"] - POLICY["camera_height"]) / dy
+        plane_t = (POLICY[LIT_GROUND_Y] - POLICY[LIT_CAMERA_HEIGHT]) / dy
         z = -distance + plane_t
-        margin = POLICY["receiver_edge_margin"]
-        if not POLICY["ground_z"][0] + margin < z < POLICY["ground_z"][1] - margin:
+        margin = POLICY[LIT_RECEIVER_EDGE_MARGIN]
+        if not POLICY[LIT_GROUND_Z][0] + margin < z < POLICY[LIT_GROUND_Z][1] - margin:
             continue
         for x in range(width):
             dx = (2 * (x + .5) / width - 1) * tangent * width / height
-            if not POLICY["ground_x"][0] + margin < dx * plane_t < POLICY["ground_x"][1] - margin:
+            if not POLICY[LIT_GROUND_X][0] + margin < dx * plane_t < POLICY[LIT_GROUND_X][1] - margin:
                 continue
             # Sphere center and camera share x/y; roots parameterize direction (dx,dy,1), not a unit vector.
             a = dx * dx + dy * dy + 1
-            exclusion_radius = POLICY["sphere_radius"] + POLICY["sphere_exclusion_margin"]
+            exclusion_radius = POLICY[LIT_SPHERE_RADIUS] + POLICY[LIT_SPHERE_EXCLUSION_MARGIN]
             discriminant = distance * distance - a * (distance * distance - exclusion_radius ** 2)
             if discriminant >= 0:
                 entry = (distance - math.sqrt(discriminant)) / a
@@ -199,24 +259,24 @@ def footprint(on, off, distance):
     for x, y in receiver_pixels(width, height, distance):
         receiver_count += 1
         delta = sum(a - b for a, b in zip(rows[y][x], off[2][y][x]))
-        if delta > POLICY["positive_channel_sum_threshold"]:
+        if delta > POLICY[LIT_POSITIVE_CHANNEL_SUM_THRESHOLD]:
             changed += 1
             gain += delta
-            tiles.add((x // POLICY["tile_extent"], y // POLICY["tile_extent"]))
-    return {"receiver_pixels": receiver_count, "positive_pixels": changed,
-        "positive_channel_gain": gain, "positive_tiles": len(tiles)}
+            tiles.add((x // POLICY[LIT_TILE_EXTENT], y // POLICY[LIT_TILE_EXTENT]))
+    return {"receiver_pixels": receiver_count, LIT_POSITIVE_PIXELS: changed,
+        LIT_POSITIVE_CHANNEL_GAIN: gain, LIT_POSITIVE_TILES: len(tiles)}
 
 
 def validate_metrics(metrics):
     if set(metrics) != set(PRESETS):
         raise SmokeFailure("both populated and sparse camera captures are required")
     for value in metrics.values():
-        if value["positive_pixels"] < POLICY["minimum_positive_pixels"] \
-            or value["positive_channel_gain"] < POLICY["minimum_channel_gain"]:
+        if value[LIT_POSITIVE_PIXELS] < POLICY[LIT_MINIMUM_POSITIVE_PIXELS] \
+            or value[LIT_POSITIVE_CHANNEL_GAIN] < POLICY[LIT_MINIMUM_CHANNEL_GAIN]:
             raise SmokeFailure("caustic contribution has insufficient actual positive receiver coverage")
-    populated, sparse = metrics["populated"], metrics["sparse"]
-    if sparse["positive_pixels"] > populated["positive_pixels"] * POLICY["maximum_sparse_pixel_ratio"] \
-        or sparse["positive_tiles"] > populated["positive_tiles"] * POLICY["maximum_sparse_tile_ratio"]:
+    populated, sparse = metrics[LIT_POPULATED], metrics[LIT_SPARSE]
+    if sparse[LIT_POSITIVE_PIXELS] > populated[LIT_POSITIVE_PIXELS] * POLICY[LIT_MAXIMUM_SPARSE_PIXEL_RATIO] \
+        or sparse[LIT_POSITIVE_TILES] > populated[LIT_POSITIVE_TILES] * POLICY[LIT_MAXIMUM_SPARSE_TILE_RATIO]:
         raise SmokeFailure("camera pair did not qualify distinct populated/sparse visible footprints")
 
 
@@ -229,14 +289,14 @@ def validate_warmup(scopes):
 
 
 def validate_report(path, identity):
-    report = json.loads(path.read_text(encoding="utf-8"))
-    if report.get("schema") != SCHEMA or report.get("policy") != POLICY or report.get("arm") != identity:
+    report = json.loads(path.read_text(encoding=LIT_UTF_8))
+    if report.get(LIT_SCHEMA) != SCHEMA or report.get(LIT_POLICY) != POLICY or report.get(LIT_ARM) != identity:
         raise SmokeFailure("caustic qualification policy or frozen arm identity changed")
-    expected = {preset + "_" + state for preset in PRESETS for state in ("on", "off")}
-    if set(report.get("captures", {})) != expected:
+    expected = {preset + "_" + state for preset in PRESETS for state in (LIT_ON, "off")}
+    if set(report.get(LIT_CAPTURES, {})) != expected:
         raise SmokeFailure("qualification must retain all four real on/off captures")
-    if report.get("qualification_tool") != file_identity(Path(__file__)) \
-        or report.get("launcher") != file_identity(Path(__file__).with_name("window_capture_smoke.py")):
+    if report.get(LIT_QUALIFICATION_TOOL) != file_identity(Path(__file__)) \
+        or report.get(LIT_LAUNCHER) != file_identity(Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)):
         raise SmokeFailure("qualification producer or framebuffer launcher changed")
     # Commands belong to the qualified arm's physical source tree, even when the other arm replays them.
     source = identity.get("source", {})
@@ -245,69 +305,69 @@ def validate_report(path, identity):
         raise SmokeFailure("qualification requires a pinned frozen source launcher")
     launcher = (Path(manifest).resolve().parent / "source/tests/smoke/window_capture_smoke.py").resolve()
     if not launcher.is_file() or source.get("files", {}).get(str(launcher)) != file_identity(launcher)["sha256"] \
-        or file_identity(launcher) != report.get("launcher"):
+        or file_identity(launcher) != report.get(LIT_LAUNCHER):
         raise SmokeFailure("qualification frozen launcher is unpinned or its bytes changed")
     frames, metrics, paths = {}, {}, [path]
-    logger = Path(report["logserver_path"])
+    logger = Path(report[LIT_LOGSERVER_PATH])
     import renderer_ab_benchmark as benchmark
     logger_binaries = benchmark.binary_identity(logger)
-    if file_identity(logger) != report["logserver"] or logger_binaries != report.get("logserver_binaries"):
+    if file_identity(logger) != report[LIT_LOGSERVER] or logger_binaries != report.get(LIT_LOGSERVER_BINARIES):
         raise SmokeFailure("qualification logserver or dependency inventory changed")
     paths.extend(logger.parent / name for name in logger_binaries)
-    for key, record in report["captures"].items():
+    for key, record in report[LIT_CAPTURES].items():
         preset, state = key.rsplit("_", 1)
-        if record.get("settings") != environment(preset, state == "on"):
+        if record.get(LIT_SETTINGS) != environment(preset, state == LIT_ON):
             raise SmokeFailure("capture settings differ from the paired policy")
         files = {}
-        for kind in ("image", "log"):
-            evidence = (path.parent / record[kind]["path"]).resolve()
-            if file_identity(evidence) != record[kind]["identity"]:
+        for kind in (LIT_IMAGE, LIT_LOG):
+            evidence = (path.parent / record[kind][LIT_PATH]).resolve()
+            if file_identity(evidence) != record[kind][LIT_IDENTITY]:
                 raise SmokeFailure("qualification raw " + kind + " changed")
             paths.append(evidence)
             files[kind] = evidence
-        text = files["log"].read_text(encoding="utf-8")
-        validate_gpu_debug(text, report["application_args"])
-        actual = validate_log(text, record["settings"], capture=True)
-        if actual != record["runtime"]:
+        text = files[LIT_LOG].read_text(encoding=LIT_UTF_8)
+        validate_gpu_debug(text, report[LIT_APPLICATION_ARGS])
+        actual = validate_log(text, record[LIT_SETTINGS], capture=True)
+        if actual != record[LIT_RUNTIME]:
             raise SmokeFailure("qualification runtime metadata does not match its actual log")
-        args = SimpleNamespace(executable=identity["executable"], runtime=identity["runtime"],
-            logserver_executable=logger, timeout=report["timeout_seconds"], application_arg=report["application_args"])
-        if record.get("command") != capture_command(args, files["image"], launcher=launcher):
+        args = SimpleNamespace(executable=identity[LIT_EXECUTABLE], runtime=identity[LIT_RUNTIME],
+            logserver_executable=logger, timeout=report[LIT_TIMEOUT_SECONDS], application_arg=report[LIT_APPLICATION_ARGS])
+        if record.get(LIT_COMMAND) != capture_command(args, files[LIT_IMAGE], launcher=launcher):
             raise SmokeFailure("qualification launch command changed its exact capture contract")
-        frames[key] = read_bmp_24_rows(files["image"])
+        frames[key] = read_bmp_24_rows(files[LIT_IMAGE])
         if frames[key][:2] != (WIDTH, HEIGHT):
             raise SmokeFailure("qualification must use the native 1280x900 framebuffer")
     for preset, distance in PRESETS.items():
-        metrics[preset] = footprint(frames[preset + "_on"], frames[preset + "_off"], distance)
+        metrics[preset] = footprint(frames[preset + LIT_ON_2], frames[preset + LIT_OFF], distance)
     validate_metrics(metrics)
-    if metrics != report.get("metrics"):
+    if metrics != report.get(LIT_METRICS):
         raise SmokeFailure("qualification metrics differ from raw image analysis")
-    return {"report": str(path), "identity": file_identity(path), "metrics": metrics,
-        "policy": POLICY, "captures": report["captures"]}, paths
+    return {"report": str(path), LIT_IDENTITY: file_identity(path), LIT_METRICS: metrics,
+        LIT_POLICY: POLICY, LIT_CAPTURES: report[LIT_CAPTURES]}, paths
 
 
 def capture_command(args, image, *, launcher=None):
     if launcher is None:
-        launcher = Path(__file__).with_name("window_capture_smoke.py")
+        launcher = Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)
     command = [sys.executable, str(launcher),
         "--executable", str(args.executable), "--working-directory", str(args.runtime),
         "--logserver-executable", str(args.logserver_executable), "--output", str(image),
-        "--log-output", str(image.with_suffix(".log")), "--application-capture",
-        "--application-capture-frame-count", str(FRAME_COUNT), "--timeout", str(args.timeout),
-        "--expect-log-message", "TransparentMultiSmokeProject: shutdown"]
+        "--log-output", str(image.with_suffix(LIT_LOG_2)), "--application-capture",
+        "--application-capture-frame-count", str(FRAME_COUNT), LIT_TIMEOUT, str(args.timeout),
+        LIT_EXPECT_LOG_MESSAGE, LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
-    if any(value == "--gpudbg" or value.startswith("--gpudbg=") for value in args.application_arg):
+    if any(value == LIT_GPUDBG or value.startswith(LIT_GPUDBG_2) for value in args.application_arg):
         for marker in GPU_DEBUG_MARKERS:
-            command.extend(("--expect-log-message", marker))
+            command.extend((LIT_EXPECT_LOG_MESSAGE, marker))
     return command
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
-    for name in ("executable", "runtime", "source-manifest", "logserver-executable", "output-directory"):
+    for name in (LIT_EXECUTABLE, LIT_RUNTIME, "source-manifest", "logserver-executable", "output-directory"):
         parser.add_argument("--" + name, type=Path, required=True)
-    parser.add_argument("--timeout", type=float, default=90)
-    parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument(LIT_TIMEOUT, type=float, default=90)
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("timeout must be finite and positive")
@@ -328,18 +388,18 @@ def main(argv=None):
         logger_binaries = benchmark.binary_identity(args.logserver_executable)
         output.mkdir(parents=True, exist_ok=False)
         owns_output = True
-        report = {"schema": SCHEMA, "policy": POLICY, "arm": identity, "captures": {}, "metrics": {},
-            "application_args": args.application_arg, "launcher": file_identity(Path(__file__).with_name("window_capture_smoke.py")),
-            "qualification_tool": file_identity(Path(__file__)), "logserver": file_identity(args.logserver_executable),
-            "logserver_path": str(args.logserver_executable), "logserver_binaries": logger_binaries,
-            "timeout_seconds": args.timeout}
+        report = {LIT_SCHEMA: SCHEMA, LIT_POLICY: POLICY, LIT_ARM: identity, LIT_CAPTURES: {}, LIT_METRICS: {},
+            LIT_APPLICATION_ARGS: args.application_arg, LIT_LAUNCHER: file_identity(Path(__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)),
+            LIT_QUALIFICATION_TOOL: file_identity(Path(__file__)), LIT_LOGSERVER: file_identity(args.logserver_executable),
+            LIT_LOGSERVER_PATH: str(args.logserver_executable), LIT_LOGSERVER_BINARIES: logger_binaries,
+            LIT_TIMEOUT_SECONDS: args.timeout}
         benchmark.write_json(output / "plan.json", report)
         frames = {}
         for preset in PRESETS:
             for enabled in (True, False):
                 if benchmark.freeze_arm(arm) != identity or benchmark.binary_identity(args.logserver_executable) != logger_binaries:
-                    raise SmokeFailure("frozen caustic arm or logger dependency inventory changed during capture")
-                key = preset + ("_on" if enabled else "_off")
+                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC)
+                key = preset + (LIT_ON_2 if enabled else LIT_OFF)
                 image = output / (key + ".bmp")
                 workload = benchmark.workloads()["caustic-" + preset]
                 env, _ = benchmark.configure_environment(os.environ, workload, output / "unused.txt")
@@ -351,23 +411,23 @@ def main(argv=None):
                 if completed.returncode:
                     raise SmokeFailure(key + " actual capture failed: " + str(completed.returncode))
                 if benchmark.freeze_arm(arm) != identity or benchmark.binary_identity(args.logserver_executable) != logger_binaries:
-                    raise SmokeFailure("frozen caustic arm or logger dependency inventory changed during capture")
+                    raise SmokeFailure(LIT_FROZEN_CAUSTIC_ARM_OR_LOGGER_DEPENDENC)
                 settings = environment(preset, enabled)
-                log = image.with_suffix(".log")
-                text = log.read_text(encoding="utf-8")
+                log = image.with_suffix(LIT_LOG_2)
+                text = log.read_text(encoding=LIT_UTF_8)
                 validate_gpu_debug(text, args.application_arg)
                 runtime = validate_log(text, settings, capture=True)
                 frames[key] = read_bmp_24_rows(image)
                 if frames[key][:2] != (WIDTH, HEIGHT):
                     raise SmokeFailure("actual caustic framebuffer has the wrong native extent")
-                report["captures"][key] = {"settings": settings, "runtime": runtime, "command": command,
-                    "image": {"path": image.name, "identity": file_identity(image)},
-                    "log": {"path": log.name, "identity": file_identity(log)}}
-                benchmark.write_json(output / "captures.json", report["captures"])
-        report["metrics"] = {preset: footprint(frames[preset + "_on"], frames[preset + "_off"], distance)
+                report[LIT_CAPTURES][key] = {LIT_SETTINGS: settings, LIT_RUNTIME: runtime, LIT_COMMAND: command,
+                    LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: file_identity(image)},
+                    LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: file_identity(log)}}
+                benchmark.write_json(output / "captures.json", report[LIT_CAPTURES])
+        report[LIT_METRICS] = {preset: footprint(frames[preset + LIT_ON_2], frames[preset + LIT_OFF], distance)
             for preset, distance in PRESETS.items()}
-        benchmark.write_json(output / "measured_metrics.json", report["metrics"])
-        validate_metrics(report["metrics"])
+        benchmark.write_json(output / "measured_metrics.json", report[LIT_METRICS])
+        validate_metrics(report[LIT_METRICS])
         benchmark.write_json(output / "qualification.json", report)
         print("PASS: actual populated/sparse visible receiver footprints qualified", flush=True)
         return 0
@@ -381,5 +441,5 @@ def main(argv=None):
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main())

@@ -15,6 +15,21 @@
 namespace __hidden_ecs_graphics_gi_material_surface_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_ASSETS = "assets";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_GI = "gi";
+static constexpr AStringView s_RAYTRACE = "raytrace";
+static constexpr AStringView s_NWBSHADOWDISPATCHSURFACE = "nwbShadowDispatchSurface";
+static constexpr AStringView s_GI_SW_TRACE_SLANGI = "gi_sw_trace.slangi";
+static constexpr AStringView s_GI_HW_TRACE_SLANGI = "gi_hw_trace.slangi";
+static constexpr AStringView s_GRAPH = "graph";
+static constexpr AStringView s_SHADOW = "shadow";
+static constexpr AStringView s_RETURN_FALSE = "return false";
+static constexpr AStringView s_RETURN = "return;";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -68,7 +83,7 @@ static bool ReturnsAfterFailedBuilderCall(const AStringView text, const AStringV
     if(offset == AStringView::npos)
         return false;
     const AStringView tail = text.substr(offset, 13u);
-    return tail == "return;" || tail.substr(0u, 12u) == "return false";
+    return tail == s_RETURN || tail.substr(0u, 12u) == s_RETURN_FALSE;
 }
 
 static TestPath RepoRoot(TestArena& testArena){
@@ -87,13 +102,13 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
     AString instanceMaterialSource;
     AString frostBindSource;
     AString frostSurfaceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_hw_trace.slangi", hwTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets_material" / "material_dispatch_codegen.cpp", dispatchCodegenSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rtDetailSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "instance_material.slangi", instanceMaterialSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "assets" / "shaders" / "frost_surface.bind", frostBindSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "assets" / "shaders" / "frost.surface", frostSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / "assets_material" / "material_dispatch_codegen.cpp", dispatchCodegenSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_detail.cpp", rtDetailSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_SHADOW / "instance_material.slangi", instanceMaterialSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / s_ASSETS / "shaders" / "frost_surface.bind", frostBindSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / s_ASSETS / "shaders" / "frost.surface", frostSurfaceSource));
 
     const AStringView swTrace(swTraceSource.data(), swTraceSource.size());
     const AStringView hwTrace(hwTraceSource.data(), hwTraceSource.size());
@@ -135,9 +150,9 @@ TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction
     AString commonSource;
     AString swSource;
     AString hwSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_trace_common.slangi", commonSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_hw_trace.slangi", hwSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / "gi_trace_common.slangi", commonSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwSource));
 
     const AStringView common(commonSource.data(), commonSource.size());
     const AStringView sw(swSource.data(), swSource.size());
@@ -173,26 +188,26 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     AString hwCausticSource;
     AString swGiTraceSource;
     AString hwGiTraceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", causticsTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareCausticsStageSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingSystemHeader));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh_scene_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_caustics.cpp", causticsTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", hardwareCausticsStageSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.h", rayTracingSystemHeader));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_swbvh_scene_swbvh.cpp", swBvhSource));
     AString swBvhTlasSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh_scene_tlas.cpp", swBvhTlasSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_swbvh_scene_tlas.cpp", swBvhTlasSource));
     swBvhSource.insert(swBvhSource.end(), swBvhTlasSource.begin(), swBvhTlasSource.end());
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "sw_shadow_traverse.slangi", swShadowTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_SHADOW / "sw_shadow_traverse.slangi", swShadowTraceSource));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "assets" / "graphics" / "shadow" / "hardware_transparent_evaluate.slangi", hwShadowTraceSource
+        repoRoot / "impl" / "assets" / "graphics" / s_SHADOW / "hardware_transparent_evaluate.slangi", hwShadowTraceSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_sw_cs.slang", swCausticSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_hw_chit.slang", hwCausticSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swGiTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_hw_trace.slangi", hwGiTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / "caustic" / "caustic_photon_sw_cs.slang", swCausticSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / "caustic" / "caustic_photon_hw_chit.slang", hwCausticSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swGiTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwGiTraceSource));
 
     const AStringView deferredLightingTaskGraph(deferredLightingTaskGraphSource.data(), deferredLightingTaskGraphSource.size());
     const AStringView shadowVisibilityTaskGraph(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
@@ -220,12 +235,12 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(rayTracingSystem, "appendPreparedShadowTraceMaterialSampledTextures"));
     EXPECT_TRUE(ContainsText(swBvh, "materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max"));
 
-    EXPECT_TRUE(ContainsText(swShadowTrace, "nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(hwShadowTrace, "nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(swCaustic, "nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(hwCaustic, "nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(swGiTrace, "nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(hwGiTrace, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(swShadowTrace, s_NWBSHADOWDISPATCHSURFACE));
+    EXPECT_TRUE(ContainsText(hwShadowTrace, s_NWBSHADOWDISPATCHSURFACE));
+    EXPECT_TRUE(ContainsText(swCaustic, s_NWBSHADOWDISPATCHSURFACE));
+    EXPECT_TRUE(ContainsText(hwCaustic, s_NWBSHADOWDISPATCHSURFACE));
+    EXPECT_TRUE(ContainsText(swGiTrace, s_NWBSHADOWDISPATCHSURFACE));
+    EXPECT_TRUE(ContainsText(hwGiTrace, s_NWBSHADOWDISPATCHSURFACE));
 
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "render.trace_material_sampled_textures"));
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "Trace Material Sampled Textures"));
@@ -259,7 +274,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         deferredLightingTaskGraph,
         "could not declare hardware-caustics stage",
-        "return;"
+        s_RETURN
     ));
     EXPECT_TRUE(ContainsText(
         swBvh,
@@ -284,16 +299,16 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     AString avboitOccupancyGraphSource;
     AString avboitExtinctionGraphSource;
     AString avboitAccumulationGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", graphicsPrefixTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_occupancy.cpp", avboitOccupancyGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_extinction.cpp", avboitExtinctionGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_accumulation.cpp", avboitAccumulationGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graphics_prefix.cpp", graphicsPrefixTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_GRAPH / "frame_graph_avboit_occupancy.cpp", avboitOccupancyGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_GRAPH / "frame_graph_avboit_extinction.cpp", avboitExtinctionGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_GRAPH / "frame_graph_avboit_accumulation.cpp", avboitAccumulationGraphSource));
     deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitOccupancyGraphSource.begin(), avboitOccupancyGraphSource.end());
     deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitExtinctionGraphSource.begin(), avboitExtinctionGraphSource.end());
     deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitAccumulationGraphSource.begin(), avboitAccumulationGraphSource.end());
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "transparent_csg_interval_builder.cpp", transparentCsgIntervalBuilderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "geometry_preparation_builder.cpp", avboitGeometryPreparationBuilderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "csg" / "transparent_csg_interval_builder.cpp", transparentCsgIntervalBuilderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit" / "geometry_preparation_builder.cpp", avboitGeometryPreparationBuilderSource));
     const AStringView graphicsPrefixTaskGraph(graphicsPrefixTaskGraphSource.data(), graphicsPrefixTaskGraphSource.size());
     const AStringView deferredLightingTaskGraph(deferredLightingTaskGraphSource.data(), deferredLightingTaskGraphSource.size());
     const AStringView transparentCsgIntervalBuilder(transparentCsgIntervalBuilderSource.data(), transparentCsgIntervalBuilderSource.size());
@@ -302,22 +317,22 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         graphicsPrefixTaskGraph,
         "could not declare prepared opaque material geometry states",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         graphicsPrefixTaskGraph,
         "could not declare prepared opaque material sampled textures",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         graphicsPrefixTaskGraph,
         "could not declare prepared opaque CSG material geometry states",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         graphicsPrefixTaskGraph,
         "could not declare prepared opaque CSG material sampled textures",
-        "return false;"
+        s_RETURN_FALSE
     ));
 
     EXPECT_TRUE(ContainsText(transparentCsgIntervalBuilder, "GatherPreparedMaterialGeometryResourceSet("));
@@ -325,18 +340,18 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         transparentCsgIntervalBuilder,
         "if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         transparentCsgIntervalBuilder,
         "if(!transparentCsgMaterialSampledTexturesCollected)",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "if(!transparentCsgIntervalBuilder.declare("));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         deferredLightingTaskGraph,
         "could not declare transparent CSG interval producer",
-        "return;"
+        s_RETURN
     ));
 
     EXPECT_TRUE(ContainsText(avboitGeometryPreparationBuilder, "GatherPreparedMaterialGeometryResourceSet("));
@@ -344,12 +359,12 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         avboitGeometryPreparationBuilder,
         "if(!outResult.geometryOwned)",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         avboitGeometryPreparationBuilder,
         "if(!outResult.sampledTexturesCollected)",
-        "return false;"
+        s_RETURN_FALSE
     ));
     EXPECT_TRUE(ReturnsAfterFailedBuilderCall(
         deferredLightingTaskGraph,

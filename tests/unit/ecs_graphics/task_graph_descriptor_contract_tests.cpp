@@ -11,6 +11,13 @@
 namespace __hidden_ecs_graphics_task_graph_descriptor_contract_tests{
 
 
+static constexpr AStringView s_CORE = "core";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_VULKAN = "vulkan";
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,7 +32,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString frameGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
     const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
 
     EXPECT_TRUE(ContainsText(
@@ -136,11 +143,11 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
         rendererSource
     ));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
+        repoRoot / s_IMPL / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
         skinningCacheSource
     ));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_mesh" / "skinning" / "resources.cpp",
+        repoRoot / s_IMPL / "ecs_mesh" / "skinning" / "resources.cpp",
         skinningResourcesSource
     ));
 
@@ -208,8 +215,8 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     AString slotAllocatorSource;
     AString nativeBindingSource;
     AString rendererExecutionSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_pipeline_state.h", heapHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "backend_pipeline_state.h", heapHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "gpu_descriptor_heap.cpp", heapSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_retirement.cpp",
         heapRetirementSource
@@ -223,7 +230,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         nativeBindingSource
     ));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp",
+        repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_execute.cpp",
         rendererExecutionSource
     ));
     const AStringView heapHeader(heapHeaderSource.data(), heapHeaderSource.size());
@@ -359,13 +366,13 @@ TEST(EcsGraphics, DescriptorStorageTeardownRequiresCompletedDeviceJoinOrActualLo
     AString managerSource;
     AString heapSource;
     AString deviceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_pipeline_state.h", managerHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "backend_pipeline_state.h", managerHeaderSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "resource_bindings_descriptor_buffer.cpp",
         managerSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "gpu_descriptor_heap.cpp", heapSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "device.cpp", deviceSource));
     const AStringView managerHeader(managerHeaderSource.data(), managerHeaderSource.size());
     const AStringView manager(managerSource.data(), managerSource.size());
     const AStringView heap(heapSource.data(), heapSource.size());

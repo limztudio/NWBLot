@@ -16,6 +16,15 @@
 namespace __hidden_reflection_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_REFLECTION = "reflection";
+static constexpr AStringView s_MESH = "mesh";
+static constexpr AStringView s_ASSETS = "assets";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_SURFACE_SLANGI = "surface.slangi";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,7 +34,7 @@ using EcsGraphicsTaskGraphContractTestDetail::AString;
 TEST(EcsGraphics, ReflectionSurfaceContractUsesExplicitFieldsAndNeutralDefaults){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "mesh" / "surface.slangi", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / s_SURFACE_SLANGI, source));
     const AStringView shader(source.data(), source.size());
     const usize structure = shader.find("struct NwbMeshSurface{");
     const usize constructor = shader.find("NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, half param1)");
@@ -50,7 +59,7 @@ TEST(EcsGraphics, ReflectionSurfaceContractUsesExplicitFieldsAndNeutralDefaults)
 TEST(EcsGraphics, ReflectionAuthoringSanitizesOnlyTheDedicatedReflectionFields){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "mesh" / "surface.slangi", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / s_SURFACE_SLANGI, source));
     const AStringView shader(source.data(), source.size());
     const usize begin = shader.find("half4 nwbPackMeshSurfaceReflection(");
     ASSERT_NE(begin, AStringView::npos);
@@ -73,7 +82,7 @@ TEST(EcsGraphics, ReflectionAuthoringSanitizesOnlyTheDedicatedReflectionFields){
 TEST(EcsGraphics, GlassReflectionUsesFiniteDielectricF0WithoutCoverageScaling){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "mesh" / "surface.slangi", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / s_SURFACE_SLANGI, source));
     const AStringView shader(source.data(), source.size());
     const usize begin = shader.find("NwbMeshSurface nwbMakeGlassSurface(");
     ASSERT_NE(begin, AStringView::npos);
@@ -116,7 +125,7 @@ TEST(EcsGraphics, ReflectionGBufferAppendsItsOwnAttachmentWithoutRepackingBxdfPa
 
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "mesh" / "gbuffer_io.slangi", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / "gbuffer_io.slangi", source));
     const AStringView shader(source.data(), source.size());
     EXPECT_TRUE(ContainsText(shader, "float4 specularRoughness : SV_Target3;"));
     EXPECT_TRUE(ContainsText(shader, "output.specularRoughness = outGBufferSpecularRoughness;"));
@@ -131,7 +140,7 @@ TEST(EcsGraphics, OpaqueCsgAndGlassWritersUseOneSanitizedReflectionPacking){
     AString meshSource;
     AString capSource;
     AString captureSource;
-    ASSERT_TRUE(ReadTextFile(graphics / "mesh" / "gbuffer_ps.slangi", meshSource));
+    ASSERT_TRUE(ReadTextFile(graphics / s_MESH / "gbuffer_ps.slangi", meshSource));
     ASSERT_TRUE(ReadTextFile(graphics / "csg" / "interval_cap_fill_ps.slang", capSource));
     ASSERT_TRUE(ReadTextFile(graphics / "avboit" / "accumulate_ps_authoring.slangi", captureSource));
     constexpr AStringView pack = "nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness)";
@@ -151,7 +160,7 @@ TEST(EcsGraphics, OpaqueCsgAndGlassWritersUseOneSanitizedReflectionPacking){
 
 TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCaptureIsDisabled){
     TestArena testArena;
-    const TestPath avboit = RepoRoot(testArena) / "impl" / "ecs_render" / "avboit";
+    const TestPath avboit = RepoRoot(testArena) / "impl" / s_ECS_RENDER / "avboit";
     AString targetSource;
     AString graphSource;
     ASSERT_TRUE(ReadTextFile(avboit / "avboit_targets.cpp", targetSource));
@@ -249,7 +258,7 @@ TEST(EcsGraphics, ReflectionPostprocessSelectorsKeepAcceptedSamplingSeparateFrom
 TEST(EcsGraphics, ReflectionTemporalNoUpdatePreservesTheTaskAndSkipsNativeRecording){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "ecs_render" / "reflection" / "task_graph_postprocess.cpp", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ECS_RENDER / s_REFLECTION / "task_graph_postprocess.cpp", source));
     const AStringView graph(source.data(), source.size());
     const usize taskBegin = graph.find("struct TemporalTask{");
     ASSERT_NE(taskBegin, AStringView::npos);
@@ -296,7 +305,7 @@ TEST(EcsGraphics, ReflectionTemporalNoUpdatePreservesTheTaskAndSkipsNativeRecord
 TEST(EcsGraphics, ReflectionUnavailableHardwareDisablesQueueingAndSkipsTlasDispatch){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "ecs_render" / "reflection" / "task_graph_reflection.cpp", source));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ECS_RENDER / s_REFLECTION / "task_graph_reflection.cpp", source));
     const AStringView graph(source.data(), source.size());
     const usize uploadBegin = graph.find("struct UploadParametersTask{");
     const usize uploadEnd = graph.find("namespace DispatchStage{", uploadBegin);

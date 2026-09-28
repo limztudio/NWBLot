@@ -31,6 +31,34 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_material{
 
 
+static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
+static constexpr AStringView s_PROJECT_MATERIALS_TEST_MATERIAL = "project/materials/test_material";
+static constexpr AStringView s_SURFACE = "surface";
+static constexpr AStringView s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M = "generated/avboit_accumulate_ps/project/materials/test_material";
+static constexpr AStringView s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA = "generated/avboit_occupancy_ps/project/materials/test_material";
+static constexpr AStringView s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M = "generated/avboit_extinction_ps/project/materials/test_material";
+static constexpr AStringView s_PROJECT_TEXTURES_TEST_CHECKER = "project/textures/test_checker";
+static constexpr AStringView s_PS = "ps";
+static constexpr AStringView s_PROJECT = "project";
+static constexpr AStringView s_TESTS = "tests";
+static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
+static constexpr AStringView s_MATERIAL_INTERFACES = "material_interfaces";
+static constexpr AStringView s_TEST_SURFACE_BIND = "test_surface.bind";
+static constexpr AStringView s_SHADERS = "shaders";
+static constexpr AStringView s_ROUGHNESS = "roughness";
+static constexpr AStringView s_TINT = "tint";
+static constexpr AStringView s_BASE_COLOR_MAP = "base_color_map";
+static constexpr AStringView s_BASE_COLOR_SAMPLER = "base_color_sampler";
+static constexpr AStringView s_ENGINE_SAMPLERS_LINEAR_CLAMP = "engine/samplers/linear_clamp";
+static constexpr AStringView s_MUTABLE_BYTE_SIZE_0 = "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;";
+static constexpr AStringView s_LOAD_SURFACE_BASE_COLOR_MAP = "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap";
+static constexpr AStringView s_LOAD_SURFACE_BASE_COLOR_SAMPLER = "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler";
+static constexpr AStringView s_CACHE = "cache";
+static constexpr AStringView s_ASSETS_DIR = "assets";
+static constexpr AStringView s_BASE_COLOR = "base_color";
+static constexpr AStringView s_MATERIALS = "materials";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -53,9 +81,9 @@ static bool ParseMaterialEntryFromMetaText(
     if(!doc.parse(metaText))
         return false;
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / "assets";
-    const Path nwbFilePath = assetRoot / "materials" / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, "project", nwbFilePath, doc, outEntry, scratchArena);
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_ASSETS_DIR;
+    const Path nwbFilePath = assetRoot / s_MATERIALS / "test_material.nwb";
+    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_PROJECT, nwbFilePath, doc, outEntry, scratchArena);
 }
 
 static bool ContainsText(const AStringView text, const AStringView expected){
@@ -179,7 +207,7 @@ static void CheckGeneratedMaterialBindSource(const AStringView generatedSourceVi
 static void CheckGeneratedHalfMaterialBindSource(const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
         "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 20u;",
-        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
+        s_MUTABLE_BYTE_SIZE_0,
         "static const half NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_DEFAULT = half(0.5h);",
         "static const half2 NWB_MATERIAL_BIND_SURFACE_RANGE_DEFAULT = half2(0.0h, 1.0h);",
         "static const half3 NWB_MATERIAL_BIND_SURFACE_TINT_DEFAULT = half3(0.25h, 0.5h, 0.75h);",
@@ -202,7 +230,7 @@ static void CheckGeneratedHalfMaterialBindSource(const AStringView generatedSour
 static void CheckGeneratedMixedHalfMaterialBindSource(const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
         "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 24u;",
-        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
+        s_MUTABLE_BYTE_SIZE_0,
         "static const uint NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET = 0u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_METALLIC_BYTE_OFFSET = 4u;",
         "static const uint NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET = 8u;",
@@ -217,7 +245,7 @@ static void CheckGeneratedMixedHalfMaterialBindSource(const AStringView generate
 static void CheckGeneratedCompactIntegerMaterialBindSource(const AStringView generatedSourceView){
     const AStringView expectedSnippets[] = {
         "static const uint NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE = 20u;",
-        "static const uint NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE = 0u;",
+        s_MUTABLE_BYTE_SIZE_0,
         "bool4 enabled;",
         "char4 signed_bytes;",
         "uchar4 bytes;",
@@ -463,7 +491,7 @@ static void CheckMinimalMaterialTypedLayout(
         }
     }
 
-    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, s_SURFACE);
     EXPECT_NE(surfaceBlock, nullptr);
     if(surfaceBlock){
         EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
@@ -473,7 +501,7 @@ static void CheckMinimalMaterialTypedLayout(
         const NWB::Impl::MaterialTypedLayoutField* baseColor = CheckMaterialTypedLayoutField(
             material,
             *surfaceBlock,
-            "base_color",
+            s_BASE_COLOR,
             NWB::Impl::MaterialLayoutFieldType::Float4,
             0u
         );
@@ -485,7 +513,7 @@ static void CheckMinimalMaterialTypedLayout(
         const NWB::Impl::MaterialTypedLayoutField* roughness = CheckMaterialTypedLayoutField(
             material,
             *surfaceBlock,
-            "roughness",
+            s_ROUGHNESS,
             NWB::Impl::MaterialLayoutFieldType::Float,
             16u
         );
@@ -542,28 +570,28 @@ static void CheckMinimalMaterialTypedBlockBytes(
 
     const ExpectedTypedBlockFloatValue expectedFloatValues[] = {
         { "runtime", 0u, 0.75f },
-        { "surface", 0u, 0.25f },
-        { "surface", 4u, 0.5f },
-        { "surface", 8u, 0.75f },
-        { "surface", 12u, 1.0f },
-        { "surface", 16u, 0.25f },
+        { s_SURFACE, 0u, 0.25f },
+        { s_SURFACE, 4u, 0.5f },
+        { s_SURFACE, 8u, 0.75f },
+        { s_SURFACE, 12u, 1.0f },
+        { s_SURFACE, 16u, 0.25f },
     };
     CheckMaterialTypedBlockValues(material, expectedFloatValues);
 
     const ExpectedTypedBlockU32Value expectedU32Values[] = {
-        { "surface", 20u, 1u },
-        { "surface", 24u, s_ExpectedDualCount },
-        { "surface", 28u, expectedFeatureMaskX },
-        { "surface", 32u, expectedFeatureMaskY },
-        { "surface", 36u, expectedFeatureMaskZ },
+        { s_SURFACE, 20u, 1u },
+        { s_SURFACE, 24u, s_ExpectedDualCount },
+        { s_SURFACE, 28u, expectedFeatureMaskX },
+        { s_SURFACE, 32u, expectedFeatureMaskY },
+        { s_SURFACE, 36u, expectedFeatureMaskZ },
     };
     CheckMaterialTypedBlockValues(material, expectedU32Values);
 
     const ExpectedTypedBlockU8Value expectedU8Values[] = {
-        { "surface", 40u, 1u },
-        { "surface", 41u, 0u },
-        { "surface", 42u, 1u },
-        { "surface", 43u, 0u },
+        { s_SURFACE, 40u, 1u },
+        { s_SURFACE, 41u, 0u },
+        { s_SURFACE, 42u, 1u },
+        { s_SURFACE, 43u, 0u },
     };
     CheckMaterialTypedBlockValues(material, expectedU8Values);
 }
@@ -574,7 +602,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
     EXPECT_EQ(material.typedLayoutFields().size(), 4u);
     EXPECT_EQ(material.typedBlockBytes().size(), 20u);
 
-    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, s_SURFACE);
     EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
@@ -587,7 +615,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
     CheckMaterialTypedLayoutHalfField(
         material,
         *surfaceBlock,
-        "roughness",
+        s_ROUGHNESS,
         NWB::Impl::MaterialLayoutFieldType::Half,
         0u,
         roughnessDefaults
@@ -607,7 +635,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
     CheckMaterialTypedLayoutHalfField(
         material,
         *surfaceBlock,
-        "tint",
+        s_TINT,
         NWB::Impl::MaterialLayoutFieldType::Half3,
         6u,
         tintDefaults
@@ -617,7 +645,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
     CheckMaterialTypedLayoutHalfField(
         material,
         *surfaceBlock,
-        "base_color",
+        s_BASE_COLOR,
         NWB::Impl::MaterialLayoutFieldType::Half4,
         12u,
         baseColorDefaults
@@ -635,7 +663,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
         { 16u, 0.25f },
         { 18u, 0.0f },
     };
-    CheckMaterialTypedBlockHalfRawValues(material, "surface", expectedHalfValues);
+    CheckMaterialTypedBlockHalfRawValues(material, s_SURFACE, expectedHalfValues);
 }
 
 static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material& material){
@@ -644,7 +672,7 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
     EXPECT_EQ(material.typedLayoutFields().size(), 5u);
     EXPECT_EQ(material.typedBlockBytes().size(), 24u);
 
-    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, s_SURFACE);
     EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
@@ -654,9 +682,9 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
     EXPECT_EQ(surfaceBlock->byteSize, 24u);
 
     const ExpectedMaterialLayoutField expectedFields[] = {
-        { "roughness", NWB::Impl::MaterialLayoutFieldType::Half, 0u },
+        { s_ROUGHNESS, NWB::Impl::MaterialLayoutFieldType::Half, 0u },
         { "metallic", NWB::Impl::MaterialLayoutFieldType::Float, 4u },
-        { "tint", NWB::Impl::MaterialLayoutFieldType::Half3, 8u },
+        { s_TINT, NWB::Impl::MaterialLayoutFieldType::Half3, 8u },
         { "flags", NWB::Impl::MaterialLayoutFieldType::UInt, 16u },
         { "tail", NWB::Impl::MaterialLayoutFieldType::Half, 20u },
     };
@@ -676,15 +704,15 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
         { 12u, 0.25f },
         { 20u, 0.875f },
     };
-    CheckMaterialTypedBlockHalfRawValues(material, "surface", expectedHalfValues);
+    CheckMaterialTypedBlockHalfRawValues(material, s_SURFACE, expectedHalfValues);
 
     const ExpectedTypedBlockFloatValue expectedFloatValues[] = {
-        { "surface", 4u, 0.75f },
+        { s_SURFACE, 4u, 0.75f },
     };
     CheckMaterialTypedBlockValues(material, expectedFloatValues);
 
     const ExpectedTypedBlockU32Value expectedU32Values[] = {
-        { "surface", 16u, 42u },
+        { s_SURFACE, 16u, 42u },
     };
     CheckMaterialTypedBlockValues(material, expectedU32Values);
 }
@@ -695,7 +723,7 @@ static void CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(const NWB::Impl:
     EXPECT_EQ(material.typedLayoutFields().size(), 5u);
     EXPECT_EQ(material.typedBlockBytes().size(), 20u);
 
-    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+    const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, s_SURFACE);
     EXPECT_NE(surfaceBlock, nullptr);
     if(!surfaceBlock)
         return;
@@ -734,30 +762,30 @@ static void CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(const NWB::Impl:
     }
 
     const ExpectedTypedBlockU8Value expectedU8Values[] = {
-        { "surface", 0u, 0u },
-        { "surface", 1u, 1u },
-        { "surface", s_ExpectedDualCount, 0u },
-        { "surface", 3u, 1u },
-        { "surface", 4u, 0x80u },
-        { "surface", 5u, 0xfeu },
-        { "surface", 6u, s_ExpectedDualCount },
-        { "surface", 7u, 64u },
-        { "surface", 8u, 3u },
-        { "surface", 9u, 4u },
-        { "surface", 10u, 5u },
-        { "surface", 11u, 6u },
+        { s_SURFACE, 0u, 0u },
+        { s_SURFACE, 1u, 1u },
+        { s_SURFACE, s_ExpectedDualCount, 0u },
+        { s_SURFACE, 3u, 1u },
+        { s_SURFACE, 4u, 0x80u },
+        { s_SURFACE, 5u, 0xfeu },
+        { s_SURFACE, 6u, s_ExpectedDualCount },
+        { s_SURFACE, 7u, 64u },
+        { s_SURFACE, 8u, 3u },
+        { s_SURFACE, 9u, 4u },
+        { s_SURFACE, 10u, 5u },
+        { s_SURFACE, 11u, 6u },
     };
     CheckMaterialTypedBlockValues(material, expectedU8Values);
 
     const ExpectedTypedBlockI16Value expectedI16Values[] = {
-        { "surface", 12u, -1234 },
-        { "surface", 14u, 2345 },
+        { s_SURFACE, 12u, -1234 },
+        { s_SURFACE, 14u, 2345 },
     };
     CheckMaterialTypedBlockValues(material, expectedI16Values);
 
     const ExpectedTypedBlockU16Value expectedU16Values[] = {
-        { "surface", 16u, 7u },
-        { "surface", 18u, 65534u },
+        { s_SURFACE, 16u, 7u },
+        { s_SURFACE, 18u, 65534u },
     };
     CheckMaterialTypedBlockValues(material, expectedU16Values);
 }
@@ -829,7 +857,7 @@ static bool BuildMaterialFromBindAndMeta(
     Path bindRoot(testArena.arena);
     bool built = false;
     if(AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, caseName, bindEntry, bindRoot, scratchArena)){
-        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
         bindEntries.push_back(Move(bindEntry));
@@ -874,15 +902,15 @@ static bool RoundTripMaterialAssetCodec(
 
 static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> accumulatePixelShader;
-    accumulatePixelShader.virtualPath = Name("generated/avboit_accumulate_ps/project/materials/test_material");
+    accumulatePixelShader.virtualPath = Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data());
     material.setAvboitAccumulatePixelShader(accumulatePixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> occupancyPixelShader;
-    occupancyPixelShader.virtualPath = Name("generated/avboit_occupancy_ps/project/materials/test_material");
+    occupancyPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data());
     material.setAvboitOccupancyPixelShader(occupancyPixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> extinctionPixelShader;
-    extinctionPixelShader.virtualPath = Name("generated/avboit_extinction_ps/project/materials/test_material");
+    extinctionPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data());
     material.setAvboitExtinctionPixelShader(extinctionPixelShader);
 }
 
@@ -930,7 +958,7 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
@@ -954,7 +982,7 @@ TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
     );
     EXPECT_TRUE(parsedMixed);
     if(parsedMixed){
-        mixedBindEntry.virtualPath = "project/material_interfaces/test_surface";
+        mixedBindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
@@ -1004,7 +1032,7 @@ TEST(AssetsGraphics, MaterialBindCompactIntegerTypedLayoutValues){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
@@ -1034,7 +1062,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     if(!parsed)
         return;
 
-    EXPECT_EQ(AStringView(materialEntry.materialInterface), AStringView("project/material_interfaces/test_surface"));
+    EXPECT_EQ(AStringView(materialEntry.materialInterface), AStringView(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE));
     EXPECT_EQ(materialEntry.parameters.size(), 3u);
 
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
@@ -1050,7 +1078,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_TRUE(parsedBind);
     if(!parsedBind)
         return;
-    bindEntry.virtualPath = "project/material_interfaces/test_surface";
+    bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
     NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
     bindEntries.push_back(Move(bindEntry));
@@ -1070,7 +1098,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_FALSE(material.transparent());
     EXPECT_FALSE(material.twoSided());
     EXPECT_FALSE(material.refractive());
-    EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
+    EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
 
     NWB::Impl::Material twoSidedMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
@@ -1479,7 +1507,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             );
             EXPECT_EQ(surfaceStruct->fields.size(), 5u);
 
-            const NWB::Impl::MaterialBindField* baseColorField = surfaceStruct->findField("base_color");
+            const NWB::Impl::MaterialBindField* baseColorField = surfaceStruct->findField(s_BASE_COLOR);
             EXPECT_NE(baseColorField, nullptr);
             if(baseColorField){
                 EXPECT_EQ(AStringView(baseColorField->type), "float4");
@@ -1497,7 +1525,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             EXPECT_EQ(runtimeStruct->fields.size(), 1u);
         }
 
-        const NWB::Impl::MaterialBindInstance* surfaceInstance = entry.findInstance("surface");
+        const NWB::Impl::MaterialBindInstance* surfaceInstance = entry.findInstance(s_SURFACE);
         const NWB::Impl::MaterialBindInstance* runtimeInstance = entry.findInstance("runtime");
         EXPECT_NE(surfaceInstance, nullptr);
         EXPECT_NE(runtimeInstance, nullptr);
@@ -1522,10 +1550,10 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         const NWB::Impl::MaterialBindStruct* halfStruct = halfEntry.findStruct("NwbTestSurfaceMaterial");
         EXPECT_NE(halfStruct, nullptr);
         if(halfStruct){
-            EXPECT_NE(halfStruct->findField("roughness"), nullptr);
+            EXPECT_NE(halfStruct->findField(s_ROUGHNESS), nullptr);
             EXPECT_NE(halfStruct->findField("range"), nullptr);
-            EXPECT_NE(halfStruct->findField("tint"), nullptr);
-            EXPECT_NE(halfStruct->findField("base_color"), nullptr);
+            EXPECT_NE(halfStruct->findField(s_TINT), nullptr);
+            EXPECT_NE(halfStruct->findField(s_BASE_COLOR), nullptr);
         }
     }
 
@@ -1612,7 +1640,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         float1DefaultRoot,
         scratchArena
     ));
-    float1DefaultEntry.virtualPath = "project/material_interfaces/test_surface";
+    float1DefaultEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
     {
         SCOPED_TRACE("material_bind_float1_default_include");
 
@@ -1667,7 +1695,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         validCacheRoot,
         scratchArena
     ));
-    validCacheEntry.virtualPath = "project/material_interfaces/test_surface";
+    validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
     EXPECT_TRUE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
         cacheInterface,
         validCacheEntry,
@@ -1703,7 +1731,7 @@ TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        entry.virtualPath = "project/material_interfaces/test_surface";
+        entry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
@@ -1739,21 +1767,21 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
     );
     EXPECT_TRUE(built);
     if(built){
-        const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+        const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, s_SURFACE);
         ASSERT_NE(surfaceBlock, nullptr);
         EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
         EXPECT_EQ(surfaceBlock->byteSize, 24u);
         CheckMaterialTypedLayoutField(
             material,
             *surfaceBlock,
-            "base_color_map",
+            s_BASE_COLOR_MAP,
             NWB::Impl::MaterialLayoutFieldType::SampledImage2D,
             16u
         );
         CheckMaterialTypedLayoutField(
             material,
             *surfaceBlock,
-            "base_color_sampler",
+            s_BASE_COLOR_SAMPLER,
             NWB::Impl::MaterialLayoutFieldType::Sampler,
             20u
         );
@@ -1761,17 +1789,17 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
-        EXPECT_EQ(imageReference.blockName, Name("surface"));
-        EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
-        EXPECT_EQ(imageReference.textureAsset.name(), Name("project/textures/test_checker"));
+        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(imageReference.fieldName, Name(s_BASE_COLOR_MAP));
+        EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER.data()));
         EXPECT_FALSE(imageReference.samplerAsset.valid());
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
         EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
         EXPECT_EQ(imageReference.constantByteOffset, 16u);
-        EXPECT_EQ(samplerReference.blockName, Name("surface"));
-        EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
+        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(samplerReference.fieldName, Name(s_BASE_COLOR_SAMPLER));
         EXPECT_FALSE(samplerReference.textureAsset.valid());
-        EXPECT_EQ(samplerReference.samplerAsset.name(), Name("engine/samplers/linear_clamp"));
+        EXPECT_EQ(samplerReference.samplerAsset.name(), Name(s_ENGINE_SAMPLERS_LINEAR_CLAMP));
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
         EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
         EXPECT_FALSE(imageReference.fixtureName);
@@ -1806,7 +1834,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
@@ -1816,8 +1844,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         ));
         const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
         const AStringView expectedSnippets[] = {
-            "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
-            "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+            s_LOAD_SURFACE_BASE_COLOR_MAP,
+            s_LOAD_SURFACE_BASE_COLOR_SAMPLER,
             "NwbHeapSampledImage2DNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_MAP_BYTE_OFFSET))",
             "NwbHeapSamplerNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_SAMPLER_BYTE_OFFSET))",
             "float4 base_color;",
@@ -1854,14 +1882,14 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
-        EXPECT_EQ(imageReference.blockName, Name("surface"));
-        EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
+        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(imageReference.fieldName, Name(s_BASE_COLOR_MAP));
         EXPECT_FALSE(imageReference.textureAsset.valid());
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
         EXPECT_EQ(imageReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8));
         EXPECT_EQ(imageReference.constantByteOffset, 0u);
-        EXPECT_EQ(samplerReference.blockName, Name("surface"));
-        EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
+        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(samplerReference.fieldName, Name(s_BASE_COLOR_SAMPLER));
         EXPECT_FALSE(samplerReference.samplerAsset.valid());
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
         EXPECT_EQ(samplerReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp));
@@ -1891,7 +1919,7 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
         NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
@@ -1901,8 +1929,8 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         ));
         const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
         const AStringView expectedSnippets[] = {
-            "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
-            "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+            s_LOAD_SURFACE_BASE_COLOR_MAP,
+            s_LOAD_SURFACE_BASE_COLOR_SAMPLER,
             "NwbHeapSampledImage2DNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_MAP_BYTE_OFFSET))",
             "NwbHeapSamplerNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_SAMPLER_BYTE_OFFSET))",
         };
@@ -1953,7 +1981,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::Sampler,
         NWB::Impl::MaterialResourceSource::Asset,
-        "engine/samplers/linear_clamp"
+        s_ENGINE_SAMPLERS_LINEAR_CLAMP
     ));
 
     NWB::Impl::Material material(testArena.arena);
@@ -1968,7 +1996,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     ASSERT_TRUE(built);
     ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
     const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
-    EXPECT_EQ(imageReference.textureAsset.name(), Name("project/textures/test_checker"));
+    EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER.data()));
     EXPECT_FALSE(imageReference.samplerAsset.valid());
     EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
     EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
@@ -2005,8 +2033,8 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         outputDirectory
     ));
 
-    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
-    const Path generatedCsgIncludeRoot = root / "cache" / "tests" / "csg_modules";
+    const Path generatedIncludePath = root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND;
+    const Path generatedCsgIncludeRoot = root / s_CACHE / s_TESTS / "csg_modules";
     const Path generatedCsgBuiltInIncludePath = generatedCsgIncludeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(generatedIncludePath, generatedSource));
@@ -2016,13 +2044,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
-    includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
+    includeDirectories.push_back(root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES);
     includeDirectories.push_back(generatedCsgIncludeRoot);
-    includeDirectories.push_back(AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets" / "graphics");
+    includeDirectories.push_back(AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_ASSETS_DIR / "graphics");
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialCookScratchArena);
     EXPECT_TRUE(shaderCook.gatherShaderDependencies(
-        root / "assets" / "shaders" / "material_ps.slang",
+        root / s_ASSETS_DIR / s_SHADERS / "material_ps.slang",
         includeDirectories,
         dependencies,
         scratchArena
@@ -2034,13 +2062,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedAsset
     ));
     if(loadedAsset){
         EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-        EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
+        EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
         CheckMinimalMaterialTypedLayout(material);
         CheckMinimalMaterialTypedBlockBytes(material);
         CheckGeneratedMaterialBindBinaryConstants(
@@ -2062,8 +2090,8 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     ));
 
     const Path halfGeneratedIncludePath =
-        halfRoot / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
+        halfRoot / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES
+        / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND
     ;
     NWB::Impl::ShaderCook::CookString halfGeneratedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(halfGeneratedIncludePath, halfGeneratedSource));
@@ -2074,13 +2102,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         halfOutputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedHalfAsset
     ));
     if(loadedHalfAsset){
         EXPECT_EQ(loadedHalfAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& halfMaterial = static_cast<const NWB::Impl::Material&>(*loadedHalfAsset);
-        EXPECT_EQ(halfMaterial.materialInterface(), Name("project/material_interfaces/test_surface"));
+        EXPECT_EQ(halfMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
         CheckHalfMaterialTypedLayoutAndBlockBytes(halfMaterial);
         CheckGeneratedMaterialBindBinaryConstants(halfGeneratedSourceView, halfMaterial);
     }
@@ -2098,8 +2126,8 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     ));
 
     const Path compactGeneratedIncludePath =
-        compactRoot / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
+        compactRoot / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES
+        / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND
     ;
     NWB::Impl::ShaderCook::CookString compactGeneratedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(compactGeneratedIncludePath, compactGeneratedSource));
@@ -2110,13 +2138,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         compactOutputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedCompactAsset
     ));
     if(loadedCompactAsset){
         EXPECT_EQ(loadedCompactAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& compactMaterial = static_cast<const NWB::Impl::Material&>(*loadedCompactAsset);
-        EXPECT_EQ(compactMaterial.materialInterface(), Name("project/material_interfaces/test_surface"));
+        EXPECT_EQ(compactMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
         CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(compactMaterial);
         CheckGeneratedMaterialBindBinaryConstants(compactGeneratedSourceView, compactMaterial);
     }
@@ -2134,15 +2162,15 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     ));
 
     const Path resourceGeneratedIncludePath =
-        resourceRoot / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
+        resourceRoot / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES
+        / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND
     ;
     NWB::Impl::ShaderCook::CookString resourceGeneratedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(resourceGeneratedIncludePath, resourceGeneratedSource));
     const AStringView resourceGeneratedSourceView(resourceGeneratedSource.data(), resourceGeneratedSource.size());
     const AStringView resourceGeneratedSnippets[] = {
-        "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
-        "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+        s_LOAD_SURFACE_BASE_COLOR_MAP,
+        s_LOAD_SURFACE_BASE_COLOR_SAMPLER,
         "NwbHeapSampledImage2DNonUniform",
         "NwbHeapSamplerNonUniform",
     };
@@ -2152,7 +2180,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         resourceOutputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedResourceAsset
     ));
     if(loadedResourceAsset){
@@ -2161,7 +2189,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         ASSERT_EQ(resourceMaterial.resourceReferences().size(), s_ExpectedDualCount);
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[0u].textureAsset.name(),
-            Name("project/textures/test_checker")
+            Name(s_PROJECT_TEXTURES_TEST_CHECKER.data())
         );
         EXPECT_FALSE(resourceMaterial.resourceReferences()[0u].samplerAsset.valid());
         EXPECT_EQ(
@@ -2170,7 +2198,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         );
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[1u].samplerAsset.name(),
-            Name("engine/samplers/linear_clamp")
+            Name(s_ENGINE_SAMPLERS_LINEAR_CLAMP)
         );
         EXPECT_FALSE(resourceMaterial.resourceReferences()[1u].textureAsset.valid());
         EXPECT_EQ(
@@ -2192,15 +2220,15 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     ));
 
     const Path fixtureGeneratedIncludePath =
-        fixtureRoot / "cache" / "tests" / "material_bind_includes"
-        / "project" / "material_interfaces" / "test_surface.bind"
+        fixtureRoot / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES
+        / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND
     ;
     NWB::Impl::ShaderCook::CookString fixtureGeneratedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(fixtureGeneratedIncludePath, fixtureGeneratedSource));
     const AStringView fixtureGeneratedSourceView(fixtureGeneratedSource.data(), fixtureGeneratedSource.size());
     const AStringView fixtureGeneratedSnippets[] = {
-        "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
-        "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+        s_LOAD_SURFACE_BASE_COLOR_MAP,
+        s_LOAD_SURFACE_BASE_COLOR_SAMPLER,
         "NwbHeapSampledImage2DNonUniform",
         "NwbHeapSamplerNonUniform",
     };
@@ -2210,7 +2238,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         fixtureOutputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedFixtureAsset
     ));
     if(loadedFixtureAsset){
@@ -2348,7 +2376,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceShaderMismatchRoot,
         interfaceShaderMismatchOutputDirectory
     ));
-    const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / "assets";
+    const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceShaderMismatchAssetRoot,
@@ -2375,7 +2403,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceIdentityMismatchRoot,
         interfaceIdentityMismatchOutputDirectory
     ));
-    const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / "assets";
+    const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         interfaceIdentityMismatchAssetRoot,
@@ -2384,7 +2412,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         AssetsGraphicsFixture::s_OtherMaterialBindShaderProbeSource
     ));
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        interfaceIdentityMismatchAssetRoot / "material_interfaces" / "other_surface.bind",
+        interfaceIdentityMismatchAssetRoot / s_MATERIAL_INTERFACES / "other_surface.bind",
         AssetsGraphicsFixture::s_MinimalMaterialBindSource
     ));
     EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
@@ -2424,7 +2452,7 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
             testArena,
             outputDirectory,
-            Name("project/materials/test_material"),
+            Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
             loadedAsset
         ));
         if(loadedAsset){
@@ -2432,15 +2460,15 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
             EXPECT_TRUE(material.transparent());
             EXPECT_EQ(
                 material.avboitAccumulatePixelShader().virtualPath,
-                Name("generated/avboit_accumulate_ps/project/materials/test_material")
+                Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data())
             );
             EXPECT_EQ(
                 material.avboitOccupancyPixelShader().virtualPath,
-                Name("generated/avboit_occupancy_ps/project/materials/test_material")
+                Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data())
             );
             EXPECT_EQ(
                 material.avboitExtinctionPixelShader().virtualPath,
-                Name("generated/avboit_extinction_ps/project/materials/test_material")
+                Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data())
             );
             EXPECT_TRUE(NWB::Impl::HasValidMaterialAvboitPixelShaderContract(
                 material.transparent(),
@@ -2452,11 +2480,11 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
 
         NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-        const Name pixelStageName("ps");
+        const Name pixelStageName(s_PS.data());
         const Name generatedPixelShaderName("generated/material_ps/project/materials/test_material");
-        const Name accumulatePixelShaderName("generated/avboit_accumulate_ps/project/materials/test_material");
-        const Name occupancyPixelShaderName("generated/avboit_occupancy_ps/project/materials/test_material");
-        const Name extinctionPixelShaderName("generated/avboit_extinction_ps/project/materials/test_material");
+        const Name accumulatePixelShaderName(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data());
+        const Name occupancyPixelShaderName(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data());
+        const Name extinctionPixelShaderName(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data());
         u64 sourceChecksum = 0u;
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, generatedPixelShaderName, pixelStageName, sourceChecksum));
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, accumulatePixelShaderName, pixelStageName, sourceChecksum));
@@ -2484,41 +2512,41 @@ TEST(AssetsGraphics, ShadowTransmittanceDispatchIsolatesOverlappingBindApis){
         outputDirectory
     ));
 
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_ASSETS_DIR;
     const bool assetsWritten =
         AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "material_interfaces" / "shadow_dispatch_first.bind",
+            assetRoot / s_MATERIAL_INTERFACES / "shadow_dispatch_first.bind",
             AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialBindSource
         )
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "material_interfaces" / "shadow_dispatch_second.bind",
+            assetRoot / s_MATERIAL_INTERFACES / "shadow_dispatch_second.bind",
             AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialBindSource
         )
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "shaders" / "shadow_dispatch_shared_surface_helper.slangi",
+            assetRoot / s_SHADERS / "shadow_dispatch_shared_surface_helper.slangi",
             AssetsGraphicsFixture::s_ShadowDispatchSharedSurfaceHelperSource
         )
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "shaders" / "shadow_dispatch_first.surface",
+            assetRoot / s_SHADERS / "shadow_dispatch_first.surface",
             AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialSurfaceSource
         )
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "shaders" / "shadow_dispatch_second.surface",
+            assetRoot / s_SHADERS / "shadow_dispatch_second.surface",
             AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialSurfaceSource
         )
-        && AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "shadow_dispatch.bxdf", AssetsGraphicsFixture::s_MaterialBindBxdfSource)
+        && AssetsGraphicsFixture::WriteTextFile(assetRoot / s_SHADERS / "shadow_dispatch.bxdf", AssetsGraphicsFixture::s_MaterialBindBxdfSource)
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "materials" / "shadow_dispatch_first.nwb",
+            assetRoot / s_MATERIALS / "shadow_dispatch_first.nwb",
             AssetsGraphicsFixture::s_ShadowDispatchFirstMaterialMeta
         )
         && AssetsGraphicsFixture::WriteTextFile(
-            assetRoot / "materials" / "shadow_dispatch_second.nwb",
+            assetRoot / s_MATERIALS / "shadow_dispatch_second.nwb",
             AssetsGraphicsFixture::s_ShadowDispatchSecondMaterialMeta
         )
     ;
     ASSERT_TRUE(assetsWritten);
 
-    const Path engineAssetRoot = AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets";
+    const Path engineAssetRoot = AssetsGraphicsFixture::AssetsGraphicsTestRepoRoot(testArena) / "impl" / s_ASSETS_DIR;
     const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
         testArena,
         root,
@@ -2528,7 +2556,7 @@ TEST(AssetsGraphics, ShadowTransmittanceDispatchIsolatesOverlappingBindApis){
     EXPECT_TRUE(cooked);
     if(cooked){
         const Path generatedDispatchPath =
-            root / "cache" / "tests" / "shadow_modules" / "shadow" / "generated" / "transmittance_dispatch.slangi"
+            root / s_CACHE / s_TESTS / "shadow_modules" / "shadow" / "generated" / "transmittance_dispatch.slangi"
         ;
         NWB::Impl::ShaderCook::CookString generatedDispatchSource(testArena.arena);
         EXPECT_TRUE(ReadTextFile(generatedDispatchPath, generatedDispatchSource));
@@ -2560,7 +2588,7 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
         root,
         outputDirectory
     ));
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
         assetRoot,
@@ -2594,7 +2622,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
         root,
         outputDirectory
     ));
-    const Path assetRoot = root / "assets";
+    const Path assetRoot = root / s_ASSETS_DIR;
     if(!AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(
         testArena,
         assetRoot,
@@ -2605,7 +2633,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
-    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
+    const Path generatedIncludePath = root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND;
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(generatedIncludePath, generatedSource));
 
@@ -2613,7 +2641,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedAsset
     ));
     if(!loadedAsset)
@@ -2631,12 +2659,12 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
         records,
         Name("project/shaders/material_ps"),
-        Name("ps"),
+        Name(s_PS.data()),
         initialPixelSourceChecksum
     ));
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "material_interfaces" / "test_surface.bind",
+        assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND,
         AssetsGraphicsFixture::s_UpdatedDefaultMaterialBindSource
     ));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
@@ -2653,7 +2681,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name("project/materials/test_material"),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
         loadedAsset
     ));
     if(loadedAsset){
@@ -2670,7 +2698,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
         records,
         Name("project/shaders/material_ps"),
-        Name("ps"),
+        Name(s_PS.data()),
         updatedPixelSourceChecksum
     ));
     EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);
@@ -2695,7 +2723,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
         outputDirectory
     ));
 
-    const Path generatedIncludePath = root / "cache" / "tests" / "material_bind_includes" / "project" / "material_interfaces" / "test_surface.bind";
+    const Path generatedIncludePath = root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND;
     NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
     EXPECT_TRUE(ReadTextFile(generatedIncludePath, generatedSource));
     const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
@@ -2708,7 +2736,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     ));
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
-    includeDirectories.push_back(root / "cache" / "tests" / "material_bind_includes");
+    includeDirectories.push_back(root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES);
     NWB::Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialCookScratchArena);
     EXPECT_TRUE(shaderCook.gatherShaderDependencies(

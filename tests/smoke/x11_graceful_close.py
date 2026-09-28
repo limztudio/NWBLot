@@ -12,6 +12,10 @@ import ctypes
 import ctypes.util
 import sys
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ERROR_INVALID_X11_WINDOW_ID = "error: invalid X11 window ID '{v}'"
+LIT_MAIN = "__main__"
+
 XLib = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 
 DisplayP = ctypes.c_void_p
@@ -76,10 +80,10 @@ def main():
     try:
         window_id = int(sys.argv[1], 0)
     except ValueError:
-        print(f"error: invalid X11 window ID '{sys.argv[1]}'", file=sys.stderr)
+        print(LIT_ERROR_INVALID_X11_WINDOW_ID.format(v=sys.argv[1]), file=sys.stderr)
         return 2
     if window_id <= 0:
-        print(f"error: invalid X11 window ID '{sys.argv[1]}'", file=sys.stderr)
+        print(LIT_ERROR_INVALID_X11_WINDOW_ID.format(v=sys.argv[1]), file=sys.stderr)
         return 2
 
     disp = XLib.XOpenDisplay(None)
@@ -97,5 +101,5 @@ def main():
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main())

@@ -7,7 +7,8 @@ import os
 from typing import Callable, Optional, Tuple
 
 
-WINDOWS_ENUM_CALLBACK = getattr(ctypes, "WINFUNCTYPE", ctypes.CFUNCTYPE)(
+WIN_FUNC_IS_WOW64 = "WINFUNCTYPE"
+WINDOWS_ENUM_CALLBACK = getattr(ctypes, WIN_FUNC_IS_WOW64, ctypes.CFUNCTYPE)(
     ctypes.c_int,
     ctypes.c_void_p,
     ctypes.c_ssize_t,
@@ -32,6 +33,19 @@ PROCESS_ENUM_INITIAL_CAPACITY = 1024
 PROCESS_ENUM_CAPACITY_GROWTH_FACTOR = 2
 QUERY_IMAGE_PATH_UNUSED_FLAGS = 0
 WINDOW_ENUM_CONTINUE = True
+WIN_API_KERNEL32 = "kernel32"
+WIN_API_PSAPI = "psapi"
+WIN_API_USER32 = "user32"
+MSG_ENUM_PROCESSES_FAILED = "EnumProcesses failed"
+MSG_WAIT_SINGLE_FAILED = "WaitForSingleObject failed"
+MSG_GET_EXIT_CODE_FAILED = "GetExitCodeProcess failed"
+MSG_NO_TERMINATE_ACCESS = "process {pid} did not grant terminate access and did not exit gracefully"
+MSG_NO_EXIT_AFTER_TERMINATE = "process {pid} did not exit after TerminateProcess"
+MSG_NO_OPEN_LAUNCHED = "could not open launched process {process.pid}"
+MSG_LAUNCHED_NO_TERMINATE = "launched process {process.pid} did not grant terminate access and did not exit gracefully"
+MSG_LAUNCHED_NO_EXIT = "launched process {process.pid} did not exit after TerminateProcess"
+MSG_FORCED_SUCCESS = "forced process {process.pid} reported a successful exit status"
+UNC_ROOT_PREFIX = "\\\\"
 
 
 @dataclass(frozen=True)
@@ -63,9 +77,9 @@ class WindowsProcessError(RuntimeError):
 
 class WindowsProcessApi:
     def __init__(self):
-        self._kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        self._psapi = ctypes.WinDLL("psapi", use_last_error=True)
-        self._user32 = ctypes.WinDLL("user32", use_last_error=True)
+        self._kernel32 = ctypes.WinDLL(WIN_API_KERNEL32, use_last_error=True)
+        self._psapi = ctypes.WinDLL(WIN_API_PSAPI, use_last_error=True)
+        self._user32 = ctypes.WinDLL(WIN_API_USER32, use_last_error=True)
         self._bind_functions()
 
     def process_ids(self) -> Tuple[int, ...]:
@@ -74,7 +88,7 @@ class WindowsProcessApi:
             process_ids = (ctypes.c_uint32 * capacity)()
             bytes_written = ctypes.c_uint32(0)
             if not self._psapi.EnumProcesses(process_ids, ctypes.sizeof(process_ids), ctypes.byref(bytes_written)):
-                raise WindowsProcessError("EnumProcesses failed")
+                raise WindowsProcessError(MSG_ENUM_PROCESSES_FAILED)
 
             count = bytes_written.value // ctypes.sizeof(ctypes.c_uint32)
             if count < capacity:
@@ -118,7 +132,7 @@ class WindowsProcessApi:
             return True
         if result == WAIT_TIMEOUT:
             return False
-        raise WindowsProcessError("WaitForSingleObject failed")
+        raise WindowsProcessError(MSG_WAIT_SINGLE_FAILED)
 
     def force_terminate(self, handle: WindowsProcessHandle) -> bool:
         if not handle.can_terminate:
@@ -128,7 +142,7 @@ class WindowsProcessApi:
     def exit_code(self, handle: WindowsProcessHandle) -> int:
         exit_code = ctypes.c_uint32(0)
         if not self._kernel32.GetExitCodeProcess(handle.native_handle, ctypes.byref(exit_code)):
-            raise WindowsProcessError("GetExitCodeProcess failed")
+            raise WindowsProcessError(MSG_GET_EXIT_CODE_FAILED)
         return int(exit_code.value)
 
     def close_process(self, handle: WindowsProcessHandle) -> None:
@@ -171,7 +185,7 @@ def normalize_windows_image_path(path, resolve_path: Optional[Callable[[str], st
     resolver = resolve_path or os.path.realpath
     resolved = ntpath.normcase(ntpath.normpath(os.fspath(resolver(os.fspath(path)))))
     if resolved.startswith(UNC_UNC_PREFIX):
-        return "\\\\" + resolved[UNC_UNC_TRIM:]
+        return UNC_ROOT_PREFIX + resolved[UNC_UNC_TRIM:]
     if resolved.startswith(UNC_DEVICE_PREFIX):
         return resolved[UNC_DEVICE_TRIM:]
     return resolved
@@ -208,9 +222,9 @@ def stop_processes_by_image_path(
             if not process_api.wait_for_exit(handle, grace_timeout_seconds):
                 forced = process_api.force_terminate(handle)
                 if not forced and not process_api.wait_for_exit(handle, 0.0):
-                    raise WindowsProcessError(f"process {pid} did not grant terminate access and did not exit gracefully")
+                    raise WindowsProcessError(MSG_NO_TERMINATE_ACCESS.format(pid=pid))
                 if not process_api.wait_for_exit(handle, hard_timeout_seconds):
-                    raise WindowsProcessError(f"process {pid} did not exit after TerminateProcess")
+                    raise WindowsProcessError(MSG_NO_EXIT_AFTER_TERMINATE.format(pid=pid))
 
             results.append(
                 WindowsProcessStopResult(
@@ -238,7 +252,7 @@ def run_bounded_process(
     if handle is None:
         exit_code = process.poll()
         if exit_code is None:
-            raise WindowsProcessError(f"could not open launched process {process.pid}")
+            raise WindowsProcessError(MSG_NO_OPEN_LAUNCHED.format(process=process))
         return WindowsBoundedRunResult(process.pid, exit_code, False, False, False)
 
     try:
@@ -252,13 +266,13 @@ def run_bounded_process(
         forced = process_api.force_terminate(handle)
         if not forced and not process_api.wait_for_exit(handle, 0.0):
             raise WindowsProcessError(
-                f"launched process {process.pid} did not grant terminate access and did not exit gracefully"
+                MSG_LAUNCHED_NO_TERMINATE.format(process=process)
             )
         if not process_api.wait_for_exit(handle, hard_timeout_seconds):
-            raise WindowsProcessError(f"launched process {process.pid} did not exit after TerminateProcess")
+            raise WindowsProcessError(MSG_LAUNCHED_NO_EXIT.format(process=process))
         exit_code = process.wait()
         if forced and exit_code == 0:
-            raise WindowsProcessError(f"forced process {process.pid} reported a successful exit status")
+            raise WindowsProcessError(MSG_FORCED_SUCCESS.format(process=process))
         return WindowsBoundedRunResult(process.pid, exit_code, True, graceful_close_requested, forced)
     finally:
         process_api.close_process(handle)

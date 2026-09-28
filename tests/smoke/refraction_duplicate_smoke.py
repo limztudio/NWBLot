@@ -11,26 +11,48 @@ import sys
 from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection, write_gallery
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
+# Shared literals (no inline hardcodes below this block).
+LIT_DUPLICATE_SINGLE_COOL = "duplicate_single_cool"
+LIT_DUPLICATE_SINGLE_WARM = "duplicate_single_warm"
+LIT_DUPLICATE_SINGLE_COOL_TINTED = "duplicate_single_cool_tinted"
+LIT_DUPLICATE_SINGLE_WARM_TINTED = "duplicate_single_warm_tinted"
+LIT_COINCIDENT_TINTED = "coincident_tinted"
+LIT_COINCIDENT_TINTED_IDENTICAL = "coincident_tinted_identical"
+LIT_COINCIDENT_PRESERVED = "coincident_preserved"
+LIT_PIXELS_OVER_CHANNEL_TOLERANCE = "pixels_over_channel_tolerance"
+LIT_MAXIMUM_CHANNEL_DIFFERENCE = "maximum_channel_difference"
+LIT_MEAN_ABSOLUTE_RGB_DIFFERENCE = "mean_absolute_rgb_difference"
+LIT_DISABLED = "disabled"
+LIT_AUTOMATIC = "automatic"
+LIT_SCREEN = "screen"
+LIT_VARIANTS = "variants"
+LIT_ID = "id"
+LIT_CAPTURES = "captures"
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+LIT_STORE_TRUE = "store_true"
+LIT_APPEND = "append"
+
 
 REFERENCES = (
-    "duplicate_single_cool", "duplicate_single_warm",
-    "duplicate_single_cool_tinted", "duplicate_single_warm_tinted",
+    LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_WARM,
+    LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_DUPLICATE_SINGLE_WARM_TINTED,
 )
 MATCHES = {
-    "coincident": "duplicate_single_cool",
-    "coincident_reversed": "duplicate_single_cool",
-    "coincident_priority_swap": "duplicate_single_warm",
-    "coincident_identical": "duplicate_single_cool",
-    "coincident_tinted": "duplicate_single_cool_tinted",
-    "coincident_tinted_reversed": "duplicate_single_cool_tinted",
-    "coincident_tinted_priority_swap": "duplicate_single_warm_tinted",
-    "coincident_tinted_identical": "duplicate_single_cool_tinted",
+    "coincident": LIT_DUPLICATE_SINGLE_COOL,
+    "coincident_reversed": LIT_DUPLICATE_SINGLE_COOL,
+    "coincident_priority_swap": LIT_DUPLICATE_SINGLE_WARM,
+    "coincident_identical": LIT_DUPLICATE_SINGLE_COOL,
+    LIT_COINCIDENT_TINTED: LIT_DUPLICATE_SINGLE_COOL_TINTED,
+    "coincident_tinted_reversed": LIT_DUPLICATE_SINGLE_COOL_TINTED,
+    "coincident_tinted_priority_swap": LIT_DUPLICATE_SINGLE_WARM_TINTED,
+    LIT_COINCIDENT_TINTED_IDENTICAL: LIT_DUPLICATE_SINGLE_COOL_TINTED,
 }
-RETAINED_CASES = ("near_coincident", "coincident_preserved")
+RETAINED_CASES = ("near_coincident", LIT_COINCIDENT_PRESERVED)
 OPTICAL_CASES = REFERENCES + tuple(MATCHES) + RETAINED_CASES
 DISABLED_CASES = (
-    "duplicate_single_cool", "duplicate_single_cool_tinted", "coincident_tinted_identical",
-    "coincident_tinted", "coincident_preserved",
+    LIT_DUPLICATE_SINGLE_COOL, LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_COINCIDENT_TINTED_IDENTICAL,
+    LIT_COINCIDENT_TINTED, LIT_COINCIDENT_PRESERVED,
 )
 MAXIMUM_CHANNEL_ERROR = 2
 MAXIMUM_MEAN_ERROR = 0.02
@@ -56,22 +78,22 @@ def pixel_difference(reference, output):
             total += sum(deltas)
     return {
         "pixels": width * height,
-        "pixels_over_channel_tolerance": changed,
-        "maximum_channel_difference": maximum,
-        "mean_absolute_rgb_difference": total / (width * height * 3),
+        LIT_PIXELS_OVER_CHANNEL_TOLERANCE: changed,
+        LIT_MAXIMUM_CHANNEL_DIFFERENCE: maximum,
+        LIT_MEAN_ABSOLUTE_RGB_DIFFERENCE: total / (width * height * 3),
     }
 
 
 def require_match(reference, output, label):
     metrics = pixel_difference(reference, output)
-    if metrics["maximum_channel_difference"] > MAXIMUM_CHANNEL_ERROR or metrics["mean_absolute_rgb_difference"] > MAXIMUM_MEAN_ERROR:
+    if metrics[LIT_MAXIMUM_CHANNEL_DIFFERENCE] > MAXIMUM_CHANNEL_ERROR or metrics[LIT_MEAN_ABSOLUTE_RGB_DIFFERENCE] > MAXIMUM_MEAN_ERROR:
         raise SmokeFailure(f"{label}: duplicate does not match its selected single volume: {json.dumps(metrics)}")
     return metrics
 
 
 def require_distinct(reference, output, label):
     metrics = pixel_difference(reference, output)
-    if metrics["pixels_over_channel_tolerance"] < MINIMUM_DISTINCT_PIXELS:
+    if metrics[LIT_PIXELS_OVER_CHANNEL_TOLERANCE] < MINIMUM_DISTINCT_PIXELS:
         raise SmokeFailure(f"{label}: control is not distinguishable in at least {MINIMUM_DISTINCT_PIXELS} pixels: {json.dumps(metrics)}")
     return metrics
 
@@ -88,16 +110,16 @@ def validate_captures(directory, variants):
             "expectation": "match" if equal else "distinct", **metrics})
 
     for variant in variants:
-        compare("duplicate_single_cool", "disabled", "duplicate_single_cool", variant, False)
+        compare(LIT_DUPLICATE_SINGLE_COOL, LIT_DISABLED, LIT_DUPLICATE_SINGLE_COOL, variant, False)
         for suffix in ("", "_tinted"):
-            compare("duplicate_single_cool" + suffix, variant, "duplicate_single_warm" + suffix, variant, False)
+            compare(LIT_DUPLICATE_SINGLE_COOL + suffix, variant, LIT_DUPLICATE_SINGLE_WARM + suffix, variant, False)
         for candidate, reference in MATCHES.items():
             compare(reference, variant, candidate, variant, True)
         for candidate in RETAINED_CASES:
-            compare("duplicate_single_cool_tinted", variant, candidate, variant, False)
-    for candidate in ("coincident_tinted_identical", "coincident_tinted"):
-        compare("duplicate_single_cool_tinted", "disabled", candidate, "disabled", True)
-    compare("duplicate_single_cool_tinted", "disabled", "coincident_preserved", "disabled", False)
+            compare(LIT_DUPLICATE_SINGLE_COOL_TINTED, variant, candidate, variant, False)
+    for candidate in (LIT_COINCIDENT_TINTED_IDENTICAL, LIT_COINCIDENT_TINTED):
+        compare(LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_DISABLED, candidate, LIT_DISABLED, True)
+    compare(LIT_DUPLICATE_SINGLE_COOL_TINTED, LIT_DISABLED, LIT_COINCIDENT_PRESERVED, LIT_DISABLED, False)
     return results
 
 
@@ -107,12 +129,12 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--variants", type=lambda value: parse_selection(value, ("automatic", "screen"), "variants"),
-        default=("automatic", "screen"), help="Optical routes to verify; defaults to automatic,screen.")
-    parser.add_argument("--require-hardware", action="store_true")
+    parser.add_argument("--variants", type=lambda value: parse_selection(value, (LIT_AUTOMATIC, LIT_SCREEN), LIT_VARIANTS),
+        default=(LIT_AUTOMATIC, LIT_SCREEN), help="Optical routes to verify; defaults to automatic,screen.")
+    parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
-    parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:
         parser.error("frames and timeout must be positive")
@@ -125,7 +147,7 @@ def main(argv):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     entries = {}
     try:
-        for variant, cases in [(route, OPTICAL_CASES) for route in args.variants] + [("disabled", DISABLED_CASES)]:
+        for variant, cases in [(route, OPTICAL_CASES) for route in args.variants] + [(LIT_DISABLED, DISABLED_CASES)]:
             for case_id in cases:
                 frame = capture(args, case_id, variant)
                 if frame is None:
@@ -134,21 +156,21 @@ def main(argv):
                 del frame
                 if case_id not in entries:
                     title, description, note = CASES[case_id]
-                    entries[case_id] = {"id": case_id, "title": title, "description": description, "note": note, "captures": []}
-                entries[case_id]["captures"].append({"id": variant, "file": f"{case_id}_{variant}.bmp"})
+                    entries[case_id] = {LIT_ID: case_id, "title": title, "description": description, "note": note, LIT_CAPTURES: []}
+                entries[case_id][LIT_CAPTURES].append({LIT_ID: variant, "file": f"{case_id}_{variant}.bmp"})
         labels = dict(VARIANT_LABELS)
         if args.require_hardware:
-            labels["automatic"] = "Hardware RT (per-pixel fallback allowed)"
+            labels[LIT_AUTOMATIC] = "Hardware RT (per-pixel fallback allowed)"
         manifest = {"captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             "frames": args.frames, "hardware_required": args.require_hardware, "application_args": args.application_arg,
-            "variants": list(args.variants) + ["disabled"], "variant_labels": labels, "limits": COMMON_LIMIT,
-            "image_count": sum(len(entry["captures"]) for entry in entries.values()), "cases": list(entries.values()),
+            LIT_VARIANTS: list(args.variants) + [LIT_DISABLED], "variant_labels": labels, "limits": COMMON_LIMIT,
+            "image_count": sum(len(entry[LIT_CAPTURES]) for entry in entries.values()), "cases": list(entries.values()),
             "validation": "Matched single-volume comparisons, insertion-order and priority checks, authored coincidence modes, and independent-layer controls."}
         write_gallery(args.output_directory, manifest)
         results = validate_captures(args.output_directory, args.variants)
         report = {"maximum_channel_error": MAXIMUM_CHANNEL_ERROR, "maximum_mean_error": MAXIMUM_MEAN_ERROR,
             "minimum_distinct_pixels": MINIMUM_DISTINCT_PIXELS, "comparisons": results}
-        (args.output_directory / "duplicate_comparisons.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        (args.output_directory / "duplicate_comparisons.json").write_text(json.dumps(report, indent=2) + "\n", encoding=LIT_UTF_8)
         print(f"PASS: {len(results)} duplicate/control comparisons; gallery: {args.output_directory / 'gallery.html'}", flush=True)
         return 0
     except (OSError, SmokeFailure, subprocess.TimeoutExpired) as exc:
@@ -156,5 +178,5 @@ def main(argv):
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

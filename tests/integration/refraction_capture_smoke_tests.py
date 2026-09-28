@@ -10,6 +10,10 @@ from refraction_capture_smoke import (  # noqa: E402
     FOREGROUND_REGION, GLASS_REGION, SmokeFailure, compare_refraction_frames, region_pixels,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_DID_NOT_DISPLACE = "did not displace"
+LIT_MAIN = "__main__"
+
 
 class RefractionCaptureAnalysisTests(unittest.TestCase):
     width = 400
@@ -40,7 +44,7 @@ class RefractionCaptureAnalysisTests(unittest.TestCase):
 
     def test_identical_frame_cannot_pass_as_refraction(self):
         source = self.make_frame()
-        with self.assertRaisesRegex(SmokeFailure, "did not displace"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_DID_NOT_DISPLACE):
             compare_refraction_frames(source, source)
 
     def test_attenuation_cannot_pass_as_displaced_edges(self):
@@ -48,7 +52,7 @@ class RefractionCaptureAnalysisTests(unittest.TestCase):
         output = [list(row) for row in source[2]]
         for x, y in region_pixels(self.width, self.height, GLASS_REGION):
             output[y][x] = tuple(int(channel * 0.2) for channel in output[y][x])
-        with self.assertRaisesRegex(SmokeFailure, "did not displace"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_DID_NOT_DISPLACE):
             compare_refraction_frames(source, (self.width, self.height, output))
 
     def test_whole_screen_shift_is_not_local_refraction(self):
@@ -69,5 +73,5 @@ class RefractionCaptureAnalysisTests(unittest.TestCase):
             compare_refraction_frames(source, output)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

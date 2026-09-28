@@ -14,6 +14,16 @@ from refraction_duplicate_smoke import (  # noqa: E402
 )
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_DOES_NOT_MATCH = "does not match"
+LIT_NOT_DISTINGUISHABLE = "not distinguishable"
+LIT_AUTOMATIC = "automatic"
+LIT_SCREEN = "screen"
+LIT_CANDIDATE_VARIANT = "{candidate}_{variant}"
+LIT_DUPLICATE_SINGLE_COOL_TINTED_DISABLED = "duplicate_single_cool_tinted_disabled"
+LIT_UNUSED = "unused"
+LIT_MAIN = "__main__"
+
 
 class RefractionDuplicateAnalysisTests(unittest.TestCase):
     @staticmethod
@@ -32,7 +42,7 @@ class RefractionDuplicateAnalysisTests(unittest.TestCase):
         output[2][0][0] = (201, 90, 120)
         require_match(reference, output, "one rounding step")
         output[2][0][0] = (200 + MAXIMUM_CHANNEL_ERROR + 1, 90, 120)
-        with self.assertRaisesRegex(SmokeFailure, "does not match"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_DOES_NOT_MATCH):
             require_match(reference, output, "local artifact")
 
     def test_systematic_small_tint_shift_fails_mean_error_budget(self):
@@ -41,18 +51,18 @@ class RefractionDuplicateAnalysisTests(unittest.TestCase):
         for row in output[2]:
             for x, pixel in enumerate(row):
                 row[x] = (pixel[0] + 1, pixel[1], pixel[2])
-        with self.assertRaisesRegex(SmokeFailure, "does not match"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_DOES_NOT_MATCH):
             require_match(reference, output, "wrong tint")
 
     def test_distinct_control_rejects_identical_and_insufficient_changes(self):
         reference = self.frame()
-        with self.assertRaisesRegex(SmokeFailure, "not distinguishable"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_NOT_DISTINGUISHABLE):
             require_distinct(reference, deepcopy(reference), "lost optical effect")
         output = deepcopy(reference)
         for index in range(MINIMUM_DISTINCT_PIXELS - 1):
             y, x = divmod(index, reference[0])
             output[2][y][x] = (0, 0, 0)
-        with self.assertRaisesRegex(SmokeFailure, "not distinguishable"):
+        with self.assertRaisesRegex(SmokeFailure, LIT_NOT_DISTINGUISHABLE):
             require_distinct(reference, output, "too few changed pixels")
         y, x = divmod(MINIMUM_DISTINCT_PIXELS - 1, reference[0])
         output[2][y][x] = (0, 0, 0)
@@ -72,26 +82,26 @@ class RefractionDuplicateAnalysisTests(unittest.TestCase):
             return width, height, [[(r + red, g + green, b + blue) for r, g, b in row] for row in rows]
 
         captures = {}
-        for variant in ("automatic", "screen"):
+        for variant in (LIT_AUTOMATIC, LIT_SCREEN):
             captures[f"duplicate_single_cool_{variant}"] = shifted()
             captures[f"duplicate_single_warm_{variant}"] = shifted(red=8)
             captures[f"duplicate_single_cool_tinted_{variant}"] = shifted(green=10)
             captures[f"duplicate_single_warm_tinted_{variant}"] = shifted(red=8, green=10)
             for candidate, reference in MATCHES.items():
-                captures[f"{candidate}_{variant}"] = captures[f"{reference}_{variant}"]
+                captures[LIT_CANDIDATE_VARIANT.format(candidate=candidate, variant=variant)] = captures[f"{reference}_{variant}"]
             for candidate in RETAINED_CASES:
-                captures[f"{candidate}_{variant}"] = shifted(blue=30)
+                captures[LIT_CANDIDATE_VARIANT.format(candidate=candidate, variant=variant)] = shifted(blue=30)
         captures["duplicate_single_cool_disabled"] = shifted(blue=20)
-        captures["duplicate_single_cool_tinted_disabled"] = shifted(green=10, blue=20)
+        captures[LIT_DUPLICATE_SINGLE_COOL_TINTED_DISABLED] = shifted(green=10, blue=20)
         for candidate in ("coincident_tinted_identical", "coincident_tinted"):
-            captures[f"{candidate}_disabled"] = captures["duplicate_single_cool_tinted_disabled"]
+            captures[f"{candidate}_disabled"] = captures[LIT_DUPLICATE_SINGLE_COOL_TINTED_DISABLED]
         captures["coincident_preserved_disabled"] = shifted(blue=40)
         with patch("refraction_duplicate_smoke.read_bmp_24_rows", side_effect=lambda path: captures[path.stem]):
-            self.assertEqual(len(validate_captures(Path("unused"), ("automatic", "screen"))), 29)
+            self.assertEqual(len(validate_captures(Path(LIT_UNUSED), (LIT_AUTOMATIC, LIT_SCREEN))), 29)
             captures["coincident_priority_swap_screen"] = captures["duplicate_single_cool_screen"]
             with self.assertRaisesRegex(SmokeFailure, "coincident_priority_swap/screen.*does not match"):
-                validate_captures(Path("unused"), ("automatic", "screen"))
+                validate_captures(Path(LIT_UNUSED), (LIT_AUTOMATIC, LIT_SCREEN))
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

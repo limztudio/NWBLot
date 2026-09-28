@@ -17,6 +17,10 @@
 namespace __hidden_frame_graph_statistics_scaling_tests{
 
 
+static constexpr AStringView s_QUEUE_ALIAS_OWNER = "queue_alias_owner";
+static constexpr AStringView s_QUEUE_ALIAS_OWNER_2 = "Queue alias owner";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -305,14 +309,14 @@ TEST(Telemetry, PacketStatisticsQueueSourceSurvivesDestinationGrowth){
         .compiledTask = {},
         .runtimeStatistics = OwnerStatistics(1u),
     };
-    const auto firstOwner = builder.addPass(Name("queue_alias_owner"), "Queue alias owner", metadata);
+    const auto firstOwner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER.data()), s_QUEUE_ALIAS_OWNER_2, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(firstOwner, QueueStatistics(1u, 1u)));
     while(fixture.queues.size() < fixture.queues.capacity()){
-        const auto owner = builder.addPass(Name("queue_alias_owner"), "Queue alias owner", metadata);
+        const auto owner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER.data()), s_QUEUE_ALIAS_OWNER_2, metadata);
         ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     }
     const usize capacityBeforeGrowth = fixture.queues.capacity();
-    const auto owner = builder.addPass(Name("queue_alias_owner"), "Queue alias owner", metadata);
+    const auto owner = builder.addPass(Name(s_QUEUE_ALIAS_OWNER.data()), s_QUEUE_ALIAS_OWNER_2, metadata);
     ASSERT_TRUE(builder.addPhysicalQueueRuntimeStatistics(owner, fixture.queues[0u].statistics));
     ASSERT_GT(fixture.queues.capacity(), capacityBeforeGrowth);
     EXPECT_EQ(fixture.queues.back().ownerNodeIndex, owner.index);

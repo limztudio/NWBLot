@@ -11,6 +11,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_MAIN = "__main__"
+
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
     # Make red the dominant reflected colour while retaining distinct green and blue texels.  A balanced checker
@@ -58,5 +61,5 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main())

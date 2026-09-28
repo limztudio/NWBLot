@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from typing import Dict, Iterable
 
+# Shared literals (no inline hardcodes below this block).
+LIT_UTF_8 = "utf-8"
+
 
 FNV64_OFFSET_BASIS = 14695981039346656037
 FNV64_PRIME = 1099511628211
@@ -24,7 +27,7 @@ NAME_HASH_LANE_SEEDS = (
 def debug_name_hash_token(text: str) -> str:
     """Match global/name.h's canonical eight-lane FNV-1a debug token."""
     lanes = list(NAME_HASH_LANE_SEEDS)
-    for byte in text.encode("utf-8"):
+    for byte in text.encode(LIT_UTF_8):
         if ord("A") <= byte <= ord("Z"):
             byte += ord("a") - ord("A")
         elif byte == ord("\\"):

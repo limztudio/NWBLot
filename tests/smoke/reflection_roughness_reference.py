@@ -6,6 +6,15 @@ import math
 
 from reflection_smoke import SmokeFailure, validate_frame
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ENERGY = "energy"
+LIT_CENTROID = "centroid"
+LIT_SPREAD = "spread"
+LIT_MAXIMUM_LINEAR_RADIANCE = "maximum_linear_radiance"
+LIT_RED = "red"
+LIT_GREEN = "green"
+LIT_MEASURED = "measured"
+
 
 CAMERA = (0.0, 1.4, -6.0)
 EMITTERS = ((-1.6, 1.4, -8.0), (1.6, 1.4, -8.0))
@@ -152,7 +161,7 @@ def weighted_shape(cells, values, color):
     cy = sum(weight * center[1] for weight, center in zip(weights, centers)) / total
     spread = math.sqrt(sum(weight * ((center[0] - cx) ** 2 + (center[1] - cy) ** 2)
         for weight, center in zip(weights, centers)) / total)
-    return {"energy": total, "centroid": [cx, cy], "spread": spread}
+    return {LIT_ENERGY: total, LIT_CENTROID: [cx, cy], LIT_SPREAD: spread}
 
 
 def analyze_roughness(frame, roughness, error_limit=0.30, camera_x=0.0):
@@ -163,19 +172,19 @@ def analyze_roughness(frame, roughness, error_limit=0.30, camera_x=0.0):
     normalized_error = sum(abs(a - b) for left, right in zip(actual, expected) for a, b in zip(left, right)) / reference_energy
     if normalized_error > error_limit:
         raise SmokeFailure(f"rough reflection differs from the independent GGX area reference ({normalized_error:.4f})")
-    result = {"roughness": roughness, "normalized_reference_error": normalized_error, "maximum_linear_radiance": maximum}
-    for color, label in ((0, "red"), (1, "green")):
+    result = {"roughness": roughness, "normalized_reference_error": normalized_error, LIT_MAXIMUM_LINEAR_RADIANCE: maximum}
+    for color, label in ((0, LIT_RED), (1, LIT_GREEN)):
         measured = weighted_shape(cells, actual, color)
         predicted = weighted_shape(cells, expected, color)
-        ratio = measured["energy"] / predicted["energy"]
+        ratio = measured[LIT_ENERGY] / predicted[LIT_ENERGY]
         if not 0.8 <= ratio <= 1.2:
             raise SmokeFailure(f"{label} rough reflection has incorrect integrated radiance ({ratio:.3f} of reference)")
-        if math.dist(measured["centroid"], predicted["centroid"]) > max(6.0, height * 0.015):
+        if math.dist(measured[LIT_CENTROID], predicted[LIT_CENTROID]) > max(6.0, height * 0.015):
             raise SmokeFailure(f"{label} rough reflection moved away from its predicted GGX position")
-        if abs(measured["spread"] - predicted["spread"]) > max(width / GRID_SIZE[0], predicted["spread"] * 0.25):
+        if abs(measured[LIT_SPREAD] - predicted[LIT_SPREAD]) > max(width / GRID_SIZE[0], predicted[LIT_SPREAD] * 0.25):
             raise SmokeFailure(f"{label} rough reflection has the wrong GGX spread")
-        result[label] = {"measured": measured, "predicted": predicted, "energy_ratio": ratio}
-    if blue_sum > 0.01 * sum(result[color]["measured"]["energy"] for color in ("red", "green")):
+        result[label] = {LIT_MEASURED: measured, "predicted": predicted, "energy_ratio": ratio}
+    if blue_sum > 0.01 * sum(result[color][LIT_MEASURED][LIT_ENERGY] for color in (LIT_RED, LIT_GREEN)):
         raise SmokeFailure("rough reflection imported color absent from the authored emitters")
     return result
 
@@ -198,4 +207,4 @@ def analyze_furnace(frame, roughness):
     mean_error = sum(errors) / len(errors)
     if mean_error > 0.04:
         raise SmokeFailure(f"white-furnace reflection violates the analytic single-scatter albedo ({mean_error:.4f})")
-    return {"mean_linear_albedo_error": mean_error, "maximum_linear_radiance": maximum}
+    return {"mean_linear_albedo_error": mean_error, LIT_MAXIMUM_LINEAR_RADIANCE: maximum}

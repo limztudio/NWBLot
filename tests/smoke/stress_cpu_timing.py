@@ -10,14 +10,34 @@ from name_symbols import known_name_symbols
 
 from window_capture_smoke import SmokeFailure
 
+# Shared literals (no inline hardcodes below this block).
+LIT_GRAPHICS_FRAME = "graphics.frame"
+LIT_GRAPHICS_PREPARE_RESOURCES = "graphics.prepare_resources"
+LIT_GRAPHICS_RENDER_PASSES = "graphics.render_passes"
+LIT_GRAPHICS_BEGIN_FRAME = "graphics.begin_frame"
+LIT_GRAPHICS_PRESENT = "graphics.present"
+LIT_WINDOW = "window"
+LIT_SECONDS = "seconds"
+LIT_NAME = "name"
+LIT_GPU = "gpu"
+LIT_CPU = "cpu"
+LIT_DOMAIN = "domain"
+LIT_SAMPLES = "samples"
+LIT_MINIMUM_SAMPLE_SECONDS = "minimum_sample_seconds"
+LIT_MAXIMUM_SAMPLE_SECONDS = "maximum_sample_seconds"
+LIT_FIRST_SOURCE_FRAME = "first_source_frame"
+LIT_LAST_SOURCE_FRAME = "last_source_frame"
+LIT_SINGLE_SOURCE_FRAMES = "single_source_frames"
+LIT_UTF_8 = "utf-8"
+
 ENABLED = "StressCpuTimingProbe: enabled cpu=1 gpu=1 memory=0 diagnostic_only=1"
 COMPLETE = "StressCpuTimingProbe: complete "
-REQUIRED_CPU = {"graphics.frame", "graphics.prepare_resources", "graphics.render_passes", "graphics.begin_frame", "graphics.present"}
+REQUIRED_CPU = {LIT_GRAPHICS_FRAME, LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_BEGIN_FRAME, LIT_GRAPHICS_PRESENT}
 # Exact stable producer scope strings; the helper computes global/name.h's canonical eight-lane hash.
 # This is not an externally supplied dictionary. Unrecognized labels retain their original token.
-KNOWN_CPU = ("frame.project_update", "graphics.frame", "graphics.animate", "graphics.begin_frame",
-    "graphics.frame_preamble", "graphics.render", "graphics.prepare_resources", "graphics.render_passes",
-    "graphics.prepare_resources_failed", "graphics.present", "graphics.garbage_collect",
+KNOWN_CPU = ("frame.project_update", LIT_GRAPHICS_FRAME, "graphics.animate", LIT_GRAPHICS_BEGIN_FRAME,
+    "graphics.frame_preamble", "graphics.render", LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES,
+    "graphics.prepare_resources_failed", LIT_GRAPHICS_PRESENT, "graphics.garbage_collect",
     "cpu.task.queue_delay", "cpu.task.execution", "cpu.task.handle_join", "cpu.task.scope_join",
     "cpu.task.scheduler_join", "cpu.worker.idle", "cpu.task.ecs.world", "cpu.task.graphics.setup", "cpu.task.graphics.frame")
 KNOWN_GPU = ("render.frame", "render.async_prefix", "render.async_shadow", "render.async_surfel_gi", "render.async_final",
@@ -53,13 +73,13 @@ def parse_publications(text, measurement):
     if len(lines) < 5 or lines[:2] != ["NWB_STRESS_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1"]:
         raise SmokeFailure("CPU diagnostic schema or capture options mismatch")
     window = lines[2].split()
-    if len(window) != 6 or window[0] != "window":
+    if len(window) != 6 or window[0] != LIT_WINDOW:
         raise SmokeFailure("CPU diagnostic measurement window missing")
     first, last, source_first, source_end = map(_integer, window[1:5])
     seconds = _seconds(window[5])
     if (first, last) != (measurement["first"], measurement["last"]) or last <= first or source_end <= source_first:
         raise SmokeFailure("CPU diagnostic presentation/source boundaries disagree")
-    if not math.isclose(seconds, measurement["seconds"], rel_tol=1e-7, abs_tol=1e-6):
+    if not math.isclose(seconds, measurement[LIT_SECONDS], rel_tol=1e-7, abs_tol=1e-6):
         raise SmokeFailure("CPU diagnostic steady-clock window differs from presentation measurement")
     completion = lines[-1].split()
     if len(completion) != 3 or completion[0] != "complete":
@@ -80,9 +100,9 @@ def parse_publications(text, measurement):
             if domain not in (0, 1) or index >= 512 or not name or any(ord(char) < 32 for char in name):
                 raise SmokeFailure("CPU diagnostic scope identity invalid")
             key = (domain, index)
-            if key in scopes or any(row["name"] == name and prior[0] == domain for prior, row in scopes.items()):
+            if key in scopes or any(row[LIT_NAME] == name and prior[0] == domain for prior, row in scopes.items()):
                 raise SmokeFailure("CPU diagnostic duplicate scope identity")
-            scopes[key] = dict(name=name, raw_name=raw_name, decoded_from_hash=name != raw_name, domain="gpu" if domain else "cpu", records=0, samples=0, seconds=0.0,
+            scopes[key] = dict(name=name, raw_name=raw_name, decoded_from_hash=name != raw_name, domain=LIT_GPU if domain else LIT_CPU, records=0, samples=0, seconds=0.0,
                 minimum_sample_seconds=None, maximum_sample_seconds=0.0, first_source_frame=None,
                 last_source_frame=None, single_source_frames=set(), excluded_records=0, excluded_samples=0)
             continue
@@ -110,7 +130,7 @@ def parse_publications(text, measurement):
         last_observation = (observation, presentations)
         row = scopes[key]
         included = begin >= source_first and end < source_end
-        records.append(dict(domain=row["domain"], scope=row["name"], observation_frame=observation,
+        records.append(dict(domain=row[LIT_DOMAIN], scope=row[LIT_NAME], observation_frame=observation,
             presentations=presentations, publication_frame=publication, first_source_frame=begin,
             last_source_frame=end, samples=count, seconds=total, included=included))
         if not included:
@@ -118,26 +138,26 @@ def parse_publications(text, measurement):
             row["excluded_samples"] += count
             continue
         row["records"] += 1
-        row["samples"] += count
-        row["seconds"] += total
-        row["minimum_sample_seconds"] = minimum if row["minimum_sample_seconds"] is None else min(row["minimum_sample_seconds"], minimum)
-        row["maximum_sample_seconds"] = max(row["maximum_sample_seconds"], maximum)
-        row["first_source_frame"] = begin if row["first_source_frame"] is None else min(row["first_source_frame"], begin)
-        row["last_source_frame"] = end if row["last_source_frame"] is None else max(row["last_source_frame"], end)
+        row[LIT_SAMPLES] += count
+        row[LIT_SECONDS] += total
+        row[LIT_MINIMUM_SAMPLE_SECONDS] = minimum if row[LIT_MINIMUM_SAMPLE_SECONDS] is None else min(row[LIT_MINIMUM_SAMPLE_SECONDS], minimum)
+        row[LIT_MAXIMUM_SAMPLE_SECONDS] = max(row[LIT_MAXIMUM_SAMPLE_SECONDS], maximum)
+        row[LIT_FIRST_SOURCE_FRAME] = begin if row[LIT_FIRST_SOURCE_FRAME] is None else min(row[LIT_FIRST_SOURCE_FRAME], begin)
+        row[LIT_LAST_SOURCE_FRAME] = end if row[LIT_LAST_SOURCE_FRAME] is None else max(row[LIT_LAST_SOURCE_FRAME], end)
         if begin == end:
-            row["single_source_frames"].add(begin)
+            row[LIT_SINGLE_SOURCE_FRAMES].add(begin)
     if (len(records), len(scopes)) != (expected_records, expected_scopes) or len(records) > 262144:
         raise SmokeFailure("CPU diagnostic completion counts mismatch")
-    present_cpu = {row["name"] for row in scopes.values() if row["domain"] == "cpu" and row["samples"]}
+    present_cpu = {row[LIT_NAME] for row in scopes.values() if row[LIT_DOMAIN] == LIT_CPU and row[LIT_SAMPLES]}
     if not REQUIRED_CPU.issubset(present_cpu):
         raise SmokeFailure("CPU diagnostic required runtime phases are missing")
-    if not any(row["domain"] == "gpu" and row["samples"] for row in scopes.values()):
+    if not any(row[LIT_DOMAIN] == LIT_GPU and row[LIT_SAMPLES] for row in scopes.values()):
         raise SmokeFailure("CPU diagnostic requires captured GPU publications too")
     result_scopes = []
     for row in scopes.values():
-        row["single_source_frame_count"] = len(row.pop("single_source_frames"))
-        row["sample_mean_ms"] = 1000 * row["seconds"] / row["samples"] if row["samples"] else None
-        row["total_ms_per_accepted_presentation"] = 1000 * row["seconds"] / (last - first)
+        row["single_source_frame_count"] = len(row.pop(LIT_SINGLE_SOURCE_FRAMES))
+        row["sample_mean_ms"] = 1000 * row[LIT_SECONDS] / row[LIT_SAMPLES] if row[LIT_SAMPLES] else None
+        row["total_ms_per_accepted_presentation"] = 1000 * row[LIT_SECONDS] / (last - first)
         result_scopes.append(row)
     return dict(schema=1, requested=True, diagnostic_only=True, performance_qualification=False,
         capture=dict(cpu=True, gpu=True, memory=False),
@@ -161,11 +181,11 @@ def verify_capture(log_text, path, measurement, requested):
         return dict(requested=False, diagnostic_only=False, performance_qualification=True)
     if enabled != [ENABLED] or len(completed) != 1 or not path.is_file():
         raise SmokeFailure("CPU diagnostic producer or completed output is missing")
-    result = parse_publications(path.read_text(encoding="utf-8"), measurement)
+    result = parse_publications(path.read_text(encoding=LIT_UTF_8), measurement)
     match = re.fullmatch(re.escape(COMPLETE) + r"records=([0-9]+) first=([0-9]+) last=([0-9]+) first_source=([0-9]+) end_source=([0-9]+)", completed[0])
-    window = result["window"]
+    window = result[LIT_WINDOW]
     expected = (len(result["publications"]), window["first_presentation"], window["last_presentation"],
-        window["first_source_frame"], window["end_source_frame_exclusive"])
+        window[LIT_FIRST_SOURCE_FRAME], window["end_source_frame_exclusive"])
     if match is None or tuple(map(int, match.groups())) != expected:
         raise SmokeFailure("CPU diagnostic completion marker disagrees with output")
     return result

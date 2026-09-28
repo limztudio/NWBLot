@@ -5,8 +5,11 @@ import re
 
 from window_capture_smoke import SmokeFailure
 
+# Shared literals (no inline hardcodes below this block).
+LIT_HALF = "half"
 
-RESOLUTIONS = {"half": 2, "quarter": 4}
+
+RESOLUTIONS = {LIT_HALF: 2, "quarter": 4}
 SETTING_MARKER = "SurfelGiQualitySmoke: requested resolve_factor="
 DISPATCH_MARKER = "RendererSystem: dispatched surfel GI resolve "
 DISPATCH_PATTERN = re.compile(re.escape(DISPATCH_MARKER) +
@@ -14,7 +17,7 @@ DISPATCH_PATTERN = re.compile(re.escape(DISPATCH_MARKER) +
 
 
 def add_arguments(parser):
-    parser.add_argument("--surfel-gi-resolve-resolution", choices=tuple(RESOLUTIONS), default="half",
+    parser.add_argument("--surfel-gi-resolve-resolution", choices=tuple(RESOLUTIONS), default=LIT_HALF,
         help="Quarter resolves one sixteenth of full-resolution pixels; tracing and bilateral full-resolution upsample stay unchanged.")
 
 

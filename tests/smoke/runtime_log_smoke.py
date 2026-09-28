@@ -22,6 +22,12 @@ from window_capture_smoke import (  # noqa: E402
     write_status,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_APPEND = "append"
+LIT_OFF = "off"
+LIT_MAIN = "__main__"
+LIT_STORE_TRUE = "store_true"
+
 
 def wait_for_process_exit(process, timeout_seconds):
     deadline = time.monotonic() + timeout_seconds
@@ -40,17 +46,17 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--timeout", type=float, default=180.0, help="Seconds to wait for the executable to finish.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
+    parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
-    parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
+    parser.add_argument("--expect-log-message", action=LIT_APPEND, default=[], help="Required substring in the logserver output.")
     parser.add_argument(
         "--reject-log-message",
-        action="append",
+        action=LIT_APPEND,
         default=list(STRICT_LOG_FAILURE_MESSAGES),
         help="Forbidden substring in the runtime log.",
     )
-    parser.add_argument("--application-arg", action="append", default=[], help="Extra argument to pass to the launched application.")
-    parser.add_argument("--software-vulkan", choices=("auto", "on", "off"), default="off", help="Linux Vulkan ICD selection.")
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[], help="Extra argument to pass to the launched application.")
+    parser.add_argument("--software-vulkan", choices=("auto", "on", LIT_OFF), default=LIT_OFF, help="Linux Vulkan ICD selection.")
     args = parser.parse_args(argv)
     if args.timeout <= 0.0:
         parser.error("--timeout must be positive")
@@ -110,5 +116,5 @@ def main(argv):
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main(sys.argv[1:]))

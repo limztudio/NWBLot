@@ -20,6 +20,9 @@
 namespace __hidden_shadow_trace_geometry_tests{
 
 
+static constexpr AStringView s_SHADOW_TRACE_HW_ATTRIBUTE = ":shadow_trace_hw_attribute";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -147,13 +150,13 @@ TEST(ShadowTraceGeometry, PreservesSelectionOrderMemberIdentityAndCombinedRoles)
     context.hardwareIndices.clear();
     ASSERT_TRUE(context.freeze(true, false));
     ASSERT_EQ(context.prepared.size(), 1u);
-    EXPECT_EQ(context.prepared[0u].identity, DeriveName(first.meshName, AStringView(":shadow_trace_hw_attribute")));
+    EXPECT_EQ(context.prepared[0u].identity, DeriveName(first.meshName, AStringView(s_SHADOW_TRACE_HW_ATTRIBUTE)));
     EXPECT_EQ(context.prepared[0u].roles, Roles::HardwareAttribute);
 
     // Duplicate ownership in the same member resolves to the first mesh in the snapshot order.
     second.attributeBuffer = first.attributeBuffer;
     ASSERT_TRUE(context.freeze(true, false));
-    EXPECT_EQ(context.prepared[0u].identity, DeriveName(first.meshName, AStringView(":shadow_trace_hw_attribute")));
+    EXPECT_EQ(context.prepared[0u].identity, DeriveName(first.meshName, AStringView(s_SHADOW_TRACE_HW_ATTRIBUTE)));
 }
 
 TEST(ShadowTraceGeometry, IncludesOffscreenPendingAndRuntimeBuildInputs){
@@ -306,13 +309,13 @@ TEST(ShadowTraceGeometry, IndexedGeometryPreservesStablePruningMemberOwnershipAn
     EXPECT_EQ(retiredFirst->getReferenceCount(), 1u);
     EXPECT_EQ(retiredMiddle->getReferenceCount(), 1u);
     ASSERT_EQ(context.prepared.size(), 1u);
-    EXPECT_EQ(context.prepared[0u].identity, DeriveName(context.meshes[0u].meshName, AStringView(":shadow_trace_hw_attribute")));
+    EXPECT_EQ(context.prepared[0u].identity, DeriveName(context.meshes[0u].meshName, AStringView(s_SHADOW_TRACE_HW_ATTRIBUTE)));
     EXPECT_FALSE(context.prepared[0u].normalizationPending);
 
     Swap(context.meshes[0u], context.meshes[1u]);
     ASSERT_TRUE(context.freeze(true, false));
     ASSERT_EQ(context.prepared.size(), 1u);
-    EXPECT_EQ(context.prepared[0u].identity, DeriveName(context.meshes[0u].meshName, AStringView(":shadow_trace_hw_attribute")));
+    EXPECT_EQ(context.prepared[0u].identity, DeriveName(context.meshes[0u].meshName, AStringView(s_SHADOW_TRACE_HW_ATTRIBUTE)));
     context.hardwarePositions.push_back(context.meshes[7u].attributeBuffer.get());
     EXPECT_FALSE(context.freeze(true, false));
     EXPECT_TRUE(context.prepared.empty());

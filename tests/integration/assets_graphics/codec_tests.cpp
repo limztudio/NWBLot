@@ -31,6 +31,9 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_codec{
 
 
+static constexpr AStringView s_CACHE = "cache";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -233,7 +236,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
 
     Path objectPath(testArena.arena);
-    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", objectPath));
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, objectPath));
 
     NWB::Core::Assets::AssetBytes firstObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(ReadAssetObjectCacheBytes(objectPath, firstObjectBytes));
@@ -243,7 +246,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path unchangedObjectPath(testArena.arena);
-    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", unchangedObjectPath));
+    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, unchangedObjectPath));
     EXPECT_EQ(unchangedObjectPath, objectPath);
 
     NWB::Core::Assets::AssetBytes unchangedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
@@ -253,7 +256,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path changedObjectPath(testArena.arena);
-    ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / "cache", objectPath, changedObjectPath));
+    ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / s_CACHE, objectPath, changedObjectPath));
     EXPECT_NE(changedObjectPath, objectPath);
 
     NWB::Core::Assets::AssetBytes changedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);

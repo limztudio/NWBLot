@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
+# Shared literals (no inline hardcodes below this block).
+LIT_TESTING = "Testing"
+LIT_SMOKE_RUNTIME = "smoke_runtime"
+LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE = "NWB_TRANSPARENT_MULTI_SPIN_ANGLE"
+LIT_N_0_6 = "0.6"
+LIT_SKINNING_CULLING_BENCHMARK_RUNTIME = "skinning_culling_benchmark_runtime"
+
 
 @dataclass(frozen=True)
 class BaselineProfile:
@@ -25,7 +32,7 @@ class BaselineProfile:
 PROFILES: Mapping[str, BaselineProfile] = {
     "opaque-texture": BaselineProfile(
         target="nwb_texture_smoke",
-        runtime_directory=Path("Testing") / "texture_smoke_runtime",
+        runtime_directory=Path(LIT_TESTING) / "texture_smoke_runtime",
         window_title="NWB Texture Smoke",
         settle_seconds=4.0,
         frozen_environment={},
@@ -33,10 +40,10 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "transparent-avboit": BaselineProfile(
         target="nwb_transparent_multi_smoke",
-        runtime_directory=Path("Testing") / "smoke_runtime",
+        runtime_directory=Path(LIT_TESTING) / LIT_SMOKE_RUNTIME,
         window_title="NWB Transparent Multi Smoke",
         settle_seconds=0.75,
-        frozen_environment={"NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0.6"},
+        frozen_environment={LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: LIT_N_0_6},
         description="Prepared transparent AVBOIT baseline with immutable material streams.",
         capture_freeze_frame=96,
         capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after",
@@ -44,7 +51,7 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "static-csg": BaselineProfile(
         target="nwb_csg_visible_smoke",
-        runtime_directory=Path("Testing") / "csg_visible_smoke_runtime",
+        runtime_directory=Path(LIT_TESTING) / "csg_visible_smoke_runtime",
         window_title="NWB CSG Visible Smoke",
         settle_seconds=4.0,
         frozen_environment={},
@@ -52,7 +59,7 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "skinned-csg": BaselineProfile(
         target="nwb_csg_skinned_visible_smoke",
-        runtime_directory=Path("Testing") / "csg_skinned_visible_smoke_runtime",
+        runtime_directory=Path(LIT_TESTING) / "csg_skinned_visible_smoke_runtime",
         window_title="NWB Skinned CSG Smoke",
         settle_seconds=0.75,
         frozen_environment={},
@@ -63,10 +70,10 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "soft-shadows": BaselineProfile(
         target="nwb_soft_shadow_test_smoke",
-        runtime_directory=Path("Testing") / "skinning_culling_benchmark_runtime",
+        runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME,
         window_title="NWB Soft Shadow Test",
         settle_seconds=0.75,
-        frozen_environment={"NWB_SOFT_SHADOW_TEST_SPIN_ANGLE": "0.6"},
+        frozen_environment={"NWB_SOFT_SHADOW_TEST_SPIN_ANGLE": LIT_N_0_6},
         description="Hardware/hybrid soft-shadow production-path baseline.",
         capture_freeze_frame=360,
         capture_ready_log="SoftShadowTestSmokeProject: renderer baseline capture ready after",
@@ -74,10 +81,10 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "caustics": BaselineProfile(
         target="nwb_caustic_sphere_smoke",
-        runtime_directory=Path("Testing") / "smoke_runtime",
+        runtime_directory=Path(LIT_TESTING) / LIT_SMOKE_RUNTIME,
         window_title="NWB Caustic Sphere Smoke",
         settle_seconds=0.75,
-        frozen_environment={"NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0.6"},
+        frozen_environment={LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: LIT_N_0_6},
         description="Caustic accumulation baseline after the temporal warm-up.",
         capture_freeze_frame=360,
         capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after",
@@ -85,7 +92,7 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "surfel-gi": BaselineProfile(
         target="nwb_gi_test_smoke",
-        runtime_directory=Path("Testing") / "skinning_culling_benchmark_runtime",
+        runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME,
         window_title="NWB GI Test",
         settle_seconds=0.75,
         frozen_environment={},
@@ -96,10 +103,10 @@ PROFILES: Mapping[str, BaselineProfile] = {
     ),
     "stress": BaselineProfile(
         target="nwb_stress_test_smoke",
-        runtime_directory=Path("Testing") / "skinning_culling_benchmark_runtime",
+        runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME,
         window_title="NWB Stress Test Smoke",
         settle_seconds=0.75,
-        frozen_environment={"NWB_STRESS_TEST_SPIN_ANGLE": "0.6"},
+        frozen_environment={"NWB_STRESS_TEST_SPIN_ANGLE": LIT_N_0_6},
         description="Skinned opaque/transparent stress-scene baseline.",
         capture_freeze_frame=96,
         capture_ready_log="StressTestSmokeProject: renderer baseline capture ready after",

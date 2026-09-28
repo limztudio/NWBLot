@@ -3,17 +3,22 @@
 
 import hashlib
 
+# Shared literals (no inline hardcodes below this block).
+LIT_RES = "res"
+LIT_SHA256 = "sha256"
+LIT_UTF_8 = "utf-8"
+
 
 def volume_segment_filename(volume_name, segment_index):
     """Match global/filesystem/volume_naming.h: UTF-8 FNV-1a of the canonical name_index.vol."""
     value = 14695981039346656037
-    for byte in f"{volume_name}_{segment_index}.vol".encode("utf-8"):
+    for byte in f"{volume_name}_{segment_index}.vol".encode(LIT_UTF_8):
         value = ((value ^ byte) * 1099511628211) & 0xffffffffffffffff
     return f"{value:016x}.vol"
 
 
 def runtime_pipeline_cache_paths(directory):
-    resources = directory / "res"
+    resources = directory / LIT_RES
     if not resources.is_dir():
         return []
     result = []
@@ -31,10 +36,10 @@ def file_identity(path):
     with path.open("rb") as source:
         for block in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(block)
-    return {"bytes": path.stat().st_size, "sha256": digest.hexdigest()}
+    return {"bytes": path.stat().st_size, LIT_SHA256: digest.hexdigest()}
 
 
 def authored_volume_hashes(directory):
     mutable = set(runtime_pipeline_cache_paths(directory))
-    return {path.relative_to(directory).as_posix(): file_identity(path)["sha256"]
-        for path in sorted((directory / "res").rglob("*.vol")) if path.is_file() and path not in mutable}
+    return {path.relative_to(directory).as_posix(): file_identity(path)[LIT_SHA256]
+        for path in sorted((directory / LIT_RES).rglob("*.vol")) if path.is_file() and path not in mutable}

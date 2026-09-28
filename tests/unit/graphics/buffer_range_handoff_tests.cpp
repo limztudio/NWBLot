@@ -17,6 +17,9 @@
 namespace __hidden_buffer_range_handoff_tests{
 
 
+static constexpr AStringView s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION = "tests/buffer_range_handoff/operation";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -69,7 +72,7 @@ struct RangeContext{
 
 TEST(BufferRangeHandoff, FanInCombinesDisjointBranchChangesAgainstWholeBufferBase){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff base(context.arena);
     Handoff first(context.arena);
     Handoff second(context.arena);
@@ -102,7 +105,7 @@ TEST(BufferRangeHandoff, FanInCombinesDisjointBranchChangesAgainstWholeBufferBas
 
 TEST(BufferRangeHandoff, FanInRejectsConflictingOverlapAndKeepsIdenticalOverlap){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff base(context.arena);
     Handoff first(context.arena);
     Handoff second(context.arena);
@@ -124,7 +127,7 @@ TEST(BufferRangeHandoff, FanInRejectsConflictingOverlapAndKeepsIdenticalOverlap)
 
 TEST(BufferRangeHandoff, FanInPreservesOwnershipOnDifferentIntervals){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff base(context.arena);
     Handoff first(context.arena);
     Handoff second(context.arena);
@@ -143,7 +146,7 @@ TEST(BufferRangeHandoff, FanInPreservesOwnershipOnDifferentIntervals){
 
 TEST(BufferRangeHandoff, FanInRejectsOverlappingStatesWithinOneSnapshot){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff base(context.arena);
     Handoff branch(context.arena);
     Handoff result(context.arena);
@@ -180,7 +183,7 @@ TEST(BufferRangeHandoff, SubsetClipsIntervalsAndSupportsInPlaceSelection){
 
 TEST(BufferRangeHandoff, WholeResourceSubsetRetainsEveryBufferInterval){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff source(context.arena);
     Handoff result(context.arena);
     context.addState(source, { 0u, 64u }, Core::ResourceStates::CopyDest);
@@ -241,7 +244,7 @@ TEST(BufferRangeHandoff, PermanentBufferStateRemainsWholeResourceInRangeSubset){
 
 TEST(BufferRangeHandoff, PendingReleaseIntervalsRemainDistinctAndCannotBeClipped){
     RangeContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/buffer_range_handoff/operation"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION.data()));
     Handoff base(context.arena);
     Handoff first(context.arena);
     Handoff second(context.arena);

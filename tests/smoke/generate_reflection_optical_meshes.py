@@ -6,6 +6,11 @@ from pathlib import Path
 
 from generate_refraction_gallery_meshes import Mesh, serialize, validate
 
+# Shared literals (no inline hardcodes below this block).
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+LIT_STORE_TRUE = "store_true"
+
 
 ROOT = Path(__file__).resolve().parent / "assets" / "meshes"
 
@@ -50,7 +55,7 @@ def tir_prism():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--check", action=LIT_STORE_TRUE)
     args = parser.parse_args()
     for filename, mesh, components, euler, bounds in (
         ("reflection_disconnected_boxes.nwb", disconnected_boxes(), 2, 4, ((-12., -9., -1.25), (12., 9., 1.25))),
@@ -59,7 +64,7 @@ def main():
     ):
         validate(mesh, components, euler, bounds)
         content = serialize(mesh).replace("generate_refraction_gallery_meshes.py", "generate_reflection_optical_meshes.py")
-        encoded = content.replace("\n", "\r\n").encode("utf-8")
+        encoded = content.replace("\n", "\r\n").encode(LIT_UTF_8)
         path = ROOT / filename
         if args.check:
             if path.read_bytes() != encoded:
@@ -69,5 +74,5 @@ def main():
         print(f"{filename}: {len(mesh.indices)} triangles, {components} closed outward components")
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     main()

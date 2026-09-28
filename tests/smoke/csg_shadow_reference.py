@@ -5,24 +5,54 @@ import math
 
 from window_capture_smoke import SmokeFailure
 
+# Shared literals (no inline hardcodes below this block).
+LIT_REFERENCE = "reference"
+LIT_CUT = "cut"
+LIT_UNCUT = "uncut"
+LIT_MOVED = "moved"
+LIT_CAMERA_SHIFT = "camera_shift"
+LIT_CLEAR = "clear"
+LIT_OPAQUE_HOLE = "opaque_hole"
+LIT_GLASS_DEPTH = "glass_depth"
+LIT_GLASS_HOLE = "glass_hole"
+LIT_OVERLAP = "overlap"
+LIT_POINT = "point"
+LIT_DIRECTIONAL = "directional"
+LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA = "CSG shadow capture dimensions are invalid"
+LIT_RGB = "rgb"
+LIT_EXPECTED_RGB = "expected_rgb"
+LIT_MAXIMUM_MEAN_BYTE_ERROR = "maximum_mean_byte_error"
+LIT_SAMPLE_COUNT = "sample_count"
+LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT = "CSG shadow captures have different extents"
+LIT_LIGHT = "light"
+LIT_EXTENT = "extent"
+LIT_MEAN_RGB_TOLERANCE_BYTES = "mean_rgb_tolerance_bytes"
+LIT_ORACLE = "oracle"
+LIT_REGIONS = "regions"
+LIT_PLANE_LEFT = "plane_left"
+LIT_ELLIPSOID_CENTER = "ellipsoid_center"
+LIT_CAPSULE_BODY = "capsule_body"
+LIT_AXIAL_CAPSULE_CENTER = "axial_capsule_center"
+LIT_SPHERE_UNION_CENTER = "sphere_union_center"
 
-ARMS = ("reference", "cut", "uncut", "moved", "camera_shift")
-ANALYTIC_ARMS = ("cut", "uncut")
+
+ARMS = (LIT_REFERENCE, LIT_CUT, LIT_UNCUT, LIT_MOVED, LIT_CAMERA_SHIFT)
+ANALYTIC_ARMS = (LIT_CUT, LIT_UNCUT)
 TRANSMISSION = (0.25, 0.5, 0.75)
 BYTE_TOLERANCE = 12.0
 # All regions are inside constant-thickness areas, away from raster and denoiser boundaries.
 # Values are (name, receiver x, receiver y, cut optical length, uncut optical length); None means opaque.
 REGIONS = (
-    ("clear", 0.0, 0.0, 0.0, 0.0),
-    ("opaque_hole", -1.7, 1.0, 0.0, None),
+    (LIT_CLEAR, 0.0, 0.0, 0.0, 0.0),
+    (LIT_OPAQUE_HOLE, -1.7, 1.0, 0.0, None),
     ("opaque_old_hole", -2.3, 1.0, None, None),
     ("opaque_rim", -2.5, 1.0, None, None),
     ("opaque_cap", 0.0, 1.0, None, None),
-    ("glass_depth", 2.0, 1.0, 1.0, 2.0),
-    ("glass_hole", -1.7, -1.0, 0.0, 2.0),
+    (LIT_GLASS_DEPTH, 2.0, 1.0, 1.0, 2.0),
+    (LIT_GLASS_HOLE, -1.7, -1.0, 0.0, 2.0),
     ("glass_old_hole", -2.3, -1.0, 2.0, 2.0),
     ("glass_rim", -2.5, -1.0, 2.0, 2.0),
-    ("overlap", 0.0, -1.0, 2.0, 4.0),
+    (LIT_OVERLAP, 0.0, -1.0, 2.0, 4.0),
     ("glass_control", 2.0, -1.0, 2.0, 2.0),
 )
 
@@ -30,7 +60,7 @@ REGIONS = (
 def expected_rgb(length, world_x, world_y, light):
     if length is None:
         return (0.0, 0.0, 0.0)
-    if light == "point":
+    if light == LIT_POINT:
         length *= math.sqrt(12.0 ** 2 + world_x ** 2 + world_y ** 2) / 12.0
     linear = [channel ** length for channel in TRANSMISSION]
     return tuple(255.0 * (12.92 * value if value <= 0.0031308 else 1.055 * value ** (1.0 / 2.4) - 0.055)
@@ -54,8 +84,8 @@ def reference_optical_length(x, y, arm, light):
     """Intersect mathematical solids, subtract cutter intervals, then sum each volume independently."""
     origin = (x, y, 0.0)
     distance = math.sqrt(x * x + y * y + 144.0)
-    direction = (-x / distance, -y / distance, -12.0 / distance) if light == "point" else (0.0, 0.0, -1.0)
-    scale = 0.5 if light == "point" else 1.0
+    direction = (-x / distance, -y / distance, -12.0 / distance) if light == LIT_POINT else (0.0, 0.0, -1.0)
+    scale = 0.5 if light == LIT_POINT else 1.0
     length = 0.0
     for slot in range(6):
         center_x, center_y = ((slot % 3) - 1) * 2.0 * scale, (1.0 if slot < 3 else -1.0) * scale
@@ -67,9 +97,9 @@ def reference_optical_length(x, y, arm, light):
             if solid is None:
                 continue
             remaining = solid[1] - solid[0]
-            if arm != "uncut" and slot != 5:
+            if arm != LIT_UNCUT and slot != 5:
                 if slot in (0, 3):
-                    half_width = 0.36 if light == "point" else 0.24
+                    half_width = 0.36 if light == LIT_POINT else 0.24
                     cut_lower = (center_x + 0.3 * scale - half_width, center_y - 0.4 * scale, -7.2)
                     cut_upper = (center_x + 0.3 * scale + half_width, center_y + 0.4 * scale, -4.8)
                 else:
@@ -86,7 +116,7 @@ def reference_optical_length(x, y, arm, light):
 
 def expected_sample_rgb(x, y, arm, light):
     # The slab solver already returns Euclidean distance, including the point-light ray angle.
-    return expected_rgb(reference_optical_length(x, y, arm, light), x, y, "directional")
+    return expected_rgb(reference_optical_length(x, y, arm, light), x, y, LIT_DIRECTIONAL)
 
 
 def project_receiver(x, y, width, height, camera_x=0.0):
@@ -107,8 +137,8 @@ def region_pixels(region, width, height, camera_x=0.0, spacing=0.015):
 def measure_frame(frame, arm, light):
     width, height, rows = frame
     if width < 320 or height < 240 or len(rows) != height or any(len(row) != width for row in rows):
-        raise SmokeFailure("CSG shadow capture dimensions are invalid")
-    camera_x = 0.3 if arm == "camera_shift" else 0.0
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA)
+    camera_x = 0.3 if arm == LIT_CAMERA_SHIFT else 0.0
     measurements = {}
     for region in REGIONS:
         name, world_x, world_y, _, _ = region
@@ -118,45 +148,45 @@ def measure_frame(frame, arm, light):
         error = max(abs(a - b) for a, b in zip(rgb, expected))
         if error > BYTE_TOLERANCE:
             raise SmokeFailure(f"{arm}/{name}: shadow disagrees with carved-box/Beer oracle; RGB={rgb}, expected={expected}, error={error:.3f}")
-        measurements[name] = {"rgb": rgb, "expected_rgb": expected, "maximum_mean_byte_error": error,
-            "sample_count": len(pixels)}
+        measurements[name] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error,
+            LIT_SAMPLE_COUNT: len(pixels)}
     return measurements
 
 
-def compare_frames(frames, light="directional"):
-    if light not in ("directional", "point") or set(frames) != set(ARMS):
+def compare_frames(frames, light=LIT_DIRECTIONAL):
+    if light not in (LIT_DIRECTIONAL, LIT_POINT) or set(frames) != set(ARMS):
         raise SmokeFailure("CSG shadow comparison requires all five arms and a supported light")
     if len({frame[:2] for frame in frames.values()}) != 1:
-        raise SmokeFailure("CSG shadow captures have different extents")
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT)
     measurements = {arm: measure_frame(frames[arm], arm, light) for arm in ARMS}
-    reference = measurements["reference"]
-    for arm in ("cut", "moved", "camera_shift"):
+    reference = measurements[LIT_REFERENCE]
+    for arm in (LIT_CUT, LIT_MOVED, LIT_CAMERA_SHIFT):
         for name, expected in reference.items():
-            error = max(abs(a - b) for a, b in zip(measurements[arm][name]["rgb"], expected["rgb"]))
+            error = max(abs(a - b) for a, b in zip(measurements[arm][name][LIT_RGB], expected[LIT_RGB]))
             if error > BYTE_TOLERANCE:
                 raise SmokeFailure(f"{arm}/{name}: cut shadow differs from independent ordinary-box geometry by {error:.3f} bytes")
-    for name, minimum_gain in (("opaque_hole", 160.0), ("glass_hole", 35.0), ("glass_depth", 15.0), ("overlap", 15.0)):
-        gain = max(a - b for a, b in zip(measurements["cut"][name]["rgb"], measurements["uncut"][name]["rgb"]))
+    for name, minimum_gain in ((LIT_OPAQUE_HOLE, 160.0), (LIT_GLASS_HOLE, 35.0), (LIT_GLASS_DEPTH, 15.0), (LIT_OVERLAP, 15.0)):
+        gain = max(a - b for a, b in zip(measurements[LIT_CUT][name][LIT_RGB], measurements[LIT_UNCUT][name][LIT_RGB]))
         if gain < minimum_gain:
             raise SmokeFailure(f"{name}: cut/uncut control has insufficient shadow change ({gain:.3f} bytes)")
-    return {"light": light, "extent": list(frames["reference"][:2]), "mean_rgb_tolerance_bytes": BYTE_TOLERANCE,
-        "oracle": "ordinary carved box pieces plus independent Beer law, IOR1, linear presentation and sRGB attachment",
-        "regions": measurements}
+    return {LIT_LIGHT: light, LIT_EXTENT: list(frames[LIT_REFERENCE][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE,
+        LIT_ORACLE: "ordinary carved box pieces plus independent Beer law, IOR1, linear presentation and sRGB attachment",
+        LIT_REGIONS: measurements}
 
 
 ANALYTIC_REGION_SPACING = 0.006
 ANALYTIC_REGIONS = (
-    ("clear", 0.0, 0.0),
-    ("plane_left", -2.3, 1.0),
+    (LIT_CLEAR, 0.0, 0.0),
+    (LIT_PLANE_LEFT, -2.3, 1.0),
     ("plane_right", -1.7, 1.0),
-    ("ellipsoid_center", 0.0, 1.0),
+    (LIT_ELLIPSOID_CENTER, 0.0, 1.0),
     ("ellipsoid_offset", 0.25, 1.0),
     ("ellipsoid_rim", 0.61, 1.0),
-    ("capsule_body", 2.0, 1.0),
+    (LIT_CAPSULE_BODY, 2.0, 1.0),
     ("capsule_endcap", 2.0, 1.52),
-    ("axial_capsule_center", -2.0, -1.0),
+    (LIT_AXIAL_CAPSULE_CENTER, -2.0, -1.0),
     ("axial_capsule_offset", -1.82, -1.0),
-    ("sphere_union_center", 0.0, -1.0),
+    (LIT_SPHERE_UNION_CENTER, 0.0, -1.0),
     ("sphere_union_offset", 0.3, -1.0),
     ("uncut_control", 2.0, -1.0),
 )
@@ -178,7 +208,7 @@ def analytic_optical_length(x, y, arm):
         dx, dy = x - ((slot % 3) - 1) * 2.0, y - (1.0 if slot < 3 else -1.0)
         if abs(dx) > 0.7 or abs(dy) > 0.7:
             continue
-        if arm == "uncut" or slot == 5:
+        if arm == LIT_UNCUT or slot == 5:
             return 2.0
         if slot == 0:
             # Remove 0.5 * dx + (z + 6) <= 0, leaving a tilted depth cut.
@@ -211,7 +241,7 @@ def receiver_pixel_world(x, y, width, height):
 def measure_analytic_frame(frame, arm):
     width, height, rows = frame
     if width < 320 or height < 240 or len(rows) != height or any(len(row) != width for row in rows):
-        raise SmokeFailure("CSG shadow capture dimensions are invalid")
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURE_DIMENSIONS_ARE_INVA)
     measurements = {}
     for region in ANALYTIC_REGIONS:
         pixels = region_pixels(region, width, height, spacing=ANALYTIC_REGION_SPACING)
@@ -219,15 +249,15 @@ def measure_analytic_frame(frame, arm):
         for x, y in pixels:
             world_x, world_y = receiver_pixel_world(x, y, width, height)
             length = analytic_optical_length(world_x, world_y, arm)
-            expected_pixels.append(expected_rgb(length, world_x, world_y, "directional"))
+            expected_pixels.append(expected_rgb(length, world_x, world_y, LIT_DIRECTIONAL))
         rgb = tuple(sum(rows[y][x][channel] for x, y in pixels) / len(pixels) for channel in range(3))
         expected = tuple(sum(value[channel] for value in expected_pixels) / len(pixels) for channel in range(3))
         error = max(abs(a - b) for a, b in zip(rgb, expected))
         if error > BYTE_TOLERANCE:
             raise SmokeFailure(f"{arm}/{region[0]}: shadow disagrees with analytic optical-length/Beer oracle; "
                 f"RGB={rgb}, expected={expected}, error={error:.3f}")
-        measurements[region[0]] = {"rgb": rgb, "expected_rgb": expected, "maximum_mean_byte_error": error,
-            "sample_count": len(pixels)}
+        measurements[region[0]] = {LIT_RGB: rgb, LIT_EXPECTED_RGB: expected, LIT_MAXIMUM_MEAN_BYTE_ERROR: error,
+            LIT_SAMPLE_COUNT: len(pixels)}
     return measurements
 
 
@@ -235,12 +265,12 @@ def compare_analytic_frames(frames):
     if set(frames) != set(ANALYTIC_ARMS):
         raise SmokeFailure("CSG analytic comparison requires a cut/uncut pair")
     if len({frame[:2] for frame in frames.values()}) != 1:
-        raise SmokeFailure("CSG shadow captures have different extents")
+        raise SmokeFailure(LIT_CSG_SHADOW_CAPTURES_HAVE_DIFFERENT_EXT)
     measurements = {arm: measure_analytic_frame(frames[arm], arm) for arm in ANALYTIC_ARMS}
-    for name in ("plane_left", "ellipsoid_center", "capsule_body", "axial_capsule_center", "sphere_union_center"):
-        gain = max(a - b for a, b in zip(measurements["cut"][name]["rgb"], measurements["uncut"][name]["rgb"]))
+    for name in (LIT_PLANE_LEFT, LIT_ELLIPSOID_CENTER, LIT_CAPSULE_BODY, LIT_AXIAL_CAPSULE_CENTER, LIT_SPHERE_UNION_CENTER):
+        gain = max(a - b for a, b in zip(measurements[LIT_CUT][name][LIT_RGB], measurements[LIT_UNCUT][name][LIT_RGB]))
         if gain < 15.0:
             raise SmokeFailure(f"{name}: analytic cut/uncut control has insufficient shadow change ({gain:.3f} bytes)")
-    return {"light": "directional", "extent": list(frames["cut"][:2]), "mean_rgb_tolerance_bytes": BYTE_TOLERANCE,
-        "oracle": "independent analytic cross sections and cutter union plus Beer law, IOR1 and sRGB attachment",
-        "regions": measurements}
+    return {LIT_LIGHT: LIT_DIRECTIONAL, LIT_EXTENT: list(frames[LIT_CUT][:2]), LIT_MEAN_RGB_TOLERANCE_BYTES: BYTE_TOLERANCE,
+        LIT_ORACLE: "independent analytic cross sections and cutter union plus Beer law, IOR1 and sRGB attachment",
+        LIT_REGIONS: measurements}

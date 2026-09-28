@@ -20,13 +20,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_testbed_entry{
+static constexpr tchar s_WindowTitle[] = NWB_TEXT("NWB Testbed");
+static constexpr tchar s_WorldAllocFailed[] = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+static constexpr tchar s_ResolverNull[] = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+static constexpr tchar s_DestroyRequiresIdleOrLoss[] = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+};
+
+
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
 }
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-    return NWB_TEXT("NWB Testbed");
+    return __hidden_testbed_entry::s_WindowTitle;
 }
 
 bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
@@ -54,12 +62,12 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
 
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed"));
+        NWB_LOGGER_FATAL(__hidden_testbed_entry::s_WorldAllocFailed);
         return false;
     }
 
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null"));
+        NWB_LOGGER_FATAL(__hidden_testbed_entry::s_ResolverNull);
         return false;
     }
 
@@ -124,7 +132,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),
-        NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss")
+        __hidden_testbed_entry::s_DestroyRequiresIdleOrLoss
     );
 
     world->clear();

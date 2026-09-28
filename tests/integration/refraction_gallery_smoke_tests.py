@@ -17,34 +17,54 @@ from refraction_gallery_smoke import (  # noqa: E402
 )
 from window_capture_smoke import write_bmp_24  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_CASES = "cases"
+LIT_NESTED = "nested"
+LIT_NWB_REFRACTION_SMOKE_CASE = "NWB_REFRACTION_SMOKE_CASE"
+LIT_NWB_REFRACTION_SMOKE_GEOMETRY = "NWB_REFRACTION_SMOKE_GEOMETRY"
+LIT_NWB_REFRACTION_SMOKE_ENABLED = "NWB_REFRACTION_SMOKE_ENABLED"
+LIT_NWB_REFRACTION_SMOKE_HARDWARE = "NWB_REFRACTION_SMOKE_HARDWARE"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT"
+LIT_PATH = "PATH"
+LIT_PRESERVED = "preserved"
+LIT_PRISM = "prism"
+LIT_GEOMETRY = "geometry"
+LIT_I = ">I"
+LIT_CAPTURES = "captures"
+LIT_IMAGE = "image"
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+
 
 class RefractionGalleryTests(unittest.TestCase):
     def test_case_selection_rejects_unknown_duplicates_and_empty(self):
-        self.assertEqual(parse_selection("nested, torus", CASES, "cases"), ("nested", "torus"))
+        self.assertEqual(parse_selection("nested, torus", CASES, LIT_CASES), (LIT_NESTED, "torus"))
         for value in ("", "unknown", "nested,nested"):
             with self.assertRaises(argparse.ArgumentTypeError):
-                parse_selection(value, CASES, "cases")
+                parse_selection(value, CASES, LIT_CASES)
 
     def test_capture_environment_overrides_case_and_removes_stale_capture_controls(self):
         inherited = {
-            "NWB_REFRACTION_SMOKE_CASE": "nested", "NWB_REFRACTION_SMOKE_GEOMETRY": "1",
-            "NWB_REFRACTION_SMOKE_ENABLED": "0", "NWB_REFRACTION_SMOKE_HARDWARE": "1",
-            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT": "1", "PATH": "preserved",
+            LIT_NWB_REFRACTION_SMOKE_CASE: LIT_NESTED, LIT_NWB_REFRACTION_SMOKE_GEOMETRY: "1",
+            LIT_NWB_REFRACTION_SMOKE_ENABLED: "0", LIT_NWB_REFRACTION_SMOKE_HARDWARE: "1",
+            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: "old.bmp",
+            LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO: "1", LIT_PATH: LIT_PRESERVED,
         }
-        env = capture_environment("prism", "screen", inherited)
-        self.assertEqual(env["NWB_REFRACTION_SMOKE_CASE"], "prism")
-        self.assertEqual(env["NWB_REFRACTION_SMOKE_GEOMETRY"], "0")
-        self.assertEqual(env["NWB_REFRACTION_SMOKE_ENABLED"], "1")
-        self.assertEqual(env["NWB_REFRACTION_SMOKE_HARDWARE"], "0")
-        self.assertEqual(env["PATH"], "preserved")
-        self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", env)
-        self.assertNotIn("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", env)
-        self.assertNotIn("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", env)
-        self.assertEqual(inherited["NWB_REFRACTION_SMOKE_CASE"], "nested")
-        preview = capture_environment("nested", "geometry", inherited)
-        self.assertEqual(preview["NWB_REFRACTION_SMOKE_ENABLED"], "0")
-        self.assertEqual(preview["NWB_REFRACTION_SMOKE_GEOMETRY"], "1")
+        env = capture_environment(LIT_PRISM, "screen", inherited)
+        self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_CASE], LIT_PRISM)
+        self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY], "0")
+        self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_ENABLED], "1")
+        self.assertEqual(env[LIT_NWB_REFRACTION_SMOKE_HARDWARE], "0")
+        self.assertEqual(env[LIT_PATH], LIT_PRESERVED)
+        self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
+        self.assertNotIn(LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH, env)
+        self.assertNotIn(LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_CO, env)
+        self.assertEqual(inherited[LIT_NWB_REFRACTION_SMOKE_CASE], LIT_NESTED)
+        preview = capture_environment(LIT_NESTED, LIT_GEOMETRY, inherited)
+        self.assertEqual(preview[LIT_NWB_REFRACTION_SMOKE_ENABLED], "0")
+        self.assertEqual(preview[LIT_NWB_REFRACTION_SMOKE_GEOMETRY], "1")
 
     @staticmethod
     def decode_png_pixels(data):
@@ -53,10 +73,10 @@ class RefractionGalleryTests(unittest.TestCase):
         offset = 8
         compressed = b""
         while offset < len(data):
-            count = struct.unpack_from(">I", data, offset)[0]
+            count = struct.unpack_from(LIT_I, data, offset)[0]
             kind = data[offset + 4:offset + 8]
             payload = data[offset + 8:offset + 8 + count]
-            crc = struct.unpack_from(">I", data, offset + 8 + count)[0]
+            crc = struct.unpack_from(LIT_I, data, offset + 8 + count)[0]
             if crc != zlib.crc32(kind + payload) & 0xffffffff:
                 raise AssertionError("invalid PNG CRC")
             if kind == b"IHDR":
@@ -95,18 +115,18 @@ class RefractionGalleryTests(unittest.TestCase):
             path = root / "single_geometry.bmp"
             write_bmp_24(path, *frame)
             original = path.read_bytes()
-            manifest = {"variants": list(VARIANTS), "cases": [{"captures": [{"id": "geometry", "file": path.name}]}]}
+            manifest = {"variants": list(VARIANTS), LIT_CASES: [{LIT_CAPTURES: [{"id": LIT_GEOMETRY, "file": path.name}]}]}
             write_gallery(root, manifest)
-            html = (root / "gallery.html").read_text(encoding="utf-8")
+            html = (root / "gallery.html").read_text(encoding=LIT_UTF_8)
             payload = html.split('<script id="capture-data" type="application/json">', 1)[1].split("</script>", 1)[0]
             embedded = json.loads(payload)
-            image = embedded["cases"][0]["captures"][0]["image"]
+            image = embedded[LIT_CASES][0][LIT_CAPTURES][0][LIT_IMAGE]
             self.assertTrue(image.startswith("data:image/png;base64,"))
             self.assertEqual(self.decode_png_pixels(base64.b64decode(image.split(",", 1)[1])), frame)
             self.assertEqual(path.read_bytes(), original)
-            self.assertNotIn("image", json.loads((root / "gallery_manifest.json").read_text())["cases"][0]["captures"][0])
+            self.assertNotIn(LIT_IMAGE, json.loads((root / "gallery_manifest.json").read_text())[LIT_CASES][0][LIT_CAPTURES][0])
             self.assertNotIn('src="https://', html)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

@@ -9,6 +9,27 @@ from pathlib import Path
 import re
 import struct
 
+# Shared literals (no inline hardcodes below this block).
+LIT_NESTED = "nested"
+LIT_OPTICAL_TIR = "optical_tir"
+LIT_SINGLE = "single"
+LIT_OPTICAL_PRIORITY_TIE_B = "optical_priority_tie_b"
+LIT_FIRST = "first"
+LIT_PRIORITY = "priority"
+LIT_SECOND = "second"
+LIT_OPTICAL_PRIORITY_A = "optical_priority_a"
+LIT_OPTICAL_MIXED = "optical_mixed"
+LIT_OPTICAL_NESTED3 = "optical_nested3"
+LIT_OPTICAL_OVERFLOW = "optical_overflow"
+LIT_UNSPECIFIED = "unspecified"
+LIT_OPTICAL_ALPHA_BEFORE = "optical_alpha_before"
+LIT_QUERY_LIMIT = "query_limit"
+LIT_BOUNDARY = "boundary"
+LIT_CHART = "chart"
+LIT_ALPHA = "alpha"
+LIT_AMBIGUOUS = "ambiguous"
+LIT_UTF_8 = "utf-8"
+
 
 def half(value):
     return struct.unpack("e", struct.pack("e", value))[0]
@@ -55,7 +76,7 @@ class Boundary:
     transmission: tuple
     planes: tuple = ()
     triangles: tuple = ()
-    mode: str = "nested"
+    mode: str = LIT_NESTED
     priority: int = 0
     tie_order: int = 0
 
@@ -110,7 +131,7 @@ MIRROR_F0 = half(0.95)
 CHART_RADIANCE = half(0.9)
 
 
-def box(name, center_z, thickness, ior=1.5, transmission=TINTED, mode="nested", priority=0, yaw=0.0, tie_order=0, xy_scale=1.0):
+def box(name, center_z, thickness, ior=1.5, transmission=TINTED, mode=LIT_NESTED, priority=0, yaw=0.0, tie_order=0, xy_scale=1.0):
     cosine, sine = math.cos(yaw), math.sin(yaw)
     axes = ((cosine, 0.0, -sine), (0.0, 1.0, 0.0), (sine, 0.0, cosine))
     center = (0.0, 1.4, center_z)
@@ -121,7 +142,7 @@ def box(name, center_z, thickness, ior=1.5, transmission=TINTED, mode="nested", 
 
 @lru_cache(maxsize=1)
 def authored_torus_triangles():
-    source = (Path(__file__).parent / "assets/meshes/refraction_torus.nwb").read_text(encoding="utf-8")
+    source = (Path(__file__).parent / "assets/meshes/refraction_torus.nwb").read_text(encoding=LIT_UTF_8)
     def rows(field):
         text = re.search(r"asset\." + field + r"\s*=\s*(\[.*?\]);", source, re.S).group(1)
         return json.loads(re.sub(r",\s*]", "]", text))
@@ -140,7 +161,7 @@ def authored_torus_triangles():
 def boundaries(case):
     if case == "optical_reference":
         return ()
-    if case == "optical_tir":
+    if case == LIT_OPTICAL_TIR:
         inverse_root_two = math.sqrt(0.5)
         planes = (((1.0, 0.0, 0.0), 20.0), ((0.0, 0.0, 1.0), 2.0),
             ((-inverse_root_two, 0.0, -inverse_root_two), 8 * inverse_root_two),
@@ -148,34 +169,34 @@ def boundaries(case):
         return (Boundary("prism", half(1.5), CLEAR, planes),)
     if case.startswith("optical_inside"):
         outer = box("outer", -3, 14, 1.5, CLEAR)
-        return (outer, box("inner", -3, 10, 1.33, CLEAR, xy_scale=0.7)) if case.endswith("nested") else (outer,)
+        return (outer, box("inner", -3, 10, 1.33, CLEAR, xy_scale=0.7)) if case.endswith(LIT_NESTED) else (outer,)
     if case in ("optical_same_mesh", "optical_disconnected"):
         # ONE instance still contains two disconnected physical components; re-entry is a fresh interval.
         return (box("front", -8, 0.5), box("back", -10, 0.5))
     if case == "optical_union_single":
-        return (box("single", -9, 0.8),)
+        return (box(LIT_SINGLE, -9, 0.8),)
     if case == "optical_union_same_mesh":
         return (box("front_component", -8.85, 0.5), box("back_component", -9.15, 0.5))
     if case == "optical_coincident_independent":
         return (box("independent_first", -9, 2), box("independent_second", -9, 2))
     if case == "optical_torus":
         return (Boundary("torus", half(1.5), TINTED, triangles=authored_torus_triangles()),)
-    if case in ("optical_priority_tie_a", "optical_priority_tie_b"):
-        reverse = case == "optical_priority_tie_b"
-        return (box("first", -8.5, 2, mode="priority", priority=10, tie_order=int(reverse)),
-            box("second", -9.5, 2, 1.33, WARM, "priority", 10, tie_order=int(not reverse)))
-    if case in ("optical_priority_a", "optical_priority_b", "optical_mixed"):
-        first_wins = case == "optical_priority_a"
-        return (box("first", -8.5, 2, mode="priority", priority=20 if first_wins else 10),
-            box("second", -9.5, 2, 1.33, WARM, "nested" if case == "optical_mixed" else "priority", 10 if first_wins else 20))
-    if case in ("optical_nested2", "optical_nested3", "optical_overflow"):
-        count = 5 if case == "optical_overflow" else 3 if case == "optical_nested3" else 2
+    if case in ("optical_priority_tie_a", LIT_OPTICAL_PRIORITY_TIE_B):
+        reverse = case == LIT_OPTICAL_PRIORITY_TIE_B
+        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=10, tie_order=int(reverse)),
+            box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_PRIORITY, 10, tie_order=int(not reverse)))
+    if case in (LIT_OPTICAL_PRIORITY_A, "optical_priority_b", LIT_OPTICAL_MIXED):
+        first_wins = case == LIT_OPTICAL_PRIORITY_A
+        return (box(LIT_FIRST, -8.5, 2, mode=LIT_PRIORITY, priority=20 if first_wins else 10),
+            box(LIT_SECOND, -9.5, 2, 1.33, WARM, LIT_NESTED if case == LIT_OPTICAL_MIXED else LIT_PRIORITY, 10 if first_wins else 20))
+    if case in ("optical_nested2", LIT_OPTICAL_NESTED3, LIT_OPTICAL_OVERFLOW):
+        count = 5 if case == LIT_OPTICAL_OVERFLOW else 3 if case == LIT_OPTICAL_NESTED3 else 2
         return tuple(box(str(index), -9, 4 - 0.6 * index if count == 5 else 3 / (1 << index),
             1.5 if index == 0 else 1.33 if index == 1 else 1.1 + 0.02 * (index - 2), TINTED if index == 0 else WARM,
             xy_scale=1.0 - 0.1 * index)
             for index in range(count))
-    return (box("single", -9, 2, transmission=CLEAR if case == "optical_clear" else TINTED,
-        mode="unspecified" if case == "optical_unspecified" else "nested", yaw=0.2 if case == "optical_tilted" else 0.0),)
+    return (box(LIT_SINGLE, -9, 2, transmission=CLEAR if case == "optical_clear" else TINTED,
+        mode=LIT_UNSPECIFIED if case == "optical_unspecified" else LIT_NESTED, yaw=0.2 if case == "optical_tilted" else 0.0),)
 
 
 def effective_medium(active):
@@ -183,7 +204,7 @@ def effective_medium(active):
         return None
     if len({item.mode for item in active}) != 1:
         raise ValueError("mixed optical medium contracts")
-    return max(active, key=lambda item: (item.priority, -item.tie_order)) if active[0].mode == "priority" else active[-1]
+    return max(active, key=lambda item: (item.priority, -item.tie_order)) if active[0].mode == LIT_PRIORITY else active[-1]
 
 
 def chart_color(x):
@@ -200,59 +221,59 @@ def trace_transmission(case, origin, direction, max_queries=16):
     active.sort(key=lambda item: item.intersect(origin, scale(direction, -1))[0], reverse=True)
     used_queries = 1 if active else 0
     throughput, radiance = [1.0] * 3, [0.0] * 3
-    alpha_pending = case in ("optical_alpha_before", "optical_alpha_after")
+    alpha_pending = case in (LIT_OPTICAL_ALPHA_BEFORE, "optical_alpha_after")
     tir_events, crossings = 0, 0
     reason = "environment"
     for _ in range(32):
         if used_queries >= max_queries:
-            reason = "query_limit"
+            reason = LIT_QUERY_LIMIT
             break
         used_queries += 1
         events = []
         for item in objects:
             hit = item.intersect(origin, direction)
             if hit is not None:
-                events.append((hit[0], "boundary", item, hit[1]))
+                events.append((hit[0], LIT_BOUNDARY, item, hit[1]))
         if direction[2] < -1e-10:
             chart_distance = (-14.0 - origin[2]) / direction[2]
-            if chart_distance > 1e-6 and case != "optical_tir":
-                events.append((chart_distance, "chart", None, None))
+            if chart_distance > 1e-6 and case != LIT_OPTICAL_TIR:
+                events.append((chart_distance, LIT_CHART, None, None))
             if alpha_pending:
-                pane_distance = ((-7.0 if case == "optical_alpha_before" else -11.0) - origin[2]) / direction[2]
+                pane_distance = ((-7.0 if case == LIT_OPTICAL_ALPHA_BEFORE else -11.0) - origin[2]) / direction[2]
                 if pane_distance > 1e-6:
-                    events.append((pane_distance, "alpha", None, None))
+                    events.append((pane_distance, LIT_ALPHA, None, None))
         if not events:
             if active:
                 reason = "invalid_exit"
             else:
-                radiance = [value + weight * (1.0 if case == "optical_tir" else 0.0) for value, weight in zip(radiance, throughput)]
+                radiance = [value + weight * (1.0 if case == LIT_OPTICAL_TIR else 0.0) for value, weight in zip(radiance, throughput)]
             break
         distance, kind, item, outward = min(events, key=lambda event: event[0])
         try:
             current = effective_medium(active)
         except ValueError:
-            reason = "ambiguous"
+            reason = LIT_AMBIGUOUS
             break
         if current is not None:
             throughput = [weight * transmission ** distance for weight, transmission in zip(throughput, current.transmission)]
         hit_point = add(origin, scale(direction, distance))
-        if kind == "chart":
+        if kind == LIT_CHART:
             radiance = [value + weight * color for value, weight, color in zip(radiance, throughput, chart_color(hit_point[0]))]
-            reason = "chart"
+            reason = LIT_CHART
             break
-        if kind == "boundary" and item.mode == "unspecified":
+        if kind == LIT_BOUNDARY and item.mode == LIT_UNSPECIFIED:
             crossings += 1
             reason = "unsupported"
             break
         # A transparent interface also performs a bounded coincidence query before any interface physics.
         if used_queries >= max_queries:
-            reason = "query_limit"
+            reason = LIT_QUERY_LIMIT
             break
         used_queries += 1
-        if sum(event[1] == "boundary" and abs(event[0] - distance) < 1e-9 for event in events) > 1:
-            reason = "ambiguous"
+        if sum(event[1] == LIT_BOUNDARY and abs(event[0] - distance) < 1e-9 for event in events) > 1:
+            reason = LIT_AMBIGUOUS
             break
-        if kind == "alpha":
+        if kind == LIT_ALPHA:
             coverage = 0.0 if hit_point[0] < -2.0 else 0.5 if hit_point[0] < 2.0 else 1.0
             pane_color = tuple(map(half, (0.9, 0.6, 0.0)))
             radiance = [value + weight * coverage * color for value, weight, color in zip(radiance, throughput, pane_color)]
@@ -271,7 +292,7 @@ def trace_transmission(case, origin, direction, max_queries=16):
             try:
                 destination = effective_medium(proposed)
             except ValueError:
-                reason = "ambiguous"
+                reason = LIT_AMBIGUOUS
                 break
             eta_i, eta_t = current.ior if current else 1.0, destination.ior if destination else 1.0
             incident_normal = outward if entering else scale(outward, -1.0)

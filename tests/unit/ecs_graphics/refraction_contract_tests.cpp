@@ -14,6 +14,12 @@
 namespace __hidden_refraction_contract_tests{
 
 
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ASSETS = "assets";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_DEFERRED = "deferred";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -40,7 +46,7 @@ TEST(EcsGraphics, RefractionSelectorAppendsTwoLanesWithoutMovingExistingResource
 
     TestArena testArena;
     AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "deferred" / "bindless_resources.slangi", shaderSource));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_DEFERRED / "bindless_resources.slangi", shaderSource));
     EXPECT_EQ(CountText(AStringView(shaderSource.data(), shaderSource.size()), "    uint4 "), 11u);
 }
 
@@ -120,7 +126,7 @@ TEST(EcsGraphics, AvboitForegroundAndBackgroundUseMatchingAdditiveAccumulation){
 TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaqueDepth){
     TestArena testArena;
     AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "avboit" / "accumulate_ps_authoring.slangi", shaderSource));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / "avboit" / "accumulate_ps_authoring.slangi", shaderSource));
     const AStringView shader(shaderSource.data(), shaderSource.size());
     EXPECT_TRUE(ContainsText(shader, "const bool refractionCapture = nwbAvboitRefractionCapture();"));
     const usize capture = shader.find("if(refractionCapture)");
@@ -140,7 +146,7 @@ TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaque
 TEST(EcsGraphics, StandaloneAvboitModeNeverSamplesMissingRefractionDescriptors){
     TestArena testArena;
     AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "avboit" / "common.slangi", shaderSource));
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / "avboit" / "common.slangi", shaderSource));
     const AStringView shader(shaderSource.data(), shaderSource.size());
     for(const AStringView function : { AStringView("bool nwbAvboitPrimaryRefractionInstance"), AStringView("float nwbAvboitPrimaryRefractionDepth") }){
         const usize entry = shader.find(function);
@@ -159,8 +165,8 @@ TEST(EcsGraphics, CompositeOpticalPolicyMatchesFiveWordPushAbiAndGatesAuxiliaryR
     const TestPath root = RepoRoot(testArena);
     AString cppSource;
     AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(root / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp", cppSource));
-    ASSERT_TRUE(ReadTextFile(root / "impl" / "assets" / "graphics" / "deferred" / "composite_cs.slang", shaderSource));
+    ASSERT_TRUE(ReadTextFile(root / s_IMPL / "ecs_render" / s_DEFERRED / "deferred_composite.cpp", cppSource));
+    ASSERT_TRUE(ReadTextFile(root / s_IMPL / s_ASSETS / s_GRAPHICS / s_DEFERRED / "composite_cs.slang", shaderSource));
     const AStringView cpp(cppSource.data(), cppSource.size());
     const AStringView shader(shaderSource.data(), shaderSource.size());
     EXPECT_TRUE(ContainsText(cpp, "static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u)"));

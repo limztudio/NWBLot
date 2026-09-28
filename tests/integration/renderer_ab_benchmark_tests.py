@@ -19,33 +19,178 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
 from smoke_volume_identity import volume_segment_filename
 
+# Shared literals (no inline hardcodes below this block).
+LIT_TOTAL_MS = "total_ms"
+LIT_GPU_SAMPLES = "gpu_samples"
+LIT_REPORTS = "reports"
+LIT_MEAN_MS = "mean_ms"
+LIT_HARDWARE = "hardware"
+LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardware transparent shadow traversal"
+LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
+LIT_MODIFIED = "modified"
+LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32 = "AvboitTimingProbe: in-flight ranges 32"
+LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1 = "AvboitTimingProbe: render unfocused 1"
+LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
+LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU = "Vulkan: created device 'Example GPU'"
+LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
+LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
+LIT_SOURCE = "source"
+LIT_REVISION = "revision"
+LIT_SOURCE_CPP = "source.cpp"
+LIT_UTF_8 = "utf-8"
+LIT_SOURCE_JSON = "source.json"
+LIT_FILES = "files"
+LIT_RUNTIME = "runtime"
+LIT_RES = "res"
+LIT_AUTHORED_VOL = "authored.vol"
+LIT_TRANSPARENT_MULTI = "transparent-multi"
+LIT_BASELINE = "baseline"
+LIT_CANDIDATE = "candidate"
+LIT_ARM = "arm"
+LIT_BLOCK = "block"
+LIT_POSITION = "position"
+LIT_SCOPES = "scopes"
+LIT_MISSING_COMPLETED_GPU_SCOPES = "missing completed GPU scopes"
+LIT_SAMPLE_RATIO = "sample ratio"
+LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH = "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH"
+LIT_OLD_BMP = "old.bmp"
+LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
+LIT_NWB_CAUSTIC_SMOKE_ENABLED = "NWB_CAUSTIC_SMOKE_ENABLED"
+LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE = "NWB_TRANSPARENT_MULTI_SPIN_ANGLE"
+LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
+LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
+LIT_OLD_TXT = "old.txt"
+LIT_PRESERVED = "PRESERVED"
+LIT_YES = "yes"
+LIT_TIMING_TXT = "timing.txt"
+LIT_NWB_AVBOIT_SMOKE_TIMING = "NWB_AVBOIT_SMOKE_TIMING"
+LIT_VK_INSTANCE_LAYERS = "VK_INSTANCE_LAYERS"
+LIT_VK_LOADER_LAYERS_ENABLE = "VK_LOADER_LAYERS_ENABLE"
+LIT_VK_LAYER_KHRONOS_VALIDATION = "VK_LAYER_KHRONOS_validation"
+LIT_SHADOW_ROUTE = "shadow_route"
+LIT_SOFTWARE = "software"
+LIT_N_1280X900 = "1280x900"
+LIT_N_960X720 = "960x720"
+LIT_IN_FLIGHT_RANGES_32 = "in-flight ranges 32"
+LIT_IN_FLIGHT_RANGES_2 = "in-flight ranges 2"
+LIT_SELECTED = " selected "
+LIT_HYBRID = "hybrid"
+LIT_BASELINE_EXECUTABLE = "--baseline-executable"
+LIT_BASELINE_RUNTIME = "--baseline-runtime"
+LIT_AR = "ar"
+LIT_BASELINE_SOURCE_MANIFEST = "--baseline-source-manifest"
+LIT_AS_JSON = "as.json"
+LIT_CANDIDATE_EXECUTABLE = "--candidate-executable"
+LIT_CANDIDATE_RUNTIME = "--candidate-runtime"
+LIT_BR = "br"
+LIT_CANDIDATE_SOURCE_MANIFEST = "--candidate-source-manifest"
+LIT_BS_JSON = "bs.json"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_LOGGER = "logger"
+LIT_OUTPUT_DIRECTORY = "--output-directory"
+LIT_OUTPUT = "output"
+LIT_BLOCKS = "--blocks"
+LIT_NAN = "nan"
+LIT_RENDER_OPAQUE_REGULAR = "render.opaque_regular"
+LIT_RENDER_DEFERRED_COMPOSITE = "render.deferred_composite"
+LIT_RENDER_DEFERRED_PRESENT = "render.deferred_present"
+LIT_SECONDARY_SCOPE = "secondary_scope"
+LIT_RENDER_SHADOW_VISIBILITY = "render.shadow_visibility"
+LIT_STATUS = "status"
+LIT_RESOLVED_GPU_TIME_REDUCTION = "resolved_gpu_time_reduction"
+LIT_CONTROLS = "controls"
+LIT_CONTROL_DRIFT = "control_drift"
+LIT_CONTROL_UNCERTAIN = "control_uncertain"
+LIT_EVERY_PLANNED_TRIAL = "every planned trial"
+LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE = "ShadowTimingProbe: indirect response hemi-ambient"
+LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN = "SoftShadowTestSmokeProject: shutdown"
+LIT_SHADOW_ZERO_EXTENT = "shadow-zero-extent"
+LIT_SHADOW_FINITE_EXTENT = "shadow-finite-extent"
+LIT_N_0_03 = "0.03"
+LIT_N_0_15 = "0.15"
+LIT_SHADOW_ZERO_DIRECTIONAL = "shadow-zero-directional"
+LIT_SHADOW_ZERO_PUNCTUAL = "shadow-zero-punctual"
+LIT_NWB_SOFT_SHADOW_TEST_ANGLE = "NWB_SOFT_SHADOW_TEST_ANGLE"
+LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS = "NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"
+LIT_NWB_SOFT_SHADOW_TEST_TIMING = "NWB_SOFT_SHADOW_TEST_TIMING"
+LIT_RUNTIME_PIPELINE_CACHE = "runtime_pipeline_cache"
+LIT_COMPLETED_TRIALS = "completed_trials"
+LIT_COMPLETED_BLOCKS = "completed_blocks"
+LIT_COMPLETED_GPU_FRAMES = "completed_gpu_frames"
+LIT_SECONDARY = "secondary"
+LIT_SCREEN = "screen"
+LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN = "ReflectionSmokeProject: shutdown"
+LIT_REFLECTION_ROUGH_SPATIAL = "reflection-rough-spatial"
+LIT_ROUGH = "rough"
+LIT_REFLECTION_MIRROR_SPATIAL = "reflection-mirror-spatial"
+LIT_REFLECTION_ROUGH_FILTERED = "reflection-rough-filtered"
+LIT_REFLECTION_SCREEN_DEPTH = "reflection-screen-depth"
+LIT_REFLECTION_OPTICAL_CLEAR = "reflection-optical-clear"
+LIT_REFLECTION_OPTICAL_INSIDE = "reflection-optical-inside"
+LIT_CAUSTIC_POPULATED = "caustic-populated"
+LIT_CAUSTIC_SPARSE = "caustic-sparse"
+LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES = "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_NEW_TIMING_TXT = "new_timing.txt"
+LIT_N_16 = "16"
+LIT_INACTIVE_REFLECTION_SCOPES = "inactive reflection scopes"
+LIT_WORKLOAD = "--workload"
+LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG = "--candidate-hardware-dispatches-per-range"
+LIT_POPULATED = "populated"
+LIT_DISABLED = "disabled"
+LIT_CAUSTIC = "caustic-"
+LIT_POSITIVE_PIXELS = "positive_pixels"
+LIT_POSITIVE_CHANNEL_GAIN = "positive_channel_gain"
+LIT_POSITIVE_TILES = "positive_tiles"
+LIT_SPARSE = "sparse"
+LIT_QUALIFICATION_JSON = "qualification.json"
+LIT_FROZEN = "frozen"
+LIT_SCHEMA = "schema"
+LIT_POLICY = "policy"
+LIT_CAPTURES = "captures"
+LIT_FAILURE_JSON = "failure.json"
+LIT_FIXTURE_EXE = "fixture.exe"
+LIT_LOGGER_EXE = "logger.exe"
+LIT_GPUDBG = "--gpudbg"
+LIT_WINDOW_CAPTURE_SMOKE_PY = "window_capture_smoke.py"
+LIT_METRICS = "metrics"
+LIT_QUALIFICATION_TOOL = "qualification_tool"
+LIT_BMP = ".bmp"
+LIT_COMMAND = "command"
+LIT_IMAGE = "image"
+LIT_PATH = "path"
+LIT_IDENTITY = "identity"
+LIT_LOG = "log"
+LIT_POPULATED_ON = "populated_on"
+LIT_MAIN = "__main__"
+
 
 def scopes(workload, frames=200, frame_ms=5.0):
-    return {name: {"total_ms": (frame_ms if name == benchmark.FRAME else .5) * frames * multiplier,
-        "gpu_samples": frames * multiplier, "reports": 6,
-        "mean_ms": frame_ms if name == benchmark.FRAME else .5}
+    return {name: {LIT_TOTAL_MS: (frame_ms if name == benchmark.FRAME else .5) * frames * multiplier,
+        LIT_GPU_SAMPLES: frames * multiplier, LIT_REPORTS: 6,
+        LIT_MEAN_MS: frame_ms if name == benchmark.FRAME else .5}
         for name, multiplier in workload.scope_multipliers}
 
 
-def log_text(route="hardware"):
+def log_text(route=LIT_HARDWARE):
     natural = next(message for message, name in benchmark.SHADOW_ROUTES.items() if name == route)
-    return "\n".join((natural, "RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware"
-        else "RendererSystem: dispatched software shadow traversal", "AvboitTimingProbe: in-flight ranges 32",
-        "AvboitTimingProbe: render unfocused 1",
+    return "\n".join((natural, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE
+        else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA, LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32,
+        LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
         "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created",
-        "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
-        "Vulkan: created device 'Example GPU'",
-        "RendererSystem: material 'glass' selected CS + PS through compute emulation",
-        "TransparentMultiSmokeProject: shutdown"))
+        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
+        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
+        LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+        LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
 
 
-def source_manifest(directory, text="source", revision="revision"):
+def source_manifest(directory, text=LIT_SOURCE, revision=LIT_REVISION):
     directory.mkdir(parents=True, exist_ok=True)
-    source = directory / "source.cpp"
-    source.write_text(text, encoding="utf-8")
-    manifest = directory / "source.json"
-    manifest.write_text(json.dumps({"revision": revision,
-        "files": {source.name: hashlib.sha256(source.read_bytes()).hexdigest()}}), encoding="utf-8")
+    source = directory / LIT_SOURCE_CPP
+    source.write_text(text, encoding=LIT_UTF_8)
+    manifest = directory / LIT_SOURCE_JSON
+    manifest.write_text(json.dumps({LIT_REVISION: revision,
+        LIT_FILES: {source.name: hashlib.sha256(source.read_bytes()).hexdigest()}}), encoding=LIT_UTF_8)
     return manifest
 
 
@@ -53,22 +198,22 @@ def make_arm(directory, name):
     directory.mkdir(parents=True, exist_ok=True)
     executable = directory / "renderer"
     executable.write_bytes(b"binary")
-    runtime = directory / "runtime"
-    (runtime / "res").mkdir(parents=True)
-    (runtime / "res" / "authored.vol").write_bytes(b"authored asset")
-    return benchmark.Arm(name, executable, runtime, source_manifest(directory / "source"))
+    runtime = directory / LIT_RUNTIME
+    (runtime / LIT_RES).mkdir(parents=True)
+    (runtime / LIT_RES / LIT_AUTHORED_VOL).write_bytes(b"authored asset")
+    return benchmark.Arm(name, executable, runtime, source_manifest(directory / LIT_SOURCE))
 
 
 def trial_matrix(frame_delta=-.5):
-    workload = benchmark.workloads()["transparent-multi"]
-    arms = (benchmark.Arm("baseline", Path("a"), Path("a_runtime"), Path("a.json")),
-        benchmark.Arm("candidate", Path("b"), Path("b_runtime"), Path("b.json")))
+    workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
+    arms = (benchmark.Arm(LIT_BASELINE, Path("a"), Path("a_runtime"), Path("a.json")),
+        benchmark.Arm(LIT_CANDIDATE, Path("b"), Path("b_runtime"), Path("b.json")))
     orders = [[arm.name for arm in row] for row in benchmark.balanced_orders(arms, 8, 0)]
     trials = []
     for block, row in enumerate(orders):
         for position, arm in enumerate(row):
-            current = scopes(workload, frame_ms=5 + block * .01 + (frame_delta if arm == "candidate" else 0))
-            trials.append({"arm": arm, "block": block, "position": position, "scopes": current})
+            current = scopes(workload, frame_ms=5 + block * .01 + (frame_delta if arm == LIT_CANDIDATE else 0))
+            trials.append({LIT_ARM: arm, LIT_BLOCK: block, LIT_POSITION: position, LIT_SCOPES: current})
     return workload, orders, trials
 
 
@@ -79,8 +224,8 @@ class CoverageTests(unittest.TestCase):
             "=== interval: 1 frames / 0.5s ===\n"
             "  render.frame: avg=456 samples=1 total_ms=100 gpu_samples=100\n")
         result = benchmark.summarize_intervals(benchmark.parse_intervals(text, finalized=True))
-        self.assertEqual(result[benchmark.FRAME]["gpu_samples"], 110)
-        self.assertAlmostEqual(result[benchmark.FRAME]["mean_ms"], 190 / 110)
+        self.assertEqual(result[benchmark.FRAME][LIT_GPU_SAMPLES], 110)
+        self.assertAlmostEqual(result[benchmark.FRAME][LIT_MEAN_MS], 190 / 110)
 
     def test_partial_live_tail_is_not_counted(self):
         text = ("=== interval: 1 frames / 0.5s ===\n"
@@ -89,7 +234,7 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(len(benchmark.parse_intervals(text)), 1)
 
     def test_all_avboit_and_control_ranges_are_required(self):
-        workload = benchmark.workloads()["transparent-multi"]
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         complete = scopes(workload)
         self.assertEqual(len(workload.scopes), 12)
         benchmark.validate_coverage(complete, workload, 6, 100)
@@ -97,22 +242,22 @@ class CoverageTests(unittest.TestCase):
             with self.subTest(scope=name):
                 missing = copy.deepcopy(complete)
                 del missing[name]
-                with self.assertRaisesRegex(benchmark.SmokeFailure, "missing completed GPU scopes"):
+                with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_MISSING_COMPLETED_GPU_SCOPES):
                     benchmark.validate_coverage(missing, workload, 6, 100)
 
     def test_ratio_boundary_and_sparse_reports_are_rejected(self):
-        workload = benchmark.workloads()["transparent-multi"]
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         for frames, tolerance in ((100, 2), (1000, 20)):
             for scope in (benchmark.OCCUPANCY, benchmark.CONTROLS[0]):
                 for sign in (-1, 1):
                     value = scopes(workload, frames)
-                    value[scope]["gpu_samples"] += sign * tolerance
+                    value[scope][LIT_GPU_SAMPLES] += sign * tolerance
                     benchmark.validate_coverage(value, workload, 6, 100)
-                    value[scope]["gpu_samples"] += sign
-                    with self.assertRaisesRegex(benchmark.SmokeFailure, "sample ratio"):
+                    value[scope][LIT_GPU_SAMPLES] += sign
+                    with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_SAMPLE_RATIO):
                         benchmark.validate_coverage(value, workload, 6, 100)
         value = scopes(workload)
-        value[benchmark.OCCUPANCY]["reports"] = 3
+        value[benchmark.OCCUPANCY][LIT_REPORTS] = 3
         with self.assertRaisesRegex(benchmark.SmokeFailure, "publications"):
             benchmark.validate_coverage(value, workload, 6, 100)
         with self.assertRaisesRegex(benchmark.SmokeFailure, "insufficient"):
@@ -121,39 +266,39 @@ class CoverageTests(unittest.TestCase):
 
 class WorkloadPolicyTests(unittest.TestCase):
     def test_inherited_smoke_capture_diagnostics_and_pose_are_cleared(self):
-        workload = benchmark.workloads()["transparent-multi"]
-        inherited = {"NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp", "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1",
-            "NWB_CAUSTIC_SMOKE_ENABLED": "1", "NWB_TRANSPARENT_CSG_DISABLE_CUTTER": "1",
-            "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "2", "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "5",
-            "NWB_GPU_TIMING_FILE": "old.txt", "PRESERVED": "yes"}
-        env, overrides = benchmark.configure_environment(inherited, workload, Path("timing.txt"))
-        self.assertEqual(env, {"PRESERVED": "yes", **dict(workload.environment_overrides),
-            "NWB_GPU_TIMING_FILE": "timing.txt"})
-        self.assertEqual(overrides["NWB_AVBOIT_SMOKE_TIMING"], "1")
-        self.assertEqual(overrides["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"], "0")
-        self.assertEqual(inherited["NWB_GPU_TIMING_FILE"], "old.txt")
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
+        inherited = {LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP, LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1",
+            LIT_NWB_CAUSTIC_SMOKE_ENABLED: "1", "NWB_TRANSPARENT_CSG_DISABLE_CUTTER": "1",
+            LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE: "2", LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "5",
+            LIT_NWB_GPU_TIMING_FILE: LIT_OLD_TXT, LIT_PRESERVED: LIT_YES}
+        env, overrides = benchmark.configure_environment(inherited, workload, Path(LIT_TIMING_TXT))
+        self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides),
+            LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
+        self.assertEqual(overrides[LIT_NWB_AVBOIT_SMOKE_TIMING], "1")
+        self.assertEqual(overrides[LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE], "0")
+        self.assertEqual(inherited[LIT_NWB_GPU_TIMING_FILE], LIT_OLD_TXT)
 
     def test_explicit_validation_is_rejected_not_silently_disabled(self):
-        workload = benchmark.workloads()["transparent-multi"]
-        for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
+        for key in (LIT_VK_INSTANCE_LAYERS, LIT_VK_LOADER_LAYERS_ENABLE):
             with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.configure_environment({key: "VK_LAYER_KHRONOS_validation"}, workload, Path("t"))
+                benchmark.configure_environment({key: LIT_VK_LAYER_KHRONOS_VALIDATION}, workload, Path("t"))
 
     def test_logs_require_actual_route_extent_policy_device_and_shutdown(self):
         self.assertEqual(benchmark.device_material_signature(log_text()),
             benchmark.device_material_signature(log_text().replace("\n", "\r\n")))
-        workload = benchmark.workloads()["transparent-multi"]
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         expected = benchmark.transparent_multi_log(log_text(), workload, True)
-        self.assertEqual(expected["shadow_route"], "hardware")
+        self.assertEqual(expected[LIT_SHADOW_ROUTE], LIT_HARDWARE)
         self.assertEqual(expected, benchmark.transparent_multi_log(log_text().replace("\n", "\r\n"), workload, True))
-        software = benchmark.transparent_multi_log(log_text("software"), workload, False)
-        self.assertEqual(software["shadow_route"], "software")
+        software = benchmark.transparent_multi_log(log_text(LIT_SOFTWARE), workload, False)
+        self.assertEqual(software[LIT_SHADOW_ROUTE], LIT_SOFTWARE)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.transparent_multi_log(log_text("software"), workload, True)
-        for altered in (log_text().replace("1280x900", "960x720"),
-            log_text().replace("in-flight ranges 32", "in-flight ranges 2"),
+            benchmark.transparent_multi_log(log_text(LIT_SOFTWARE), workload, True)
+        for altered in (log_text().replace(LIT_N_1280X900, LIT_N_960X720),
+            log_text().replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2),
             log_text().replace("render unfocused 1", "render unfocused 0"),
-            log_text().replace("TransparentMultiSmokeProject: shutdown", ""),
+            log_text().replace(LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN, ""),
             log_text() + "\nAvboitTimingProbe: in-flight ranges 32", log_text() + "\n[ERROR]: rejected",
             log_text() + "\nFramebufferCapture: capture ready", log_text().replace("Vulkan: created device", "device")):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
@@ -161,51 +306,51 @@ class WorkloadPolicyTests(unittest.TestCase):
 
     def test_material_signature_preserves_mixed_routes_independent_of_creation_order(self):
         indexed = "RendererSystem: material 'glass' selected VertexIndexed + PS from persistent object-space geometry"
-        compute = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
-        device = "Vulkan: created device 'Example GPU'"
+        compute = LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED
+        device = LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU
         mixed = benchmark.device_material_signature("\n".join((device, compute, indexed, compute)))
         reordered = benchmark.device_material_signature("\n".join((device, indexed, compute)))
         self.assertEqual(mixed, reordered)
-        self.assertEqual(mixed["material_routes"]["glass"], [compute.split(" selected ")[1], indexed.split(" selected ")[1]])
+        self.assertEqual(mixed["material_routes"]["glass"], [compute.split(LIT_SELECTED)[1], indexed.split(LIT_SELECTED)[1]])
         self.assertNotEqual(mixed, benchmark.device_material_signature("\n".join((device, indexed))))
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.device_material_signature(device)
 
     def test_current_hardware_route_requires_dispatch_and_preserves_frozen_hybrid_identity(self):
-        workload = benchmark.workloads()["transparent-multi"]
-        marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
+        marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         for altered in (log_text().replace(marker, ""),
-            log_text() + "\nRendererSystem: dispatched software shadow traversal"):
+            log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
-        legacy = benchmark.transparent_multi_log(log_text("hybrid"), workload, True)
-        self.assertEqual(legacy["shadow_route"], "hybrid")
-        self.assertNotEqual(legacy["shadow_route"], benchmark.transparent_multi_log(log_text(), workload, True)["shadow_route"])
+        legacy = benchmark.transparent_multi_log(log_text(LIT_HYBRID), workload, True)
+        self.assertEqual(legacy[LIT_SHADOW_ROUTE], LIT_HYBRID)
+        self.assertNotEqual(legacy[LIT_SHADOW_ROUTE], benchmark.transparent_multi_log(log_text(), workload, True)[LIT_SHADOW_ROUTE])
 
     def test_cli_defaults_and_lower_coverage_or_unbalanced_plans(self):
-        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
-            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
-            "--logserver-executable", "logger", "--output-directory", "output"]
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
+            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+            LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         args = benchmark.parse_args(common)
         self.assertEqual((args.blocks, args.warmup_intervals, args.sample_intervals, args.minimum_frame_samples, args.timeout),
             (8, 2, 6, 100, 90))
-        for extra in (("--blocks", "7"), ("--blocks", "6"), ("--warmup-intervals", "1"),
-            ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", "nan"),
+        for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"),
+            ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN),
             ("--application-arg=--gpudbg",)):
             with self.subTest(extra=extra), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 benchmark.parse_args(common + list(extra))
 
 
 class WorkloadControlSelectionTests(unittest.TestCase):
-    SHADOW_CONTROLS = ("render.opaque_regular", "render.deferred_lighting",
-        "render.deferred_composite", "render.deferred_present")
+    SHADOW_CONTROLS = (LIT_RENDER_OPAQUE_REGULAR, "render.deferred_lighting",
+        LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT)
 
     def shadow_workload(self, **changes):
         from dataclasses import replace
-        values = {"name": "test-shadow-controls", "secondary_scope": "render.shadow_visibility",
+        values = {"name": "test-shadow-controls", LIT_SECONDARY_SCOPE: LIT_RENDER_SHADOW_VISIBILITY,
             "control_scopes": self.SHADOW_CONTROLS}
         values.update(changes)
-        return replace(benchmark.workloads()["transparent-multi"], **values)
+        return replace(benchmark.workloads()[LIT_TRANSPARENT_MULTI], **values)
 
     def test_existing_workloads_keep_original_control_policy(self):
         for workload in benchmark.workloads().values():
@@ -219,35 +364,35 @@ class WorkloadControlSelectionTests(unittest.TestCase):
         _, orders, trials = trial_matrix()
         workload = self.shadow_workload()
         for trial in trials:
-            if trial["arm"] == "candidate":
-                trial["scopes"]["render.shadow_visibility"]["mean_ms"] = .2
-                trial["scopes"]["render.shadow_visibility"]["total_ms"] = .2 * trial["scopes"]["render.shadow_visibility"]["gpu_samples"]
+            if trial[LIT_ARM] == LIT_CANDIDATE:
+                trial[LIT_SCOPES][LIT_RENDER_SHADOW_VISIBILITY][LIT_MEAN_MS] = .2
+                trial[LIT_SCOPES][LIT_RENDER_SHADOW_VISIBILITY][LIT_TOTAL_MS] = .2 * trial[LIT_SCOPES][LIT_RENDER_SHADOW_VISIBILITY][LIT_GPU_SAMPLES]
         result = benchmark.compare_trials(trials, orders, workload)
-        self.assertEqual(result["status"], "resolved_gpu_time_reduction")
-        self.assertEqual(tuple(result["controls"]), self.SHADOW_CONTROLS)
-        self.assertAlmostEqual(result["scope_deltas"]["render.shadow_visibility"]["mean_ms"], -.3)
+        self.assertEqual(result[LIT_STATUS], LIT_RESOLVED_GPU_TIME_REDUCTION)
+        self.assertEqual(tuple(result[LIT_CONTROLS]), self.SHADOW_CONTROLS)
+        self.assertAlmostEqual(result["scope_deltas"][LIT_RENDER_SHADOW_VISIBILITY][LIT_MEAN_MS], -.3)
 
     def test_composite_and_present_drift_remain_controls(self):
-        for changed_scope in ("render.deferred_composite", "render.deferred_present"):
+        for changed_scope in (LIT_RENDER_DEFERRED_COMPOSITE, LIT_RENDER_DEFERRED_PRESENT):
             _, orders, trials = trial_matrix()
             for trial in trials:
-                if trial["arm"] == "candidate":
-                    trial["scopes"][changed_scope]["mean_ms"] = .8
+                if trial[LIT_ARM] == LIT_CANDIDATE:
+                    trial[LIT_SCOPES][changed_scope][LIT_MEAN_MS] = .8
             with self.subTest(scope=changed_scope):
                 result = benchmark.compare_trials(trials, orders, self.shadow_workload())
-                self.assertEqual(result["status"], "control_drift")
-                self.assertTrue(result["controls"][changed_scope]["material_drift"])
+                self.assertEqual(result[LIT_STATUS], LIT_CONTROL_DRIFT)
+                self.assertTrue(result[LIT_CONTROLS][changed_scope]["material_drift"])
 
     def test_uncertain_present_control_cannot_claim_reduction(self):
         _, orders, trials = trial_matrix()
         for trial in trials:
-            if trial["arm"] == "candidate":
-                trial["scopes"]["render.deferred_present"]["mean_ms"] += .2 if trial["block"] % 2 else -.2
+            if trial[LIT_ARM] == LIT_CANDIDATE:
+                trial[LIT_SCOPES][LIT_RENDER_DEFERRED_PRESENT][LIT_MEAN_MS] += .2 if trial[LIT_BLOCK] % 2 else -.2
         result = benchmark.compare_trials(trials, orders, self.shadow_workload())
-        self.assertEqual(result["status"], "control_uncertain")
+        self.assertEqual(result[LIT_STATUS], LIT_CONTROL_UNCERTAIN)
 
     def test_empty_duplicate_or_mutable_controls_are_rejected(self):
-        for controls in ((), ("render.opaque_regular", "render.opaque_regular"), ["render.opaque_regular"]):
+        for controls in ((), (LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_OPAQUE_REGULAR), [LIT_RENDER_OPAQUE_REGULAR]):
             with self.subTest(controls=controls), self.assertRaisesRegex(benchmark.SmokeFailure, "nonempty unique tuple"):
                 self.shadow_workload(control_scopes=controls)
 
@@ -256,7 +401,7 @@ class WorkloadControlSelectionTests(unittest.TestCase):
             self.shadow_workload(control_scopes=("render.not_measured",))
 
     def test_primary_and_secondary_targets_cannot_be_controls(self):
-        for control in (benchmark.FRAME, "render.shadow_visibility"):
+        for control in (benchmark.FRAME, LIT_RENDER_SHADOW_VISIBILITY):
             with self.subTest(control=control), self.assertRaisesRegex(benchmark.SmokeFailure, "target cannot also be a control"):
                 self.shadow_workload(control_scopes=(control,))
 
@@ -265,78 +410,78 @@ class WorkloadControlSelectionTests(unittest.TestCase):
         for control in self.SHADOW_CONTROLS:
             values = scopes(workload)
             del values[control]
-            with self.subTest(control=control), self.assertRaisesRegex(benchmark.SmokeFailure, "missing completed GPU scopes"):
+            with self.subTest(control=control), self.assertRaisesRegex(benchmark.SmokeFailure, LIT_MISSING_COMPLETED_GPU_SCOPES):
                 benchmark.validate_coverage(values, workload, 6, 100)
 
     def test_per_workload_controls_do_not_relax_complete_trial_requirement(self):
         _, orders, trials = trial_matrix()
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
+        with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
             benchmark.compare_trials(trials[:-1], orders, self.shadow_workload())
 
 
-def soft_shadow_log_text(workload, route="hardware"):
+def soft_shadow_log_text(workload, route=LIT_HARDWARE):
     values = dict(workload.environment_overrides)
     return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
-        "ShadowTimingProbe: caustic emission 0", "ShadowTimingProbe: indirect response hemi-ambient",
+        "ShadowTimingProbe: caustic emission 0", LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE,
         f"ShadowTimingProbe: natural shadow route {route}",
-        "RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched software shadow traversal",
+        LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA if route == LIT_HARDWARE else LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA,
         f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
         "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
-        "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
-        "Vulkan: created device 'Example GPU'", "RendererSystem: material 'glass' selected CS + PS through compute emulation",
-        "SoftShadowTestSmokeProject: shutdown"))
+        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
+        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+        LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN))
 
 
 class ShadowWorkloadPolicyTests(unittest.TestCase):
     def test_four_extent_workloads_have_exact_scope_and_control_policy(self):
-        expected = {"shadow-zero-extent": ("0", "0"), "shadow-finite-extent": ("0.03", "0.15"),
-            "shadow-zero-directional": ("0", "0.15"), "shadow-zero-punctual": ("0.03", "0")}
+        expected = {LIT_SHADOW_ZERO_EXTENT: ("0", "0"), LIT_SHADOW_FINITE_EXTENT: (LIT_N_0_03, LIT_N_0_15),
+            LIT_SHADOW_ZERO_DIRECTIONAL: ("0", LIT_N_0_15), LIT_SHADOW_ZERO_PUNCTUAL: (LIT_N_0_03, "0")}
         for name, extents in expected.items():
             workload = benchmark.workloads()[name]
             values = dict(workload.environment_overrides)
-            self.assertEqual((values["NWB_SOFT_SHADOW_TEST_ANGLE"], values["NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"]), extents)
+            self.assertEqual((values[LIT_NWB_SOFT_SHADOW_TEST_ANGLE], values[LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS]), extents)
             self.assertEqual(workload.control_scopes, benchmark.SHADOW_CONTROLS)
             self.assertEqual(workload.inactive_scopes, benchmark.SHADOW_INACTIVE)
             self.assertEqual(len(workload.scopes), 13)
             self.assertEqual(set(dict(workload.scope_multipliers).values()), {1})
-            self.assertEqual(workload.secondary_scope, "render.shadow_visibility")
+            self.assertEqual(workload.secondary_scope, LIT_RENDER_SHADOW_VISIBILITY)
 
     def test_shadow_environment_clears_inherited_capture_and_extent_policy(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
-        env, overrides = benchmark.configure_environment({"NWB_SOFT_SHADOW_TEST_ANGLE": "0.2",
-            "NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS": "1", "NWB_SOFT_SHADOW_TEST_TIMING": "0",
-            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "360", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "PRESERVED": "yes"}, workload, Path("timing.txt"))
-        self.assertEqual(env, {"PRESERVED": "yes", **dict(workload.environment_overrides), "NWB_GPU_TIMING_FILE": "timing.txt"})
-        self.assertEqual(overrides["NWB_SOFT_SHADOW_TEST_TIMING"], "1")
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
+        env, overrides = benchmark.configure_environment({LIT_NWB_SOFT_SHADOW_TEST_ANGLE: "0.2",
+            LIT_NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS: "1", LIT_NWB_SOFT_SHADOW_TEST_TIMING: "0",
+            LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F: "360", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
+            LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_PRESERVED: LIT_YES}, workload, Path(LIT_TIMING_TXT))
+        self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_TIMING_TXT})
+        self.assertEqual(overrides[LIT_NWB_SOFT_SHADOW_TEST_TIMING], "1")
 
     def test_shadow_logs_require_actual_policy_route_extent_and_lifecycle(self):
-        for name in ("shadow-zero-extent", "shadow-finite-extent"):
+        for name in (LIT_SHADOW_ZERO_EXTENT, LIT_SHADOW_FINITE_EXTENT):
             workload = benchmark.workloads()[name]
             text = soft_shadow_log_text(workload)
             expected = benchmark.soft_shadow_log(text, workload, True)
             self.assertEqual(expected, benchmark.soft_shadow_log(text.replace("\n", "\r\n"), workload, True))
-            for altered in (text.replace("in-flight ranges 32", "in-flight ranges 2"),
-                text.replace("caustic emission 0", "caustic emission 1"), text.replace("1280x900", "960x720"),
-                text.replace("SoftShadowTestSmokeProject: shutdown", ""), text + "\nShadowTimingProbe: render unfocused 0",
+            for altered in (text.replace(LIT_IN_FLIGHT_RANGES_32, LIT_IN_FLIGHT_RANGES_2),
+                text.replace("caustic emission 0", "caustic emission 1"), text.replace(LIT_N_1280X900, LIT_N_960X720),
+                text.replace(LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN, ""), text + "\nShadowTimingProbe: render unfocused 0",
                 text.replace("natural shadow route hardware", "natural shadow route software")):
                 with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.soft_shadow_log(altered, workload, True)
 
     def test_shadow_hardware_dispatch_evidence_and_legacy_frozen_route_are_distinct(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
-        marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
+        marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         text = soft_shadow_log_text(workload)
-        for altered in (text.replace(marker, ""), text + "\nRendererSystem: dispatched software shadow traversal"):
+        for altered in (text.replace(marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(altered, workload, True)
-        legacy = benchmark.soft_shadow_log(soft_shadow_log_text(workload, "hybrid"), workload, True)
-        self.assertEqual(legacy["shadow_route"], "hybrid")
+        legacy = benchmark.soft_shadow_log(soft_shadow_log_text(workload, LIT_HYBRID), workload, True)
+        self.assertEqual(legacy[LIT_SHADOW_ROUTE], LIT_HYBRID)
 
     def test_shadow_logs_require_exact_material_indirect_response(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
         text = soft_shadow_log_text(workload)
-        marker = "ShadowTimingProbe: indirect response hemi-ambient"
+        marker = LIT_SHADOWTIMINGPROBE_INDIRECT_RESPONSE_HE
         self.assertEqual(benchmark.soft_shadow_log(text, workload, True)["indirect_response"], "hemi-ambient")
         for altered in (text.replace(marker, ""), text.replace(marker, "ShadowTimingProbe: indirect response surfel"),
             text + "\n" + marker, text + "\nShadowTimingProbe: indirect response surfel"):
@@ -344,21 +489,21 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
                 benchmark.soft_shadow_log(altered, workload, True)
 
     def test_shadow_zero_policy_does_not_accept_tiny_nonzero_or_nonfinite(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
         text = soft_shadow_log_text(workload)
-        for value in ("0.000000001", "nan", "inf", "-inf"):
+        for value in ("0.000000001", LIT_NAN, "inf", "-inf"):
             with self.subTest(value=value), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(text.replace("angular=0 radius=0", f"angular={value} radius=0"), workload, True)
 
     def test_shadow_logs_reject_validation_capture_and_fallback_emission(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
-        for marker in ("FramebufferCapture: ready", "Vulkan: enabled validation layer", "VK_LAYER_KHRONOS_validation",
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
+        for marker in ("FramebufferCapture: ready", "Vulkan: enabled validation layer", LIT_VK_LAYER_KHRONOS_VALIDATION,
             "render submission suspended", "retaining all-lit visibility", "preserving opaque visibility"):
             with self.subTest(marker=marker), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(soft_shadow_log_text(workload) + "\n" + marker, workload, True)
 
     def test_shadow_coverage_requires_each_phase_and_rejects_caustic_work(self):
-        workload = benchmark.workloads()["shadow-zero-extent"]
+        workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
         values = scopes(workload)
         benchmark.validate_coverage(values, workload, 6, 100)
         for name in benchmark.SHADOW_PHASES:
@@ -379,39 +524,39 @@ class FrozenIdentityTests(unittest.TestCase):
             root = Path(temporary)
             manifest = source_manifest(root)
             frozen = benchmark.source_identity(manifest)
-            self.assertEqual(frozen["revision"], "revision")
-            (root / "source.cpp").write_text("changed", encoding="utf-8")
+            self.assertEqual(frozen[LIT_REVISION], LIT_REVISION)
+            (root / LIT_SOURCE_CPP).write_text("changed", encoding=LIT_UTF_8)
             with self.assertRaisesRegex(benchmark.SmokeFailure, "source bytes"):
                 benchmark.source_identity(manifest)
-            for document in ([], {"revision": "r", "files": {}}, {"revision": "r", "files": {"x": "invalid"}}):
-                manifest.write_text(json.dumps(document), encoding="utf-8")
+            for document in ([], {LIT_REVISION: "r", LIT_FILES: {}}, {LIT_REVISION: "r", LIT_FILES: {"x": "invalid"}}):
+                manifest.write_text(json.dumps(document), encoding=LIT_UTF_8)
                 with self.assertRaises(benchmark.SmokeFailure):
                     benchmark.source_identity(manifest)
 
     def test_only_exact_contiguous_pipeline_cache_segments_can_mutate(self):
         with tempfile.TemporaryDirectory() as temporary:
-            arm = make_arm(Path(temporary), "baseline")
+            arm = make_arm(Path(temporary), LIT_BASELINE)
             before = benchmark.freeze_arm(arm)
-            cache = arm.runtime / "res" / volume_segment_filename("runtime_pipeline_cache", 0)
+            cache = arm.runtime / LIT_RES / volume_segment_filename(LIT_RUNTIME_PIPELINE_CACHE, 0)
             cache.write_bytes(b"runtime cache")
             self.assertEqual(before, benchmark.freeze_arm(arm))
             cache.write_bytes(b"updated runtime cache")
             self.assertEqual(before, benchmark.freeze_arm(arm))
-            unrelated = arm.runtime / "res" / volume_segment_filename("runtime_pipeline_cache", 2)
+            unrelated = arm.runtime / LIT_RES / volume_segment_filename(LIT_RUNTIME_PIPELINE_CACHE, 2)
             unrelated.write_bytes(b"gap means authored/unknown")
             self.assertNotEqual(before, benchmark.freeze_arm(arm))
 
     def test_binary_authored_source_and_shared_tool_changes_abort(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            arm = make_arm(root / "arm", "baseline")
-            other = make_arm(root / "other", "candidate")
+            arm = make_arm(root / LIT_ARM, LIT_BASELINE)
+            other = make_arm(root / "other", LIT_CANDIDATE)
             tool = root / "tool.py"
             tool.write_bytes(b"tool")
             identities = {item.name: benchmark.freeze_arm(item) for item in (arm, other)}
             shared = {str(tool): benchmark.file_identity(tool)}
             benchmark.verify_frozen((arm, other), identities, shared)
-            for path in (arm.executable, arm.runtime / "res" / "authored.vol", tool):
+            for path in (arm.executable, arm.runtime / LIT_RES / LIT_AUTHORED_VOL, tool):
                 original = path.read_bytes()
                 path.write_bytes(b"changed")
                 with self.subTest(path=path), self.assertRaises(benchmark.SmokeFailure):
@@ -425,14 +570,14 @@ class FrozenIdentityTests(unittest.TestCase):
     def test_shared_or_hard_linked_caches_are_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            first = make_arm(root / "a", "baseline")
-            second = make_arm(root / "b", "candidate")
+            first = make_arm(root / "a", LIT_BASELINE)
+            second = make_arm(root / "b", LIT_CANDIDATE)
             with self.assertRaisesRegex(benchmark.SmokeFailure, "distinct"):
                 benchmark.validate_arm_separation((first, first))
             benchmark.validate_arm_separation((first, second))
-            filename = volume_segment_filename("runtime_pipeline_cache", 0)
-            first_cache = first.runtime / "res" / filename
-            second_cache = second.runtime / "res" / filename
+            filename = volume_segment_filename(LIT_RUNTIME_PIPELINE_CACHE, 0)
+            first_cache = first.runtime / LIT_RES / filename
+            second_cache = second.runtime / LIT_RES / filename
             first_cache.write_bytes(b"shared cache")
             second_cache.hardlink_to(first_cache)
             with self.assertRaisesRegex(benchmark.SmokeFailure, "alias"):
@@ -452,40 +597,40 @@ class PairedInferenceTests(unittest.TestCase):
         positions = collections.Counter((position, arm) for row in orders for position, arm in enumerate(row))
         self.assertEqual(set(positions.values()), {4})
         result = benchmark.compare_trials(trials, orders, workload)
-        self.assertEqual(result["completed_trials"], 16)
-        self.assertEqual(result["completed_blocks"], 8)
-        self.assertEqual(result["completed_gpu_frames"], 3200)
-        self.assertEqual(result["status"], "resolved_gpu_time_reduction")
-        self.assertAlmostEqual(result["frame"]["mean_ms"], -.5)
-        self.assertEqual(result["secondary_scope"], benchmark.OCCUPANCY)
-        self.assertAlmostEqual(result["secondary"]["mean_ms"], 0)
+        self.assertEqual(result[LIT_COMPLETED_TRIALS], 16)
+        self.assertEqual(result[LIT_COMPLETED_BLOCKS], 8)
+        self.assertEqual(result[LIT_COMPLETED_GPU_FRAMES], 3200)
+        self.assertEqual(result[LIT_STATUS], LIT_RESOLVED_GPU_TIME_REDUCTION)
+        self.assertAlmostEqual(result["frame"][LIT_MEAN_MS], -.5)
+        self.assertEqual(result[LIT_SECONDARY_SCOPE], benchmark.OCCUPANCY)
+        self.assertAlmostEqual(result[LIT_SECONDARY][LIT_MEAN_MS], 0)
 
     def test_missing_duplicate_and_wrong_order_trials_are_not_silently_dropped(self):
         workload, orders, trials = trial_matrix()
         changed = copy.deepcopy(trials)
-        changed[0]["position"] = 1
+        changed[0][LIT_POSITION] = 1
         for invalid in (trials[:-1], trials + [trials[0]], changed):
-            with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
+            with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
                 benchmark.compare_trials(invalid, orders, workload)
 
     def test_small_effect_and_uncertain_controls_cannot_claim_speedup(self):
         workload, orders, trials = trial_matrix(-.01)
-        self.assertEqual(benchmark.compare_trials(trials, orders, workload)["status"], "unresolved")
+        self.assertEqual(benchmark.compare_trials(trials, orders, workload)[LIT_STATUS], "unresolved")
         workload, orders, trials = trial_matrix(-.5)
         for trial in trials:
-            if trial["arm"] == "candidate":
-                trial["scopes"][benchmark.CONTROLS[0]]["mean_ms"] += .2 if trial["block"] % 2 else -.2
+            if trial[LIT_ARM] == LIT_CANDIDATE:
+                trial[LIT_SCOPES][benchmark.CONTROLS[0]][LIT_MEAN_MS] += .2 if trial[LIT_BLOCK] % 2 else -.2
         result = benchmark.compare_trials(trials, orders, workload)
-        self.assertEqual(result["status"], "control_uncertain")
+        self.assertEqual(result[LIT_STATUS], LIT_CONTROL_UNCERTAIN)
         for trial in trials:
-            if trial["arm"] == "candidate":
-                trial["scopes"][benchmark.CONTROLS[0]]["mean_ms"] = .3
-        self.assertEqual(benchmark.compare_trials(trials, orders, workload)["status"], "control_drift")
+            if trial[LIT_ARM] == LIT_CANDIDATE:
+                trial[LIT_SCOPES][benchmark.CONTROLS[0]][LIT_MEAN_MS] = .3
+        self.assertEqual(benchmark.compare_trials(trials, orders, workload)[LIT_STATUS], LIT_CONTROL_DRIFT)
 
 
 def reflection_log_text(workload):
     policy = workload.reflection_policy
-    route = "screen-space" if policy.variant.mode == "screen" else "hardware"
+    route = "screen-space" if policy.variant.mode == LIT_SCREEN else LIT_HARDWARE
     lines = [f"ReflectionSmokeProject: case {policy.family} created",
         f"ReflectionSmokeProject: reflection mode {policy.variant.mode}",
         f"ReflectionSmokeProject: hardware ray budget {policy.ray_budget}",
@@ -494,8 +639,8 @@ def reflection_log_text(workload):
         "ReflectionSmokeProject: timing render unfocused 1",
         "ReflectionSmokeProject: timing in-flight ranges 32",
         "ReflectionSmokeProject: timing depth mip count 10",
-        "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: shutdown",
-        f"Reflection resolve: {route}", "Vulkan: created device 'Example GPU'",
+        "ReflectionSmokeProject: hardware available", LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN,
+        f"Reflection resolve: {route}", LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
         "RendererSystem: material 'receiver' selected CS + PS through compute emulation",
         "RendererSystem: deferred rendering targets ready (960x720, samples=1)"]
     if policy.family.startswith("optical_"):
@@ -507,16 +652,16 @@ class ReflectionWorkloadTests(unittest.TestCase):
     def test_fixed_six_workloads_pin_settings_target_and_active_ranges(self):
         reflection = benchmark.reflection
         expected = {
-            "reflection-rough-spatial": ("rough", "hardware", .4, False, True, reflection.SPATIAL),
-            "reflection-mirror-spatial": ("rough", "hardware", 0.0, False, True, reflection.SPATIAL),
-            "reflection-rough-filtered": ("rough", "hardware", .4, True, True, reflection.SPATIAL),
-            "reflection-screen-depth": ("floor", "screen", 0.0, False, False, reflection.DEPTH),
-            "reflection-optical-clear": ("optical_clear", "hardware", 0.0, False, False, reflection.HARDWARE),
-            "reflection-optical-inside": ("optical_inside", "hardware", 0.0, False, False, reflection.HARDWARE),
+            LIT_REFLECTION_ROUGH_SPATIAL: (LIT_ROUGH, LIT_HARDWARE, .4, False, True, reflection.SPATIAL),
+            LIT_REFLECTION_MIRROR_SPATIAL: (LIT_ROUGH, LIT_HARDWARE, 0.0, False, True, reflection.SPATIAL),
+            LIT_REFLECTION_ROUGH_FILTERED: (LIT_ROUGH, LIT_HARDWARE, .4, True, True, reflection.SPATIAL),
+            LIT_REFLECTION_SCREEN_DEPTH: ("floor", LIT_SCREEN, 0.0, False, False, reflection.DEPTH),
+            LIT_REFLECTION_OPTICAL_CLEAR: ("optical_clear", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
+            LIT_REFLECTION_OPTICAL_INSIDE: ("optical_inside", LIT_HARDWARE, 0.0, False, False, reflection.HARDWARE),
         }
-        self.assertEqual(set(benchmark.workloads()), {"transparent-multi", *expected,
-            "shadow-zero-extent", "shadow-finite-extent", "shadow-zero-directional", "shadow-zero-punctual",
-            "caustic-populated", "caustic-sparse"})
+        self.assertEqual(set(benchmark.workloads()), {LIT_TRANSPARENT_MULTI, *expected,
+            LIT_SHADOW_ZERO_EXTENT, LIT_SHADOW_FINITE_EXTENT, LIT_SHADOW_ZERO_DIRECTIONAL, LIT_SHADOW_ZERO_PUNCTUAL,
+            LIT_CAUSTIC_POPULATED, LIT_CAUSTIC_SPARSE})
         for name, values in expected.items():
             with self.subTest(workload=name):
                 workload = benchmark.workloads()[name]
@@ -530,43 +675,43 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 benchmark.validate_coverage(scopes(workload), workload, 6, 100)
 
     def test_reflection_environment_reuses_fixed_production_controls_after_clearing_inheritance(self):
-        inherited = {"NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "1",
-            "NWB_AVBOIT_SMOKE_TIMING": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
-            "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "5", "PRESERVED": "yes"}
+        inherited = {LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS: "1", LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES: "1",
+            LIT_NWB_AVBOIT_SMOKE_TIMING: "1", LIT_NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH: LIT_OLD_BMP,
+            LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO: "5", LIT_PRESERVED: LIT_YES}
         for workload in benchmark.workloads().values():
             if workload.reflection_policy is None:
                 continue
             with self.subTest(workload=workload.name):
-                env, overrides = benchmark.configure_environment(inherited, workload, Path("new_timing.txt"))
-                self.assertEqual(env, {"PRESERVED": "yes", **overrides})
-                self.assertEqual(overrides, {**dict(workload.environment_overrides), "NWB_GPU_TIMING_FILE": "new_timing.txt"})
-                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "0")
+                env, overrides = benchmark.configure_environment(inherited, workload, Path(LIT_NEW_TIMING_TXT))
+                self.assertEqual(env, {LIT_PRESERVED: LIT_YES, **overrides})
+                self.assertEqual(overrides, {**dict(workload.environment_overrides), LIT_NWB_GPU_TIMING_FILE: LIT_NEW_TIMING_TXT})
+                self.assertEqual(overrides[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
                 self.assertEqual(overrides["NWB_REFLECTION_SMOKE_TIMING"], "1")
-                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_HISTORY_SAMPLES"], "16")
+                self.assertEqual(overrides[LIT_NWB_REFLECTION_SMOKE_HISTORY_SAMPLES], LIT_N_16)
                 self.assertEqual(overrides["NWB_REFLECTION_SMOKE_FEEDBACK"], "0")
-                self.assertEqual(overrides["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"], "0.016666667")
+                self.assertEqual(overrides[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO], "0.016666667")
                 self.assertEqual(overrides["NWB_REFLECTION_SMOKE_ROUGHNESS"], str(workload.reflection_policy.roughness))
-        self.assertEqual(inherited["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "1")
+        self.assertEqual(inherited[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "1")
 
     def test_reflection_cannot_override_explicit_vulkan_validation(self):
-        workload = benchmark.workloads()["reflection-rough-spatial"]
-        for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
+        workload = benchmark.workloads()[LIT_REFLECTION_ROUGH_SPATIAL]
+        for key in (LIT_VK_INSTANCE_LAYERS, LIT_VK_LOADER_LAYERS_ENABLE):
             with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.configure_environment({key: "validation"}, workload, Path("timing"))
 
     def test_screen_depth_requires_all_ten_mips_and_no_hardware_ranges(self):
-        workload = benchmark.workloads()["reflection-screen-depth"]
+        workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.DEPTH], 10)
         self.assertIn(benchmark.reflection.HARDWARE, workload.inactive_scopes)
         self.assertIn(benchmark.reflection.BUILD_ARGS, workload.inactive_scopes)
         for multiplier in (1, 9, 11):
             changed = scopes(workload)
-            changed[benchmark.reflection.DEPTH]["gpu_samples"] = 200 * multiplier
+            changed[benchmark.reflection.DEPTH][LIT_GPU_SAMPLES] = 200 * multiplier
             with self.subTest(multiplier=multiplier), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_coverage(changed, workload, 6, 100)
 
     def test_mirror_still_requires_spatial_but_no_temporal_range(self):
-        workload = benchmark.workloads()["reflection-mirror-spatial"]
+        workload = benchmark.workloads()[LIT_REFLECTION_MIRROR_SPATIAL]
         self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.SPATIAL], 1)
         self.assertIn(benchmark.reflection.TEMPORAL, workload.inactive_scopes)
         changed = scopes(workload)
@@ -575,7 +720,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
             benchmark.validate_coverage(changed, workload, 6, 100)
 
     def test_filtered_retains_temporal_one_per_frame_and_both_controls(self):
-        workload = benchmark.workloads()["reflection-rough-filtered"]
+        workload = benchmark.workloads()[LIT_REFLECTION_ROUGH_FILTERED]
         self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.TEMPORAL], 1)
         for missing in (benchmark.reflection.TEMPORAL, benchmark.reflection.SPATIAL, benchmark.CONTROLS[1]):
             changed = scopes(workload)
@@ -587,16 +732,16 @@ class ReflectionWorkloadTests(unittest.TestCase):
         for workload in benchmark.workloads().values():
             for inactive in workload.inactive_scopes:
                 with self.subTest(workload=workload.name, scope=inactive), self.assertRaisesRegex(
-                    benchmark.SmokeFailure, "inactive reflection scopes"):
-                    benchmark.validate_inactive_scopes({inactive: {"gpu_samples": 1}}, workload)
+                    benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
+                    benchmark.validate_inactive_scopes({inactive: {LIT_GPU_SAMPLES: 1}}, workload)
 
     def test_inactive_hashed_scope_is_decoded_and_rejected(self):
-        workload = benchmark.workloads()["reflection-screen-depth"]
+        workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         symbols = benchmark.load_name_symbols(None, workload.observed_scopes)
         token = next(token for token, name in symbols.items() if name == benchmark.reflection.HARDWARE)
         text = f"=== interval: 1 frames / 0.5s ===\n  {token}: total_ms=1 gpu_samples=1\n"
         parsed = benchmark.summarize_intervals(benchmark.parse_intervals(text, symbols, finalized=True))
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "inactive reflection scopes"):
+        with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
             benchmark.validate_inactive_scopes(parsed, workload)
 
     def test_reflection_runtime_signature_uses_production_log_validation(self):
@@ -609,16 +754,16 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 self.assertEqual(signature["reflection_route"], workload.reflection_policy.variant.mode)
                 self.assertEqual(signature["reflection_policy"]["roughness"], workload.reflection_policy.roughness)
                 self.assertEqual(signature, workload.validate_log(text.replace("\n", "\r\n"), workload, True))
-                for altered in (text.replace("960x720", "1280x900"),
+                for altered in (text.replace(LIT_N_960X720, LIT_N_1280X900),
                     text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
                     text + "\nReflectionSmokeProject: screen steps 16", text + "\nVUID-rejected",
                     text + "\nFramebufferCapture: capture ready", text.replace("hardware available", "hardware unavailable"),
-                    text.replace("ReflectionSmokeProject: shutdown", "")):
+                    text.replace(LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN, "")):
                     with self.assertRaises(benchmark.SmokeFailure):
                         workload.validate_log(altered, workload, True)
 
     def test_inside_query_cap_is_strict_despite_shared_benchmark_only_checking_clear(self):
-        workload = benchmark.workloads()["reflection-optical-inside"]
+        workload = benchmark.workloads()[LIT_REFLECTION_OPTICAL_INSIDE]
         text = reflection_log_text(workload)
         for changed in (text.replace("optical query limit 16", "optical query limit 8"),
             text + "\nReflectionSmokeProject: optical query limit 16"):
@@ -626,54 +771,54 @@ class ReflectionWorkloadTests(unittest.TestCase):
                 workload.validate_log(changed, workload, True)
 
     def test_declared_native_dispatch_count_never_changes_range_coverage(self):
-        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
-            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
-            "--logserver-executable", "logger", "--output-directory", "output"]
-        args = benchmark.parse_args(common + ["--workload", "reflection-optical-clear",
-            "--candidate-hardware-dispatches-per-range", "2"])
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
+            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+            LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
+        args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_REFLECTION_OPTICAL_CLEAR,
+            LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
         self.assertEqual((args.blocks, args.baseline_hardware_dispatches_per_range,
             args.candidate_hardware_dispatches_per_range), (8, 1, 2))
         self.assertTrue(args.require_hardware)
         workload = benchmark.workloads()[args.workload]
         self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.HARDWARE], 1)
         value = scopes(workload)
-        value[benchmark.reflection.HARDWARE]["gpu_samples"] *= 2
+        value[benchmark.reflection.HARDWARE][LIT_GPU_SAMPLES] *= 2
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.validate_coverage(value, workload, 6, 100)
-        for name in ("transparent-multi", "reflection-screen-depth", "reflection-rough-filtered"):
+        for name in (LIT_TRANSPARENT_MULTI, LIT_REFLECTION_SCREEN_DEPTH, LIT_REFLECTION_ROUGH_FILTERED):
             with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + ["--workload", name, "--candidate-hardware-dispatches-per-range", "2"])
+                benchmark.parse_args(common + [LIT_WORKLOAD, name, LIT_CANDIDATE_HARDWARE_DISPATCHES_PER_RANG, "2"])
 
     def test_depth_secondary_reports_per_mip_and_aggregate_work_without_frame_attribution(self):
-        workload = benchmark.workloads()["reflection-screen-depth"]
+        workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         _, orders, trials = trial_matrix()
         for trial in trials:
-            trial["scopes"] = scopes(workload, frame_ms=5 if trial["arm"] == "baseline" else 4.5)
-            if trial["arm"] == "candidate":
-                trial["scopes"][benchmark.reflection.DEPTH]["mean_ms"] = .4
-                trial["scopes"][benchmark.reflection.DEPTH]["total_ms"] = .4 * 200 * 10
+            trial[LIT_SCOPES] = scopes(workload, frame_ms=5 if trial[LIT_ARM] == LIT_BASELINE else 4.5)
+            if trial[LIT_ARM] == LIT_CANDIDATE:
+                trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_MEAN_MS] = .4
+                trial[LIT_SCOPES][benchmark.reflection.DEPTH][LIT_TOTAL_MS] = .4 * 200 * 10
         result = benchmark.compare_trials(trials, orders, workload)
-        self.assertEqual(result["secondary_scope"], benchmark.reflection.DEPTH)
-        self.assertAlmostEqual(result["secondary"]["mean_ms"], -.1)
-        self.assertAlmostEqual(result["secondary_per_frame_work"]["delta"]["mean_ms"], -1.0)
-        self.assertEqual(result["completed_trials"], 16)
-        self.assertEqual(result["completed_blocks"], 8)
-        self.assertEqual(result["completed_gpu_frames"], 3200)
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
+        self.assertEqual(result[LIT_SECONDARY_SCOPE], benchmark.reflection.DEPTH)
+        self.assertAlmostEqual(result[LIT_SECONDARY][LIT_MEAN_MS], -.1)
+        self.assertAlmostEqual(result["secondary_per_frame_work"]["delta"][LIT_MEAN_MS], -1.0)
+        self.assertEqual(result[LIT_COMPLETED_TRIALS], 16)
+        self.assertEqual(result[LIT_COMPLETED_BLOCKS], 8)
+        self.assertEqual(result[LIT_COMPLETED_GPU_FRAMES], 3200)
+        with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_EVERY_PLANNED_TRIAL):
             benchmark.compare_trials(trials[:-1], orders, workload)
 
 
-def caustic_log_text(preset="populated", enabled=True, capture=False):
+def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
     distance = benchmark.caustic.PRESETS[preset]
     text = "\n".join((
-        "Vulkan: created device 'Example GPU'",
-        "RendererSystem: material 'glass' selected CS + PS through compute emulation",
+        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
+        LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware",
-        "RendererSystem: dispatched hardware transparent shadow traversal",
-        "AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1",
+        LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
+        LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32, LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
         "AvboitTimingProbe: caustic in-flight ranges 32",
         "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
-        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else "disabled"),
+        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else LIT_DISABLED),
         "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false",
         "CausticTimingProbe: scene single-static-sphere-ground-v1",
         f"CausticTimingProbe: camera {preset} distance {distance} height 0.85",
@@ -681,8 +826,8 @@ def caustic_log_text(preset="populated", enabled=True, capture=False):
         "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
         "CausticTimingProbe: vertical FOV radians 1.0471976",
         "CausticTimingProbe: photon phases bootstrap 2 converged 4 warmup 8",
-        "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
-        "TransparentMultiSmokeProject: shutdown"))
+        LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
+        LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
     if enabled:
         text += "\nRendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, 262144 full-grid budget, 1 caustic lights, 1 refractive instances)"
     if capture:
@@ -692,12 +837,12 @@ def caustic_log_text(preset="populated", enabled=True, capture=False):
 
 class CausticMeasurementTests(unittest.TestCase):
     def test_camera_presets_keep_optical_quality_and_geometry_controls_identical(self):
-        populated, sparse = (benchmark.workloads()["caustic-" + preset] for preset in benchmark.caustic.PRESETS)
+        populated, sparse = (benchmark.workloads()[LIT_CAUSTIC + preset] for preset in benchmark.caustic.PRESETS)
         a, b = dict(populated.environment_overrides), dict(sparse.environment_overrides)
         self.assertEqual({key for key in a if a[key] != b[key]}, {"NWB_CAUSTIC_SMOKE_CAMERA_PRESET"})
-        self.assertEqual(a["NWB_CAUSTIC_SMOKE_ENABLED"], "1")
+        self.assertEqual(a[LIT_NWB_CAUSTIC_SMOKE_ENABLED], "1")
         self.assertEqual(a["NWB_REFRACTION_SMOKE_ENABLED"], "0")
-        self.assertEqual(a["NWB_REFLECTION_SMOKE_MODE"], "disabled")
+        self.assertEqual(a["NWB_REFLECTION_SMOKE_MODE"], LIT_DISABLED)
         self.assertEqual(populated.scope_multipliers, sparse.scope_multipliers)
         self.assertEqual(populated.secondary_scope, benchmark.caustic.RESOLVE)
         self.assertIn(benchmark.caustic.PHOTONS, populated.control_scopes)
@@ -705,7 +850,7 @@ class CausticMeasurementTests(unittest.TestCase):
         self.assertEqual(len(populated.scopes), 14)
 
     def test_completed_resolve_and_photon_counts_cannot_be_divided_or_missing(self):
-        workload = benchmark.workloads()["caustic-populated"]
+        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
         benchmark.validate_coverage(scopes(workload), workload, 6, 100)
         for name in (benchmark.caustic.RESOLVE, benchmark.caustic.PHOTONS):
             missing = scopes(workload)
@@ -713,24 +858,24 @@ class CausticMeasurementTests(unittest.TestCase):
             with self.subTest(scope=name), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.validate_coverage(missing, workload, 6, 100)
             wrong = scopes(workload)
-            wrong[name]["gpu_samples"] *= 2
-            with self.assertRaisesRegex(benchmark.SmokeFailure, "sample ratio"):
+            wrong[name][LIT_GPU_SAMPLES] *= 2
+            with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_SAMPLE_RATIO):
                 benchmark.validate_coverage(wrong, workload, 6, 100)
 
     def test_warmup_is_actual_completed_gpu_work_not_publication_count(self):
-        values = {name: {"gpu_samples": 12, "total_ms": 1, "reports": 2}
+        values = {name: {LIT_GPU_SAMPLES: 12, LIT_TOTAL_MS: 1, LIT_REPORTS: 2}
             for name in (benchmark.FRAME, benchmark.caustic.PHOTONS)}
         benchmark.caustic.validate_warmup(values)
         for name in values:
             changed = copy.deepcopy(values)
-            changed[name]["gpu_samples"] = 11
-            changed[name]["reports"] = 1000
+            changed[name][LIT_GPU_SAMPLES] = 11
+            changed[name][LIT_REPORTS] = 1000
             with self.assertRaises(benchmark.SmokeFailure):
                 benchmark.caustic.validate_warmup(changed)
 
     def test_actual_native_route_geometry_and_photon_budget_are_load_bearing(self):
         for preset in benchmark.caustic.PRESETS:
-            workload = benchmark.workloads()["caustic-" + preset]
+            workload = benchmark.workloads()[LIT_CAUSTIC + preset]
             text = caustic_log_text(preset)
             actual = workload.validate_log(text, workload, True)
             self.assertEqual(actual["camera_distance"], benchmark.caustic.PRESETS[preset])
@@ -747,24 +892,24 @@ class CausticMeasurementTests(unittest.TestCase):
                     workload.validate_log(changed, workload, True)
 
     def test_caustic_current_route_is_strict_and_frozen_legacy_requires_explicit_opt_in(self):
-        workload = benchmark.workloads()["caustic-populated"]
+        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
-        hardware_marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        hardware_marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         legacy = text.replace("natural hardware shadow route", "natural hybrid shadow route").replace(
-            hardware_marker, "RendererSystem: dispatched software shadow traversal")
+            hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.caustic.validate_log(legacy, settings)
         preserved = benchmark.caustic.validate_log(legacy, settings, allow_legacy_shadow_route=True)
-        self.assertEqual(preserved["shadow_route"], "hybrid")
-        self.assertEqual(workload.validate_log(legacy, workload, True)["shadow_route"], "hybrid")
+        self.assertEqual(preserved[LIT_SHADOW_ROUTE], LIT_HYBRID)
+        self.assertEqual(workload.validate_log(legacy, workload, True)[LIT_SHADOW_ROUTE], LIT_HYBRID)
         for altered in (text.replace(hardware_marker, ""),
-            text + "\nRendererSystem: dispatched software shadow traversal"):
+            text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.caustic.validate_log(altered, settings)
 
     def test_capture_evidence_is_required_for_qualification_and_forbidden_for_timing(self):
-        workload = benchmark.workloads()["caustic-populated"]
+        workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
         text = caustic_log_text(capture=True)
         settings = dict(workload.environment_overrides)
         actual = benchmark.caustic.validate_log(text, settings, capture=True)
@@ -775,7 +920,7 @@ class CausticMeasurementTests(unittest.TestCase):
         for changed in (caustic_log_text(), text.replace("source frame 359", "source frame 7")):
             with self.assertRaises(benchmark.SmokeFailure):
                 benchmark.caustic.validate_log(changed, settings, capture=True)
-        off = benchmark.caustic.environment("populated", False)
+        off = benchmark.caustic.environment(LIT_POPULATED, False)
         benchmark.caustic.validate_log(caustic_log_text(enabled=False, capture=True), off, capture=True)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.caustic.validate_log(text, off, capture=True)
@@ -793,44 +938,44 @@ class CausticMeasurementTests(unittest.TestCase):
         for x in range(width):
             rows[0][x] = (255, 255, 255)
         result = benchmark.caustic.footprint((width, height, rows), off, 2.2)
-        self.assertEqual(result["positive_pixels"], 20)
-        self.assertEqual(result["positive_channel_gain"], 1200)
-        self.assertEqual(benchmark.caustic.footprint(off, off, 2.2)["positive_pixels"], 0)
+        self.assertEqual(result[LIT_POSITIVE_PIXELS], 20)
+        self.assertEqual(result[LIT_POSITIVE_CHANNEL_GAIN], 1200)
+        self.assertEqual(benchmark.caustic.footprint(off, off, 2.2)[LIT_POSITIVE_PIXELS], 0)
 
     def test_visible_pixel_and_tile_reduction_are_independent_qualification_gates(self):
-        good = {"populated": {"positive_pixels": 1000, "positive_tiles": 100, "positive_channel_gain": 60000},
-            "sparse": {"positive_pixels": 250, "positive_tiles": 30, "positive_channel_gain": 15000}}
+        good = {LIT_POPULATED: {LIT_POSITIVE_PIXELS: 1000, LIT_POSITIVE_TILES: 100, LIT_POSITIVE_CHANNEL_GAIN: 60000},
+            LIT_SPARSE: {LIT_POSITIVE_PIXELS: 250, LIT_POSITIVE_TILES: 30, LIT_POSITIVE_CHANNEL_GAIN: 15000}}
         benchmark.caustic.validate_metrics(good)
-        for key, value in (("positive_pixels", 99), ("positive_channel_gain", 1499), ("positive_tiles", 81)):
+        for key, value in ((LIT_POSITIVE_PIXELS, 99), (LIT_POSITIVE_CHANNEL_GAIN, 1499), (LIT_POSITIVE_TILES, 81)):
             changed = copy.deepcopy(good)
-            changed["sparse"][key] = value
+            changed[LIT_SPARSE][key] = value
             with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.caustic.validate_metrics(changed)
         with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.caustic.validate_metrics({"populated": good["populated"], "sparse": good["populated"]})
+            benchmark.caustic.validate_metrics({LIT_POPULATED: good[LIT_POPULATED], LIT_SPARSE: good[LIT_POPULATED]})
 
     def test_caustic_cli_requires_both_frozen_arm_qualification_reports(self):
-        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
-            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
-            "--logserver-executable", "logger", "--output-directory", "output"]
+        common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
+            LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
+            LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
         proofs = ["--baseline-caustic-qualification", "aqual.json", "--candidate-caustic-qualification", "bqual.json"]
         for partial in ([], proofs[:2], proofs[2:]):
             with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                benchmark.parse_args(common + ["--workload", "caustic-populated"] + partial)
-        args = benchmark.parse_args(common + ["--workload", "caustic-sparse"] + proofs)
+                benchmark.parse_args(common + [LIT_WORKLOAD, LIT_CAUSTIC_POPULATED] + partial)
+        args = benchmark.parse_args(common + [LIT_WORKLOAD, LIT_CAUSTIC_SPARSE] + proofs)
         self.assertTrue(args.require_hardware)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             benchmark.parse_args(common + proofs)
 
     def test_qualification_replay_requires_exact_identity_policy_and_all_four_captures(self):
         with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "qualification.json"
-            identity = {"frozen": "actual-arm"}
-            document = {"schema": benchmark.caustic.SCHEMA, "policy": benchmark.caustic.POLICY,
-                "arm": identity, "captures": {}}
-            for changed in ({**document, "arm": {"frozen": "other-arm"}},
-                {**document, "policy": {}}, document):
-                path.write_text(json.dumps(changed), encoding="utf-8")
+            path = Path(temporary) / LIT_QUALIFICATION_JSON
+            identity = {LIT_FROZEN: "actual-arm"}
+            document = {LIT_SCHEMA: benchmark.caustic.SCHEMA, LIT_POLICY: benchmark.caustic.POLICY,
+                LIT_ARM: identity, LIT_CAPTURES: {}}
+            for changed in ({**document, LIT_ARM: {LIT_FROZEN: "other-arm"}},
+                {**document, LIT_POLICY: {}}, document):
+                path.write_text(json.dumps(changed), encoding=LIT_UTF_8)
                 with self.assertRaises(benchmark.SmokeFailure):
                     benchmark.caustic.validate_report(path, identity)
 
@@ -839,22 +984,22 @@ class CausticMeasurementTests(unittest.TestCase):
             directory = Path(temporary)
             output = directory / "old_evidence"
             output.mkdir()
-            saved = output / "failure.json"
+            saved = output / LIT_FAILURE_JSON
             saved.write_bytes(b"original failure evidence")
-            argv = ["--executable", str(directory / "bin" / "fixture.exe"),
-                "--runtime", str(directory / "runtime"), "--source-manifest", str(directory / "source" / "source.json"),
-                "--logserver-executable", str(directory / "logger" / "logger.exe"), "--output-directory", str(output)]
+            argv = ["--executable", str(directory / "bin" / LIT_FIXTURE_EXE),
+                "--runtime", str(directory / LIT_RUNTIME), "--source-manifest", str(directory / LIT_SOURCE / LIT_SOURCE_JSON),
+                LIT_LOGSERVER_EXECUTABLE, str(directory / LIT_LOGGER / LIT_LOGGER_EXE), LIT_OUTPUT_DIRECTORY, str(output)]
             with patch.object(benchmark.caustic.subprocess, "run") as launch, contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(benchmark.caustic.main(argv), 1)
             launch.assert_not_called()
             self.assertEqual(saved.read_bytes(), b"original failure evidence")
-            self.assertEqual(sorted(path.name for path in output.iterdir()), ["failure.json"])
+            self.assertEqual(sorted(path.name for path in output.iterdir()), [LIT_FAILURE_JSON])
 
     def test_caustic_output_overlap_rejected_in_both_directions(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             protected = root / "inputs"
-            for output in (protected, protected / "output", root):
+            for output in (protected, protected / LIT_OUTPUT, root):
                 with self.subTest(output=output), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.caustic.validate_output_path(output, (protected,))
             benchmark.caustic.validate_output_path(root / "evidence", (protected,))
@@ -862,13 +1007,13 @@ class CausticMeasurementTests(unittest.TestCase):
     def test_caustic_requested_gpu_debug_needs_actual_all_markers(self):
         utility = benchmark.caustic
         text = "\n".join(utility.GPU_DEBUG_MARKERS)
-        utility.validate_gpu_debug(text, ["--gpudbg"])
+        utility.validate_gpu_debug(text, [LIT_GPUDBG])
         utility.validate_gpu_debug("ordinary launch", [])
         for marker in utility.GPU_DEBUG_MARKERS:
             with self.subTest(marker=marker), self.assertRaises(benchmark.SmokeFailure):
-                utility.validate_gpu_debug(text.replace(marker, "requested only"), ["--gpudbg"])
-        args = SimpleNamespace(executable="fixture.exe", runtime="runtime", logserver_executable="logger.exe",
-            timeout=90, application_arg=["--gpudbg"])
+                utility.validate_gpu_debug(text.replace(marker, "requested only"), [LIT_GPUDBG])
+        args = SimpleNamespace(executable=LIT_FIXTURE_EXE, runtime=LIT_RUNTIME, logserver_executable=LIT_LOGGER_EXE,
+            timeout=90, application_arg=[LIT_GPUDBG])
         command = utility.capture_command(args, Path("output.bmp"))
         for marker in utility.GPU_DEBUG_MARKERS:
             self.assertIn(marker, command)
@@ -882,28 +1027,28 @@ class CausticMeasurementTests(unittest.TestCase):
                 utility = benchmark.caustic
                 width, height = 160, 120
                 launchers, sources = {}, {}
-                launcher_bytes = Path(utility.__file__).with_name("window_capture_smoke.py").read_bytes()
-                for name in ("baseline", "candidate"):
+                launcher_bytes = Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY).read_bytes()
+                for name in (LIT_BASELINE, LIT_CANDIDATE):
                     arm_root = directory / name
                     launcher = arm_root / "source/tests/smoke/window_capture_smoke.py"
                     launcher.parent.mkdir(parents=True)
                     launcher.write_bytes(launcher_bytes)
-                    manifest = arm_root / "source.json"
-                    manifest.write_text(json.dumps({"revision": name, "files": {
-                        launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding="utf-8")
+                    manifest = arm_root / LIT_SOURCE_JSON
+                    manifest.write_text(json.dumps({LIT_REVISION: name, LIT_FILES: {
+                        launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding=LIT_UTF_8)
                     launchers[name] = launcher
                     sources[name] = benchmark.source_identity(manifest)
-                identity = {"executable": str(directory / "fixture.exe"), "runtime": str(directory / "runtime"),
-                    "source": sources["candidate"]}
-                logger = directory / "logger.exe"
+                identity = {"executable": str(directory / LIT_FIXTURE_EXE), LIT_RUNTIME: str(directory / LIT_RUNTIME),
+                    LIT_SOURCE: sources[LIT_CANDIDATE]}
+                logger = directory / LIT_LOGGER_EXE
                 logger.write_bytes(b"synthetic logger identity")
                 (directory / "crash_handler.exe").write_bytes(b"synthetic crash helper identity")
                 logger_dependency = directory / "logger_dependency.dll"
                 logger_dependency.write_bytes(b"synthetic logger dependency identity")
                 args = SimpleNamespace(**identity, logserver_executable=logger, timeout=90.0, application_arg=[])
-                document = {"schema": utility.SCHEMA, "policy": policy, "arm": identity, "captures": {},
-                    "metrics": {}, "qualification_tool": benchmark.file_identity(Path(utility.__file__)),
-                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name("window_capture_smoke.py")),
+                document = {LIT_SCHEMA: utility.SCHEMA, LIT_POLICY: policy, LIT_ARM: identity, LIT_CAPTURES: {},
+                    LIT_METRICS: {}, LIT_QUALIFICATION_TOOL: benchmark.file_identity(Path(utility.__file__)),
+                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name(LIT_WINDOW_CAPTURE_SMOKE_PY)),
                     "logserver": benchmark.file_identity(logger), "logserver_path": str(logger),
                     "logserver_binaries": benchmark.binary_identity(logger),
                     "timeout_seconds": 90.0, "application_args": []}
@@ -911,7 +1056,7 @@ class CausticMeasurementTests(unittest.TestCase):
                     frames = {}
                     for enabled in (True, False):
                         key = preset + ("_on" if enabled else "_off")
-                        image, log = directory / (key + ".bmp"), directory / (key + ".log")
+                        image, log = directory / (key + LIT_BMP), directory / (key + ".log")
                         selected = set(utility.receiver_pixels(width, height, distance)) if enabled else set()
                         pixels = bytearray()
                         for y in reversed(range(height)):
@@ -920,72 +1065,72 @@ class CausticMeasurementTests(unittest.TestCase):
                         header = struct.pack("<2sIHHI", b"BM", 54 + len(pixels), 0, 0, 54)
                         header += struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(pixels), 0, 0, 0, 0)
                         image.write_bytes(header + pixels)
-                        log.write_text(caustic_log_text(preset, enabled, capture=True).replace("1280x900", "160x120"), encoding="utf-8")
+                        log.write_text(caustic_log_text(preset, enabled, capture=True).replace(LIT_N_1280X900, "160x120"), encoding=LIT_UTF_8)
                         settings = utility.environment(preset, enabled)
-                        document["captures"][key] = {"settings": settings,
-                            "runtime": utility.validate_log(log.read_text(encoding="utf-8"), settings, capture=True),
-                            "command": utility.capture_command(args, image, launcher=launchers["candidate"]),
-                            "image": {"path": image.name, "identity": benchmark.file_identity(image)},
-                            "log": {"path": log.name, "identity": benchmark.file_identity(log)}}
+                        document[LIT_CAPTURES][key] = {"settings": settings,
+                            LIT_RUNTIME: utility.validate_log(log.read_text(encoding=LIT_UTF_8), settings, capture=True),
+                            LIT_COMMAND: utility.capture_command(args, image, launcher=launchers[LIT_CANDIDATE]),
+                            LIT_IMAGE: {LIT_PATH: image.name, LIT_IDENTITY: benchmark.file_identity(image)},
+                            LIT_LOG: {LIT_PATH: log.name, LIT_IDENTITY: benchmark.file_identity(log)}}
                         frames[enabled] = utility.read_bmp_24_rows(image)
-                    document["metrics"][preset] = utility.footprint(frames[True], frames[False], distance)
-                report = directory / "qualification.json"
-                report.write_text(json.dumps(document), encoding="utf-8")
+                    document[LIT_METRICS][preset] = utility.footprint(frames[True], frames[False], distance)
+                report = directory / LIT_QUALIFICATION_JSON
+                report.write_text(json.dumps(document), encoding=LIT_UTF_8)
                 result, paths = utility.validate_report(report, identity)
-                self.assertEqual(result["metrics"], document["metrics"])
+                self.assertEqual(result[LIT_METRICS], document[LIT_METRICS])
                 self.assertEqual(len(paths), 12)
                 # Both physical frozen roots contain identical launchers; replay must bind the selected arm's path.
-                baseline_identity = {**identity, "source": sources["baseline"]}
+                baseline_identity = {**identity, LIT_SOURCE: sources[LIT_BASELINE]}
                 baseline_document = copy.deepcopy(document)
-                baseline_document["arm"] = baseline_identity
-                for key, record in baseline_document["captures"].items():
-                    record["command"] = utility.capture_command(args, directory / (key + ".bmp"),
-                        launcher=launchers["baseline"])
-                report.write_text(json.dumps(baseline_document), encoding="utf-8")
+                baseline_document[LIT_ARM] = baseline_identity
+                for key, record in baseline_document[LIT_CAPTURES].items():
+                    record[LIT_COMMAND] = utility.capture_command(args, directory / (key + LIT_BMP),
+                        launcher=launchers[LIT_BASELINE])
+                report.write_text(json.dumps(baseline_document), encoding=LIT_UTF_8)
                 baseline_result, _ = utility.validate_report(report, baseline_identity)
-                self.assertEqual(baseline_result["metrics"], document["metrics"])
+                self.assertEqual(baseline_result[LIT_METRICS], document[LIT_METRICS])
                 wrong_root = copy.deepcopy(document)
-                wrong_root["captures"]["populated_on"]["command"] = baseline_document["captures"]["populated_on"]["command"]
-                report.write_text(json.dumps(wrong_root), encoding="utf-8")
+                wrong_root[LIT_CAPTURES][LIT_POPULATED_ON][LIT_COMMAND] = baseline_document[LIT_CAPTURES][LIT_POPULATED_ON][LIT_COMMAND]
+                report.write_text(json.dumps(wrong_root), encoding=LIT_UTF_8)
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "launch command changed"):
                     utility.validate_report(report, identity)
                 unpinned_identity = copy.deepcopy(identity)
-                unpinned_identity["source"]["files"].pop(str(launchers["candidate"].resolve()))
+                unpinned_identity[LIT_SOURCE][LIT_FILES].pop(str(launchers[LIT_CANDIDATE].resolve()))
                 unpinned = copy.deepcopy(document)
-                unpinned["arm"] = unpinned_identity
-                report.write_text(json.dumps(unpinned), encoding="utf-8")
+                unpinned[LIT_ARM] = unpinned_identity
+                report.write_text(json.dumps(unpinned), encoding=LIT_UTF_8)
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "launcher is unpinned"):
                     utility.validate_report(report, unpinned_identity)
-                report.write_text(json.dumps(document), encoding="utf-8")
-                launchers["candidate"].write_bytes(launcher_bytes + b"modified")
+                report.write_text(json.dumps(document), encoding=LIT_UTF_8)
+                launchers[LIT_CANDIDATE].write_bytes(launcher_bytes + LIT_MODIFIED.encode(LIT_UTF_8))
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "launcher is unpinned or its bytes changed"):
                     utility.validate_report(report, identity)
-                launchers["candidate"].write_bytes(launcher_bytes)
+                launchers[LIT_CANDIDATE].write_bytes(launcher_bytes)
                 saved_dependency = logger_dependency.read_bytes()
-                logger_dependency.write_bytes(saved_dependency + b"modified")
+                logger_dependency.write_bytes(saved_dependency + LIT_MODIFIED.encode(LIT_UTF_8))
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "dependency inventory changed"):
                     utility.validate_report(report, identity)
                 logger_dependency.write_bytes(saved_dependency)
-                for kind in ("image", "log"):
-                    raw = directory / document["captures"]["populated_on"][kind]["path"]
+                for kind in (LIT_IMAGE, LIT_LOG):
+                    raw = directory / document[LIT_CAPTURES][LIT_POPULATED_ON][kind][LIT_PATH]
                     saved = raw.read_bytes()
-                    raw.write_bytes(saved + b"modified")
+                    raw.write_bytes(saved + LIT_MODIFIED.encode(LIT_UTF_8))
                     with self.subTest(kind=kind), self.assertRaisesRegex(benchmark.SmokeFailure, "raw .* changed"):
                         utility.validate_report(report, identity)
                     raw.write_bytes(saved)
-                for field in ("metrics", "qualification_tool", "command"):
+                for field in (LIT_METRICS, LIT_QUALIFICATION_TOOL, LIT_COMMAND):
                     changed = copy.deepcopy(document)
-                    if field == "metrics":
-                        changed[field]["populated"]["positive_pixels"] += 1
-                    elif field == "qualification_tool":
+                    if field == LIT_METRICS:
+                        changed[field][LIT_POPULATED][LIT_POSITIVE_PIXELS] += 1
+                    elif field == LIT_QUALIFICATION_TOOL:
                         changed[field]["sha256"] = "0" * 64
                     else:
-                        command = changed["captures"]["populated_on"]["command"]
-                        command[command.index("--application-capture-frame-count") + 1] = "16"
-                    report.write_text(json.dumps(changed), encoding="utf-8")
+                        command = changed[LIT_CAPTURES][LIT_POPULATED_ON][LIT_COMMAND]
+                        command[command.index("--application-capture-frame-count") + 1] = LIT_N_16
+                    report.write_text(json.dumps(changed), encoding=LIT_UTF_8)
                     with self.subTest(field=field), self.assertRaises(benchmark.SmokeFailure):
                         utility.validate_report(report, identity)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

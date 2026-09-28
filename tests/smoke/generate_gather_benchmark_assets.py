@@ -6,6 +6,14 @@ import hashlib
 import json
 from pathlib import Path
 
+# Shared literals (no inline hardcodes below this block).
+LIT_R_N = "\r\n"
+LIT_N = "\n"
+LIT_UTF_8 = "utf-8"
+LIT_GENERATION_IDENTITY_JSON = "generation_identity.json"
+LIT_EMPTY = ", "
+LIT_MAIN = "__main__"
+
 MATERIAL = '''material asset;
 
 asset.interface = "project/shaders/smoke_surface.bind";
@@ -23,7 +31,7 @@ asset.parameters = {
 
 
 def crlf(text):
-    return text.replace("\r\n", "\n").replace("\n", "\r\n").encode("utf-8")
+    return text.replace(LIT_R_N, LIT_N).replace(LIT_N, LIT_R_N).encode(LIT_UTF_8)
 
 
 def generated_contents(mesh_text, surface_text):
@@ -53,20 +61,20 @@ def main(argv=None):
     # and the generated surface in that same private root; two project roots would resolve the wrong include.
     contents = {path.relative_to(source_root).as_posix(): path.read_bytes()
         for path in sorted(source_root.rglob("*")) if path.is_file()}
-    generated = generated_contents(sources[0].read_text(encoding="utf-8"), sources[1].read_text(encoding="utf-8"))
+    generated = generated_contents(sources[0].read_text(encoding=LIT_UTF_8), sources[1].read_text(encoding=LIT_UTF_8))
     if contents.keys() & generated.keys():
         parser.error("generated benchmark identities collide with source assets")
     contents.update(generated)
-    if "generation_identity.json" in contents:
+    if LIT_GENERATION_IDENTITY_JSON in contents:
         parser.error("source assets collide with the reserved generation identity")
     expected = dict(contents)
-    expected["generation_identity.json"] = (json.dumps({"schema": 1, "objects": 64,
+    expected[LIT_GENERATION_IDENTITY_JSON] = (json.dumps({"schema": 1, "objects": 64,
         "templates": {str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in sources},
-        "files": {relative: hashlib.sha256(payload).hexdigest() for relative, payload in contents.items()}}, indent=2) + "\n").encode("utf-8")
+        "files": {relative: hashlib.sha256(payload).hexdigest() for relative, payload in contents.items()}}, indent=2) + LIT_N).encode(LIT_UTF_8)
     existing = {path.relative_to(output).as_posix() for path in output.rglob("*") if path.is_file()}
     unexpected = sorted(existing - expected.keys())
     if unexpected:
-        parser.error("unexpected existing generated files: " + ", ".join(unexpected))
+        parser.error("unexpected existing generated files: " + LIT_EMPTY.join(unexpected))
     for relative, payload in expected.items():
         path = output / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,9 +85,9 @@ def main(argv=None):
     mismatched = [relative for relative, payload in expected.items()
         if hashlib.sha256((output / relative).read_bytes()).digest() != hashlib.sha256(payload).digest()]
     if mismatched:
-        parser.error("generated output payload verification failed: " + ", ".join(mismatched))
+        parser.error("generated output payload verification failed: " + LIT_EMPTY.join(mismatched))
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main())

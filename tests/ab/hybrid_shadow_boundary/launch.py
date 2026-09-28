@@ -31,17 +31,41 @@ sys.path.insert(0, str(REPO))
 
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ON = "ON"
+LIT_DBG = "dbg"
+LIT_OPT = "opt"
+LIT_COZTER = ".cozter"
+LIT_OUT = "out"
+LIT_AB_RESULTS = "ab-results"
+LIT_HYBRID_SHADOW_BOUNDARY = "hybrid-shadow-boundary"
+LIT_HEALTHY_EXECUTABLE = "--healthy-executable"
+LIT_BASELINE_EXECUTABLE = "--baseline-executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_NO_LOGSERVER = "--no-logserver"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_STORE_TRUE = "store_true"
+LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_SELF_TEST = "--self-test"
+LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
+LIT_MEASURE_SECONDS = "--measure-seconds"
+LIT_N_30 = "30"
+LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA = "hybrid_shadow_boundary_healthy_benchmark.exe"
+LIT_MAIN = "__main__"
+
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "hybrid_shadow_boundary" / "run.py"
 HEALTHY_TARGET = "nwb_hybrid_shadow_boundary_healthy_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
 REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": "ON",
-    "NWB_BUILD_LOGSERVER": "ON",
-    "NWB_BUILD_PIPELINE": "ON",
-    "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_LOADER": LIT_ON,
+    "NWB_BUILD_LOGSERVER": LIT_ON,
+    "NWB_BUILD_PIPELINE": LIT_ON,
+    "NWB_BUILD_TESTS": LIT_ON,
 }
-DIAGNOSTIC_CONFIGURATIONS = ("dbg", "opt")
+DIAGNOSTIC_CONFIGURATIONS = (LIT_DBG, LIT_OPT)
 
 
 @dataclass(frozen=True)
@@ -54,7 +78,7 @@ class BoundaryPaths:
 
 def default_output_directory(root: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / ".cozter" / "out" / "ab-results" / "hybrid-shadow-boundary" / stamp
+    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HYBRID_SHADOW_BOUNDARY / stamp
 
 
 def require_diagnostic_configuration(config: str) -> None:
@@ -118,21 +142,21 @@ def runner_command(args: argparse.Namespace, paths: BoundaryPaths) -> List[objec
     command: List[object] = [
         sys.executable,
         REPO / RUNNER_SCRIPT,
-        "--healthy-executable",
+        LIT_HEALTHY_EXECUTABLE,
         paths.healthy_executable,
-        "--baseline-executable",
+        LIT_BASELINE_EXECUTABLE,
         paths.baseline_executable,
-        "--runtime-dir",
+        LIT_RUNTIME_DIR,
         paths.runtime_directory,
-        "--output-dir",
+        LIT_OUTPUT_DIR,
         paths.output_directory,
     ]
     if args.gpu_validation:
-        command.append("--gpu-validation")
+        command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
-        command.append("--no-logserver")
+        command.append(LIT_NO_LOGSERVER)
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -149,32 +173,32 @@ def run_runner(args: argparse.Namespace, paths: BoundaryPaths) -> int:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--healthy-executable", type=Path, help="Override the healthy hardware transparent-shadow executable.")
+    parser.add_argument(LIT_HEALTHY_EXECUTABLE, type=Path, help="Override the healthy hardware transparent-shadow executable.")
     parser.add_argument(
-        "--baseline-executable",
+        LIT_BASELINE_EXECUTABLE,
         dest="baseline_executable",
         type=Path,
         help="Override the executable reused for the opaque baseline arm.",
     )
-    parser.add_argument("--runtime-dir", type=Path, help="Override the cooked stress-scene runtime directory.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for boundary timing, logs, captures, and reports.")
-    parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs instead of logserver.")
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the cooked stress-scene runtime directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for boundary timing, logs, captures, and reports.")
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
+    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        "--gpu-validation",
-        dest="gpu_validation",
-        action="store_true",
+        LIT_GPU_VALIDATION,
+        dest=LIT_GPU_VALIDATION_2,
+        action=LIT_STORE_TRUE,
         help="Enable Vulkan validation for a correctness-oriented run.",
     )
     validation_group.add_argument(
         "--no-gpu-validation",
-        dest="gpu_validation",
+        dest=LIT_GPU_VALIDATION_2,
         action="store_false",
         help="Measure without --gpudbg layer overhead (the default).",
     )
     parser.set_defaults(gpu_validation=False)
-    parser.add_argument("--self-test", action="store_true", help="Validate launcher command composition without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -192,32 +216,32 @@ def run_self_test() -> int:
         platform_name="windows",
         arch="x64",
         domain="full",
-        config="dbg",
-        configure_preset="windows-clang-x64",
-        build_dir=root / "__cmake" / "build" / "windows-clang-x64",
+        config=LIT_DBG,
+        configure_preset=LIT_WINDOWS_CLANG_X64,
+        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
         cmake=("cmake",),
     )
     args = SimpleNamespace(
         healthy_executable=None,
         baseline_executable=None,
         runtime_dir=None,
-        output_dir=root / ".cozter" / "out" / "ab-results" / "hybrid-shadow-boundary" / "self-test",
+        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HYBRID_SHADOW_BOUNDARY / "self-test",
         dry_run=True,
         gpu_validation=True,
         no_logserver=False,
         logserver_executable=None,
-        runner_args=["--measure-seconds", "30"],
+        runner_args=[LIT_MEASURE_SECONDS, LIT_N_30],
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
     assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
-    assert command[command.index("--healthy-executable") + 1].endswith("hybrid_shadow_boundary_healthy_benchmark.exe")
-    assert command[command.index("--baseline-executable") + 1].endswith("hybrid_shadow_boundary_healthy_benchmark.exe")
-    assert "--gpu-validation" in command
-    assert command[-2:] == ["--measure-seconds", "30"]
-    assert parse_args(["--self-test"]).gpu_validation is False
-    require_diagnostic_configuration("dbg")
-    require_diagnostic_configuration("opt")
+    assert command[command.index(LIT_HEALTHY_EXECUTABLE) + 1].endswith(LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA)
+    assert command[command.index(LIT_BASELINE_EXECUTABLE) + 1].endswith(LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA)
+    assert LIT_GPU_VALIDATION in command
+    assert command[-2:] == [LIT_MEASURE_SECONDS, LIT_N_30]
+    assert parse_args([LIT_SELF_TEST]).gpu_validation is False
+    require_diagnostic_configuration(LIT_DBG)
+    require_diagnostic_configuration(LIT_OPT)
     try:
         require_diagnostic_configuration("fin")
     except SystemExit as error:
@@ -245,5 +269,5 @@ def main(argv: Sequence[str]) -> int:
     return run(args)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

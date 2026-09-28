@@ -12,6 +12,13 @@
 namespace __hidden_telemetry_perf_tests{
 
 
+static constexpr AStringView s_MEMORY_PROJECT_ARENA = "memory/project_arena";
+static constexpr AStringView s_RENDERER_FRAME = "renderer/frame";
+static constexpr AStringView s_RENDERER_FRAME_TEXT = "Renderer Frame";
+static constexpr AStringView s_PROJECT_ARENA_TEXT = "Project Arena";
+static constexpr AStringView s_CPU_UPDATE = "cpu/update";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -26,7 +33,7 @@ using namespace TelemetryTestDetail;
 
 TEST(Telemetry, PerfTimingPayloadRoundTrip){
     TestArena testArena;
-    const Name scopeName("renderer/frame");
+    const Name scopeName(s_RENDERER_FRAME.data());
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -34,7 +41,7 @@ TEST(Telemetry, PerfTimingPayloadRoundTrip){
         testArena.arena,
         Telemetry::PerfTimingSource::Gpu,
         scopeName,
-        "Renderer Frame",
+        s_RENDERER_FRAME_TEXT,
         stats,
         payload
     ));
@@ -44,7 +51,7 @@ TEST(Telemetry, PerfTimingPayloadRoundTrip){
     EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.source, Telemetry::PerfTimingSource::Gpu);
     EXPECT_EQ(parsed.scopeName, scopeName);
-    EXPECT_EQ(parsed.scopeText, "Renderer Frame");
+    EXPECT_EQ(parsed.scopeText, s_RENDERER_FRAME_TEXT);
     EXPECT_EQ(parsed.stats.seconds, stats.seconds);
     EXPECT_EQ(parsed.stats.sampleCount, stats.sampleCount);
     EXPECT_EQ(parsed.stats.publishFrameIndex, stats.publishFrameIndex);
@@ -63,8 +70,8 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Unknown,
-        Name("renderer/frame"),
-        "Renderer Frame",
+        Name(s_RENDERER_FRAME.data()),
+        s_RENDERER_FRAME_TEXT,
         stats,
         payload
     ));
@@ -73,8 +80,8 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Cpu,
-        Name("renderer/frame"),
-        "Renderer Frame",
+        Name(s_RENDERER_FRAME.data()),
+        s_RENDERER_FRAME_TEXT,
         stats,
         payload
     ));
@@ -85,9 +92,9 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    const Name scopeName("cpu/update");
+    const Name scopeName(s_CPU_UPDATE.data());
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, "cpu/update", stats, 11u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, scopeName, s_CPU_UPDATE, stats, 11u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
@@ -100,13 +107,13 @@ TEST(Telemetry, RecordPerfTimingUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.source, Telemetry::PerfTimingSource::Cpu);
     EXPECT_EQ(parsed.scopeName, scopeName);
-    EXPECT_EQ(parsed.scopeText, "cpu/update");
+    EXPECT_EQ(parsed.scopeText, s_CPU_UPDATE);
     EXPECT_EQ(parsed.stats.sampleCount, stats.sampleCount);
 }
 
 TEST(Telemetry, PerfMemoryPayloadRoundTrip){
     TestArena testArena;
-    const Name scopeName("memory/project_arena");
+    const Name scopeName(s_MEMORY_PROJECT_ARENA.data());
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
@@ -114,7 +121,7 @@ TEST(Telemetry, PerfMemoryPayloadRoundTrip){
     EXPECT_TRUE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
-        "Project Arena",
+        s_PROJECT_ARENA_TEXT,
         snapshot,
         delta,
         payload
@@ -124,7 +131,7 @@ TEST(Telemetry, PerfMemoryPayloadRoundTrip){
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.scopeName, scopeName);
-    EXPECT_EQ(parsed.scopeText, "Project Arena");
+    EXPECT_EQ(parsed.scopeText, s_PROJECT_ARENA_TEXT);
     EXPECT_EQ(parsed.snapshot.scopeName, scopeName);
     EXPECT_EQ(parsed.snapshot.frameIndex, snapshot.frameIndex);
     EXPECT_EQ(parsed.snapshot.reservedBytes, snapshot.reservedBytes);
@@ -150,14 +157,14 @@ TEST(Telemetry, PerfMemoryPayloadRoundTrip){
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    const Name scopeName("memory/project_arena");
+    const Name scopeName(s_MEMORY_PROJECT_ARENA.data());
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         NAME_NONE,
-        "Project Arena",
+        s_PROJECT_ARENA_TEXT,
         snapshot,
         delta,
         payload
@@ -176,7 +183,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
-        "Project Arena",
+        s_PROJECT_ARENA_TEXT,
         snapshot,
         delta,
         payload
@@ -187,7 +194,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
         scopeName,
-        "Project Arena",
+        s_PROJECT_ARENA_TEXT,
         snapshot,
         delta,
         payload
@@ -199,10 +206,10 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    const Name scopeName("memory/project_arena");
+    const Name scopeName(s_MEMORY_PROJECT_ARENA.data());
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, "memory/project_arena", snapshot, delta, 12u));
+    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, scopeName, s_MEMORY_PROJECT_ARENA, snapshot, delta, 12u));
 
     const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
@@ -214,7 +221,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     EXPECT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.scopeName, scopeName);
-    EXPECT_EQ(parsed.scopeText, "memory/project_arena");
+    EXPECT_EQ(parsed.scopeText, s_MEMORY_PROJECT_ARENA);
     EXPECT_EQ(parsed.snapshot.usedBytes, snapshot.usedBytes);
     EXPECT_TRUE(parsed.delta.hasSamples);
     EXPECT_EQ(parsed.delta.usedBytes, delta.usedBytes);

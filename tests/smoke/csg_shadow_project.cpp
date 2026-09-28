@@ -24,6 +24,13 @@
 namespace __hidden_csg_shadow_smoke{
 
 
+static constexpr AStringView s_ENGINE_CSG_SPHERE = "engine/csg/sphere";
+static constexpr AStringView s_DIRECTIONAL = "directional";
+static constexpr AStringView s_POINT = "point";
+static constexpr AStringView s_HARD = "hard";
+static constexpr AStringView s_FINITE = "finite";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -94,15 +101,15 @@ private:
         }
         if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_LIGHT", value)){
             const AStringView light(value.data(), value.size());
-            if(light != "directional" && light != "point")
+            if(light != s_DIRECTIONAL && light != s_POINT)
                 return false;
-            m_pointLight = light == "point";
+            m_pointLight = light == s_POINT;
         }
         if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_LIGHT_SOURCE", value)){
             const AStringView source(value.data(), value.size());
-            if(source != "hard" && source != "finite")
+            if(source != s_HARD && source != s_FINITE)
                 return false;
-            m_finiteLightSource = source == "finite";
+            m_finiteLightSource = source == s_FINITE;
         }
         if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_ATLAS", value)){
             const AStringView atlas(value.data(), value.size());
@@ -244,7 +251,7 @@ private:
         const SIMDMatrix ellipsoid = MatrixAffineTransformation(
             VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f)
         );
-        addAnalyticCutter(1u, Name("engine/csg/sphere"), sphere, ellipsoid);
+        addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, ellipsoid);
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
         capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
@@ -260,8 +267,8 @@ private:
         addAnalyticCutter(3u, Name("engine/csg/capsule"), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
-        addAnalyticCutter(4u, Name("engine/csg/sphere"), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
-        addAnalyticCutter(4u, Name("engine/csg/sphere"), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
         addAnalyticCutter(5u, Name("engine/csg/plane"), plane, MatrixIdentity());
@@ -308,7 +315,7 @@ public:
         lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
         lightComponent->enableCaustics = false;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , m_finiteLightSource ? NWB_TEXT("finite") : NWB_TEXT("hard")
+            , m_finiteLightSource ? s_FINITE.data() : s_HARD.data()
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
         );
         if(m_analyticAtlas)
@@ -318,7 +325,7 @@ public:
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
             && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), m_pointLight ? NWB_TEXT("point") : NWB_TEXT("directional"), hardware ? 1u : 0u
+            , static_cast<u32>(m_arm), m_pointLight ? s_POINT.data() : s_DIRECTIONAL.data(), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
         return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u, m_capture);

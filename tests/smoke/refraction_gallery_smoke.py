@@ -16,9 +16,41 @@ from window_capture_smoke import (
     SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_SINGLE = "single"
+LIT_GEOMETRY = "geometry"
+LIT_AUTOMATIC = "automatic"
+LIT_SCREEN = "screen"
+LIT_DISABLED = "disabled"
+LIT_NWB_REFRACTION_SMOKE_CASE = "NWB_REFRACTION_SMOKE_CASE"
+LIT_NWB_REFRACTION_SMOKE_GEOMETRY = "NWB_REFRACTION_SMOKE_GEOMETRY"
+LIT_NWB_REFRACTION_SMOKE_ENABLED = "NWB_REFRACTION_SMOKE_ENABLED"
+LIT_NWB_REFRACTION_SMOKE_HARDWARE = "NWB_REFRACTION_SMOKE_HARDWARE"
+LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO = "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"
+LIT_CHANGED_PIXELS = "changed_pixels"
+LIT_I = ">I"
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_TIMEOUT = "--timeout"
+LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_AVBOIT_REFRACTION_RESOLVE = "AVBOIT refraction resolve:"
+LIT_UTF_8 = "utf-8"
+LIT_LIMITS = "limits"
+LIT_CASE_NOTE = "case-note"
+LIT_CASES = "cases"
+LIT_CAPTURES = "captures"
+LIT_FILE = "file"
+LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ = "Comma-separated selection; defaults to all: "
+LIT_VARIANTS = "variants"
+LIT_ID = "id"
+LIT_MAIN = "__main__"
+LIT_STORE_TRUE = "store_true"
+LIT_APPEND = "append"
+
 
 CASES = {
-    "single": ("Single solid", "A single closed glass volume in front of the stripe wall.",
+    LIT_SINGLE: ("Single solid", "A single closed glass volume in front of the stripe wall.",
         "The baseline supported case: one primary entry and exit. Compare the bent background with the straight red foreground panel."),
     "separate": ("Separate objects", "Distinct glass objects with separate visible silhouettes.",
         "Each pixel can retain its own nearest refractor. Spatially separate objects can therefore use different primary interfaces."),
@@ -64,10 +96,10 @@ CASES = {
         "Independent surfaces remain separate. Their layered result remains subject to the renderer's bounded interface model."),
 }
 
-VARIANTS = ("geometry", "automatic", "screen", "disabled")
+VARIANTS = (LIT_GEOMETRY, LIT_AUTOMATIC, LIT_SCREEN, LIT_DISABLED)
 VARIANT_LABELS = {
-    "geometry": "Geometry preview — translucent, refraction off", "automatic": "Automatic tracing",
-    "screen": "Screen-space fallback", "disabled": "Refraction disabled",
+    LIT_GEOMETRY: "Geometry preview — translucent, refraction off", LIT_AUTOMATIC: "Automatic tracing",
+    LIT_SCREEN: "Screen-space fallback", LIT_DISABLED: "Refraction disabled",
 }
 COMMON_LIMIT = (
     "Current implementation: one primary refractor per pixel, bounded hardware continuation, "
@@ -95,17 +127,17 @@ def parse_selection(text, allowed, option):
 def capture_environment(case, variant, inherited=None):
     env = dict(os.environ if inherited is None else inherited)
     for name in (
-        "NWB_REFRACTION_SMOKE_CASE", "NWB_REFRACTION_SMOKE_GEOMETRY",
-        "NWB_REFRACTION_SMOKE_ENABLED", "NWB_REFRACTION_SMOKE_HARDWARE",
-        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS",
+        LIT_NWB_REFRACTION_SMOKE_CASE, LIT_NWB_REFRACTION_SMOKE_GEOMETRY,
+        LIT_NWB_REFRACTION_SMOKE_ENABLED, LIT_NWB_REFRACTION_SMOKE_HARDWARE,
+        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO,
         "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
     ):
         env.pop(name, None)
-    env["NWB_REFRACTION_SMOKE_CASE"] = case
-    env["NWB_REFRACTION_SMOKE_GEOMETRY"] = "1" if variant == "geometry" else "0"
-    env["NWB_REFRACTION_SMOKE_ENABLED"] = "0" if variant in ("geometry", "disabled") else "1"
-    env["NWB_REFRACTION_SMOKE_HARDWARE"] = "0" if variant == "screen" else "1"
-    env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"
+    env[LIT_NWB_REFRACTION_SMOKE_CASE] = case
+    env[LIT_NWB_REFRACTION_SMOKE_GEOMETRY] = "1" if variant == LIT_GEOMETRY else "0"
+    env[LIT_NWB_REFRACTION_SMOKE_ENABLED] = "0" if variant in (LIT_GEOMETRY, LIT_DISABLED) else "1"
+    env[LIT_NWB_REFRACTION_SMOKE_HARDWARE] = "0" if variant == LIT_SCREEN else "1"
+    env[LIT_NWB_RENDERER_BASELINE_FIXED_DELTA_SECO] = "0.016666667"
     return env
 
 
@@ -125,7 +157,7 @@ def frame_difference(reference, output):
             maximum = max(maximum, largest)
     pixels = width * height
     return {
-        "compared_with": "disabled", "changed_pixels": changed, "total_pixels": pixels,
+        "compared_with": LIT_DISABLED, LIT_CHANGED_PIXELS: changed, "total_pixels": pixels,
         "changed_fraction": changed / pixels, "mean_absolute_rgb_difference": channel_sum / (pixels * 3),
         "maximum_channel_difference": maximum,
     }
@@ -147,7 +179,7 @@ def png_rgb_bytes(frame):
         raise SmokeFailure("cannot encode a malformed framebuffer as PNG")
 
     def chunk(kind, payload):
-        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff)
+        return struct.pack(LIT_I, len(payload)) + kind + payload + struct.pack(LIT_I, zlib.crc32(kind + payload) & 0xffffffff)
 
     # Filter 0 stores each channel exactly as read; DEFLATE only compresses bytes.
     scanlines = bytearray()
@@ -162,26 +194,26 @@ def capture(args, case, variant):
     output = args.output_directory / f"{case}_{variant}.bmp"
     command = [
         sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
-        "--executable", str(args.executable), "--working-directory", str(args.working_directory),
+        LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture",
-        "--application-capture-frame-count", str(args.frames), "--timeout", str(args.timeout),
-        "--expect-log-message", f"RefractionSmokeProject: gallery case {case} created",
-        "--expect-log-message", "RefractionSmokeProject: shutdown",
-        "--expect-log-message", "RefractionSmokeProject: refraction " + (
-            "disabled" if variant in ("geometry", "disabled") else "enabled"
+        "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
+        LIT_EXPECT_LOG_MESSAGE, f"RefractionSmokeProject: gallery case {case} created",
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",
+        LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + (
+            LIT_DISABLED if variant in (LIT_GEOMETRY, LIT_DISABLED) else "enabled"
         ),
     ]
     if args.logserver_executable:
-        command += ["--logserver-executable", str(args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
-    if variant == "automatic":
-        command += ["--expect-log-message", "AVBOIT refraction resolve: hardware" if args.require_hardware
-            else "AVBOIT refraction resolve:"]
-    elif variant == "screen":
-        command += ["--expect-log-message", "AVBOIT refraction resolve: screen-space"]
+    if variant == LIT_AUTOMATIC:
+        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: hardware" if args.require_hardware
+            else LIT_AVBOIT_REFRACTION_RESOLVE]
+    elif variant == LIT_SCREEN:
+        command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve: screen-space"]
     else:
-        command += ["--reject-log-message", "AVBOIT refraction resolve:"]
+        command += ["--reject-log-message", LIT_AVBOIT_REFRACTION_RESOLVE]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing {case}/{variant} ({args.frames} frames)...", flush=True)
     completed = subprocess.run(command, env=capture_environment(case, variant), check=False, timeout=args.timeout + 30)
@@ -195,7 +227,7 @@ def capture(args, case, variant):
 
 
 HTML = r'''<!doctype html>
-<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><meta charset=LIT_UTF_8><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AVBOIT refraction: rendered case gallery</title>
 <style>
 :root{color-scheme:dark;font:15px/1.5 system-ui,sans-serif;background:#10151d;color:#e6edf5}
@@ -212,11 +244,11 @@ dialog{padding:0;max-width:96vw;max-height:96vh;width:1300px;background:#10151d;
 </style>
 <header><div class="eyebrow">Actual 960 × 720 framebuffer captures</div><h1>AVBOIT refraction: rendered case gallery</h1>
 <p>Inspect geometry, hardware-preferred tracing, screen-space fallback, and refraction disabled from the same fixed camera.</p>
-<p class="small" id="provenance"></p><div class="notice" id="limits"></div></header>
+<p class="small" id="provenance"></p><div class="notice" id=LIT_LIMITS></div></header>
 <main><nav class="case-tabs" id="tabs" aria-label="Refraction case"></nav>
-<h2 id="case-title"></h2><p id="case-description"></p><p class="case-note" id="case-note"></p>
+<h2 id="case-title"></h2><p id="case-description"></p><p class=LIT_CASE_NOTE id=LIT_CASE_NOTE></p>
 <div class="key"><span><i class="dot red"></i>Red: foreground AVBOIT panel</span><span><i class="dot blue"></i>Blue: background AVBOIT panel</span><span><i class="dot gray"></i>Stripes: opaque background</span></div>
-<div class="controls"><div class="checks" id="variant-controls"></div><label>Scene zoom <input id="zoom" type="range" min="1" max="3" step=".25" value="1.5"><output id="zoom-value">1.5×</output></label><label>Layout <select id="layout"><option value="two">Side by side</option><option value="single">One per row</option></select></label><button id="reset">Reset view</button></div>
+<div class="controls"><div class="checks" id="variant-controls"></div><label>Scene zoom <input id="zoom" type="range" min="1" max="3" step=".25" value="1.5"><output id="zoom-value">1.5×</output></label><label>Layout <select id="layout"><option value="two">Side by side</option><option value=LIT_SINGLE>One per row</option></select></label><button id="reset">Reset view</button></div>
 <section class="grid" id="cards" aria-label="Captured variants"></section></main>
 <footer>All images are actual framebuffer readbacks, encoded losslessly as PNG with unchanged RGB pixels. The original BMPs are retained beside this file. This gallery works offline and needs no image server or external libraries. Click a capture to inspect pixels. Differences compare the full frame with the disabled variant and are descriptive, not a physical-accuracy score.</footer>
 <dialog id="viewer"><div class="dialog-head"><strong id="viewer-title"></strong><div class="dialog-controls"><label>Pixel scale <select id="pixel-scale"><option value="1">100%</option><option value="2">200%</option><option value="3">300%</option></select></label><button id="close-viewer">Close</button></div></div><div class="dialog-view"><img id="viewer-image" alt="Expanded actual framebuffer capture"></div></dialog>
@@ -242,16 +274,16 @@ byId('zoom').addEventListener('input',updateZoom);byId('layout').addEventListene
 def write_gallery(output_directory, manifest):
     # Preserve raw BMPs alongside the report. Embedded PNGs contain the same RGB
     # pixels; no resizing, repainting, or generated image is involved.
-    (output_directory / "gallery_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (output_directory / "gallery_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding=LIT_UTF_8)
     embedded = json.loads(json.dumps(manifest))
-    for case in embedded["cases"]:
-        for capture_item in case["captures"]:
-            content = png_rgb_bytes(read_bmp_24_rows(output_directory / capture_item["file"]))
-            (output_directory / Path(capture_item["file"]).with_suffix(".png")).write_bytes(content)
+    for case in embedded[LIT_CASES]:
+        for capture_item in case[LIT_CAPTURES]:
+            content = png_rgb_bytes(read_bmp_24_rows(output_directory / capture_item[LIT_FILE]))
+            (output_directory / Path(capture_item[LIT_FILE]).with_suffix(".png")).write_bytes(content)
             capture_item["image"] = "data:image/png;base64," + base64.b64encode(content).decode("ascii")
     data = json.dumps(embedded, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
     prefix, suffix = HTML.split("__CAPTURE_DATA__")
-    with (output_directory / "gallery.html").open("w", encoding="utf-8", newline="\n") as output:
+    with (output_directory / "gallery.html").open("w", encoding=LIT_UTF_8, newline="\n") as output:
         output.write(prefix)
         output.write(data)
         output.write(suffix)
@@ -259,18 +291,18 @@ def write_gallery(output_directory, manifest):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--executable", type=Path, required=True)
-    parser.add_argument("--working-directory", type=Path, required=True)
+    parser.add_argument(LIT_EXECUTABLE, type=Path, required=True)
+    parser.add_argument(LIT_WORKING_DIRECTORY, type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
-    parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, "cases"), default=tuple(CASES),
-        help="Comma-separated selection; defaults to all: " + ", ".join(CASES))
-    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, "variants"), default=VARIANTS,
-        help="Comma-separated selection; defaults to all: " + ", ".join(VARIANTS))
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path)
+    parser.add_argument("--cases", type=lambda value: parse_selection(value, CASES, LIT_CASES), default=tuple(CASES),
+        help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(CASES))
+    parser.add_argument("--variants", type=lambda value: parse_selection(value, VARIANTS, LIT_VARIANTS), default=VARIANTS,
+        help=LIT_COMMA_SEPARATED_SELECTION_DEFAULTS_TO_ + ", ".join(VARIANTS))
     parser.add_argument("--frames", type=int, default=16)
-    parser.add_argument("--timeout", type=float, default=60.0, help="Capture timeout in seconds for each child run.")
-    parser.add_argument("--require-hardware", action="store_true")
-    parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument(LIT_TIMEOUT, type=float, default=60.0, help="Capture timeout in seconds for each child run.")
+    parser.add_argument("--require-hardware", action=LIT_STORE_TRUE)
+    parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:
         parser.error("frames and timeout must be positive")
@@ -283,19 +315,19 @@ def main(argv):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     labels = dict(VARIANT_LABELS)
     if args.require_hardware:
-        labels["automatic"] = "Hardware RT (per-pixel fallback allowed)"
+        labels[LIT_AUTOMATIC] = "Hardware RT (per-pixel fallback allowed)"
     manifest = {
         "captured_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "frames": args.frames, "hardware_required": args.require_hardware,
         "application_args": list(args.application_arg),
-        "variants": list(args.variants), "variant_labels": labels, "limits": COMMON_LIMIT,
-        "image_count": len(args.cases) * len(args.variants), "cases": [],
+        LIT_VARIANTS: list(args.variants), "variant_labels": labels, LIT_LIMITS: COMMON_LIMIT,
+        "image_count": len(args.cases) * len(args.variants), LIT_CASES: [],
         "validation": "Strict runtime logs, successful route dispatch, normal shutdown, nontrivial frames, and visible changes when a disabled baseline is present.",
     }
     try:
         for case_id in args.cases:
             title, description, note = CASES[case_id]
-            entry = {"id": case_id, "title": title, "description": description, "note": note, "captures": []}
+            entry = {LIT_ID: case_id, "title": title, "description": description, "note": note, LIT_CAPTURES: []}
             frames = {}
             for variant in args.variants:
                 frame = capture(args, case_id, variant)
@@ -303,17 +335,17 @@ def main(argv):
                     print(f"SKIP: framebuffer capture unavailable for {case_id}/{variant}", file=sys.stderr)
                     return SKIP_EXIT_CODE
                 frames[variant] = frame
-                entry["captures"].append({"id": variant, "file": f"{case_id}_{variant}.bmp"})
-            if "disabled" in frames:
-                for captured in entry["captures"]:
-                    variant = captured["id"]
-                    if variant in ("disabled", "geometry"):
+                entry[LIT_CAPTURES].append({LIT_ID: variant, LIT_FILE: f"{case_id}_{variant}.bmp"})
+            if LIT_DISABLED in frames:
+                for captured in entry[LIT_CAPTURES]:
+                    variant = captured[LIT_ID]
+                    if variant in (LIT_DISABLED, LIT_GEOMETRY):
                         continue
-                    metrics = frame_difference(frames["disabled"], frames[variant])
+                    metrics = frame_difference(frames[LIT_DISABLED], frames[variant])
                     captured["difference"] = metrics
-                    if metrics["changed_pixels"] < 64:
+                    if metrics[LIT_CHANGED_PIXELS] < 64:
                         raise SmokeFailure(f"{case_id}/{variant}: fewer than 64 pixels changed from disabled baseline; expected a visible scene effect")
-            manifest["cases"].append(entry)
+            manifest[LIT_CASES].append(entry)
             del frames
         write_gallery(args.output_directory, manifest)
         print(f"PASS: {manifest['image_count']} actual captures; offline gallery: {args.output_directory / 'gallery.html'}", flush=True)
@@ -323,5 +355,5 @@ def main(argv):
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

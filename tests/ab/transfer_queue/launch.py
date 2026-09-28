@@ -23,11 +23,28 @@ sys.path.insert(0, str(REPO))
 
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_EXECUTABLE = "--executable"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_ADAPTER_INDEX = "--adapter-index"
+LIT_IN_FLIGHT = "--in-flight"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_EXTERNAL_PROFILER_REPORT = "--external-profiler-report"
+LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_STORE_TRUE = "store_true"
+LIT_SELF_TEST = "--self-test"
+LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
+LIT_CAPTURE_RGP = "capture.rgp"
+LIT_UPLOAD_MIB = "--upload-mib"
+LIT_N_32 = "32"
+LIT_MAIN = "__main__"
+LIT_ON = "ON"
+
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "transfer_queue" / "run.py"
 PROFILE_TARGET = "nwb_transfer_upload_profile"
 REQUIRED_DEFINES = {
-    "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_TESTS": LIT_ON,
 }
 
 
@@ -62,19 +79,19 @@ def runner_command(args: argparse.Namespace, paths: ProfilePaths) -> List[object
     command: List[object] = [
         sys.executable,
         REPO / RUNNER_SCRIPT,
-        "--executable",
+        LIT_EXECUTABLE,
         paths.executable,
-        "--output-dir",
+        LIT_OUTPUT_DIR,
         paths.output_directory,
-        "--adapter-index",
+        LIT_ADAPTER_INDEX,
         args.adapter_index,
-        "--in-flight",
+        LIT_IN_FLIGHT,
         args.in_flight,
     ]
     if args.gpu_validation:
-        command.append("--gpu-validation")
+        command.append(LIT_GPU_VALIDATION)
     if args.external_profiler_report is not None:
-        command += ["--external-profiler-report", ROOT_LAUNCHER.resolve_path(REPO, args.external_profiler_report)]
+        command += [LIT_EXTERNAL_PROFILER_REPORT, ROOT_LAUNCHER.resolve_path(REPO, args.external_profiler_report)]
     command += list(args.runner_args)
     return command
 
@@ -82,35 +99,35 @@ def runner_command(args: argparse.Namespace, paths: ProfilePaths) -> List[object
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--executable", type=Path, help="Override the transfer-upload profile executable.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for logs and the profiling report.")
+    parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the transfer-upload profile executable.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for logs and the profiling report.")
     parser.add_argument(
-        "--adapter-index",
+        LIT_ADAPTER_INDEX,
         type=int,
         default=0,
         help="Pinned Vulkan adapter enumeration index for both A/B processes (default: 0).",
     )
-    parser.add_argument("--in-flight", type=int, default=2, help="Maximum concurrently retained upload windows per arm.")
+    parser.add_argument(LIT_IN_FLIGHT, type=int, default=2, help="Maximum concurrently retained upload windows per arm.")
     parser.add_argument(
-        "--external-profiler-report",
+        LIT_EXTERNAL_PROFILER_REPORT,
         type=Path,
         help="Optional external GPU-profiler report/trace to copy into the artifact bundle.",
     )
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        "--gpu-validation",
-        dest="gpu_validation",
-        action="store_true",
+        LIT_GPU_VALIDATION,
+        dest=LIT_GPU_VALIDATION_2,
+        action=LIT_STORE_TRUE,
         help="Enable Vulkan validation in both A/B arms (the default).",
     )
     validation_group.add_argument(
         "--no-gpu-validation",
-        dest="gpu_validation",
+        dest=LIT_GPU_VALIDATION_2,
         action="store_false",
         help="Run without Vulkan validation when a target cannot expose the validation layer.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action="store_true", help="Validate launcher command composition without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -126,7 +143,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run_self_test() -> int:
-    assert parse_args(["--self-test"]).adapter_index == 0
+    assert parse_args([LIT_SELF_TEST]).adapter_index == 0
     root = Path("/nwb")
     settings = ROOT_LAUNCHER.LaunchSettings(
         root=root,
@@ -134,8 +151,8 @@ def run_self_test() -> int:
         arch="x64",
         domain="full",
         config="dbg",
-        configure_preset="windows-clang-x64",
-        build_dir=root / "__cmake" / "build" / "windows-clang-x64",
+        configure_preset=LIT_WINDOWS_CLANG_X64,
+        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
         cmake=("cmake",),
     )
     args = SimpleNamespace(
@@ -145,18 +162,18 @@ def run_self_test() -> int:
         gpu_validation=True,
         adapter_index=1,
         in_flight=3,
-        external_profiler_report=Path("capture.rgp"),
-        runner_args=["--upload-mib", "32"],
+        external_profiler_report=Path(LIT_CAPTURE_RGP),
+        runner_args=[LIT_UPLOAD_MIB, LIT_N_32],
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert command[command.index("--executable") + 1].endswith("transfer_upload_profile.exe")
+    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("transfer_upload_profile.exe")
     assert "/.cozter/out/ab-results/transfer-queue/" in paths.output_directory.as_posix()
-    assert "--gpu-validation" in command
-    assert command[command.index("--adapter-index") + 1] == "1"
-    assert command[command.index("--in-flight") + 1] == "3"
-    assert command[command.index("--external-profiler-report") + 1].endswith("capture.rgp")
-    assert command[-2:] == ["--upload-mib", "32"]
+    assert LIT_GPU_VALIDATION in command
+    assert command[command.index(LIT_ADAPTER_INDEX) + 1] == "1"
+    assert command[command.index(LIT_IN_FLIGHT) + 1] == "3"
+    assert command[command.index(LIT_EXTERNAL_PROFILER_REPORT) + 1].endswith(LIT_CAPTURE_RGP)
+    assert command[-2:] == [LIT_UPLOAD_MIB, LIT_N_32]
     print("transfer-queue launcher self-test passed")
     return 0
 
@@ -184,5 +201,5 @@ def main(argv: Sequence[str]) -> int:
     return run(args)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

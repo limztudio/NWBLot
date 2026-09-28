@@ -49,6 +49,85 @@ from window_capture_smoke import (  # noqa: E402
     wait_for_log_message,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_GIT = "git"
+LIT_UNAVAILABLE = "unavailable"
+LIT_FRAME_LOCKED = "frame-locked"
+LIT_SETTLED = "settled"
+LIT_I = "<I"
+LIT_RENDERER_BASELINE_CAPTURE = "renderer baseline capture"
+LIT_RENDERER_BASELINE_LOGSERVER = "renderer baseline logserver"
+LIT_UTF_8 = "utf-8"
+LIT_SCHEMA = "schema"
+LIT_CAPTURE_KIND = "capture_kind"
+LIT_PROFILE = "profile"
+LIT_CAPTURE_MODE = "capture_mode"
+LIT_CAPTURE_FREEZE_FRAME = "capture_freeze_frame"
+LIT_FIXED_DELTA_SECONDS = "fixed_delta_seconds"
+LIT_SETTLE_SECONDS = "settle_seconds"
+LIT_GPU_VALIDATION = "gpu_validation"
+LIT_SOURCE_REVISION = "source_revision"
+LIT_SOURCE_WORKTREE_CLEAN = "source_worktree_clean"
+LIT_CAPTURE_FILE = "capture_file"
+LIT_CAPTURE_SHA256 = "capture_sha256"
+LIT_FROZEN_ENVIRONMENT = "frozen_environment"
+LIT_REFERENCE_SOURCE_REVISION = "reference_source_revision"
+LIT_MANIFEST_JSON = "manifest.json"
+LIT_BASELINE = "baseline"
+LIT_CORPUS_ID = "corpus_id"
+LIT_ARTIFACT_ROOT = "artifact_root"
+LIT_PROFILES = "profiles"
+LIT_CAPTURE_ENVIRONMENT = "capture_environment"
+LIT_REFERENCE = "reference"
+LIT_DIRECTORY = "directory"
+LIT_RUNTIME_LOG = "runtime.log"
+LIT_MANIFEST_SHA256 = "manifest_sha256"
+LIT_RUNTIME_LOG_SHA256 = "runtime_log_sha256"
+LIT_LIMITS = "limits"
+LIT_MAXIMUM_MAX_ABS = "maximum_max_abs"
+LIT_MAXIMUM_MEAN_ABS = "maximum_mean_abs"
+LIT_MAXIMUM_CHANGED_FRACTION = "maximum_changed_fraction"
+LIT_SAME_REVISION_RECAPTURE = "same_revision_recapture"
+LIT_COMPARISON_JSON = "comparison.json"
+LIT_COMPARISON_SHA256 = "comparison_sha256"
+LIT_NWB_RENDERER_BASELINE_COMPARISON_V1 = "nwb.renderer-baseline-comparison.v1"
+LIT_CANDIDATE_SOURCE_REVISION = "candidate_source_revision"
+LIT_DIFFERENCE = "difference"
+LIT_MAX_ABS = "max_abs"
+LIT_MEAN_ABS = "mean_abs"
+LIT_CHANGED_FRACTION = "changed_fraction"
+LIT_CANDIDATE_BMP = "candidate.bmp"
+LIT_BASELINE_BMP = "baseline.bmp"
+LIT_DIFFERENCE_BMP = "difference.bmp"
+LIT_PROFILE_2 = "--profile"
+LIT_EXECUTABLE = "--executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_REFERENCE_DIR = "--reference-dir"
+LIT_REFERENCE_CORPUS = "--reference-corpus"
+LIT_STORE_TRUE = "store_true"
+LIT_OPAQUE_TEXTURE = "opaque-texture"
+LIT_APP_STOP = "app-stop"
+LIT_CLEANUP_NONE = "cleanup-none"
+LIT_LOGSERVER_LOG = "logserver_*.log"
+LIT_LOGSERVER_HELPER = "logserver-helper"
+LIT_CAPTURED_RUNTIME_EVIDENCE = "captured runtime evidence"
+LIT_BUILD_LAUNCH_ENVIRONMENT = "build_launch_environment"
+LIT_CREATE_CAPTURE_BACKEND = "create_capture_backend"
+LIT_LAUNCH_LOGSERVER = "launch_logserver"
+LIT_LAUNCH_TESTBED = "launch_testbed"
+LIT_TERMINATE_PROCESS = "terminate_process"
+LIT_SHUTDOWN_LOGSERVER_AND_COLLECT = "shutdown_logserver_and_collect"
+LIT_PREPARE = "prepare"
+LIT_CLOSE = "close"
+LIT_CAPTURE = "capture"
+LIT_SOFT_SHADOWS = "soft-shadows"
+LIT_READY = "ready"
+LIT_SETTLE = "settle"
+LIT_TEST_REFERENCE = "test-reference"
+LIT_MAIN = "__main__"
+LIT_APPEND = "append"
+
 
 SCHEMA = "nwb.renderer-baseline.v1"
 CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
@@ -111,21 +190,21 @@ def sha256_file(path: Path) -> str:
 def source_revision() -> str:
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            [LIT_GIT, "rev-parse", "HEAD"],
             cwd=REPO,
             check=False,
             capture_output=True,
             text=True,
         )
     except OSError:
-        return "unavailable"
-    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else "unavailable"
+        return LIT_UNAVAILABLE
+    return result.stdout.strip() if result.returncode == 0 and result.stdout.strip() else LIT_UNAVAILABLE
 
 
 def source_worktree_clean() -> bool:
     try:
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
+            [LIT_GIT, "status", "--porcelain"],
             cwd=REPO,
             check=False,
             capture_output=True,
@@ -148,7 +227,7 @@ def canonical_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
 
 
 def capture_mode(profile: BaselineProfile) -> str:
-    return "frame-locked" if profile.capture_freeze_frame != 0 else "settled"
+    return LIT_FRAME_LOCKED if profile.capture_freeze_frame != 0 else LIT_SETTLED
 
 
 def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
@@ -159,8 +238,8 @@ def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
     if len(data) < 54 or data[:2] != b"BM":
         raise SmokeFailure(f"capture is not a BMP: {path}")
 
-    pixel_offset = struct.unpack_from("<I", data, 10)[0]
-    dib_size = struct.unpack_from("<I", data, 14)[0]
+    pixel_offset = struct.unpack_from(LIT_I, data, 10)[0]
+    dib_size = struct.unpack_from(LIT_I, data, 14)[0]
     if dib_size < 40 or len(data) < 14 + dib_size:
         raise SmokeFailure(f"capture has an unsupported DIB header: {path}")
 
@@ -339,19 +418,19 @@ def capture_scene(
         else:
             capture = backend.capture_window(window, capture_path)
         validate_capture_result(capture)
-        app_exit_code, app_exit_tail = terminate_process(app_process, "renderer baseline capture", window)
+        app_exit_code, app_exit_tail = terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
         app_process = None
         log_text = shutdown_logserver_and_collect(
             logserver_process,
             log_directory,
             log_baseline,
             log_pattern,
-            "renderer baseline logserver",
+            LIT_RENDERER_BASELINE_LOGSERVER,
         )
         logserver_process = None
     finally:
-        terminate_process(app_process, "renderer baseline capture", window)
-        terminate_process(logserver_process, "renderer baseline logserver")
+        terminate_process(app_process, LIT_RENDERER_BASELINE_CAPTURE, window)
+        terminate_process(logserver_process, LIT_RENDERER_BASELINE_LOGSERVER)
         if backend:
             backend.close()
 
@@ -359,7 +438,7 @@ def capture_scene(
     if not capture_path.is_file():
         raise SmokeFailure(f"renderer baseline did not create capture: {capture_path}")
     forbidden = validate_runtime_log(log_text, args.reject_log)
-    log_path.write_text(log_text, encoding="utf-8")
+    log_path.write_text(log_text, encoding=LIT_UTF_8)
     return CaptureResult(
         capture_file=capture_path.name,
         log_file=log_path.name,
@@ -381,37 +460,37 @@ def manifest_payload(
     reference_manifest: Optional[Mapping[str, object]] = None,
 ) -> Dict[str, object]:
     payload: Dict[str, object] = {
-        "schema": SCHEMA,
-        "capture_kind": capture_kind,
+        LIT_SCHEMA: SCHEMA,
+        LIT_CAPTURE_KIND: capture_kind,
         "captured_utc": datetime.now(timezone.utc).isoformat(),
-        "profile": profile_name,
+        LIT_PROFILE: profile_name,
         "profile_description": profile.description,
         "target": profile.target,
         "window_title": profile.window_title,
-        "capture_mode": capture_mode(profile),
-        "capture_freeze_frame": profile.capture_freeze_frame,
-        "fixed_delta_seconds": profile.fixed_delta_seconds,
-        "settle_seconds": args.settle_seconds,
-        "gpu_validation": args.gpu_validation,
+        LIT_CAPTURE_MODE: capture_mode(profile),
+        LIT_CAPTURE_FREEZE_FRAME: profile.capture_freeze_frame,
+        LIT_FIXED_DELTA_SECONDS: profile.fixed_delta_seconds,
+        LIT_SETTLE_SECONDS: args.settle_seconds,
+        LIT_GPU_VALIDATION: args.gpu_validation,
         "runtime_directory": str(args.runtime_dir),
-        "source_revision": capture.source_revision,
-        "source_worktree_clean": capture.source_worktree_clean,
+        LIT_SOURCE_REVISION: capture.source_revision,
+        LIT_SOURCE_WORKTREE_CLEAN: capture.source_worktree_clean,
         "executable_sha256": capture.executable_sha256,
-        "capture_file": capture.capture_file,
-        "capture_sha256": capture.capture_sha256,
+        LIT_CAPTURE_FILE: capture.capture_file,
+        LIT_CAPTURE_SHA256: capture.capture_sha256,
         "log_file": capture.log_file,
-        "frozen_environment": dict(capture.frozen_environment),
+        LIT_FROZEN_ENVIRONMENT: dict(capture.frozen_environment),
         "platform": platform.platform(),
         "python_version": platform.python_version(),
     }
     if reference_manifest is not None:
-        payload["reference_source_revision"] = reference_manifest.get("source_revision")
-        payload["reference_capture_sha256"] = reference_manifest.get("capture_sha256")
+        payload[LIT_REFERENCE_SOURCE_REVISION] = reference_manifest.get(LIT_SOURCE_REVISION)
+        payload["reference_capture_sha256"] = reference_manifest.get(LIT_CAPTURE_SHA256)
     return payload
 
 
 def write_json(path: Path, payload: Mapping[str, object]) -> None:
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding=LIT_UTF_8)
 
 
 def load_reference(
@@ -423,41 +502,41 @@ def load_reference(
     capture_freeze_frame: int,
     fixed_delta_seconds: float,
 ) -> Tuple[Mapping[str, object], Path]:
-    manifest_path = reference_directory / "manifest.json"
+    manifest_path = reference_directory / LIT_MANIFEST_JSON
     try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding=LIT_UTF_8))
     except OSError as error:
         raise SmokeFailure(f"could not read baseline manifest '{manifest_path}': {error}") from error
     except json.JSONDecodeError as error:
         raise SmokeFailure(f"baseline manifest is not valid JSON: {manifest_path}: {error}") from error
-    if not isinstance(manifest, dict) or manifest.get("schema") != SCHEMA:
+    if not isinstance(manifest, dict) or manifest.get(LIT_SCHEMA) != SCHEMA:
         raise SmokeFailure(f"baseline manifest has an unsupported schema: {manifest_path}")
-    if manifest.get("capture_kind") != "baseline":
+    if manifest.get(LIT_CAPTURE_KIND) != LIT_BASELINE:
         raise SmokeFailure(f"reference manifest is not an immutable baseline: {manifest_path}")
-    if manifest.get("profile") != profile_name:
+    if manifest.get(LIT_PROFILE) != profile_name:
         raise SmokeFailure(
             f"baseline profile mismatch: reference is {manifest.get('profile')!r}, candidate is {profile_name!r}"
         )
-    if manifest.get("frozen_environment") != dict(frozen_environment):
+    if manifest.get(LIT_FROZEN_ENVIRONMENT) != dict(frozen_environment):
         raise SmokeFailure("baseline frozen environment differs from the candidate capture")
-    if manifest.get("gpu_validation") != gpu_validation:
+    if manifest.get(LIT_GPU_VALIDATION) != gpu_validation:
         raise SmokeFailure("baseline GPU-validation mode differs from the candidate capture")
-    if manifest.get("settle_seconds") != settle_seconds:
+    if manifest.get(LIT_SETTLE_SECONDS) != settle_seconds:
         raise SmokeFailure("baseline settle duration differs from the candidate capture")
-    expected_capture_mode = "frame-locked" if capture_freeze_frame != 0 else "settled"
-    if manifest.get("capture_mode") != expected_capture_mode:
+    expected_capture_mode = LIT_FRAME_LOCKED if capture_freeze_frame != 0 else LIT_SETTLED
+    if manifest.get(LIT_CAPTURE_MODE) != expected_capture_mode:
         raise SmokeFailure("baseline capture mode differs from the candidate capture")
-    if manifest.get("capture_freeze_frame") != capture_freeze_frame:
+    if manifest.get(LIT_CAPTURE_FREEZE_FRAME) != capture_freeze_frame:
         raise SmokeFailure("baseline capture freeze frame differs from the candidate capture")
-    if manifest.get("fixed_delta_seconds") != fixed_delta_seconds:
+    if manifest.get(LIT_FIXED_DELTA_SECONDS) != fixed_delta_seconds:
         raise SmokeFailure("baseline fixed simulation delta differs from the candidate capture")
-    capture_name = manifest.get("capture_file")
+    capture_name = manifest.get(LIT_CAPTURE_FILE)
     if not isinstance(capture_name, str) or not capture_name:
         raise SmokeFailure(f"baseline manifest has no capture filename: {manifest_path}")
     capture_path = reference_directory / capture_name
     if not capture_path.is_file():
         raise SmokeFailure(f"baseline capture does not exist: {capture_path}")
-    expected_hash = manifest.get("capture_sha256")
+    expected_hash = manifest.get(LIT_CAPTURE_SHA256)
     if not isinstance(expected_hash, str) or sha256_file(capture_path) != expected_hash:
         raise SmokeFailure(f"baseline capture checksum does not match its immutable manifest: {capture_path}")
     return manifest, capture_path
@@ -465,18 +544,18 @@ def load_reference(
 
 def load_corpus(corpus_id: str, corpus_path: Path = CURRENT_CORPUS_FILE) -> Mapping[str, object]:
     try:
-        corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+        corpus = json.loads(corpus_path.read_text(encoding=LIT_UTF_8))
     except OSError as error:
         raise SmokeFailure(f"could not read renderer baseline corpus '{corpus_path}': {error}") from error
     except json.JSONDecodeError as error:
         raise SmokeFailure(f"renderer baseline corpus is not valid JSON: {corpus_path}: {error}") from error
-    if not isinstance(corpus, dict) or corpus.get("schema") != CORPUS_SCHEMA:
+    if not isinstance(corpus, dict) or corpus.get(LIT_SCHEMA) != CORPUS_SCHEMA:
         raise SmokeFailure(f"renderer baseline corpus has an unsupported schema: {corpus_path}")
-    if corpus.get("corpus_id") != corpus_id:
+    if corpus.get(LIT_CORPUS_ID) != corpus_id:
         raise SmokeFailure(f"renderer baseline corpus id does not match '{corpus_id}': {corpus_path}")
-    if not isinstance(corpus.get("artifact_root"), str):
+    if not isinstance(corpus.get(LIT_ARTIFACT_ROOT), str):
         raise SmokeFailure(f"renderer baseline corpus has no artifact root: {corpus_path}")
-    if not isinstance(corpus.get("profiles"), dict):
+    if not isinstance(corpus.get(LIT_PROFILES), dict):
         raise SmokeFailure(f"renderer baseline corpus has no profile table: {corpus_path}")
     return corpus
 
@@ -484,7 +563,7 @@ def load_corpus(corpus_id: str, corpus_path: Path = CURRENT_CORPUS_FILE) -> Mapp
 def corpus_artifact_root(corpus: Mapping[str, object], supplied_root: Optional[Path]) -> Path:
     if supplied_root is not None:
         return supplied_root
-    artifact_root = corpus.get("artifact_root")
+    artifact_root = corpus.get(LIT_ARTIFACT_ROOT)
     assert isinstance(artifact_root, str)
     return REPO / artifact_root
 
@@ -526,10 +605,10 @@ def load_corpus_reference(
     corpus_path: Path = CURRENT_CORPUS_FILE,
 ) -> Tuple[Mapping[str, object], Path, CorpusReference]:
     corpus = load_corpus(corpus_id, corpus_path)
-    capture_environment = corpus.get("capture_environment")
+    capture_environment = corpus.get(LIT_CAPTURE_ENVIRONMENT)
     if not isinstance(capture_environment, dict):
         raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no capture environment")
-    expected_gpu_validation = capture_environment.get("gpu_validation")
+    expected_gpu_validation = capture_environment.get(LIT_GPU_VALIDATION)
     if not isinstance(expected_gpu_validation, bool):
         raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no GPU-validation mode")
     if gpu_validation != expected_gpu_validation:
@@ -538,25 +617,25 @@ def load_corpus_reference(
             f"got {gpu_validation}"
         )
 
-    profiles = corpus.get("profiles")
+    profiles = corpus.get(LIT_PROFILES)
     assert isinstance(profiles, dict)
     entry = profiles.get(profile_name)
     if not isinstance(entry, dict):
         raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no profile '{profile_name}'")
-    reference = entry.get("reference")
+    reference = entry.get(LIT_REFERENCE)
     if not isinstance(reference, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no reference")
     artifact_root = corpus_artifact_root(corpus, supplied_root)
     reference_directory = corpus_child(
         artifact_root,
-        corpus_string(reference, "directory", profile_name),
+        corpus_string(reference, LIT_DIRECTORY, profile_name),
         f"reference directory for '{profile_name}'",
     )
-    manifest_path = reference_directory / "manifest.json"
-    log_path = reference_directory / "runtime.log"
-    if sha256_file(manifest_path) != corpus_string(reference, "manifest_sha256", profile_name):
+    manifest_path = reference_directory / LIT_MANIFEST_JSON
+    log_path = reference_directory / LIT_RUNTIME_LOG
+    if sha256_file(manifest_path) != corpus_string(reference, LIT_MANIFEST_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus manifest checksum does not match for '{profile_name}'")
-    if sha256_file(log_path) != corpus_string(reference, "runtime_log_sha256", profile_name):
+    if sha256_file(log_path) != corpus_string(reference, LIT_RUNTIME_LOG_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus runtime-log checksum does not match for '{profile_name}'")
 
     manifest, capture = load_reference(
@@ -568,58 +647,58 @@ def load_corpus_reference(
         profile.capture_freeze_frame,
         profile.fixed_delta_seconds,
     )
-    if manifest.get("source_revision") != corpus_string(reference, "source_revision", profile_name):
+    if manifest.get(LIT_SOURCE_REVISION) != corpus_string(reference, LIT_SOURCE_REVISION, profile_name):
         raise SmokeFailure(f"renderer baseline corpus source revision does not match for '{profile_name}'")
-    if manifest.get("capture_sha256") != corpus_string(reference, "capture_sha256", profile_name):
+    if manifest.get(LIT_CAPTURE_SHA256) != corpus_string(reference, LIT_CAPTURE_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus capture manifest does not match for '{profile_name}'")
-    if sha256_file(capture) != corpus_string(reference, "capture_sha256", profile_name):
+    if sha256_file(capture) != corpus_string(reference, LIT_CAPTURE_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus image checksum does not match for '{profile_name}'")
 
-    limits_entry = entry.get("limits")
+    limits_entry = entry.get(LIT_LIMITS)
     if not isinstance(limits_entry, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no comparison limits")
     limits = {
-        "maximum_max_abs": corpus_number(limits_entry, "maximum_max_abs", profile_name),
-        "maximum_mean_abs": corpus_number(limits_entry, "maximum_mean_abs", profile_name),
-        "maximum_changed_fraction": corpus_number(limits_entry, "maximum_changed_fraction", profile_name),
+        LIT_MAXIMUM_MAX_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MAX_ABS, profile_name),
+        LIT_MAXIMUM_MEAN_ABS: corpus_number(limits_entry, LIT_MAXIMUM_MEAN_ABS, profile_name),
+        LIT_MAXIMUM_CHANGED_FRACTION: corpus_number(limits_entry, LIT_MAXIMUM_CHANGED_FRACTION, profile_name),
     }
-    if limits["maximum_max_abs"] < 0.0 or limits["maximum_mean_abs"] < 0.0:
+    if limits[LIT_MAXIMUM_MAX_ABS] < 0.0 or limits[LIT_MAXIMUM_MEAN_ABS] < 0.0:
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has negative comparison limits")
-    if not 0.0 <= limits["maximum_changed_fraction"] <= 1.0:
+    if not 0.0 <= limits[LIT_MAXIMUM_CHANGED_FRACTION] <= 1.0:
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has an invalid changed-fraction limit")
-    recapture = entry.get("same_revision_recapture")
+    recapture = entry.get(LIT_SAME_REVISION_RECAPTURE)
     if not isinstance(recapture, dict):
         raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no same-revision re-capture")
     recapture_directory = corpus_child(
         artifact_root,
-        corpus_string(recapture, "directory", profile_name),
+        corpus_string(recapture, LIT_DIRECTORY, profile_name),
         f"same-revision re-capture directory for '{profile_name}'",
     )
-    comparison_path = recapture_directory / "comparison.json"
-    if sha256_file(comparison_path) != corpus_string(recapture, "comparison_sha256", profile_name):
+    comparison_path = recapture_directory / LIT_COMPARISON_JSON
+    if sha256_file(comparison_path) != corpus_string(recapture, LIT_COMPARISON_SHA256, profile_name):
         raise SmokeFailure(f"renderer baseline corpus re-capture checksum does not match for '{profile_name}'")
     try:
-        comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+        comparison = json.loads(comparison_path.read_text(encoding=LIT_UTF_8))
     except OSError as error:
         raise SmokeFailure(f"could not read renderer baseline corpus re-capture '{comparison_path}': {error}") from error
     except json.JSONDecodeError as error:
         raise SmokeFailure(f"renderer baseline corpus re-capture is not valid JSON: {comparison_path}: {error}") from error
-    if not isinstance(comparison, dict) or comparison.get("schema") != "nwb.renderer-baseline-comparison.v1":
+    if not isinstance(comparison, dict) or comparison.get(LIT_SCHEMA) != LIT_NWB_RENDERER_BASELINE_COMPARISON_V1:
         raise SmokeFailure(f"renderer baseline corpus re-capture has an unsupported schema for '{profile_name}'")
-    if comparison.get("profile") != profile_name:
+    if comparison.get(LIT_PROFILE) != profile_name:
         raise SmokeFailure(f"renderer baseline corpus re-capture profile does not match for '{profile_name}'")
-    expected_revision = corpus_string(reference, "source_revision", profile_name)
-    if comparison.get("reference_source_revision") != expected_revision:
+    expected_revision = corpus_string(reference, LIT_SOURCE_REVISION, profile_name)
+    if comparison.get(LIT_REFERENCE_SOURCE_REVISION) != expected_revision:
         raise SmokeFailure(f"renderer baseline corpus re-capture reference revision does not match for '{profile_name}'")
-    if comparison.get("candidate_source_revision") != expected_revision:
+    if comparison.get(LIT_CANDIDATE_SOURCE_REVISION) != expected_revision:
         raise SmokeFailure(f"renderer baseline corpus re-capture candidate revision does not match for '{profile_name}'")
-    difference = comparison.get("difference")
+    difference = comparison.get(LIT_DIFFERENCE)
     if not isinstance(difference, dict):
         raise SmokeFailure(f"renderer baseline corpus re-capture has no difference metrics for '{profile_name}'")
     for corpus_key, comparison_key, limit_key in (
-        ("max_abs", "max_abs", "maximum_max_abs"),
-        ("mean_abs", "mean_abs", "maximum_mean_abs"),
-        ("changed_fraction", "changed_fraction", "maximum_changed_fraction"),
+        (LIT_MAX_ABS, LIT_MAX_ABS, LIT_MAXIMUM_MAX_ABS),
+        (LIT_MEAN_ABS, LIT_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS),
+        (LIT_CHANGED_FRACTION, LIT_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),
     ):
         recorded_value = corpus_number(recapture, corpus_key, profile_name)
         observed_value = corpus_number(difference, comparison_key, profile_name)
@@ -632,9 +711,9 @@ def load_corpus_reference(
 
 def apply_corpus_limits(args: argparse.Namespace, reference: CorpusReference) -> None:
     for argument_name, corpus_key in (
-        ("maximum_max_abs", "maximum_max_abs"),
-        ("maximum_mean_abs", "maximum_mean_abs"),
-        ("maximum_changed_fraction", "maximum_changed_fraction"),
+        (LIT_MAXIMUM_MAX_ABS, LIT_MAXIMUM_MAX_ABS),
+        (LIT_MAXIMUM_MEAN_ABS, LIT_MAXIMUM_MEAN_ABS),
+        (LIT_MAXIMUM_CHANGED_FRACTION, LIT_MAXIMUM_CHANGED_FRACTION),
     ):
         approved_limit = reference.limits[corpus_key]
         requested_limit = getattr(args, argument_name)
@@ -649,7 +728,7 @@ def apply_corpus_limits(args: argparse.Namespace, reference: CorpusReference) ->
 
 def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
     corpus = load_corpus(corpus_id)
-    profiles = corpus.get("profiles")
+    profiles = corpus.get(LIT_PROFILES)
     assert isinstance(profiles, dict)
     expected_profiles = set(profile_names())
     actual_profiles = set(profiles)
@@ -659,9 +738,9 @@ def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
         raise SmokeFailure(
             f"renderer baseline corpus '{corpus_id}' profile set mismatch: missing={missing}, unexpected={unexpected}"
         )
-    capture_environment = corpus.get("capture_environment")
+    capture_environment = corpus.get(LIT_CAPTURE_ENVIRONMENT)
     assert isinstance(capture_environment, dict)
-    gpu_validation = capture_environment.get("gpu_validation")
+    gpu_validation = capture_environment.get(LIT_GPU_VALIDATION)
     assert isinstance(gpu_validation, bool)
     for profile_name in sorted(expected_profiles):
         profile = get_profile(profile_name)
@@ -723,41 +802,41 @@ def run(args: argparse.Namespace) -> int:
         raise SmokeFailure("refusing to create an immutable baseline from a dirty source worktree")
 
     prepare_output_directory(args.output_dir)
-    capture_kind = "candidate" if reference_capture is not None else "baseline"
-    capture_path = args.output_dir / ("candidate.bmp" if reference_capture is not None else "baseline.bmp")
-    log_path = args.output_dir / "runtime.log"
+    capture_kind = "candidate" if reference_capture is not None else LIT_BASELINE
+    capture_path = args.output_dir / (LIT_CANDIDATE_BMP if reference_capture is not None else LIT_BASELINE_BMP)
+    log_path = args.output_dir / LIT_RUNTIME_LOG
     capture = capture_scene(args, profile, capture_path, log_path, frozen_environment)
     manifest = manifest_payload(capture_kind, args.profile, profile, args, capture, reference_manifest)
-    write_json(args.output_dir / "manifest.json", manifest)
+    write_json(args.output_dir / LIT_MANIFEST_JSON, manifest)
 
     if reference_capture is None:
         print(f"captured immutable renderer baseline: {args.output_dir}")
         return 0
 
-    difference = compare_bmp_rgb(reference_capture, capture_path, args.output_dir / "difference.bmp")
+    difference = compare_bmp_rgb(reference_capture, capture_path, args.output_dir / LIT_DIFFERENCE_BMP)
     failures = difference_failures(args, difference)
     comparison = {
-        "schema": "nwb.renderer-baseline-comparison.v1",
-        "profile": args.profile,
+        LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1,
+        LIT_PROFILE: args.profile,
         "reference_directory": str(reference_directory),
         "candidate_directory": str(args.output_dir),
-        "reference_source_revision": reference_manifest.get("source_revision"),
-        "candidate_source_revision": capture.source_revision,
+        LIT_REFERENCE_SOURCE_REVISION: reference_manifest.get(LIT_SOURCE_REVISION),
+        LIT_CANDIDATE_SOURCE_REVISION: capture.source_revision,
         "reference_capture": str(reference_capture),
         "candidate_capture": str(capture_path),
-        "difference_capture": str(args.output_dir / "difference.bmp"),
-        "difference": asdict(difference) | {"changed_fraction": difference.changed_fraction},
+        "difference_capture": str(args.output_dir / LIT_DIFFERENCE_BMP),
+        LIT_DIFFERENCE: asdict(difference) | {LIT_CHANGED_FRACTION: difference.changed_fraction},
         "reference_corpus": corpus_reference.corpus_id if corpus_reference is not None else None,
         "effective_limits": {
-            "maximum_max_abs": args.maximum_max_abs,
-            "maximum_mean_abs": args.maximum_mean_abs,
-            "maximum_changed_fraction": args.maximum_changed_fraction,
+            LIT_MAXIMUM_MAX_ABS: args.maximum_max_abs,
+            LIT_MAXIMUM_MEAN_ABS: args.maximum_mean_abs,
+            LIT_MAXIMUM_CHANGED_FRACTION: args.maximum_changed_fraction,
             "require_exact": args.require_exact,
         },
         "threshold_failures": failures,
         "verdict": "fail" if failures else ("pass" if corpus_reference is not None else "report-only"),
     }
-    write_json(args.output_dir / "comparison.json", comparison)
+    write_json(args.output_dir / LIT_COMPARISON_JSON, comparison)
     print(f"renderer baseline comparison artifacts: {args.output_dir}")
     if failures:
         print("renderer baseline comparison failed: " + "; ".join(failures), file=sys.stderr)
@@ -767,14 +846,14 @@ def run(args: argparse.Namespace) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=profile_names(), help="Pinned renderer scene to capture.")
-    parser.add_argument("--executable", type=Path, help="Selected smoke executable.")
-    parser.add_argument("--runtime-dir", type=Path, help="Selected cooked smoke runtime directory.")
-    parser.add_argument("--output-dir", type=Path, help="New, empty artifact directory.")
+    parser.add_argument(LIT_PROFILE_2, choices=profile_names(), help="Pinned renderer scene to capture.")
+    parser.add_argument(LIT_EXECUTABLE, type=Path, help="Selected smoke executable.")
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Selected cooked smoke runtime directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="New, empty artifact directory.")
     reference_group = parser.add_mutually_exclusive_group()
-    reference_group.add_argument("--reference-dir", type=Path, help="Immutable baseline directory to compare against.")
+    reference_group.add_argument(LIT_REFERENCE_DIR, type=Path, help="Immutable baseline directory to compare against.")
     reference_group.add_argument(
-        "--reference-corpus",
+        LIT_REFERENCE_CORPUS,
         choices=(CURRENT_CORPUS_ID,),
         help="Compare against the checked-in formal current-renderer corpus and enforce its limits.",
     )
@@ -789,19 +868,19 @@ def make_parser() -> argparse.ArgumentParser:
         help="Verify every restored current-renderer corpus artifact without running Vulkan.",
     )
     parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs instead of logserver.")
+    parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
-    validation_group.add_argument("--gpu-validation", dest="gpu_validation", action="store_true")
-    validation_group.add_argument("--no-gpu-validation", dest="gpu_validation", action="store_false")
+    validation_group.add_argument("--gpu-validation", dest=LIT_GPU_VALIDATION, action=LIT_STORE_TRUE)
+    validation_group.add_argument("--no-gpu-validation", dest=LIT_GPU_VALIDATION, action="store_false")
     parser.set_defaults(gpu_validation=False)
     parser.add_argument("--settle-seconds", type=float, help="Override the profile's fixed temporal settle duration.")
     parser.add_argument("--startup-timeout", type=float, default=30.0, help="Seconds to wait for the native smoke window.")
-    parser.add_argument("--require-exact", action="store_true", help="Require bit-exact RGB output for a comparison.")
+    parser.add_argument("--require-exact", action=LIT_STORE_TRUE, help="Require bit-exact RGB output for a comparison.")
     parser.add_argument("--maximum-max-abs", type=int, help="Optional maximum per-channel RGB difference.")
     parser.add_argument("--maximum-mean-abs", type=float, help="Optional maximum mean absolute RGB difference.")
     parser.add_argument("--maximum-changed-fraction", type=float, help="Optional maximum fraction of changed pixels.")
-    parser.add_argument("--reject-log", action="append", default=[], help="Additional runtime log text that invalidates a capture.")
-    parser.add_argument("--self-test", action="store_true", help="Exercise manifest and pixel-difference logic without Vulkan.")
+    parser.add_argument("--reject-log", action=LIT_APPEND, default=[], help="Additional runtime log text that invalidates a capture.")
+    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Exercise manifest and pixel-difference logic without Vulkan.")
     return parser
 
 
@@ -812,12 +891,12 @@ def validate_args(args: argparse.Namespace) -> None:
         conflicting = [
             name
             for name, value in (
-                ("--profile", args.profile),
-                ("--executable", args.executable),
-                ("--runtime-dir", args.runtime_dir),
-                ("--output-dir", args.output_dir),
-                ("--reference-dir", args.reference_dir),
-                ("--reference-corpus", args.reference_corpus),
+                (LIT_PROFILE_2, args.profile),
+                (LIT_EXECUTABLE, args.executable),
+                (LIT_RUNTIME_DIR, args.runtime_dir),
+                (LIT_OUTPUT_DIR, args.output_dir),
+                (LIT_REFERENCE_DIR, args.reference_dir),
+                (LIT_REFERENCE_CORPUS, args.reference_corpus),
             )
             if value is not None
         ]
@@ -828,7 +907,7 @@ def validate_args(args: argparse.Namespace) -> None:
         raise SmokeFailure("--corpus-root requires --reference-corpus or --verify-corpus")
     missing = [
         flag
-        for flag, value in (("--profile", args.profile), ("--executable", args.executable), ("--runtime-dir", args.runtime_dir), ("--output-dir", args.output_dir))
+        for flag, value in ((LIT_PROFILE_2, args.profile), (LIT_EXECUTABLE, args.executable), (LIT_RUNTIME_DIR, args.runtime_dir), (LIT_OUTPUT_DIR, args.output_dir))
         if value is None
     ]
     if missing:
@@ -877,54 +956,54 @@ def run_self_test() -> int:
             startup_timeout=1.0,
             gpu_validation=False,
             settle_seconds=0.0,
-            profile="opaque-texture",
+            profile=LIT_OPAQUE_TEXTURE,
             reject_log=[],
         )
         events = []
 
         def terminate(process, name, window_handle=None):
             if process is app:
-                events.append(("app-stop", name, window_handle))
+                events.append((LIT_APP_STOP, name, window_handle))
                 return 7, "simulated abnormal exit"
             assert process is None
-            events.append(("cleanup-none", name, window_handle))
+            events.append((LIT_CLEANUP_NONE, name, window_handle))
             return None, ""
 
         def shutdown(process, directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver
             assert directory == root
             assert received_baseline == baseline
-            assert pattern == "logserver_*.log"
-            assert events == [("app-stop", "renderer baseline capture", 17)]
-            events.append(("logserver-helper", shutdown_name))
-            return "captured runtime evidence"
+            assert pattern == LIT_LOGSERVER_LOG
+            assert events == [(LIT_APP_STOP, LIT_RENDERER_BASELINE_CAPTURE, 17)]
+            events.append((LIT_LOGSERVER_HELPER, shutdown_name))
+            return LIT_CAPTURED_RUNTIME_EVIDENCE
 
-        with mock.patch.object(module, "build_launch_environment", return_value={}), \
-             mock.patch.object(module, "create_capture_backend", return_value=backend), \
-             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
-             mock.patch.object(module, "launch_testbed", return_value=app), \
-             mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
-             mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
+        with mock.patch.object(module, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
+             mock.patch.object(module, LIT_CREATE_CAPTURE_BACKEND, return_value=backend), \
+             mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
+             mock.patch.object(module, LIT_LAUNCH_TESTBED, return_value=app), \
+             mock.patch.object(module, LIT_TERMINATE_PROCESS, side_effect=terminate) as terminate_mock, \
+             mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown) as shutdown_mock:
             try:
-                capture_scene(orchestration_args, get_profile("opaque-texture"), capture_path, runtime_log_path, {})
+                capture_scene(orchestration_args, get_profile(LIT_OPAQUE_TEXTURE), capture_path, runtime_log_path, {})
             except SmokeFailure as error:
                 assert "exit 7" in str(error)
             else:
                 raise AssertionError("renderer orchestration accepted an abnormal Testbed exit")
 
         assert events == [
-            ("app-stop", "renderer baseline capture", 17),
-            ("logserver-helper", "renderer baseline logserver"),
-            ("cleanup-none", "renderer baseline capture", 17),
-            ("cleanup-none", "renderer baseline logserver", None),
+            (LIT_APP_STOP, LIT_RENDERER_BASELINE_CAPTURE, 17),
+            (LIT_LOGSERVER_HELPER, LIT_RENDERER_BASELINE_LOGSERVER),
+            (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_CAPTURE, 17),
+            (LIT_CLEANUP_NONE, LIT_RENDERER_BASELINE_LOGSERVER, None),
         ]
         assert terminate_mock.mock_calls == [
-            mock.call(app, "renderer baseline capture", 17),
-            mock.call(None, "renderer baseline capture", 17),
-            mock.call(None, "renderer baseline logserver"),
+            mock.call(app, LIT_RENDERER_BASELINE_CAPTURE, 17),
+            mock.call(None, LIT_RENDERER_BASELINE_CAPTURE, 17),
+            mock.call(None, LIT_RENDERER_BASELINE_LOGSERVER),
         ]
         shutdown_mock.assert_called_once_with(
-            logserver, root, baseline, "logserver_*.log", "renderer baseline logserver"
+            logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_RENDERER_BASELINE_LOGSERVER
         )
         backend.close.assert_called_once_with()
         backend.prepare_window.assert_called_once_with(17)
@@ -932,102 +1011,102 @@ def run_self_test() -> int:
         raw_backend = object.__new__(WindowsCapture)
         raw_events = []
         raw_backend.wait_for_window = mock.Mock(return_value=17)
-        raw_backend.prepare_raw_client_window = lambda window: raw_events.append(("prepare", window))
+        raw_backend.prepare_raw_client_window = lambda window: raw_events.append((LIT_PREPARE, window))
         raw_backend.prepare_window = mock.Mock(side_effect=AssertionError("raw preparation required"))
         raw_backend.capture_window = mock.Mock(side_effect=AssertionError("prepared raw capture required"))
-        raw_backend.close = lambda: raw_events.append(("close",))
+        raw_backend.close = lambda: raw_events.append((LIT_CLOSE,))
 
         def raw_capture(window, path):
-            raw_events.append(("capture", window))
+            raw_events.append((LIT_CAPTURE, window))
             return capture(window, path)
 
         raw_backend.capture_prepared_raw_client_window = raw_capture
         raw_args = SimpleNamespace(**vars(orchestration_args))
-        raw_args.profile = "soft-shadows"
-        with mock.patch.object(module, "build_launch_environment", return_value={}), \
-             mock.patch.object(module, "create_capture_backend", return_value=raw_backend), \
-             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
-             mock.patch.object(module, "launch_testbed", return_value=app), \
-             mock.patch.object(module, "wait_for_log_message", side_effect=lambda *args: raw_events.append(("ready",))), \
-             mock.patch.object(time, "sleep", side_effect=lambda delay: raw_events.append(("settle", delay))), \
-             mock.patch.object(module, "terminate_process", return_value=(0, "")), \
-             mock.patch.object(module, "shutdown_logserver_and_collect", return_value="captured runtime evidence"), \
+        raw_args.profile = LIT_SOFT_SHADOWS
+        with mock.patch.object(module, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}), \
+             mock.patch.object(module, LIT_CREATE_CAPTURE_BACKEND, return_value=raw_backend), \
+             mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
+             mock.patch.object(module, LIT_LAUNCH_TESTBED, return_value=app), \
+             mock.patch.object(module, "wait_for_log_message", side_effect=lambda *args: raw_events.append((LIT_READY,))), \
+             mock.patch.object(time, "sleep", side_effect=lambda delay: raw_events.append((LIT_SETTLE, delay))), \
+             mock.patch.object(module, LIT_TERMINATE_PROCESS, return_value=(0, "")), \
+             mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_CAPTURED_RUNTIME_EVIDENCE), \
              mock.patch.object(module, "validate_runtime_log", return_value=()), \
-             mock.patch.object(module, "source_revision", return_value="test-source"), \
-             mock.patch.object(module, "source_worktree_clean", return_value=True):
-            capture_scene(raw_args, get_profile("soft-shadows"), capture_path, runtime_log_path, {})
-        assert raw_events == [("prepare", 17), ("ready",), ("settle", 0.0), ("capture", 17), ("close",)]
+             mock.patch.object(module, LIT_SOURCE_REVISION, return_value="test-source"), \
+             mock.patch.object(module, LIT_SOURCE_WORKTREE_CLEAN, return_value=True):
+            capture_scene(raw_args, get_profile(LIT_SOFT_SHADOWS), capture_path, runtime_log_path, {})
+        assert raw_events == [(LIT_PREPARE, 17), (LIT_READY,), (LIT_SETTLE, 0.0), (LIT_CAPTURE, 17), (LIT_CLOSE,)]
         raw_backend.prepare_window.assert_not_called()
         raw_backend.capture_window.assert_not_called()
 
-        reference_directory = root / "opaque-texture" / "reference"
+        reference_directory = root / LIT_OPAQUE_TEXTURE / LIT_REFERENCE
         reference_directory.mkdir(parents=True)
-        reference_image = reference_directory / "baseline.bmp"
-        candidate_image = root / "candidate.bmp"
+        reference_image = reference_directory / LIT_BASELINE_BMP
+        candidate_image = root / LIT_CANDIDATE_BMP
         write_bmp_rgb(reference_image, 2, 1, bytes((8, 16, 24, 32, 40, 48)))
         write_bmp_rgb(candidate_image, 2, 1, bytes((8, 16, 24, 35, 40, 50)))
         manifest = {
-            "schema": SCHEMA,
-            "capture_kind": "baseline",
-            "profile": "opaque-texture",
-            "capture_file": "baseline.bmp",
-            "capture_sha256": sha256_file(reference_image),
-            "frozen_environment": {},
-            "gpu_validation": False,
-            "settle_seconds": 4.0,
-            "capture_mode": "settled",
-            "capture_freeze_frame": 0,
-            "fixed_delta_seconds": 0.0,
-            "source_revision": "test-reference",
+            LIT_SCHEMA: SCHEMA,
+            LIT_CAPTURE_KIND: LIT_BASELINE,
+            LIT_PROFILE: LIT_OPAQUE_TEXTURE,
+            LIT_CAPTURE_FILE: LIT_BASELINE_BMP,
+            LIT_CAPTURE_SHA256: sha256_file(reference_image),
+            LIT_FROZEN_ENVIRONMENT: {},
+            LIT_GPU_VALIDATION: False,
+            LIT_SETTLE_SECONDS: 4.0,
+            LIT_CAPTURE_MODE: LIT_SETTLED,
+            LIT_CAPTURE_FREEZE_FRAME: 0,
+            LIT_FIXED_DELTA_SECONDS: 0.0,
+            LIT_SOURCE_REVISION: LIT_TEST_REFERENCE,
         }
-        write_json(reference_directory / "manifest.json", manifest)
-        (reference_directory / "runtime.log").write_text("test runtime log\n", encoding="utf-8")
-        loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False, 0, 0.0)
-        assert loaded_manifest["source_revision"] == "test-reference"
+        write_json(reference_directory / LIT_MANIFEST_JSON, manifest)
+        (reference_directory / LIT_RUNTIME_LOG).write_text("test runtime log\n", encoding=LIT_UTF_8)
+        loaded_manifest, loaded_capture = load_reference(reference_directory, LIT_OPAQUE_TEXTURE, {}, 4.0, False, 0, 0.0)
+        assert loaded_manifest[LIT_SOURCE_REVISION] == LIT_TEST_REFERENCE
         assert loaded_capture == reference_image
-        recapture_directory = root / "opaque-texture" / "recapture"
+        recapture_directory = root / LIT_OPAQUE_TEXTURE / "recapture"
         recapture_directory.mkdir(parents=True)
-        comparison_path = recapture_directory / "comparison.json"
+        comparison_path = recapture_directory / LIT_COMPARISON_JSON
         write_json(
             comparison_path,
             {
-                "schema": "nwb.renderer-baseline-comparison.v1",
-                "profile": "opaque-texture",
-                "reference_source_revision": "test-reference",
-                "candidate_source_revision": "test-reference",
-                "difference": {
-                    "max_abs": 2,
-                    "mean_abs": 0.5,
-                    "changed_fraction": 0.25,
+                LIT_SCHEMA: LIT_NWB_RENDERER_BASELINE_COMPARISON_V1,
+                LIT_PROFILE: LIT_OPAQUE_TEXTURE,
+                LIT_REFERENCE_SOURCE_REVISION: LIT_TEST_REFERENCE,
+                LIT_CANDIDATE_SOURCE_REVISION: LIT_TEST_REFERENCE,
+                LIT_DIFFERENCE: {
+                    LIT_MAX_ABS: 2,
+                    LIT_MEAN_ABS: 0.5,
+                    LIT_CHANGED_FRACTION: 0.25,
                 },
             },
         )
         corpus_path = root / "corpus.json"
         corpus = {
-            "schema": CORPUS_SCHEMA,
-            "corpus_id": CURRENT_CORPUS_ID,
-            "artifact_root": ".",
-            "capture_environment": {"gpu_validation": False},
-            "profiles": {
-                "opaque-texture": {
-                    "reference": {
-                        "directory": "opaque-texture/reference",
-                        "source_revision": "test-reference",
-                        "capture_sha256": sha256_file(reference_image),
-                        "manifest_sha256": sha256_file(reference_directory / "manifest.json"),
-                        "runtime_log_sha256": sha256_file(reference_directory / "runtime.log"),
+            LIT_SCHEMA: CORPUS_SCHEMA,
+            LIT_CORPUS_ID: CURRENT_CORPUS_ID,
+            LIT_ARTIFACT_ROOT: ".",
+            LIT_CAPTURE_ENVIRONMENT: {LIT_GPU_VALIDATION: False},
+            LIT_PROFILES: {
+                LIT_OPAQUE_TEXTURE: {
+                    LIT_REFERENCE: {
+                        LIT_DIRECTORY: "opaque-texture/reference",
+                        LIT_SOURCE_REVISION: LIT_TEST_REFERENCE,
+                        LIT_CAPTURE_SHA256: sha256_file(reference_image),
+                        LIT_MANIFEST_SHA256: sha256_file(reference_directory / LIT_MANIFEST_JSON),
+                        LIT_RUNTIME_LOG_SHA256: sha256_file(reference_directory / LIT_RUNTIME_LOG),
                     },
-                    "same_revision_recapture": {
-                        "directory": "opaque-texture/recapture",
-                        "comparison_sha256": sha256_file(comparison_path),
-                        "max_abs": 2,
-                        "mean_abs": 0.5,
-                        "changed_fraction": 0.25,
+                    LIT_SAME_REVISION_RECAPTURE: {
+                        LIT_DIRECTORY: "opaque-texture/recapture",
+                        LIT_COMPARISON_SHA256: sha256_file(comparison_path),
+                        LIT_MAX_ABS: 2,
+                        LIT_MEAN_ABS: 0.5,
+                        LIT_CHANGED_FRACTION: 0.25,
                     },
-                    "limits": {
-                        "maximum_max_abs": 3,
-                        "maximum_mean_abs": 1.0,
-                        "maximum_changed_fraction": 0.75,
+                    LIT_LIMITS: {
+                        LIT_MAXIMUM_MAX_ABS: 3,
+                        LIT_MAXIMUM_MEAN_ABS: 1.0,
+                        LIT_MAXIMUM_CHANGED_FRACTION: 0.75,
                     },
                 }
             },
@@ -1036,22 +1115,22 @@ def run_self_test() -> int:
         corpus_manifest, corpus_capture, corpus_reference = load_corpus_reference(
             CURRENT_CORPUS_ID,
             root,
-            "opaque-texture",
-            get_profile("opaque-texture"),
+            LIT_OPAQUE_TEXTURE,
+            get_profile(LIT_OPAQUE_TEXTURE),
             False,
             corpus_path=corpus_path,
         )
-        assert corpus_manifest["source_revision"] == "test-reference"
+        assert corpus_manifest[LIT_SOURCE_REVISION] == LIT_TEST_REFERENCE
         assert corpus_capture == reference_image
-        assert corpus_reference.limits["maximum_max_abs"] == 3.0
-        reference_log = reference_directory / "runtime.log"
-        reference_log.write_text("tampered runtime log\n", encoding="utf-8")
+        assert corpus_reference.limits[LIT_MAXIMUM_MAX_ABS] == 3.0
+        reference_log = reference_directory / LIT_RUNTIME_LOG
+        reference_log.write_text("tampered runtime log\n", encoding=LIT_UTF_8)
         try:
             load_corpus_reference(
                 CURRENT_CORPUS_ID,
                 root,
-                "opaque-texture",
-                get_profile("opaque-texture"),
+                LIT_OPAQUE_TEXTURE,
+                get_profile(LIT_OPAQUE_TEXTURE),
                 False,
                 corpus_path=corpus_path,
             )
@@ -1059,7 +1138,7 @@ def run_self_test() -> int:
             pass
         else:
             raise AssertionError("corpus artifact tampering must fail closed")
-        reference_log.write_text("test runtime log\n", encoding="utf-8")
+        reference_log.write_text("test runtime log\n", encoding=LIT_UTF_8)
         corpus_args = SimpleNamespace(
             maximum_max_abs=None,
             maximum_mean_abs=None,
@@ -1090,7 +1169,7 @@ def run_self_test() -> int:
         assert surfel_profile.capture_freeze_frame == 360
         assert surfel_profile.settle_seconds == 0.75
         assert surfel_profile.fixed_delta_seconds == 1.0 / 60.0
-        soft_shadow_profile = get_profile("soft-shadows")
+        soft_shadow_profile = get_profile(LIT_SOFT_SHADOWS)
         assert soft_shadow_profile.capture_freeze_frame == 360
         assert soft_shadow_profile.settle_seconds == 0.75
         assert soft_shadow_profile.fixed_delta_seconds == 1.0 / 60.0
@@ -1098,7 +1177,7 @@ def run_self_test() -> int:
         assert stress_profile.capture_freeze_frame == 96
         assert stress_profile.settle_seconds == 0.75
         assert stress_profile.fixed_delta_seconds == 1.0 / 60.0
-        difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
+        difference = compare_bmp_rgb(reference_image, candidate_image, root / LIT_DIFFERENCE_BMP)
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3
         assert difference.changed_pixels == 1
@@ -1127,5 +1206,5 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

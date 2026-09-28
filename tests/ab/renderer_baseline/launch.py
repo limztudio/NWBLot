@@ -25,13 +25,35 @@ sys.path.insert(0, str(REPO))
 import launcher as ROOT_LAUNCHER  # noqa: E402
 from profiles import get_profile, profile_names  # noqa: E402
 
+# Shared literals (no inline hardcodes below this block).
+LIT_ON = "ON"
+LIT_COZTER = ".cozter"
+LIT_OUT = "out"
+LIT_AB_RESULTS = "ab-results"
+LIT_RENDERER_BASELINE = "renderer-baseline"
+LIT_PROFILE = "--profile"
+LIT_EXECUTABLE = "--executable"
+LIT_RUNTIME_DIR = "--runtime-dir"
+LIT_OUTPUT_DIR = "--output-dir"
+LIT_GPU_VALIDATION = "--gpu-validation"
+LIT_NO_LOGSERVER = "--no-logserver"
+LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
+LIT_STORE_TRUE = "store_true"
+LIT_GPU_VALIDATION_2 = "gpu_validation"
+LIT_SELF_TEST = "--self-test"
+LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
+LIT_TRANSPARENT_AVBOIT = "transparent-avboit"
+LIT_REFERENCE_DIR = "--reference-dir"
+LIT_REFERENCE = "reference"
+LIT_MAIN = "__main__"
+
 
 RUNNER_SCRIPT = Path("tests") / "ab" / "renderer_baseline" / "run.py"
 REQUIRED_DEFINES = {
-    "NWB_BUILD_LOADER": "ON",
-    "NWB_BUILD_LOGSERVER": "ON",
-    "NWB_BUILD_PIPELINE": "ON",
-    "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_LOADER": LIT_ON,
+    "NWB_BUILD_LOGSERVER": LIT_ON,
+    "NWB_BUILD_PIPELINE": LIT_ON,
+    "NWB_BUILD_TESTS": LIT_ON,
 }
 
 
@@ -44,7 +66,7 @@ class BaselinePaths:
 
 def default_output_directory(root: Path, profile_name: str) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / ".cozter" / "out" / "ab-results" / "renderer-baseline" / profile_name / stamp
+    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_RENDERER_BASELINE / profile_name / stamp
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> BaselinePaths:
@@ -74,21 +96,21 @@ def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[objec
     command: List[object] = [
         sys.executable,
         REPO / RUNNER_SCRIPT,
-        "--profile",
+        LIT_PROFILE,
         args.profile,
-        "--executable",
+        LIT_EXECUTABLE,
         paths.executable,
-        "--runtime-dir",
+        LIT_RUNTIME_DIR,
         paths.runtime_directory,
-        "--output-dir",
+        LIT_OUTPUT_DIR,
         paths.output_directory,
     ]
     if args.gpu_validation:
-        command.append("--gpu-validation")
+        command.append(LIT_GPU_VALIDATION)
     if args.no_logserver:
-        command.append("--no-logserver")
+        command.append(LIT_NO_LOGSERVER)
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
+        command += [LIT_LOGSERVER_EXECUTABLE, ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -97,20 +119,20 @@ def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
     parser.add_argument("profile", nargs="?", choices=profile_names(), help="Pinned renderer scene to capture.")
-    parser.add_argument("--executable", type=Path, help="Override the selected smoke executable.")
-    parser.add_argument("--runtime-dir", type=Path, help="Override the selected cooked smoke runtime directory.")
-    parser.add_argument("--output-dir", type=Path, help="Directory for the immutable capture and manifest.")
-    parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs instead of logserver.")
+    parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the selected smoke executable.")
+    parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the selected cooked smoke runtime directory.")
+    parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for the immutable capture and manifest.")
+    parser.add_argument(LIT_LOGSERVER_EXECUTABLE, type=Path, help="Override the logserver executable.")
+    parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        "--gpu-validation", dest="gpu_validation", action="store_true", help="Enable Vulkan validation for this capture."
+        LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable Vulkan validation for this capture."
     )
     validation_group.add_argument(
-        "--no-gpu-validation", dest="gpu_validation", action="store_false", help="Do not pass --gpudbg."
+        "--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg."
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action="store_true", help="Validate launcher command composition without building Vulkan targets.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without building Vulkan targets.")
     return parser
 
 
@@ -131,29 +153,29 @@ def run_self_test() -> int:
         arch="x64",
         domain="full",
         config="dbg",
-        configure_preset="windows-clang-x64",
-        build_dir=root / "__cmake" / "build" / "windows-clang-x64",
+        configure_preset=LIT_WINDOWS_CLANG_X64,
+        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
         cmake=("cmake",),
     )
     args = SimpleNamespace(
-        profile="transparent-avboit",
+        profile=LIT_TRANSPARENT_AVBOIT,
         executable=None,
         runtime_dir=None,
-        output_dir=root / ".cozter" / "out" / "ab-results" / "renderer-baseline" / "transparent-avboit" / "self-test",
+        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_RENDERER_BASELINE / LIT_TRANSPARENT_AVBOIT / "self-test",
         dry_run=True,
         gpu_validation=True,
         no_logserver=False,
         logserver_executable=None,
-        runner_args=["--reference-dir", "reference"],
+        runner_args=[LIT_REFERENCE_DIR, LIT_REFERENCE],
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
     assert paths.runtime_directory.as_posix().endswith("Testing/smoke_runtime/dbg")
-    assert command[command.index("--executable") + 1].endswith("transparent_multi_smoke.exe")
-    assert command[command.index("--profile") + 1] == "transparent-avboit"
-    assert "--gpu-validation" in command
-    assert command[-2:] == ["--reference-dir", "reference"]
-    assert parse_args(["--self-test"]).gpu_validation is True
+    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("transparent_multi_smoke.exe")
+    assert command[command.index(LIT_PROFILE) + 1] == LIT_TRANSPARENT_AVBOIT
+    assert LIT_GPU_VALIDATION in command
+    assert command[-2:] == [LIT_REFERENCE_DIR, LIT_REFERENCE]
+    assert parse_args([LIT_SELF_TEST]).gpu_validation is True
     print("renderer-baseline launcher self-test passed")
     return 0
 
@@ -180,5 +202,5 @@ def main(argv: Sequence[str]) -> int:
     return run(args)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     raise SystemExit(main(sys.argv[1:]))

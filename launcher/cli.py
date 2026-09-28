@@ -16,5 +16,8 @@ def main(argv: Sequence[str]) -> int:
     return launcher.main(argv)
 
 
-if __name__ == "__main__":
+MAIN_ENTRY = "__main__"
+
+
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))

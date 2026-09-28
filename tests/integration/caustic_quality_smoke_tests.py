@@ -12,10 +12,22 @@ import caustic_quality_smoke as quality
 import caustic_optical_smoke as optical
 import stress_timing_smoke as stress
 
+# Shared literals (no inline hardcodes below this block).
+LIT_HARDWARE = "hardware"
+LIT_N = "\n"
+LIT_EXECUTABLE = "--executable"
+LIT_WORKING_DIRECTORY = "--working-directory"
+LIT_CAUSTIC_PHOTON_GRID_DIVISOR = "--caustic-photon-grid-divisor"
+LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR = "NWB_CAUSTIC_PHOTON_GRID_DIVISOR"
+LIT_NWB_CAUSTIC_SMOKE_ENABLED = "NWB_CAUSTIC_SMOKE_ENABLED"
+LIT_SOFTWARE = "software"
+LIT_PRODUCERS = "producers"
+LIT_MAIN = "__main__"
 
-def record(divisor=1, backend="hardware", phases=2, base=512):
+
+def record(divisor=1, backend=LIT_HARDWARE, phases=2, base=512):
     full = (base // divisor) ** 2
-    return (quality.SETTING_MARKER + str(divisor) + "\n"
+    return (quality.SETTING_MARKER + str(divisor) + LIT_N
         + f"RendererSystem: dispatched {backend} caustic producer ({full // phases} photons/frame, "
         + f"{phases} temporal phases, {full} full-grid budget, 2 caustic lights, 10 refractive instances)")
 
@@ -27,65 +39,65 @@ class CausticQualitySmokeTests(unittest.TestCase):
         self.output = Path(self.temporary.name)
         executable = self.output / "renderer.exe"
         executable.write_bytes(b"fixture")
-        self.stress_args = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
-        self.optical_args = ["--executable", str(executable), "--working-directory", str(self.output),
+        self.stress_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output), "--no-logserver"]
+        self.optical_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output),
             "--output-directory", str(self.output / "optical")]
 
     def test_cli_defaults_and_only_explicit_supported_divisors(self):
         for parse, required in ((stress.parse_args, self.stress_args), (optical.parse_args, self.optical_args)):
             self.assertEqual(parse(required).caustic_photon_grid_divisor, 1)
             for divisor in (1, 2, 4):
-                self.assertEqual(parse(required + ["--caustic-photon-grid-divisor", str(divisor)]).caustic_photon_grid_divisor, divisor)
+                self.assertEqual(parse(required + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, str(divisor)]).caustic_photon_grid_divisor, divisor)
             for value in ("0", "3", "8", "-1", "2.0", "fast"):
                 with self.subTest(value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
-                    parse(required + ["--caustic-photon-grid-divisor", value])
+                    parse(required + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, value])
 
     def test_stress_launch_strips_inherited_budget_and_uses_explicit_divisor(self):
         for divisor in (1, 2, 4):
-            args = stress.parse_args(self.stress_args + ["--caustic-photon-grid-divisor", str(divisor)])
-            env = stress.launch_environment({"NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "8", "NWB_CAUSTIC_SMOKE_ENABLED": "0"}, args, self.output)
-            self.assertEqual(env["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"], str(divisor))
-            self.assertNotIn("NWB_CAUSTIC_SMOKE_ENABLED", env)
+            args = stress.parse_args(self.stress_args + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, str(divisor)])
+            env = stress.launch_environment({LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "8", LIT_NWB_CAUSTIC_SMOKE_ENABLED: "0"}, args, self.output)
+            self.assertEqual(env[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], str(divisor))
+            self.assertNotIn(LIT_NWB_CAUSTIC_SMOKE_ENABLED, env)
 
     def test_all_optical_variants_share_quality_without_changing_effect_toggles(self):
-        with patch.dict(optical.os.environ, {"NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "8"}):
+        with patch.dict(optical.os.environ, {LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR: "8"}):
             for software in (False, True):
                 for divisor in (1, 2, 4):
                     for variant in optical.VARIANTS:
                         env = optical.capture_environment(variant, software, divisor)
-                        self.assertEqual(env["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"], str(divisor))
-                        self.assertEqual(env["NWB_CAUSTIC_SMOKE_ENABLED"], "0" if variant == "caustics_disabled" else "1")
+                        self.assertEqual(env[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], str(divisor))
+                        self.assertEqual(env[LIT_NWB_CAUSTIC_SMOKE_ENABLED], "0" if variant == "caustics_disabled" else "1")
                         self.assertEqual(env["NWB_REFRACTION_SMOKE_ENABLED"], "0" if variant == "refraction_disabled" else "1")
-            self.assertEqual(optical.capture_environment("combined")["NWB_CAUSTIC_PHOTON_GRID_DIVISOR"], "1")
+            self.assertEqual(optical.capture_environment("combined")[LIT_NWB_CAUSTIC_PHOTON_GRID_DIVISOR], "1")
 
     def test_actual_producer_counts_match_all_phases_and_both_backends(self):
         for divisor in (1, 2, 4):
             for phases in (1, 2, 4):
-                for backend, base in (("hardware", 512), ("software", 512), ("software", 128)):
+                for backend, base in ((LIT_HARDWARE, 512), (LIT_SOFTWARE, 512), (LIT_SOFTWARE, 128)):
                     result = quality.verify_settings(record(divisor, backend, phases, base), divisor)
                     self.assertTrue(result["verified"])
-                    self.assertEqual(result["producers"][0]["photons_per_frame"] * phases, (base // divisor) ** 2)
+                    self.assertEqual(result[LIT_PRODUCERS][0]["photons_per_frame"] * phases, (base // divisor) ** 2)
 
     def test_missing_mismatched_malformed_and_incoherent_evidence_fails(self):
         text = record(2)
         cases = ("", text.replace(quality.SETTING_MARKER + "2", quality.SETTING_MARKER + "1"),
-            text + "\n" + quality.SETTING_MARKER + "2", text.replace("65536 full-grid", "262144 full-grid"),
+            text + LIT_N + quality.SETTING_MARKER + "2", text.replace("65536 full-grid", "262144 full-grid"),
             text.replace("32768 photons/frame", "16384 photons/frame"), text.replace("2 temporal", "3 temporal"),
             text.replace("2 caustic lights", "0 caustic lights"), text.replace("producer (", "producer (bad "))
         for candidate in cases:
             with self.subTest(candidate=candidate), self.assertRaises(quality.SmokeFailure):
                 quality.verify_settings(candidate, 2)
         with self.assertRaises(quality.SmokeFailure):
-            quality.verify_settings(record(1, "hardware", base=128), 1)
+            quality.verify_settings(record(1, LIT_HARDWARE, base=128), 1)
 
     def test_disabled_caustics_still_proves_requested_quality_but_rejects_dispatch(self):
         text = quality.SETTING_MARKER + "4"
-        self.assertEqual(quality.verify_settings(text, 4, producer_enabled=False)["producers"], [])
+        self.assertEqual(quality.verify_settings(text, 4, producer_enabled=False)[LIT_PRODUCERS], [])
         with self.assertRaises(quality.SmokeFailure):
             quality.verify_settings(text, 4)
         with self.assertRaises(quality.SmokeFailure):
             quality.verify_settings(record(4), 4, producer_enabled=False)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     unittest.main()

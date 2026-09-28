@@ -14,12 +14,16 @@ sys.path.insert(0, str(REPO))
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
 
-TARGET = "testbed"
+TESTBED_TARGET = TESTBED_TARGET
+MAIN_ENTRY = "__main__"
+
+
+TARGET = TESTBED_TARGET
 
 
 def main(argv: Sequence[str]) -> int:
     return ROOT_LAUNCHER.run_target_launcher(TARGET, argv)
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))

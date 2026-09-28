@@ -19,6 +19,12 @@ from dataclasses import dataclass, field
 import math
 from pathlib import Path
 
+# Shared literals (no inline hardcodes below this block).
+LIT_N = "\n"
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+LIT_STORE_TRUE = "store_true"
+
 
 Vec3 = tuple[float, float, float]
 Triangle = tuple[int, int, int]
@@ -237,12 +243,12 @@ def serialize(mesh: Mesh) -> str:
         lines.append(f"asset.{name} = [")
         lines.extend("    [" + ", ".join(number(value) for value in row) + "]," for row in rows)
         lines.extend(["];", ""])
-    return "\n".join(lines)
+    return LIT_N.join(lines)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="Validate existing asset text without writing files")
+    parser.add_argument("--check", action=LIT_STORE_TRUE, help="Validate existing asset text without writing files")
     args = parser.parse_args()
     prism_height = math.sqrt(3.0) * 0.95
     assets = [
@@ -253,7 +259,7 @@ def main() -> None:
     for filename, mesh, components, euler, bounds in assets:
         validate(mesh, components, euler, bounds)
         path = ROOT / filename
-        content = serialize(mesh).replace("\n", "\r\n").encode("utf-8")
+        content = serialize(mesh).replace(LIT_N, "\r\n").encode(LIT_UTF_8)
         if args.check:
             assert path.read_bytes() == content, f"Stale generated mesh or non-CRLF line endings: {path}"
         else:
@@ -261,5 +267,5 @@ def main() -> None:
         print(f"{filename}: {len(mesh.positions)} positions, {len(mesh.indices)} triangles, {components} closed components; bounds {bounds}")
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     main()

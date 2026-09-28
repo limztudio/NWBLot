@@ -14,6 +14,15 @@
 namespace __hidden_telemetry_report_tests{
 
 
+static constexpr AStringView s_GBUFFER = "gbuffer";
+static constexpr AStringView s_PHYSICALQUEUES_NULL = "\"physicalQueues\": null";
+static constexpr AStringView s_RUNTIME_STATISTICS_NONE = "runtime_statistics=\"none\"";
+static constexpr AStringView s_RUNTIME_STATISTICS_NULL_JSON = "\"runtimeStatistics\": null";
+static constexpr AStringView s_RUNTIME_STATISTICS_OBJECT_JSON = "\"runtimeStatistics\": {";
+static constexpr AStringView s_RESOURCE_WITH_NULL_STATISTICS_JSON = "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, \"runtimeStatistics\": null";
+static constexpr AStringView s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN = "runtime_physical_queue_count=\"unknown\"";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -37,12 +46,12 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
         1u
     ));
 
-    const Name cpuScopeName("gbuffer");
+    const Name cpuScopeName(s_GBUFFER.data());
     NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
     stats.sampleCount = 1u;
     stats.firstSampleFrameIndex = stats.publishFrameIndex;
     stats.lastSampleFrameIndex = stats.publishFrameIndex;
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, s_ExpectedDualCount));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, s_GBUFFER, stats, s_ExpectedDualCount));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
@@ -92,7 +101,7 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    const Name gbufferScopeName("gbuffer");
+    const Name gbufferScopeName(s_GBUFFER.data());
     NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
     firstTiming.seconds = 0.041;
     firstTiming.sampleCount = 1u;
@@ -165,7 +174,7 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 64"));
 
     char gbufferIdentityText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(Name("gbuffer").hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
+    NameDetail::HashToDebugString(Name(s_GBUFFER.data()).hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
     constexpr AStringView identityPrefix = "\"identity\": \"";
     const usize identityOffset = json.find(identityPrefix);
     ASSERT_NE(identityOffset, AStringView::npos);
@@ -216,7 +225,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(Telemetry::RecordPerfTiming(
         recorder,
         Telemetry::PerfTimingSource::Gpu,
-        Name("gbuffer"),
+        Name(s_GBUFFER.data()),
         "gbuffer",
         aggregatedTiming,
         70u
@@ -347,19 +356,18 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "\"sameQueueWaitElisionCount\": 12, \"timelineWaitCount\": 14, \"mergedTimelineWaitCount\": 18, "
         "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": 8, \"submissionSeconds\": 0.021}"
     ));
-    EXPECT_TRUE(ContainsText(changedJson, "\"physicalQueues\": null"));
+    EXPECT_TRUE(ContainsText(changedJson, s_PHYSICALQUEUES_NULL));
     EXPECT_TRUE(ContainsText(
         unassignedJson,
-        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
-        "\"runtimeStatistics\": null"
+        s_RESOURCE_WITH_NULL_STATISTICS_JSON
     ));
-    EXPECT_FALSE(ContainsText(unassignedJson, "\"runtimeStatistics\": {"));
+    EXPECT_FALSE(ContainsText(unassignedJson, s_RUNTIME_STATISTICS_OBJECT_JSON));
     EXPECT_TRUE(ContainsText(
         rejectedJson,
         "\"runtimeStatistics\": {\"graphGeneration\": 61, \"planGeneration\": 62, "
         "\"recordingAttemptGeneration\": 63, \"deviceGeneration\": 17"
     ));
-    EXPECT_TRUE(ContainsText(rejectedJson, "\"physicalQueues\": null"));
+    EXPECT_TRUE(ContainsText(rejectedJson, s_PHYSICALQUEUES_NULL));
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const usize changedDotOffset = dot.find("  n0 [");
@@ -416,14 +424,14 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "runtime_statistics=\"present\", runtime_graph_generation=51, runtime_plan_generation=52, "
         "runtime_recording_attempt_generation=53, runtime_device_generation=17"
     ));
-    EXPECT_TRUE(ContainsText(unassignedDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(unassignedDot, s_RUNTIME_STATISTICS_NONE));
     EXPECT_TRUE(ContainsText(
         rejectedDot,
         "runtime_statistics=\"present\", runtime_graph_generation=61, runtime_plan_generation=62, "
         "runtime_recording_attempt_generation=63, runtime_device_generation=17"
     ));
-    EXPECT_TRUE(ContainsText(changedDot, "runtime_physical_queue_count=\"unknown\""));
-    EXPECT_TRUE(ContainsText(rejectedDot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_TRUE(ContainsText(changedDot, s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN));
+    EXPECT_TRUE(ContainsText(rejectedDot, s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN));
 }
 
 TEST(Telemetry, TelemetryReportPreservesExactPhysicalQueueRuntimeStatistics){
@@ -484,7 +492,7 @@ TEST(Telemetry, TelemetryReportPreservesExactPhysicalQueueRuntimeStatistics){
         "\"acceptedFrontierSubmissionCount\": 18, \"recoverySubmissionCount\": 5, \"submissionSeconds\": 0.011}"
     ));
     EXPECT_TRUE(ContainsText(firstPass, "\"recoverySubmissionCount\": 3"));
-    EXPECT_TRUE(ContainsText(secondPass, "\"physicalQueues\": null"));
+    EXPECT_TRUE(ContainsText(secondPass, s_PHYSICALQUEUES_NULL));
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const usize firstPassDotOffset = dot.find("  n0 [");
@@ -496,7 +504,7 @@ TEST(Telemetry, TelemetryReportPreservesExactPhysicalQueueRuntimeStatistics){
     const AStringView firstPassDot = dot.substr(firstPassDotOffset, secondPassDotOffset - firstPassDotOffset);
     const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
     EXPECT_TRUE(ContainsText(firstPassDot, "runtime_physical_queue_count=2"));
-    EXPECT_TRUE(ContainsText(secondPassDot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_TRUE(ContainsText(secondPassDot, s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN));
 }
 
 TEST(Telemetry, TelemetryReportPreservesExactPacketSubmissionStatistics){
@@ -653,6 +661,21 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     EXPECT_EQ(report.summary.frameGraphNodeCount, nodes.size());
     EXPECT_EQ(report.summary.frameGraphEdgeCount, edges.size());
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
+    const AStringView json(report.json.data(), report.json.size());
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"resourceVersionCount\": null, \"resourceVersionEdgeCount\": null"
+    ));
+    EXPECT_TRUE(ContainsText(
+        json,
+        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null, "
+        "\"submissionSeconds\": 0.021}"
+    ));
+    EXPECT_TRUE(ContainsText(json, s_PHYSICALQUEUES_NULL));
+    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    EXPECT_TRUE(ContainsText(dot, s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN));
 }
 
 TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
@@ -685,14 +708,13 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView resourceJson = json.substr(resourceJsonOffset, secondPassJsonOffset - resourceJsonOffset);
     const AStringView secondPassJson = json.substr(secondPassJsonOffset, jsonEdgesOffset - secondPassJsonOffset);
     EXPECT_TRUE(ContainsText(firstPassJson, "\"kind\": \"pass\""));
-    EXPECT_TRUE(ContainsText(firstPassJson, "\"runtimeStatistics\": null"));
+    EXPECT_TRUE(ContainsText(firstPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
     EXPECT_TRUE(ContainsText(
         resourceJson,
-        "\"kind\": \"resource\", \"flags\": 0, \"queueAssignment\": null, \"compiledTask\": null, "
-        "\"runtimeStatistics\": null"
+        s_RESOURCE_WITH_NULL_STATISTICS_JSON
     ));
     EXPECT_TRUE(ContainsText(secondPassJson, "\"kind\": \"pass\""));
-    EXPECT_TRUE(ContainsText(secondPassJson, "\"runtimeStatistics\": null"));
+    EXPECT_TRUE(ContainsText(secondPassJson, s_RUNTIME_STATISTICS_NULL_JSON));
 
     const AStringView dot(report.graph.data(), report.graph.size());
     const usize firstPassDotOffset = dot.find("  n0 [");
@@ -710,9 +732,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     const AStringView firstPassDot = dot.substr(firstPassDotOffset, resourceDotOffset - firstPassDotOffset);
     const AStringView resourceDot = dot.substr(resourceDotOffset, secondPassDotOffset - resourceDotOffset);
     const AStringView secondPassDot = dot.substr(secondPassDotOffset, dotEdgesOffset - secondPassDotOffset);
-    EXPECT_TRUE(ContainsText(firstPassDot, "runtime_statistics=\"none\""));
-    EXPECT_TRUE(ContainsText(resourceDot, "runtime_statistics=\"none\""));
-    EXPECT_TRUE(ContainsText(secondPassDot, "runtime_statistics=\"none\""));
+    EXPECT_TRUE(ContainsText(firstPassDot, s_RUNTIME_STATISTICS_NONE));
+    EXPECT_TRUE(ContainsText(resourceDot, s_RUNTIME_STATISTICS_NONE));
+    EXPECT_TRUE(ContainsText(secondPassDot, s_RUNTIME_STATISTICS_NONE));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){

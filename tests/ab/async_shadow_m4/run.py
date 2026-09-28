@@ -64,6 +64,64 @@ from window_capture_smoke import (  # noqa: E402
     validate_capture_result,
 )
 
+# Shared literals (no inline hardcodes below this block).
+LIT_TESTS = "tests"
+LIT_RENDER_FRAME = "render.frame"
+LIT_RENDER_ASYNC_SHADOW = "render.async_shadow"
+LIT_RENDER_ASYNC_FINAL = "render.async_final"
+LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO = "cannot safely continue after an unresolved frame recovery submission"
+LIT_I = "<I"
+LIT_UTF_8 = "utf-8"
+LIT_COLLECTION_ERROR = "collection_error"
+LIT_SYNC = "sync"
+LIT_ASYNC = "async"
+LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT = "# Async-shadow M4 benchmark report"
+LIT_ARTIFACTS = "## Artifacts"
+LIT_GATES = "gates"
+LIT_PASSED = "passed"
+LIT_PIXEL_DIFF = "pixel_diff"
+LIT_NWB_RENDER_UNFOCUSED = "NWB_RENDER_UNFOCUSED"
+LIT_NWB_STRESS_TEST_SPIN_ANGLE = "NWB_STRESS_TEST_SPIN_ANGLE"
+LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU = "benchmark runner could not select a runtime-log directory"
+LIT_BENCHMARK_LOGSERVER = "benchmark logserver"
+LIT_TESTBED = "testbed"
+LIT_TIMING_FILE = "timing_file"
+LIT_LOG_FILE = "log_file"
+LIT_PASS = "pass"
+LIT_FAIL = "fail"
+LIT_SCHEMA = "schema"
+LIT_NWB_ASYNC_SHADOW_M4_V2 = "nwb.async_shadow_m4.v2"
+LIT_VERDICT = "verdict"
+LIT_SELF_TEST = "--self-test"
+LIT_STORE_TRUE = "store_true"
+LIT_WARMUP_SECONDS = "--warmup-seconds"
+LIT_MEASURE_SECONDS = "--measure-seconds"
+LIT_STARTUP_TIMEOUT = "--startup-timeout"
+LIT_PIXEL_CAPTURE_SETTLE_SECONDS = "--pixel-capture-settle-seconds"
+LIT_MINIMUM_SHADOW_MS = "--minimum-shadow-ms"
+LIT_MAXIMUM_FRAME_REGRESSION_PERCENT = "--maximum-frame-regression-percent"
+LIT_MAXIMUM_PIXEL_MEAN_ABS = "--maximum-pixel-mean-abs"
+LIT_CLIENT_CAPTURE = "client-capture"
+LIT_PREPARE = "prepare"
+LIT_CAPTURE = "capture"
+LIT_PREPARED_CLIENT_CAPTURE = "prepared-client-capture"
+LIT_DWMSETWINDOWATTRIBUTE = "DwmSetWindowAttribute"
+LIT_DWMFLUSH = "DwmFlush"
+LIT_CLIENT_RECT = "client-rect"
+LIT_SCREEN_BITBLT = "screen-bitblt"
+LIT_RAW_CLIENT_CAPTURE = "raw-client-capture"
+LIT_APP_STOP = "app-stop"
+LIT_CLEANUP_NONE = "cleanup-none"
+LIT_LOGSERVER_LOG = "logserver_*.log"
+LIT_LOGSERVER_HELPER = "logserver-helper"
+LIT_EXIT_7 = "exit 7"
+LIT_SYNC_FRAME_LOCKED_CAPTURE = "sync frame-locked capture"
+LIT_SYNC_BENCHMARK = "sync benchmark"
+LIT_ASYNC_LOG = "async.log"
+LIT_SYNC_LOG = "sync.log"
+LIT_MAIN = "__main__"
+LIT_APPEND = "append"
+
 
 LANE_RE = re.compile(
     r"Vulkan:\s+async compute lane\s+requested=(true|false|yes|no)\s+effective=(true|false|yes|no)"
@@ -71,13 +129,13 @@ LANE_RE = re.compile(
     re.IGNORECASE,
 )
 REQUIRED_ASYNC_SCOPES = (
-    "render.frame",
-    "render.async_shadow",
-    "render.async_final",
+    LIT_RENDER_FRAME,
+    LIT_RENDER_ASYNC_SHADOW,
+    LIT_RENDER_ASYNC_FINAL,
 )
 DEFAULT_FORBIDDEN_LOGS = (
     *STRICT_LOG_FAILURE_MESSAGES,
-    "cannot safely continue after an unresolved frame recovery submission",
+    LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO,
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
@@ -202,8 +260,8 @@ def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
     if len(data) < 54 or data[:2] != b"BM":
         raise SmokeFailure(f"capture is not a BMP: {path}")
 
-    pixel_offset = struct.unpack_from("<I", data, 10)[0]
-    dib_size = struct.unpack_from("<I", data, 14)[0]
+    pixel_offset = struct.unpack_from(LIT_I, data, 10)[0]
+    dib_size = struct.unpack_from(LIT_I, data, 14)[0]
     if dib_size < 40 or len(data) < 14 + dib_size:
         raise SmokeFailure(f"capture has an unsupported DIB header: {path}")
 
@@ -268,7 +326,7 @@ def compare_bmp_rgb(first: Path, second: Path) -> PixelDiff:
 
 def write_json(path: Path, payload: Mapping[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding=LIT_UTF_8)
 
 
 def format_ms(value: float) -> str:
@@ -276,39 +334,39 @@ def format_ms(value: float) -> str:
 
 
 def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
-    if report.get("collection_error"):
-        sync = report["sync"]
-        async_run = report["async"]
+    if report.get(LIT_COLLECTION_ERROR):
+        sync = report[LIT_SYNC]
+        async_run = report[LIT_ASYNC]
         assert isinstance(sync, Mapping)
         assert isinstance(async_run, Mapping)
         lines = (
-            "# Async-shadow M4 benchmark report",
+            LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT,
             "",
             "Verdict: **FAIL**",
             "",
             "## Incomplete telemetry",
             "",
-            str(report["collection_error"]),
+            str(report[LIT_COLLECTION_ERROR]),
             "",
-            "## Artifacts",
+            LIT_ARTIFACTS,
             "",
             f"- Sync timing: `{sync['timing_file']}`",
             f"- Async timing: `{async_run['timing_file']}`",
             f"- Sync log: `{sync['log_file']}`",
             f"- Async log: `{async_run['log_file']}`",
         )
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
         return
 
-    sync = report["sync"]
-    async_run = report["async"]
+    sync = report[LIT_SYNC]
+    async_run = report[LIT_ASYNC]
     assert isinstance(sync, Mapping)
     assert isinstance(async_run, Mapping)
-    gates = report["gates"]
+    gates = report[LIT_GATES]
     assert isinstance(gates, Sequence)
 
     lines = [
-        "# Async-shadow M4 benchmark report",
+        LIT_ASYNC_SHADOW_M4_BENCHMARK_REPORT,
         "",
         f"Verdict: **{report['verdict'].upper()}**",
         "",
@@ -317,7 +375,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
     ]
     for gate in gates:
         assert isinstance(gate, Mapping)
-        result = "PASS" if gate["passed"] else "FAIL"
+        result = "PASS" if gate[LIT_PASSED] else "FAIL"
         lines.append(f"| {gate['name']} | {result} | {gate['detail']} |")
 
     lines.extend((
@@ -330,15 +388,15 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         f"- Async graph-owned shadow median: {async_run['shadow_median_ms']:.4f} ms",
         f"- Async graph-owned shadow positive samples: {async_run['shadow_positive_sample_count']}/{async_run['shadow_sample_count']}",
         "",
-        "## Artifacts",
+        LIT_ARTIFACTS,
         "",
         f"- Sync timing: `{sync['timing_file']}`",
         f"- Async timing: `{async_run['timing_file']}`",
         f"- Sync log: `{sync['log_file']}`",
         f"- Async log: `{async_run['log_file']}`",
     ))
-    if report.get("pixel_diff"):
-        pixel_diff = report["pixel_diff"]
+    if report.get(LIT_PIXEL_DIFF):
+        pixel_diff = report[LIT_PIXEL_DIFF]
         assert isinstance(pixel_diff, Mapping)
         lines.extend((
             f"- Pixel comparison: max abs {pixel_diff['max_abs']}, mean abs {pixel_diff['mean_abs']:.6f}, "
@@ -347,7 +405,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
             f"- Async capture: `{async_run['capture_file']}`",
         ))
 
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding=LIT_UTF_8)
 
 
 def wait_while_running(process, seconds: float, stage: str) -> None:
@@ -362,14 +420,14 @@ def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[s
 
 
 def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
-    if mode == "async" and not lane.effective:
+    if mode == LIT_ASYNC and not lane.effective:
         raise DedicatedComputeUnavailable(
             "async-shadow M4 skipped: the requested async lane did not resolve to a distinct compute-only family "
             f"(graphics family {lane.graphics_family}, compute family {lane.compute_family})"
         )
-    if mode == "async" and (not lane.requested or lane.graphics_family == lane.compute_family):
+    if mode == LIT_ASYNC and (not lane.requested or lane.graphics_family == lane.compute_family):
         raise SmokeFailure(f"async benchmark did not create a distinct requested compute lane: {lane}")
-    if mode == "sync" and (lane.requested or lane.effective):
+    if mode == LIT_SYNC and (lane.requested or lane.effective):
         raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
 
 
@@ -404,8 +462,8 @@ def run_frame_locked_capture(
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment["NWB_RENDER_UNFOCUSED"] = "1"
-    environment["NWB_STRESS_TEST_SPIN_ANGLE"] = args.frozen_yaw
+    environment[LIT_NWB_RENDER_UNFOCUSED] = "1"
+    environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
     environment["NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"] = str(args.pixel_capture_frames)
 
     logserver_process = None
@@ -422,7 +480,7 @@ def run_frame_locked_capture(
             launch_args, executable, environment
         )
         if not log_directory:
-            raise SmokeFailure("benchmark runner could not select a runtime-log directory")
+            raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
         app_process = launch_testbed(launch_args, executable, environment, log_port)
 
         lane = wait_for_lane_status(
@@ -457,15 +515,15 @@ def run_frame_locked_capture(
             log_directory,
             log_baseline,
             log_pattern,
-            "benchmark logserver",
+            LIT_BENCHMARK_LOGSERVER,
         )
         logserver_process = None
-        capture_log_path.write_text(log_text, encoding="utf-8")
+        capture_log_path.write_text(log_text, encoding=LIT_UTF_8)
     finally:
         terminate_process(app_process, f"{mode} frame-locked capture", window)
-        terminate_process(logserver_process, "benchmark logserver")
+        terminate_process(logserver_process, LIT_BENCHMARK_LOGSERVER)
 
-    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
+    require_normal_process_exit(app_exit_code, app_exit_tail, LIT_TESTBED)
     if not log_text:
         raise SmokeFailure(f"{mode} frame-locked capture produced no captured logger output")
 
@@ -501,9 +559,9 @@ def run_single_mode(
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment["NWB_RENDER_UNFOCUSED"] = "1"
+    environment[LIT_NWB_RENDER_UNFOCUSED] = "1"
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
-    environment["NWB_STRESS_TEST_SPIN_ANGLE"] = args.frozen_yaw
+    environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
 
     logserver_process = None
     app_process = None
@@ -519,7 +577,7 @@ def run_single_mode(
             launch_args, executable, environment
         )
         if not log_directory:
-            raise SmokeFailure("benchmark runner could not select a runtime-log directory")
+            raise SmokeFailure(LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU)
         app_process = launch_testbed(launch_args, executable, environment, log_port)
 
         lane = wait_for_lane_status(
@@ -544,14 +602,14 @@ def run_single_mode(
             log_directory,
             log_baseline,
             log_pattern,
-            "benchmark logserver",
+            LIT_BENCHMARK_LOGSERVER,
         )
         logserver_process = None
     finally:
         terminate_process(app_process, f"{mode} benchmark", window)
-        terminate_process(logserver_process, "benchmark logserver")
+        terminate_process(logserver_process, LIT_BENCHMARK_LOGSERVER)
 
-    require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
+    require_normal_process_exit(app_exit_code, app_exit_tail, LIT_TESTBED)
     if not measurement_log_text:
         raise SmokeFailure(f"{mode} benchmark produced no captured logger output")
 
@@ -568,7 +626,7 @@ def run_single_mode(
         )
     else:
         log_text = measurement_log_text
-    log_path.write_text(log_text, encoding="utf-8")
+    log_path.write_text(log_text, encoding=LIT_UTF_8)
     summaries = summarize_scopes(parse_timing_file(timing_path, symbols))
     forbidden = find_forbidden_log_messages(log_text, tuple(DEFAULT_FORBIDDEN_LOGS) + tuple(args.reject_log))
     return RunResult(
@@ -584,14 +642,14 @@ def run_single_mode(
 
 
 def gate(name: str, passed: bool, detail: str) -> Dict[str, object]:
-    return {"name": name, "passed": passed, "detail": detail}
+    return {"name": name, LIT_PASSED: passed, "detail": detail}
 
 
 def raw_run_payload(run: RunResult) -> Dict[str, object]:
     return {
         "executable": run.executable,
-        "timing_file": run.timing_file,
-        "log_file": run.log_file,
+        LIT_TIMING_FILE: run.timing_file,
+        LIT_LOG_FILE: run.log_file,
         "capture_file": run.capture_file,
         "lane": asdict(run.lane),
         "forbidden_log_messages": run.forbidden_log_messages,
@@ -606,11 +664,11 @@ def raw_pixel_diff_payload(pixel_diff: PixelDiff) -> Dict[str, object]:
 
 
 def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResult) -> Dict[str, object]:
-    sync_frame = require_scope_samples(sync.scopes, "render.frame", args.minimum_samples, Path(sync.timing_file))
-    async_frame = require_scope_samples(async_run.scopes, "render.frame", args.minimum_samples, Path(async_run.timing_file))
+    sync_frame = require_scope_samples(sync.scopes, LIT_RENDER_FRAME, args.minimum_samples, Path(sync.timing_file))
+    async_frame = require_scope_samples(async_run.scopes, LIT_RENDER_FRAME, args.minimum_samples, Path(async_run.timing_file))
     shadow = require_scope_samples(
         async_run.scopes,
-        "render.async_shadow",
+        LIT_RENDER_ASYNC_SHADOW,
         args.minimum_samples,
         Path(async_run.timing_file),
     )
@@ -676,7 +734,7 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
             else f"sync={sync.forbidden_log_messages}, async={async_run.forbidden_log_messages}",
         ),
     ]
-    verdict = "pass" if all(bool(item["passed"]) for item in gates) else "fail"
+    verdict = LIT_PASS if all(bool(item[LIT_PASSED]) for item in gates) else LIT_FAIL
 
     def compact_run(run: RunResult, frame: ScopeSummary, shadow_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
         result = raw_run_payload(run)
@@ -693,13 +751,13 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
         return result
 
     return {
-        "schema": "nwb.async_shadow_m4.v2",
-        "verdict": verdict,
-        "gates": gates,
+        LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V2,
+        LIT_VERDICT: verdict,
+        LIT_GATES: gates,
         "frame_regression_percent": regression_percent,
-        "sync": compact_run(sync, sync_frame),
-        "async": compact_run(async_run, async_frame, shadow),
-        "pixel_diff": raw_pixel_diff_payload(pixel_diff) if pixel_diff else None,
+        LIT_SYNC: compact_run(sync, sync_frame),
+        LIT_ASYNC: compact_run(async_run, async_frame, shadow),
+        LIT_PIXEL_DIFF: raw_pixel_diff_payload(pixel_diff) if pixel_diff else None,
     }
 
 
@@ -715,20 +773,20 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--self-test", action="store_true", help="Run parser/verdict checks without launching Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/verdict checks without launching Vulkan.")
     parser.add_argument("--sync-executable", type=Path, help="Path to nwb_async_shadow_m4_sync_benchmark.")
     parser.add_argument("--async-executable", type=Path, help="Path to nwb_async_shadow_m4_async_benchmark.")
     parser.add_argument("--runtime-dir", type=Path, help="Cooked smoke runtime root used as both process working directory.")
     parser.add_argument("--output-dir", type=Path, help="Directory for timing files, logs, captures, and reports.")
     parser.add_argument("--logserver-executable", help="Optional path to nwb_logserver/logserver.")
-    parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs rather than a logserver.")
+    parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs rather than a logserver.")
     parser.add_argument("--sync-namesym", type=Path, help="Optional name-symbol sidecar for an opt/fin sync binary.")
     parser.add_argument("--async-namesym", type=Path, help="Optional name-symbol sidecar for an opt/fin async binary.")
     parser.add_argument("--window-title", default="NWB Async Shadow M4 Benchmark", help="Native window title used for capture and graceful exit.")
     parser.add_argument("--frozen-yaw", default="0.6", help="NWB_STRESS_TEST_SPIN_ANGLE used for deterministic A/B captures.")
-    parser.add_argument("--warmup-seconds", type=float, default=4.0, help="Settling time before each timed measurement.")
-    parser.add_argument("--measure-seconds", type=float, default=12.0, help="Timing collection time per mode after warmup.")
-    parser.add_argument("--startup-timeout", type=float, default=45.0, help="Timeout for device creation and window visibility.")
+    parser.add_argument(LIT_WARMUP_SECONDS, type=float, default=4.0, help="Settling time before each timed measurement.")
+    parser.add_argument(LIT_MEASURE_SECONDS, type=float, default=12.0, help="Timing collection time per mode after warmup.")
+    parser.add_argument(LIT_STARTUP_TIMEOUT, type=float, default=45.0, help="Timeout for device creation and window visibility.")
     parser.add_argument(
         "--pixel-capture-frames",
         type=int,
@@ -736,30 +794,30 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="World ticks to render before the benchmark-only held-frame pixel capture.",
     )
     parser.add_argument(
-        "--pixel-capture-settle-seconds",
+        LIT_PIXEL_CAPTURE_SETTLE_SECONDS,
         type=float,
         default=0.75,
         help="Additional time to let the held capture frame present before it is read back.",
     )
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum captured timing intervals required per rollout scope.")
-    parser.add_argument("--minimum-shadow-ms", type=float, default=0.01, help="Minimum median graph-owned async shadow time.")
+    parser.add_argument(LIT_MINIMUM_SHADOW_MS, type=float, default=0.01, help="Minimum median graph-owned async shadow time.")
     parser.add_argument(
-        "--maximum-frame-regression-percent",
+        LIT_MAXIMUM_FRAME_REGRESSION_PERCENT,
         type=float,
         default=3.0,
         help="Maximum allowed async render.frame median regression versus sync.",
     )
-    parser.add_argument("--skip-pixel-parity", action="store_true", help="Do not capture or compare native window pixels.")
+    parser.add_argument("--skip-pixel-parity", action=LIT_STORE_TRUE, help="Do not capture or compare native window pixels.")
     parser.add_argument("--maximum-pixel-max-abs", type=int, default=16, help="Maximum allowed per-channel pixel delta.")
-    parser.add_argument("--maximum-pixel-mean-abs", type=float, default=0.75, help="Maximum allowed mean per-channel pixel delta.")
+    parser.add_argument(LIT_MAXIMUM_PIXEL_MEAN_ABS, type=float, default=0.75, help="Maximum allowed mean per-channel pixel delta.")
     parser.add_argument(
         "--maximum-pixel-changed-fraction",
         type=float,
         help="Optional maximum fraction of changed pixels; unset tolerates widespread sub-threshold temporal noise.",
     )
-    parser.add_argument("--gpu-validation", action="store_true", help="Pass --gpudbg to both loader processes.")
-    parser.add_argument("--reject-log", action="append", default=[], help="Additional log substring that fails the run.")
-    parser.add_argument("--report-only", action="store_true", help="Write a report but return success if a rollout gate fails.")
+    parser.add_argument("--gpu-validation", action=LIT_STORE_TRUE, help="Pass --gpudbg to both loader processes.")
+    parser.add_argument("--reject-log", action=LIT_APPEND, default=[], help="Additional log substring that fails the run.")
+    parser.add_argument("--report-only", action=LIT_STORE_TRUE, help="Write a report but return success if a rollout gate fails.")
     args = parser.parse_args(argv)
 
     if args.self_test:
@@ -769,19 +827,19 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     missing = [f"--{name.replace('_', '-')}" for name in required if getattr(args, name) is None]
     if missing:
         parser.error(f"missing required arguments: {', '.join(missing)}")
-    require_non_negative(parser, "--warmup-seconds", args.warmup_seconds)
-    require_positive(parser, "--measure-seconds", args.measure_seconds)
-    require_positive(parser, "--startup-timeout", args.startup_timeout)
+    require_non_negative(parser, LIT_WARMUP_SECONDS, args.warmup_seconds)
+    require_positive(parser, LIT_MEASURE_SECONDS, args.measure_seconds)
+    require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)
     if args.pixel_capture_frames <= 0:
         parser.error("--pixel-capture-frames must be positive")
-    require_non_negative(parser, "--pixel-capture-settle-seconds", args.pixel_capture_settle_seconds)
+    require_non_negative(parser, LIT_PIXEL_CAPTURE_SETTLE_SECONDS, args.pixel_capture_settle_seconds)
     if args.minimum_samples <= 0:
         parser.error("--minimum-samples must be positive")
-    require_non_negative(parser, "--minimum-shadow-ms", args.minimum_shadow_ms)
-    require_non_negative(parser, "--maximum-frame-regression-percent", args.maximum_frame_regression_percent)
+    require_non_negative(parser, LIT_MINIMUM_SHADOW_MS, args.minimum_shadow_ms)
+    require_non_negative(parser, LIT_MAXIMUM_FRAME_REGRESSION_PERCENT, args.maximum_frame_regression_percent)
     if args.maximum_pixel_max_abs < 0 or args.maximum_pixel_max_abs > 255:
         parser.error("--maximum-pixel-max-abs must be in [0, 255]")
-    require_non_negative(parser, "--maximum-pixel-mean-abs", args.maximum_pixel_mean_abs)
+    require_non_negative(parser, LIT_MAXIMUM_PIXEL_MEAN_ABS, args.maximum_pixel_mean_abs)
     if args.maximum_pixel_changed_fraction is not None and not 0.0 <= args.maximum_pixel_changed_fraction <= 1.0:
         parser.error("--maximum-pixel-changed-fraction must be in [0, 1]")
 
@@ -807,7 +865,7 @@ def build_test_bmp(path: Path, pixels: Sequence[Tuple[int, int, int]]) -> None:
 
 
 def run_self_test() -> int:
-    capture_args = parse_args(["--self-test"])
+    capture_args = parse_args([LIT_SELF_TEST])
     assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     assert capture_args.pixel_capture_frames == 96
     assert capture_args.pixel_capture_settle_seconds == 0.75
@@ -826,7 +884,7 @@ def run_self_test() -> int:
     assert find_forbidden_log_messages(
         "RendererSystem: cannot safely continue after an unresolved frame recovery submission",
         DEFAULT_FORBIDDEN_LOGS,
-    ) == ["cannot safely continue after an unresolved frame recovery submission"]
+    ) == [LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO]
 
     class ClientAreaCaptureProbe:
         def __init__(self):
@@ -834,23 +892,23 @@ def run_self_test() -> int:
 
         def capture_client_window(self, window, output_path):
             self.calls.append((window, output_path))
-            return "client-capture"
+            return LIT_CLIENT_CAPTURE
 
     client_capture_probe = ClientAreaCaptureProbe()
     client_capture_path = Path("client-capture.bmp")
     prepare_m4_client_area(client_capture_probe, 17)
-    assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == "client-capture"
+    assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == LIT_CLIENT_CAPTURE
     assert client_capture_probe.calls == [(17, client_capture_path)]
 
     m4_capture_calls = []
     m4_capture_probe = object.__new__(WindowsCapture)
-    m4_capture_probe.prepare_raw_client_window = lambda window: m4_capture_calls.append(("prepare", window))
+    m4_capture_probe.prepare_raw_client_window = lambda window: m4_capture_calls.append((LIT_PREPARE, window))
     m4_capture_probe.capture_prepared_raw_client_window = (
-        lambda window, output_path: m4_capture_calls.append(("capture", window, output_path)) or "prepared-client-capture"
+        lambda window, output_path: m4_capture_calls.append((LIT_CAPTURE, window, output_path)) or LIT_PREPARED_CLIENT_CAPTURE
     )
     prepare_m4_client_area(m4_capture_probe, 17)
-    assert capture_m4_client_area(m4_capture_probe, 17, client_capture_path) == "prepared-client-capture"
-    assert m4_capture_calls == [("prepare", 17), ("capture", 17, client_capture_path)]
+    assert capture_m4_client_area(m4_capture_probe, 17, client_capture_path) == LIT_PREPARED_CLIENT_CAPTURE
+    assert m4_capture_calls == [(LIT_PREPARE, 17), (LIT_CAPTURE, 17, client_capture_path)]
 
     frame_locked_capture_source = inspect.getsource(run_frame_locked_capture)
     assert frame_locked_capture_source.index("prepare_m4_client_area(capture_backend, window)") < frame_locked_capture_source.index(
@@ -915,28 +973,28 @@ def run_self_test() -> int:
             self.flush_result = flush_result
 
         def DwmSetWindowAttribute(self, hwnd, attribute, preference_pointer, preference_size):
-            self.calls.append(("DwmSetWindowAttribute", hwnd.value, attribute, preference_pointer._obj.value, preference_size))
+            self.calls.append((LIT_DWMSETWINDOWATTRIBUTE, hwnd.value, attribute, preference_pointer._obj.value, preference_size))
             return self.set_result
 
         def DwmFlush(self):
-            self.calls.append(("DwmFlush",))
+            self.calls.append((LIT_DWMFLUSH,))
             return self.flush_result
 
     dwm_calls = []
     dwm_capture = object.__new__(WindowsCapture)
     dwm_capture.dwmapi = DwmApi(dwm_calls)
-    dwm_capture._prepare_capture_window = lambda hwnd: dwm_calls.append(("prepare", hwnd))
+    dwm_capture._prepare_capture_window = lambda hwnd: dwm_calls.append((LIT_PREPARE, hwnd))
     dwm_capture.prepare_raw_client_window(17)
     assert dwm_calls == [
-        ("prepare", 17),
-        ("DwmSetWindowAttribute", 17, 33, 1, 4),
-        ("DwmFlush",),
+        (LIT_PREPARE, 17),
+        (LIT_DWMSETWINDOWATTRIBUTE, 17, 33, 1, 4),
+        (LIT_DWMFLUSH,),
     ]
 
     unsupported_calls = []
     unsupported_capture = object.__new__(WindowsCapture)
     unsupported_capture.dwmapi = DwmApi(unsupported_calls, -2147024809)
-    unsupported_capture._prepare_capture_window = lambda hwnd: unsupported_calls.append(("prepare", hwnd))
+    unsupported_capture._prepare_capture_window = lambda hwnd: unsupported_calls.append((LIT_PREPARE, hwnd))
     try:
         unsupported_capture.prepare_raw_client_window(17)
     except SmokeSkip as error:
@@ -945,31 +1003,31 @@ def run_self_test() -> int:
     else:
         raise AssertionError("M4 DWM setup accepted an unsupported corner-preference attribute")
     assert unsupported_calls == [
-        ("prepare", 17),
-        ("DwmSetWindowAttribute", 17, 33, 1, 4),
+        (LIT_PREPARE, 17),
+        (LIT_DWMSETWINDOWATTRIBUTE, 17, 33, 1, 4),
     ]
 
     negative_failure_calls = []
     negative_failure_capture = object.__new__(WindowsCapture)
     negative_failure_capture.dwmapi = DwmApi(negative_failure_calls, -1)
-    negative_failure_capture._prepare_capture_window = lambda hwnd: negative_failure_calls.append(("prepare", hwnd))
+    negative_failure_capture._prepare_capture_window = lambda hwnd: negative_failure_calls.append((LIT_PREPARE, hwnd))
     try:
         negative_failure_capture.prepare_raw_client_window(17)
     except SmokeFailure as error:
-        assert "DwmSetWindowAttribute" in str(error)
+        assert LIT_DWMSETWINDOWATTRIBUTE in str(error)
         assert "HRESULT 0xFFFFFFFF" in str(error)
     else:
         raise AssertionError("M4 DWM setup accepted a negative DwmSetWindowAttribute failure")
     assert len(negative_failure_calls) == 2
 
     for set_result, flush_result, expected_operation, expected_calls in (
-        (1, 0, "DwmSetWindowAttribute", 2),
-        (0, 1, "DwmFlush", 3),
+        (1, 0, LIT_DWMSETWINDOWATTRIBUTE, 2),
+        (0, 1, LIT_DWMFLUSH, 3),
     ):
         failure_calls = []
         failure_capture = object.__new__(WindowsCapture)
         failure_capture.dwmapi = DwmApi(failure_calls, set_result, flush_result)
-        failure_capture._prepare_capture_window = lambda hwnd: failure_calls.append(("prepare", hwnd))
+        failure_capture._prepare_capture_window = lambda hwnd: failure_calls.append((LIT_PREPARE, hwnd))
         try:
             failure_capture.prepare_raw_client_window(17)
         except SmokeFailure as error:
@@ -981,15 +1039,15 @@ def run_self_test() -> int:
 
     raw_client_capture_calls = []
     raw_client_capture = object.__new__(WindowsCapture)
-    raw_client_capture._client_rect = lambda hwnd: raw_client_capture_calls.append(("client-rect", hwnd)) or "client-rect"
+    raw_client_capture._client_rect = lambda hwnd: raw_client_capture_calls.append((LIT_CLIENT_RECT, hwnd)) or LIT_CLIENT_RECT
     raw_client_capture._capture_screen_rect = (
-        lambda hwnd, rect, output_path: raw_client_capture_calls.append(("screen-bitblt", hwnd, rect, output_path))
-        or "raw-client-capture"
+        lambda hwnd, rect, output_path: raw_client_capture_calls.append((LIT_SCREEN_BITBLT, hwnd, rect, output_path))
+        or LIT_RAW_CLIENT_CAPTURE
     )
-    assert raw_client_capture.capture_prepared_raw_client_window(17, client_capture_path) == "raw-client-capture"
+    assert raw_client_capture.capture_prepared_raw_client_window(17, client_capture_path) == LIT_RAW_CLIENT_CAPTURE
     assert raw_client_capture_calls == [
-        ("client-rect", 17),
-        ("screen-bitblt", 17, "client-rect", client_capture_path),
+        (LIT_CLIENT_RECT, 17),
+        (LIT_SCREEN_BITBLT, 17, LIT_CLIENT_RECT, client_capture_path),
     ]
 
     with tempfile.TemporaryDirectory() as directory:
@@ -1013,23 +1071,23 @@ def run_self_test() -> int:
 
         def terminate(process, name, window_handle=None):
             if process is app:
-                events.append(("app-stop", name, window_handle))
+                events.append((LIT_APP_STOP, name, window_handle))
                 return 7, "simulated abnormal exit"
             assert process is None
-            events.append(("cleanup-none", name, window_handle))
+            events.append((LIT_CLEANUP_NONE, name, window_handle))
             return None, ""
 
         def shutdown(process, log_directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver
             assert log_directory == root
             assert received_baseline == baseline
-            assert pattern == "logserver_*.log"
-            assert events[-1][0] == "app-stop"
-            events.append(("logserver-helper", shutdown_name))
+            assert pattern == LIT_LOGSERVER_LOG
+            assert events[-1][0] == LIT_APP_STOP
+            events.append((LIT_LOGSERVER_HELPER, shutdown_name))
             return "captured runtime evidence"
 
         with mock.patch.object(module, "build_launch_environment", return_value={}), \
-             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
              mock.patch.object(module, "launch_testbed", return_value=app), \
              mock.patch.object(module, "wait_for_lane_status", return_value=orchestration_lane), \
              mock.patch.object(module, "wait_for_log_message"), \
@@ -1037,45 +1095,45 @@ def run_self_test() -> int:
              mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
              mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown) as shutdown_mock:
             try:
-                run_frame_locked_capture(capture_args, "sync", executable, backend)
+                run_frame_locked_capture(capture_args, LIT_SYNC, executable, backend)
             except SmokeFailure as error:
-                assert "exit 7" in str(error)
+                assert LIT_EXIT_7 in str(error)
             else:
                 raise AssertionError("frame-locked orchestration accepted an abnormal Testbed exit")
 
             try:
-                run_single_mode(capture_args, "sync", executable, {}, backend, None)
+                run_single_mode(capture_args, LIT_SYNC, executable, {}, backend, None)
             except SmokeFailure as error:
-                assert "exit 7" in str(error)
+                assert LIT_EXIT_7 in str(error)
             else:
                 raise AssertionError("timed orchestration accepted an abnormal Testbed exit")
 
         assert events == [
-            ("app-stop", "sync frame-locked capture", 17),
-            ("logserver-helper", "benchmark logserver"),
-            ("cleanup-none", "sync frame-locked capture", 17),
-            ("cleanup-none", "benchmark logserver", None),
-            ("app-stop", "sync benchmark", 17),
-            ("logserver-helper", "benchmark logserver"),
-            ("cleanup-none", "sync benchmark", 17),
-            ("cleanup-none", "benchmark logserver", None),
+            (LIT_APP_STOP, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
+            (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER),
+            (LIT_CLEANUP_NONE, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
+            (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),
+            (LIT_APP_STOP, LIT_SYNC_BENCHMARK, 17),
+            (LIT_LOGSERVER_HELPER, LIT_BENCHMARK_LOGSERVER),
+            (LIT_CLEANUP_NONE, LIT_SYNC_BENCHMARK, 17),
+            (LIT_CLEANUP_NONE, LIT_BENCHMARK_LOGSERVER, None),
         ]
         assert terminate_mock.mock_calls == [
-            mock.call(app, "sync frame-locked capture", 17),
-            mock.call(None, "sync frame-locked capture", 17),
-            mock.call(None, "benchmark logserver"),
-            mock.call(app, "sync benchmark", 17),
-            mock.call(None, "sync benchmark", 17),
-            mock.call(None, "benchmark logserver"),
+            mock.call(app, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
+            mock.call(None, LIT_SYNC_FRAME_LOCKED_CAPTURE, 17),
+            mock.call(None, LIT_BENCHMARK_LOGSERVER),
+            mock.call(app, LIT_SYNC_BENCHMARK, 17),
+            mock.call(None, LIT_SYNC_BENCHMARK, 17),
+            mock.call(None, LIT_BENCHMARK_LOGSERVER),
         ]
         assert shutdown_mock.mock_calls == [
-            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
-            mock.call(logserver, root, baseline, "logserver_*.log", "benchmark logserver"),
+            mock.call(logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_BENCHMARK_LOGSERVER),
+            mock.call(logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_BENCHMARK_LOGSERVER),
         ]
 
         timing = root / "timing.txt"
-        frame_token = debug_name_hash_token("render.frame")
-        shadow_token = debug_name_hash_token("render.async_shadow")
+        frame_token = debug_name_hash_token(LIT_RENDER_FRAME)
+        shadow_token = debug_name_hash_token(LIT_RENDER_ASYNC_SHADOW)
         assert frame_token == "40b0e96fbc71842a_8b1f334a9e5209dd_e341401cb88c31da_09af79e15cfb43b2_f6b5516d15dbcf7a_05406d8b5a24bcb8_9a3ecd4d8684c68f_371acbda0ef43b35"
         timing.write_text(
             "=== interval: 20 frames / 0.5s ===\n"
@@ -1084,41 +1142,41 @@ def run_self_test() -> int:
             "=== interval: 20 frames / 0.5s ===\n"
             f"  {frame_token}: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
             f"  {shadow_token}: avg=1.7500 min=0.0 max=2.0 samples=20\n",
-            encoding="utf-8",
+            encoding=LIT_UTF_8,
         )
         summaries = summarize_scopes(parse_timing_file(timing, load_name_symbols(None)))
-        assert summaries["render.frame"].median_ms == 4.5
-        assert summaries["render.async_shadow"].positive_sample_count == 2
+        assert summaries[LIT_RENDER_FRAME].median_ms == 4.5
+        assert summaries[LIT_RENDER_ASYNC_SHADOW].positive_sample_count == 2
 
         # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate
         # submissions. The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
         stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
         async_run = RunResult(
-            mode="async",
+            mode=LIT_ASYNC,
             executable="async.exe",
             timing_file="async.timing.txt",
-            log_file="async.log",
+            log_file=LIT_ASYNC_LOG,
             capture_file=None,
             lane=LaneStatus(True, True, 0, 1),
             scopes={
-                "render.frame": stable_scope,
-                "render.async_shadow": stable_scope,
-                "render.async_final": stable_scope,
+                LIT_RENDER_FRAME: stable_scope,
+                LIT_RENDER_ASYNC_SHADOW: stable_scope,
+                LIT_RENDER_ASYNC_FINAL: stable_scope,
             },
             forbidden_log_messages=[],
         )
         sync_run = RunResult(
-            mode="sync",
+            mode=LIT_SYNC,
             executable="sync.exe",
             timing_file="sync.timing.txt",
-            log_file="sync.log",
+            log_file=LIT_SYNC_LOG,
             capture_file=None,
             lane=LaneStatus(False, False, 0, 1),
-            scopes={"render.frame": stable_scope},
+            scopes={LIT_RENDER_FRAME: stable_scope},
             forbidden_log_messages=[],
         )
         capture_args.skip_pixel_parity = True
-        assert evaluate_runs(capture_args, sync_run, async_run)["verdict"] == "pass"
+        assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
 
         first = root / "first.bmp"
         second = root / "second.bmp"
@@ -1134,12 +1192,12 @@ def run_self_test() -> int:
         write_markdown_report(
             failure_markdown,
             {
-                "collection_error": "render.async_shadow was not published",
-                "sync": {"timing_file": "sync.txt", "log_file": "sync.log"},
-                "async": {"timing_file": "async.txt", "log_file": "async.log"},
+                LIT_COLLECTION_ERROR: "render.async_shadow was not published",
+                LIT_SYNC: {LIT_TIMING_FILE: "sync.txt", LIT_LOG_FILE: LIT_SYNC_LOG},
+                LIT_ASYNC: {LIT_TIMING_FILE: "async.txt", LIT_LOG_FILE: LIT_ASYNC_LOG},
             },
         )
-        assert "Incomplete telemetry" in failure_markdown.read_text(encoding="utf-8")
+        assert "Incomplete telemetry" in failure_markdown.read_text(encoding=LIT_UTF_8)
 
     print("async-shadow M4 harness self-test passed")
     return 0
@@ -1156,26 +1214,26 @@ def run(args: argparse.Namespace) -> int:
         # would only exercise the intentional Graphics queue route.
         capture_backend = create_capture_backend()
         async_capture = (
-            run_frame_locked_capture(args, "async", args.async_executable, capture_backend)
+            run_frame_locked_capture(args, LIT_ASYNC, args.async_executable, capture_backend)
             if not args.skip_pixel_parity
             else None
         )
         async_run = run_single_mode(
             args,
-            "async",
+            LIT_ASYNC,
             args.async_executable,
             load_name_symbols(args.async_namesym),
             capture_backend,
             async_capture,
         )
         sync_capture = (
-            run_frame_locked_capture(args, "sync", args.sync_executable, capture_backend)
+            run_frame_locked_capture(args, LIT_SYNC, args.sync_executable, capture_backend)
             if not args.skip_pixel_parity
             else None
         )
         sync_run = run_single_mode(
             args,
-            "sync",
+            LIT_SYNC,
             args.sync_executable,
             load_name_symbols(args.sync_namesym),
             capture_backend,
@@ -1187,18 +1245,18 @@ def run(args: argparse.Namespace) -> int:
             report = evaluate_runs(args, sync_run, async_run)
         except SmokeFailure as error:
             report = {
-                "schema": "nwb.async_shadow_m4.v2",
-                "verdict": "fail",
-                "collection_error": str(error),
-                "gates": [gate("required timestamp telemetry", False, str(error))],
-                "sync": raw_run_payload(sync_run),
-                "async": raw_run_payload(async_run),
-                "pixel_diff": None,
+                LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V2,
+                LIT_VERDICT: LIT_FAIL,
+                LIT_COLLECTION_ERROR: str(error),
+                LIT_GATES: [gate("required timestamp telemetry", False, str(error))],
+                LIT_SYNC: raw_run_payload(sync_run),
+                LIT_ASYNC: raw_run_payload(async_run),
+                LIT_PIXEL_DIFF: None,
             }
         write_json(json_path, report)
         write_markdown_report(markdown_path, report)
         print(f"M4 report: {markdown_path}")
-        if report["verdict"] != "pass" and not args.report_only:
+        if report[LIT_VERDICT] != LIT_PASS and not args.report_only:
             return 1
         return 0
     finally:
@@ -1223,5 +1281,5 @@ def main(argv: Sequence[str]) -> int:
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     sys.exit(main(sys.argv[1:]))

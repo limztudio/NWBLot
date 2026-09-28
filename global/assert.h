@@ -16,6 +16,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr tchar s_AssertColon[] = NWB_TEXT(":");
+inline constexpr tchar s_AssertNewline[] = NWB_TEXT("\n");
+inline constexpr tchar s_AssertLabel[] = NWB_TEXT("ASSERT ");
+inline constexpr tchar s_FatalAssertLabel[] = NWB_TEXT("FATAL ASSERT ");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
         .event = ::DiagnosticEventName::s_Assert.data(),                                 \
@@ -28,7 +37,7 @@
     })
 
 #define NWB_DETAIL_ASSERT_ABORT(label)                                                   \
-    NWB_TCERR << NWB_TEXT(label) << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n"); \
+    NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
     ::std::abort()
 
 #define NWB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
@@ -44,7 +53,7 @@
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
         NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.c_str());  \
-        NWB_TCERR << NWB_TEXT(label) << NWB_TEXT(__FILE__) << NWB_TEXT(":") << __LINE__ << NWB_TEXT("\n") << diagnosticMessage.c_str() << NWB_TEXT("\n"); \
+        NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \
 }
@@ -54,8 +63,8 @@
 
 
 #if NWB_OCCUR_ASSERT
-#define NWB_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, "ASSERT ", condition)
-#define NWB_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, "ASSERT ", condition, __VA_ARGS__)
+#define NWB_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
+#define NWB_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
 #else
 #define NWB_ASSERT(condition)
 #define NWB_ASSERT_MSG(condition, ...)
@@ -66,8 +75,8 @@
 
 
 #if NWB_OCCUR_FATAL_ASSERT
-#define NWB_FATAL_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, "FATAL ASSERT ", condition)
-#define NWB_FATAL_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, "FATAL ASSERT ", condition, __VA_ARGS__)
+#define NWB_FATAL_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
+#define NWB_FATAL_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
 #else
 #define NWB_FATAL_ASSERT(condition)
 #define NWB_FATAL_ASSERT_MSG(condition, ...)

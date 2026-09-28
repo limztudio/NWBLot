@@ -62,6 +62,14 @@ static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinn
 static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
 static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
 static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
+static constexpr tchar s_InitWorldFailedText[] = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
+static constexpr char s_UiWindowTitle[] = "NWB Testbed";
+static constexpr char s_UiRendererLine[] = "Renderer: mesh shader path with compute emulation fallback";
+static constexpr char s_UiCharacterLine[] = "Character: female model";
+static constexpr tchar s_CharacterInvalidText[] = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
+static constexpr tchar s_StartupSceneText[] = NWB_TEXT("ProjectTestbed: startup scene created ({})");
+static constexpr tchar s_ShutdownText[] = NWB_TEXT("ProjectTestbed: shutdown");
+static constexpr char s_InitWorldFailedNarrow[] = "ProjectTestbed initialization failed";
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -253,8 +261,8 @@ static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
 NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
-        NWB_LOGGER_FATAL(NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false"));
-        throw RuntimeException("ProjectTestbed initialization failed");
+        NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
+        throw RuntimeException(__hidden_runtime::s_InitWorldFailedNarrow);
     }
     return MakeNotNullUnique(Move(world));
 }
@@ -262,14 +270,14 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 void ProjectTestbed::drawUiControls(){
     ImGui::SetNextWindowPos(ImVec2(__hidden_runtime::s_UiInitialPosition.x, __hidden_runtime::s_UiInitialPosition.y), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(__hidden_runtime::s_UiInitialWidth, __hidden_runtime::s_UiInitialHeightAuto), ImGuiCond_FirstUseEver);
-    if(!ImGui::Begin("NWB Testbed")){
+    if(!ImGui::Begin(__hidden_runtime::s_UiWindowTitle)){
         ImGui::End();
         return;
     }
 
-    ImGui::TextUnformatted("Renderer: mesh shader path with compute emulation fallback");
+    ImGui::TextUnformatted(__hidden_runtime::s_UiRendererLine);
     ImGui::Separator();
-    ImGui::TextUnformatted("Character: female model");
+    ImGui::TextUnformatted(__hidden_runtime::s_UiCharacterLine);
     ImGui::End();
 }
 
@@ -335,7 +343,7 @@ bool ProjectTestbed::onStartup(){
 
 bool ProjectTestbed::createDefaultScene(){
     if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity"));
+        NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
         return false;
     }
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
@@ -348,7 +356,7 @@ bool ProjectTestbed::createDefaultScene(){
     };
 
     NWB_LOGGER_ESSENTIAL_INFO(
-        NWB_TEXT("ProjectTestbed: startup scene created ({})"),
+        __hidden_runtime::s_StartupSceneText,
         __hidden_runtime::s_DefaultSceneDescription
     );
     return true;
@@ -358,7 +366,7 @@ void ProjectTestbed::onShutdown(){
     unregisterInputHandler();
     clearInputState();
     destroyWorld();
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ProjectTestbed: shutdown"));
+    NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_ShutdownText);
 }
 
 bool ProjectTestbed::onUpdate(f32 delta){

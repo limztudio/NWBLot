@@ -17,6 +17,11 @@
 namespace __hidden_frame_graph_report_scaling_tests{
 
 
+static constexpr AStringView s_PACKET_INDEX = "\"packet\": {\"index\":";
+static constexpr AStringView s_RUNTIME_PACKET_SUBMISSION_COUNT_3 = "runtime_packet_submission_count=3";
+static constexpr AStringView s_RUNTIME_PACKET_SUBMISSION_COUNT_2 = "runtime_packet_submission_count=2";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -185,7 +190,7 @@ void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 task
     ASSERT_EQ(report.summary.frameGraphNodeCount, ownerCount + taskCount);
     const AStringView json(report.json.data(), report.json.size());
     const AStringView dot(report.graph.data(), report.graph.size());
-    EXPECT_EQ(CountText(json, "\"packet\": {\"index\":"), packetCount);
+    EXPECT_EQ(CountText(json, s_PACKET_INDEX), packetCount);
     EXPECT_EQ(CountText(json, "\"runtimeStatistics\": null"), taskCount);
     EXPECT_EQ(CountText(dot, "runtime_packet_submission_count="), ownerCount);
     RecordUnsignedProperty(MakeNotNull("report_build_ns"), elapsed);
@@ -229,7 +234,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     ASSERT_FALSE(first.empty());
     ASSERT_FALSE(empty.empty());
     ASSERT_FALSE(last.empty());
-    EXPECT_EQ(CountText(first, "\"packet\": {\"index\":"), 3u);
+    EXPECT_EQ(CountText(first, s_PACKET_INDEX), 3u);
     EXPECT_TRUE(ContainsText(first, "\"physicalQueues\": [{"));
     EXPECT_TRUE(ContainsText(first, "\"queue\": {\"index\": 1,"));
     EXPECT_TRUE(ContainsText(first, "\"queue\": {\"index\": 2,"));
@@ -237,7 +242,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     EXPECT_LT(first.find("\"packet\": {\"index\": 0,"), first.find("\"packet\": {\"index\": 1,"));
     EXPECT_LT(first.find("\"packet\": {\"index\": 1,"), first.find("\"packet\": {\"index\": 2,"));
     EXPECT_TRUE(ContainsText(empty, "\"physicalQueues\": null, \"packetSubmissions\": []"));
-    EXPECT_EQ(CountText(last, "\"packet\": {\"index\":"), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(last, s_PACKET_INDEX), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(last, "\"physicalQueues\": null"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 7,"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 8,"));
@@ -249,11 +254,11 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     const AStringView emptyDot = FindLine(dot, "  n3 [");
     const AStringView lastDot = FindLine(dot, "  n5 [");
     EXPECT_TRUE(ContainsText(firstDot, "runtime_physical_queue_count=2"));
-    EXPECT_TRUE(ContainsText(firstDot, "runtime_packet_submission_count=3"));
+    EXPECT_TRUE(ContainsText(firstDot, s_RUNTIME_PACKET_SUBMISSION_COUNT_3));
     EXPECT_TRUE(ContainsText(emptyDot, "runtime_physical_queue_count=\"unknown\""));
     EXPECT_TRUE(ContainsText(emptyDot, "runtime_packet_submission_count=0"));
     EXPECT_TRUE(ContainsText(lastDot, "runtime_physical_queue_count=\"unknown\""));
-    EXPECT_TRUE(ContainsText(lastDot, "runtime_packet_submission_count=2"));
+    EXPECT_TRUE(ContainsText(lastDot, s_RUNTIME_PACKET_SUBMISSION_COUNT_2));
     EXPECT_EQ(CountText(dot, "runtime_packet_submission_count="), 3u);
 }
 
@@ -272,18 +277,18 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     ASSERT_EQ(report.summary.frameGraphFrameCount, s_ExpectedDualCount);
-    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), 5u);
+    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), 5u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"), 1u);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=2"), 1u);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_3), 1u);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_2), 1u);
 
     recorder.clear();
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=2"), 1u);
-    EXPECT_FALSE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"));
+    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_2), 1u);
+    EXPECT_FALSE(ContainsText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_3));
 }
 
 TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNextValidCapture){
@@ -342,8 +347,8 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     EXPECT_EQ(report.summary.parseFailureCount, 3u);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
     EXPECT_EQ(report.summary.frameGraphNodeCount, s_ExpectedDualCount);
-    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), 3u);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"), 1u);
+    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), 3u);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_3), 1u);
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));
 }
 

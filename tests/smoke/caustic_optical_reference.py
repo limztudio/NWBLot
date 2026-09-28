@@ -11,6 +11,9 @@ import re
 
 from reflection_optical_reference import add, cross, dot, half, normalized, scale
 
+# Shared literals (no inline hardcodes below this block).
+LIT_UTF_8 = "utf-8"
+
 
 CAMERA = (0.0, 0.85, -2.2)
 ENVIRONMENT = (0.6, 0.7, 1.0)
@@ -87,7 +90,7 @@ class MeshNode:
 
 @lru_cache(maxsize=1)
 def sphere_mesh():
-    source = MESH_PATH.read_text(encoding="utf-8")
+    source = MESH_PATH.read_text(encoding=LIT_UTF_8)
     def rows(field):
         text = re.search(r"asset\." + field + r"\s*=\s*(\[.*?\]);", source, re.S).group(1)
         return json.loads(re.sub(r",\s*]", "]", text))
@@ -175,7 +178,7 @@ def expected_environment_color(disabled_rgb, fresnel):
 
 def predictor_metadata():
     # Canonical LF content identity is stable across the repository's required CRLF checkout policy.
-    digest = hashlib.sha256(MESH_PATH.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(MESH_PATH.read_text(encoding=LIT_UTF_8).encode(LIT_UTF_8)).hexdigest()
     return {"mesh": str(MESH_PATH.relative_to(Path(__file__).parent)), "mesh_lf_sha256": digest,
         "camera": CAMERA, "sphere_center": (0, 0.85, 0), "sphere_scale": 0.7, "vertical_fov_degrees": 60,
         "ior": IOR, "environment": ENVIRONMENT, "presentation": "sRGB of Reinhard scene radiance",

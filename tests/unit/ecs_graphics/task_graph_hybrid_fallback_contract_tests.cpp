@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_hybrid_fallback_contract_tests{
 
 
+static constexpr AStringView s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C = "RendererSystem: created RayQuery shadow compute pipeline";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -94,7 +97,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         "CONFIGURATIONS dbg opt"
     ));
     EXPECT_FALSE(ContainsText(healthyCapture, "enabled natural opaque hardware-shadow baseline"));
-    EXPECT_FALSE(ContainsText(healthyCapture, "RendererSystem: created RayQuery shadow compute pipeline"));
+    EXPECT_FALSE(ContainsText(healthyCapture, s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C));
 
     EXPECT_TRUE(ContainsText(opaqueCapture, "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"));
     EXPECT_TRUE(ContainsText(
@@ -129,7 +132,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         "CONFIGURATIONS dbg opt"
     ));
     EXPECT_FALSE(ContainsText(opaqueCapture, "enabled healthy hardware transparent-shadow benchmark"));
-    EXPECT_FALSE(ContainsText(opaqueCapture, "RendererSystem: created RayQuery shadow compute pipeline"));
+    EXPECT_FALSE(ContainsText(opaqueCapture, s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C));
 
     const usize transparentCaptureOffset = smokeCmake.find("            nwb_transparent_multi_capture_smoke");
     const usize transparentCaptureEndOffset = smokeCmake.find(
@@ -151,7 +154,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         transparentCapture,
         "ENVIRONMENT \"NWB_TRANSPARENT_MULTI_SPIN_ANGLE=0.6;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=6\""
     ));
-    EXPECT_FALSE(ContainsText(transparentCapture, "RendererSystem: created RayQuery shadow compute pipeline"));
+    EXPECT_FALSE(ContainsText(transparentCapture, s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C));
 
     const usize opaqueBaselineHelperOffset = stressTestProject.find(
         "[[nodiscard]] static bool hybridShadowOpaqueBaseline()"

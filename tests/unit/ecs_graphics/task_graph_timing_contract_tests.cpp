@@ -11,6 +11,14 @@
 namespace __hidden_ecs_graphics_task_graph_timing_contract_tests{
 
 
+static constexpr AStringView s_CORE = "core";
+static constexpr AStringView s_GRAPHICS = "graphics";
+static constexpr AStringView s_IMPL = "impl";
+static constexpr AStringView s_ECS_RENDER = "ecs_render";
+static constexpr AStringView s_NOEXCEPT_BRACE = ")noexcept{";
+static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_CPP = "renderer_frame_pipeline_graph.cpp";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -38,18 +46,18 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     AString timingMetricCorrelatorSource;
     AString timingSubmissionSource;
     AString frameGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.h", timingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_types.h", timingTypesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_scope_lifecycle.cpp", timingScopesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_frame_transaction.cpp", timingFrameTransactionSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.cpp", timingSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_accumulator.cpp", timingAccumulatorSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing.h", timingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_types.h", timingTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_scope_lifecycle.cpp", timingScopesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_frame_transaction.cpp", timingFrameTransactionSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing.cpp", timingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_accumulator.cpp", timingAccumulatorSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "gpu_timing_metric_correlator.cpp",
         timingMetricCorrelatorSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_submission.cpp", timingSubmissionSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_submission.cpp", timingSubmissionSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
     const AStringView timingHeader(timingHeaderSource.data(), timingHeaderSource.size());
     const AStringView timingTypes(timingTypesSource.data(), timingTypesSource.size());
     const AStringView timingScopes(timingScopesSource.data(), timingScopesSource.size());
@@ -313,11 +321,11 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_TRUE(ContainsText(timingAccumulator.substr(
         confirmQueryDefinitionOffset,
         prepareQueryForRecoveryDefinitionOffset - confirmQueryDefinitionOffset
-    ), ")noexcept{"));
+    ), s_NOEXCEPT_BRACE));
     EXPECT_TRUE(ContainsText(timing.substr(
         confirmScopeDefinitionOffset,
         prepareRecoveryDefinitionOffset - confirmScopeDefinitionOffset
-    ), ")noexcept{"));
+    ), s_NOEXCEPT_BRACE));
     EXPECT_TRUE(ContainsText(timing.substr(
         confirmScopeDefinitionOffset,
         prepareRecoveryDefinitionOffset - confirmScopeDefinitionOffset
@@ -391,7 +399,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
             "kernel/task_graph_frame_timing_end_task.cpp",
             "deferred/task_graph_suffix_builder.h",
             "deferred/task_graph_suffix_builder.cpp",
-            "renderer_frame_pipeline_graph.cpp",
+            s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
         },
         taskGraphSource
     ));
@@ -451,7 +459,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(system, "surfelCounterReadbackFollowsPresentation"));
     EXPECT_TRUE(ContainsText(system, "laggedLightingHistoryFollowsPresentation"));
     AString frameTailSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "frame_tail_builder.cpp", frameTailSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "deferred" / "frame_tail_builder.cpp", frameTailSource));
     const AStringView frameTail(frameTailSource.data(), frameTailSource.size());
     EXPECT_TRUE(ContainsText(taskGraph, ".terminalPresentationTask = m_deferredFrameTimingEndTask,"));
     EXPECT_TRUE(ContainsText(frameTail, "const Core::GpuTaskId historyCopyDependencies[] = { inputs.terminalPresentationTask };"));
@@ -522,7 +530,7 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "renderer_frame_pipeline_graph.cpp",
+            s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
             "renderer_frame_pipeline_graph_schedule.cpp",
             "renderer_frame_pipeline_graph_packet_metrics.cpp",
         },
@@ -622,10 +630,10 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     AString timingFeedbackHeaderSource;
     AString timingFeedbackSource;
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", systemHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.cpp", systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.cpp", timingFeedbackSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "kernel" / "task_timing_feedback.cpp", timingFeedbackSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -636,7 +644,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
             "avboit/task_graph_accumulation_tasks.h",
             "avboit/task_graph_accumulation_tasks.cpp",
             "avboit/task_graph_timing_metadata.h",
-            "renderer_frame_pipeline_graph.cpp",
+            s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
             "renderer_frame_pipeline_graph_schedule.cpp",
         },
         taskGraphSource
@@ -772,7 +780,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     ASSERT_NE(acceptOffset, AStringView::npos);
     ASSERT_NE(discardOffset, AStringView::npos);
     const AStringView accept = timingFeedback.substr(acceptOffset, discardOffset - acceptOffset);
-    EXPECT_TRUE(ContainsText(accept, ")noexcept{"));
+    EXPECT_TRUE(ContainsText(accept, s_NOEXCEPT_BRACE));
     EXPECT_TRUE(ContainsText(accept, "m_state.acceptSubmission(attribution, token, m_active);"));
     EXPECT_FALSE(ContainsText(accept, "m_history"));
     EXPECT_FALSE(ContainsText(accept, ".erase("));
@@ -819,7 +827,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
 
     const AStringView lighting(taskGraph.substr(lightingOffset));
     AString computeChainSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "compute_effect_chain_builder.cpp", computeChainSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit" / "compute_effect_chain_builder.cpp", computeChainSource));
     const AStringView computeChain(computeChainSource.data(), computeChainSource.size());
     EXPECT_TRUE(ContainsText(computeChain, "allowTimingFeedbackRouting = true"));
     EXPECT_TRUE(ContainsText(lighting, "avboitComputeEffectChainBuilder.declareDepthWarp("));

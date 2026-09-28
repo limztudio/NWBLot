@@ -9,6 +9,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+# Shared literals (no inline hardcodes below this block).
+LIT_UTF_8 = "utf-8"
+
 
 class ProfileFailure(RuntimeError):
     pass
@@ -34,5 +37,5 @@ def capture_vulkan_summary(output_dir: Path) -> Path | None:
         return None
     completed = subprocess.run([vulkaninfo, "--summary"], text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     output_path = output_dir / "vulkaninfo-summary.txt"
-    output_path.write_text(completed.stdout, encoding="utf-8")
+    output_path.write_text(completed.stdout, encoding=LIT_UTF_8)
     return output_path

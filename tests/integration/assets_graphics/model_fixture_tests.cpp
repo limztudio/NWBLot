@@ -31,6 +31,10 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_model_fixture{
 
 
+static constexpr AStringView s_RIG = "rig";
+static constexpr AStringView s_MODEL_FIXTURE_NWB = "model_fixture.nwb";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -213,7 +217,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
         AStringView(meta.data(), meta.size()),
         "model_bunch_local_references",
         "characters",
-        "model_fixture.nwb",
+        s_MODEL_FIXTURE_NWB,
         testArena,
         root,
         outputDirectory
@@ -241,7 +245,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     const Name expectedMesh("project/characters/model_fixture/mesh");
     const Name expectedSkin("project/characters/model_fixture/skin");
     const Name expectedSkeleton("project/characters/model_fixture/skeleton");
-    EXPECT_EQ(model.skeletonObjects()[0].name, Name("rig"));
+    EXPECT_EQ(model.skeletonObjects()[0].name, Name(s_RIG.data()));
     EXPECT_EQ(model.skeletonObjects()[0].skeleton.name(), expectedSkeleton);
 
     const NWB::Impl::ModelSkinnedMeshObject* body = FindSkinnedModelObject(model, Name("body"));
@@ -251,12 +255,12 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     if(body){
         EXPECT_EQ(body->mesh.name(), expectedMesh);
         EXPECT_EQ(body->skin.name(), expectedSkin);
-        EXPECT_EQ(body->skeletonObject, Name("rig"));
+        EXPECT_EQ(body->skeletonObject, Name(s_RIG.data()));
     }
     if(detail){
         EXPECT_EQ(detail->mesh.name(), expectedMesh);
         EXPECT_EQ(detail->skin.name(), expectedSkin);
-        EXPECT_EQ(detail->skeletonObject, Name("rig"));
+        EXPECT_EQ(detail->skeletonObject, Name(s_RIG.data()));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -337,7 +341,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     if(tool){
         EXPECT_EQ(tool->mesh.name(), Name("project/characters/model_attachment_fixture/mesh"));
         EXPECT_FALSE(tool->material.valid());
-        EXPECT_EQ(tool->parentObject, Name("rig"));
+        EXPECT_EQ(tool->parentObject, Name(s_RIG.data()));
         EXPECT_EQ(tool->parentJoint, Name("hand"));
         EXPECT_EQ(tool->transform._14, 0.5f);
         EXPECT_EQ(tool->transform._24, 0.125f);
@@ -381,7 +385,7 @@ asset_bunch bunch = [
         AStringView(meta.data(), meta.size()),
         "model_bunch_non_affine_fourth_transform_row",
         "characters",
-        "model_fixture.nwb",
+        s_MODEL_FIXTURE_NWB,
         testArena,
         root,
         outputDirectory
@@ -403,7 +407,7 @@ static bool ExpandModelBunchFixture(
         return false;
 
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
-    const Path nwbFilePath = assetRoot / "characters" / "model_fixture.nwb";
+    const Path nwbFilePath = assetRoot / "characters" / s_MODEL_FIXTURE_NWB;
     return NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
         assetRoot,
         "project",

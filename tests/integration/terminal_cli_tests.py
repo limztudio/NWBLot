@@ -5,56 +5,66 @@ import pathlib
 import subprocess
 import tempfile
 
+# Shared literals (no inline hardcodes below this block).
+LIT_APPEND = "append"
+LIT_HELP = "--help"
+LIT_NWB_ASSET_PIPELINE = "NWB asset pipeline"
+LIT_OUTPUT = "--output"
+LIT_NWB_UNKNOWN_OPTION = "--nwb-unknown-option"
+LIT_OUTPUT_2 = "output"
+LIT_MAIN = "__main__"
+LIT_UTF_8 = "utf-8"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pipeline", type=pathlib.Path, action="append", default=[])
-    parser.add_argument("--utility", type=pathlib.Path, action="append", default=[])
-    parser.add_argument("--application", type=pathlib.Path, action="append", default=[])
+    parser.add_argument("--pipeline", type=pathlib.Path, action=LIT_APPEND, default=[])
+    parser.add_argument("--utility", type=pathlib.Path, action=LIT_APPEND, default=[])
+    parser.add_argument("--application", type=pathlib.Path, action=LIT_APPEND, default=[])
     return parser.parse_args()
 
 
 def run(executable: pathlib.Path, arguments: list[str], root: pathlib.Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [str(executable.resolve()), *arguments], cwd=root, capture_output=True, text=True,
-        encoding="utf-8", errors="replace", timeout=30.0, check=False,
+        encoding=LIT_UTF_8, errors="replace", timeout=30.0, check=False,
     )
 
 
 def verify_pipeline(executable: pathlib.Path, root: pathlib.Path) -> None:
-    help_result = run(executable, ["--help"], root)
+    help_result = run(executable, [LIT_HELP], root)
     assert help_result.returncode == 0, (executable, help_result)
-    assert "NWB asset pipeline" in help_result.stdout and "--output" in help_result.stdout, help_result
+    assert LIT_NWB_ASSET_PIPELINE in help_result.stdout and LIT_OUTPUT in help_result.stdout, help_result
     assert "Usage:" not in help_result.stderr, help_result
-    for arguments in ([], ["--nwb-unknown-option"], ["--output", str(root / "output")]):
+    for arguments in ([], [LIT_NWB_UNKNOWN_OPTION], [LIT_OUTPUT, str(root / LIT_OUTPUT_2)]):
         result = run(executable, arguments, root)
         assert result.returncode == 1, (executable, arguments, result)
-        if "--output" not in arguments:
-            assert "NWB asset pipeline" in result.stderr and "--output" in result.stderr, result
+        if LIT_OUTPUT not in arguments:
+            assert LIT_NWB_ASSET_PIPELINE in result.stderr and LIT_OUTPUT in result.stderr, result
             assert "failed to parse command line" in result.stdout + result.stderr, result
         else:
             assert "provide --input or --input-list" in result.stdout + result.stderr, result
-        assert not (root / "output").exists(), (executable, arguments, "created output after failure")
+        assert not (root / LIT_OUTPUT_2).exists(), (executable, arguments, "created output after failure")
 
 
 def verify_utility(executable: pathlib.Path, root: pathlib.Path) -> None:
-    help_result = run(executable, ["--help"], root)
-    assert help_result.returncode == 0 and "--help" in help_result.stdout, (executable, help_result)
-    result = run(executable, ["--nwb-unknown-option"], root)
+    help_result = run(executable, [LIT_HELP], root)
+    assert help_result.returncode == 0 and LIT_HELP in help_result.stdout, (executable, help_result)
+    result = run(executable, [LIT_NWB_UNKNOWN_OPTION], root)
     # CLI11's ExtrasError is 109; preserve its native terminal code instead of normalizing it to generic failure.
     assert result.returncode == 109, (executable, result)
-    assert "--nwb-unknown-option" in result.stderr, result
+    assert LIT_NWB_UNKNOWN_OPTION in result.stderr, result
     assert "Press Enter to exit" not in result.stdout, result
 
 
 def verify_application(executable: pathlib.Path, root: pathlib.Path) -> None:
-    for arguments in (["--help"], ["--nwb-unknown-option"]):
+    for arguments in ([LIT_HELP], [LIT_NWB_UNKNOWN_OPTION]):
         result = run(executable, arguments, root)
         assert result.returncode in (-1, 255, 0xFFFFFFFF), (executable, arguments, result)
-        if arguments == ["--help"]:
-            assert "--help" in result.stdout, result
+        if arguments == [LIT_HELP]:
+            assert LIT_HELP in result.stdout, result
         else:
-            assert "--nwb-unknown-option" in result.stderr, result
+            assert LIT_NWB_UNKNOWN_OPTION in result.stderr, result
 
 
 def main() -> None:
@@ -70,6 +80,6 @@ def main() -> None:
             verify_application(executable, root)
 
 
-if __name__ == "__main__":
+if __name__ == LIT_MAIN:
     main()
 

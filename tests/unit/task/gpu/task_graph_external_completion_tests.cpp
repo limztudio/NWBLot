@@ -25,6 +25,10 @@ namespace Tests{
 namespace __hidden_task_graph_external_completion_tests{
 
 
+static constexpr AStringView s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI = "tests/task_graph/owned_external_completion";
+static constexpr AStringView s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL = "tests/task_graph/metadata_external_completion";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -134,7 +138,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     };
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/owned_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
             .setMarkerLabel("Owned External Completion")
             .setToken(token)
     );
@@ -163,7 +167,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId repeatedMetadataImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/owned_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
             .setMarkerLabel("Compatible Metadata Reference")
     );
     EXPECT_EQ(repeatedMetadataImport, completion);
@@ -174,7 +178,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId repeatedTokenImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/owned_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
             .setMarkerLabel("Compatible Token Reference")
             .setToken(token)
     );
@@ -189,7 +193,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     ++conflictingToken.value;
     EXPECT_FALSE(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/owned_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
             .setMarkerLabel("Conflicting Token Reference")
             .setToken(conflictingToken)
     ).valid());
@@ -220,7 +224,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
 
     const Graphics::GpuExternalCompletionId metadataCompletion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/metadata_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
             .setMarkerLabel("Metadata External Completion")
     );
     ASSERT_TRUE(metadataCompletion.valid());
@@ -312,7 +316,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId upgradedCompletion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/metadata_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
             .setMarkerLabel("Late Token Upgrade")
             .setToken(token)
     );
@@ -345,12 +349,12 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     EXPECT_EQ(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/metadata_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
             .setMarkerLabel("Upgraded Metadata Reference")
     ), metadataCompletion);
     EXPECT_EQ(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/metadata_external_completion"))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
             .setMarkerLabel("Upgraded Token Reference")
             .setToken(token)
     ), metadataCompletion);

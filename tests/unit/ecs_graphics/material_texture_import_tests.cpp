@@ -21,6 +21,12 @@
 namespace __hidden_material_texture_import_tests{
 
 
+static constexpr AStringView s_TESTS_TEXTURE_IMPORT_SCRATCH = "tests/texture_import/scratch";
+static constexpr AStringView s_MATERIAL_TEXTURE = "Material Texture";
+static constexpr AStringView s_EXISTING_MATERIAL_TEXTURE = "Existing Material Texture";
+static constexpr AStringView s_NEW_MATERIAL_TEXTURE = "New Material Texture";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -54,7 +60,7 @@ struct TextureContext{
     }
 
     [[nodiscard]] Core::GpuGraphResourceId importExisting(const Core::TextureHandle& texture, const Name& identity){
-        return graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, "Existing Material Texture"));
+        return graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, s_EXISTING_MATERIAL_TEXTURE));
     }
 };
 
@@ -67,9 +73,9 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
     const auto existing = context.importExisting(second, Name("tests/texture_import/existing_alias"));
     ASSERT_TRUE(existing.valid());
     const Array<Core::TextureHandle, 5u> requested = { second, first, second, third, first };
-    Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "New Material Texture", resources), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_NEW_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 5u);
     EXPECT_EQ(resources[0u], existing);
     EXPECT_EQ(resources[0u], resources[s_ThirdElementIndex]);
@@ -81,7 +87,7 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
     EXPECT_EQ(view.textureForResource(resources[1u]), first.get());
     EXPECT_EQ(view.textureForResource(resources[3u]), third.get());
     EXPECT_EQ(view.resourceAt(0u).identity, Name("tests/texture_import/existing_alias"));
-    EXPECT_EQ(view.resourceAt(0u).markerLabel, "Existing Material Texture");
+    EXPECT_EQ(view.resourceAt(0u).markerLabel, s_EXISTING_MATERIAL_TEXTURE);
 }
 
 TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntact){
@@ -89,7 +95,7 @@ TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntac
     const auto unnamed = context.makeTexture(NAME_NONE);
     const auto existing = context.importExisting(unnamed, Name("tests/texture_import/unnamed_alias"));
     ASSERT_TRUE(existing.valid());
-    Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
     ResourceVector resources(scratch);
     resources.push_back(existing);
     EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, nullptr, 0u, "Unused", resources), SampledTextureImportResult::Success);
@@ -151,9 +157,9 @@ TEST(MaterialTextureImport, MissingIdentityKeepsTheImportedPrefixAndDoesNotProce
             useNull ? Core::TextureHandle{} : context.makeTexture(NAME_NONE),
             context.makeTexture(Name("tests/texture_import/later")),
         };
-        Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
+        Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
         ResourceVector resources(scratch);
-        EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources), SampledTextureImportResult::MissingIdentity);
+        EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::MissingIdentity);
         ASSERT_EQ(resources.size(), 1u);
         const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
         ASSERT_TRUE(view.valid());
@@ -172,9 +178,9 @@ TEST(MaterialTextureImport, IdentityConflictIsAnImportFailureAfterTheValidPrefix
         context.makeTexture(Name("tests/texture_import/prefix")), context.makeTexture(identity),
         context.makeTexture(Name("tests/texture_import/later")),
     };
-    Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
     ResourceVector resources(scratch);
-    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "Material Texture", resources), SampledTextureImportResult::ImportFailed);
+    EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::ImportFailed);
     ASSERT_EQ(resources.size(), 1u);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
@@ -187,14 +193,14 @@ TEST(MaterialTextureImport, NewCallAfterResetUsesCurrentGenerationAndReplacement
     TextureContext context;
     const Name identity("tests/texture_import/replacement");
     Core::TextureHandle texture = context.makeTexture(identity);
-    Core::Alloc::ScratchArena scratch(Name("tests/texture_import/scratch"));
+    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     const auto oldResource = resources[0u];
     context.graph.reset();
     texture = context.makeTexture(identity);
     resources.clear();
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, "Material Texture", resources), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 1u);
     EXPECT_NE(resources[0u].generation, oldResource.generation);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
@@ -240,7 +246,7 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
     ResourceVector resources(scratch);
     resources.push_back(existing[0u]);
     ASSERT_EQ(ImportMaterialSampledTextureResources(
-        context.graph, requests.data(), requests.size(), "New Material Texture", resources
+        context.graph, requests.data(), requests.size(), s_NEW_MATERIAL_TEXTURE, resources
     ), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), requests.size() + 1u);
     EXPECT_EQ(resources[0u], existing[0u]);
@@ -254,10 +260,10 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
         EXPECT_EQ(view.textureForResource(resource), context.textures[textureIndex].get());
         if(existing[textureIndex].valid()){
             EXPECT_EQ(resource, existing[textureIndex]);
-            EXPECT_EQ(view.resourceAt(resource.index).markerLabel, "Existing Material Texture");
+            EXPECT_EQ(view.resourceAt(resource.index).markerLabel, s_EXISTING_MATERIAL_TEXTURE);
         }
         else
-            EXPECT_EQ(view.resourceAt(resource.index).markerLabel, "New Material Texture");
+            EXPECT_EQ(view.resourceAt(resource.index).markerLabel, s_NEW_MATERIAL_TEXTURE);
         EXPECT_EQ(
             context.textures[textureIndex]->getReferenceCount(),
             referencesBefore[textureIndex] + (existing[textureIndex].valid() ? 0u : 1u)
@@ -466,7 +472,7 @@ static void BenchmarkTextureImports(
     EXPECT_EQ(resolved, requestCount * iterations);
     Core::Alloc::ScratchArena scratch(Name("tests/texture_import/assertion_scratch"));
     ResourceVector resources(scratch);
-    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), "Material Texture", resources), SampledTextureImportResult::Success);
+    ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requests.data(), requests.size(), s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), uniqueCount + unrelatedCount);

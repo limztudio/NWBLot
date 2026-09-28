@@ -33,6 +33,7 @@
 #include "refcount_ptr.h"
 #include "simplemath.h"
 #include "simdmath.h"
+#include "terminal_entry.h"
 #include "timer.h"
 
 

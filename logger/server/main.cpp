@@ -11,7 +11,7 @@
 #include <CLI.hpp>
 
 #include <core/common/command_line.h>
-#include <core/common/terminal_entry.h>
+#include <global/terminal_entry.h>
 #include <core/common/module.h>
 #include "module.h"
 #include "frame.h"

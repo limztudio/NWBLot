@@ -6,7 +6,7 @@
 
 
 #include <core/assets/global.h>
-#include <core/common/terminal_entry.h>
+#include <global/terminal_entry.h>
 
 #include <CLI.hpp>
 

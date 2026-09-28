@@ -13,7 +13,7 @@
 #include <global/global.h>
 #include <global/exception.h>
 #include <global/scope_exit.h>
-#include <core/common/terminal_entry.h>
+#include <global/terminal_entry.h>
 #include <global/filesystem.h>
 
 #include <core/common/command_line.h>

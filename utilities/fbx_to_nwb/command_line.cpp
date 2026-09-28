@@ -5,7 +5,7 @@
 #include "module.h"
 
 #include <CLI.hpp>
-#include <core/common/terminal_entry.h>
+#include <global/terminal_entry.h>
 #include <core/common/log.h>
 
 

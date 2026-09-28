@@ -6,7 +6,6 @@ target_sources(nwb_common PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/aftermath_runtime.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/application_entry.h"
-    "${CMAKE_CURRENT_LIST_DIR}/terminal_entry.h"
     "${CMAKE_CURRENT_LIST_DIR}/command_line.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/log.h"

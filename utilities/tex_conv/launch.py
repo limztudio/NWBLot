@@ -15,11 +15,12 @@ import launcher as ROOT_LAUNCHER  # noqa: E402
 
 
 TARGET = "nwb_tex_conv"
+MAIN_ENTRY = "__main__"
 
 
 def main(argv: Sequence[str]) -> int:
     return ROOT_LAUNCHER.run_target_launcher(TARGET, argv)
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))

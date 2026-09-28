@@ -8,6 +8,7 @@
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -58,7 +59,7 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
     // existing graph identity, preserving the preparation producer and cross-effect read dependencies.
     const Core::GpuGraphResourceId tlas = graph.importAccelStruct(
         resources.sceneTlas,
-        RendererTaskGraphDetail::AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+        RendererTaskGraphDetail::AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
             .setInitialState(tlasInitialState)
     );
     if(!tlas.valid())

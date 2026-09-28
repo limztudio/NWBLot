@@ -10,6 +10,7 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 #include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
@@ -395,20 +396,20 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             )
             && appendOptionalReadBuffer(
                 inputs.rayTracingResources->shadowInstanceMaterialBuffer,
-                Name("render.deferred_effects.instance_material"),
-                "Shadow Instance Materials",
+                Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
+                RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel,
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
                 inputs.rayTracingResources->shadowMaterialTypedBuffer,
-                Name("render.deferred_effects.material_typed"),
-                "Shadow Typed Materials",
+                Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
+                RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel,
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
                 inputs.rayTracingResources->shadowInstanceBuffer,
-                Name("render.deferred_effects.shadow_instances"),
-                "Shadow Instances",
+                Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
+                RendererFramePipelineDetail::s_SceneShadowInstancesLabel,
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
@@ -437,7 +438,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         if(inputs.rayTracingResources->sceneTlas){
             const Core::GpuGraphResourceId tlas = m_graph.importAccelStruct(
                 inputs.rayTracingResources->sceneTlas,
-                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
                     .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
             optionalResourcesImported = optionalResourcesImported && tlas.valid();

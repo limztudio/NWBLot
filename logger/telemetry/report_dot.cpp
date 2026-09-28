@@ -6,6 +6,7 @@
 
 #include "report.h"
 
+#include <global/diagnostics.h>
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
@@ -270,7 +271,7 @@ void AppendFrameGraphQueueAssignmentDot(
     StringAppendFormat(out, ", queue_modifier_mask={}", static_cast<u32>(assignment.modifiers));
     out += ", queue_acceptance=";
     AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
-    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
     StringAppendFormat(
         out,
         ", queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "

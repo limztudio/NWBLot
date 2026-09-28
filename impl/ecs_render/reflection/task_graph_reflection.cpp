@@ -37,6 +37,12 @@ namespace __hidden_reflection_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr tchar s_DisabledReflectionRoute[] = NWB_TEXT("disabled");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] Core::GpuGraphResourceId ImportTexture(Core::GpuTaskGraph& graph, const Core::TextureHandle& texture){
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -233,7 +239,7 @@ struct DispatchTask{
                 const bool screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
                 const tchar* route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
                 if(mode == NWB_REFLECTION_MODE_DISABLED)
-                    route = NWB_TEXT("disabled");
+                    route = s_DisabledReflectionRoute;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: {}"), route);
                 *payload.fallbackDispatchLogged = true;
             }

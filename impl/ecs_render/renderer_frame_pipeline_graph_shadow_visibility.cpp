@@ -394,7 +394,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     if(rayTracingShadowResources.sceneTlas){
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             rayTracingShadowResources.sceneTlas,
-            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+            AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
                 .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
         );
         optionalResourcesImported = optionalResourcesImported && sceneTlas.valid();
@@ -554,18 +554,18 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         );
         const Core::GpuGraphResourceId shadowInstanceMaterials = importBuffer(
             rayTracingResources.shadowInstanceMaterialBuffer,
-            Name("render.deferred_effects.instance_material"),
-            "Shadow Instance Materials"
+            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
+            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel
         );
         const Core::GpuGraphResourceId shadowTypedMaterials = importBuffer(
             rayTracingResources.shadowMaterialTypedBuffer,
-            Name("render.deferred_effects.material_typed"),
-            "Shadow Typed Materials"
+            Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
+            RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel
         );
         const Core::GpuGraphResourceId shadowInstances = importBuffer(
             rayTracingResources.shadowInstanceBuffer,
-            Name("render.deferred_effects.shadow_instances"),
-            "Shadow Instances"
+            Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
+            RendererFramePipelineDetail::s_SceneShadowInstancesLabel
         );
         if(
             !shadowSoftHalfA.valid()

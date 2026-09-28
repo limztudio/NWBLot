@@ -98,7 +98,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     const usize sameClassTransferQueueCount = sameClassQueueCount(CommandQueue::Transfer);
 
     const char* const sameClassGraphicsQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? "disabled"
+        ? VulkanDetail::s_DisabledQueueReason.data()
         : m_sameClassGraphicsQueueEnabled
             ? m_secondaryGraphicsQueueFamily != m_graphicsQueueFamily
                 ? "cross-family and/or primary-family Graphics queues selected"
@@ -130,7 +130,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     m_asyncComputeLaneEnabled = m_deviceParams.enableAsyncComputeLane && m_computeQueueEnabled;
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
     const char* const asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
-        ? "disabled"
+        ? VulkanDetail::s_DisabledQueueReason.data()
         : asyncComputeLaneEffective
             ? "dedicated compute family selected"
             : "no dedicated compute-only family"
@@ -144,7 +144,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     );
 
     const char* const sameClassComputeQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? "disabled"
+        ? VulkanDetail::s_DisabledQueueReason.data()
         : !m_computeQueueEnabled
             ? "primary dedicated Compute queue unavailable"
             : m_sameClassComputeQueueEnabled
@@ -174,7 +174,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     ;
     const bool transferQueueEffective = m_transferQueueEnabled;
     const char* const transferQueueReason = !m_deviceParams.enableTransferQueue
-        ? "disabled"
+        ? VulkanDetail::s_DisabledQueueReason.data()
         : transferQueueEffective
             ? "dedicated transfer-only family selected"
             : "no dedicated transfer-only family"
@@ -189,7 +189,7 @@ void BackendContext::logVulkanDeviceConfiguration(
     );
 
     const char* const sameClassTransferQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? "disabled"
+        ? VulkanDetail::s_DisabledQueueReason.data()
         : !transferQueueEffective
             ? "primary dedicated Transfer queue unavailable"
             : m_sameClassTransferQueueEnabled

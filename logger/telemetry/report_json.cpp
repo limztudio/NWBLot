@@ -6,6 +6,7 @@
 
 #include "report.h"
 
+#include <global/diagnostics.h>
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
@@ -96,7 +97,7 @@ void AppendFrameGraphQueueAssignmentJson(
     StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
     out += s_JsonAcceptanceKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
-    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
     StringAppendFormat(
         out,
         ", \"score\": {{\"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
@@ -389,8 +390,8 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(
     StringAppendFormat(
         out,
         ", \"joinsAcceptedQueueFrontier\": {}, \"recoverySubmission\": {}, \"submissionSeconds\": {:.9}}}",
-        statistics.joinsAcceptedQueueFrontier ? "true" : "false",
-        statistics.recoverySubmission ? "true" : "false",
+        statistics.joinsAcceptedQueueFrontier ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText,
+        statistics.recoverySubmission ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText,
         statistics.submissionSeconds
     );
 }
@@ -525,7 +526,7 @@ void BuildJson(
     out += "{\n";
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
-    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? "true" : "false");
+    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? DiagnosticDetail::s_TrueText : DiagnosticDetail::s_FalseText);
     if(summary.hasFrameRange)
         StringAppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
     out += "},\n";

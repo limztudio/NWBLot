@@ -24,6 +24,8 @@ TARGET = "nwb_pipeline"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
 CACHE_KEY_HEX_DIGITS = 16
+TEXT_ENCODING = "utf-8"
+MAIN_ENTRY = "__main__"
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -114,7 +116,7 @@ def write_inputs(path: Path, values: list[Path]) -> None:
         if "\n" in spelling or "\r" in spelling:
             raise ValueError("Asset paths must not contain newlines")
         text += spelling + "\n"
-    path.write_text(text, encoding="utf-8", newline="\n")
+    path.write_text(text, encoding=TEXT_ENCODING, newline="\n")
 
 
 def run_stage(executable: Path, arguments: list[str], repo_root: Path) -> None:
@@ -162,8 +164,8 @@ def cook(options: argparse.Namespace) -> None:
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
     cache = resolve_path(repo_root, options.cache_directory or Path("__build_obj/asset_cache"))
-    output_key = hashlib.sha256(str(output).encode("utf-8")).hexdigest()[:CACHE_KEY_HEX_DIGITS]
-    configuration_key = hashlib.sha256(configuration.encode("utf-8")).hexdigest()[:CACHE_KEY_HEX_DIGITS]
+    output_key = hashlib.sha256(str(output).encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
+    configuration_key = hashlib.sha256(configuration.encode(TEXT_ENCODING)).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
 
     env = ROOT_LAUNCHER.build_environment(options)
@@ -199,6 +201,6 @@ def main(argv: Sequence[str]) -> int:
     return EXIT_SUCCESS
 
 
-if __name__ == "__main__":
+if __name__ == MAIN_ENTRY:
     raise SystemExit(main(sys.argv[1:]))
 

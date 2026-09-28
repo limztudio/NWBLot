@@ -500,13 +500,14 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         taskGraph,
         "const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();"
     ));
-    EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\").setInitialState(sceneTlasInitialState)"));
+    EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel).setInitialState(sceneTlasInitialState)"));
     // Refraction and reflection use the neutral importer, forwarding the same generation-aware initial state as
     // the direct shadow, GI, and caustic imports. Include the extracted caustic owner in the generation checks.
-    static constexpr AStringView s_SceneTlasImport = "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")";
+    static constexpr AStringView s_SceneTlasImportA = "AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)";
+    static constexpr AStringView s_SceneTlasImportB = "RendererTaskGraphDetail::AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)";
     EXPECT_EQ(
-        CountText(taskGraph, s_SceneTlasImport) + CountText(sceneGraph, s_SceneTlasImport)
-            + CountText(hardwareCaustics, s_SceneTlasImport),
+        CountText(taskGraph, s_SceneTlasImportA) + CountText(sceneGraph, s_SceneTlasImportB)
+            + CountText(hardwareCaustics, s_SceneTlasImportA),
         5u
     );
     // Hardware shadows import early; reflection/refraction import only when that shared read set is still absent.

@@ -226,22 +226,22 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     bool optionalResourcesImported =
         appendOptionalReadBuffer(
             rayTracingResources.shadowInstanceMaterialBuffer,
-            Name("render.deferred_effects.instance_material"),
-            "Shadow Instance Materials",
+            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
+            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel,
             Core::ResourceStates::ShaderResource,
             &shadowInstanceMaterials
         )
         && appendOptionalReadBuffer(
             rayTracingResources.shadowMaterialTypedBuffer,
-            Name("render.deferred_effects.material_typed"),
-            "Shadow Typed Materials",
+            Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
+            RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel,
             Core::ResourceStates::ShaderResource,
             &shadowMaterialTyped
         )
         && appendOptionalReadBuffer(
             rayTracingResources.shadowInstanceBuffer,
-            Name("render.deferred_effects.shadow_instances"),
-            "Shadow Instances",
+            Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
+            RendererFramePipelineDetail::s_SceneShadowInstancesLabel,
             Core::ResourceStates::ShaderResource,
             &shadowInstances
         )
@@ -327,7 +327,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         else{
             tlas = m_deferredLightingTaskGraph.importAccelStruct(
                 rayTracingResources.sceneTlas,
-                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel)
                     .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
             optionalResourcesImported = tlas.valid();

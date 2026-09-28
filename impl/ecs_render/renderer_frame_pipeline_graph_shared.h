@@ -26,6 +26,19 @@ namespace RendererFramePipelineDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr char s_SceneShadowInstanceMaterialName[] = "render.deferred_effects.instance_material";
+inline constexpr char s_SceneShadowMaterialTypedName[] = "render.deferred_effects.material_typed";
+inline constexpr char s_SceneShadowInstancesName[] = "render.deferred_effects.shadow_instances";
+inline constexpr char s_SceneShadowInstanceMaterialLabel[] = "Shadow Instance Materials";
+inline constexpr char s_SceneShadowMaterialTypedLabel[] = "Shadow Typed Materials";
+inline constexpr char s_SceneShadowInstancesLabel[] = "Shadow Instances";
+inline constexpr char s_SceneTlasResourceName[] = "render.deferred_effects.tlas";
+inline constexpr char s_SceneTlasResourceLabel[] = "Scene TLAS";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares.
 // The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
 template<typename ImportBufferFn, typename AppendBufferFn>
@@ -44,16 +57,16 @@ template<typename ImportBufferFn, typename AppendBufferFn>
     const Name sceneShadowIdentities[] = {
         Name("render.shadow_visibility.scene_bvh_nodes"),
         Name("render.shadow_visibility.scene_instances"),
-        Name("render.deferred_effects.instance_material"),
-        Name("render.deferred_effects.material_typed"),
-        Name("render.deferred_effects.shadow_instances"),
+        Name(s_SceneShadowInstanceMaterialName),
+        Name(s_SceneShadowMaterialTypedName),
+        Name(s_SceneShadowInstancesName),
     };
     const char* const sceneShadowLabels[] = {
         "Scene BVH Nodes",
         "Scene Instances",
-        "Shadow Instance Materials",
-        "Shadow Typed Materials",
-        "Shadow Instances",
+        s_SceneShadowInstanceMaterialLabel,
+        s_SceneShadowMaterialTypedLabel,
+        s_SceneShadowInstancesLabel,
     };
     for(usize bufferIndex = 0u; bufferIndex < 5u; ++bufferIndex){
         if(!sceneShadowBuffers[bufferIndex])

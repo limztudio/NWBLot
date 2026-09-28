@@ -214,6 +214,7 @@ inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 versi
 }
 
 inline constexpr StringView s_UnknownDebugLabel = "unknown";
+inline constexpr StringView s_DisabledQueueReason = "disabled";
 
 
 inline const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){

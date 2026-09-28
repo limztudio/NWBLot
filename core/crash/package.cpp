@@ -4,6 +4,8 @@
 
 #include "package_internal.h"
 
+#include <global/diagnostics.h>
+
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <dbghelp.h>
 #include <windows.h>
@@ -97,7 +99,7 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
     AppendUnsignedText(manifest, request.threadId);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
-    manifest += request.exceptionPointers ? "true" : "false";
+    manifest += request.exceptionPointers ? DiagnosticDetail::s_TrueText.data() : DiagnosticDetail::s_FalseText.data();
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
     AppendUnsignedText(manifest, request.faultAddress);
     AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);

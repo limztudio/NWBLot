@@ -24,6 +24,16 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr tchar s_PositionsStreamLabel[] = NWB_TEXT("positions");
+inline constexpr tchar s_NormalsStreamLabel[] = NWB_TEXT("normals");
+inline constexpr tchar s_TangentsStreamLabel[] = NWB_TEXT("tangents");
+inline constexpr tchar s_Uv0StreamLabel[] = NWB_TEXT("uv0");
+inline constexpr tchar s_ColorsStreamLabel[] = NWB_TEXT("colors");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename HeaderT>
 [[nodiscard]] bool MeshBaseHeaderComplete(const HeaderT& header){
     return
@@ -60,11 +70,11 @@ template<
     ColorContainer& outColors,
     const NotNull<const tchar*> failureContext
 ){
-    return Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, MakeNotNull(NWB_TEXT("positions")))
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.normalCount, outNormals, failureContext, MakeNotNull(NWB_TEXT("normals")))
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.tangentCount, outTangents, failureContext, MakeNotNull(NWB_TEXT("tangents")))
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.uv0Count, outUv0, failureContext, MakeNotNull(NWB_TEXT("uv0")))
-        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.colorCount, outColors, failureContext, MakeNotNull(NWB_TEXT("colors")))
+    return Core::Assets::ReadVectorPayload(binary, inOutCursor, header.positionCount, outPositions, failureContext, MakeNotNull(s_PositionsStreamLabel))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.normalCount, outNormals, failureContext, MakeNotNull(s_NormalsStreamLabel))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.tangentCount, outTangents, failureContext, MakeNotNull(s_TangentsStreamLabel))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.uv0Count, outUv0, failureContext, MakeNotNull(s_Uv0StreamLabel))
+        && Core::Assets::ReadVectorPayload(binary, inOutCursor, header.colorCount, outColors, failureContext, MakeNotNull(s_ColorsStreamLabel))
     ;
 }
 
@@ -185,11 +195,11 @@ template<typename MeshT>
     const MeshT& mesh,
     const NotNull<const tchar*> failureContext
 ){
-    return Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, MakeNotNull(NWB_TEXT("positions")))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, MakeNotNull(NWB_TEXT("normals")))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, MakeNotNull(NWB_TEXT("tangents")))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, MakeNotNull(NWB_TEXT("uv0")))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, MakeNotNull(NWB_TEXT("colors")))
+    return Core::Assets::AppendVectorPayload(outBinary, mesh.positionStream(), failureContext, MakeNotNull(s_PositionsStreamLabel))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.normalStream(), failureContext, MakeNotNull(s_NormalsStreamLabel))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.tangentStream(), failureContext, MakeNotNull(s_TangentsStreamLabel))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.uv0Stream(), failureContext, MakeNotNull(s_Uv0StreamLabel))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.colorStream(), failureContext, MakeNotNull(s_ColorsStreamLabel))
     ;
 }
 

@@ -18,6 +18,7 @@
 #include <global/timer.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -279,24 +280,24 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const Core::GpuGraphResourceId shadowInstanceMaterials = rayTracingResources.shadowInstanceMaterialBuffer
         ? importBuffer(
             rayTracingResources.shadowInstanceMaterialBuffer,
-            Name("render.deferred_effects.instance_material"),
-            "Shadow Instance Materials"
+            Name(RendererFramePipelineDetail::s_SceneShadowInstanceMaterialName),
+            RendererFramePipelineDetail::s_SceneShadowInstanceMaterialLabel
         )
         : Core::GpuGraphResourceId{}
     ;
     const Core::GpuGraphResourceId shadowInstances = rayTracingResources.shadowInstanceBuffer
         ? importBuffer(
             rayTracingResources.shadowInstanceBuffer,
-            Name("render.deferred_effects.shadow_instances"),
-            "Shadow Instances"
+            Name(RendererFramePipelineDetail::s_SceneShadowInstancesName),
+            RendererFramePipelineDetail::s_SceneShadowInstancesLabel
         )
         : Core::GpuGraphResourceId{}
     ;
     const Core::GpuGraphResourceId shadowMaterialTyped = rayTracingResources.shadowMaterialTypedBuffer
         ? importBuffer(
             rayTracingResources.shadowMaterialTypedBuffer,
-            Name("render.deferred_effects.material_typed"),
-            "Shadow Typed Materials"
+            Name(RendererFramePipelineDetail::s_SceneShadowMaterialTypedName),
+            RendererFramePipelineDetail::s_SceneShadowMaterialTypedLabel
         )
         : Core::GpuGraphResourceId{}
     ;
@@ -699,7 +700,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             rayTracingShadowResources.sceneTlas,
-            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS").setInitialState(sceneTlasInitialState)
+            AccelStructResourceDesc(Name(RendererFramePipelineDetail::s_SceneTlasResourceName), RendererFramePipelineDetail::s_SceneTlasResourceLabel).setInitialState(sceneTlasInitialState)
         );
         resourcesImported = resourcesImported && sceneTlas.valid();
         if(sceneTlas.valid()){

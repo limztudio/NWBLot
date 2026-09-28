@@ -573,7 +573,7 @@ TEST_F(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
 
     EXPECT_TRUE(result.accepted);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("status=tombstone_parsed")));
-    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT(s_CALLSTACK)));
+    EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("callstack:")));
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("#00 pc 0000000000012344")));
 
     CrashTestText report(arena);

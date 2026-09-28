@@ -27,7 +27,7 @@ static constexpr AStringView s_PROJECT_FIXTURES_BUNDLE_FIRST = "project/fixtures
 static constexpr AStringView s_LOCAL = "local";
 static constexpr AStringView s_LABEL = "label";
 static constexpr AStringView s_A_SEPARATELY_OWNED_METADATA_STRING = "a separately owned metadata string";
-static constexpr AStringView s_DOES_NOT_TARGET_A_DECLARED_ASSET = "does not target a declared asset";
+static constexpr TStringView s_DOES_NOT_TARGET_A_DECLARED_ASSET = NWB_TEXT("does not target a declared asset");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -406,7 +406,7 @@ asset_bunch bunch = [first, second];
         EXPECT_EQ(output[0u].assetType, Name("probe"));
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(s_DOES_NOT_TARGET_A_DECLARED_ASSET)));
+    EXPECT_TRUE(logger.sawErrorContaining(s_DOES_NOT_TARGET_A_DECLARED_ASSET));
 }
 
 TEST(AssetBunchOwnership, RegisteredExpanderTransfersValuesToTheModelParserWithoutBorrowedLifetime){
@@ -518,7 +518,7 @@ asset_bunch bunch = [Asset, asset];
         EXPECT_TRUE(output.empty());
         EXPECT_EQ(logger.errorCount(), 1u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
-        EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT(s_DOES_NOT_TARGET_A_DECLARED_ASSET)));
+        EXPECT_FALSE(logger.sawErrorContaining(s_DOES_NOT_TARGET_A_DECLARED_ASSET));
     }
 }
 
@@ -619,7 +619,7 @@ TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
             EXPECT_TRUE(output.empty());
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
-            EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT(s_DOES_NOT_TARGET_A_DECLARED_ASSET)), caseIndex == 0u);
+            EXPECT_EQ(logger.sawErrorContaining(s_DOES_NOT_TARGET_A_DECLARED_ASSET), caseIndex == 0u);
             EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")), caseIndex == 1u);
         }
     }

@@ -22,7 +22,7 @@ namespace __hidden_model_cook_normalization_tests{
 static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
 static constexpr AStringView s_TESTS_MODEL_COOK_NORMALIZATION_MESH = "tests/model_cook_normalization/mesh";
-static constexpr AStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = "targets a missing skeleton object";
+static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = NWB_TEXT("targets a missing skeleton object");
 static constexpr AStringView s_SHARED = "shared";
 static constexpr AStringView s_RIG_A = "rig_a";
 static constexpr AStringView s_RIG_B = "rig_b";
@@ -187,7 +187,7 @@ TEST(ModelCookNormalization, AmbiguousAliasesFailBeforeMissingTargetValidationAn
     EXPECT_FALSE(metadata.parse());
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
+    EXPECT_FALSE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
     metadata.asset.field(s_SKINNED_MESHES).field(s_UNKNOWN_MESH).field(s_SKELETON).setString(s_RIG_B);
     metadata.asset.field(s_SKINNED_MESHES).field("ambiguous_mesh").field(s_SKELETON).setString(s_RIG_A);
     metadata.expectedSkeletons.at(Name(s_UNKNOWN_MESH)) = Name(s_RIG_B);
@@ -205,7 +205,7 @@ TEST(ModelCookNormalization, UnknownAliasesRemainUnchangedForPayloadValidation){
     EXPECT_FALSE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
+    EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
     EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
 }
 
@@ -234,7 +234,7 @@ TEST(ModelCookNormalization, HandlesStaticOnlyAndMissingSkeletonCollections){
     EXPECT_FALSE(metadata.parse());
     metadata.verifyNormalizedMeshes();
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(s_TARGETS_A_MISSING_SKELETON_OBJECT)));
+    EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
 }
 
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.

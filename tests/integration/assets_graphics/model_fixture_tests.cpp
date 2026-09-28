@@ -217,7 +217,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
         AStringView(meta.data(), meta.size()),
         "model_bunch_local_references",
         "characters",
-        s_MODEL_FIXTURE_NWB,
+        s_MODEL_FIXTURE_NWB.data(),
         testArena,
         root,
         outputDirectory
@@ -385,7 +385,7 @@ asset_bunch bunch = [
         AStringView(meta.data(), meta.size()),
         "model_bunch_non_affine_fourth_transform_row",
         "characters",
-        s_MODEL_FIXTURE_NWB,
+        s_MODEL_FIXTURE_NWB.data(),
         testArena,
         root,
         outputDirectory

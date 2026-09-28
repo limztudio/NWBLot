@@ -17,7 +17,7 @@
 namespace __hidden_gpu_pass_timing_probe_tests{
 
 
-static constexpr AStringView s_PUBLISHED_WINDOWS_2 = "published_windows=2";
+static constexpr TStringView s_PUBLISHED_WINDOWS_2 = NWB_TEXT("published_windows=2");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +53,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
         testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.c_str())
     );
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
-    EXPECT_FALSE(logger.sawMessageContaining(NWB_TEXT(s_PUBLISHED_WINDOWS_2)));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
 }
 
 TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals){
@@ -79,7 +79,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     }
     probe.recordFrame(0.25f, view);
     EXPECT_EQ(logger.messageCount(), 2u);
-    EXPECT_FALSE(logger.sawMessageContaining(NWB_TEXT(s_PUBLISHED_WINDOWS_2)));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
 
     // The old publication remains visible, but the next interval must not count it again.
     probe.recordFrame(0.25f, view);
@@ -96,7 +96,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
         testArena.arena, NWB_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).c_str())
     );
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
-    EXPECT_FALSE(logger.sawMessageContaining(NWB_TEXT(s_PUBLISHED_WINDOWS_2)));
+    EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
 }
 
 

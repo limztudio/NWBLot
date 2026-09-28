@@ -231,14 +231,16 @@ TEST(AssetsGraphics, ShaderMetadataParsesOptimizationLevel){
 
     const Path assetRoot = root / "assets";
     const Path shaderMetaPath = assetRoot / "shaders" / "optimization_level_ps.nwb";
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        shaderMetaPath,
-        s_SHADER_ASSET_HEAD
-        s_ASSET_STAGE_PS
-        s_ASSET_TARGET_SPIRV
-        "asset.optimization_level = \"none\";\n"
+    const auto shaderMetadata = StringFormat(
+        testArena.arena,
+        "{}{}{}{}{}",
+        s_SHADER_ASSET_HEAD,
+        s_ASSET_STAGE_PS,
+        s_ASSET_TARGET_SPIRV,
+        "asset.optimization_level = \"none\";\n",
         s_ASSET_ENTRY_MAIN
-    ));
+    );
+    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderMetaPath, shaderMetadata));
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
         assetRoot / "shaders" / "optimization_level_ps.slang",
         R"NWB_SLANG(struct NwbOptimizationLevelPixelOutput{
@@ -358,13 +360,15 @@ NwbStandalonePixelOutput main(){
 )NWB_SLANG";
 
 static bool WriteStandaloneShaderProbe(const Path& assetRoot){
-    if(!AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "standalone_ps.nwb",
-        s_SHADER_ASSET_HEAD
-        s_ASSET_STAGE_PS
-        s_ASSET_TARGET_SPIRV
+    const auto shaderMetadata = StringFormat(
+        assetRoot.arena(),
+        "{}{}{}{}",
+        s_SHADER_ASSET_HEAD,
+        s_ASSET_STAGE_PS,
+        s_ASSET_TARGET_SPIRV,
         s_ASSET_ENTRY_MAIN
-    ))
+    );
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "standalone_ps.nwb", shaderMetadata))
         return false;
 
     return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_StandaloneShaderProbeSource);
@@ -393,13 +397,15 @@ NwbBomCompilerProbeOutput main(){
 )NWB_SLANG";
 
 static bool WriteBomCompilerProbe(const Path& assetRoot){
-    if(!AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "bom_compiler_probe_ps.nwb",
-        s_SHADER_ASSET_HEAD
-        s_ASSET_STAGE_PS
-        s_ASSET_TARGET_SPIRV
+    const auto shaderMetadata = StringFormat(
+        assetRoot.arena(),
+        "{}{}{}{}",
+        s_SHADER_ASSET_HEAD,
+        s_ASSET_STAGE_PS,
+        s_ASSET_TARGET_SPIRV,
         s_ASSET_ENTRY_MAIN
-    ))
+    );
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.nwb", shaderMetadata))
         return false;
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource))
         return false;
@@ -420,13 +426,15 @@ NwbExactEntryPointPixelOutput MainCase(){
 )NWB_SLANG";
 
 static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
-    if(!AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "exact_entry_point_ps.nwb",
-        s_SHADER_ASSET_HEAD
-        s_ASSET_STAGE_PS
-        s_ASSET_TARGET_SPIRV
+    const auto shaderMetadata = StringFormat(
+        assetRoot.arena(),
+        "{}{}{}{}",
+        s_SHADER_ASSET_HEAD,
+        s_ASSET_STAGE_PS,
+        s_ASSET_TARGET_SPIRV,
         "asset.entry_point = \"MainCase\";\n"
-    ))
+    );
+    if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.nwb", shaderMetadata))
         return false;
 
     return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);

@@ -57,14 +57,14 @@ struct ModelInputs{
         });
         staticMeshObjects.push_back(ModelStaticMeshObject{
             .name = Name(s_PROP.data()),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH),
+            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .material = {},
             .parentObject = Name(s_RIG.data()),
             .parentJoint = Name("hand"),
         });
         skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
             .name = Name(s_BODY.data()),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH),
+            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
             .material = {},
             .skeletonObject = Name(s_RIG.data()),
@@ -339,14 +339,14 @@ TEST(ModelPayloadBenchmark, DISABLED_ValidatesLargeMixedModel){
         const Name parent = inputs.skeletonObjects[index % s_SkeletonCount].name;
         inputs.staticMeshObjects.push_back(ModelStaticMeshObject{
             .name = IndexedName(Name("prop/"), index),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH),
+            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .material = {},
             .parentObject = parent,
             .parentJoint = Name("hand"),
         });
         inputs.skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
             .name = IndexedName(Name("body/"), index),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH),
+            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
             .material = {},
             .skeletonObject = parent,

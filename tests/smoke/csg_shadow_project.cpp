@@ -315,7 +315,7 @@ public:
         lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
         lightComponent->enableCaustics = false;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
-            , m_finiteLightSource ? s_FINITE.data() : s_HARD.data()
+            , StringConvert(m_finiteLightSource ? s_FINITE : s_HARD)
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
         );
         if(m_analyticAtlas)
@@ -325,7 +325,7 @@ public:
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
             && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
-            , static_cast<u32>(m_arm), m_pointLight ? s_POINT.data() : s_DIRECTIONAL.data(), hardware ? 1u : 0u
+            , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
         return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u, m_capture);

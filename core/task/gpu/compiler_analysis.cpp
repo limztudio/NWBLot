@@ -7,6 +7,7 @@
 
 #include <global/hash_utils.h>
 #include <global/timer.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +30,8 @@ using namespace GpuTaskGraphCompilerDetail;
 
 inline constexpr usize s_InvalidAccess = Limit<usize>::s_Max;
 inline constexpr u64 s_EdgePairProducerShift = 32u;
+inline constexpr usize s_IndexedInferredEdges = Limit<usize>::s_Max - 1u;
+inline constexpr usize s_InlineInferredReasonCount = 8u;
 
 
 struct TrackedResourceAccess{
@@ -87,6 +90,39 @@ struct DependencyPairHasher{
         usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> s_EdgePairProducerShift));
         HashCombine(hash, static_cast<u32>(pairKey));
         return hash;
+    }
+};
+
+// Store stable edge ordinals so the deduplication index does not copy complete dependency keys.
+struct InferredDependencyHasher{
+    const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
+
+
+    [[nodiscard]] usize operator()(const usize index)const noexcept{
+        const GpuTaskDependencyEdge& edge = (*edges)[index];
+        const u64 taskPair = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
+        usize hash = DependencyPairHasher{}(taskPair);
+        HashCombine(hash, edge.resource.index);
+        HashCombine(hash, edge.resourceVersion.index);
+        HashCombine(hash, edge.hazard);
+        return hash;
+    }
+};
+
+struct InferredDependencyEqual{
+    const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
+
+
+    [[nodiscard]] bool operator()(const usize lhsIndex, const usize rhsIndex)const noexcept{
+        const GpuTaskDependencyEdge& lhs = (*edges)[lhsIndex];
+        const GpuTaskDependencyEdge& rhs = (*edges)[rhsIndex];
+        return
+            lhs.producer == rhs.producer
+            && lhs.consumer == rhs.consumer
+            && lhs.resource == rhs.resource
+            && lhs.resourceVersion == rhs.resourceVersion
+            && lhs.hazard == rhs.hazard
+        ;
     }
 };
 
@@ -349,6 +385,12 @@ bool GpuTaskGraphCompiler::analyze(
         0, DependencyPairHasher(), EqualTo<u64>(), scratchArena
     );
     Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
+    HashSet<usize, InferredDependencyHasher, InferredDependencyEqual, Alloc::ScratchArena> inferredEdgeIndices(
+        0u,
+        InferredDependencyHasher{ &outAnalysis.m_inferredEdges },
+        InferredDependencyEqual{ &outAnalysis.m_inferredEdges },
+        scratchArena
+    );
     usize expectedEdgeCount = resourceVersionDependencyEdges.size();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
@@ -380,20 +422,41 @@ bool GpuTaskGraphCompiler::analyze(
         NWB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
         DependencyPairIndices& pair = appendRawEdge(edge);
-        for(usize edgeIndex = pair.firstInferredEdge; edgeIndex != Limit<usize>::s_Max; edgeIndex = nextInferredEdges[edgeIndex]){
-            const GpuTaskDependencyEdge& existing = outAnalysis.m_inferredEdges[edgeIndex];
-            if(
-                existing.resource == edge.resource
-                && existing.resourceVersion == edge.resourceVersion
-                && existing.hazard == edge.hazard
-            )
-                return;
+        bool indexed = pair.firstInferredEdge == s_IndexedInferredEdges;
+        if(!indexed){
+            usize reasonCount = 0u;
+            for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = nextInferredEdges[index]){
+                const GpuTaskDependencyEdge& previous = outAnalysis.m_inferredEdges[index];
+                if(previous.resource == edge.resource && previous.resourceVersion == edge.resourceVersion && previous.hazard == edge.hazard)
+                    return;
+                ++reasonCount;
+            }
+            if(reasonCount == s_InlineInferredReasonCount){
+                if(inferredEdgeIndices.empty())
+                    inferredEdgeIndices.reserve(expectedEdgeCount / 2u + 1u);
+                for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = nextInferredEdges[index]){
+                    if(!inferredEdgeIndices.insert(index).second){
+                        NWB_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
+                        TerminateInvariant();
+                    }
+                }
+                // Edge vectors cannot reach this reserved ordinal; it marks a pair promoted to indexed lookup.
+                pair.firstInferredEdge = s_IndexedInferredEdges;
+                indexed = true;
+            }
+        }
+        const usize index = outAnalysis.m_inferredEdges.size();
+        outAnalysis.m_inferredEdges.push_back(edge);
+        // Only a duplicate candidate is removed; every indexed ordinal keeps its original immutable edge.
+        if(indexed && !inferredEdgeIndices.insert(index).second){
+            outAnalysis.m_inferredEdges.pop_back();
+            return;
         }
         if(pair.firstInferredEdge == Limit<usize>::s_Max)
             ++outAnalysis.m_inferredEdgeCount;
-        nextInferredEdges.push_back(pair.firstInferredEdge);
-        pair.firstInferredEdge = outAnalysis.m_inferredEdges.size();
-        outAnalysis.m_inferredEdges.push_back(edge);
+        nextInferredEdges.push_back(indexed ? Limit<usize>::s_Max : pair.firstInferredEdge);
+        if(!indexed)
+            pair.firstInferredEdge = index;
         if(IsResourceVersionHazard(edge.hazard))
             ++outAnalysis.m_resourceVersionEdgeCount;
     };
@@ -595,14 +658,17 @@ bool GpuTaskGraphCompiler::analyze(
         // a graph prerequisite whose rejection could make the join unavailable. Scheduling edges are a reduced
         // subset of these raw edges, so rejecting every raw incoming edge also covers inferred HazardDomain
         // prerequisites.
-        for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
-            if(edge.consumer == task.id){
-                return fail(
-                    GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
-                    task.id,
-                    edge.producer,
-                    edge.resource
-                );
+        // An empty reduced incoming row proves that the raw graph has no prerequisite either.
+        if(outAnalysis.m_schedulingIncomingOffsets[task.id.index] != outAnalysis.m_schedulingIncomingOffsets[task.id.index + 1u]){
+            for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
+                if(edge.consumer == task.id){
+                    return fail(
+                        GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
+                        task.id,
+                        edge.producer,
+                        edge.resource
+                    );
+                }
             }
         }
         if(task.externalDependencyCount != 0u || task.externalStateSourceCount != 0u)

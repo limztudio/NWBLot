@@ -478,12 +478,19 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         m_initialOwnerHandoffSources,
         m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
     );
+    ContainerDetail::ReserveGrowingCapacity(
+        m_initialOwnerHandoffStateSnapshots,
+        m_initialOwnerHandoffStateSnapshots.size() + desc.initialOwnerHandoffSourceCount
+    );
     ContainerDetail::ReserveGrowingCapacity(m_queueFamilyIndices, m_queueFamilyIndices.size() + queueFamilyIndexCount);
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_resources, m_resources.size() + 1u);
 
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSourceRollback(
         m_initialOwnerHandoffSources
+    );
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope initialOwnerSnapshotRollback(
+        m_initialOwnerHandoffStateSnapshots
     );
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope queueFamilyRollback(m_queueFamilyIndices);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
@@ -504,6 +511,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             .minimumCompletionToken = source.minimumCompletionToken,
             .stateSource = (*initialOwnerHandoffStateSnapshots)[sourceIndex].get(),
         });
+        m_initialOwnerHandoffStateSnapshots.push_back((*initialOwnerHandoffStateSnapshots)[sourceIndex].get());
     }
 
     GpuGraphResourceNode resource;
@@ -562,6 +570,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             snapshot.release();
     }
     initialOwnerSourceRollback.commit();
+    initialOwnerSnapshotRollback.commit();
     queueFamilyRollback.commit();
     markerRollback.commit();
     resourceRollback.commit();
@@ -678,41 +687,6 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     return GpuGraphResourceSetId{ .generation = m_generation, .index = index };
 }
 
-GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || desc.markerLabel.size() > Limit<u32>::s_Max
-        || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
-        || desc.type >= GpuGraphPipelineType::kCount
-        || m_pipelines.size() >= Limit<u32>::s_Max
-    )
-        return {};
-
-    ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
-    ContainerDetail::ReserveGrowingCapacity(m_pipelines, m_pipelines.size() + 1u);
-
-    u32 markerLabelOffset = 0u;
-    u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
-        return {};
-
-    GpuGraphPipelineNode pipeline;
-    pipeline.identity = desc.identity;
-    pipeline.type = desc.type;
-    pipeline.markerLabelOffset = markerLabelOffset;
-    pipeline.markerLabelSize = markerLabelSize;
-
-    const u32 index = static_cast<u32>(m_pipelines.size());
-    m_pipelines.push_back(Move(pipeline));
-    m_declarationRevision = allocateGeneration();
-    return GpuGraphPipelineId{ .generation = m_generation, .index = index };
-}
-
 GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
@@ -729,6 +703,10 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
     ContainerDetail::ReserveGrowingCapacity(m_externalCompletions, m_externalCompletions.size() + 1u);
+    prepareExternalCompletionIndex();
+
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
+    __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope completionRollback(m_externalCompletions);
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -741,9 +719,26 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     completion.markerLabelOffset = markerLabelOffset;
     completion.markerLabelSize = markerLabelSize;
     completion.hasToken = desc.token.valid() && desc.token.hasPhysicalQueueIdentity();
+    const u16 tokenDeviceGeneration = completion.hasToken ? desc.token.deviceGeneration : 0u;
 
+    const NameHash& identityKey = desc.identity.identityHash();
+    bool identityInserted = false;
+    ScopeExit indexRollback([&]()noexcept{
+        if(identityInserted)
+            m_externalCompletionIdentityIndex->erase(identityKey);
+    });
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));
+    if(m_externalCompletionIdentityIndex){
+        identityInserted = m_externalCompletionIdentityIndex->emplace(identityKey, index).second;
+        if(!identityInserted)
+            return {};
+    }
+    markerRollback.commit();
+    completionRollback.commit();
+    indexRollback.release();
+    if(tokenDeviceGeneration != 0u)
+        m_externalCompletionDeviceGeneration = tokenDeviceGeneration;
     m_declarationRevision = allocateGeneration();
     return GpuExternalCompletionId{ .generation = m_generation, .index = index };
 }

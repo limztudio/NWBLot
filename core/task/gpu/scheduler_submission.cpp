@@ -145,7 +145,6 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     if(
         !planAccess.validFor(declarationAccess)
-        || !declarationAccess.validForDeviceGeneration(planAccess.deviceGeneration())
         || device().getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacket(packetID)
         || !recordedGraph.validForWithinArtifactOperation(
@@ -168,23 +167,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     GpuTimingSubmissionTicket* const ownedTimingTicket = recordedGraph.packetTimingTicket(packetID, artifactAccess);
     if(packet.recordsTiming != static_cast<bool>(ownedTimingTicket))
         return false;
-    for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
-        GpuTimingSubmissionTicket* const timingTicket = timingTickets[timingTicketIndex];
-        if(!timingTicket)
-            return false;
-        for(usize previousIndex = 0u; previousIndex < timingTicketIndex; ++previousIndex){
-            if(timingTickets[previousIndex] == timingTicket)
-                return false;
-        }
-        for(usize ownerIndex = 0u; ownerIndex < planAccess.packetCount(); ++ownerIndex){
-            const GpuSubmissionPacketId ownerPacket = planAccess.packetIdAt(ownerIndex);
-            if(
-                ownerPacket != packetID
-                && recordedGraph.packetTimingTicket(ownerPacket, artifactAccess) == timingTicket
-            )
-                return false;
-        }
-    }
+    // Range admission resolved unique nonnull tickets and checked every artifact owner under this same lease.
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> submissionTimingTickets(scratchArena);
     submissionTimingTickets.reserve(timingTicketCount + (ownedTimingTicket ? 1u : 0u));
     if(ownedTimingTicket)

@@ -188,8 +188,15 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
             m_resourceSetIdentityIndex->clear();
         m_resourceSets.clear();
         m_resourceSetMembers.clear();
+        if(m_pipelineIdentityIndex)
+            m_pipelineIdentityIndex->clear();
+        if(m_pipelinePointerIndex)
+            m_pipelinePointerIndex->clear();
         m_pipelines.clear();
+        if(m_externalCompletionIdentityIndex)
+            m_externalCompletionIdentityIndex->clear();
         m_externalCompletions.clear();
+        m_externalCompletionDeviceGeneration = 0u;
         m_uploadBlobs.clear();
         m_markerText.clear();
         m_presentEndpoint = {};
@@ -735,17 +742,9 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
         )
             return false;
     }
-    for(const GpuExternalCompletionNode& completion : m_externalCompletions){
-        if(
-            completion.hasToken
-            && (
-                !completion.token.valid()
-                || !completion.token.hasPhysicalQueueIdentity()
-                || completion.token.deviceGeneration != deviceGeneration
-            )
-        )
-            return false;
-    }
+    // Token append and upgrade validate one shared generation before publishing immutable completion storage.
+    if(m_externalCompletionDeviceGeneration != 0u && m_externalCompletionDeviceGeneration != deviceGeneration)
+        return false;
     return true;
 }
 

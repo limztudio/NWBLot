@@ -3,6 +3,7 @@
 
 
 #include "packet_runtime_internal.h"
+#include "packet_runtime_initial_state_validation.h"
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
@@ -98,8 +99,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuTaskGraph::PacketRecordingAccess& recordingAccess,
     const GpuSubmissionPacketId packetID,
+    Alloc::ScratchArena& stateFanInScratchArena,
     const CommandListResourceStateHandoff* const initialStates
-)const noexcept{
+)const{
     if(
         !declarationAccess.validFor(graph)
         || !planAccess.validFor(declarationAccess)
@@ -155,37 +157,19 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             && m_device.getQueueFamilyIndex(releaseDestinationQueue) == destinationFamily
         ;
     };
+    Optional<GpuInitialStateHandoffValidation> initialStateValidation;
+    if(initialStates){
+        initialStateValidation.emplace(*initialStates, stateFanInScratchArena);
+        if(!initialStateValidation->validate())
+            return false;
+    }
     const auto permanentTextureState = [&](Texture* const texture, ResourceStates::Mask& outState){
         outState = ResourceStates::Unknown;
-        if(!initialStates)
-            return true;
-        for(const CommandListResourceStateHandoff::PermanentTextureState& state
-            : initialStates->m_permanentTextureStates
-        ){
-            if(state.texture != texture)
-                continue;
-            if(state.state == ResourceStates::Unknown)
-                return false;
-            if(outState != ResourceStates::Unknown && outState != state.state)
-                return false;
-            outState = state.state;
-        }
-        return true;
+        return !initialStateValidation || initialStateValidation->permanentTextureState(texture, outState);
     };
     const auto permanentBufferState = [&](Buffer* const buffer, ResourceStates::Mask& outState){
         outState = ResourceStates::Unknown;
-        if(!initialStates)
-            return true;
-        for(const CommandListResourceStateHandoff::BufferState& state : initialStates->m_permanentBufferStates){
-            if(state.buffer != buffer)
-                continue;
-            if(state.state == ResourceStates::Unknown)
-                return false;
-            if(outState != ResourceStates::Unknown && outState != state.state)
-                return false;
-            outState = state.state;
-        }
-        return true;
+        return !initialStateValidation || initialStateValidation->permanentBufferState(buffer, outState);
     };
     const auto validateTextureForState = [&](Texture* const texture, const ResourceStates::Mask state){
         if(
@@ -241,23 +225,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 )
             )
                 return false;
-            for(usize otherIndex = 0u; otherIndex < stateIndex; ++otherIndex){
-                const CommandListResourceStateHandoff::TextureState& other =
-                    initialStates->m_textureStates[otherIndex]
-                ;
-                if(
-                    other.texture == state.texture
-                    && other.mipLevel == state.mipLevel
-                    && other.arraySlice == state.arraySlice
-                    && other.state != state.state
-                )
-                    return false;
-            }
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(!permanentTextureState(state.texture, permanentState))
-                return false;
-            if(permanentState != ResourceStates::Unknown && permanentState != state.state)
-                return false;
         }
         for(const CommandListResourceStateHandoff::PermanentTextureState& state
             : initialStates->m_permanentTextureStates
@@ -276,9 +243,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 )
             )
                 return false;
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(state.texture && !permanentTextureState(state.texture, permanentState))
-                return false;
         }
         for(usize stateIndex = 0u; stateIndex < initialStates->m_bufferStates.size(); ++stateIndex){
             const CommandListResourceStateHandoff::BufferState& state = initialStates->m_bufferStates[stateIndex];
@@ -287,9 +251,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const BufferDesc& description = state.buffer->getCreationDescription();
             if(
                 !validateBufferForState(state.buffer, state.state)
-                || !state.range.hasExtent()
-                || state.range.byteOffset >= description.byteSize
-                || (state.range.byteSize != BufferRange::AllBytes && state.range.end() > description.byteSize)
                 || !validateOwnership(
                     state.queueSharing,
                     description.queueSharing,
@@ -298,21 +259,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                     state.releaseDestinationQueue
                 )
             )
-                return false;
-            for(usize otherIndex = 0u; otherIndex < stateIndex; ++otherIndex){
-                const CommandListResourceStateHandoff::BufferState& other =
-                    initialStates->m_bufferStates[otherIndex]
-                ;
-                if(
-                    other.buffer == state.buffer
-                    && other.range.overlaps(state.range)
-                )
-                    return false;
-            }
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(!permanentBufferState(state.buffer, permanentState))
-                return false;
-            if(permanentState != ResourceStates::Unknown && permanentState != state.state)
                 return false;
         }
         for(const CommandListResourceStateHandoff::BufferState& state
@@ -332,9 +278,6 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 )
             )
                 return false;
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(state.buffer && !permanentBufferState(state.buffer, permanentState))
-                return false;
         }
     }
 
@@ -350,15 +293,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         ;
     };
     const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range){
-        if(!buffer || range.byteSize == 0u)
-            return false;
-        const u64 bufferSize = buffer->getCreationDescription().byteSize;
-        return range.byteOffset < bufferSize
-            && (
-                range.byteSize == BufferRange::AllBytes
-                || range.byteSize <= bufferSize - range.byteOffset
-            )
-        ;
+        return buffer && GpuInitialStateHandoffValidation::validBufferRange(range, buffer->getCreationDescription().byteSize);
     };
     const auto validateResourceReady = [&](const GpuGraphResourceId resourceID,
                                            ResourceStates::Mask& outPermanentState,

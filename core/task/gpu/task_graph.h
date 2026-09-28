@@ -67,7 +67,7 @@ struct GpuTaskGraphInitialOwnerHandoffSourceView{
     GpuPhysicalQueueId destinationQueue;
     GpuExternalCompletionId completion;
     QueueSubmissionToken minimumCompletionToken;
-    CommandListResourceStateHandoff* stateSource = nullptr;
+    const CommandListResourceStateHandoff* stateSource = nullptr;
 };
 
 struct GpuTaskGraphResourceView{
@@ -736,6 +736,35 @@ private:
         RayTracingPipelineHandle rayTracingPipeline;
     };
 
+    struct PipelinePointerKey{
+        const void* pointer = nullptr;
+        GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    };
+
+    struct PipelinePointerEqual{
+        [[nodiscard]] bool operator()(const PipelinePointerKey& left, const PipelinePointerKey& right)const noexcept{
+            return left.pointer == right.pointer && left.type == right.type;
+        }
+    };
+
+    struct PipelineImportMatch{
+        u32 index = Limit<u32>::s_Max;
+        bool samePointer = false;
+    };
+
+    struct PipelinePointerHasher{
+        [[nodiscard]] usize operator()(const PipelinePointerKey& key)const noexcept;
+    };
+
+    // The pending pipeline node retains the imported handle before any registry entry is published.
+    struct PipelineBinding{
+        const GraphicsPipelineHandle* graphicsPipeline = nullptr;
+        const ComputePipelineHandle* computePipeline = nullptr;
+        const MeshletPipelineHandle* meshletPipeline = nullptr;
+        const RayTracingPipelineHandle* rayTracingPipeline = nullptr;
+        u16 deviceGeneration = 0u;
+    };
+
     struct GpuExternalCompletionNode{
         Name identity = NAME_NONE;
         QueueSubmissionToken token;
@@ -754,9 +783,12 @@ private:
 
 
 private:
-    using ResourceIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
+    using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
     using ResourcePointerIndex = HashMap<
         ResourcePointerKey, u32, ResourcePointerHasher, ResourcePointerEqual, GraphicsArena
+    >;
+    using PipelinePointerIndex = HashMap<
+        PipelinePointerKey, u32, PipelinePointerHasher, PipelinePointerEqual, GraphicsArena
     >;
 
 
@@ -766,6 +798,7 @@ private:
 
     [[nodiscard]] static u64 allocateGeneration()noexcept;
     [[nodiscard]] static ResourcePointerKey resourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
+    [[nodiscard]] static PipelinePointerKey pipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
 private:
     template<typename TaskT>
@@ -1283,8 +1316,13 @@ private:
         const ResourcePointerKey& pointer
     )const noexcept;
     [[nodiscard]] u32 findResourceSetIdentity(const Name& identity)const noexcept;
+    [[nodiscard]] u32 findPipelineIdentity(const Name& identity)const noexcept;
+    [[nodiscard]] PipelineImportMatch findPipelineImportMatch(const Name& identity, const PipelinePointerKey& pointer)const noexcept;
+    [[nodiscard]] u32 findExternalCompletionIdentity(const Name& identity)const noexcept;
     void prepareResourceIndexes(const ResourcePointerKey& pendingPointer);
     void prepareResourceSetIndex();
+    void preparePipelineIndexes(const PipelinePointerKey& pendingPointer);
+    void prepareExternalCompletionIndex();
     [[nodiscard]] GpuGraphResourceId appendResourceWithinMutation(
         const GpuGraphResourceDesc& desc,
         const ResourceQueueAdmissionSnapshot* queueAdmission,
@@ -1293,7 +1331,7 @@ private:
     );
     [[nodiscard]] GpuGraphResourceVersionId appendResourceVersion(const GpuGraphResourceVersionDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
-    [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
@@ -1321,16 +1359,20 @@ private:
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
     // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix
-    Optional<ResourceIdentityIndex> m_resourceIdentityIndex;
+    Optional<ImportIdentityIndex> m_resourceIdentityIndex;
     Optional<ResourcePointerIndex> m_resourcePointerIndex;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;
     GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
+    GraphicsVector<CommandListResourceStateHandoff*> m_initialOwnerHandoffStateSnapshots;
     GraphicsVector<u32> m_queueFamilyIndices;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
-    Optional<ResourceIdentityIndex> m_resourceSetIdentityIndex;
+    Optional<ImportIdentityIndex> m_resourceSetIdentityIndex;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
+    Optional<ImportIdentityIndex> m_pipelineIdentityIndex;
+    Optional<PipelinePointerIndex> m_pipelinePointerIndex;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
+    Optional<ImportIdentityIndex> m_externalCompletionIdentityIndex;
     GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;
     GraphicsBytes m_markerText;
     GpuPresentEndpoint m_presentEndpoint;
@@ -1345,6 +1387,7 @@ private:
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
     mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
+    u16 m_externalCompletionDeviceGeneration = 0u;
     bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;
     mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;

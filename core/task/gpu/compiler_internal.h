@@ -523,7 +523,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
-    const Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     Alloc::ScratchArena& scratchArena
 );

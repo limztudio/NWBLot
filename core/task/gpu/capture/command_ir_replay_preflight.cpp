@@ -573,11 +573,6 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             GpuCommandIrReplayError::InvalidCompiledGraph,
             streamValidation
         );
-    if(!graph.validForDeviceGeneration(compiledGraph.deviceGeneration()))
-        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
-            GpuCommandIrReplayError::InvalidCompiledGraph,
-            streamValidation
-        );
     if(!compiledGraph.validPacket(packet))
         return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
             GpuCommandIrReplayError::InvalidPacket,

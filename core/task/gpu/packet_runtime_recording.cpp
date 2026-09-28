@@ -188,7 +188,6 @@ bool GpuNativePacketRecorder::recordPacket(
     if(
         !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
         || !planAccess.validFor(declarationAccess)
-        || !declarationAccess.validForDeviceGeneration(planAccess.deviceGeneration())
         || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacket(packetID)
         || !outRecordedGraph.validForWithinArtifactOperation(
@@ -322,6 +321,7 @@ bool GpuNativePacketRecorder::recordPacket(
         planAccess,
         recordingAccess,
         packetID,
+        stateFanInScratchArena,
         initialStates
     )){
         packetStateSeed->reset();
@@ -691,7 +691,6 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
         || !planAccess.validFor(compiledGraph)
         || !artifactAccess.exclusiveFor(outRecordedGraph)
         || !planAccess.validFor(declarationAccess)
-        || !declarationAccess.validForDeviceGeneration(planAccess.deviceGeneration())
         || m_device.getDeviceGeneration() != planAccess.deviceGeneration()
         || !planAccess.validPacketRange(range)
     )

@@ -5,38 +5,13 @@
 #include "scheduler.h"
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
+#include "scheduler_submission_bindings.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_gpu_packet_runtime_submission_tasks{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] bool ValidateTaskAcceptedCallbacks(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphTaskAcceptedCallback* const callbacks,
-    const usize callbackCount
-){
-    return ValidateTaskCallbackRange(declarationAccess, planAccess, range, callbacks, callbackCount);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,8 +30,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount,
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
-)const{
+    const usize taskSubmissionHookCount)const{
     if(outFailedPacket)
         *outFailedPacket = {};
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);
@@ -98,9 +72,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         )
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
-        || (taskTimingTicketCount != 0u && !taskTimingTickets)
-        || (taskSubmissionHookCount != 0u && !taskSubmissionHooks)
-        || !__hidden_gpu_packet_runtime_submission_tasks::ValidateTaskAcceptedCallbacks(
+        || !ValidateTaskCallbackRange(
             declarationAccess,
             planAccess,
             range,
@@ -110,100 +82,27 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     )
         return false;
 
-    struct ResolvedTaskTimingTicket{
-        GpuSubmissionPacketId packet;
-        GpuTimingSubmissionTicket* timingTicket = nullptr;
-    };
-    Vector<ResolvedTaskTimingTicket, Alloc::ScratchArena> packetTimingTickets{ scratchArena };
-    packetTimingTickets.reserve(taskTimingTicketCount);
-    for(usize bindingIndex = 0u; bindingIndex < taskTimingTicketCount; ++bindingIndex){
-        const GpuTaskGraphTaskTimingTicket& binding = taskTimingTickets[bindingIndex];
-        if(
-            !binding.timingTicket
-            || !declarationAccess.validTask(binding.task)
-            || !planAccess.findTask(binding.task).valid()
-        )
-            return false;
+    GpuTaskSubmissionDetail::TaskSubmissionBindings bindings(scratchArena);
+    if(!bindings.resolve(
+        declarationAccess,
+        planAccess,
+        range,
+        taskTimingTickets,
+        taskTimingTicketCount,
+        taskSubmissionHooks,
+        taskSubmissionHookCount
+    ))
+        return false;
 
-        for(usize previousBindingIndex = 0u; previousBindingIndex < bindingIndex; ++previousBindingIndex){
-            if(taskTimingTickets[previousBindingIndex].task == binding.task)
-                return false;
-        }
-
-        const GpuSubmissionPacketId packet = planAccess.packetForTask(binding.task);
-        if(
-            !packet.valid()
-            || packet.index < range.first.index
-            || static_cast<usize>(packet.index) >= static_cast<usize>(range.first.index) + range.packetCount
-        )
-            return false;
-
-        bool ticketAlreadyBound = false;
-        for(const ResolvedTaskTimingTicket& existing : packetTimingTickets){
-            if(existing.timingTicket != binding.timingTicket)
-                continue;
-            // One ticket is a one-shot native-submission transaction. Semantic aliases may share it only when the compiler resolves every anchor to the same merged packet.
-            if(existing.packet != packet)
-                return false;
-            ticketAlreadyBound = true;
-            break;
-        }
-        if(!ticketAlreadyBound){
-            packetTimingTickets.push_back(ResolvedTaskTimingTicket{
-                .packet = packet,
-                .timingTicket = binding.timingTicket,
-            });
-        }
-    }
-
-    for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
+    if(!bindings.timingTickets.empty()){
         for(usize ownerIndex = 0u; ownerIndex < planAccess.packetCount(); ++ownerIndex){
             const GpuSubmissionPacketId ownerPacket = planAccess.packetIdAt(ownerIndex);
-            if(
-                ownerPacket != ticket.packet
-                && recordedGraph.packetTimingTicket(ownerPacket, artifactOperation) == ticket.timingTicket
-            )
+            if(!bindings.validateOwnedTimingTicket(
+                ownerPacket,
+                recordedGraph.packetTimingTicket(ownerPacket, artifactOperation)
+            ))
                 return false;
         }
-    }
-
-    struct ResolvedTaskSubmissionHook{
-        GpuSubmissionPacketId packet;
-        QueueSubmissionPreSubmitHook hook;
-    };
-    Vector<ResolvedTaskSubmissionHook, Alloc::ScratchArena> packetSubmissionHooks{ scratchArena };
-    packetSubmissionHooks.reserve(taskSubmissionHookCount);
-    for(usize bindingIndex = 0u; bindingIndex < taskSubmissionHookCount; ++bindingIndex){
-        const GpuTaskGraphTaskSubmissionHook& binding = taskSubmissionHooks[bindingIndex];
-        if(
-            !binding.hook.valid()
-            || !declarationAccess.validTask(binding.task)
-            || !planAccess.findTask(binding.task).valid()
-        )
-            return false;
-
-        for(usize previousBindingIndex = 0u; previousBindingIndex < bindingIndex; ++previousBindingIndex){
-            if(taskSubmissionHooks[previousBindingIndex].task == binding.task)
-                return false;
-        }
-
-        const GpuSubmissionPacketId packet = planAccess.packetForTask(binding.task);
-        if(
-            !packet.valid()
-            || packet.index < range.first.index
-            || static_cast<usize>(packet.index) >= static_cast<usize>(range.first.index) + range.packetCount
-        )
-            return false;
-
-        for(const ResolvedTaskSubmissionHook& existing : packetSubmissionHooks){
-            // A native submission can emit one unambiguous one-shot signal. Do not silently choose between two semantic targets that the compiler merged into one packet.
-            if(existing.packet == packet)
-                return false;
-        }
-        packetSubmissionHooks.push_back(ResolvedTaskSubmissionHook{
-            .packet = packet,
-            .hook = binding.hook,
-        });
     }
 
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
@@ -227,7 +126,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             return false;
     }
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
-    resolvedTimingTickets.reserve(packetTimingTickets.size());
+    resolvedTimingTickets.reserve(bindings.timingTickets.size());
     // The owning composite admission remains active. Release the nested reader only after every mutable artifact query and scratch allocation completes
     preflightExceptionScope.complete();
 
@@ -236,18 +135,8 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
             return false;
-        resolvedTimingTickets.clear();
-        for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
-            if(ticket.packet == packet)
-                resolvedTimingTickets.push_back(ticket.timingTicket);
-        }
         const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr;
-        for(const ResolvedTaskSubmissionHook& hook : packetSubmissionHooks){
-            if(hook.packet == packet){
-                preSubmitHook = &hook.hook;
-                break;
-            }
-        }
+        bindings.collectPacket(packet, resolvedTimingTickets, preSubmitHook);
         SubmissionAttemptExceptionScope packetExceptionScope(
             graph,
             compiledGraph,

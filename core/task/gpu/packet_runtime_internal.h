@@ -113,8 +113,9 @@ private:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuTaskGraph::PacketRecordingAccess& recordingAccess,
         GpuSubmissionPacketId packet,
+        Alloc::ScratchArena& stateFanInScratchArena,
         const CommandListResourceStateHandoff* initialStates
-    )const noexcept;
+    )const;
 
 
 private:

@@ -47,7 +47,7 @@ A pending queue-family release must be acquired with its original byte interval.
 
 # CPU scaling benchmarks
 
-The `nwb_gpu_task_tests` target includes disabled benchmarks for queue placement, timing-history routing, resource-version analysis and binding validation, resource-state fragments and epilogue grouping, ownership statistics, replay preflight, submission validation, telemetry export, and compiled packet queries. Run them with an optimized build:
+The `nwb_gpu_task_tests` target includes disabled benchmarks for queue placement, timing-history routing, resource-version analysis and binding validation, inferred dependency analysis, resource-state fragments and epilogue grouping, terminal dependencies, ownership statistics, initial-state handoff validation, replay preflight, submission bindings and validation, resource/pipeline/completion imports, telemetry export, and compiled packet queries. Run them with an optimized build:
 
 ```text
 gpu_task_tests --gtest_also_run_disabled_tests --gtest_filter="*Benchmark.*:*.DISABLED_*Benchmark*" --gtest_output=xml:gpu_benchmarks.xml

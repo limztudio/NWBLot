@@ -75,34 +75,6 @@ namespace __hidden_gpu_task_graph_imports{
     ;
 }
 
-[[nodiscard]] static bool CompatiblePipelineMetadata(
-    const GpuTaskGraphPipelineView& pipeline,
-    const GpuGraphPipelineDesc& desc
-)noexcept{
-    // Identity and concrete pipeline kind define the graph-side table key.  Marker text is observational metadata,
-    // matching resource imports where a later compatible import reuses the original graph-owned label.
-    return pipeline.identity == desc.identity && pipeline.type == desc.type;
-}
-
-[[nodiscard]] static bool HasExternalCompletionTokenValue(const QueueSubmissionToken& token)noexcept{
-    return token.queue != CommandQueue::kCount
-        || token.value != 0u
-        || token.physicalQueueIndex != Limit<u16>::s_Max
-        || token.deviceGeneration != 0u
-    ;
-}
-
-[[nodiscard]] static bool SameSubmissionToken(
-    const QueueSubmissionToken& lhs,
-    const QueueSubmissionToken& rhs
-)noexcept{
-    return lhs.queue == rhs.queue
-        && lhs.value == rhs.value
-        && lhs.physicalQueueIndex == rhs.physicalQueueIndex
-        && lhs.deviceGeneration == rhs.deviceGeneration
-    ;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -390,188 +362,6 @@ GpuGraphResourceSetId GpuTaskGraph::importResourceSet(const GpuGraphResourceSetD
     return appendResourceSet(desc);
 }
 
-GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::kCount)
-        return {};
-
-    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
-        const GpuTaskGraphPipelineView existing = pipelineAt(pipelineIndex);
-        if(existing.identity != desc.identity)
-            continue;
-        if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(existing, desc))
-            return {};
-        return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
-    }
-
-    return appendPipeline(desc);
-}
-
-GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
-    const GraphicsPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Graphics)
-        return {};
-
-    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
-        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
-        if(existing.type == GpuGraphPipelineType::Graphics && existing.graphicsPipeline.get() == pipeline.get()){
-            if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
-                return {};
-            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
-        }
-        if(existing.identity == desc.identity)
-            return {};
-    }
-
-    const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid()){
-        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
-        importedPipeline.graphicsPipeline = pipeline;
-        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
-    }
-    return id;
-}
-
-GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
-    const ComputePipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Compute)
-        return {};
-
-    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
-        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
-        if(existing.type == GpuGraphPipelineType::Compute && existing.computePipeline.get() == pipeline.get()){
-            if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
-                return {};
-            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
-        }
-        if(existing.identity == desc.identity)
-            return {};
-    }
-
-    const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid()){
-        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
-        importedPipeline.computePipeline = pipeline;
-        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
-    }
-    return id;
-}
-
-GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
-    const MeshletPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Meshlet)
-        return {};
-
-    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
-        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
-        if(existing.type == GpuGraphPipelineType::Meshlet && existing.meshletPipeline.get() == pipeline.get()){
-            if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
-                return {};
-            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
-        }
-        if(existing.identity == desc.identity)
-            return {};
-    }
-
-    const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid()){
-        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
-        importedPipeline.meshletPipeline = pipeline;
-        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
-    }
-    return id;
-}
-
-GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
-    const RayTracingPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc
-){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::RayTracing)
-        return {};
-
-    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
-        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
-        if(existing.type == GpuGraphPipelineType::RayTracing && existing.rayTracingPipeline.get() == pipeline.get()){
-            if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
-                return {};
-            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
-        }
-        if(existing.identity == desc.identity)
-            return {};
-    }
-
-    const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid()){
-        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
-        importedPipeline.rayTracingPipeline = pipeline;
-        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
-    }
-    return id;
-}
-
-GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
-    DeclarationMutationScope mutation(*this);
-    if(!mutation.valid())
-        return {};
-
-    const bool hasToken = __hidden_gpu_task_graph_imports::HasExternalCompletionTokenValue(desc.token);
-    if(
-        !desc.identity
-        || desc.markerLabel.empty()
-        || (hasToken && (
-            !desc.token.valid()
-            || !desc.token.hasPhysicalQueueIdentity()
-            || !validForDeviceGeneration(desc.token.deviceGeneration)
-        ))
-    )
-        return {};
-
-    for(usize completionIndex = 0u; completionIndex < m_externalCompletions.size(); ++completionIndex){
-        GpuExternalCompletionNode& existing = m_externalCompletions[completionIndex];
-        if(existing.identity != desc.identity)
-            continue;
-        if(hasToken){
-            if(existing.hasToken){
-                if(!__hidden_gpu_task_graph_imports::SameSubmissionToken(existing.token, desc.token))
-                    return {};
-            }
-            else{
-                existing.token = desc.token;
-                existing.hasToken = true;
-                m_declarationRevision = allocateGeneration();
-            }
-        }
-        return GpuExternalCompletionId{ .generation = m_generation, .index = static_cast<u32>(completionIndex) };
-    }
-
-    return appendExternalCompletion(desc);
-}
-
 bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
@@ -674,7 +464,7 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
             return;
 
         const usize identityCount = AddSize(m_resources.size(), 1u);
-        ResourceIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
+        ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
         usize pointerCount = pendingPointer.pointer ? 1u : 0u;
         for(usize index = 0u; index < m_resources.size(); ++index){
             const GpuGraphResourceNode& resource = m_resources[index];
@@ -695,7 +485,7 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
 
         // Build both tables before publishing either. Their move construction cannot fail, and both contain only
         // already-published ordinals; an unsuccessful later append may retain capacity without changing lookup.
-        static_assert(IsNothrowMoveConstructible_V<ResourceIdentityIndex>);
+        static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
         static_assert(IsNothrowMoveConstructible_V<ResourcePointerIndex>);
         m_resourceIdentityIndex.emplace(Move(identities));
         if(pointers)
@@ -709,11 +499,11 @@ void GpuTaskGraph::prepareResourceSetIndex(){
     if(m_resourceSetIdentityIndex || m_resourceSets.size() < s_InlineImportIndexCount)
         return;
     const usize identityCount = AddSize(m_resourceSets.size(), 1u);
-    ResourceIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
+    ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
     // emplace intentionally keeps the first ordinal for the exact identity.
     for(usize index = 0u; index < m_resourceSets.size(); ++index)
         identities.emplace(m_resourceSets[index].identity.identityHash(), static_cast<u32>(index));
-    static_assert(IsNothrowMoveConstructible_V<ResourceIdentityIndex>);
+    static_assert(IsNothrowMoveConstructible_V<ImportIdentityIndex>);
     m_resourceSetIdentityIndex.emplace(Move(identities));
 }
 

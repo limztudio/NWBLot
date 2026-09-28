@@ -93,16 +93,6 @@ namespace __hidden_gpu_packet_runtime_execution{
     return planAccess.validPacketRange(outRange);
 }
 
-[[nodiscard]] bool ValidateNormalGraphTaskRecordedCallbacks(
-    const GpuTaskGraph::DeclarationReadView& declarations,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphTaskRecordedCallback* const callbacks,
-    const usize callbackCount
-){
-    return ValidateTaskCallbackRange(declarations, planAccess, range, callbacks, callbackCount);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -174,7 +164,7 @@ bool GpuTaskScheduler::submitGraph(
             (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
             || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
             || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-            || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
+            || !ValidateTaskCallbackRange(
                 declarationAccess,
                 planAccess,
                 normalRange,

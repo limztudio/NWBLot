@@ -238,6 +238,7 @@ struct TimerQueryResult{
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
+    friend class GpuInitialStateHandoffValidation;
     friend class GraphicsBackend::VulkanTestDispatchAccess;
 
 private:

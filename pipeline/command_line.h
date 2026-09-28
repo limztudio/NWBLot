@@ -69,7 +69,7 @@ public:
     // Shared RunPipelineTool wrapper: parse options, then invoke the tool body inside the terminal entry.
     template<typename ToolBody>
     [[nodiscard]] int run(const int argc, char** argv, PipelineOptions& options, ToolBody&& body){
-        return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+        return ::InvokeTerminalEntry<CLI::ParseError>([&](){
             if(!parse(argc, argv, options))
                 return s_PipelineExitFailure;
             return body(options);

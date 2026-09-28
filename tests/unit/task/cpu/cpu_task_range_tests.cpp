@@ -142,7 +142,7 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
     u32 retirements = 0u;
     u32 callbacks = 0u;
     CpuTaskScheduler scheduler(0u);
-    const int result = Common::InvokeTerminalEntry<Failure>([&]()->int{
+    const int result = ::InvokeTerminalEntry<Failure>([&]()->int{
         scheduler.parallelFor(0u, 1u, 1u, [&](usize){
             EXPECT_TRUE(scheduler.submit([&, capture = Retirement(retirements)](){
                 EXPECT_TRUE(capture.count != nullptr);

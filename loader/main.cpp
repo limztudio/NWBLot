@@ -519,7 +519,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
     __hidden_loader::AddDebugCommandLineOptions(app, options);
 
-    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
         options.useStandaloneLogger = address.empty() || port == __hidden_loader::s_StandaloneLoggerPort;
@@ -528,7 +528,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; },
-        NWB::Core::Common::TerminalErrorExitPolicy::ApplicationFailure
+        ::TerminalErrorExitPolicy::ApplicationFailure
     );
 }
 

@@ -60,7 +60,7 @@ static int MainLogic(
     NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
     logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
 
-    return NWB::Core::Common::InvokeTerminalEntry<GeneralException>([&](){
+    return ::InvokeTerminalEntry<GeneralException>([&](){
         NWB::Log::Frame frame(inst);
         if(!frame.init()){
             logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Log::Type::Fatal);
@@ -102,7 +102,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     app.add_option(__hidden_logger_server_main::s_CrashRetainRawOption.data(), crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
     app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption.data(), crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
 
-    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
         return MainLogic(
@@ -113,7 +113,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
             inst
         );
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; },
-        NWB::Core::Common::TerminalErrorExitPolicy::ApplicationFailure
+        ::TerminalErrorExitPolicy::ApplicationFailure
     );
 }
 

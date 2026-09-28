@@ -34,7 +34,6 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 
 using namespace NWB::Core;
-using NWB::Core::Common::InvokeTerminalEntry;
 
 inline constexpr u32 s_ConstructionException = 0xE101u;
 inline constexpr u32 s_WorkerException = 0xE102u;

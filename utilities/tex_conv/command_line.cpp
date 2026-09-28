@@ -68,7 +68,7 @@ int Run(const int argc, char** argv){
     app.add_flag(TexConvCliDetail::s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
     app.add_flag(TexConvCliDetail::s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
 
-    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
 
         {

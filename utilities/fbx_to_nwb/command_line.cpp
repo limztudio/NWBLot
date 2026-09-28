@@ -399,7 +399,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
 
-    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+    return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
 
         options.inputPath.assign(inputPath.data(), inputPath.size());

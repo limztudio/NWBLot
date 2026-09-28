@@ -193,11 +193,11 @@ private:
     // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
+    TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
+    bool m_ownsCmdPool = false;
 
     const VulkanContext& m_context;
     Queue& m_queue;
-    TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
-    bool m_ownsCmdPool = false;
 };
 typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 

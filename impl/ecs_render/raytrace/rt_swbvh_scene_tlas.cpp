@@ -237,16 +237,16 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         if(!commandList && m_lightSpaceShadow.m_csg.gathering){
             AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, LoadFloat(instanceDesc.transform), mesh);
             m_lightSpaceShadow.m_casters.push_back({
+                .triangleIndexBuffer = mesh.triangleIndexBuffer,
+                .meshletDescBuffer = mesh.meshletDescBuffer,
+                .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
                 .instanceIndex = meshInstanceIndex,
                 .indexCount = mesh.meshletPrimitiveIndexCount,
-                .transparent = transparent,
-                .csg = false,
-                .triangleIndexBuffer = mesh.triangleIndexBuffer,
                 .meshletCount = mesh.meshletCount,
                 .meshletDescSlot = mesh.meshletCount != 0u ? mesh.meshletDescHeapHandle.slot() : 0u,
                 .meshletBoundsSlot = mesh.meshletCount != 0u ? mesh.meshletLocalBoundsHeapHandle.slot() : 0u,
-                .meshletDescBuffer = mesh.meshletDescBuffer,
-                .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
+                .transparent = transparent,
+                .csg = false,
             });
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);

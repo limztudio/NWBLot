@@ -65,11 +65,11 @@ private:
         QueueSubmissionToken acceptedSubmission;
         QueueSubmissionToken frameResetSubmission;
         u64 frameIndex = 0u;
-        GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         u64 reservation = 0u;
         u64 publicationGeneration = 0u;
         u64 performanceCaptureEpoch = 0u;
         u64 retirementSubscriptionIdentityLimit = 0u;
+        GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         GpuPhysicalQueueId physicalQueue;
         GpuPhysicalQueueId frameResetRecordingQueue;
         u32 epoch = 0u;

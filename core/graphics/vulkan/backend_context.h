@@ -318,7 +318,6 @@ private:
     QueueSubmissionToken m_framePresentationSubmission;
     u64 m_nextFramePresentationClaimIdentity = 0u;
     u64 m_framePresentationClaimIdentity = 0u;
-    u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     bool m_framePresentationClaimIdentityExhausted = false;
     bool m_frameAcquired = false;
     bool m_frameAbandonmentComplete = false;
@@ -331,6 +330,7 @@ private:
     u32 m_acquireSyncSlotIndex = 0u;
     u32 m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
+    u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
 
     Futex m_swapChainLifecycleMutex;
     u64 m_swapChainLifecycleEpoch = 0u;

@@ -39,12 +39,12 @@ namespace CsgReceiverPass{
 
 
 struct CsgReceiverDrawState{
-    bool active = false;
-    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-    // Resolved with cutterCount so render-side CSG work can iterate the lookup-owned
-    // range directly instead of resolving the receiver component and group again.
     u32 firstCutter = 0u;
     u32 cutterCount = 0u;
+    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+    bool active = false;
+    // Resolved with cutterCount so render-side CSG work can iterate the lookup-owned
+    // range directly instead of resolving the receiver component and group again.
 };
 
 struct CsgFrameState{

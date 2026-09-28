@@ -386,9 +386,9 @@ namespace GpuTaskGraphCompilerDetail{
                 .index = static_cast<u32>(compiledPlan.packets.size()),
                 };
             compiledPlan.packets.push_back(GpuSubmissionPacket{
-                .queue = assignment->queue,
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),
                 .taskCount = 1u,
+                .queue = assignment->queue,
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
                 .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
@@ -415,8 +415,8 @@ namespace GpuTaskGraphCompilerDetail{
         compiledPlan.packetTasks.push_back(taskID);
         compiledPlan.tasks.push_back(GpuCompiledTask{
             .task = taskID,
-            .queue = assignment->queue,
             .packet = packetID,
+            .queue = assignment->queue,
             .packetizationDecision = packetizationDecision,
             .timingPolicy = task.timing.policy,
             .recordsNonCommittingTimingSample = static_cast<bool>(

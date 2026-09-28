@@ -159,6 +159,8 @@ private:
         Core::Texture* visibilityTexture = nullptr;
         u32 visibilityStorage = 0u;
         u32 sceneShading = 0u;
+        // Must be odd so the selected upsample input is the final ping-pong result.
+        u32 waveletPassCount = 1u;
         bool temporalMomentsValid = false;
         // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
         bool graphOwnsFirstWaveletInputState = false;
@@ -176,8 +178,6 @@ private:
         bool graphOwnsUpsampleVisibilityOutputState = false;
         bool firstWaveletWritesHalfA = true;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
-        // Must be odd so the selected upsample input is the final ping-pong result.
-        u32 waveletPassCount = 1u;
     };
 
 

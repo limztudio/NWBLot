@@ -56,31 +56,32 @@ namespace ECSRenderDetail{
     // Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
     struct MeshRayTracingResourceSnapshot{
         Name meshName = NAME_NONE;
-        Core::BufferHandle positionBuffer;
-        Core::BufferHandle triangleIndexBuffer;
-        Core::BufferHandle attributeBuffer;
-        Core::BufferHandle runtimeLocalBoundsBuffer;
-        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
-        Core::BufferHandle meshletDescBuffer;
-        Core::BufferHandle meshletLocalBoundsBuffer;
-        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        u32 meshletCount = 0u;
-        Core::RayTracingAccelStructHandle blas;
-        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::BufferHandle swBvhNodeBuffer;
-        Core::BufferHandle swBvhParentBuffer;
-        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
-        u32 meshletPrimitiveIndexCount = 0u;
-        u32 blasRefitsSinceRebuild = 0u;
-        u32 swBvhRefitsSinceRebuild = 0u;
         u64 runtimeMeshVersion = 0u;
         u64 runtimeGeometryContentRevision = 0u;
         u64 blasGeometryContentRevision = 0u;
         u64 swBvhGeometryContentRevision = 0u;
+        Core::BufferHandle positionBuffer;
+        Core::BufferHandle triangleIndexBuffer;
+        Core::BufferHandle attributeBuffer;
+        Core::BufferHandle runtimeLocalBoundsBuffer;
+        // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
+        Core::BufferHandle meshletDescBuffer;
+        Core::BufferHandle meshletLocalBoundsBuffer;
+        Core::RayTracingAccelStructHandle blas;
+        Core::BufferHandle swBvhNodeBuffer;
+        Core::BufferHandle swBvhParentBuffer;
+        CsgReceiverCpuBounds csgLocalBounds;
+        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+        u32 meshletCount = 0u;
+        u32 meshletPrimitiveIndexCount = 0u;
+        u32 blasRefitsSinceRebuild = 0u;
+        u32 swBvhRefitsSinceRebuild = 0u;
         bool runtimeMesh = false;
         bool blasBuildPending = false;
         bool blasBackingFresh = false;
@@ -89,7 +90,6 @@ namespace ECSRenderDetail{
         bool swBvhTopologyBuilt = false;
         bool blasBuildAccepted = false;
         bool swBvhBuildAccepted = false;
-        CsgReceiverCpuBounds csgLocalBounds;
     };
     using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;
     using MeshRetainedAccelerationStateBufferVector = Vector<Core::BufferHandle, Core::Alloc::ScratchArena>;

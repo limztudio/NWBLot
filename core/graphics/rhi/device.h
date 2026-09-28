@@ -292,13 +292,12 @@ struct AdapterInfo{
     typedef Array<u8, s_LuidByteCount> LUID;
 
     GraphicsString name;
+    u64 dedicatedVideoMemory = 0;
+    UUID uuid = {};
+    LUID luid = {};
     u32 vendorID = 0;
     u32 deviceID = 0;
-    u64 dedicatedVideoMemory = 0;
-
-    UUID uuid = {};
     bool hasUUID = false;
-    LUID luid = {};
     bool hasLUID = false;
 
     explicit AdapterInfo(GraphicsArena& arena)
@@ -347,27 +346,28 @@ namespace SwapChainOutputMode{
 };
 
 struct DeviceCreationParameters : public InstanceParameters{
-    bool startMaximized = false;
-    bool startFullscreen = false;
-    bool startBorderless = false;
-    bool allowModeSwitch = false;
     i32 windowPosX = s_WindowPositionAuto;
     i32 windowPosY = s_WindowPositionAuto;
     u32 refreshRate = 0;
     u32 swapChainBufferCount = s_SwapChainBufferCount;
+    u32 swapChainSampleCount = 1;
+    u32 swapChainSampleQuality = 0;
+    u32 maxFramesInFlight = s_MaxFramesInFlight;
+    i32 adapterIndex = -1;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
+    // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
+    HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
+    bool startMaximized = false;
+    bool startFullscreen = false;
+    bool startBorderless = false;
+    bool allowModeSwitch = false;
     // Opt-in preference: if the current surface cannot expose HDR10, creation continues with the
     // requested SDR format instead of rejecting the device or window.
     bool enableHDR10Output = false;
     // Opt-in presentation-image readback. Unsupported surfaces keep a normal presentable swap chain and publish
     // swapChainReadbackAvailable=false instead of failing device creation.
     bool enableSwapChainReadback = false;
-    u32 swapChainSampleCount = 1;
-    u32 swapChainSampleQuality = 0;
-    u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
-    // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
-    HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
     // Native mesh shaders are optional. Windows ARM64 defaults to the compute-emulation path because extension
     // advertisement alone does not qualify native mesh-output correctness; callers may explicitly opt in.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
@@ -389,7 +389,6 @@ struct DeviceCreationParameters : public InstanceParameters{
     // Permits an auxiliary same-class transport to come from a different compatible Vulkan family. Tasks must
     // separately opt in before the compiler can route across that ownership boundary.
     bool enableCrossFamilySameClassQueueRouting = false;
-    i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;
 

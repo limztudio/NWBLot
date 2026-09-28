@@ -148,8 +148,8 @@ AccelStruct::AccelStruct(
 )
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(context.objectArena)
-    , m_creationQueueSharing(creationQueueSharing)
     , m_context(context)
+    , m_creationQueueSharing(creationQueueSharing)
 {
     m_desc.queueSharing = creationQueueSharing;
 }

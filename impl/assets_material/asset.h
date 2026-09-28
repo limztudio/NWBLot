@@ -421,11 +421,11 @@ struct MaterialResourceReference{
     Name fieldName = NAME_NONE;
     Core::Assets::AssetRef<Texture> textureAsset;
     Core::Assets::AssetRef<Sampler> samplerAsset;
-    MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
-    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     // A cooked material keeps resource identity separate from its numeric/default typed payload.
     // `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves the device-lifetime descriptor handle.
     Name fixtureName = NAME_NONE;
+    MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
+    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
 };
 

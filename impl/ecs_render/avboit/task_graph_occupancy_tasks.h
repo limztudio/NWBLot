@@ -51,10 +51,10 @@ struct AvboitPreGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
-        bool hasTransparentRenderers = false;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
+        bool hasTransparentRenderers = false;
         bool transparentCsgStreamsUploaded = false;
         bool transparentCsgIntervalTargetsGraphOwned = false;
         bool transparentCsgIntervalPeelTargetStatesGraphOwned = false;

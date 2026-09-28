@@ -37,7 +37,6 @@ struct GpuTaskGraphRuntimeStatistics;
 // Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
 // contains one or more explicitly compatible tasks.
 struct GpuSubmissionPacket{
-    GpuPhysicalQueueId queue;
     u32 taskOffset = 0u;
     u32 taskCount = 0u;
     u32 dependencyOffset = 0u;
@@ -48,6 +47,7 @@ struct GpuSubmissionPacket{
     // producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic
     // compile-order submission.
     u32 recordingFrontier = 0u;
+    GpuPhysicalQueueId queue;
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
     // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;
@@ -108,19 +108,19 @@ namespace GpuTaskPacketizationDecision{
 
 struct GpuCompiledTask{
     GpuTaskId task;
-    GpuPhysicalQueueId queue;
     GpuSubmissionPacketId packet;
-    GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
-    GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
-    // Calibration and debug-override observations contribute route duration history without becoming the
-    // committed timing-feedback incumbent. Retain that decision so late query collection preserves policy dwell.
-    bool recordsNonCommittingTimingSample = false;
     u32 prologueStateSeedOffset = 0u;
     u32 prologueStateSeedCount = 0u;
     u32 prologueBarrierOffset = 0u;
     u32 prologueBarrierCount = 0u;
     u32 epilogueBarrierOffset = 0u;
     u32 epilogueBarrierCount = 0u;
+    GpuPhysicalQueueId queue;
+    GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
+    GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
+    // Calibration and debug-override observations contribute route duration history without becoming the
+    // committed timing-feedback incumbent. Retain that decision so late query collection preserves policy dwell.
+    bool recordsNonCommittingTimingSample = false;
 };
 
 // One checked task lookup and all of its borrowed compiler-owned lowering slices. Keep this value inside the
@@ -205,16 +205,16 @@ namespace GpuOwnershipTransferRoute{
 
 struct GpuCompiledOwnershipTransfer{
     GpuGraphResourceId resource;
-    Name resourceIdentity = NAME_NONE;
     GpuTaskResourceRange range;
     GpuTaskId sourceTask;
     GpuTaskId destinationTask;
     GpuSubmissionPacketId sourcePacket;
     GpuSubmissionPacketId destinationPacket;
-    GpuPhysicalQueueId sourceQueue;
-    GpuPhysicalQueueId destinationQueue;
     u32 sourceQueueFamilyIndex = Limit<u32>::s_Max;
     u32 destinationQueueFamilyIndex = Limit<u32>::s_Max;
+    Name resourceIdentity = NAME_NONE;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
     ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
     GpuGraphResourceType::Enum resourceType = GpuGraphResourceType::HazardDomain;
     GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::kCount;

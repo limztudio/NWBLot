@@ -622,10 +622,10 @@ public:
 
 
 private:
-    Futex m_mutex;
     VkFence m_fence = VK_NULL_HANDLE;
-
     const VulkanContext& m_context;
+    Futex m_mutex;
+
     bool m_started = false;
 };
 
@@ -665,9 +665,6 @@ public:
 private:
     Futex m_mutex;
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
-    GpuPhysicalQueueId m_timestampQueue;
-    GpuPhysicalQueueId m_cycleBaselineQueue;
-    GpuPhysicalQueueId m_cycleQueue;
     RecordingOwner m_resetRecordingOwner;
     RecordingOwner m_beginRecordingOwner;
     RecordingOwner m_endRecordingOwner;
@@ -691,6 +688,9 @@ private:
     bool m_cycleInvalidated = false;
     bool m_resetAuthorizationAvailable = false;
     bool m_recordingActive = false;
+    GpuPhysicalQueueId m_timestampQueue;
+    GpuPhysicalQueueId m_cycleBaselineQueue;
+    GpuPhysicalQueueId m_cycleQueue;
 
     const VulkanContext& m_context;
 };

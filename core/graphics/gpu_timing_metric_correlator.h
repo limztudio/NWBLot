@@ -70,9 +70,9 @@ private:
     };
 
     struct PacketEnvelopeMetricScopeRecord{
+        GpuComparableTimestampRange range;
         Name scopeName = NAME_NONE;
         GpuPhysicalQueueId physicalQueue;
-        GpuComparableTimestampRange range;
         bool received = false;
     };
 
@@ -87,6 +87,7 @@ private:
         GpuPhysicalQueueId physicalQueue;
         bool queueInternalIdle = false;
     };
+
 
     struct PendingPacketEnvelopeMetric{
         u64 sourceFrameIndex = 0u;

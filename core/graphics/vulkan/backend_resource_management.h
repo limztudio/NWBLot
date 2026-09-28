@@ -61,13 +61,13 @@ private:
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     // Driver-created set size, segment, and binding offsets.
     u32 m_descriptorBufferSetSizeBytes = 0;
+    u32 m_pushConstantByteSize = 0;
     DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
+    bool m_isBindless = false;
+    bool m_descriptorBufferCompatible = false;
     HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorBufferBindingOffsets;
 
     const VulkanContext& m_context;
-    u32 m_pushConstantByteSize = 0;
-    bool m_isBindless = false;
-    bool m_descriptorBufferCompatible = false;
 };
 
 
@@ -112,7 +112,6 @@ private:
 
 private:
     RayTracingAccelStructDesc m_desc;
-    const ResourceQueueSharing::Mask m_creationQueueSharing;
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
@@ -122,6 +121,7 @@ private:
     AccelStructBuildSignatureRole* m_retiredBuildSignatureRoles = nullptr;
 
     const VulkanContext& m_context;
+    const ResourceQueueSharing::Mask m_creationQueueSharing;
     bool m_isTopLevelAtCreation = false;
 };
 

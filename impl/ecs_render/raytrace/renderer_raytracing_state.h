@@ -255,6 +255,8 @@ struct RtSoftShadowState{
     u32 m_softShadowFrameIndex = 0u;
     // 1: A is history input; 0: B is history input.
     u32 m_softShadowHistoryFrontIsA = 1u;
+    // Transparent temporal gates; coarse/adaptive fallback remains available.
+    TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
 
     bool m_shadowSoftPipelineFailed = false;
     bool m_shadowGeometryDownsamplePipelineFailed = false;
@@ -267,8 +269,6 @@ struct RtSoftShadowState{
     // Defer the history swap until the ordered submission succeeds.
     bool m_softShadowTemporalHistoryAdvancePending = false;
     bool m_shadowReprojectMergePipelineFailed = false;
-    // Transparent temporal gates; coarse/adaptive fallback remains available.
-    TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
     bool m_softTransparentTemporalReady = false;
     bool m_softTransparentReady = false;
 };

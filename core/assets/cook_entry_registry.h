@@ -221,11 +221,11 @@ public:
         const bool logBuildFailure
     )
         : m_entries(arena)
-        , m_assetType(assetType)
         , m_assetKindText(assetKindText)
         , m_parseDocument(parseDocument)
         , m_parseValue(parseValue)
         , m_buildAsset(buildAsset)
+        , m_assetType(assetType)
         , m_logBuildFailure(logBuildFailure)
     {}
 
@@ -328,11 +328,11 @@ private:
 
 private:
     CookVector<EntryT> m_entries;
-    Name m_assetType = NAME_NONE;
     NotNull<const tchar*> m_assetKindText;
     DocumentParseFunction m_parseDocument = nullptr;
     ValueParseFunction m_parseValue = nullptr;
     BuildAssetFunction m_buildAsset = nullptr;
+    Name m_assetType = NAME_NONE;
     bool m_logBuildFailure = true;
 };
 

@@ -202,10 +202,10 @@ TEST(LightSpaceCaptureGraph, ReuseCompilesWithoutCaptureOnlyImportsAndRetainsAcc
 TEST(LightSpaceCaptureGraph, UntouchedDrawArgumentExportReproducesTheRejectedReuseGraph){
     CaptureContext context;
     ASSERT_TRUE(context.declareReuse().valid());
-    const auto unused = context.graph.importBuffer(context.snapshot.drawArguments,
+    const auto importedArguments = context.graph.importBuffer(context.snapshot.drawArguments,
         RendererTaskGraphDetail::BufferResourceDesc(Name("tests/light_space/unused_arguments"), "Unused Capture Draw Arguments")
             .setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common));
-    ASSERT_TRUE(unused.valid());
+    ASSERT_TRUE(importedArguments.valid());
     ASSERT_NO_FATAL_FAILURE(ExpectCompilation(context, false));
 }
 

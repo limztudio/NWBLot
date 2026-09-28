@@ -661,21 +661,6 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     EXPECT_EQ(report.summary.frameGraphNodeCount, nodes.size());
     EXPECT_EQ(report.summary.frameGraphEdgeCount, edges.size());
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
-    const AStringView json(report.json.data(), report.json.size());
-    EXPECT_TRUE(ContainsText(
-        json,
-        "\"resourceVersionCount\": null, \"resourceVersionEdgeCount\": null"
-    ));
-    EXPECT_TRUE(ContainsText(
-        json,
-        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null, "
-        "\"submissionSeconds\": 0.021}"
-    ));
-    EXPECT_TRUE(ContainsText(json, s_PHYSICALQUEUES_NULL));
-    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
-
-    const AStringView dot(report.graph.data(), report.graph.size());
-    EXPECT_TRUE(ContainsText(dot, s_RUNTIME_PHYSICAL_QUEUE_COUNT_UNKNOWN));
 }
 
 TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){

@@ -2,7 +2,7 @@
 """Build and run the transfer-upload profiling harness.
 
 The workflow compares an explicit Graphics setup-upload baseline with the automatic
-Transfer-preferred route.  It is target-hardware-only: hosts without a distinct
+Transfer route.  It is target-hardware-only: hosts without a distinct
 Transfer family return 77 after preserving a topology/report artifact.
 """
 

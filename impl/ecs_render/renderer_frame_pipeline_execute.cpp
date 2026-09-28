@@ -116,7 +116,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
         return;
     }
-    // Scheduling queries the graph-visible transport, not the legacy lane.
+    // Use the device's primary physical Graphics queue for scheduling.
     const Core::GpuPhysicalQueueId primaryGraphicsQueue =
         device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);

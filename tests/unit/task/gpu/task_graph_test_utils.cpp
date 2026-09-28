@@ -303,7 +303,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    Vector<Graphics::GpuTaskQueueAssignmentOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
+    Vector<Graphics::GpuTaskDiagnosticQueueOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         overrides.reserve(declarations.taskCount());
@@ -329,8 +329,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
         }
     }
     Graphics::GpuTaskGraphCompileOptions routedOptions = options;
-    routedOptions.queueAssignmentOptions.queueOverrides = overrides.data();
-    routedOptions.queueAssignmentOptions.queueOverrideCount = overrides.size();
+    routedOptions.queueAssignmentOptions.diagnosticQueueOverrides = overrides.data();
+    routedOptions.queueAssignmentOptions.diagnosticQueueOverrideCount = overrides.size();
     return Compile(graph, analysis, topology, assignments, compiledGraph, routedOptions);
 }
 
@@ -435,14 +435,14 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryRouting;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DebugTimingOverride;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticTimingQueueOverride;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::QueueOverride)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::QueueOverride;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticQueueOverride;
     return static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(expected);
 }
 

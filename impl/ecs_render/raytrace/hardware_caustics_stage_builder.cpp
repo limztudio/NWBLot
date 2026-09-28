@@ -476,7 +476,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
         irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         irradianceClearScheduling.allowPacketMerge = true;
-        // Prefer the same-class GraphicsRuntime lane; later successors retain it.
+        // Allow physical queue balancing for the clear; later successors retain its selected queue.
         EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
         EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
 

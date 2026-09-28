@@ -149,7 +149,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     EXPECT_EQ(
         nodes[0u].flags,
         Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
-        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting
+        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentRerouted
         | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting
     );
 }
@@ -750,14 +750,14 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
         EXPECT_EQ(assignment->queue, queues[incumbentQueueIndex].id);
         EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
-        const Graphics::GpuTaskTimingQueueOverride forcedOverride{
+        const Graphics::GpuTaskDiagnosticTimingQueueOverride forcedOverride{
             .key = incumbentKey,
             .queue = queues[candidateQueueIndex].id,
         };
         assignmentOptions.timingHistory = nullptr;
         assignmentOptions.timingFeedbackPolicy = {};
-        assignmentOptions.timingQueueOverrides = &forcedOverride;
-        assignmentOptions.timingQueueOverrideCount = 1u;
+        assignmentOptions.diagnosticTimingQueueOverrides = &forcedOverride;
+        assignmentOptions.diagnosticTimingQueueOverrideCount = 1u;
         EXPECT_FALSE(Assign(graph, analysis, topology, assignments, assignmentOptions));
         EXPECT_EQ(
             assignments.diagnostic().status,
@@ -876,15 +876,15 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
     timingPolicy.minimumRelativeBenefit = 0.1;
     timingPolicy.minimumFramesBetweenSwitches = 0u;
-    const Graphics::GpuTaskTimingQueueOverride timingOverrides[] = {
-        Graphics::GpuTaskTimingQueueOverride{
+    const Graphics::GpuTaskDiagnosticTimingQueueOverride timingOverrides[] = {
+        Graphics::GpuTaskDiagnosticTimingQueueOverride{
             .key = Graphics::GpuTaskTimingKey{
                 .task = firstIdentity,
                 .queue = Graphics::CommandQueue::Graphics,
             },
             .queue = firstAuxiliaryQueue.id,
         },
-        Graphics::GpuTaskTimingQueueOverride{
+        Graphics::GpuTaskDiagnosticTimingQueueOverride{
             .key = Graphics::GpuTaskTimingKey{
                 .task = secondIdentity,
                 .queue = Graphics::CommandQueue::Graphics,
@@ -895,8 +895,8 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
     options.timingHistory = &timingSnapshot;
     options.timingFeedbackPolicy = timingPolicy;
-    options.timingQueueOverrides = timingOverrides;
-    options.timingQueueOverrideCount = LengthOf(timingOverrides);
+    options.diagnosticTimingQueueOverrides = timingOverrides;
+    options.diagnosticTimingQueueOverrideCount = LengthOf(timingOverrides);
     options.timingFrameIndex = 12u;
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -918,7 +918,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     EXPECT_EQ(thirdAssignment->queue, secondAuxiliaryQueue.id);
 }
 
-TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueueRoutes){
+TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesDiagnosticQueueOverrides){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
@@ -1005,16 +1005,16 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     // choose the second route instead of depending on topology order alone.
     EXPECT_EQ(targetAssignment->queue, secondAuxiliaryGraphicsQueue.id);
 
-    const Graphics::GpuTaskTimingQueueOverride forcedOverride[]{
-        Graphics::GpuTaskTimingQueueOverride{
+    const Graphics::GpuTaskDiagnosticTimingQueueOverride forcedOverride[]{
+        Graphics::GpuTaskDiagnosticTimingQueueOverride{
             .key = targetTimingKey,
             .queue = firstAuxiliaryGraphicsQueue.id,
         },
     };
     assignmentOptions.timingHistory = nullptr;
     assignmentOptions.timingFeedbackPolicy = {};
-    assignmentOptions.timingQueueOverrides = forcedOverride;
-    assignmentOptions.timingQueueOverrideCount = LengthOf(forcedOverride);
+    assignmentOptions.diagnosticTimingQueueOverrides = forcedOverride;
+    assignmentOptions.diagnosticTimingQueueOverrideCount = LengthOf(forcedOverride);
     Graphics::GpuTaskGraphCompileOptions forcedCompileOptions;
     forcedCompileOptions.queueAssignmentOptions = assignmentOptions;
     Graphics::GpuCompiledGraph forcedCompiledGraph(testArena.arena);
@@ -1030,7 +1030,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
         EXPECT_TRUE(forcedCompiledTask->recordsNonCommittingTimingSample);
     }
 
-    // Debug forcing collects a route observation without replacing the committed policy incumbent. Once the
+    // A diagnostic routing override collects a route observation without replacing the committed policy incumbent. Once the
     // override disappears, ordinary dwell continues from the last adaptive/static assignment.
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(targetTimingKey, firstAuxiliaryGraphicsQueue.id, 0.020));
     const Graphics::GpuTaskTimingAssignmentKey targetAssignmentKey =
@@ -1046,14 +1046,14 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     timingPolicy.minimumFramesBetweenSwitches = 30u;
     assignmentOptions.timingHistory = &timingSnapshot;
     assignmentOptions.timingFeedbackPolicy = timingPolicy;
-    assignmentOptions.timingQueueOverrides = nullptr;
-    assignmentOptions.timingQueueOverrideCount = 0u;
+    assignmentOptions.diagnosticTimingQueueOverrides = nullptr;
+    assignmentOptions.diagnosticTimingQueueOverrideCount = 0u;
     assignmentOptions.timingFrameIndex = 14u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* const restoredAssignment = assignments.find(target);
     ASSERT_NE(restoredAssignment, nullptr);
     EXPECT_EQ(restoredAssignment->queue, queues[0u].id);
-    EXPECT_FALSE(restoredAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride);
+    EXPECT_FALSE(restoredAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride);
     EXPECT_FALSE(restoredAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     Graphics::GpuPhysicalQueueInfo crossFamilyGraphicsQueue = GraphicsQueue(1u);
@@ -1066,14 +1066,14 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
         .queues = crossFamilyQueues,
         .queueCount = LengthOf(crossFamilyQueues),
     };
-    const Graphics::GpuTaskTimingQueueOverride invalidForcedOverride[]{
-        Graphics::GpuTaskTimingQueueOverride{
+    const Graphics::GpuTaskDiagnosticTimingQueueOverride invalidForcedOverride[]{
+        Graphics::GpuTaskDiagnosticTimingQueueOverride{
             .key = targetTimingKey,
             .queue = crossFamilyGraphicsQueue.id,
         },
     };
-    assignmentOptions.timingQueueOverrides = invalidForcedOverride;
-    assignmentOptions.timingQueueOverrideCount = LengthOf(invalidForcedOverride);
+    assignmentOptions.diagnosticTimingQueueOverrides = invalidForcedOverride;
+    assignmentOptions.diagnosticTimingQueueOverrideCount = LengthOf(invalidForcedOverride);
     EXPECT_FALSE(Assign(graph, analysis, crossFamilyTopology, assignments, assignmentOptions));
     EXPECT_EQ(
         assignments.diagnostic().status,
@@ -1098,8 +1098,8 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     ASSERT_TRUE(crossFamilyTask.valid());
     Graphics::GpuTaskGraphAnalysis crossFamilyAnalysis(testArena.arena);
     ASSERT_TRUE(Analyze(crossFamilyGraph, crossFamilyAnalysis));
-    const Graphics::GpuTaskTimingQueueOverride crossFamilyOverride[]{
-        Graphics::GpuTaskTimingQueueOverride{
+    const Graphics::GpuTaskDiagnosticTimingQueueOverride crossFamilyOverride[]{
+        Graphics::GpuTaskDiagnosticTimingQueueOverride{
             .key = Graphics::GpuTaskTimingKey{
                 .task = crossFamilyIdentity,
                 .queue = Graphics::CommandQueue::Graphics,
@@ -1108,8 +1108,8 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
         },
     };
     Graphics::GpuTaskGraphQueueAssignmentOptions crossFamilyOptions;
-    crossFamilyOptions.timingQueueOverrides = crossFamilyOverride;
-    crossFamilyOptions.timingQueueOverrideCount = LengthOf(crossFamilyOverride);
+    crossFamilyOptions.diagnosticTimingQueueOverrides = crossFamilyOverride;
+    crossFamilyOptions.diagnosticTimingQueueOverrideCount = LengthOf(crossFamilyOverride);
     Graphics::GpuTaskGraphQueueAssignments crossFamilyAssignments(testArena.arena);
     ASSERT_TRUE(Assign(
         crossFamilyGraph,
@@ -1122,7 +1122,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     ASSERT_NE(crossFamilyAssignment, nullptr);
     EXPECT_EQ(crossFamilyAssignment->queue, crossFamilyGraphicsQueue.id);
     EXPECT_EQ(crossFamilyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
-    EXPECT_TRUE(crossFamilyAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride);
+    EXPECT_TRUE(crossFamilyAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride);
 }
 
 TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipHandoffs){

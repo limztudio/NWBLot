@@ -894,7 +894,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
     Graphics::GpuTaskSchedulingHint readerScheduling;
     readerScheduling.forceSubmissionBoundary = true;
     readerScheduling.allowPacketMerge = false;
-    const Graphics::GpuTaskCommandRequirements readerQueues[] = {
+    const Graphics::GpuTaskCommandRequirements readerCommands[] = {
         { Graphics::GpuQueueCapability::Graphics },
         { Graphics::GpuQueueCapability::Compute },
         { Graphics::GpuQueueCapability::Graphics },
@@ -913,7 +913,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
             .setDependencies(readerIndex == 1u ? &readers[0u] : nullptr, readerIndex == 1u ? 1u : 0u)
             .setResourceUses(&readerUse, 1u)
         ;
-        readers[readerIndex] = graph.addTask(readerDesc, readerQueues[readerIndex]);
+        readers[readerIndex] = graph.addTask(readerDesc, readerCommands[readerIndex]);
         ASSERT_TRUE(readers[readerIndex].valid());
     }
 
@@ -984,7 +984,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
     for(const usize prefixPacketCount : prefixPacketCounts){
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuTaskCommandRequirements prefixQueue{ Graphics::GpuQueueCapability::Graphics };
+        const Graphics::GpuTaskCommandRequirements prefixCommands{ Graphics::GpuQueueCapability::Graphics };
         Graphics::GpuTaskSchedulingHint prefixScheduling;
         prefixScheduling.forceSubmissionBoundary = true;
         prefixScheduling.allowPacketMerge = false;
@@ -995,7 +995,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
                 graph,
                 DeriveName(prefixBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
                 "Terminal Packed Reachability Prefix",
-                prefixQueue,
+                prefixCommands,
                 prefixScheduling
             );
             ASSERT_TRUE(prefixTask.valid());

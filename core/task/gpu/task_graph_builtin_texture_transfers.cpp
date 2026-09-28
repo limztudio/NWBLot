@@ -252,9 +252,9 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     };
 
     bool valid = true;
-    bool requiresTransferQueue = false;
-    bool requiresGraphicsQueue = false;
-    bool requiresComputeQueue = false;
+    bool requiresTransferCapability = false;
+    bool requiresGraphicsCapability = false;
+    bool requiresComputeOrGraphicsCapability = false;
     for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
         const GpuCopyTextureTaskRegion& region = copyDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){
@@ -305,13 +305,13 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             )
         ;
         if(valid){
-            requiresTransferQueue = requiresTransferQueue
+            requiresTransferCapability = requiresTransferCapability
                 || contract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Transfer
             ;
-            requiresGraphicsQueue = requiresGraphicsQueue
+            requiresGraphicsCapability = requiresGraphicsCapability
                 || contract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Graphics
             ;
-            requiresComputeQueue = requiresComputeQueue
+            requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability
                 || contract.queueRequirement
                     == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics
             ;
@@ -330,11 +330,11 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
 
     GpuTaskDesc resolvedDesc = desc;
     GpuTaskCommandRequirements commands;
-    if(requiresTransferQueue)
+    if(requiresTransferCapability)
         commands.requiredCapabilities |= GpuQueueCapability::Transfer;
-    if(requiresGraphicsQueue)
+    if(requiresGraphicsCapability)
         commands.requiredCapabilities |= GpuQueueCapability::Graphics;
-    if(requiresComputeQueue)
+    if(requiresComputeOrGraphicsCapability)
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
     return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation, commands);

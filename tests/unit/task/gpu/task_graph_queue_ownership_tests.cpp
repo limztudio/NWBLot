@@ -379,7 +379,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     const auto addTask = [&graph, &scheduling, texture](
         const Name& identity,
         const AStringView label,
-        const Graphics::GpuTaskCommandRequirements& queue,
+        const Graphics::GpuTaskCommandRequirements& commands,
         const Graphics::GpuTaskResourceAccess::Enum access){
         const Graphics::GpuTaskResourceUse use{
             .resource = texture,
@@ -394,7 +394,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
             .setScheduling(scheduling)
             .setResourceUses(&use, 1u)
         ;
-        return graph.addTask(desc, queue);
+        return graph.addTask(desc, commands);
     };
     const Graphics::GpuTaskId firstGraphics = addTask(
         Name("tests/task_graph/repeated_ownership_first_graphics"),
@@ -751,7 +751,7 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
 
     EXPECT_EQ(
         assignments.diagnostic().status,
-        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
     );
     EXPECT_FALSE(compiledPlan.valid());
 }

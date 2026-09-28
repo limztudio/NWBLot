@@ -23,7 +23,7 @@ namespace __hidden_gpu_task_graph_compiler_queue_placement{
 using namespace GpuTaskGraphCompilerDetail;
 
 
-[[nodiscard]] bool AccumulateRequiredQueue(const GpuPhysicalQueueId queue, GpuPhysicalQueueId& inOutQueue)noexcept{
+[[nodiscard]] bool AccumulateExactQueueConstraint(const GpuPhysicalQueueId queue, GpuPhysicalQueueId& inOutQueue)noexcept{
     if(!queue.valid())
         return true;
     if(inOutQueue.valid() && inOutQueue != queue)
@@ -33,7 +33,7 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool FindFirstUseOwnerQueue(
+[[nodiscard]] bool AccumulateInitialOwnershipQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
@@ -43,7 +43,7 @@ using namespace GpuTaskGraphCompilerDetail;
             ? resource.initialOwnerReleaseDestinationQueue
             : resource.initialOwnerQueue
         ;
-        return AccumulateRequiredQueue(destination, inOutQueue);
+        return AccumulateExactQueueConstraint(destination, inOutQueue);
     }
 
     const GpuTaskGraphInitialOwnerHandoffSourceView* selectedSource = nullptr;
@@ -58,11 +58,11 @@ using namespace GpuTaskGraphCompilerDetail;
             return false;
         selectedSource = &source;
     }
-    return selectedSource && AccumulateRequiredQueue(selectedSource->destinationQueue, inOutQueue);
+    return selectedSource && AccumulateExactQueueConstraint(selectedSource->destinationQueue, inOutQueue);
 }
 
 
-[[nodiscard]] bool BuildInitialOwnerQueueConstraints(
+[[nodiscard]] bool BuildInitialOwnershipQueueConstraints(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues,
@@ -129,12 +129,12 @@ using namespace GpuTaskGraphCompilerDetail;
                 if(!CollectLatestResourceStateFragments(states, history, resource, firstUseRanges, scratchArena, fragments))
                     return false;
                 for(const TrackedResourceStateFragment& fragment : fragments){
-                    if(!fragment.state && !FindFirstUseOwnerQueue(graph, resource, fragment.range, outQueues[taskID.index]))
+                    if(!fragment.state && !AccumulateInitialOwnershipQueue(graph, resource, fragment.range, outQueues[taskID.index]))
                         return false;
                 }
             }
             else if(history.last(use.resource) == Limit<usize>::s_Max){
-                if(!FindFirstUseOwnerQueue(graph, resource, plannedRange, outQueues[taskID.index]))
+                if(!AccumulateInitialOwnershipQueue(graph, resource, plannedRange, outQueues[taskID.index]))
                     return false;
             }
             if(!history.append(TrackedCompiledResourceState{
@@ -214,8 +214,8 @@ namespace GpuTaskGraphCompilerDetail{
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(
             (requiredClass != CommandQueue::kCount && candidate.queueClass != requiredClass)
-            || (group.requiredQueue.valid() && candidate.id != group.requiredQueue)
-            || (group.overrideQueue.valid() && candidate.id != group.overrideQueue)
+            || (group.initialOwnershipQueue.valid() && candidate.id != group.initialOwnershipQueue)
+            || (group.diagnosticOverrideQueue.valid() && candidate.id != group.diagnosticOverrideQueue)
             || !HasCapabilities(candidate.capabilities, group.requiredCapabilities)
             || !IsBetterQueue(candidate, result)
         )
@@ -248,32 +248,32 @@ namespace GpuTaskGraphCompilerDetail{
         outDiagnostic.requiredCapabilities = graph.taskAt(task.index).commands.requiredCapabilities;
         return false;
     };
-    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> requiredQueues(graph.taskCount(), scratchArena);
-    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> overrideQueues(graph.taskCount(), scratchArena);
+    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> initialOwnershipQueues(graph.taskCount(), scratchArena);
+    Vector<GpuPhysicalQueueId, Alloc::ScratchArena> diagnosticOverrideQueues(graph.taskCount(), scratchArena);
     GpuTaskId failedTask;
-    if(!BuildInitialOwnerQueueConstraints(graph, analysis, requiredQueues, failedTask, scratchArena))
+    if(!BuildInitialOwnershipQueueConstraints(graph, analysis, initialOwnershipQueues, failedTask, scratchArena))
         return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, failedTask);
 
-    if(options.queueOverrideCount != 0u && !options.queueOverrides){
-        outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride;
+    if(options.diagnosticQueueOverrideCount != 0u && !options.diagnosticQueueOverrides){
+        outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
         return false;
     }
-    for(usize overrideIndex = 0u; overrideIndex < options.queueOverrideCount; ++overrideIndex){
-        const GpuTaskQueueAssignmentOverride& override = options.queueOverrides[overrideIndex];
+    for(usize overrideIndex = 0u; overrideIndex < options.diagnosticQueueOverrideCount; ++overrideIndex){
+        const GpuTaskDiagnosticQueueOverride& override = options.diagnosticQueueOverrides[overrideIndex];
         if(!graph.validTask(override.task)){
-            outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride;
+            outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
             outDiagnostic.task = override.task;
             return false;
         }
         const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, override.queue);
         if(
-            overrideQueues[override.task.index].valid()
+            diagnosticOverrideQueues[override.task.index].valid()
             || !candidate
             || !IsLegalQueueAssignmentCandidate(graph, topology, graph.taskAt(override.task.index), *candidate)
-            || (requiredQueues[override.task.index].valid() && requiredQueues[override.task.index] != override.queue)
+            || (initialOwnershipQueues[override.task.index].valid() && initialOwnershipQueues[override.task.index] != override.queue)
         )
-            return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride, override.task);
-        overrideQueues[override.task.index] = override.queue;
+            return fail(GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride, override.task);
+        diagnosticOverrideQueues[override.task.index] = override.queue;
     }
 
     outGroups.clear();
@@ -286,8 +286,8 @@ namespace GpuTaskGraphCompilerDetail{
             .assignmentOffset = assignmentIndex,
             .assignmentCount = 1u,
             .requiredCapabilities = task.commands.requiredCapabilities,
-            .requiredQueue = requiredQueues[taskID.index],
-            .overrideQueue = overrideQueues[taskID.index],
+            .initialOwnershipQueue = initialOwnershipQueues[taskID.index],
+            .diagnosticOverrideQueue = diagnosticOverrideQueues[taskID.index],
         };
         const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton);
         if(!singletonQueue)
@@ -300,13 +300,13 @@ namespace GpuTaskGraphCompilerDetail{
             GpuTaskQueuePlacementGroup combined = outGroups.back();
             ++combined.assignmentCount;
             combined.requiredCapabilities |= singleton.requiredCapabilities;
-            combined.overrideQueue = {};
+            combined.diagnosticOverrideQueue = {};
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
-            if(AccumulateRequiredQueue(singleton.requiredQueue, combined.requiredQueue)){
+            if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
                 NWB_ASSERT(legalityWitness);
                 // The witness already admits preceding members; only the appended task can invalidate it.
                 if(
-                    (!combined.requiredQueue.valid() || combined.requiredQueue == legalityWitness->id)
+                    (!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id)
                     && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness)
                 )
                     combinedWitness = legalityWitness;
@@ -314,15 +314,15 @@ namespace GpuTaskGraphCompilerDetail{
                     combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined);
             }
             if(combinedWitness){
-                combined.overrideQueue = outGroups.back().overrideQueue;
+                combined.diagnosticOverrideQueue = outGroups.back().diagnosticOverrideQueue;
                 if(
-                    !AccumulateRequiredQueue(singleton.overrideQueue, combined.overrideQueue)
+                    !AccumulateExactQueueConstraint(singleton.diagnosticOverrideQueue, combined.diagnosticOverrideQueue)
                     || (
-                        combined.overrideQueue.valid()
+                        combined.diagnosticOverrideQueue.valid()
                         && !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)
                     )
                 )
-                    return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride, taskID);
+                    return fail(GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride, taskID);
                 outGroups.back() = combined;
                 legalityWitness = combinedWitness;
                 continue;

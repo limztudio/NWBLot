@@ -69,10 +69,10 @@ namespace GpuTaskQueueAssignmentModifier{
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryRouting = 1u << 2u,
-        DebugTimingOverride = 1u << 3u,
+        DiagnosticTimingQueueOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
-        QueueOverride = 1u << 6u,
+        DiagnosticQueueOverride = 1u << 6u,
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
@@ -86,7 +86,7 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         InvalidQueueTopology,
         InvalidQueueLoad,
         InvalidTimingFeedback,
-        InvalidQueueOverride,
+        InvalidDiagnosticQueueOverride,
         NoCompatibleQueue,
     };
 };
@@ -122,15 +122,15 @@ namespace GpuTaskGraphPacketizationPolicy{
     };
 };
 
-// The timing system owns these immutable observations. Queue assignment only consumes a snapshot,
-// graph validation and packet/barrier correctness remain independent from late query completion and history mutation.
+// Relative work cost for one physical queue. Scheduler pressure snapshots and compile-local assignment totals
+// use the same units as task cost hints.
 struct GpuTaskQueueLoad{
     GpuPhysicalQueueId queue;
     u64 estimatedCost = 0u;
 };
 
 // Scheduler diagnostics may force a legal placement without adding queue choices to task declarations.
-struct GpuTaskQueueAssignmentOverride{
+struct GpuTaskDiagnosticQueueOverride{
     GpuTaskId task;
     GpuPhysicalQueueId queue;
 };
@@ -143,11 +143,11 @@ struct GpuTaskGraphQueueAssignmentOptions{
     // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
     // The history remains an explicitly immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
-    const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
-    usize timingQueueOverrideCount = 0u;
+    const GpuTaskDiagnosticTimingQueueOverride* diagnosticTimingQueueOverrides = nullptr;
+    usize diagnosticTimingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;
-    const GpuTaskQueueAssignmentOverride* queueOverrides = nullptr;
-    usize queueOverrideCount = 0u;
+    const GpuTaskDiagnosticQueueOverride* diagnosticQueueOverrides = nullptr;
+    usize diagnosticQueueOverrideCount = 0u;
 };
 
 // Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).

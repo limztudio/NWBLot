@@ -227,15 +227,15 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    const Graphics::GpuTaskQueueAssignmentOverride routes[] = {
+    const Graphics::GpuTaskDiagnosticQueueOverride routes[] = {
         { .task = first, .queue = queues[1u].id },
         { .task = second, .queue = queues[0u].id },
         { .task = transfer, .queue = queues[s_ThirdElementIndex].id },
         { .task = recovery, .queue = queues[0u].id },
     };
     Graphics::GpuTaskGraphCompileOptions options;
-    options.queueAssignmentOptions.queueOverrides = routes;
-    options.queueAssignmentOptions.queueOverrideCount = LengthOf(routes);
+    options.queueAssignmentOptions.diagnosticQueueOverrides = routes;
+    options.queueAssignmentOptions.diagnosticQueueOverrideCount = LengthOf(routes);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
@@ -750,11 +750,11 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     );
     ASSERT_TRUE(generatedVertexBuffer.valid());
 
-    const Graphics::GpuTaskCommandRequirements graphicsComputeQueue{ QueueCapabilities(
+    const Graphics::GpuTaskCommandRequirements graphicsComputeCommands{ QueueCapabilities(
             Graphics::GpuQueueCapability::Graphics,
             Graphics::GpuQueueCapability::Compute
         ) };
-    const Graphics::GpuTaskCommandRequirements graphicsRasterQueue{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements graphicsRasterCommands{ Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Small;
     producerScheduling.overlapPreferred = false;
@@ -776,7 +776,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
             .setMarkerLabel("Generate Vertex Buffer")
             .setScheduling(producerScheduling)
             .setResourceUses(producerUses, LengthOf(producerUses)),
-        graphicsComputeQueue
+        graphicsComputeCommands
     );
     ASSERT_TRUE(producer.valid());
 
@@ -798,7 +798,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
             .setScheduling(rasterScheduling)
             .setDependencies(&producer, 1u)
             .setResourceUses(rasterUses, LengthOf(rasterUses)),
-        graphicsRasterQueue
+        graphicsRasterCommands
     );
     ASSERT_TRUE(raster.valid());
 

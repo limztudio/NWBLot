@@ -212,8 +212,8 @@ struct GpuTaskQueueScoringData{
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> ownershipEdges;
     Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
     u64 totalAssignedCost = 0u;
-    const GpuTaskQueueLoad* queueLoads = nullptr;
-    usize queueLoadCount = 0u;
+    const GpuTaskQueueLoad* externalQueueLoads = nullptr;
+    usize externalQueueLoadCount = 0u;
 
 
     [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
@@ -225,7 +225,7 @@ struct GpuTaskQueueScoringData{
     );
 
     void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuTaskGraphQueueTopology& topology);
-    void moveAssignedTask(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
+    void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
 };
 
@@ -253,8 +253,8 @@ struct GpuTaskQueuePlacementGroup{
     usize assignmentOffset = 0u;
     usize assignmentCount = 0u;
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
-    GpuPhysicalQueueId requiredQueue;
-    GpuPhysicalQueueId overrideQueue;
+    GpuPhysicalQueueId initialOwnershipQueue;
+    GpuPhysicalQueueId diagnosticOverrideQueue;
 };
 
 [[nodiscard]] bool BuildQueuePlacementGroups(

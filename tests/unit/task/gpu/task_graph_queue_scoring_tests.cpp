@@ -199,20 +199,20 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         const usize moves[][2u] = { { 0u, 1u }, { 3u, 1u }, { 6u, 1u }, { 0u, 2u }, { 5u, 0u }, { 0u, 2u } };
         for(const auto& move : moves){
             Graphics::GpuTaskQueueAssignment& assignment = assignments[move[0u]];
-            scoringData.moveAssignedTask(assignment.task, assignment.queue, queues[move[1u]].id);
+            scoringData.updateAssignmentLoads(assignment.task, assignment.queue, queues[move[1u]].id);
             assignment.queue = queues[move[1u]].id;
             expectScores();
         }
         // Exercise zero eligible off-queue cost, including cancellation by self and a singleton exclusion.
         for(Graphics::GpuTaskQueueAssignment& assignment : assignments){
-            scoringData.moveAssignedTask(assignment.task, assignment.queue, queues[0u].id);
+            scoringData.updateAssignmentLoads(assignment.task, assignment.queue, queues[0u].id);
             assignment.queue = queues[0u].id;
         }
         expectScores();
         const usize offQueueRows[] = { 0u, 3u };
         for(const usize row : offQueueRows){
             Graphics::GpuTaskQueueAssignment& assignment = assignments[row];
-            scoringData.moveAssignedTask(assignment.task, assignment.queue, queues[1u].id);
+            scoringData.updateAssignmentLoads(assignment.task, assignment.queue, queues[1u].id);
             assignment.queue = queues[1u].id;
             expectScores();
         }

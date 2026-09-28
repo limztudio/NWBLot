@@ -39,14 +39,14 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
-    const Graphics::GpuTaskCommandRequirements graphicsQueue{ Graphics::GpuQueueCapability::Graphics };
-    const Graphics::GpuTaskCommandRequirements computeQueue{ Graphics::GpuQueueCapability::Compute };
+    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements computeCommands{ Graphics::GpuQueueCapability::Compute };
     const auto addFirstUse = [&](
         Graphics::GpuTaskGraph& graph,
         const Graphics::GpuGraphResourceId resource,
         const Name& identity,
         const AStringView label,
-        const Graphics::GpuTaskCommandRequirements& queue){
+        const Graphics::GpuTaskCommandRequirements& commands){
         const Graphics::GpuTaskResourceUse use{
             .resource = resource,
             .range = {},
@@ -59,7 +59,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             .setMarkerLabel(label)
             .setResourceUses(&use, 1u)
         ;
-        return graph.addTask(desc, queue);
+        return graph.addTask(desc, commands);
     };
     const auto addBuffer = [&](
         Graphics::GpuTaskGraph& graph,
@@ -100,7 +100,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             resource,
             Name("tests/task_graph/initial_owner_graphics_use"),
             "Initial Owner Graphics Use",
-            graphicsQueue
+            graphicsCommands
         );
         ASSERT_TRUE(task.valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -129,7 +129,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             resource,
             Name("tests/task_graph/initial_owner_compute_use"),
             "Initial Owner Compute Use",
-            computeQueue
+            computeCommands
         ).valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -155,7 +155,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             resource,
             Name("tests/task_graph/initial_owner_stale_use"),
             "Initial Owner Stale Use",
-            graphicsQueue
+            graphicsCommands
         ).valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -182,7 +182,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             resource,
             Name("tests/task_graph/initial_owner_concurrent_use"),
             "Initial Owner Concurrent Use",
-            graphicsQueue
+            graphicsCommands
         ).valid());
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

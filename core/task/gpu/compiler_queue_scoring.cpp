@@ -253,10 +253,10 @@ const GpuTaskQueueAssignment* FindQueueAssignment(
 
 
 u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
-    if(!queueLoads)
+    if(!externalQueueLoads)
         return 0u;
-    for(usize queueLoadIndex = 0u; queueLoadIndex < queueLoadCount; ++queueLoadIndex){
-        const GpuTaskQueueLoad& externalLoad = queueLoads[queueLoadIndex];
+    for(usize queueLoadIndex = 0u; queueLoadIndex < externalQueueLoadCount; ++queueLoadIndex){
+        const GpuTaskQueueLoad& externalLoad = externalQueueLoads[queueLoadIndex];
         if(externalLoad.queue == queue)
             return externalLoad.estimatedCost;
     }
@@ -272,8 +272,8 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
     , ownershipEdges(scratchArena)
     , assignedQueueLoads(scratchArena)
-    , queueLoads(options.queueLoads)
-    , queueLoadCount(options.queueLoadCount)
+    , externalQueueLoads(options.queueLoads)
+    , externalQueueLoadCount(options.queueLoadCount)
 {
     for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex)
         taskCosts[taskIndex] = QueueCostWeight(graph.taskAt(taskIndex).scheduling.cost);
@@ -350,7 +350,7 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     }
 }
 
-void GpuTaskQueueScoringData::moveAssignedTask(
+void GpuTaskQueueScoringData::updateAssignmentLoads(
     const GpuTaskId& task,
     const GpuPhysicalQueueId& previousQueue,
     const GpuPhysicalQueueId& selectedQueue)noexcept{

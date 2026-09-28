@@ -461,14 +461,14 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
             .access = Graphics::GpuTaskResourceAccess::Read,
         };
     }
-    const Graphics::GpuTaskCommandRequirements queue{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics };
+    const Graphics::GpuTaskCommandRequirements commands{ .requiredCapabilities = Graphics::GpuQueueCapability::Graphics };
     Graphics::GpuTaskDesc wholeDesc;
     wholeDesc
         .setIdentity(Name("tests/fragment_order/whole"))
         .setMarkerLabel("Whole Writer")
         .setResourceUses(wholeUses, LengthOf(wholeUses))
     ;
-    const Graphics::GpuTaskId whole = graph.addTask(wholeDesc, queue);
+    const Graphics::GpuTaskId whole = graph.addTask(wholeDesc, commands);
     ASSERT_TRUE(whole.valid());
     Graphics::GpuTaskDesc cutsDesc;
     cutsDesc
@@ -477,7 +477,7 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
         .setDependencies(&whole, 1u)
         .setResourceUses(cutUses, LengthOf(cutUses))
     ;
-    const Graphics::GpuTaskId cuts = graph.addTask(cutsDesc, queue);
+    const Graphics::GpuTaskId cuts = graph.addTask(cutsDesc, commands);
     ASSERT_TRUE(cuts.valid());
     Graphics::GpuTaskDesc readerDesc;
     readerDesc
@@ -486,7 +486,7 @@ TEST(GpuTaskGraphResourceFragments, SixtyFourBuffersPreserveExactTerminalExportS
         .setDependencies(&cuts, 1u)
         .setResourceUses(readUses, LengthOf(readUses))
     ;
-    const Graphics::GpuTaskId reader = graph.addTask(readerDesc, queue);
+    const Graphics::GpuTaskId reader = graph.addTask(readerDesc, commands);
     ASSERT_TRUE(reader.valid());
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);

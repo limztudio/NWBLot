@@ -565,14 +565,14 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         ASSERT_NE(assignments.find(task), nullptr);
         EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
 
-        const Graphics::GpuTaskQueueAssignmentOverride route{ .task = task, .queue = queues[1u].id };
+        const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = task, .queue = queues[1u].id };
         Graphics::GpuTaskGraphQueueAssignmentOptions options;
-        options.queueOverrides = &route;
-        options.queueOverrideCount = 1u;
+        options.diagnosticQueueOverrides = &route;
+        options.diagnosticQueueOverrideCount = 1u;
         EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
         EXPECT_EQ(
             assignments.diagnostic().status,
-            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride
+            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
     }
@@ -631,14 +631,14 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         ASSERT_NE(assignments.find(task), nullptr);
         EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
 
-        const Graphics::GpuTaskQueueAssignmentOverride route{ .task = task, .queue = queues[1u].id };
+        const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = task, .queue = queues[1u].id };
         Graphics::GpuTaskGraphQueueAssignmentOptions options;
-        options.queueOverrides = &route;
-        options.queueOverrideCount = 1u;
+        options.diagnosticQueueOverrides = &route;
+        options.diagnosticQueueOverrideCount = 1u;
         EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
         EXPECT_EQ(
             assignments.diagnostic().status,
-            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride
+            Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
         );
         EXPECT_EQ(assignments.diagnostic().task, task);
     };

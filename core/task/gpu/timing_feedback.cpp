@@ -129,46 +129,44 @@ bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
 }
 
 
-GpuTaskTimingQueueOverrideStatus::Enum ValidateGpuTaskTimingQueueOverrides(
-    const GpuTaskTimingQueueOverride* const overrides,
+GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(
+    const GpuTaskDiagnosticTimingQueueOverride* const overrides,
     const usize overrideCount,
-    const u16 deviceGeneration
-)noexcept{
+    const u16 deviceGeneration)noexcept{
     if(overrideCount == 0u)
-        return GpuTaskTimingQueueOverrideStatus::Success;
+        return GpuTaskDiagnosticTimingQueueOverrideStatus::Success;
     if(!overrides)
-        return GpuTaskTimingQueueOverrideStatus::MissingOverrides;
+        return GpuTaskDiagnosticTimingQueueOverrideStatus::MissingOverrides;
     if(deviceGeneration == 0u)
-        return GpuTaskTimingQueueOverrideStatus::MismatchedDeviceGeneration;
+        return GpuTaskDiagnosticTimingQueueOverrideStatus::MismatchedDeviceGeneration;
 
     for(usize overrideIndex = 0u; overrideIndex < overrideCount; ++overrideIndex){
-        const GpuTaskTimingQueueOverride& override = overrides[overrideIndex];
+        const GpuTaskDiagnosticTimingQueueOverride& override = overrides[overrideIndex];
         if(!override.key.valid())
-            return GpuTaskTimingQueueOverrideStatus::InvalidKey;
+            return GpuTaskDiagnosticTimingQueueOverrideStatus::InvalidKey;
         if(!override.queue.valid())
-            return GpuTaskTimingQueueOverrideStatus::InvalidQueue;
+            return GpuTaskDiagnosticTimingQueueOverrideStatus::InvalidQueue;
         if(override.queue.deviceGeneration != deviceGeneration)
-            return GpuTaskTimingQueueOverrideStatus::MismatchedDeviceGeneration;
+            return GpuTaskDiagnosticTimingQueueOverrideStatus::MismatchedDeviceGeneration;
 
         for(usize previousIndex = 0u; previousIndex < overrideIndex; ++previousIndex){
             if(overrides[previousIndex].key == override.key)
-                return GpuTaskTimingQueueOverrideStatus::DuplicateTaskKey;
+                return GpuTaskDiagnosticTimingQueueOverrideStatus::DuplicateTaskKey;
         }
     }
-    return GpuTaskTimingQueueOverrideStatus::Success;
+    return GpuTaskDiagnosticTimingQueueOverrideStatus::Success;
 }
 
 
-const GpuTaskTimingQueueOverride* FindGpuTaskTimingQueueOverride(
-    const GpuTaskTimingQueueOverride* const overrides,
+const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(
+    const GpuTaskDiagnosticTimingQueueOverride* const overrides,
     const usize overrideCount,
-    const GpuTaskTimingKey& key
-)noexcept{
+    const GpuTaskTimingKey& key)noexcept{
     if(!overrides || !key.valid())
         return nullptr;
 
     for(usize overrideIndex = 0u; overrideIndex < overrideCount; ++overrideIndex){
-        const GpuTaskTimingQueueOverride& override = overrides[overrideIndex];
+        const GpuTaskDiagnosticTimingQueueOverride& override = overrides[overrideIndex];
         if(override.key == key)
             return &override;
     }

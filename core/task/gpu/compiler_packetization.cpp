@@ -423,7 +423,7 @@ namespace GpuTaskGraphCompilerDetail{
                 assignment->modifiers
                 & (
                     GpuTaskQueueAssignmentModifier::TimingCalibration
-                    | GpuTaskQueueAssignmentModifier::DebugTimingOverride
+                    | GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride
                 )
             ),
         });

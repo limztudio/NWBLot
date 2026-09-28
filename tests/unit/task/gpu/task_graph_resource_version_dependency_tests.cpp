@@ -307,10 +307,10 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
         .queueCount = LengthOf(queues),
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = consumer, .queue = queues[1u].id };
+    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = consumer, .queue = queues[1u].id };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = &route;
-    options.queueOverrideCount = 1u;
+    options.diagnosticQueueOverrides = &route;
+    options.diagnosticQueueOverrideCount = 1u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);

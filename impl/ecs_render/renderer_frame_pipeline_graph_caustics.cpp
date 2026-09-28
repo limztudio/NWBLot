@@ -465,7 +465,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
-    // Start an independent packet on the auxiliary lane; successors keep it.
+    // Allow physical queue balancing for the initial packet; successors retain its selected queue.
     EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
     Core::GpuTaskDesc irradianceClearDesc;

@@ -224,14 +224,14 @@ struct GpuTaskTimingFeedbackPolicy{
     [[nodiscard]] bool valid()const noexcept;
 };
 
-struct GpuTaskTimingQueueOverride{
+struct GpuTaskDiagnosticTimingQueueOverride{
     GpuTaskTimingKey key;
     GpuPhysicalQueueId queue;
 
     [[nodiscard]] bool valid()const noexcept{ return key.valid() && queue.valid(); }
 };
 
-namespace GpuTaskTimingQueueOverrideStatus{
+namespace GpuTaskDiagnosticTimingQueueOverrideStatus{
     enum Enum : u8{
         Success,
         MissingOverrides,
@@ -246,13 +246,13 @@ namespace GpuTaskTimingQueueOverrideStatus{
 
 // Validates only identity and device-generation safety.  The compiler remains responsible for capability, queue
 // class, resource-ownership, and task-level eligibility checks before honoring a debug force override.
-[[nodiscard]] GpuTaskTimingQueueOverrideStatus::Enum ValidateGpuTaskTimingQueueOverrides(
-    const GpuTaskTimingQueueOverride* overrides,
+[[nodiscard]] GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(
+    const GpuTaskDiagnosticTimingQueueOverride* overrides,
     usize overrideCount,
     u16 deviceGeneration
 )noexcept;
-[[nodiscard]] const GpuTaskTimingQueueOverride* FindGpuTaskTimingQueueOverride(
-    const GpuTaskTimingQueueOverride* overrides,
+[[nodiscard]] const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(
+    const GpuTaskDiagnosticTimingQueueOverride* overrides,
     usize overrideCount,
     const GpuTaskTimingKey& key
 )noexcept;

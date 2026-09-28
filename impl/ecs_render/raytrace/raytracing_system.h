@@ -801,7 +801,7 @@ public:
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     [[nodiscard]] bool ensureSurfelUpsamplePipeline();
     [[nodiscard]] bool ensureSurfelTraceBuildArgsPipeline();
-    // The graph schedules the small diagnostic copy as a late Transfer-preferred tail and publishes its token.
+    // The graph schedules the small diagnostic readback as a late copy task and publishes its token.
     [[nodiscard]] bool shouldCaptureSurfelCountReadback()const noexcept;
     void markSurfelCountReadbackScheduled()noexcept;
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;

@@ -204,7 +204,7 @@ def markdown_report(report: Dict[str, Any]) -> str:
         "",
         f"Status: **{status}**",
         "",
-        "This compares explicit Graphics setup uploads with the automatic Transfer-preferred route. "
+        "This compares explicit Graphics setup uploads with the automatic Transfer route. "
         "Both arms keep the same logical-device queue topology. The reported throughput is a host completion envelope; "
         "memory-bandwidth contention requires an external GPU trace and review.",
         "",

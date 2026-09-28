@@ -1100,10 +1100,10 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = consumer, .queue = queues[1u].id };
+    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = consumer, .queue = queues[1u].id };
     Graphics::GpuTaskGraphCompileOptions options;
-    options.queueAssignmentOptions.queueOverrides = &route;
-    options.queueAssignmentOptions.queueOverrideCount = 1u;
+    options.queueAssignmentOptions.diagnosticQueueOverrides = &route;
+    options.queueAssignmentOptions.diagnosticQueueOverrideCount = 1u;
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 

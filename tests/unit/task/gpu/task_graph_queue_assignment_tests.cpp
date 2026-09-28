@@ -178,15 +178,18 @@ TEST(GpuTaskGraph, KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacem
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, GraphicsQueue().id);
-    const Graphics::GpuTaskQueueAssignmentOverride override{ .task = task, .queue = auxiliary.id };
+    const Graphics::GpuTaskDiagnosticQueueOverride override{ .task = task, .queue = auxiliary.id };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = &override;
-    options.queueOverrideCount = 1u;
+    options.diagnosticQueueOverrides = &override;
+    options.diagnosticQueueOverrideCount = 1u;
     EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
-    EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride);
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
+    );
 }
 
-TEST(GpuTaskGraph, RejectsConflictingSchedulerOverridesForMergedTasks){
+TEST(GpuTaskGraph, RejectsConflictingDiagnosticQueueOverridesForMergedTasks){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint firstScheduling;
@@ -202,15 +205,18 @@ TEST(GpuTaskGraph, RejectsConflictingSchedulerOverridesForMergedTasks){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    const Graphics::GpuTaskQueueAssignmentOverride overrides[] = {
+    const Graphics::GpuTaskDiagnosticQueueOverride overrides[] = {
         { .task = first, .queue = queues[0u].id },
         { .task = second, .queue = queues[1u].id },
     };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = overrides;
-    options.queueOverrideCount = LengthOf(overrides);
+    options.diagnosticQueueOverrides = overrides;
+    options.diagnosticQueueOverrideCount = LengthOf(overrides);
     EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
-    EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride);
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
+    );
 }
 
 TEST(GpuTaskGraph, AutomaticallyPreservesAnImportedExclusiveOwnerForFirstUse){
@@ -273,30 +279,41 @@ TEST(GpuTaskGraph, DerivesTypedCommandRequirementsFromTheTaskPayload){
     EXPECT_EQ(declarations.taskAt(compute.index).commands.requiredCapabilities, Graphics::GpuQueueCapability::Compute);
 }
 
-TEST(GpuTaskGraph, ValidatesSchedulerQueueOverridesAgainstCommandCapabilities){
+TEST(GpuTaskGraph, ValidatesDiagnosticQueueOverridesAgainstCommandCapabilities){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/queue_override"), "Queue Override", ComputeCommands());
+    const Graphics::GpuTaskId task = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/diagnostic_queue_override"),
+        "Diagnostic Queue Override",
+        ComputeCommands()
+    );
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(0u, Graphics::GpuQueueCapability::Graphics), DedicatedComputeQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    Graphics::GpuTaskQueueAssignmentOverride override{ .task = task, .queue = queues[1u].id };
+    Graphics::GpuTaskDiagnosticQueueOverride override{ .task = task, .queue = queues[1u].id };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = &override;
-    options.queueOverrideCount = 1u;
+    options.diagnosticQueueOverrides = &override;
+    options.diagnosticQueueOverrideCount = 1u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, queues[1u].id);
-    EXPECT_TRUE(assignments.find(task)->modifiers & Graphics::GpuTaskQueueAssignmentModifier::QueueOverride);
+    EXPECT_TRUE(assignments.find(task)->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride);
     override.queue = queues[0u].id;
     EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
-    EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride);
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
+    );
     override.queue = { .index = 1u, .deviceGeneration = s_ExpectedDualCount };
     EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
-    EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride);
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride
+    );
 }
 
 TEST(GpuTaskGraph, ChoosesComputePlacementFromOverlapAndExternalQueueLoad){
@@ -365,22 +382,22 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
     const Graphics::GpuTaskId graphicsTask = AddTaskWithCommands(
         graph,
-        Name("tests/task_graph/scored_any_graphics"),
-        "Scored Any Graphics",
+        Name("tests/task_graph/deterministic_graphics"),
+        "Deterministic Graphics",
         graphicsCommands,
         graphicsScheduling
     );
 
-    Graphics::GpuTaskCommandRequirements anyRequest;
-    anyRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-    const Graphics::GpuTaskId anyTask = AddTaskWithCommands(
+    Graphics::GpuTaskCommandRequirements transferCommands;
+    transferCommands.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
+    const Graphics::GpuTaskId transferTask = AddTaskWithCommands(
         graph,
-        Name("tests/task_graph/scored_any"),
-        "Scored Any",
-        anyRequest
+        Name("tests/task_graph/deterministic_transfer"),
+        "Deterministic Transfer",
+        transferCommands
     );
     ASSERT_TRUE(graphicsTask.valid());
-    ASSERT_TRUE(anyTask.valid());
+    ASSERT_TRUE(transferTask.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphics = GraphicsQueue(3u);
     auxiliaryGraphics.queueIndex = 1u;
@@ -411,8 +428,8 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     ASSERT_TRUE(Assign(graph, analysis, firstTopology, firstAssignments));
     ASSERT_TRUE(Assign(graph, analysis, secondTopology, secondAssignments));
 
-    const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(anyTask);
-    const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(anyTask);
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(transferTask);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(transferTask);
     ASSERT_NE(firstAssignment, nullptr);
     ASSERT_NE(secondAssignment, nullptr);
     EXPECT_EQ(firstAssignment->queue, DedicatedComputeQueue().id);
@@ -477,10 +494,10 @@ TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
         .queueCount = LengthOf(queues),
     };
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = producer, .queue = queues[1u].id };
+    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = producer, .queue = queues[1u].id };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = &route;
-    options.queueOverrideCount = 1u;
+    options.diagnosticQueueOverrides = &route;
+    options.diagnosticQueueOverrideCount = 1u;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     ASSERT_NE(producerAssignment, nullptr);
@@ -566,10 +583,10 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
         .queueCount = LengthOf(separateFamilyQueues),
     };
     Graphics::GpuTaskGraphQueueAssignments separateFamilyAssignments(testArena.arena);
-    const Graphics::GpuTaskQueueAssignmentOverride route{ .task = consumer, .queue = separateFamilyQueues[1u].id };
+    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = consumer, .queue = separateFamilyQueues[1u].id };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
-    options.queueOverrides = &route;
-    options.queueOverrideCount = 1u;
+    options.diagnosticQueueOverrides = &route;
+    options.diagnosticQueueOverrideCount = 1u;
     ASSERT_TRUE(Assign(graph, analysis, separateFamilyTopology, separateFamilyAssignments, options));
     const Graphics::GpuTaskQueueAssignment* const separateFamilyAssignment = separateFamilyAssignments.find(consumer);
     ASSERT_NE(separateFamilyAssignment, nullptr);
@@ -617,7 +634,7 @@ TEST(GpuTaskGraph, UsesFutureConsumerRoutesWhenChoosingAutomaticPlacement){
         const Graphics::GpuTaskId movable = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_future_movable"), "Future Movable", ComputeCommands(), {}, {}, &producer, 1u);
         ASSERT_TRUE(movable.valid());
         const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-        Graphics::GpuTaskQueueAssignmentOverride routes[3u] = {};
+        Graphics::GpuTaskDiagnosticQueueOverride routes[3u] = {};
         const Name consumerIdentities[] = { Name("tests/task_graph/future_first"), Name("tests/task_graph/future_second"), Name("tests/task_graph/future_third") };
         if(addFutureConsumers){
             for(usize index = 0u; index < LengthOf(routes); ++index){
@@ -631,8 +648,8 @@ TEST(GpuTaskGraph, UsesFutureConsumerRoutesWhenChoosingAutomaticPlacement){
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Analyze(graph, analysis));
         Graphics::GpuTaskGraphQueueAssignmentOptions options;
-        options.queueOverrides = addFutureConsumers ? routes : nullptr;
-        options.queueOverrideCount = addFutureConsumers ? LengthOf(routes) : 0u;
+        options.diagnosticQueueOverrides = addFutureConsumers ? routes : nullptr;
+        options.diagnosticQueueOverrideCount = addFutureConsumers ? LengthOf(routes) : 0u;
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(movable);
         ASSERT_NE(assignment, nullptr);

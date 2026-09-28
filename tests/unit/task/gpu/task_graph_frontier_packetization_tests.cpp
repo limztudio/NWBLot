@@ -576,7 +576,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
-    const Graphics::GpuTaskTimingQueueOverride queueOverride{
+    const Graphics::GpuTaskDiagnosticTimingQueueOverride queueOverride{
         .key = Graphics::GpuTaskTimingKey{
             .task = consumerIdentity,
             .queue = Graphics::CommandQueue::Graphics,
@@ -585,8 +585,8 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
     };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    options.queueAssignmentOptions.timingQueueOverrides = &queueOverride;
-    options.queueAssignmentOptions.timingQueueOverrideCount = 1u;
+    options.queueAssignmentOptions.diagnosticTimingQueueOverrides = &queueOverride;
+    options.queueAssignmentOptions.diagnosticTimingQueueOverrideCount = 1u;
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);

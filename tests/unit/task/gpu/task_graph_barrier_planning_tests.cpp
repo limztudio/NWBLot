@@ -706,7 +706,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         const Name& identity,
         const AStringView label,
         const Graphics::GpuGraphResourceId resource,
-        const Graphics::GpuTaskCommandRequirements& queue,
+        const Graphics::GpuTaskCommandRequirements& commands,
         const bool hasIndependentStateSource){
         const Graphics::GpuTaskResourceUse uses[] = {
             Graphics::GpuTaskResourceUse{
@@ -724,7 +724,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
             .setScheduling(scheduling)
             .setResourceUses(uses, LengthOf(uses))
         ;
-        return graph.addTask(desc, queue);
+        return graph.addTask(desc, commands);
     };
     const Graphics::GpuTaskId concurrentGraphics = addReadTask(
         Name("tests/task_graph/concurrent_read_graphics"),

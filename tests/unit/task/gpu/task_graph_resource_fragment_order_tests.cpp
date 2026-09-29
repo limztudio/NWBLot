@@ -80,9 +80,9 @@ void AppendBufferState(
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = resource,
         .range = BufferRange(offset, size),
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = static_cast<u32>(states.size()) },
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = static_cast<u32>(states.size()) },
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
 }
@@ -116,9 +116,9 @@ static void BenchmarkLatestWholeState(const Graphics::GpuGraphResourceType::Enum
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = s_Buffer,
         .range = {},
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
     RequestedRanges requested(scratchArena);
@@ -297,17 +297,17 @@ TEST(GpuTaskGraphResourceFragments, TextureInteriorOverwritePreservesFourRemaind
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = s_Buffer,
         .range = whole,
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = s_Buffer,
         .range = center,
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 1u },
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 1u },
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
     RequestedRanges requested(scratchArena);
@@ -382,9 +382,9 @@ TEST(GpuTaskGraphResourceFragments, IndexedHistoryRejectsForeignGenerationAndInv
     TrackedCompiledResourceState state{
         .resource = s_Buffer,
         .range = BufferRange(0u, 16u),
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
         .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     };
     ASSERT_TRUE(history.append(state));
@@ -476,9 +476,9 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
         TrackedCompiledResourceState state{
             .resource = s_Buffer,
             .range = {},
+            .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
             .state = Graphics::ResourceStates::CopyDest,
             .access = Graphics::GpuTaskResourceAccess::Write,
-            .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
             .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
         };
         ASSERT_TRUE(history.append(state));

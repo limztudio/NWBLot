@@ -278,7 +278,7 @@ def require_metadata_field_absent(metadata: str, field: str) -> None:
 
 
 def metadata_mip_payload_byte_count(metadata: str) -> int:
-    mip_sizes = [int(size) for size in re.findall(r'LIT_SIZE_BYTES: (\d+)', metadata)]
+    mip_sizes = [int(size) for size in re.findall(r'"' + LIT_SIZE_BYTES + r'": (\d+)', metadata)]
     if not mip_sizes:
         raise AssertionError(f"metadata does not contain mip byte sizes\n{metadata}")
     return sum(mip_sizes)
@@ -301,12 +301,12 @@ def require_uastc_hdr_metadata(metadata: str) -> None:
     for fragment in (
         "asset.version = 2;",
         'asset.format = "uastc_hdr_4x4";',
-        'asset.color_space = LIT_LINEAR;',
+        'asset.color_space = "linear";',
         LIT_ASSET_BLOCK_WIDTH_4,
         LIT_ASSET_BLOCK_HEIGHT_4,
         LIT_ASSET_BYTES_PER_BLOCK_16,
-        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
-        'asset.mip_address_mode = LIT_CLAMP;',
+        'asset.payload_layout = "mip_major_slice_major_blocks";',
+        'asset.mip_address_mode = "clamp";',
     ):
         require_metadata_fragment(metadata, fragment)
     require_metadata_string_field(metadata, "asset.uastc_hdr_spec_revision")
@@ -452,24 +452,24 @@ def main() -> int:
     for fragment in (
         "texture asset;",
         LIT_ASSET_VERSION_1,
-        'asset.format = LIT_UASTC_LDR_4X4;',
-        'asset.uastc_spec_revision = LIT_B624C07AD3C659E7B0F0BADCB36E9A6B8820A9;',
+        'asset.format = "uastc_ldr_4x4";',
+        'asset.uastc_spec_revision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";',
         'asset.color_space = "srgb";',
-        'asset.dimension = LIT_N_2D;',
+        'asset.dimension = "2d";',
         LIT_ASSET_DEPTH_1,
         "asset.width = 7;",
         "asset.height = 5;",
         LIT_ASSET_BLOCK_WIDTH_4,
         LIT_ASSET_BLOCK_HEIGHT_4,
         LIT_ASSET_BYTES_PER_BLOCK_16,
-        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
-        'asset.mip_address_mode = LIT_CLAMP;',
+        'asset.payload_layout = "mip_major_slice_major_blocks";',
+        'asset.mip_address_mode = "clamp";',
         LIT_ASSET_HAS_ALPHA_1,
         LIT_ASSET_MIP_COUNT_3,
-        'asset.data = LIT_CHECKER_TEX;',
-        '{ LIT_LEVEL: 0, LIT_WIDTH: 7, LIT_HEIGHT: 5, LIT_BLOCKS_X: 2, LIT_BLOCKS_Y: 2, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 64, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 1, LIT_WIDTH: 3, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 64, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 80, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        'asset.data = "checker.tex";',
+        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 7' + ', "' + LIT_HEIGHT + '": 5' + ', "' + LIT_BLOCKS_X + '": 2' + ', "' + LIT_BLOCKS_Y + '": 2' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 64' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 3' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 64' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 80' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(metadata, fragment)
 
@@ -513,7 +513,7 @@ def main() -> int:
         raise AssertionError("tex_conv --output did not create the requested pair")
     require_metadata_fragment(
         linear_metadata_path.read_text(encoding=LIT_UTF_8),
-        'asset.color_space = LIT_LINEAR;',
+        'asset.color_space = "linear";',
     )
 
     # Keep the LDR alpha cases at one UASTC block per level. The expected payloads are
@@ -626,16 +626,16 @@ def main() -> int:
     radiance_metadata = radiance_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(radiance_metadata)
     for fragment in (
-        'asset.dimension = LIT_N_2D;',
+        'asset.dimension = "2d";',
         LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = LIT_OPAQUE;',
+        'asset.alpha_mode = "opaque";',
         LIT_ASSET_MIP_COUNT_3,
-        'asset.data = LIT_RADIANCE_TEX;',
-        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 16, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 32, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        'asset.data = "radiance.tex";',
+        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 16' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 32' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(radiance_metadata, fragment)
     for field in (
@@ -661,7 +661,7 @@ def main() -> int:
     radiance_white_metadata = radiance_white_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(radiance_white_metadata)
     require_metadata_fragment(radiance_white_metadata, LIT_ASSET_HAS_ALPHA_0)
-    require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = LIT_OPAQUE;')
+    require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = "opaque";')
     for field in (
         LIT_ASSET_ALPHA_CONSTANT_UNORM8,
         LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
@@ -711,16 +711,16 @@ def main() -> int:
     openexr_metadata = openexr_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(openexr_metadata)
     for fragment in (
-        'asset.dimension = LIT_N_2D;',
+        'asset.dimension = "2d";',
         LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = LIT_UASTC_LDR_4X4;',
+        'asset.alpha_mode = "uastc_ldr_4x4";',
         LIT_ASSET_MIP_COUNT_3,
-        'asset.data = LIT_OPENEXR_TEX;',
-        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 16, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 32, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        'asset.data = "openexr.tex";',
+        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 16' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 32' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(openexr_metadata, fragment)
     openexr_rgb_payload_bytes = metadata_mip_payload_byte_count(openexr_metadata)
@@ -732,7 +732,7 @@ def main() -> int:
     )
     require_metadata_fragment(
         openexr_metadata,
-        'asset.alpha_uastc_spec_revision = LIT_B624C07AD3C659E7B0F0BADCB36E9A6B8820A9;',
+        'asset.alpha_uastc_spec_revision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";',
     )
     require_metadata_field_absent(openexr_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
     require_texture_payload_matches_metadata(openexr_metadata, openexr_texture_path)
@@ -768,15 +768,15 @@ def main() -> int:
     hdr_cube_metadata = hdr_cube_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(hdr_cube_metadata)
     for fragment in (
-        'asset.dimension = LIT_CUBE_2;',
+        'asset.dimension = "cube";',
         LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = LIT_OPAQUE;',
+        'asset.alpha_mode = "opaque";',
         LIT_ASSET_MIP_COUNT_2,
-        'asset.data = LIT_HDR_CUBE_TEX;',
-        '{ LIT_LEVEL: 0, LIT_WIDTH: 2, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 96, LIT_SLICES: 6 }',
-        '{ LIT_LEVEL: 1, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 96, LIT_SIZE_BYTES: 96, LIT_SLICES: 6 }',
+        'asset.data = "hdr_cube.tex";',
+        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 96' + ', "' + LIT_SLICES + '": 6' + ' }',
+        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 96' + ', "' + LIT_SIZE_BYTES + '": 96' + ', "' + LIT_SLICES + '": 6' + ' }',
     ):
         require_metadata_fragment(hdr_cube_metadata, fragment)
     for field in (
@@ -809,16 +809,16 @@ def main() -> int:
     hdr_volume_metadata = hdr_volume_metadata_path.read_text(encoding=LIT_UTF_8)
     require_uastc_hdr_metadata(hdr_volume_metadata)
     for fragment in (
-        'asset.dimension = LIT_VOLUME_2;',
+        'asset.dimension = "volume";',
         LIT_ASSET_DEPTH_3,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.alpha_mode = LIT_OPAQUE;',
+        'asset.alpha_mode = "opaque";',
         LIT_ASSET_MIP_COUNT_3,
-        'asset.data = LIT_HDR_VOLUME_TEX;',
-        '{ LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 0, LIT_SIZE_BYTES: 48, LIT_SLICES: 3 }',
-        '{ LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 48, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
-        '{ LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1, LIT_BLOCKS_X: 1, LIT_BLOCKS_Y: 1, LIT_OFFSET_BYTES: 64, LIT_SIZE_BYTES: 16, LIT_SLICES: 1 }',
+        'asset.data = "hdr_volume.tex";',
+        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 48' + ', "' + LIT_SLICES + '": 3' + ' }',
+        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 48' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
+        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 64' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(hdr_volume_metadata, fragment)
     for field in (
@@ -854,16 +854,16 @@ def main() -> int:
     cube_metadata = cube_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
         LIT_ASSET_VERSION_1,
-        'asset.dimension = LIT_CUBE_2;',
+        'asset.dimension = "cube";',
         LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
-        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        'asset.payload_layout = "mip_major_slice_major_blocks";',
         LIT_ASSET_MIP_COUNT_2,
-        'LIT_LEVEL: 0, LIT_WIDTH: 2, LIT_HEIGHT: 2',
-        'LIT_LEVEL: 1, LIT_WIDTH: 1, LIT_HEIGHT: 1',
-        'LIT_SLICES: 6',
-        'asset.data = LIT_CUBE_TEX;',
+        '"' + LIT_LEVEL + '": 0, "' + LIT_WIDTH + '": 2, "' + LIT_HEIGHT + '": 2',
+        '"' + LIT_LEVEL + '": 1, "' + LIT_WIDTH + '": 1, "' + LIT_HEIGHT + '": 1',
+        '"' + LIT_SLICES + '": 6',
+        'asset.data = "cube.tex";',
     ):
         require_metadata_fragment(cube_metadata, fragment)
     if cube_texture_path.stat().st_size != 192:
@@ -893,17 +893,17 @@ def main() -> int:
     volume_metadata = volume_metadata_path.read_text(encoding=LIT_UTF_8)
     for fragment in (
         LIT_ASSET_VERSION_1,
-        'asset.dimension = LIT_VOLUME_2;',
+        'asset.dimension = "volume";',
         LIT_ASSET_DEPTH_3,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.payload_layout = LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS;',
+        'asset.payload_layout = "mip_major_slice_major_blocks";',
         LIT_ASSET_MIP_COUNT_3,
-        'LIT_LEVEL: 0, LIT_WIDTH: 4, LIT_HEIGHT: 2',
-        'LIT_LEVEL: 1, LIT_WIDTH: 2, LIT_HEIGHT: 1',
-        'LIT_LEVEL: 2, LIT_WIDTH: 1, LIT_HEIGHT: 1',
-        'LIT_SLICES: 3',
-        'asset.data = LIT_VOLUME_TEX;',
+        '"' + LIT_LEVEL + '": 0, "' + LIT_WIDTH + '": 4, "' + LIT_HEIGHT + '": 2',
+        '"' + LIT_LEVEL + '": 1, "' + LIT_WIDTH + '": 2, "' + LIT_HEIGHT + '": 1',
+        '"' + LIT_LEVEL + '": 2, "' + LIT_WIDTH + '": 1, "' + LIT_HEIGHT + '": 1',
+        '"' + LIT_SLICES + '": 3',
+        'asset.data = "volume.tex";',
     ):
         require_metadata_fragment(volume_metadata, fragment)
     if volume_texture_path.stat().st_size != 80:

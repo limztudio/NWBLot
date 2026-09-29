@@ -6,6 +6,7 @@
 #include "text_input_text.h"
 
 #include <global/scope_exit.h>
+#include <global/simplemath.h>
 #include <global/termination.h>
 
 
@@ -35,21 +36,26 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(
     const TextInputSessionToken token,
     const usize beforeBytes,
     const usize afterBytes,
-    const u64 revision){
+    const u64 revision,
+    const TextInputDeletionBasis::Enum basis){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)
         return TextInputAdmission::InvalidSession;
     if(revision != 0u && revision != m_surroundingRevision)
         return TextInputAdmission::InvalidRange;
-    if(beforeBytes > m_caretByte || afterBytes > m_surrounding.size() - m_caretByte)
+    if(basis >= TextInputDeletionBasis::kCount)
+        return TextInputAdmission::InvalidRange;
+    const usize start = basis == TextInputDeletionBasis::Selection ? Min(m_anchorByte, m_caretByte) : m_caretByte;
+    const usize end = basis == TextInputDeletionBasis::Selection ? Max(m_anchorByte, m_caretByte) : m_caretByte;
+    if(beforeBytes > start || afterBytes > m_surrounding.size() - end)
         return TextInputAdmission::InvalidRange;
     if(
-        !IsTextInputUtf8Boundary(m_surrounding, m_caretByte - beforeBytes)
-        || !IsTextInputUtf8Boundary(m_surrounding, m_caretByte + afterBytes)
+        !IsTextInputUtf8Boundary(m_surrounding, start - beforeBytes)
+        || !IsTextInputUtf8Boundary(m_surrounding, end + afterBytes)
     )
         return TextInputAdmission::InvalidRange;
-    return admitEvent(token, TextInputEventKind::DeleteSurrounding, {}, 0u, 0u, beforeBytes, afterBytes, true);
+    return admitEvent(token, TextInputEventKind::DeleteSurrounding, {}, 0u, 0u, beforeBytes, afterBytes, true, basis);
 }
 
 bool QueuedTextInputService::cancelSession(const TextInputSessionToken token, const TextInputCancelReason::Enum reason){
@@ -87,7 +93,8 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     const usize caretByte,
     const usize beforeBytes,
     const usize afterBytes,
-    const bool caretVisible){
+    const bool caretVisible,
+    const TextInputDeletionBasis::Enum basis){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)
@@ -130,6 +137,7 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     event.deleteAfterBytes = afterBytes;
     event.caretVisible = caretVisible;
     event.cancelReason = TextInputCancelReason::NativeCancelled;
+    event.deletionBasis = basis;
     m_queuedTextBytes = m_queuedTextBytes - oldBytes + text.size();
     return TextInputAdmission::Accepted;
 }

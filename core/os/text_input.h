@@ -32,6 +32,10 @@ namespace TextInputChangeCause{
     enum Enum : u8{ InputMethod, Other };
 };
 
+namespace TextInputDeletionBasis{
+    enum Enum : u8{ Caret, Selection, kCount };
+};
+
 namespace TextInputPollResult{
     enum Enum : u8{ InvalidSession, Pending, Event, WrongThread };
 };
@@ -100,6 +104,7 @@ struct TextInputEvent{
     usize deleteAfterBytes = 0u;
     bool caretVisible = true;
     TextInputCancelReason::Enum cancelReason = TextInputCancelReason::NativeCancelled;
+    TextInputDeletionBasis::Enum deletionBasis = TextInputDeletionBasis::Caret;
 
     explicit TextInputEvent(Alloc::GlobalArena& arena)
         : text(arena)
@@ -112,7 +117,8 @@ struct TextInputEvent{
 
 // Construct, update, native dispatch, poll and destroy on the owning OS/event thread. No UI callback or model is borrowed.
 // begin/update copy valid UTF-8 without embedded NUL. All text positions are UTF-8 byte boundaries, never code-point counts.
-// Preedit positions index event.text; DeleteSurrounding lengths address the surrounding snapshot at surroundingRevision.
+// Preedit positions index event.text; deletion addresses the snapshot at surroundingRevision.
+// Caret distances address the caret; Selection distances skip the selected range and preserve its bytes.
 // poll consumes an event and copies its text into the caller's arena. A service admits only one active session.
 // Focus loss or event overflow discards pending events and leaves one terminal Cancelled event for that token.
 // A cancelled token can poll that event once; end or a new begin invalidates it. Stale/foreign native delivery is rejected.

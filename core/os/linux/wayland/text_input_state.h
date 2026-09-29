@@ -31,9 +31,11 @@ struct WaylandTextInputProvenance{
     bool revisionKnown = false;
 };
 
-// v3 deletion skips the selected range; the current normalized deletion contract requires a collapsed selection.
+class WaylandTextInputSurroundingState;
+
+// v3 deletion excludes the selected range and may address only the exact surrounding slice sent to the compositor.
 [[nodiscard]] bool CanApplyWaylandTextInputDeletion(
-    const WaylandTextInputProvenance& provenance, u64 currentRevision,
+    const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire,
     usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes
 )noexcept;
 
@@ -44,8 +46,14 @@ struct WaylandTextInputProvenance{
 
 // Record only a surrounding snapshot that fits and was sent to the compositor.
 class WaylandTextInputSurroundingState final{
+    friend bool CanApplyWaylandTextInputDeletion(
+        const WaylandTextInputProvenance& provenance, u64 currentRevision, const WaylandTextInputSurroundingState& wire,
+        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes
+    )noexcept;
+
+
 public:
-    void reset()noexcept{ m_revision = 0u; }
+    void reset()noexcept;
     [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
     [[nodiscard]] WaylandTextInputSurrounding update(
         AStringView text, usize anchorByte, usize caretByte, u64 revision
@@ -53,6 +61,10 @@ public:
 
 
 private:
+    usize m_offsetByte = 0u;
+    usize m_lengthBytes = 0u;
+    usize m_anchorByte = 0u;
+    usize m_caretByte = 0u;
     u64 m_revision = 0u;
 };
 

@@ -1,5 +1,6 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/edit_surrounding_selection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_image_builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_image_layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_texture_image_validation_tests.cpp"

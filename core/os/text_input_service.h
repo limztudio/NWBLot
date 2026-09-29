@@ -58,7 +58,8 @@ protected:
         TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, bool caretVisible = true
     );
     [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(
-        TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision = 0u
+        TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision = 0u,
+        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
     );
     [[nodiscard]] bool cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }
@@ -73,7 +74,8 @@ protected:
 private:
     [[nodiscard]] TextInputAdmission::Enum admitEvent(
         TextInputSessionToken token, TextInputEventKind::Enum kind, AStringView text,
-        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, bool caretVisible
+        usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, bool caretVisible,
+        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
     );
     void clearEvents();
     void invalidateSession();

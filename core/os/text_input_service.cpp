@@ -198,6 +198,7 @@ TextInputPollResult::Enum QueuedTextInputService::poll(const TextInputSessionTok
     event.deleteAfterBytes = next.deleteAfterBytes;
     event.caretVisible = next.caretVisible;
     event.cancelReason = next.cancelReason;
+    event.deletionBasis = next.deletionBasis;
     m_queuedTextBytes -= next.text.size();
     const bool cancelled = next.kind == TextInputEventKind::Cancelled;
     m_events.erase(m_events.begin());

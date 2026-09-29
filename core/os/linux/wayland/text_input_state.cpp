@@ -33,12 +33,23 @@ static constexpr u32 s_SerialHalfRange = 0x80000000u;
 bool CanApplyWaylandTextInputDeletion(
     const WaylandTextInputProvenance& provenance,
     const u64 currentRevision,
+    const WaylandTextInputSurroundingState& wire,
     const usize anchorByte,
     const usize caretByte,
     const usize beforeBytes,
     const usize afterBytes)noexcept{
-    return provenance.token.valid() && provenance.revisionKnown && provenance.revision == currentRevision
-        && (anchorByte == caretByte || (beforeBytes == 0u && afterBytes == 0u));
+    if(
+        !provenance.token.valid() || !provenance.revisionKnown || currentRevision == 0u
+        || provenance.revision != currentRevision || wire.m_revision != currentRevision
+        || wire.m_anchorByte > wire.m_lengthBytes || wire.m_caretByte > wire.m_lengthBytes
+        || anchorByte < wire.m_offsetByte || caretByte < wire.m_offsetByte
+        || anchorByte - wire.m_offsetByte != wire.m_anchorByte || caretByte - wire.m_offsetByte != wire.m_caretByte
+    )
+        return false;
+    return
+        beforeBytes <= Min(wire.m_anchorByte, wire.m_caretByte)
+        && afterBytes <= wire.m_lengthBytes - Max(wire.m_anchorByte, wire.m_caretByte)
+    ;
 }
 
 WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(
@@ -68,16 +79,37 @@ WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(
     return { text.substr(first, last - first), first, anchorByte - first, caretByte - first, true };
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void WaylandTextInputSurroundingState::reset()noexcept{
+    m_offsetByte = 0u;
+    m_lengthBytes = 0u;
+    m_anchorByte = 0u;
+    m_caretByte = 0u;
+    m_revision = 0u;
+}
+
 WaylandTextInputSurrounding WaylandTextInputSurroundingState::update(
     const AStringView text,
     const usize anchorByte,
     const usize caretByte,
     const u64 revision)noexcept{
     const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(text, anchorByte, caretByte);
-    if(slice.available)
+    if(slice.available){
+        m_offsetByte = slice.offsetByte;
+        m_lengthBytes = slice.text.size();
+        m_anchorByte = slice.anchorByte;
+        m_caretByte = slice.caretByte;
         m_revision = revision;
+    }
     return slice;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i32 bufferScale)noexcept{
     const i64 scale = Max(bufferScale, 1);
@@ -94,6 +126,10 @@ TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i3
         static_cast<i32>(Max(lastX - firstX, i64(1))), static_cast<i32>(Max(lastY - firstY, i64(1)))
     };
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void WaylandTextInputSerialTracker::reset(){
     m_token = {};

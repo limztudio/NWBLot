@@ -1,5 +1,6 @@
 nwb_declare_gtest_executable(nwb_os_tests)
 target_sources(nwb_os_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/text_input_selection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard_async_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard_text_tests.cpp"

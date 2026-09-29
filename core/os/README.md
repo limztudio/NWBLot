@@ -49,3 +49,9 @@ The portable Linux backend-model tests exercise preedit byte mapping, nested XIC
 Deterministic session tests cover copied UTF-8, stale/foreign tokens, focus cancellation, event ordering/coalescing, revisions, byte boundaries, overflow, native start failures, reentrant cleanup, and event-thread ownership. Win32 tests use actual hidden HWNDs and exercise Unicode messages, surrogate reset/cancellation, IME duplicate suppression, and IMM32 composition/candidate caret placement when a context is available. These tests do not establish live Korean/Japanese/Chinese IME or TSF behavior; live language-input qualification still belongs on each native host.
 
 The IMM32 message contract and caret forms follow [Microsoft's composition-message documentation](https://learn.microsoft.com/en-us/windows/win32/intl/processing-the-wm-ime-composition-message) and [candidate-window coordinates](https://learn.microsoft.com/en-us/windows/win32/api/imm/ns-imm-candidateform).
+
+## Selection-excluded surrounding deletion
+
+`TextInputEvent::deletionBasis` defaults to `Caret` for existing producers. Wayland v3 uses `Selection`, whose before/after byte counts address the outer edges of the normalized selection and exclude the selected bytes. The queue validates scalar boundaries and copies the basis with session, sequence and surrounding revision. UI consumers perform their own model and grapheme checks.
+
+The Wayland wire state retains copied numeric bounds and endpoints of the actual at-most-4000-byte surrounding snapshot. Deletion requires matching current, published and serial-retained revisions plus exact endpoints, and cannot escape that sent slice. An unavailable replacement does not retag old metadata; reset clears it. The native Done order remains preedit clear, deletion, commit and new preedit. Linux runtime/compositor and live IME qualification require native evidence; cross-target compilation and deterministic model/service tests alone do not provide it.

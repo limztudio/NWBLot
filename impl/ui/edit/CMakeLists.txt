@@ -11,6 +11,7 @@ target_sources(nwb_ui_edit PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/float_model.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/model.h"
     "${CMAKE_CURRENT_LIST_DIR}/model.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/surrounding.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/actions.h"
     "${CMAKE_CURRENT_LIST_DIR}/commands.h"
     "${CMAKE_CURRENT_LIST_DIR}/commands.cpp"

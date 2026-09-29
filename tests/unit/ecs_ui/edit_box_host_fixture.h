@@ -41,8 +41,10 @@ public:
     [[nodiscard]] TextInputAdmission::Enum preedit(AStringView text, usize anchor, usize caret, bool visible = true){
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
-    [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after){
-        return emitDeleteSurrounding(activeSession(), before, after);
+    [[nodiscard]] TextInputAdmission::Enum erase(
+        usize before, usize after, u64 revision = 0u,
+        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret){
+        return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
     [[nodiscard]] TextInputRect nativeCaret()const{ return caretRect(); }
 };

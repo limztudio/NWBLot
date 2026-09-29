@@ -66,6 +66,18 @@ UiTextEditStatus::Enum ApplyUiTextEditEvent(
     case Core::TextInputEventKind::DeleteSurrounding: {
         if(expectedSurroundingRevision == 0u || event.surroundingRevision != expectedSurroundingRevision || !matchesPublishedModel)
             return UiTextEditStatus::StaleSurrounding;
+        if(event.deletionBasis >= Core::TextInputDeletionBasis::kCount)
+            return UiTextEditStatus::InvalidEvent;
+        if(event.deletionBasis == Core::TextInputDeletionBasis::Selection){
+            if(
+                event.deleteBeforeBytes > model.selectionStart()
+                || event.deleteAfterBytes > model.text().size() - model.selectionEnd()
+            )
+                return UiTextEditStatus::InvalidEvent;
+            return model.eraseAroundSelection(event.deleteBeforeBytes, event.deleteAfterBytes)
+                ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected
+            ;
+        }
         if(model.hasSelection() && (event.deleteBeforeBytes != 0u || event.deleteAfterBytes != 0u))
             return UiTextEditStatus::ModelRejected;
         const usize caret = model.caret();

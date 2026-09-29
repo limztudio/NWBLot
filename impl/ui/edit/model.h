@@ -89,6 +89,8 @@ public:
     [[nodiscard]] bool eraseForward();
     // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
     [[nodiscard]] bool eraseSurrounding(usize beforeBytes, usize afterBytes);
+    // Native selection surrounding deletion retains selected bytes and direction, rejecting merged endpoint seams.
+    [[nodiscard]] bool eraseAroundSelection(usize beforeBytes, usize afterBytes);
     [[nodiscard]] bool undo();
     [[nodiscard]] bool redo();
     [[nodiscard]] bool canUndo()const{ return m_historyCursor != 0u; }

@@ -66,14 +66,15 @@ void WaylandTextInputService::receiveDone(const u32 serial){
         status = emitPreedit(token, {}, 0u, 0u);
     if(status == TextInputAdmission::Accepted && m_hasDelete){
         if(CanApplyWaylandTextInputDeletion(
-            provenance, surroundingRevision(), surroundingAnchorByte(), surroundingCaretByte(),
+            provenance, surroundingRevision(), m_wireState, surroundingAnchorByte(), surroundingCaretByte(),
             m_pendingBefore, m_pendingAfter
         )){
-            status = emitDeleteSurrounding(token, m_pendingBefore, m_pendingAfter, provenance.revision);
+            status = emitDeleteSurrounding(
+                token, m_pendingBefore, m_pendingAfter, provenance.revision, TextInputDeletionBasis::Selection
+            );
         }
         else{
-            // Deletion against stale text or across a selected span is not the normalized caret-relative contract.
-            // Refuse the whole batch explicitly instead of silently dropping part of an IM edit.
+            // Refuse stale or unsent surrounding ranges before applying later native batch edits.
             clearPending();
             if(!cancelSession(token, TextInputCancelReason::NativeCancelled))
                 NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: stale surrounding batch could not cancel current session"));

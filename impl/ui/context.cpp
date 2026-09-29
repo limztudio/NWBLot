@@ -49,6 +49,9 @@ bool Context::beginFrame(const u64 generation){
     m_targets.clear();
     m_popups.clear();
     m_stateClaims.clear();
+    m_popupDepth = 0u;
+    m_currentPopup = {};
+    m_popupLayer = 0u;
     return true;
 }
 
@@ -65,7 +68,7 @@ bool Context::beginRoot(const WidgetRoot& root){
 }
 
 bool Context::endRoot(){
-    const bool valid = m_rootActive && m_scopes.size() == 1u && !m_currentPopup.valid();
+    const bool valid = m_rootActive && m_scopes.size() == 1u && m_popupDepth == 0u && !m_currentPopup.valid();
     m_rootActive = false;
     m_scopes.clear();
     if(!valid)
@@ -169,7 +172,7 @@ bool Context::takePointerGesture(const WidgetState& state, const bool enabled, P
 }
 
 bool Context::finishFrame(){
-    if(m_failed || m_frameGeneration == 0u || m_rootActive || m_currentPopup.valid()){
+    if(m_failed || m_frameGeneration == 0u || m_rootActive || m_popupDepth != 0u || m_currentPopup.valid()){
         fail();
         return false;
     }
@@ -217,6 +220,8 @@ void Context::resetInput(){
     m_targets.clear();
     m_popups.clear();
     m_currentPopup = {};
+    m_popupDepth = 0u;
+    m_popupStack.fill({});
     m_popupLayer = 0u;
     m_readyGeneration = 0u;
 }

@@ -88,6 +88,7 @@ struct SkinBinding{
 };
 
 inline constexpr usize s_PaintMaxImages = s_PaintMaxGlyphPages;
+inline constexpr usize s_PaintMaxOverlayDepth = 16u;
 
 template<typename T>
 using PaintVector = Vector<T, Core::Alloc::GlobalArena>;
@@ -155,7 +156,7 @@ public:
     void reserve(usize quadCount, usize clipDepth = 8u);
     void pushClip(const Rect& clip);
     [[nodiscard]] bool popClip();
-    // Overlay scopes cannot nest. Their viewport clip escapes parent clipping until the balanced endOverlay().
+    // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
     [[nodiscard]] bool beginOverlay(u32 layer);
     [[nodiscard]] bool endOverlay();
     void fillRect(const Rect& rectangle, const Color& color = {});
@@ -184,10 +185,18 @@ private:
 
 
 private:
+    struct OverlayFrame{
+        usize clipDepth = 0u;
+        u32 layer = 0u;
+    };
+
+
+private:
     DrawSnapshot m_snapshot;
     PaintVector<UiSkinRegion> m_regions;
     PaintVector<Rect> m_clips;
-    usize m_overlayClipDepth = 0u;
+    OverlayFrame m_overlays[s_PaintMaxOverlayDepth];
+    usize m_overlayDepth = 0u;
     u32 m_layer = 0u;
     bool m_recording = false;
 };

@@ -66,6 +66,18 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
             if(scopes[previous].token.widget == scope.token.widget)
                 return false;
         }
+        if(!scope.parent.empty()){
+            bool parent = false;
+            for(usize previous = 0u; previous < index; ++previous)
+                parent |= scopes[previous].token == scope.parent;
+            if(!scope.parent.valid() || !parent)
+                return false;
+        }
+        // A child cannot reuse its open lifetime beneath a different ancestor lifetime.
+        for(const auto& previous : m_popups){
+            if(previous.scope.token == scope.token && previous.scope.parent != scope.parent)
+                return false;
+        }
         PopupRecord record;
         record.scope = scope;
         m_stagedPopups.push_back(record);
@@ -87,11 +99,38 @@ bool InputRouter::validPopupTarget(const HitTarget& target)const{
     return false;
 }
 
+const PopupScope* InputRouter::popupScope(const PopupToken& token)const{
+    for(const auto& record : m_popups){
+        if(record.scope.token == token)
+            return &record.scope;
+    }
+    return nullptr;
+}
+
 bool InputRouter::allowedByPopup(const HitTarget& target)const{
     if(m_popups.empty())
         return !target.popup.widget.valid();
     const PopupRecord& top = m_popups.back();
     return !top.closing && target.popup == top.scope.token;
+}
+
+bool InputRouter::popupDescendant(const PopupToken& token, const PopupToken& ancestor)const{
+    PopupToken current = token;
+    for(usize depth = 0u; depth < s_InputMaxPopups && current.valid(); ++depth){
+        if(current == ancestor)
+            return true;
+        bool found = false;
+        for(const auto& record : m_popups){
+            if(record.scope.token == current){
+                current = record.scope.parent;
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            return false;
+    }
+    return false;
 }
 
 void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
@@ -124,6 +163,10 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
                 staged.closing = previous.closing;
                 break;
             }
+        }
+        for(const auto& ancestor : m_stagedPopups){
+            if(ancestor.scope.token == staged.scope.parent && ancestor.closing)
+                staged.closing = true;
         }
         if(lostFocus){
             if(!staged.closing && m_popupDismissals.size() < s_InputMaxPopups)

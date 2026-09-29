@@ -101,6 +101,7 @@ private:
         WidgetState popup;
         WidgetState rows;
         PopupToken popupToken;
+        PopupToken parentToken;
         ControlToken token;
         ControlToken listToken;
         Rect visibleField;
@@ -153,6 +154,7 @@ private:
         ContextMenuState* state = nullptr;
         ContextMenuOptions options;
         PopupToken popupToken;
+        PopupToken parentToken;
         ControlToken listToken;
         u64 rowCount = 0u;
         u64 revision = 0u;
@@ -173,7 +175,10 @@ private:
 
 
 private:
+    BuilderScopeFrame* m_parent = nullptr;
     PopupState* m_popupState = nullptr;
+    PopupToken m_popupToken;
+    bool m_popupVisible = false;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
     LayoutTree m_layout;

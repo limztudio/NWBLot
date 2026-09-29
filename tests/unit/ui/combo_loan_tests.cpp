@@ -333,7 +333,7 @@ TEST_F(UiComboLoanTests, ReconcileCallbackSelectionRejectsBeforeAnyQueuedCommitI
     EXPECT_FALSE(m_context.commitFrame(2u));
 }
 
-TEST_F(UiComboLoanTests, ComboInsideUserPopupRejectsBeforeSourceOrModelCallbacks){
+TEST_F(UiComboLoanTests, ClosedUserPopupSuppressesLaterComboBeforeSourceOrModelCallbacks){
     PopupState popupState;
     popupState.open();
     PopupOptions options;
@@ -343,13 +343,15 @@ TEST_F(UiComboLoanTests, ComboInsideUserPopupRejectsBeforeSourceOrModelCallbacks
     const u64 inputGeneration = m_state.inputGeneration();
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPopup("owner", popupState, options));
+    popupState.close();
     m_callbacks.arm(MutationKind::RevisionSelect, 8u);
     const ComboResult result = m_builder.comboBox("combo", m_callbacks, m_state, Options());
-    EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(m_context.failed());
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(m_context.failed());
     EXPECT_EQ(m_callbacks.mutations(), 0u);
     EXPECT_EQ(m_state.inputGeneration(), inputGeneration);
     EXPECT_EQ(m_state.selectedKey(), 1u);
+    ASSERT_TRUE(m_builder.endPopup());
     EXPECT_FALSE(m_context.commitFrame(1u));
 }
 

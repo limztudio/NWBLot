@@ -43,7 +43,7 @@ bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
 
 void InputRouter::closePopup(const PopupToken& token){
     for(auto& record : m_popups){
-        if(record.scope.token == token)
+        if(popupDescendant(record.scope.token, token))
             record.closing = true;
     }
     reconcileTargets();
@@ -52,7 +52,7 @@ void InputRouter::closePopup(const PopupToken& token){
 void InputRouter::fencePopup(const PopupToken& token){
     for(auto& record : m_popups){
         if(record.scope.token.widget == token.widget && record.scope.token != token)
-            record.closing = true;
+            closePopup(record.scope.token);
     }
     reconcileTargets();
 }
@@ -72,34 +72,71 @@ void InputRouter::cancelPopupFocus(){
 }
 
 void InputRouter::retirePopup(const WidgetId id){
-    bool removed = false;
-    const bool top = !m_popups.empty() && m_popups.back().scope.token.widget == id;
-    for(usize index = m_popups.size(); index > 0u; --index){
-        if(m_popups[index - 1u].scope.token.widget == id){
-            const auto restore = m_popups[index - 1u];
-            m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
-            for(auto& record : m_popups){
-                if(record.restorePopup == restore.scope.token){
-                    record.restoreFocus = restore.restoreFocus;
-                    record.restoreDeclaration = restore.restoreDeclaration;
-                    record.restorePopup = restore.restorePopup;
+    Array<bool, s_InputMaxPopups> removed{};
+    bool found = false;
+    for(usize index = 0u; index < m_popups.size(); ++index){
+        removed[index] = m_popups[index].scope.token.widget == id;
+        for(usize ancestor = 0u; ancestor < index && !removed[index]; ++ancestor)
+            removed[index] = removed[ancestor] && m_popups[index].scope.parent == m_popups[ancestor].scope.token;
+        found |= removed[index];
+    }
+    if(!found)
+        return;
+    const bool top = removed[m_popups.size() - 1u];
+    PopupRecord restore = m_popups.back();
+    const auto splice = [this, &removed](PopupRecord& record){
+        for(usize depth = 0u; depth < s_InputMaxPopups; ++depth){
+            bool foundParent = false;
+            for(usize index = 0u; index < m_popups.size(); ++index){
+                if(removed[index] && record.restorePopup == m_popups[index].scope.token){
+                    const auto& ancestor = m_popups[index];
+                    record.restoreFocus = ancestor.restoreFocus;
+                    record.restoreDeclaration = ancestor.restoreDeclaration;
+                    record.restorePopup = ancestor.restorePopup;
+                    foundParent = true;
+                    break;
                 }
             }
-            if(top){
-                m_focus = restore.restoreFocus;
-                m_focusDeclaration = restore.restoreDeclaration;
-                const HitTarget* target = findTarget(m_focus, m_focusDeclaration);
-                m_focusControl = target ? target->control : ControlToken{};
-            }
-            removed = true;
+            if(!foundParent)
+                break;
         }
+    };
+    if(top)
+        splice(restore);
+    for(usize index = 0u; index < m_popups.size(); ++index){
+        if(!removed[index])
+            splice(m_popups[index]);
+    }
+    for(usize index = m_targets.size(); index > 0u; --index){
+        bool remove = false;
+        for(usize popup = 0u; popup < m_popups.size(); ++popup)
+            remove |= removed[popup] && m_targets[index - 1u].popup == m_popups[popup].scope.token;
+        if(remove)
+            m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
     }
     for(usize index = m_popupDismissals.size(); index > 0u; --index){
-        if(m_popupDismissals[index - 1u].token.widget == id)
+        bool remove = false;
+        for(usize popup = 0u; popup < m_popups.size(); ++popup)
+            remove |= removed[popup] && m_popupDismissals[index - 1u].token == m_popups[popup].scope.token;
+        if(remove)
             m_popupDismissals.erase(m_popupDismissals.begin() + static_cast<isize>(index - 1u));
     }
-    if(removed)
-        reconcileTargets();
+    for(usize index = m_popups.size(); index > 0u; --index){
+        if(removed[index - 1u])
+            m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
+    }
+    rebuildLookup();
+    if(top){
+        const HitTarget* target = findTarget(restore.restoreFocus, restore.restoreDeclaration);
+        if(m_windowFocused && target && target->popup == restore.restorePopup && target->focusable && isInteractive(*target)){
+            m_focus = target->id;
+            m_focusDeclaration = target->declarationGeneration;
+            m_focusControl = target->control;
+        }
+        else
+            clearFocus();
+    }
+    reconcileTargets();
 }
 
 

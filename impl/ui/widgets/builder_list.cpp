@@ -5,6 +5,7 @@
 #include "../builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,7 +21,7 @@ ListResult Builder::virtualList(
     const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
     if(
-        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f
         || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
     ){
@@ -32,6 +33,8 @@ ListResult Builder::virtualList(
         result.valid = true;
         return result;
     }
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
     WidgetState* widget = m_context.declare(stableKey, WidgetKind::VirtualList);
     if(!widget)
         return result;

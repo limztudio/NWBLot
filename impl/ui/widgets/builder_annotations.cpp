@@ -24,22 +24,32 @@ Builder::Item* Builder::annotationAnchor(const AStringView stableKey){
 }
 
 bool Builder::listStateMatches(const ListFrame& frame)const{
-    return frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
+    return popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration;
 }
 
 bool Builder::listMatches(const ListFrame& frame)const{
     return
         frame.source && listStateMatches(frame)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration
-        && frame.source->revision() == frame.token.contentRevision && frame.source->rowCount() == frame.rowCount
+        && frame.source->instanceGeneration() == frame.token.contentGeneration && listStateMatches(frame)
+        && frame.source->revision() == frame.token.contentRevision && listStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount
         && listStateMatches(frame)
     ;
 }
 
 bool Builder::paintDeferred(){
-    if(!paintContextMenus() || !paintCombos())
+    if(!paintDeferredContents() || !validateDeferredSources() || !validateDeferredStates())
         return false;
-    // Every list, combo and menu remains borrowed through all callbacks in this enclosing scope.
+    releaseDeferredLoans();
+    return true;
+}
+
+bool Builder::paintDeferredContents(){
+    return paintContextMenus() && paintCombos() && paintTooltips();
+}
+
+bool Builder::validateDeferredSources()const{
+    // Every loan remains live through all later source callbacks, including those in an ended child scope.
     for(const auto& frame : m_scope->m_lists){
         if(!listMatches(frame))
             return false;
@@ -52,7 +62,11 @@ bool Builder::paintDeferred(){
         if(!contextMenuMatches(frame))
             return false;
     }
-    // The final model checks call no source code, so a later callback cannot invalidate an earlier model unnoticed.
+    return true;
+}
+
+bool Builder::validateDeferredStates()const{
+    // No source callbacks run after these model checks until every scope's loans have been released.
     for(const auto& frame : m_scope->m_lists){
         if(!listStateMatches(frame))
             return false;
@@ -65,9 +79,10 @@ bool Builder::paintDeferred(){
         if(!contextMenuStateMatches(frame))
             return false;
     }
-    if(!paintTooltips())
-        return false;
-    releaseDeferredLoans();
+    for(const auto& frame : m_scope->m_tooltips){
+        if(!frame.state || frame.state->revision() != frame.revision)
+            return false;
+    }
     return true;
 }
 

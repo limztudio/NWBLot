@@ -33,7 +33,10 @@ void BuilderScopeFrame::reset(){
     m_panelActive = false;
     m_windowActive = false;
     m_window.state = nullptr;
+    m_parent = nullptr;
     m_popupState = nullptr;
+    m_popupToken = {};
+    m_popupVisible = false;
     m_items.clear();
     m_lists.clear();
     m_combos.clear();

@@ -54,7 +54,7 @@ public:
     // The borrowed WindowState must remain alive through that matching endWindow().
     [[nodiscard]] bool beginWindow(AStringView stableKey, StringView title, WindowState& state, const WindowOptions& options = {});
     [[nodiscard]] bool endWindow();
-    // Popups begin after the preceding panel/window is balanced. Only a visible begin requires endPopup().
+    // Popups begin after a balanced panel/window or within another popup. Only a visible begin requires endPopup().
     [[nodiscard]] bool beginPopup(AStringView stableKey, PopupState& state, const PopupOptions& options = {});
     [[nodiscard]] bool endPopup();
     [[nodiscard]] bool beginRow(AStringView stableKey, const ContainerOptions& options = {});
@@ -68,8 +68,8 @@ public:
     // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
     // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
     [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options = {});
-    // The field and its popup borrow state/source through endPanel/endWindow; popup input is consumed in this declaration.
-    // Internal popup/list scopes are emitted automatically after the containing scope's layout. User-popup nesting is not supported.
+    // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
+    // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
     [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
         SearchComboState& state, const SearchComboOptions& options = {});
@@ -80,23 +80,27 @@ public:
         ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
-    [[nodiscard]] bool balanced()const{ return !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
+    [[nodiscard]] bool balanced()const{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
     void reset();
-    void setSkin(const UiSkin& skin){ m_skin = &skin; }
-    [[nodiscard]] WidgetStyle& style(){ return m_style; }
-    [[nodiscard]] EditBoxStyle& editStyle(){ return m_editStyle; }
-    [[nodiscard]] PopupStyle& popupStyle(){ return m_popupStyle; }
-    [[nodiscard]] ListStyle& listStyle(){ return m_listStyle; }
-    [[nodiscard]] ComboStyle& comboStyle(){ return m_comboStyle; }
-    [[nodiscard]] TooltipStyle& tooltipStyle(){ return m_tooltipStyle; }
-    void setEditHost(IEditBoxHost* host){ m_editHost = host; }
-    void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
-    void setPointerBusy(bool busy){ m_pointerBusy = busy; }
+    // Observe accepted input without retaining target pointers across frame publication.
+    [[nodiscard]] const InputRouter& input()const{ return m_context.input(); }
+    [[nodiscard]] bool failed()const{ return m_context.failed(); }
+    void setSkin(const UiSkin& skin){ if(declarationBlocked()) m_context.fail(); else m_skin = &skin; }
+    [[nodiscard]] WidgetStyle& style(){ if(declarationBlocked()) m_context.fail(); return m_style; }
+    [[nodiscard]] EditBoxStyle& editStyle(){ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
+    [[nodiscard]] PopupStyle& popupStyle(){ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
+    [[nodiscard]] ListStyle& listStyle(){ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
+    [[nodiscard]] ComboStyle& comboStyle(){ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
+    [[nodiscard]] TooltipStyle& tooltipStyle(){ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
+    void setEditHost(IEditBoxHost* host){ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
+    void setDeltaSeconds(f32 delta){ if(declarationBlocked()) m_context.fail(); else m_deltaSeconds = delta; }
+    void setPointerBusy(bool busy){ if(declarationBlocked()) m_context.fail(); else m_pointerBusy = busy; }
     // Valid while a window scope is open, including a collapsed window.
     [[nodiscard]] const WindowMetrics& windowMetrics()const{ return m_scope->m_window.metrics; }
 
 
 private:
+    [[nodiscard]] bool declarationBlocked()const{ return m_finalizing || m_declaring; }
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const;
@@ -128,6 +132,9 @@ private:
     [[nodiscard]] bool paintComboQuery(ComboFrame& frame, LayoutBox& content);
     [[nodiscard]] Item* annotationAnchor(AStringView stableKey);
     [[nodiscard]] bool paintDeferred();
+    [[nodiscard]] bool paintDeferredContents();
+    [[nodiscard]] bool validateDeferredSources()const;
+    [[nodiscard]] bool validateDeferredStates()const;
     void releaseDeferredLoans();
     [[nodiscard]] bool listStateMatches(const ListFrame& frame)const;
     [[nodiscard]] bool listMatches(const ListFrame& frame)const;
@@ -141,6 +148,13 @@ private:
     [[nodiscard]] bool paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
+    [[nodiscard]] bool popupFrameVisible(const BuilderScopeFrame& frame)const;
+    [[nodiscard]] bool popupAncestorsVisible()const;
+    [[nodiscard]] bool finishPopupFamily();
+    [[nodiscard]] bool paintPopupFamily(BuilderScopeFrame& frame);
+    [[nodiscard]] bool validatePopupFamily();
+    void releasePopupFamily();
+    [[nodiscard]] bool reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
 
 
@@ -151,6 +165,8 @@ private:
     TextService& m_text;
     BuilderScopeFrame m_scopeFrame;
     NotNull<BuilderScopeFrame*> m_scope;
+    PaintVector<Core::GlobalUniquePtr<BuilderScopeFrame>> m_popupFrames;
+    usize m_popupFrameCount = 0u;
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
     EditBoxStyle m_editStyle;
@@ -161,6 +177,8 @@ private:
     IEditBoxHost* m_editHost = nullptr;
     f32 m_deltaSeconds = 0.0f;
     bool m_pointerBusy = false;
+    bool m_declaring = false;
+    bool m_finalizing = false;
 };
 
 

@@ -15,22 +15,20 @@ NWB_IMPL_UI_BEGIN
 
 
 bool PaintBuilder::beginOverlay(const u32 layer){
-    if(!m_recording || layer == 0u || m_overlayClipDepth != 0u)
+    if(!m_recording || layer == 0u || m_overlayDepth == s_PaintMaxOverlayDepth)
         return false;
     const DisplayMetrics& display = m_snapshot.m_displayMetrics;
-    const usize previousDepth = m_clips.size();
+    m_overlays[m_overlayDepth++] = { m_clips.size(), m_layer };
     m_clips.push_back({ 0.0f, 0.0f, display.logicalWidth, display.logicalHeight });
-    m_overlayClipDepth = previousDepth;
     m_layer = layer;
     return true;
 }
 
 bool PaintBuilder::endOverlay(){
-    if(!m_recording || m_overlayClipDepth == 0u || m_clips.size() != m_overlayClipDepth + 1u)
+    if(!m_recording || m_overlayDepth == 0u || m_clips.size() != m_overlays[m_overlayDepth - 1u].clipDepth + 1u)
         return false;
     m_clips.pop_back();
-    m_overlayClipDepth = 0u;
-    m_layer = 0u;
+    m_layer = m_overlays[--m_overlayDepth].layer;
     return true;
 }
 

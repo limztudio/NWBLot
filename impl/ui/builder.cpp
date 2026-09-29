@@ -5,6 +5,7 @@
 #include "builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,11 +24,12 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_text(text)
     , m_scopeFrame(arena)
     , m_scope(MakeNotNull(&m_scopeFrame))
+    , m_popupFrames(arena)
 {}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(
-        m_scope->m_panelActive || m_scope->m_windowActive || !m_skin
+        declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin
         || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)
     ){
         m_context.fail();
@@ -59,10 +61,12 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
 }
 
 bool Builder::endPanel(){
-    if(!m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_popupState || m_scope->m_stack.size() != 1u || m_context.failed() || !m_scope->m_layout.arrange(m_scope->m_bounds)){
+    if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_popupState || m_scope->m_stack.size() != 1u || m_context.failed() || !m_scope->m_layout.arrange(m_scope->m_bounds)){
         m_context.fail();
         return false;
     }
+    m_finalizing = true;
+    ScopeExit finish([this]()noexcept{ m_finalizing = false; });
     const bool painted = paintPanel();
     const bool popped = m_context.popScope();
     m_scope->m_panelActive = false;
@@ -82,7 +86,7 @@ bool Builder::beginColumn(const AStringView stableKey, const ContainerOptions& o
 }
 
 bool Builder::endContainer(){
-    if(!m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
+    if(declarationBlocked() || !m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
         m_context.fail();
         return false;
     }
@@ -111,15 +115,23 @@ bool Builder::checkbox(const AStringView stableKey, const StringView text, bool&
 }
 
 void Builder::reset(){
+    if(declarationBlocked()){
+        m_context.fail();
+        return;
+    }
     if(m_scope->m_panelActive || m_scope->m_windowActive)
         m_context.fail();
-    m_scope->reset();
+    m_scope = MakeNotNull(&m_scopeFrame);
+    m_scopeFrame.reset();
+    for(auto& frame : m_popupFrames)
+        frame->reset();
+    m_popupFrameCount = 0u;
 }
 
 bool Builder::beginContainer(
     const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
     if(
-        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u
         || !m_context.declare(stableKey, WidgetKind::Container)
     ){
         m_context.fail();
@@ -143,7 +155,7 @@ bool Builder::beginContainer(
 Builder::Item* Builder::addItem(
     const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
     if(
-        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
         || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();

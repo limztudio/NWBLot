@@ -153,6 +153,64 @@ TEST_F(UiContextMenuInputTests, SecondaryPressCopiesAcceptedLifetimeWithoutActiv
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
 
+TEST_F(UiContextMenuInputTests, SecondaryMenuOnAnotherParentAnchorPreservesAndRestoresPriorFocus){
+    const PopupScope parent = Scope();
+    const auto parentTargets = PopupTargets(parent);
+    HitTarget anchor = Target(102u, { 100.0f, 55.0f, 25.0f, 20.0f });
+    anchor.popup = parent.token;
+    anchor.layer = parent.layer;
+    anchor.clip = parent.bounds;
+    anchor.paintOrder = 2u;
+    const Array<HitTarget, 4u> closed = { parentTargets[0u], parentTargets[1u], parentTargets[2u], anchor };
+    ASSERT_TRUE(m_router.commitTargets(closed.data(), closed.size(), 1u, &parent, 1u));
+    const WidgetId previousFocus = parentTargets[2u].id;
+    ASSERT_EQ(m_router.focus(), previousFocus);
+    ASSERT_NE(previousFocus, anchor.id);
+    const Point position{ 110.0f, 60.0f };
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, position)).pointerConsumed);
+    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp, position)).pointerConsumed);
+    EXPECT_EQ(m_router.focus(), previousFocus);
+    ContextMenuAction action;
+    ASSERT_TRUE(take(action, anchor.id.value, anchor.declarationGeneration));
+    EXPECT_EQ(action.popup, parent.token);
+    EXPECT_FALSE(action.keyboard);
+    EXPECT_TRUE(m_router.actions().empty());
+
+    PopupScope menu;
+    menu.token = { { 200u }, 21u, 31u, 1u };
+    menu.parent = parent.token;
+    menu.bounds = { 145.0f, 110.0f, 50.0f, 60.0f };
+    menu.viewport = parent.viewport;
+    menu.layer = 2u;
+    HitTarget barrier;
+    barrier.id = menu.token.widget;
+    barrier.declarationGeneration = menu.token.declarationGeneration;
+    barrier.rectangle = menu.bounds;
+    barrier.clip = menu.viewport;
+    barrier.popup = menu.token;
+    barrier.layer = menu.layer;
+    barrier.paintOrder = 3u;
+    HitTarget command = Target(201u, { 150.0f, 115.0f, 40.0f, 20.0f });
+    command.popup = menu.token;
+    command.layer = menu.layer;
+    command.clip = menu.bounds;
+    command.paintOrder = 4u;
+    const Array<HitTarget, 6u> opened = { closed[0u], closed[1u], closed[2u], closed[3u], barrier, command };
+    const Array<PopupScope, 2u> scopes = { parent, menu };
+    ASSERT_TRUE(m_router.commitTargets(opened.data(), opened.size(), 2u, scopes.data(), scopes.size()));
+    EXPECT_EQ(m_router.focus(), command.id);
+    EXPECT_TRUE(send(Key(InputKey::Escape)).keyboardConsumed);
+    EXPECT_TRUE(release(InputKey::Escape).keyboardConsumed);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    ASSERT_TRUE(m_router.consumePopupDismissal(menu.token, reason));
+    EXPECT_EQ(reason, PopupDismissReason::Escape);
+    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token, reason));
+    ASSERT_TRUE(m_router.commitTargets(closed.data(), closed.size(), 3u, &parent, 1u));
+    EXPECT_EQ(m_router.focus(), previousFocus);
+    EXPECT_NE(m_router.focus(), anchor.id);
+    EXPECT_FALSE(m_router.consumeActivation(anchor.id));
+}
+
 TEST_F(UiContextMenuInputTests, HeldSecondaryConsumesMovementLeaveAndReleaseOutsideTheTarget){
     const HitTarget target = Target();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));

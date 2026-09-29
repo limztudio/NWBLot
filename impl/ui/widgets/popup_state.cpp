@@ -57,6 +57,14 @@ void PopupState::close(){
     m_open = false;
 }
 
+void PopupState::bindParent(const PopupToken& parent){
+    if(m_parentBound && m_parent != parent && m_parentOpenGeneration == m_openGeneration)
+        close();
+    m_parent = parent;
+    m_parentBound = true;
+    m_parentOpenGeneration = m_openGeneration;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

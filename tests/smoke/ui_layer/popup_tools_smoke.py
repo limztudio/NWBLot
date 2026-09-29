@@ -56,12 +56,14 @@ class PopupToolsRun:
         self.expected.update(changes)
         for field in dynamic:
             self.expected.pop(field, None)
+        self.native.maintain_pointer()
         time.sleep(settle)
         path = self.args.output_directory / f"{len(self.stages):02d}_{name}.bmp"
         stage_deadline = min(self.deadline, time.monotonic() + 10.0)
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during popup tools UI capture")
+            self.native.maintain_pointer()
             snapshot = snapshot_from_logs(self.logs())
             if snapshot is None:
                 time.sleep(0.1)
@@ -162,6 +164,7 @@ class PopupToolsRun:
         self.checkpoint("source_replacement_held_key_setup", open=1, cursor=5)
         self.native.key("Down", True)
         self.checkpoint("held_key_previews_once", cursor=4)
+        self.hover("counter")
         self.native.tap("F6")
         self.checkpoint("source_replacement_dismisses_and_retires_owner", open=0, source_generation=2,
             source_revision=3, dynamic=("cursor",))
@@ -187,6 +190,7 @@ class PopupToolsRun:
         self.checkpoint("escape_dismisses_context_commands", open=0, dynamic=("cursor",))
         self.right_click_anchor()
         self.checkpoint("focus_loss_menu_setup", open=1, cursor=5)
+        self.hover("counter")
         self.native.focus_loss_and_gain()
         self.checkpoint("native_focus_loss_dismisses_menu", open=0, sentinel_focused=0, dynamic=("cursor",))
         self.native.tap("Down")

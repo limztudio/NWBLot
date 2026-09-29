@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include "../input/popup.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,7 +43,7 @@ struct PopupPlacement{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The host owns each state; declarations lend it only through their matching endPopup.
+// The host lends state through the outermost popup end; each opening binds to its exact parent lifetime.
 class PopupState final : NoCopy{
     friend class Builder;
 
@@ -66,9 +67,16 @@ public:
 
 
 private:
+    void bindParent(const PopupToken& parent);
+
+
+private:
     const u64 m_instanceGeneration;
     u64 m_openGeneration = 0u;
     PopupPlacement m_placement;
+    PopupToken m_parent;
+    u64 m_parentOpenGeneration = 0u;
+    bool m_parentBound = false;
     bool m_open = false;
 };
 

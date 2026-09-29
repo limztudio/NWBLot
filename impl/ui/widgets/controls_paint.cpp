@@ -34,7 +34,7 @@ bool Builder::paintPanel(){
 bool Builder::paintItems(){
     for(const auto& item : m_scope->m_items){
         const LayoutBox* box = m_scope->m_layout.box(item.node);
-        if(!box || !paintItem(item, *box))
+        if(!popupAncestorsVisible() || !box || !paintItem(item, *box))
             return false;
     }
     return true;

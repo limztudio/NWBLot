@@ -8,6 +8,7 @@
 #include "ui_combo_gallery.h"
 #include "ui_edit_gallery.h"
 #include "ui_list_gallery.h"
+#include "ui_nested_popup_gallery.h"
 #include "ui_popup_gallery.h"
 #include "ui_popup_tools_gallery.h"
 #include "ui_search_combo_gallery.h"
@@ -34,6 +35,7 @@ private:
     TestbedUiSearchComboGallery m_searchCombos;
     TestbedUiPopupGallery m_popups;
     TestbedUiPopupToolsGallery m_popupTools;
+    TestbedUiNestedPopupGallery m_nestedPopups;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

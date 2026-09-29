@@ -433,7 +433,7 @@ TEST_F(UiPopupToolsBuilderTests, InvalidMenuRowHeightRejectsTheCandidate){
     EXPECT_TRUE(m_context.failed());
 }
 
-TEST_F(UiPopupToolsBuilderTests, ContextMenuInsideAUserPopupIsRejectedUntilNestedScopesAreSupported){
+TEST_F(UiPopupToolsBuilderTests, ContextMenuInsideAUserPopupUsesTheParentInputScope){
     m_plainPopup.open();
     ASSERT_TRUE(begin(1u));
     PopupOptions options;
@@ -441,8 +441,9 @@ TEST_F(UiPopupToolsBuilderTests, ContextMenuInsideAUserPopupIsRejectedUntilNeste
     ASSERT_TRUE(m_builder.beginPopup("plain", m_plainPopup, options));
     EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
     const ContextMenuResult result = m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions);
-    EXPECT_FALSE(result.valid);
-    EXPECT_TRUE(m_context.failed());
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(m_context.failed());
+    ASSERT_TRUE(m_builder.endPopup());
 }
 
 TEST_F(UiPopupToolsBuilderTests, ExternalMenuCloseBeforeScopeEndPreservesTheMutationAndRejectsTheLoan){

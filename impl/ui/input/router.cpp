@@ -206,13 +206,17 @@ void InputRouter::invalidateTarget(const WidgetId id){
         if(m_targets[index - 1u].id == id || m_targets[index - 1u].owner == id)
             m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
     }
+    rebuildLookup();
+    reconcileTargets();
+}
+
+void InputRouter::rebuildLookup(){
     m_lookup.clear();
     for(usize index = 0u; index < m_targets.size(); ++index)
         m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
     Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs){
         return lhs.value < rhs.value;
     });
-    reconcileTargets();
 }
 
 void InputRouter::clearFocus(){

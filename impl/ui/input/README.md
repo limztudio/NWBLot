@@ -79,3 +79,11 @@ The router admits at most 4,096 targets, 256 queued events, 256 pending activati
 `queue()` rejects malformed or excess events before insertion. The host must handle a rejected event; the ECS adapter invalidates input rather than retaining potentially stuck state. An activation or context-menu request at its full action queue is dropped and reported through `activationOverflow`; freeing a slot later does not replay the dropped event. A full gesture queue similarly drops the new gesture and reports `gestureOverflow`. Accepted action/gesture sequences remain unique across cancellation and reset.
 
 The router is owned by one CPU execution context. It does not synchronize concurrent event producers or layout publication; a host serializes those operations at its UI boundary. Draw snapshots own rendering data and immutable font images, while callbacks and application values remain outside GPU work.
+
+## Popup ancestry and activation
+
+Every nonempty `PopupScope::parent` must identify an earlier registered, lower-layer scope with an exact widget/declaration/state/open token. Registration reserves layer order independently of activation; Context keeps a bounded parent activation stack for declarations and deferred painting. Geometry updates retain identity, parent and layer. Eight scopes is the frame limit, including automatic combo and context-menu children.
+
+The top accepted scope owns pointer routing and focus traversal. Dismissing a child affects its subtree and restores an eligible parent after accepted removal. Closing, fencing or retiring an ancestor retires descendant targets, queued intentions and capture together while preserving unrelated top-level scope chains. Removing and recreating an old target cannot revive its original held intention; its release remains consumed by the original owner. Native focus loss cancels the entire family and fences delayed acceptance.
+
+`popupCount()`, `topPopupToken()` and `popupScope(token)` are read-only observations of accepted copied scopes. A closing scope remains observable until replacement publication or retirement. Returned target/scope pointers are borrowed only until publication, reset or declaration retirement.

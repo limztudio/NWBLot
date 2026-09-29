@@ -75,6 +75,10 @@ public:
     void closePopup(const PopupToken& token);
     void fencePopup(const PopupToken& token);
     [[nodiscard]] bool hasPopup()const{ return !m_popups.empty(); }
+    [[nodiscard]] usize popupCount()const{ return m_popups.size(); }
+    // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
+    [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const;
+    [[nodiscard]] PopupToken topPopupToken()const{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] u64 focusLossGeneration()const{ return m_focusLossGeneration; }
     // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
     void invalidateTarget(WidgetId id);
@@ -146,11 +150,13 @@ private:
     );
     void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
+    [[nodiscard]] bool popupDescendant(const PopupToken& token, const PopupToken& ancestor)const;
     [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
     [[nodiscard]] bool validPopupTarget(const HitTarget& target)const;
     void installPopups(u64 expectedFocusLossGeneration);
     void retirePopup(WidgetId id);
     void cancelPopupFocus();
+    void rebuildLookup();
     void reconcileTargets();
     void updateHover();
     void cancelPointerCapture();

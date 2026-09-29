@@ -372,7 +372,7 @@ TEST_F(UiPopupContextTests, TargetsInSequentialScopesReceiveDistinctLayersThenRe
     EXPECT_EQ(m_context.input().focus(), secondChild.id);
 }
 
-TEST_F(UiPopupContextTests, NestedOrUnbalancedScopesPoisonCandidateWithoutPublishingIt){
+TEST_F(UiPopupContextTests, NestedScopeWithoutItsParentTokenPoisonsCandidateWithoutPublishingIt){
     const PopupFrame accepted = focusBase();
     ASSERT_TRUE(begin(2u));
     const WidgetState owner = declare("popup", WidgetKind::Popup);
@@ -386,14 +386,19 @@ TEST_F(UiPopupContextTests, NestedOrUnbalancedScopesPoisonCandidateWithoutPublis
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(m_context.input().focus(), accepted.base.id);
     EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), accepted.base.id);
-    m_context.abandonFrame();
-    ASSERT_TRUE(begin(3u));
+}
+
+TEST_F(UiPopupContextTests, UnbalancedPopupScopeCannotPublishItsCandidate){
+    const PopupFrame accepted = focusBase();
+    ASSERT_TRUE(begin(2u));
     const WidgetState unbalancedOwner = declare("popup", WidgetKind::Popup);
     ASSERT_TRUE(m_context.beginPopupScope(unbalancedOwner, scope(unbalancedOwner)));
     EXPECT_FALSE(m_context.endRoot());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
-    EXPECT_FALSE(m_context.commitFrame(3u));
+    EXPECT_FALSE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(m_context.input().focus(), accepted.base.id);
 }
 
 TEST_F(UiPopupContextTests, CapacityRejectsNinthScopeBeforePublishingAnyCandidate){

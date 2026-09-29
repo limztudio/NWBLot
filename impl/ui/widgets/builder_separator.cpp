@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
     if(
-        !m_scope->m_panelActive || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
+        declarationBlocked() || !m_scope->m_panelActive || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
         || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || options.direction > SeparatorDirection::Vertical
         || !IsFinite(options.thickness) || options.thickness < 0.0f
     ){

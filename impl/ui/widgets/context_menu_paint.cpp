@@ -39,7 +39,7 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         || anchorBox->rectangle.x + anchorBox->rectangle.width <= clip.x || anchorBox->rectangle.y + anchorBox->rectangle.height <= clip.y
     ){
         frame.state->close();
-        m_context.input().closePopup(frame.popupToken);
+        m_context.discardPopupScope(frame.popupToken);
         snapshotContextMenu(frame);
         return true;
     }
@@ -52,9 +52,10 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         return false;
     PopupScope scope;
     scope.token = frame.popupToken;
+    scope.parent = frame.parentToken;
     scope.bounds = placement.bounds;
     scope.viewport = placement.viewport;
-    if(!m_context.beginPopupScope(frame.popup, scope))
+    if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
         const bool ended = m_context.endPopupScope(false);

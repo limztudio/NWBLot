@@ -60,11 +60,19 @@ public:
     [[nodiscard]] bool takePointerGesture(const WidgetState& state, bool enabled, PointerGesture& gesture);
     [[nodiscard]] bool takeControlAction(const WidgetState& state, bool enabled, const ControlToken& token, ControlAction& action);
     [[nodiscard]] bool takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled, PointerGesture& gesture);
+    // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
+    [[nodiscard]] bool registerPopupScope(const WidgetState& state, PopupScope scope);
+    [[nodiscard]] bool activatePopupScope(const PopupToken& token);
+    [[nodiscard]] bool updatePopupScope(const PopupToken& token, PopupScope scope);
     [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
     [[nodiscard]] bool endPopupScope(bool visible);
+    // Discard an inactive scope and its descendants without disturbing the current parent activation.
+    void discardPopupScope(const PopupToken& token);
+    [[nodiscard]] bool hasPopupScope(const PopupToken& token)const;
     [[nodiscard]] WidgetId scopeId()const{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
     [[nodiscard]] PopupToken popupToken()const{ return m_currentPopup; }
     [[nodiscard]] u32 popupLayer()const{ return m_popupLayer; }
+    [[nodiscard]] u32 popupLayer(const PopupToken& token)const;
     [[nodiscard]] PopupToken topPopupToken()const{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] bool finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
@@ -97,6 +105,8 @@ private:
     InputVector<HitTarget> m_commitTargets;
     InputVector<PopupScope> m_commitPopups;
     PopupToken m_currentPopup;
+    Array<PopupToken, s_InputMaxPopups> m_popupStack{};
+    usize m_popupDepth = 0u;
     u32 m_popupLayer = 0u;
     WidgetRoot m_root;
     u64 m_frameGeneration = 0u;

@@ -44,6 +44,7 @@ target_sources(nwb_ui_widgets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/popup_layout.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/popup_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/builder_popup.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_popup_family.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/window.h"
     "${CMAKE_CURRENT_LIST_DIR}/window_behavior.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/window_layout.cpp"

@@ -12,6 +12,7 @@ class PopupToolsNativeInput(ComboNativeInput):
     def __init__(self, backend, handle):
         super().__init__(backend, handle)
         self.original_cursor = None
+        self.requested_pointer = None
         if self.windows:
             backend.user32.GetCursorPos.argtypes = [ctypes.POINTER(backend.POINT)]
             backend.user32.GetCursorPos.restype = ctypes.c_int
@@ -19,6 +20,7 @@ class PopupToolsNativeInput(ComboNativeInput):
             backend.user32.SetCursorPos.restype = ctypes.c_int
 
     def pointer(self, x, y):
+        self.requested_pointer = (int(x), int(y))
         if self.windows:
             if self.original_cursor is None:
                 original = self.backend.POINT()
@@ -31,6 +33,18 @@ class PopupToolsNativeInput(ComboNativeInput):
             if not self.backend.user32.SetCursorPos(position.x, position.y):
                 raise SmokeFailure("failed to position the Win32 cursor for popup tools hover")
         super().pointer(x, y)
+
+    def maintain_pointer(self):
+        if not self.windows or self.requested_pointer is None:
+            return
+        requested = self.backend.POINT(*self.requested_pointer)
+        observed = self.backend.POINT()
+        if not self.backend.user32.ClientToScreen(ctypes.c_void_p(self.handle), ctypes.byref(requested)):
+            raise SmokeFailure("failed to map the requested popup tools hover")
+        if not self.backend.user32.GetCursorPos(ctypes.byref(observed)):
+            raise SmokeFailure("failed to inspect the popup tools cursor")
+        if (observed.x, observed.y) != (requested.x, requested.y):
+            self.pointer(*self.requested_pointer)
 
     def restore_pointer(self):
         if self.windows and self.original_cursor is not None:

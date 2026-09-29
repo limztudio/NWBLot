@@ -16,11 +16,12 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::comboStateMatches(const ComboFrame& frame)const{
     return
-        frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration
+        popupAncestorsVisible() && frame.state && frame.state->inputGeneration() == frame.token.instanceGeneration
         && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration
         && frame.state->isOpen() == frame.open
         && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
         && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration
+        && frame.state->m_popup.m_parent == frame.parentToken
         && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration
             && frame.search->query().revision() == frame.queryRevision
             && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
@@ -31,11 +32,13 @@ bool Builder::comboStateMatches(const ComboFrame& frame)const{
 
 bool Builder::comboMatches(const ComboFrame& frame)const{
     return
-        frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results)
-        && frame.source->instanceGeneration() == frame.token.contentGeneration
-        && frame.source->revision() == frame.token.contentRevision && frame.source->rowCount() == frame.rowCount
-        && frame.results && frame.results->instanceGeneration() == frame.listToken.contentGeneration
-        && frame.results->revision() == frame.listToken.contentRevision && frame.results->rowCount() == frame.resultCount
+        frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results) && comboStateMatches(frame)
+        && frame.source->instanceGeneration() == frame.token.contentGeneration && comboStateMatches(frame)
+        && frame.source->revision() == frame.token.contentRevision && comboStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount && comboStateMatches(frame)
+        && frame.results && frame.results->instanceGeneration() == frame.listToken.contentGeneration && comboStateMatches(frame)
+        && frame.results->revision() == frame.listToken.contentRevision && comboStateMatches(frame)
+        && frame.results->rowCount() == frame.resultCount
         && comboStateMatches(frame)
     ;
 }

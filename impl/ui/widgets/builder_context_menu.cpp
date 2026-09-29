@@ -5,6 +5,7 @@
 #include "../builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,12 +22,16 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
     if(
-        !m_scope->m_panelActive || m_scope->m_popupState || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || !anchor || !IsFinite(options.size.x) || !IsFinite(options.size.y) || options.size.x <= 0.0f || options.size.y <= 0.0f
         || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || m_scope->m_contextMenus.size() >= s_InputMaxPopups
     ){
         m_context.fail();
+        return result;
+    }
+    if(!synchronizePopup()){
+        result.valid = true;
         return result;
     }
     for(const auto& previous : m_scope->m_contextMenus){
@@ -35,10 +40,13 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
             return result;
         }
     }
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
     WidgetState* widget = m_context.declare(stableKey, WidgetKind::ContextMenu);
     if(!widget || !m_context.claimState(*widget, state.instanceGeneration()))
         return result;
     ContextMenuFrame frame;
+    frame.parentToken = m_context.popupToken();
     frame.widget = *widget;
     frame.anchor = anchor->state;
     frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
@@ -59,6 +67,10 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         state.m_anchorDeclaration = anchor->state.declarationGeneration;
         state.advanceRevision();
     }
+    const bool boundOpen = state.isOpen();
+    state.m_popup.bindParent(frame.parentToken);
+    if(boundOpen && !state.isOpen())
+        state.close();
     WidgetState* popup = m_context.declarePart(frame.widget, "popup", WidgetKind::Popup);
     if(!popup)
         return result;
@@ -119,6 +131,11 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     list.padding.right = Max(list.padding.right, background->padding.right);
     list.padding.bottom = Max(list.padding.bottom, background->padding.bottom);
     frame.list = static_cast<u32>(m_scope->m_lists.size());
+    state.m_popup.bindParent(frame.parentToken);
+    if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){
+        m_context.fail();
+        return {};
+    }
     m_scope->m_lists.push_back(list);
     anchor->contextMenu = frame.options.enabled;
     anchor->annotated = true;

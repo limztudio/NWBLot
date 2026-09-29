@@ -5,6 +5,7 @@
 #include "../builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions){
     ComboResult result;
     if(
-        !m_scope->m_panelActive || m_scope->m_popupState || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
         || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || !IsFinite(m_comboStyle.arrowExtent) || m_comboStyle.arrowExtent <= 0.0f
@@ -35,6 +36,12 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return result;
     }
+    if(!synchronizePopup()){
+        result.valid = true;
+        return result;
+    }
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
     WidgetState* widget = m_context.declare(stableKey, search ? WidgetKind::SearchComboBox : WidgetKind::ComboBox);
     if(!widget)
         return result;
@@ -47,6 +54,9 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         || !ComboBehavior::Bind(state, field.id, field.declarationGeneration)
     )
         return result;
+    state.m_popup.bindParent(m_context.popupToken());
+    if(previouslyOpen && !state.isOpen())
+        ComboBehavior::Close(state);
     const u64 queryRevision = search ? search->query().revision() : 0u;
     const u64 queryExternalRevision = search ? search->query().externalRevision() : 0u;
     const u64 queryCompositionGeneration = search ? search->query().compositionGeneration() : 0u;
@@ -87,6 +97,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return result;
     }
     ComboFrame frame;
+    frame.parentToken = m_context.popupToken();
     frame.source = &source;
     frame.results = &results;
     frame.searchSource = searchSource;
@@ -117,6 +128,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     frame.open = state.isOpen();
+    state.m_popup.bindParent(frame.parentToken);
     if(search && !frame.open)
         search->m_editor.focused = false;
     frame.popupToken.openGeneration = state.m_popup.openGeneration();
@@ -200,6 +212,10 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     frame.list = static_cast<u32>(m_scope->m_lists.size());
+    if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){
+        m_context.fail();
+        return {};
+    }
     m_scope->m_lists.push_back(list);
     m_scope->m_combos.push_back(frame);
     m_scope->m_items.push_back(Move(item));

@@ -21,11 +21,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(item.list >= m_scope->m_lists.size())
         return false;
     ListFrame& frame = m_scope->m_lists[item.list];
-    if(
-        !frame.source || !frame.state || frame.source->instanceGeneration() != frame.token.contentGeneration
-        || frame.source->revision() != frame.token.contentRevision || frame.source->rowCount() != frame.rowCount
-        || frame.state->inputGeneration() != frame.token.instanceGeneration
-    )
+    if(!listMatches(frame))
         return false;
     const Rect clip = visibleClip(box.clip);
     ScrollPlacement placement;
@@ -34,7 +30,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
         frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
     ))
         return false;
-    if(!ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement.viewport.height))
+    if(
+        !ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement.viewport.height)
+        || !listStateMatches(frame)
+    )
         return false;
     if(!ScrollLayout::Calculate(
         box.rectangle, clip, frame.padding, m_listStyle.scrollbarWidth, m_listStyle.minimumThumb,
@@ -107,17 +106,23 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
         || (frame.keyboardFocus.valid() && m_context.input().focus() == frame.keyboardFocus);
     TextLayout text(m_arena);
     for(u64 index = placement.firstRow; index < placement.endRow; ++index){
+        if(!listStateMatches(frame))
+            return false;
         const u64 key = frame.source->key(index);
+        if(!listStateMatches(frame))
+            return false;
         u64 resolved = 0u;
-        if(key == 0u || !frame.source->indexOf(key, resolved) || resolved != index)
+        if(key == 0u || !frame.source->indexOf(key, resolved) || !listStateMatches(frame) || resolved != index)
             return false;
         const bool enabled = item.enabled && frame.source->enabled(index);
+        if(!listStateMatches(frame))
+            return false;
         const WidgetId part = MakeWidgetPartId(rows, key);
         Rect rectangle;
         if(!ScrollLayout::RowBounds(index, placement, frame.options.rowHeight, rectangle))
             return false;
         const ShapeRequest request{ frame.source->text(index), m_style.fontSize };
-        if(m_text.layout(request, text) != TextLayoutStatus::Success)
+        if(!listStateMatches(frame) || m_text.layout(request, text) != TextLayoutStatus::Success)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key,
             m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
@@ -137,11 +142,7 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
                 return false;
         }
     }
-    return
-        frame.state->inputGeneration() == frame.token.instanceGeneration
-        && frame.source->instanceGeneration() == frame.token.contentGeneration
-        && frame.source->revision() == frame.token.contentRevision && frame.source->rowCount() == frame.rowCount
-    ;
+    return listMatches(frame);
 }
 
 

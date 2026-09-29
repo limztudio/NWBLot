@@ -103,7 +103,7 @@ void PaintBuilder::begin(
     m_regions.assign(skin.regions().begin(), skin.regions().end());
     m_clips.clear();
     m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
-    m_overlayClipDepth = 0u;
+    m_overlayDepth = 0u;
     m_layer = 0u;
     m_recording = true;
 }
@@ -126,7 +126,7 @@ void PaintBuilder::pushClip(const Rect& clip){
 
 bool PaintBuilder::popClip(){
     NWB_ASSERT(m_recording);
-    if(m_clips.size() <= 1u || (m_overlayClipDepth != 0u && m_clips.size() <= m_overlayClipDepth + 1u))
+    if(m_clips.size() <= 1u || (m_overlayDepth != 0u && m_clips.size() <= m_overlays[m_overlayDepth - 1u].clipDepth + 1u))
         return false;
     m_clips.pop_back();
     return true;
@@ -157,7 +157,7 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
 }
 
 DrawSnapshot PaintBuilder::freeze(){
-    NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayClipDepth == 0u);
+    NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
     Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs){
         return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
     });

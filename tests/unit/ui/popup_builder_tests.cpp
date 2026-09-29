@@ -450,21 +450,27 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     ASSERT_TRUE(m_context.commitFrame(4u));
 }
 
-TEST_F(UiPopupBuilderTests, NestedPopupBeginRejectsWithoutCreatingASecondBorrowedScope){
+TEST_F(UiPopupBuilderTests, NestedPopupEndRestoresItsParentAndPublishesBothScopes){
     PopupState first;
     PopupState nested;
     first.open();
     nested.open();
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPopup("popup", first, Anchored()));
-    EXPECT_FALSE(m_builder.beginPopup("nested", nested, Anchored()));
-    EXPECT_TRUE(m_context.failed());
+    const PopupToken parent = m_context.popupToken();
+    ASSERT_TRUE(m_builder.beginPopup("nested", nested, Anchored()));
+    EXPECT_NE(m_context.popupToken(), parent);
+    ASSERT_TRUE(m_builder.endPopup());
+    EXPECT_EQ(m_context.popupToken(), parent);
     EXPECT_FALSE(m_builder.balanced());
-    EXPECT_FALSE(m_builder.endPopup());
+    ASSERT_TRUE(m_builder.endPopup());
     EXPECT_TRUE(m_builder.balanced());
-    EXPECT_FALSE(m_context.endRoot());
-    EXPECT_FALSE(m_context.finishFrame());
-    EXPECT_FALSE(m_context.commitFrame(1u));
+    ASSERT_TRUE(finishRoot());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    EXPECT_FALSE(snapshot.commands().empty());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_EQ(m_context.input().popupCount(), 2u);
+    EXPECT_EQ(m_context.input().popupScope(m_context.input().topPopupToken())->parent, parent);
 }
 
 TEST_F(UiPopupBuilderTests, PopupRequiresThePrecedingPanelToBeBalanced){

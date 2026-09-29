@@ -195,7 +195,8 @@ TEST_F(UiPaintOverlayTests, RejectedAdmissionAndUnbalancedClosurePreserveTheActi
     EXPECT_FALSE(m_builder.endOverlay());
     m_builder.fillRect(rectangle);
     ASSERT_TRUE(m_builder.beginOverlay(8u));
-    EXPECT_FALSE(m_builder.beginOverlay(9u));
+    ASSERT_TRUE(m_builder.beginOverlay(9u));
+    ASSERT_TRUE(m_builder.endOverlay());
     EXPECT_FALSE(m_builder.beginOverlay(0u));
     m_builder.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
     EXPECT_FALSE(m_builder.endOverlay());
@@ -217,6 +218,45 @@ TEST_F(UiPaintOverlayTests, RejectedAdmissionAndUnbalancedClosurePreserveTheActi
     EXPECT_FLOAT_EQ(snapshot.vertices()[6u].position.x, 30.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[8u].position.x, 5.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[10u].position.x, 15.0f);
+}
+
+TEST_F(UiPaintOverlayTests, NestedOverlayRestoresParentLayerAndItsClipAfterEscapingBoth){
+    const Rect rectangle{ 0.0f, 0.0f, 100.0f, 80.0f };
+    ASSERT_TRUE(m_builder.beginOverlay(2u));
+    m_builder.pushClip({ 5.0f, 5.0f, 10.0f, 10.0f });
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.beginOverlay(3u));
+    m_builder.fillRect(rectangle);
+    EXPECT_FALSE(m_builder.popClip());
+    ASSERT_TRUE(m_builder.endOverlay());
+    m_builder.fillRect(rectangle);
+    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(m_builder.endOverlay());
+    m_builder.fillRect(rectangle);
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.commands().size(), 4u);
+    EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
+    EXPECT_EQ(snapshot.commands()[1u].layer, 2u);
+    EXPECT_EQ(snapshot.commands()[2u].layer, 2u);
+    EXPECT_EQ(snapshot.commands()[3u].layer, 3u);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 5.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[4u].position.x, 0.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[6u].position.x, 100.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[8u].position.x, 5.0f);
+    EXPECT_FLOAT_EQ(snapshot.vertices()[10u].position.x, 15.0f);
+}
+
+TEST_F(UiPaintOverlayTests, BoundedOverlayDepthRejectsWithoutChangingTheLastAcceptedScope){
+    for(u32 layer = 1u; layer <= s_PaintMaxOverlayDepth; ++layer)
+        ASSERT_TRUE(m_builder.beginOverlay(layer));
+    EXPECT_FALSE(m_builder.beginOverlay(99u));
+    m_builder.fillRect({ 0.0f, 0.0f, 100.0f, 80.0f });
+    for(usize depth = 0u; depth < s_PaintMaxOverlayDepth; ++depth)
+        ASSERT_TRUE(m_builder.endOverlay());
+    EXPECT_FALSE(m_builder.endOverlay());
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.commands().size(), 1u);
+    EXPECT_EQ(snapshot.commands()[0u].layer, s_PaintMaxOverlayDepth);
 }
 
 TEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOverlayState){

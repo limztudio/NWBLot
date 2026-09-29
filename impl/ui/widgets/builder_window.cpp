@@ -5,6 +5,7 @@
 #include "../builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::beginWindow(
     const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
-    if(m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
+    if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
         m_context.fail();
         return false;
     }
@@ -109,10 +110,12 @@ bool Builder::beginWindow(
 }
 
 bool Builder::endWindow(){
-    if(!m_scope->m_windowActive || !m_scope->m_panelActive || !m_scope->m_window.state || m_scope->m_stack.size() != 1u || m_context.failed()){
+    if(declarationBlocked() || !m_scope->m_windowActive || !m_scope->m_panelActive || !m_scope->m_window.state || m_scope->m_stack.size() != 1u || m_context.failed()){
         m_context.fail();
         return false;
     }
+    m_finalizing = true;
+    ScopeExit finish([this]()noexcept{ m_finalizing = false; });
     WindowState& state = *m_scope->m_window.state;
     bool arranged = true;
     if(!state.collapsed){

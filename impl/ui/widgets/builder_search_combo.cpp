@@ -18,13 +18,14 @@ NWB_IMPL_UI_BEGIN
 
 SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
     SearchComboState& state, const SearchComboOptions& options){
-    if(!IsFinite(options.queryHeight) || options.queryHeight <= 0.0f || !IsFinite(options.queryGap) || options.queryGap < 0.0f){
+    if(declarationBlocked() || !IsFinite(options.queryHeight) || options.queryHeight <= 0.0f || !IsFinite(options.queryGap) || options.queryGap < 0.0f){
         m_context.fail();
         return {};
     }
+    const usize previousCount = m_scope->m_combos.size();
     SearchComboResult result;
     result.combo = declareCombo(stableKey, source, state.combo(), options.combo, &state, &source, &options);
-    if(result.combo.valid && !m_scope->m_combos.empty())
+    if(result.combo.valid && m_scope->m_combos.size() > previousCount)
         result.queryChanged = m_scope->m_combos.back().queryChanged;
     return result;
 }

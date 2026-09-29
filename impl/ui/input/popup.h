@@ -27,6 +27,9 @@ struct PopupToken{
     [[nodiscard]] bool valid()const{
         return widget.valid() && declarationGeneration != 0u && instanceGeneration != 0u && openGeneration != 0u;
     }
+    [[nodiscard]] bool empty()const{
+        return !widget.valid() && declarationGeneration == 0u && instanceGeneration == 0u && openGeneration == 0u;
+    }
 };
 
 [[nodiscard]] inline bool operator==(const PopupToken& lhs, const PopupToken& rhs){
@@ -49,6 +52,7 @@ struct PopupScope{
     bool dismissOutside = true;
     bool dismissEscape = true;
     bool autofocus = true;
+    PopupToken parent;
 };
 
 struct PopupDismissal{

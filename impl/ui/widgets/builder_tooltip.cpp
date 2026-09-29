@@ -20,7 +20,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     TooltipState& state, const TooltipOptions& options){
     Item* anchor = annotationAnchor(anchorKey);
     if(
-        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();

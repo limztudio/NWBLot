@@ -89,7 +89,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
         return false;
     const Rect& anchor = frame.state->bounds();
     if(frame.visibleField.width <= 0.0f || frame.visibleField.height <= 0.0f){
-        m_context.input().closePopup(frame.popupToken);
+        m_context.discardPopupScope(frame.popupToken);
         ComboBehavior::Close(*frame.state);
         frame.open = false;
         if(frame.search){
@@ -112,9 +112,10 @@ bool Builder::paintComboPopup(ComboFrame& frame){
         Max(m_popupStyle.padding.bottom, background->padding.bottom) };
     PopupScope scope;
     scope.token = frame.popupToken;
+    scope.parent = frame.parentToken;
     scope.bounds = placement.bounds;
     scope.viewport = placement.viewport;
-    if(!m_context.beginPopupScope(frame.popup, scope))
+    if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){
         const bool ended = m_context.endPopupScope(false);

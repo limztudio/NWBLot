@@ -5,6 +5,7 @@
 #include "../builder.h"
 
 #include <global/simplemath.h>
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 EditBoxResult Builder::editBox(
     const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
     if(
-        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
+        declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
         || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
@@ -30,6 +31,8 @@ EditBoxResult Builder::editBox(
         result.valid = true;
         return result;
     }
+    m_declaring = true;
+    ScopeExit finish([this]()noexcept{ m_declaring = false; });
     WidgetState* widget = m_context.declare(stableKey, WidgetKind::EditBox);
     if(!widget)
         return {};

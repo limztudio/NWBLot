@@ -14,6 +14,7 @@
 TestbedUiWidgetGallery::TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
     : m_edits(arena)
     , m_searchCombos(arena)
+    , m_nestedPopups(arena)
 {}
 
 void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
@@ -49,6 +50,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     m_combos.paint(context, Max(18.0f, x - 292.0f), y + 270.0f);
     m_searchCombos.paint(context, Max(18.0f, x - 584.0f), y + 270.0f);
     m_popupTools.paint(context, Max(18.0f, x - 584.0f), y);
+    m_nestedPopups.paint(context, Max(18.0f, x - 876.0f), y);
     m_popups.paint(context, x, y);
 }
 

@@ -51,7 +51,7 @@ struct UiEditBoxGeometry{
 };
 
 namespace UiEditBoxEventKind{
-    enum Enum : u8{ Key, Character, Native, Selection, PastePrimary };
+    enum Enum : u8{ Key, Character, Native, Selection, PastePrimary, Blur };
 };
 
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
@@ -65,9 +65,15 @@ private:
         UiEditBoxGeometry candidate;
         UiEditBoxGeometry displayed;
         u64 seen = 0u;
+        u64 focusGeneration = 0u;
+        u64 retiredFocusGeneration = 0u;
         usize dragAnchor = 0u;
         bool dragging = false;
         bool preeditCaretVisible = true;
+        bool actionCapable = false;
+        bool focused = false;
+        bool enabled = true;
+        bool readOnly = false;
         Core::TextInputSessionToken rejectedNative;
 
         explicit Entry(Core::Alloc::GlobalArena& arena) : expected(arena), candidate(arena), displayed(arena){}
@@ -79,6 +85,7 @@ private:
         Ui::EditKeyStroke key;
         usize position = 0u;
         u64 geometryRevision = 0u;
+        u64 focusGeneration = 0u;
         u64 geometryExternalRevision = 0u;
         u64 surroundingRevision = 0u;
         u64 surroundingModelRevision = 0u;
@@ -104,6 +111,8 @@ public:
         const Ui::EditBoxOptions& options)override;
     [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
         const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
+    [[nodiscard]] virtual Ui::EditBoxResult editActions(const Ui::WidgetState& widget, Ui::EditModel& model,
+        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions)override;
     [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
         const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
@@ -124,7 +133,14 @@ private:
     [[nodiscard]] const Entry* find(Ui::WidgetId widget)const;
     [[nodiscard]] bool append(Event&& event);
     void discard(const UiTextEditOwner& owner);
-    void apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result);
+    [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
+        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions);
+    [[nodiscard]] bool apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
+        Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions);
+    [[nodiscard]] bool applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
+        Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions);
+    [[nodiscard]] bool rejectBorrowedMutation();
+    [[nodiscard]] u64 nextFocusGeneration();
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const;
     [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const;
@@ -149,8 +165,11 @@ private:
     Ui::DisplayMetrics m_display;
     u64 m_generation = 0u;
     u64 m_lastNativeSequence = 0u;
+    u64 m_focusGeneration = 0u;
     usize m_queuedTextBytes = 0u;
     bool m_clipboardFailure = false;
+    bool m_borrowed = false;
+    bool m_borrowRejected = false;
 };
 
 

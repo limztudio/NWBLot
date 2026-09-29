@@ -78,6 +78,8 @@ void UiEditBoxHost::drainPublications(){
 }
 
 bool UiEditBoxHost::takeClipboardFailure(){
+    if(rejectBorrowedMutation())
+        return false;
     const bool failed = m_clipboardFailure;
     m_clipboardFailure = false;
     return failed;
@@ -100,6 +102,8 @@ const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const{
 }
 
 void UiEditBoxHost::beginFrame(const u64 generation, const Ui::DisplayMetrics& display){
+    if(rejectBorrowedMutation())
+        return;
     drainPublications();
     collectNative();
     m_generation = generation;
@@ -107,6 +111,8 @@ void UiEditBoxHost::beginFrame(const u64 generation, const Ui::DisplayMetrics& d
 }
 
 void UiEditBoxHost::finishFrame(){
+    if(rejectBorrowedMutation())
+        return;
     for(usize index = m_entries.size(); index > 0u; --index){
         const auto& entry = m_entries[index - 1u];
         if(entry.seen == m_generation)
@@ -123,6 +129,8 @@ void UiEditBoxHost::finishFrame(){
 }
 
 void UiEditBoxHost::commitFrame(const u64 generation){
+    if(rejectBorrowedMutation())
+        return;
     if(m_context.input().layoutGeneration() != generation)
         return;
     for(auto& entry : m_entries){
@@ -144,6 +152,8 @@ void UiEditBoxHost::commitFrame(const u64 generation){
 
 bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
     const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
+    if(rejectBorrowedMutation())
+        return false;
     Entry* entry = find(widget.id);
     if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || entry->popup != m_context.popupToken() || !view.ready())
         return false;
@@ -176,12 +186,31 @@ bool UiEditBoxHost::hasTextFocus()const{
 }
 
 void UiEditBoxHost::synchronizeFocus(){
+    if(rejectBorrowedMutation())
+        return;
     const Entry* entry = find(m_context.input().focus());
     const bool focused = hasTextFocus() && entry;
     for(auto& candidate : m_entries){
-        if(focused && candidate.owner == entry->owner)
+        const bool active = focused && candidate.owner == entry->owner;
+        if(candidate.actionCapable){
+            if(active && !candidate.focused){
+                candidate.focused = true;
+                candidate.focusGeneration = nextFocusGeneration();
+            }
+            else if(!active && candidate.focused){
+                Event event(m_arena);
+                event.owner = candidate.owner;
+                event.focusGeneration = candidate.focusGeneration;
+                event.kind = UiEditBoxEventKind::Blur;
+                candidate.focused = false;
+                if(!append(Move(event)))
+                    return;
+            }
+        }
+        if(active)
             continue;
-        discard(candidate.owner);
+        if(!candidate.actionCapable)
+            discard(candidate.owner);
         candidate.dragging = false;
     }
     if(
@@ -193,6 +222,8 @@ void UiEditBoxHost::synchronizeFocus(){
 }
 
 void UiEditBoxHost::reset(){
+    if(rejectBorrowedMutation())
+        return;
     cancelTransfers();
     m_entries.clear();
     m_events.clear();

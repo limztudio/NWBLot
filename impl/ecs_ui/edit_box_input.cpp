@@ -63,6 +63,8 @@ bool UiEditBoxHost::append(Event&& event){
 }
 
 void UiEditBoxHost::collectNative(){
+    if(rejectBorrowedMutation())
+        return;
     for(usize index = 0u; m_session.token().valid() && index <= Core::s_TextInputMaxEvents; ++index){
         Event event(m_arena);
         const auto poll = m_session.pollOwned(event.native);
@@ -83,6 +85,8 @@ void UiEditBoxHost::collectNative(){
         }
         m_lastNativeSequence = event.native.sequence;
         event.owner = m_session.owner();
+        const Entry* entry = find(event.owner.widget);
+        event.focusGeneration = entry && entry->owner == event.owner ? entry->focusGeneration : 0u;
         event.kind = UiEditBoxEventKind::Native;
         event.surroundingRevision = m_session.surroundingRevision();
         event.surroundingModelRevision = m_nativePublished.revision;
@@ -95,10 +99,13 @@ void UiEditBoxHost::collectNative(){
 }
 
 void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture){
+    if(rejectBorrowedMutation())
+        return;
     if(input.type == Ui::InputEventType::FocusLost){
         reset();
         return;
     }
+    synchronizeFocus();
     if(input.type == Ui::InputEventType::PointerCaptureLost){
         for(auto& entry : m_entries)
             entry.dragging = false;
@@ -114,6 +121,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             return;
         Event event(m_arena);
         event.owner = entry->owner;
+        event.focusGeneration = entry->focusGeneration;
         event.key = { __hidden_ui_edit_box_input::EditKey(input.key), input.control, input.shift, input.alt, input.repeat };
         if(Ui::TranslateEditCommand(event.key).command == Ui::EditCommand::None)
             return;
@@ -128,6 +136,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             return;
         Event event(m_arena);
         event.owner = entry->owner;
+        event.focusGeneration = entry->focusGeneration;
         event.kind = UiEditBoxEventKind::Selection;
         event.position = byte;
         event.geometryRevision = entry->displayed.revision;
@@ -142,6 +151,9 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
 }
 
 bool UiEditBoxHost::character(const u32 unicode){
+    if(rejectBorrowedMutation())
+        return false;
+    synchronizeFocus();
     if(!hasTextFocus())
         return false;
     if(m_session.token().valid())
@@ -152,6 +164,7 @@ bool UiEditBoxHost::character(const u32 unicode){
     Event event(m_arena);
     event.kind = UiEditBoxEventKind::Character;
     event.owner = entry->owner;
+    event.focusGeneration = entry->focusGeneration;
     char bytes[4u] = {};
     usize count = 0u;
     if(unicode < 0x80u){
@@ -183,12 +196,16 @@ bool UiEditBoxHost::character(const u32 unicode){
 }
 
 bool UiEditBoxHost::pastePrimary(const Ui::Point position){
+    if(rejectBorrowedMutation())
+        return false;
+    synchronizeFocus();
     const Ui::WidgetId target = m_context.input().hitTest(position);
     Entry* entry = find(target);
     if(!entry || !hasTextFocus() || m_context.input().focus() != target)
         return false;
     Event event(m_arena);
     event.owner = entry->owner;
+    event.focusGeneration = entry->focusGeneration;
     event.kind = UiEditBoxEventKind::PastePrimary;
     return append(Move(event));
 }

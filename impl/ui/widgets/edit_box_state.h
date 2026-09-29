@@ -6,6 +6,7 @@
 
 
 #include "edit_box.h"
+#include "../edit/actions.h"
 #include "../state/store.h"
 #include "../input/popup.h"
 
@@ -46,6 +47,8 @@ struct EditBoxResult{
     bool cancelled = false;
     bool focused = false;
     bool preeditCaretVisible = true;
+    bool blurred = false;
+    bool abandoned = false;
 };
 
 
@@ -63,6 +66,9 @@ public:
     // Deferred composite controls lend an explicit popup identity before its candidate geometry is emitted.
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model,
         const EditBoxOptions& options, const PopupToken&){ return edit(widget, model, options); }
+    // Action-capable hosts invoke the borrowed sink in event order, before returning the draft for a paint snapshot.
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
+        const PopupToken&, IEditActionSink&){ return {}; }
     [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view,
         const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };

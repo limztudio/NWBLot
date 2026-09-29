@@ -353,6 +353,7 @@ public:
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
     // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
+    [[nodiscard]] const VkPhysicalDeviceLimits& getPhysicalDeviceLimits()const noexcept{ return m_context.physicalDeviceProperties.limits; }
     [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;

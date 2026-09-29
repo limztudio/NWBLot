@@ -495,7 +495,7 @@ void GpuCommandIrStreamReader::fail(
 
 GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(const BinaryByteView bytes)noexcept{
     GpuCommandIrStreamReader reader(bytes);
-    GpuCommandIrBuiltinTaskRecord record;
+    GpuCommandIrDecodedRecord record;
     for(;;){
         switch(reader.next(record)){
         case GpuCommandIrStreamReadStatus::Record:

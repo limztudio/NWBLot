@@ -43,6 +43,10 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
 }
 
+[[nodiscard]] static bool QueueHasGraphicsCapability(const GpuPhysicalQueueInfo& queue)noexcept{
+    return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+}
+
 [[nodiscard]] static const GpuTaskResourceUse* FindTaskResourceUse(
     const GpuTaskGraphTaskView& task,
     const GpuGraphResourceId resource,
@@ -559,8 +563,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
+[[nodiscard]] static GpuCommandIrReplayResult PreflightPacketImpl(
     const BinaryByteView bytes,
+    const GpuCommandIrOwnedStream* const ownedStream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet
@@ -595,12 +600,6 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             GpuCommandIrReplayError::PacketQueueUnavailable,
             streamValidation
         );
-    if(!__hidden_gpu_command_ir_replay_preflight::QueueHasTransferCapability(*queue))
-        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
-            GpuCommandIrReplayError::MissingTransferCapability,
-            streamValidation
-        );
-
     GpuCommandIrStreamReader reader(bytes);
     if(reader.validation().failed())
         return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
@@ -624,14 +623,21 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     u32 previousTaskOrder = 0u;
     bool hasPreviousTask = false;
     u64 recordIndex = 0u;
-    GpuCommandIrBuiltinTaskRecord record;
+    GpuCommandIrDetail::RasterReplayState rasterState;
+    GpuCommandIrDecodedRecord decoded;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
-        if(status == GpuCommandIrStreamReadStatus::End)
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
+        if(status == GpuCommandIrStreamReadStatus::End){
+            if(rasterState.active){
+                return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
+                    GpuCommandIrReplayError::InvalidRasterState, streamValidation, recordIndex
+                );
+            }
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
                 .recordIndex = recordIndex,
             };
+        }
         if(status == GpuCommandIrStreamReadStatus::Error){
             return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
                 GpuCommandIrReplayError::InvalidStream,
@@ -640,14 +646,28 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             );
         }
 
+        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        if(raster && !ownedStream){
+            return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
+                GpuCommandIrReplayError::MissingOwnedSidecar, streamValidation, recordIndex
+            );
+        }
+        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
         // The packet is a self-contained scope; filter other packets after the full syntax check above.
-        if(record.packet != packet){
+        if(recordPacket != packet){
             ++recordIndex;
             continue;
         }
 
+        GpuCommandIrBuiltinTaskRecord contextRecord = decoded.builtin;
+        if(raster){
+            contextRecord.task = decoded.raster.task;
+            contextRecord.packet = decoded.raster.packet;
+            contextRecord.queue = decoded.raster.queue;
+        }
+
         const GpuCommandIrReplayError::Enum contextError = __hidden_gpu_command_ir_replay_preflight::ValidateRecordContext(
-            record,
+            contextRecord,
             graph,
             compiledGraph,
             packet,
@@ -659,19 +679,52 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
         if(contextError != GpuCommandIrReplayError::None)
             return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(contextError, streamValidation, recordIndex);
 
-        const GpuTaskGraphTaskView task = graph.taskAt(record.task.index);
-        const GpuCommandIrReplayError::Enum operationError = __hidden_gpu_command_ir_replay_preflight::ValidateOperation(
-            record,
-            reader.blobBytes(),
-            graph,
-            task,
-            *queue
-        );
+        const GpuTaskGraphTaskView task = graph.taskAt(contextRecord.task.index);
+        GpuCommandIrReplayError::Enum operationError = GpuCommandIrReplayError::None;
+        if(raster){
+            if(!__hidden_gpu_command_ir_replay_preflight::QueueHasGraphicsCapability(*queue))
+                operationError = GpuCommandIrReplayError::MissingGraphicsCapability;
+            else{
+                operationError = GpuCommandIrDetail::ValidateRasterGraphOperation(
+                    decoded.raster, graph, task, rasterState
+                );
+            }
+        }
+        else{
+            if(!__hidden_gpu_command_ir_replay_preflight::QueueHasTransferCapability(*queue))
+                operationError = GpuCommandIrReplayError::MissingTransferCapability;
+            else{
+                operationError = GpuCommandIrDetail::ValidateRasterBuiltinBoundary(contextRecord.task, rasterState);
+                if(operationError == GpuCommandIrReplayError::None){
+                    operationError = __hidden_gpu_command_ir_replay_preflight::ValidateOperation(
+                        decoded.builtin, reader.blobBytes(), graph, task, *queue
+                    );
+                }
+            }
+        }
         if(operationError != GpuCommandIrReplayError::None)
             return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(operationError, streamValidation, recordIndex);
 
         ++recordIndex;
     }
+}
+
+GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
+    const BinaryByteView bytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    const GpuSubmissionPacketId packet
+)noexcept{
+    return PreflightPacketImpl(bytes, nullptr, graph, compiledGraph, packet);
+}
+
+GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
+    const GpuCommandIrOwnedStream& stream,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    const GpuSubmissionPacketId packet
+)noexcept{
+    return PreflightPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet);
 }
 
 

@@ -57,6 +57,9 @@ namespace GpuCommandIrWireOpcode{
         ClearTextureRectUInt,
         UploadBuffer,
         UploadTexture,
+        BindGraphicsHeap,
+        SetPushConstants,
+        EndRenderPass,
 
         kCount,
     };
@@ -64,7 +67,7 @@ namespace GpuCommandIrWireOpcode{
 
 // Same-host tooling format; magic/version reject incompatible layouts.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
-inline constexpr u16 s_GpuCommandIrStreamVersion = 4u;
+inline constexpr u16 s_GpuCommandIrStreamVersion = 5u;
 
 #pragma pack(push, 1)
 struct GpuCommandIrStreamHeaderPrefix{
@@ -312,6 +315,13 @@ struct GpuCommandIrBuiltinTaskRecord{
     bool clearStencil = false;
 };
 
+struct GpuCommandIrDecodedRecord;
+struct GpuCommandIrRasterStateDesc;
+struct GpuCommandIrRasterStateOwner;
+struct GpuCommandIrRasterHeapOwner;
+struct GpuCommandIrRasterOwnerTable;
+class GpuCommandIrOwnerAnchor;
+
 
 // Reader validates only the wire contract; topology needs a later phase.
 namespace GpuCommandIrStreamReadStatus{
@@ -365,6 +375,7 @@ public:
 
 public:
     [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrBuiltinTaskRecord& outRecord)noexcept;
+    [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrDecodedRecord& outRecord)noexcept;
     [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
@@ -417,16 +428,21 @@ private:
     usize m_recordCount = 0u;
     usize m_commandSize = 0u;
     usize m_blobSize = 0u;
+    usize m_rasterStateOwnerCount = 0u;
+    usize m_rasterHeapOwnerCount = 0u;
 };
 
 // Caller-arena-owned immutable exported bytes; capture reset and graph teardown cannot change them.
 class GpuCommandIrOwnedStream final : NoCopy{
 public:
     explicit GpuCommandIrOwnedStream(GraphicsArena& arena);
+    ~GpuCommandIrOwnedStream()noexcept;
 
 
 public:
     [[nodiscard]] BinaryByteView bytes()const noexcept{ return BinaryByteView{ m_bytes.data(), m_bytes.size() }; }
+    [[nodiscard]] const GpuCommandIrRasterStateOwner* rasterStateOwner(u32 index)const noexcept;
+    [[nodiscard]] const GpuCommandIrRasterHeapOwner* rasterHeapOwner(u32 index)const noexcept;
 
 
 private:
@@ -434,6 +450,7 @@ private:
 
     GraphicsArena& m_arena;
     GraphicsBytes m_bytes;
+    GpuCommandIrRasterOwnerTable* m_rasterOwners = nullptr;
 };
 
 
@@ -472,6 +489,11 @@ namespace GpuCommandIrReplayError{
         PermanentResourceStateMismatch,
         InvalidBufferUpload,
         InvalidTextureUpload,
+        MissingOwnedSidecar,
+        MissingGraphicsCapability,
+        InvalidRasterState,
+        InvalidRasterDraw,
+        InvalidRasterOwner,
     };
 };
 
@@ -501,11 +523,24 @@ struct GpuCommandIrReplayResult{
     const GpuCompiledGraph::ReadView& compiledGraph,
     GpuSubmissionPacketId packet
 )noexcept;
+[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
+    const GpuCommandIrOwnedStream& stream,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    GpuSubmissionPacketId packet
+)noexcept;
 
 // Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass,
 // bytes+graph stable. No seeds/barriers/submit; caller keeps the packet contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     BinaryByteView bytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept;
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+    const GpuCommandIrOwnedStream& stream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
     GpuSubmissionPacketId packet,
@@ -526,6 +561,7 @@ struct GpuCommandIrReplayResult{
 class GpuCommandIrCapture final : NoCopy{
 public:
     explicit GpuCommandIrCapture(GraphicsArena& arena);
+    ~GpuCommandIrCapture()noexcept;
 
 
 public:
@@ -542,6 +578,42 @@ public:
     [[nodiscard]] bool exportOwned(GpuCommandIrOwnedStream& outStream)const;
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
     [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& checkpoint)noexcept;
+    [[nodiscard]] bool captureSetGraphicsState(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        const GpuCommandIrRasterStateDesc& state
+    );
+    // ownerArena and the descriptor owner's arena must outlive every exported stream that retains this heap binding.
+    // The Device and its heap must outlive the last retained lease/artifact.
+    [[nodiscard]] bool captureBindGraphicsHeap(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        GpuGraphPipelineId pipeline,
+        const GraphicsPipelineHandle& pipelineOwner,
+        GpuDescriptorHeap& heap,
+        GraphicsArena& ownerArena,
+        const GpuCommandIrOwnerAnchor& descriptorOwner
+    );
+    [[nodiscard]] bool capturePushConstants(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        BinaryByteView bytes
+    );
+    [[nodiscard]] bool captureDraw(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        const DrawArguments& arguments,
+        bool indexed
+    );
+    [[nodiscard]] bool captureEndRenderPass(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue
+    );
     // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording
     // attempt. This is a recording trace; a later reader may separately correlate it with submission acceptance.
     void rollback(usize recordCount)noexcept;
@@ -616,6 +688,15 @@ private:
     [[nodiscard]] bool append(const GpuCommandIrBuiltinTaskRecord& record);
     [[nodiscard]] bool appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
     [[nodiscard]] bool appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
+    [[nodiscard]] bool appendRasterBytes(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        BinaryByteView encoded,
+        BinaryByteView blob,
+        const GpuCommandIrRasterStateOwner* stateOwner,
+        const GpuCommandIrRasterHeapOwner* heapOwner
+    );
     void writeStreamHeader()noexcept;
     void rollbackPrefix(usize recordCount, u64 graphGeneration, u64 planGeneration, u64 attemptGeneration)noexcept;
 
@@ -626,7 +707,9 @@ private:
     GraphicsVector<u64> m_recordSerials;
     GraphicsBytes m_commandBytes;
     GraphicsBytes m_blobBytes;
+    GpuCommandIrRasterOwnerTable* m_rasterOwners = nullptr;
     mutable GraphicsBytes m_packedBytes;
+    GraphicsArena& m_arena;
     mutable bool m_packedDirty = true;
     u64 m_ownerIdentity = 0u;
     u64 m_resetEpoch = 1u;
@@ -641,6 +724,12 @@ private:
 
 
 NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "command_ir_raster.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -190,6 +190,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 // Preflight cannot check native ownership, so scan the packet before taking the recording lease.
 [[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
     const BinaryByteView bytes,
+    const GpuCommandIrOwnedStream* const ownedStream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList,
@@ -212,9 +213,10 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     }
 
     u64 recordIndex = 0u;
-    GpuCommandIrBuiltinTaskRecord record;
+    GpuCommandIrDetail::RasterReplayState rasterState;
+    GpuCommandIrDecodedRecord decoded;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
         if(status == GpuCommandIrStreamReadStatus::End){
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
@@ -229,13 +231,20 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             );
         }
 
-        if(record.packet == packet){
-            const GpuCommandIrReplayError::Enum operandError = ValidateBackendOperands(
-                record,
-                graph,
-                commandList,
-                *commandQueue
-            );
+        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
+        if(recordPacket == packet){
+            GpuCommandIrReplayError::Enum operandError = GpuCommandIrReplayError::None;
+            if(raster){
+                operandError = ownedStream
+                    ? GpuCommandIrDetail::ValidateRasterBackendOperand(
+                        decoded.raster, *ownedStream, graph, *commandQueue, commandList, recordIndex, rasterState
+                    )
+                    : GpuCommandIrReplayError::MissingOwnedSidecar
+                ;
+            }
+            else
+                operandError = ValidateBackendOperands(decoded.builtin, graph, commandList, *commandQueue);
             if(operandError != GpuCommandIrReplayError::None)
                 return ReplayFailure(operandError, expectedStreamValidation, recordIndex);
         }
@@ -374,14 +383,18 @@ static void LowerOperation(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+[[nodiscard]] static GpuCommandIrReplayResult ReplayPacketImpl(
     const BinaryByteView bytes,
+    const GpuCommandIrOwnedStream* const ownedStream,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
     CommandList& commandList
 )noexcept{
-    GpuCommandIrReplayResult result = PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet);
+    GpuCommandIrReplayResult result = ownedStream
+        ? PreflightGpuCommandIrPacket(*ownedStream, graph, compiledGraph, packet)
+        : PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet)
+    ;
     if(!result.valid())
         return result;
 
@@ -432,6 +445,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     }
     const GpuCommandIrReplayResult backendPreflight = __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(
         bytes,
+        ownedStream,
         graph,
         packet,
         commandList,
@@ -443,10 +457,10 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
     // Preflight already proved legality, so this walk can lower without a duplicate command list.
     GpuCommandIrStreamReader reader(bytes);
-    GpuCommandIrBuiltinTaskRecord record;
+    GpuCommandIrDecodedRecord decoded;
     u64 recordIndex = 0u;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
         if(status == GpuCommandIrStreamReadStatus::End)
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
@@ -460,16 +474,19 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             );
         }
 
-        if(record.packet != packet){
+        const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
+        const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
+        if(recordPacket != packet){
             ++recordIndex;
             continue;
         }
 
         // The graph and bytes are caller-stable; concurrent mutation stays unsupported.
-        if(!graph.validResource(record.destination) || (
-            (record.opcode == GpuCommandIrOpcode::CopyBuffer || record.opcode == GpuCommandIrOpcode::CopyTexture)
-            && !graph.validResource(record.source)
-        )){
+        if(!raster && (!graph.validResource(decoded.builtin.destination) || (
+            (decoded.builtin.opcode == GpuCommandIrOpcode::CopyBuffer
+                || decoded.builtin.opcode == GpuCommandIrOpcode::CopyTexture)
+            && !graph.validResource(decoded.builtin.source)
+        ))){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::StreamChangedDuringReplay,
                 result.streamValidation,
@@ -477,8 +494,25 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             );
         }
 
-        if(record.opcode == GpuCommandIrOpcode::UploadBuffer || record.opcode == GpuCommandIrOpcode::UploadTexture){
-            if(!GpuCommandIrDetail::LowerUploadOperation(record, reader.blobBytes(), graph, commandList)){
+        if(raster){
+            if(
+                !ownedStream
+                || !GpuCommandIrDetail::LowerRasterOperation(
+                    decoded.raster, *ownedStream, reader.blobBytes(), commandList
+                )
+            ){
+                return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+                    GpuCommandIrReplayError::CommandListRecordingFailed,
+                    result.streamValidation,
+                    recordIndex
+                );
+            }
+        }
+        else if(
+            decoded.builtin.opcode == GpuCommandIrOpcode::UploadBuffer
+            || decoded.builtin.opcode == GpuCommandIrOpcode::UploadTexture
+        ){
+            if(!GpuCommandIrDetail::LowerUploadOperation(decoded.builtin, reader.blobBytes(), graph, commandList)){
                 return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                     GpuCommandIrReplayError::CommandListRecordingFailed,
                     result.streamValidation,
@@ -487,7 +521,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             }
         }
         else
-            __hidden_gpu_command_ir_replay_lowering::LowerOperation(record, graph, commandList);
+            __hidden_gpu_command_ir_replay_lowering::LowerOperation(decoded.builtin, graph, commandList);
         if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::CommandListRecordingFailed,
@@ -497,6 +531,26 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
         }
         ++recordIndex;
     }
+}
+
+GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+    const BinaryByteView bytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept{
+    return ReplayPacketImpl(bytes, nullptr, graph, compiledGraph, packet, commandList);
+}
+
+GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+    const GpuCommandIrOwnedStream& stream,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuCompiledGraph::ReadView& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept{
+    return ReplayPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet, commandList);
 }
 
 GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
@@ -566,6 +620,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     const GpuCommandIrReplayResult backendPreflight =
         __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(
             bytes,
+            nullptr,
             graph,
             packet,
             commandList,

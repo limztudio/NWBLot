@@ -236,6 +236,7 @@ GpuCommandIrCapture::GpuCommandIrCapture(GraphicsArena& arena)
     , m_commandBytes(arena)
     , m_blobBytes(arena)
     , m_packedBytes(arena)
+    , m_arena(arena)
     , m_ownerIdentity(__hidden_gpu_command_ir_capture::AllocateCaptureIdentity())
 {
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
@@ -280,7 +281,20 @@ bool GpuCommandIrCapture::exportOwned(GpuCommandIrOwnedStream& outStream)const{
             m_blobBytes.size()
         );
     }
+    GpuCommandIrRasterOwnerTable* ownerCandidate = nullptr;
+    if(m_rasterOwners && (!m_rasterOwners->stateOwners.empty() || !m_rasterOwners->heapOwners.empty())){
+        GpuCommandIrRasterOwnerTable staged(outStream.m_arena);
+        staged.stateOwners = m_rasterOwners->stateOwners;
+        staged.heapOwners = m_rasterOwners->heapOwners;
+        ownerCandidate = NewArenaObject<GpuCommandIrRasterOwnerTable>(outStream.m_arena, outStream.m_arena);
+        ownerCandidate->stateOwners.swap(staged.stateOwners);
+        ownerCandidate->heapOwners.swap(staged.heapOwners);
+    }
     outStream.m_bytes.swap(candidate);
+    GpuCommandIrRasterOwnerTable* const previousOwners = outStream.m_rasterOwners;
+    outStream.m_rasterOwners = ownerCandidate;
+    if(previousOwners)
+        DestroyArenaObjectNoexcept(outStream.m_arena, previousOwners);
     return true;
 }
 
@@ -295,10 +309,26 @@ GpuCommandIrCaptureCheckpoint GpuCommandIrCapture::checkpoint()const noexcept{
     result.m_recordingAttemptGeneration = m_recordingAttemptGeneration;
     result.m_commandSize = m_commandBytes.size();
     result.m_blobSize = m_blobBytes.size();
+    result.m_rasterStateOwnerCount = m_rasterOwners ? m_rasterOwners->stateOwners.size() : 0u;
+    result.m_rasterHeapOwnerCount = m_rasterOwners ? m_rasterOwners->heapOwners.size() : 0u;
     return result;
 }
 
 bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept{
+    usize prefixStateOwners = 0u;
+    usize prefixHeapOwners = 0u;
+    if(m_rasterOwners){
+        while(
+            prefixStateOwners < m_rasterOwners->stateOwners.size()
+            && m_rasterOwners->stateOwners[prefixStateOwners].recordIndex < target.m_recordCount
+        )
+            ++prefixStateOwners;
+        while(
+            prefixHeapOwners < m_rasterOwners->heapOwners.size()
+            && m_rasterOwners->heapOwners[prefixHeapOwners].recordIndex < target.m_recordCount
+        )
+            ++prefixHeapOwners;
+    }
     if(
         target.m_ownerIdentity != m_ownerIdentity
         || target.m_resetEpoch != m_resetEpoch
@@ -308,6 +338,8 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
             target.m_recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[target.m_recordCount - 1u]
         )
         || target.m_blobSize != (target.m_recordCount == 0u ? 0u : m_blobEndOffsets[target.m_recordCount - 1u])
+        || target.m_rasterStateOwnerCount != prefixStateOwners
+        || target.m_rasterHeapOwnerCount != prefixHeapOwners
         || target.m_prefixSerial != (target.m_recordCount == 0u ? 0u : m_recordSerials[target.m_recordCount - 1u])
         || (target.m_recordCount != 0u && (
             target.m_graphGeneration != m_graphGeneration || target.m_planGeneration != m_planGeneration
@@ -344,6 +376,10 @@ void GpuCommandIrCapture::reset()noexcept{
     m_recordSerials.clear();
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_blobBytes.clear();
+    if(m_rasterOwners){
+        m_rasterOwners->stateOwners.clear();
+        m_rasterOwners->heapOwners.clear();
+    }
     m_packedDirty = true;
     if(m_resetEpoch == Limit<u64>::s_Max){
         NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
@@ -393,6 +429,12 @@ void GpuCommandIrCapture::rollbackPrefix(
     m_recordSerials.resize(recordCount);
     m_commandBytes.resize(byteOffset);
     m_blobBytes.resize(blobEnd);
+    if(m_rasterOwners){
+        while(!m_rasterOwners->stateOwners.empty() && m_rasterOwners->stateOwners.back().recordIndex >= recordCount)
+            m_rasterOwners->stateOwners.pop_back();
+        while(!m_rasterOwners->heapOwners.empty() && m_rasterOwners->heapOwners.back().recordIndex >= recordCount)
+            m_rasterOwners->heapOwners.pop_back();
+    }
     m_graphGeneration = graphGeneration;
     m_planGeneration = planGeneration;
     m_recordingAttemptGeneration = attemptGeneration;

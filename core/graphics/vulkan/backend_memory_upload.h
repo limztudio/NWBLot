@@ -739,6 +739,10 @@ public:
     }
 
     [[nodiscard]] u32 getNumAttributes()const{ return static_cast<u32>(m_attributes.size()); }
+    [[nodiscard]] u32 getNumBindings()const{ return static_cast<u32>(m_bindings.size()); }
+    [[nodiscard]] const VkVertexInputBindingDescription* getBindingDescription(u32 index)const{
+        return index < m_bindings.size() ? &m_bindings[index] : nullptr;
+    }
 
 
 private:

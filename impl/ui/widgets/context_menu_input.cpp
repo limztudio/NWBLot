@@ -19,8 +19,8 @@ void Builder::snapshotContextMenu(ContextMenuFrame& frame){
     frame.open = frame.state->isOpen();
     frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();
     frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
-    if(frame.list < m_lists.size())
-        m_lists[frame.list].token = frame.listToken;
+    if(frame.list < m_scope->m_lists.size())
+        m_scope->m_lists[frame.list].token = frame.listToken;
 }
 
 bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const{

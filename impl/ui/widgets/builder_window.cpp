@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::beginWindow(
     const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
-    if(m_panelActive || m_windowActive || !m_skin || m_context.failed()){
+    if(m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
         m_context.fail();
         return false;
     }
@@ -32,21 +32,21 @@ bool Builder::beginWindow(
     if(
         !frame || !header || (options.collapsible && !collapse)
         || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window
-        || m_text.layout(request, m_window.title) != TextLayoutStatus::Success
+        || m_text.layout(request, m_scope->m_window.title) != TextLayoutStatus::Success
         || !WindowLayout::Measure(
             *frame, *header, collapse, resize, m_style, options,
-            m_window.title.measure(), m_skin->referenceDensity(), m_window.metrics
+            m_scope->m_window.title.measure(), m_skin->referenceDensity(), m_scope->m_window.metrics
         )
     ){
         m_context.fail();
         return false;
     }
-    m_panelState = *window;
-    m_window.state = &state;
-    m_window.options = options;
-    m_window.firstUse = !state.initialized;
+    m_scope->m_panelState = *window;
+    m_scope->m_window.state = &state;
+    m_scope->m_window.options = options;
+    m_scope->m_window.firstUse = !state.initialized;
     WindowState candidate = state;
-    if(!WindowBehavior::Initialize(candidate, options, m_window.metrics) || !m_context.pushScope(stableKey)){
+    if(!WindowBehavior::Initialize(candidate, options, m_scope->m_window.metrics) || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
@@ -58,90 +58,90 @@ bool Builder::beginWindow(
         m_context.fail();
         return false;
     }
-    m_window.titleState = *titleState;
-    m_window.collapseState = *collapseState;
-    m_window.resizeState = *resizeState;
+    m_scope->m_window.titleState = *titleState;
+    m_scope->m_window.collapseState = *collapseState;
+    m_scope->m_window.resizeState = *resizeState;
     if(!options.collapsible)
         candidate.collapsed = false;
-    if(m_context.takeActivation(m_window.collapseState, options.collapsible))
+    if(m_context.takeActivation(m_scope->m_window.collapseState, options.collapsible))
         candidate.collapsed = !candidate.collapsed;
     PointerGesture gesture;
-    while(m_context.takePointerGesture(m_window.titleState, options.movable, gesture)){
+    while(m_context.takePointerGesture(m_scope->m_window.titleState, options.movable, gesture)){
         if(!WindowBehavior::ApplyMove(candidate, gesture)){
             m_context.fail();
             return false;
         }
     }
-    while(m_context.takePointerGesture(m_window.resizeState, options.resizable && !candidate.collapsed, gesture)){
-        if(!WindowBehavior::ApplyResize(candidate, gesture, m_window.metrics.minimumSize)){
+    while(m_context.takePointerGesture(m_scope->m_window.resizeState, options.resizable && !candidate.collapsed, gesture)){
+        if(!WindowBehavior::ApplyResize(candidate, gesture, m_scope->m_window.metrics.minimumSize)){
             m_context.fail();
             return false;
         }
     }
-    if(!WindowBehavior::Constrain(candidate, m_paint.displayMetrics(), m_window.metrics.titleHeight)){
+    if(!WindowBehavior::Constrain(candidate, m_paint.displayMetrics(), m_scope->m_window.metrics.titleHeight)){
         m_context.fail();
         return false;
     }
-    m_bounds = WindowLayout::Content(candidate, m_window.metrics);
+    m_scope->m_bounds = WindowLayout::Content(candidate, m_scope->m_window.metrics);
     LayoutNodeDesc description;
     description.direction = options.direction;
-    description.width = m_window.firstUse && options.contentWidthFirstUse
-        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_bounds.width };
-    description.height = m_window.firstUse && options.contentHeightFirstUse
-        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_bounds.height };
-    description.padding = m_window.metrics.contentPadding;
+    description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse
+        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
+    description.height = m_scope->m_window.firstUse && options.contentHeightFirstUse
+        ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
+    description.padding = m_scope->m_window.metrics.contentPadding;
     description.gap = m_style.gap;
     description.intrinsicSize = {
-        Max(0.0f, m_window.metrics.minimumSize.x - description.padding.left - description.padding.right),
-        Max(0.0f, m_window.metrics.minimumSize.y - m_window.metrics.titleHeight
+        Max(0.0f, m_scope->m_window.metrics.minimumSize.x - description.padding.left - description.padding.right),
+        Max(0.0f, m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight
             - description.padding.top - description.padding.bottom)
     };
     u32 node = 0u;
-    if(!m_layout.addNode(s_LayoutNoParent, description, node)){
+    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node)){
         m_context.fail();
         return false;
     }
-    m_stack.push_back(node);
-    m_panelActive = true;
-    m_windowActive = true;
+    m_scope->m_stack.push_back(node);
+    m_scope->m_panelActive = true;
+    m_scope->m_windowActive = true;
     state = candidate;
     return !state.collapsed;
 }
 
 bool Builder::endWindow(){
-    if(!m_windowActive || !m_panelActive || !m_window.state || m_stack.size() != 1u || m_context.failed()){
+    if(!m_scope->m_windowActive || !m_scope->m_panelActive || !m_scope->m_window.state || m_scope->m_stack.size() != 1u || m_context.failed()){
         m_context.fail();
         return false;
     }
-    WindowState& state = *m_window.state;
+    WindowState& state = *m_scope->m_window.state;
     bool arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
-        const Rect viewport{ m_bounds.x, m_bounds.y, Max(m_bounds.width, display.logicalWidth),
-            Max(m_bounds.height, display.logicalHeight) };
-        arranged = m_layout.arrange(viewport);
-        const LayoutBox* root = m_layout.box(0u);
+        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, Max(m_scope->m_bounds.width, display.logicalWidth),
+            Max(m_scope->m_bounds.height, display.logicalHeight) };
+        arranged = m_scope->m_layout.arrange(viewport);
+        const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){
-            if(m_window.firstUse && m_window.options.contentWidthFirstUse)
-                state.bounds.width = Max(root->rectangle.width, m_window.metrics.minimumSize.x);
-            if(m_window.firstUse && m_window.options.contentHeightFirstUse)
+            if(m_scope->m_window.firstUse && m_scope->m_window.options.contentWidthFirstUse)
+                state.bounds.width = Max(root->rectangle.width, m_scope->m_window.metrics.minimumSize.x);
+            if(m_scope->m_window.firstUse && m_scope->m_window.options.contentHeightFirstUse)
                 state.bounds.height = Max(
-                    root->rectangle.height + m_window.metrics.titleHeight, m_window.metrics.minimumSize.y
+                    root->rectangle.height + m_scope->m_window.metrics.titleHeight, m_scope->m_window.metrics.minimumSize.y
                 );
-            arranged = WindowBehavior::Constrain(state, display, m_window.metrics.titleHeight);
-            m_bounds = WindowLayout::Content(state, m_window.metrics);
+            arranged = WindowBehavior::Constrain(state, display, m_scope->m_window.metrics.titleHeight);
+            m_scope->m_bounds = WindowLayout::Content(state, m_scope->m_window.metrics);
             if(arranged)
-                arranged = m_layout.arrange(m_bounds);
+                arranged = m_scope->m_layout.arrange(m_scope->m_bounds);
         }
         else
             arranged = false;
     }
     const bool painted = arranged && paintWindow();
     const bool popped = m_context.popScope();
-    m_panelActive = false;
-    m_windowActive = false;
-    m_window.state = nullptr;
-    m_stack.clear();
+    m_scope->m_panelActive = false;
+    m_scope->m_windowActive = false;
+    m_scope->m_window.state = nullptr;
+    m_scope->m_stack.clear();
     const bool combosPainted = painted && popped && paintDeferred();
     if(!combosPainted)
         m_context.fail();

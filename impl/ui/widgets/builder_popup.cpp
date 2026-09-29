@@ -52,44 +52,44 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
         m_context.fail();
         return false;
     }
-    m_panelState = *widget;
-    m_bounds = placement.bounds;
+    m_scope->m_panelState = *widget;
+    m_scope->m_bounds = placement.bounds;
     LayoutNodeDesc description;
     description.direction = LayoutDirection::Column;
-    description.width = { LayoutSizePolicy::Fixed, m_bounds.width };
-    description.height = { LayoutSizePolicy::Fixed, m_bounds.height };
+    description.width = { LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
+    description.height = { LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
     description.padding = { Max(m_popupStyle.padding.left, background->padding.left), Max(m_popupStyle.padding.top, background->padding.top),
         Max(m_popupStyle.padding.right, background->padding.right), Max(m_popupStyle.padding.bottom, background->padding.bottom) };
     description.gap = m_style.gap;
     u32 node = 0u;
-    if(!m_layout.addNode(s_LayoutNoParent, description, node)){
+    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node)){
         m_context.fail();
         return false;
     }
-    m_stack.push_back(node);
-    m_popupState = &state;
-    m_popupOptions = options;
-    m_popupPlacement = placement;
+    m_scope->m_stack.push_back(node);
+    m_scope->m_popupState = &state;
+    m_scope->m_popupOptions = options;
+    m_scope->m_popupPlacement = placement;
     state.m_placement = placement;
-    m_panelActive = true;
+    m_scope->m_panelActive = true;
     return true;
 }
 
 bool Builder::endPopup(){
-    if(!m_popupState || !m_panelActive || m_windowActive || m_stack.size() != 1u){
+    if(!m_scope->m_popupState || !m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_stack.size() != 1u){
         m_context.fail();
         return false;
     }
     const bool visible = synchronizePopup();
-    const bool painted = !visible || (!m_context.failed() && m_layout.arrange(m_bounds) && paintPopup());
+    const bool painted = !visible || (!m_context.failed() && m_scope->m_layout.arrange(m_scope->m_bounds) && paintPopup());
     const bool overlayEnded = m_paint.endOverlay();
     const bool scopePopped = m_context.popScope();
     const bool popupEnded = m_context.endPopupScope(visible && painted);
-    m_popupState = nullptr;
-    m_panelActive = false;
-    m_stack.clear();
+    m_scope->m_popupState = nullptr;
+    m_scope->m_panelActive = false;
+    m_scope->m_stack.clear();
     if(!visible){
-        for(auto& frame : m_tooltips){
+        for(auto& frame : m_scope->m_tooltips){
             if(frame.state && frame.state->revision() == frame.revision)
                 frame.state->reset();
         }
@@ -102,11 +102,11 @@ bool Builder::endPopup(){
 }
 
 bool Builder::synchronizePopup(){
-    if(!m_popupState)
+    if(!m_scope->m_popupState)
         return true;
     const PopupToken token = m_context.popupToken();
-    const bool visible = m_popupState->isOpen() && m_popupState->instanceGeneration() == token.instanceGeneration
-        && m_popupState->openGeneration() == token.openGeneration;
+    const bool visible = m_scope->m_popupState->isOpen() && m_scope->m_popupState->instanceGeneration() == token.instanceGeneration
+        && m_scope->m_popupState->openGeneration() == token.openGeneration;
     if(!visible)
         m_context.input().closePopup(token);
     return visible;

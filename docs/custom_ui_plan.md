@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation is on `custom_ui`, with `main` merged through `e2402c958` in `acea8bca5`. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation includes an owned Unicode edit model, OS text-input/IME and clipboard services for Win32 and Linux, a borrowed ECS edit-session adapter, and single-file SDF font atlas packaging. M5 now includes skinned single-line edit boxes, popup/modal scopes, keyed virtualized lists, ordinary combo boxes and this searchable-combo increment. Independent UI GPU preparation and final framebuffer composition remain shared by these controls. Nested user-popup composition, tooltips/context menus, numeric/multiline editors and native Linux compositor/live IME qualification remain later work.
+Status: implementation is on `custom_ui`, with `main` merged through `e2402c958` in `acea8bca5`. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation includes an owned Unicode edit model, OS text-input/IME and clipboard services for Win32 and Linux, a borrowed ECS edit-session adapter, and single-file SDF font atlas packaging. M5 now includes skinned single-line edit boxes, popup/modal scopes, keyed virtualized lists, ordinary/searchable combo boxes, delayed tooltips and stable-key context menus. Independent UI GPU preparation and final framebuffer composition remain shared by these controls. Nested user-popup composition, numeric/multiline editors and native Linux compositor/live IME qualification remain later work. Remaining work proceeds as separate committed and pushed increments, stopping before M6 measurement and tuning.
 
 Implemented in the first increment:
 
@@ -532,3 +532,9 @@ All runtime/build/asset/vendor removal items below are implemented in the M3 inc
 6. Search tracked production/build/asset sources for `ImGui`, `ImDraw`, `ImTexture`, `imgui.h`, ImGui shader paths, and vendor targets. Exclude historical documentation and generated artifacts from the zero-runtime-dependency gate; verify a fresh build/cook cannot resolve the removed directory accidentally.
 
 Completion has two explicit gates: M3 removes the dependency completely; M5 delivers the requested reusable edit box, combo box, and list toolkit. The engine owns UI behavior, state, paint data, and GPU integration throughout the final design.
+
+## Builder scope storage foundation
+
+`BuilderScopeFrame` now owns each declaration scope's transient layout, items, deferred control loans, container stack and window/popup state in the caller-owned UI arena. Shared text, paint, skin, styles and edit services remain on `Builder`. The embedded frame is immovable and accessed through a non-null reseatable pointer so subsequent popup composition can preserve parent scopes without copying borrowed state. Public behavior and the current popup nesting restrictions are unchanged in this infrastructure increment.
+
+Validation on Windows ARM64 / Clang, `dbg`: all 619 UI and 71 ECS-UI tests pass. The window, edit, popup, combo, searchable-combo and popup-tools GPU smoke tests all pass. Genuine Linux syntax/type checks pass for 165 translation units with unchanged input and dependency hashes; native Linux linking and compositor behavior remain unqualified. All 22 changed C++ sources pass the source-format and size checks, and `git diff --check` passes.

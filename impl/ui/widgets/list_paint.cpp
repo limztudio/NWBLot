@@ -18,9 +18,9 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::paintList(const Item& item, const LayoutBox& box){
-    if(item.list >= m_lists.size())
+    if(item.list >= m_scope->m_lists.size())
         return false;
-    ListFrame& frame = m_lists[item.list];
+    ListFrame& frame = m_scope->m_lists[item.list];
     if(
         !frame.source || !frame.state || frame.source->instanceGeneration() != frame.token.contentGeneration
         || frame.source->revision() != frame.token.contentRevision || frame.source->rowCount() != frame.rowCount

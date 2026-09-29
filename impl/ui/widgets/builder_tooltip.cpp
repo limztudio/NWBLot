@@ -20,8 +20,8 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     TooltipState& state, const TooltipOptions& options){
     Item* anchor = annotationAnchor(anchorKey);
     if(
-        !m_panelActive || (m_windowActive && m_window.state->collapsed) || m_context.failed()
-        || !anchor || m_tooltips.size() >= s_LayoutMaxNodes
+        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        || !anchor || m_scope->m_tooltips.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
         return false;
@@ -58,7 +58,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     frame.state = &state;
     frame.options = options;
     frame.revision = state.revision();
-    frame.anchorIndex = static_cast<u32>(anchor - m_items.data());
+    frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.layer = m_context.popupLayer() + 1u;
     const ShapeRequest request{ text, m_style.fontSize };
     if(m_text.layout(request, frame.text) != TextLayoutStatus::Success){
@@ -66,16 +66,16 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
         return false;
     }
     anchor->annotated = true;
-    m_tooltips.push_back(Move(frame));
+    m_scope->m_tooltips.push_back(Move(frame));
     return true;
 }
 
 bool Builder::paintTooltips(){
-    for(auto& frame : m_tooltips){
-        if(!frame.state || frame.state->revision() != frame.revision || frame.anchorIndex >= m_items.size())
+    for(auto& frame : m_scope->m_tooltips){
+        if(!frame.state || frame.state->revision() != frame.revision || frame.anchorIndex >= m_scope->m_items.size())
             return false;
-        const Item& anchor = m_items[frame.anchorIndex];
-        const LayoutBox* box = m_layout.box(anchor.node);
+        const Item& anchor = m_scope->m_items[frame.anchorIndex];
+        const LayoutBox* box = m_scope->m_layout.box(anchor.node);
         if(!box || anchor.state.id != frame.anchor.id || anchor.state.declarationGeneration != frame.anchor.declarationGeneration)
             return false;
         if(!frame.state->visible())

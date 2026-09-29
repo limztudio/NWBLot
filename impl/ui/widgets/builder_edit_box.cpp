@@ -19,8 +19,8 @@ NWB_IMPL_UI_BEGIN
 EditBoxResult Builder::editBox(
     const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
     if(
-        !m_panelActive || (m_windowActive && m_window.state->collapsed)
-        || m_context.failed() || m_items.size() >= s_LayoutMaxNodes
+        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
+        || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
         return {};
@@ -64,12 +64,12 @@ EditBoxResult Builder::editBox(
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = { minimum.x, Max(minimum.y, item.editView.layout().measure().y + item.padding.top + item.padding.bottom) };
-    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
         m_context.fail();
         result.valid = false;
         return result;
     }
-    m_items.push_back(Move(item));
+    m_scope->m_items.push_back(Move(item));
     return result;
 }
 

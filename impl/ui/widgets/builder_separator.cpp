@@ -18,8 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 bool Builder::separator(const AStringView stableKey, const SeparatorOptions& options){
     if(
-        !m_panelActive || m_context.failed() || m_items.size() >= s_LayoutMaxNodes
-        || (m_windowActive && m_window.state->collapsed) || options.direction > SeparatorDirection::Vertical
+        !m_scope->m_panelActive || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
+        || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || options.direction > SeparatorDirection::Vertical
         || !IsFinite(options.thickness) || options.thickness < 0.0f
     ){
         m_context.fail();
@@ -40,11 +40,11 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
     description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };
     description.height = horizontal ? LayoutSize{ LayoutSizePolicy::Fixed, thickness } : options.length;
     description.intrinsicSize = { skinRegion->minimumWidth, skinRegion->minimumHeight };
-    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
         m_context.fail();
         return false;
     }
-    m_items.push_back(Move(item));
+    m_scope->m_items.push_back(Move(item));
     return true;
 }
 

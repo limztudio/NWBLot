@@ -24,6 +24,8 @@ A separator does not receive focus or activation. Its direction selects a horizo
 
 ## Source ownership
 
+`BuilderScopeFrame` owns transient layout, declarations, borrowed control loans and the active window/popup state. `Builder` retains shared text, paint, skin, styles and edit services. This storage boundary preserves the existing behavior while preparing independent popup scopes.
+
 - `window_behavior.cpp` owns initialization, dragging, resizing, viewport constraints, and candidate validation.
 - `window_layout.cpp` owns skin-derived metrics and chrome/content geometry.
 - `builder_window.cpp` owns window declaration and balanced content arrangement.

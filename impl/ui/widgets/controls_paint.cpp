@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::paintPanel(){
-    const LayoutBox* panel = m_layout.box(0u);
+    const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)
         return false;
     m_paint.pushClip(visibleClip(panel->clip));
@@ -26,14 +26,14 @@ bool Builder::paintPanel(){
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
     barrier.clip = visibleClip(panel->clip);
-    if(!painted || !popped || !m_context.addTarget(m_panelState, barrier))
+    if(!painted || !popped || !m_context.addTarget(m_scope->m_panelState, barrier))
         return false;
     return paintItems();
 }
 
 bool Builder::paintItems(){
-    for(const auto& item : m_items){
-        const LayoutBox* box = m_layout.box(item.node);
+    for(const auto& item : m_scope->m_items){
+        const LayoutBox* box = m_scope->m_layout.box(item.node);
         if(!box || !paintItem(item, *box))
             return false;
     }

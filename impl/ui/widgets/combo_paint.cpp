@@ -17,9 +17,9 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::paintCombo(const Item& item, const LayoutBox& box){
-    if(item.combo >= m_combos.size())
+    if(item.combo >= m_scope->m_combos.size())
         return false;
-    ComboFrame& frame = m_combos[item.combo];
+    ComboFrame& frame = m_scope->m_combos[item.combo];
     if(!comboMatches(frame))
         return false;
     const InputRouter& input = m_context.input();
@@ -74,8 +74,8 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
 }
 
 bool Builder::paintCombos(){
-    for(auto& frame : m_combos){
-        if(!comboMatches(frame) || frame.list >= m_lists.size())
+    for(auto& frame : m_scope->m_combos){
+        if(!comboMatches(frame) || frame.list >= m_scope->m_lists.size())
             return false;
         if(frame.open && frame.options.enabled && !paintComboPopup(frame))
             return false;
@@ -98,7 +98,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
             snapshotComboQuery(frame);
         }
         frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
-        m_lists[frame.list].token = frame.listToken;
+        m_scope->m_lists[frame.list].token = frame.listToken;
         return true;
     }
     PopupOptions options;

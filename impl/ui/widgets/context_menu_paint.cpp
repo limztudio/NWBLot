@@ -17,8 +17,8 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::paintContextMenus(){
-    for(auto& frame : m_contextMenus){
-        if(!contextMenuMatches(frame) || frame.list >= m_lists.size() || frame.anchorIndex >= m_items.size())
+    for(auto& frame : m_scope->m_contextMenus){
+        if(!contextMenuMatches(frame) || frame.list >= m_scope->m_lists.size() || frame.anchorIndex >= m_scope->m_items.size())
             return false;
         if(frame.open && frame.options.enabled && !paintContextMenuPopup(frame))
             return false;
@@ -27,8 +27,8 @@ bool Builder::paintContextMenus(){
 }
 
 bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
-    const Item& anchor = m_items[frame.anchorIndex];
-    const LayoutBox* anchorBox = m_layout.box(anchor.node);
+    const Item& anchor = m_scope->m_items[frame.anchorIndex];
+    const LayoutBox* anchorBox = m_scope->m_layout.box(anchor.node);
     const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
     if(!anchorBox || !background || !contextMenuMatches(frame))
         return false;

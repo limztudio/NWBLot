@@ -123,7 +123,7 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
                 && gesture.control == frame.listToken && gesture.popup == frame.popupToken;
         }
         else{
-            const bool fromEditor = frame.editor != s_LayoutNoParent && action.source == m_comboEditors[frame.editor].state.id;
+            const bool fromEditor = frame.editor != s_LayoutNoParent && action.source == m_scope->m_comboEditors[frame.editor].state.id;
             if(
                 fromEditor && (frame.search->query().composition().active
                     || (action.kind == ControlActionKind::Submit && !frame.editorSubmitted))

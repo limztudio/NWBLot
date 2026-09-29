@@ -24,8 +24,8 @@ SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableList
     }
     SearchComboResult result;
     result.combo = declareCombo(stableKey, source, state.combo(), options.combo, &state, &source, &options);
-    if(result.combo.valid && !m_combos.empty())
-        result.queryChanged = m_combos.back().queryChanged;
+    if(result.combo.valid && !m_scope->m_combos.empty())
+        result.queryChanged = m_scope->m_combos.back().queryChanged;
     return result;
 }
 
@@ -75,8 +75,8 @@ bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
         return true;
     if(!prepareEditBox(item, query, state.m_editor, result))
         return false;
-    frame.editor = static_cast<u32>(m_comboEditors.size());
-    m_comboEditors.push_back(Move(item));
+    frame.editor = static_cast<u32>(m_scope->m_comboEditors.size());
+    m_scope->m_comboEditors.push_back(Move(item));
     return comboMatches(frame);
 }
 
@@ -93,9 +93,9 @@ void Builder::snapshotComboQuery(ComboFrame& frame){
 }
 
 bool Builder::paintComboQuery(ComboFrame& frame, LayoutBox& content){
-    if(frame.editor >= m_comboEditors.size() || !comboMatches(frame))
+    if(frame.editor >= m_scope->m_comboEditors.size() || !comboMatches(frame))
         return false;
-    const Item& item = m_comboEditors[frame.editor];
+    const Item& item = m_scope->m_comboEditors[frame.editor];
     const f32 measured = item.editView.layout().measure().y + item.padding.top + item.padding.bottom;
     LayoutBox box = content;
     box.rectangle.height = Min(Max(frame.queryHeight, measured), content.rectangle.height);

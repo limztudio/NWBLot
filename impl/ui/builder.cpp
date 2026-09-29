@@ -21,23 +21,13 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_context(context)
     , m_paint(paint)
     , m_text(text)
-    , m_layout(arena)
-    , m_items(arena)
-    , m_lists(arena)
-    , m_combos(arena)
-    , m_comboEditors(arena)
-    , m_tooltips(arena)
-    , m_contextMenus(arena)
-    , m_stack(arena)
-    , m_window(arena)
-{
-    m_items.reserve(s_LayoutMaxNodes);
-    m_stack.reserve(64u);
-}
+    , m_scopeFrame(arena)
+    , m_scope(MakeNotNull(&m_scopeFrame))
+{}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(
-        m_panelActive || m_windowActive || !m_skin
+        m_scope->m_panelActive || m_scope->m_windowActive || !m_skin
         || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)
     ){
         m_context.fail();
@@ -50,8 +40,8 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
         return false;
     }
     reset();
-    m_panelState = *state;
-    m_bounds = bounds;
+    m_scope->m_panelState = *state;
+    m_scope->m_bounds = bounds;
     LayoutNodeDesc description;
     description.direction = direction;
     description.width = { LayoutSizePolicy::Fixed, bounds.width };
@@ -59,24 +49,24 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
     description.padding = { panel->padding.left, panel->padding.top, panel->padding.right, panel->padding.bottom };
     description.gap = m_style.gap;
     u32 node = 0u;
-    if(!m_layout.addNode(s_LayoutNoParent, description, node) || !m_context.pushScope(stableKey)){
+    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node) || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
-    m_stack.push_back(node);
-    m_panelActive = true;
+    m_scope->m_stack.push_back(node);
+    m_scope->m_panelActive = true;
     return true;
 }
 
 bool Builder::endPanel(){
-    if(!m_panelActive || m_windowActive || m_popupState || m_stack.size() != 1u || m_context.failed() || !m_layout.arrange(m_bounds)){
+    if(!m_scope->m_panelActive || m_scope->m_windowActive || m_scope->m_popupState || m_scope->m_stack.size() != 1u || m_context.failed() || !m_scope->m_layout.arrange(m_scope->m_bounds)){
         m_context.fail();
         return false;
     }
     const bool painted = paintPanel();
     const bool popped = m_context.popScope();
-    m_panelActive = false;
-    m_stack.clear();
+    m_scope->m_panelActive = false;
+    m_scope->m_stack.clear();
     const bool combosPainted = painted && popped && paintDeferred();
     if(!combosPainted)
         m_context.fail();
@@ -92,11 +82,11 @@ bool Builder::beginColumn(const AStringView stableKey, const ContainerOptions& o
 }
 
 bool Builder::endContainer(){
-    if(!m_panelActive || m_stack.size() <= 1u){
+    if(!m_scope->m_panelActive || m_scope->m_stack.size() <= 1u){
         m_context.fail();
         return false;
     }
-    m_stack.pop_back();
+    m_scope->m_stack.pop_back();
     return m_context.popScope();
 }
 
@@ -121,26 +111,15 @@ bool Builder::checkbox(const AStringView stableKey, const StringView text, bool&
 }
 
 void Builder::reset(){
-    if(m_panelActive || m_windowActive)
+    if(m_scope->m_panelActive || m_scope->m_windowActive)
         m_context.fail();
-    m_panelActive = false;
-    m_windowActive = false;
-    m_window.state = nullptr;
-    m_popupState = nullptr;
-    m_items.clear();
-    m_lists.clear();
-    m_combos.clear();
-    m_comboEditors.clear();
-    m_tooltips.clear();
-    m_contextMenus.clear();
-    m_stack.clear();
-    m_layout.reset();
+    m_scope->reset();
 }
 
 bool Builder::beginContainer(
     const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
     if(
-        !m_panelActive || (m_windowActive && m_window.state->collapsed) || m_stack.size() >= 64u
+        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u
         || !m_context.declare(stableKey, WidgetKind::Container)
     ){
         m_context.fail();
@@ -153,19 +132,19 @@ bool Builder::beginContainer(
     description.padding = options.padding;
     description.gap = options.gap;
     u32 node = 0u;
-    if(!m_layout.addNode(m_stack.back(), description, node) || !m_context.pushScope(stableKey)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, node) || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
-    m_stack.push_back(node);
+    m_scope->m_stack.push_back(node);
     return true;
 }
 
 Builder::Item* Builder::addItem(
     const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
     if(
-        !m_panelActive || (m_windowActive && m_window.state->collapsed)
-        || m_context.failed() || m_items.size() >= s_LayoutMaxNodes
+        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
+        || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
         return nullptr;
@@ -221,12 +200,12 @@ Builder::Item* Builder::addItem(
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = { Max(measured.x, minimum.x), Max(measured.y, minimum.y) };
-    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
         m_context.fail();
         return nullptr;
     }
-    m_items.push_back(Move(item));
-    return &m_items.back();
+    m_scope->m_items.push_back(Move(item));
+    return &m_scope->m_items.back();
 }
 
 const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const{

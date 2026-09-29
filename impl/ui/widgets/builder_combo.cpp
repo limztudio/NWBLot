@@ -26,8 +26,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions){
     ComboResult result;
     if(
-        !m_panelActive || m_popupState || (m_windowActive && m_window.state->collapsed) || m_context.failed()
-        || m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
+        !m_scope->m_panelActive || m_scope->m_popupState || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.popupHeight) || options.popupHeight <= 0.0f
         || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
         || !IsFinite(m_comboStyle.arrowExtent) || m_comboStyle.arrowExtent <= 0.0f
         || !IsFinite(m_comboStyle.arrowGap) || m_comboStyle.arrowGap < 0.0f
@@ -126,7 +126,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     Item item(m_arena);
     item.state = field;
     item.enabled = options.enabled;
-    item.combo = static_cast<u32>(m_combos.size());
+    item.combo = static_cast<u32>(m_scope->m_combos.size());
     item.padding = m_comboStyle.padding;
     Point minimum;
     const Name names[]{ m_comboStyle.normal, m_comboStyle.hover, m_comboStyle.open,
@@ -177,7 +177,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     list.focusOnCommit = frame.listFocusOnCommit;
     list.rowCount = frame.resultCount;
     if(frame.editor != s_LayoutNoParent)
-        list.keyboardFocus = m_comboEditors[frame.editor].state.id;
+        list.keyboardFocus = m_scope->m_comboEditors[frame.editor].state.id;
     list.padding = m_listStyle.padding;
     const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
     if(!background){
@@ -195,20 +195,20 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     description.intrinsicSize = { Max(minimum.x, measured.x + frame.arrowExtent + m_comboStyle.arrowGap
         + item.padding.left + item.padding.right), Max(minimum.y, Max(measured.y, frame.arrowExtent)
         + item.padding.top + item.padding.bottom) };
-    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
         m_context.fail();
         return {};
     }
-    frame.list = static_cast<u32>(m_lists.size());
-    m_lists.push_back(list);
-    m_combos.push_back(frame);
-    m_items.push_back(Move(item));
+    frame.list = static_cast<u32>(m_scope->m_lists.size());
+    m_scope->m_lists.push_back(list);
+    m_scope->m_combos.push_back(frame);
+    m_scope->m_items.push_back(Move(item));
     result.valid = true;
     result.selectionChanged = previousSelection != state.selectedKey();
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
     result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id
-        || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_comboEditors[frame.editor].state.id));
+        || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_scope->m_comboEditors[frame.editor].state.id));
     return result;
 }
 

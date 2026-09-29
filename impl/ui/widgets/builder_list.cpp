@@ -20,8 +20,8 @@ ListResult Builder::virtualList(
     const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
     ListResult result;
     if(
-        !m_panelActive || (m_windowActive && m_window.state->collapsed) || m_context.failed()
-        || m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f
+        !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
+        || m_scope->m_items.size() >= s_LayoutMaxNodes || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f
         || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
     ){
         m_context.fail();
@@ -94,19 +94,19 @@ ListResult Builder::virtualList(
     Item item(m_arena);
     item.state = *widget;
     item.enabled = options.enabled;
-    item.list = static_cast<u32>(m_lists.size());
+    item.list = static_cast<u32>(m_scope->m_lists.size());
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = { Max(120.0f, background->minimumWidth),
         Max(options.rowHeight + frame.padding.top + frame.padding.bottom, background->minimumHeight) };
-    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
         m_context.fail();
         result.valid = false;
         return result;
     }
-    m_lists.push_back(frame);
-    m_items.push_back(Move(item));
+    m_scope->m_lists.push_back(frame);
+    m_scope->m_items.push_back(Move(item));
     return result;
 }
 

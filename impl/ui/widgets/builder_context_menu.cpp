@@ -21,15 +21,15 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
     if(
-        !m_panelActive || m_popupState || (m_windowActive && m_window.state->collapsed) || m_context.failed()
+        !m_scope->m_panelActive || m_scope->m_popupState || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()
         || !anchor || !IsFinite(options.size.x) || !IsFinite(options.size.y) || options.size.x <= 0.0f || options.size.y <= 0.0f
         || !IsFinite(options.rowHeight) || options.rowHeight <= 0.0f || !IsFinite(options.wheelRows) || options.wheelRows <= 0.0f
-        || m_contextMenus.size() >= s_InputMaxPopups
+        || m_scope->m_contextMenus.size() >= s_InputMaxPopups
     ){
         m_context.fail();
         return result;
     }
-    for(const auto& previous : m_contextMenus){
+    for(const auto& previous : m_scope->m_contextMenus){
         if(previous.anchor.id == anchor->state.id){
             m_context.fail();
             return result;
@@ -41,7 +41,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     ContextMenuFrame frame;
     frame.widget = *widget;
     frame.anchor = anchor->state;
-    frame.anchorIndex = static_cast<u32>(anchor - m_items.data());
+    frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.source = &source;
     frame.state = &state;
     frame.options = options;
@@ -118,14 +118,14 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     list.padding.top = Max(list.padding.top, background->padding.top);
     list.padding.right = Max(list.padding.right, background->padding.right);
     list.padding.bottom = Max(list.padding.bottom, background->padding.bottom);
-    frame.list = static_cast<u32>(m_lists.size());
-    m_lists.push_back(list);
+    frame.list = static_cast<u32>(m_scope->m_lists.size());
+    m_scope->m_lists.push_back(list);
     anchor->contextMenu = frame.options.enabled;
     anchor->annotated = true;
     result.valid = true;
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
-    m_contextMenus.push_back(frame);
+    m_scope->m_contextMenus.push_back(frame);
     return result;
 }
 

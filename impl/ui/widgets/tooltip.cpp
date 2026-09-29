@@ -68,6 +68,7 @@ void TooltipState::reset(){
     m_declarationGeneration = 0u;
     m_popup = {};
     m_focusLossGeneration = 0u;
+    m_hoverActivityGeneration = 0u;
     m_options = {};
     m_placement = {};
     m_elapsed = 0.0;
@@ -86,8 +87,8 @@ void TooltipState::advanceRevision(){
 
 
 bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
-    const PopupToken& popup, const u64 focusLossGeneration, const bool hovered, const f32 deltaSeconds,
-    const TooltipOptions& options){
+    const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
+    const bool hovered, const f32 deltaSeconds, const TooltipOptions& options){
     using namespace __hidden_ui_tooltip;
     if(
         !anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{}))
@@ -95,7 +96,8 @@ bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u
     )
         return false;
     const bool sameBinding = state.m_anchor == anchor && state.m_declarationGeneration == declarationGeneration
-        && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration;
+        && state.m_popup == popup && state.m_focusLossGeneration == focusLossGeneration
+        && state.m_hoverActivityGeneration == hoverActivityGeneration;
     const bool sameOptions = SameOptions(state.m_options, options);
     const bool activeHover = options.enabled && hovered;
     f64 elapsed = 0.0;
@@ -111,6 +113,7 @@ bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u
         state.m_declarationGeneration = declarationGeneration;
         state.m_popup = popup;
         state.m_focusLossGeneration = focusLossGeneration;
+        state.m_hoverActivityGeneration = hoverActivityGeneration;
         state.m_options = options;
         state.m_elapsed = elapsed;
         state.m_hovered = activeHover;

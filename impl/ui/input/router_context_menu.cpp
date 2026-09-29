@@ -101,6 +101,7 @@ void InputRouter::routeSecondary(const InputEvent& event, InputRoutingResult& re
         result.pointerConsumed |= m_secondarySequenceConsumed;
         return;
     }
+    advanceHoverActivity();
     m_secondaryDown = true;
     m_secondarySequenceConsumed = m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
     result.pointerConsumed |= m_secondarySequenceConsumed;

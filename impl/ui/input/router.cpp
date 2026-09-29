@@ -125,8 +125,9 @@ InputRoutingResult InputRouter::process(){
         }
         else{
             result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
+            advanceHoverActivity();
             m_pointerKnown = false;
-            m_hover = {};
+            clearHover();
         }
     }
     m_events.clear();
@@ -356,10 +357,33 @@ void InputRouter::reconcileTargets(){
 }
 
 void InputRouter::updateHover(){
-    m_hover = m_pointerKnown ? hitTest(m_pointer) : WidgetId{};
+    const HitTarget* hovered = m_pointerKnown ? findHitTarget(m_pointer) : nullptr;
+    const HitTarget* owner = hovered != nullptr && hovered->owner.valid() ? controlHost(*hovered) : hovered;
+    HoverIdentity identity;
+    if(owner != nullptr)
+        identity = { owner->id, owner->declarationGeneration, owner->popup, owner->control };
+    if(
+        m_hoverIdentity.owner != identity.owner || m_hoverIdentity.declarationGeneration != identity.declarationGeneration
+        || m_hoverIdentity.popup != identity.popup || m_hoverIdentity.control != identity.control
+    )
+        advanceHoverActivity();
+    m_hoverIdentity = identity;
+    m_hover = hovered == nullptr ? WidgetId{} : hovered->id;
+}
+
+void InputRouter::advanceHoverActivity(){
+    if(m_hoverActivityGeneration == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++m_hoverActivityGeneration;
+}
+
+void InputRouter::clearHover(){
+    m_hover = {};
+    m_hoverIdentity = {};
 }
 
 void InputRouter::cancelPointerCapture(){
+    advanceHoverActivity();
     const bool secondaryHeld = m_secondaryDown;
     m_secondaryDown = false;
     m_secondarySequenceConsumed = false;
@@ -367,7 +391,7 @@ void InputRouter::cancelPointerCapture(){
     if(!m_primaryDown){
         if(secondaryHeld){
             m_pointerKnown = false;
-            m_hover = {};
+            clearHover();
         }
         return;
     }
@@ -378,7 +402,7 @@ void InputRouter::cancelPointerCapture(){
         }
     }
     m_activeGestureSequence = 0u;
-    m_hover = {};
+    clearHover();
     m_capture = {};
     m_capturePopup = {};
     m_captureDeclaration = 0u;
@@ -389,12 +413,13 @@ void InputRouter::cancelPointerCapture(){
 }
 
 void InputRouter::cancelInteraction(){
+    advanceHoverActivity();
     m_actions.clear();
     m_controlActions.clear();
     m_contextMenuActions.clear();
     m_pointerGestures.clear();
     m_activeGestureSequence = 0u;
-    m_hover = {};
+    clearHover();
     m_focus = {};
     m_capture = {};
     m_capturePopup = {};

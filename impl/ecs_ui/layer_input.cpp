@@ -153,6 +153,7 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         return false;
     synchronizeNativeInput();
     const u32 bit = 1u << static_cast<u32>(button);
+    const bool firstPress = action != Core::InputAction::Release && (m_pressedButtons & bit) == 0u;
     if(action != Core::InputAction::Release && m_pressedButtons == 0u){
         m_pointerOwner = m_context.input().wouldConsumePointer(m_pointer)
             ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
@@ -183,6 +184,14 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         const bool pasted = m_editHost.pastePrimary(m_pointer);
         if(!pasted)
             m_editHost.synchronizeFocus();
+    }
+    if(
+        firstPress && (owner == __hidden_layer_input::s_Scene
+            || (button != Core::MouseButton::Left && button != Core::MouseButton::Right))
+    ){
+        Ui::InputEvent leave;
+        leave.type = Ui::InputEventType::PointerLeave;
+        routeInput(leave);
     }
     if(action == Core::InputAction::Release){
         m_pressedButtons &= ~bit;

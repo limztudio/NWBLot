@@ -130,6 +130,96 @@ TEST_F(UiInputTests, HitTestRespectsPaintOrderClippingDisabledTargetsAndHalfOpen
     EXPECT_FALSE(m_router.wouldConsumePointer({ -1.0f, -1.0f }));
 }
 
+TEST_F(UiInputTests, TransientHoverDepartureAndReentryAdvanceActivityBeforeTheNextPaint){
+    HitTarget targets[]{ Target(1u), Target(2u, { 40.0f, 10.0f, 20.0f, 20.0f }) };
+    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
+    ASSERT_EQ(send(PointerEvent(InputEventType::PointerMove)).hover, targets[0].id);
+    const u64 stable = m_router.hoverActivityGeneration();
+    ASSERT_EQ(send(PointerEvent(InputEventType::PointerMove, { 16.0f, 16.0f })).hover, targets[0].id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+    ASSERT_TRUE(m_router.commitTargets(targets, 2u, 2u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+    EXPECT_FALSE(m_router.commitTargets(nullptr, 1u, 3u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), stable);
+
+    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove, { 45.0f, 15.0f })));
+    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
+    EXPECT_EQ(m_router.process().hover, targets[0].id);
+    const u64 returned = m_router.hoverActivityGeneration();
+    EXPECT_GT(returned, stable);
+
+    ASSERT_TRUE(m_router.queue({ InputEventType::PointerLeave, {} }));
+    ASSERT_TRUE(m_router.queue(PointerEvent(InputEventType::PointerMove)));
+    EXPECT_EQ(m_router.process().hover, targets[0].id);
+    EXPECT_GT(m_router.hoverActivityGeneration(), returned);
+}
+
+TEST_F(UiInputTests, HoverActivityUsesTheControlHostLifetimeAcrossOwnedParts){
+    HitTarget targets[]{ Target(1u, { 10.0f, 10.0f, 80.0f, 20.0f }),
+        Target(2u, { 20.0f, 10.0f, 10.0f, 20.0f }), Target(3u, { 40.0f, 10.0f, 10.0f, 20.0f }) };
+    targets[0].control = { 11u, 12u, 13u };
+    for(usize index = 1u; index < 3u; ++index){
+        targets[index].owner = targets[0].id;
+        targets[index].ownerDeclarationGeneration = targets[0].declarationGeneration;
+        targets[index].control = targets[0].control;
+        targets[index].focusable = false;
+        targets[index].paintOrder = static_cast<u32>(index);
+    }
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 1u));
+    ASSERT_EQ(send(PointerEvent(InputEventType::PointerMove, { 15.0f, 15.0f })).hover, targets[0].id);
+    const u64 ownerGeneration = m_router.hoverActivityGeneration();
+    EXPECT_EQ(send(PointerEvent(InputEventType::PointerMove, { 25.0f, 15.0f })).hover, targets[1].id);
+    EXPECT_EQ(send(PointerEvent(InputEventType::PointerMove, { 45.0f, 15.0f })).hover, targets[2].id);
+    EXPECT_EQ(send(PointerEvent(InputEventType::PointerMove, { 80.0f, 15.0f })).hover, targets[0].id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), ownerGeneration);
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 2u));
+    EXPECT_EQ(m_router.hoverActivityGeneration(), ownerGeneration);
+
+    targets[0].control.contentRevision = 14u;
+    targets[1].control = targets[0].control;
+    targets[2].control = targets[0].control;
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 3u));
+    const u64 changedControl = m_router.hoverActivityGeneration();
+    EXPECT_GT(changedControl, ownerGeneration);
+    targets[0].declarationGeneration = 2u;
+    targets[1].ownerDeclarationGeneration = 2u;
+    targets[2].ownerDeclarationGeneration = 2u;
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 4u));
+    EXPECT_GT(m_router.hoverActivityGeneration(), changedControl);
+}
+
+TEST_F(UiInputTests, PressCaptureLossFocusLossAndResetFenceHoverActivity){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    ASSERT_EQ(send(PointerEvent(InputEventType::PointerMove)).hover, target.id);
+    u64 previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), previous);
+
+    ASSERT_TRUE(send(PointerEvent(InputEventType::SecondaryDown)).pointerConsumed);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(send(PointerEvent(InputEventType::SecondaryUp)).pointerConsumed);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), previous);
+
+    send({ InputEventType::PointerCaptureLost, {} });
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    send({ InputEventType::FocusLost, {} });
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    m_router.reset();
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+    previous = m_router.hoverActivityGeneration();
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    send({ InputEventType::FocusGained, {} });
+    EXPECT_EQ(send(PointerEvent(InputEventType::PointerMove)).hover, target.id);
+    EXPECT_GT(m_router.hoverActivityGeneration(), previous);
+}
+
 TEST_F(UiInputTests, DragOutsideDoesNotActivateAndRemovalKeepsReleaseConsumption){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));

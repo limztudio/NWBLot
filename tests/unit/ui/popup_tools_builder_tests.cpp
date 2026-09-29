@@ -81,6 +81,64 @@ TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequire
     EXPECT_TRUE(m_tooltip.visible());
 }
 
+TEST_F(UiPopupToolsBuilderTests, LeaveAndReturnBetweenDeclarationsRestartsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    EXPECT_NE(send({ InputEventType::PointerMove, { 790.0f, 590.0f } }).hover, anchor());
+    ASSERT_TRUE(moveToAnchor());
+    EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, SameAnchorPointerMotionKeepsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    const Point pointer = m_context.input().pointerPosition();
+    EXPECT_EQ(send({ InputEventType::PointerMove, { pointer.x + 5.0f, pointer.y } }).hover, anchor());
+    EXPECT_EQ(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
+TEST_F(UiPopupToolsBuilderTests, ClickBetweenDeclarationsRestartsTheTooltipDelay){
+    m_tooltipOptions.delaySeconds = 0.5f;
+    m_deltaSeconds = 0.25f;
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(acceptTools(2u, true, false));
+    ASSERT_TRUE(acceptTools(3u, true, false));
+    ASSERT_TRUE(acceptTools(4u, true, false));
+    ASSERT_TRUE(m_tooltip.visible());
+    const u64 activity = m_context.input().hoverActivityGeneration();
+    const Point pointer = m_context.input().pointerPosition();
+    EXPECT_TRUE(send({ InputEventType::PrimaryDown, pointer }).pointerConsumed);
+    EXPECT_TRUE(send({ InputEventType::PrimaryUp, pointer }).pointerConsumed);
+    EXPECT_GT(m_context.input().hoverActivityGeneration(), activity);
+    ASSERT_TRUE(acceptTools(5u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(6u, true, false));
+    EXPECT_FALSE(m_tooltip.visible());
+    ASSERT_TRUE(acceptTools(7u, true, false));
+    EXPECT_TRUE(m_tooltip.visible());
+}
+
 TEST_F(UiPopupToolsBuilderTests, PrimaryCaptureAndSecondaryPressSuppressTheTooltip){
     ASSERT_TRUE(acceptTools(1u, true, false));
     ASSERT_TRUE(moveToAnchor());

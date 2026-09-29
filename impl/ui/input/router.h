@@ -56,6 +56,13 @@ private:
         ControlToken control;
     };
 
+    struct HoverIdentity{
+        WidgetId owner;
+        u64 declarationGeneration = 0u;
+        PopupToken popup;
+        ControlToken control;
+    };
+
 
 public:
     explicit InputRouter(Core::Alloc::GlobalArena& arena);
@@ -103,6 +110,7 @@ public:
     [[nodiscard]] const InputVector<InputAction>& actions()const{ return m_actions; }
     [[nodiscard]] const InputVector<ControlAction>& controlActions()const{ return m_controlActions; }
     [[nodiscard]] WidgetId hover()const{ return m_hover; }
+    [[nodiscard]] u64 hoverActivityGeneration()const{ return m_hoverActivityGeneration; }
     [[nodiscard]] WidgetId focus()const{ return m_focus; }
     [[nodiscard]] WidgetId capture()const{ return m_capture; }
     [[nodiscard]] bool primaryDown()const{ return m_primaryDown; }
@@ -161,6 +169,8 @@ private:
     void rebuildLookup();
     void reconcileTargets();
     void updateHover();
+    void advanceHoverActivity();
+    void clearHover();
     void cancelPointerCapture();
     void cancelInteraction();
     void appendActivation(const HitTarget& target, InputActionSource::Enum source, InputRoutingResult& result);
@@ -187,9 +197,11 @@ private:
     InputVector<PopupDismissal> m_popupDismissals;
     u64 m_layoutGeneration = 0u;
     u64 m_focusLossGeneration = 0u;
+    u64 m_hoverActivityGeneration = 1u;
     u64 m_nextActionSequence = 1u;
     u64 m_activeGestureSequence = 0u;
     WidgetId m_hover;
+    HoverIdentity m_hoverIdentity;
     WidgetId m_focus;
     WidgetId m_capture;
     PopupToken m_capturePopup;

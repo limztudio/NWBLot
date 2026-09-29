@@ -39,7 +39,7 @@ UiLayerSystem::UiLayerSystem(
     , m_clipboard(clipboard)
     , m_textInput(textInput)
     , m_assetManager(assetManager)
-    , m_skinRef(skin)
+    , m_skinSelection(skin)
     , m_presentation(presentation)
     , m_fontRefs(fonts, arena)
     , m_paint(arena)
@@ -79,22 +79,35 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(width == 0u || height == 0u)
         return true;
 
-    if(!m_skinAsset){
-        const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-            m_skinRef.name(), m_skinAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
-        );
-        if(!skin)
-            return false;
-    }
-    const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-    NWB_FATAL_ASSERT(skin);
     if(!m_fontsReady){
         Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/load_fonts"));
         if(!loadFonts(scratchArena))
             return false;
     }
-    if(!m_renderer.validateResources(width, height) || !m_renderer.setSkin(m_skinRef, *skin, m_skinGeneration))
+    if(!m_renderer.validateResources(width, height))
         return false;
+
+    const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure([this](const Core::Assets::AssetRef<UiSkin>& ref){
+        if(ref == m_skinSelection.selected() && m_skinAsset){
+            const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
+            return skin && m_renderer.setSkin(ref, *skin, m_skinGeneration);
+        }
+        UniquePtr<Core::Assets::IAsset> candidateAsset;
+        const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
+            ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
+        );
+        if(!skin || !m_renderer.setSkin(ref, *skin, m_skinGeneration))
+            return false;
+        m_skinAsset = Move(candidateAsset);
+        return true;
+    });
+    if(selection == UiSkinSelectionResult::Failed)
+        return false;
+    if(selection == UiSkinSelectionResult::DefaultFallback){
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default")
+            , StringConvert(m_skinSelection.requested().name().c_str())
+        );
+    }
 
     f32 scaleX = 1.0f;
     f32 scaleY = 1.0f;

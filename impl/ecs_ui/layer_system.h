@@ -8,6 +8,7 @@
 #include "components.h"
 #include "edit_box_host.h"
 #include "frame_delta.h"
+#include "skin_selection.h"
 
 #include <impl/ui/gpu/renderer.h>
 
@@ -112,7 +113,7 @@ private:
     Core::IClipboardService& m_clipboard;
     Core::ITextInputService& m_textInput;
     Core::Assets::AssetManager& m_assetManager;
-    Core::Assets::AssetRef<UiSkin> m_skinRef;
+    UiSkinSelection m_skinSelection;
     UiLayerPresentation::Enum m_presentation;
     UniquePtr<Core::Assets::IAsset> m_skinAsset;
     FontReferences m_fontRefs;

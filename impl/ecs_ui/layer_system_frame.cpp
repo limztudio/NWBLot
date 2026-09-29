@@ -39,7 +39,13 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(*skin);
-    m_paint.begin(m_display, m_frameGeneration, m_skinGeneration, m_skinRef, *skin);
+    m_paint.begin(
+        m_display,
+        m_frameGeneration,
+        m_skinGeneration,
+        m_skinSelection.selected(),
+        *skin
+    );
     m_paint.reserve(256u);
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u);

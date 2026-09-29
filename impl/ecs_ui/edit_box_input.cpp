@@ -132,6 +132,8 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
     }
     else if(input.type <= Ui::InputEventType::PrimaryUp){
         const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
+        if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target)
+            return;
         Entry* entry = find(target);
         usize byte = 0u;
         if(!entry || !hit(*entry, input.position, byte))

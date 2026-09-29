@@ -25,12 +25,13 @@ namespace Tests::Smoke{
 
 // One owned observation follows the completed Builder scope and travels with the same GPU marker sequence.
 struct UiTextAreaSnapshot{
-    Array<u64, 23u> values{};
-    Array<Impl::Ui::Rect, 11u> rectangles{};
+    Array<u64, 25u> values{};
+    Array<Impl::Ui::Rect, 16u> rectangles{};
     Array<Impl::Ui::Rect, 32u> selections{};
     Impl::Ui::DisplayMetrics display;
     Impl::Ui::Point scroll;
     Impl::Ui::Point measure;
+    Impl::Ui::Point maximum;
     f32 lineHeight = 0.0f;
     u32 selectionCount = 0u;
     u32 sequence = 0u;

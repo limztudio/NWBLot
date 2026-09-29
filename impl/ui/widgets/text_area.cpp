@@ -21,6 +21,7 @@ bool TextAreaState::scrollTo(const Point scroll){
     if(!IsFinite(scroll.x) || !IsFinite(scroll.y) || scroll.x < 0.0f || scroll.y < 0.0f)
         return false;
     advanceRevision();
+    m_scrollInput.retire();
     m_visual.scroll = scroll.x;
     m_scrollY = scroll.y;
     m_revealCaret = false;
@@ -29,6 +30,7 @@ bool TextAreaState::scrollTo(const Point scroll){
 
 void TextAreaState::reset(){
     advanceRevision();
+    m_scrollInput.retire();
     m_visual = {};
     m_navigation.reset();
     m_compositionGeneration = 0u;

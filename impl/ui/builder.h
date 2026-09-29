@@ -100,6 +100,7 @@ public:
     [[nodiscard]] bool failed()const{ return m_context.failed(); }
     void setSkin(const UiSkin& skin){ if(declarationBlocked()) m_context.fail(); else m_skin = &skin; }
     [[nodiscard]] WidgetStyle& style(){ if(declarationBlocked()) m_context.fail(); return m_style; }
+    [[nodiscard]] ScrollbarStyle& scrollbarStyle(){ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
     [[nodiscard]] EditBoxStyle& editStyle(){ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
     [[nodiscard]] PopupStyle& popupStyle(){ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
     [[nodiscard]] ListStyle& listStyle(){ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
@@ -128,6 +129,8 @@ private:
         const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr,
         FloatEditFrame* floatFrame = nullptr);
     [[nodiscard]] bool paintTextArea(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
+    [[nodiscard]] bool paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
     [[nodiscard]] bool textAreaAvailable(const EditModel& model, const TextAreaState& state)const;
     void snapshotTextArea(TextAreaFrame& frame);
     [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const;
@@ -196,6 +199,7 @@ private:
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
     EditBoxStyle m_editStyle;
+    ScrollbarStyle m_scrollbarStyle;
     PopupStyle m_popupStyle;
     ListStyle m_listStyle;
     ComboStyle m_comboStyle;

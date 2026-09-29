@@ -89,10 +89,13 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
     const u64 stateRevision = m_state.revision();
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    TextAreaOptions compact = smallOptions();
+    compact.height.value += m_builder.scrollbarStyle().thickness;
+    ASSERT_TRUE(frameArea(2u, compact));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
     const EditBoxPlacement& placement = m_state.placement();
+    ASSERT_GE(placement.content.height, placement.caret.height);
     EXPECT_GE(placement.caret.x, placement.content.x);
     EXPECT_GE(placement.caret.y, placement.content.y);
     EXPECT_LE(placement.caret.x + placement.caret.width, placement.content.x + placement.content.width + 0.001f);

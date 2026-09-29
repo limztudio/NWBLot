@@ -34,7 +34,8 @@ namespace __hidden_ui_text_area_snapshot{
 
 static constexpr TStringView s_RectNames[]{ NWB_TEXT("bounds"), NWB_TEXT("content"), NWB_TEXT("clip"), NWB_TEXT("caret"),
     NWB_TEXT("reset"), NWB_TEXT("long"), NWB_TEXT("readonly"), NWB_TEXT("enabled"), NWB_TEXT("viewport"),
-    NWB_TEXT("clipboard"), NWB_TEXT("outside") };
+    NWB_TEXT("clipboard"), NWB_TEXT("outside"), NWB_TEXT("x_track"), NWB_TEXT("x_thumb"), NWB_TEXT("y_track"),
+    NWB_TEXT("y_thumb"), NWB_TEXT("corner") };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,6 +73,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     if(!m_observed.snapshot(m_model) || m_observed.shape(context.text, { {}, 16.0f }) != TextLayoutStatus::Success)
         return false;
     const EditBoxPlacement& placement = m_state.placement();
+    const ScrollViewportPlacement& scrollbars = m_state.scrollbars();
     const auto& geometry = m_observed.caretGeometry();
     Rect localCaret;
     if(!geometry.caretRect(m_observed.displayCaret(), localCaret) || geometry.lines().size() > 32u)
@@ -80,6 +82,7 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.display = context.display;
     current.scroll = m_state.scroll();
     current.measure = m_observed.layout().measure();
+    current.maximum = { static_cast<f32>(scrollbars.horizontal.maximum), static_cast<f32>(scrollbars.vertical.maximum) };
     current.lineHeight = localCaret.height;
     current.rectangles[0u] = placement.bounds;
     current.rectangles[1u] = placement.content;
@@ -90,6 +93,11 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
             placement.bounds.y - (index < 3u ? 76.0f : 38.0f), 112.0f, 30.0f };
     }
     current.rectangles[10u] = { placement.bounds.x, placement.bounds.y + placement.bounds.height + 8.0f, 160.0f, 30.0f };
+    current.rectangles[11u] = scrollbars.horizontal.track;
+    current.rectangles[12u] = scrollbars.horizontal.thumb;
+    current.rectangles[13u] = scrollbars.vertical.track;
+    current.rectangles[14u] = scrollbars.vertical.thumb;
+    current.rectangles[15u] = scrollbars.corner;
     for(u32 index = 0u; index < geometry.lines().size(); ++index){
         Rect rectangle;
         if(!geometry.rangeOnLine(m_observed.selectionRange(), index, placement.caret.width, rectangle))
@@ -102,16 +110,21 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     }
     const bool coherent = Abs(placement.caret.x - placement.textOrigin.x - localCaret.x) < 0.02f
         && Abs(placement.caret.y - placement.textOrigin.y - localCaret.y) < 0.02f
-        && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY;
+        && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
+        && SameRect(placement.content, scrollbars.viewport) && SameRect(placement.clip, scrollbars.contentClip)
+        && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;
     const auto& navigation = m_state.navigation();
     current.values = { static_cast<u64>(m_model.text().size()), TextHash(m_model.text()), static_cast<u64>(m_model.anchor()),
         static_cast<u64>(m_model.caret()), static_cast<u64>(m_state.focused()), static_cast<u64>(m_enabled),
         static_cast<u64>(m_readOnly), static_cast<u64>(m_compact), static_cast<u64>(m_longDocument),
         static_cast<u64>(navigation.hasPreferredX()), BitCast<u32>(navigation.preferredX()), m_submits, m_cancels, m_blurs,
         m_abandons, m_outside, m_clipboardSeeds, static_cast<u64>(m_clipboardToken.valid()), m_model.revision(),
-        m_model.externalRevision(), m_model.selectionGeneration(), static_cast<u64>(coherent), geometry.lines().size() };
+        m_model.externalRevision(), m_model.selectionGeneration(), static_cast<u64>(coherent), geometry.lines().size(),
+        static_cast<u64>(m_model.canUndo()), static_cast<u64>(m_model.canRedo()) };
     bool changed = current.values != m_snapshot.values || current.selectionCount != m_snapshot.selectionCount
-        || current.scroll.x != m_snapshot.scroll.x || current.scroll.y != m_snapshot.scroll.y;
+        || current.scroll.x != m_snapshot.scroll.x || current.scroll.y != m_snapshot.scroll.y
+        || current.maximum.x != m_snapshot.maximum.x || current.maximum.y != m_snapshot.maximum.y
+        || current.measure.x != m_snapshot.measure.x || current.measure.y != m_snapshot.measure.y || current.lineHeight != m_snapshot.lineHeight;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
         changed |= !SameRect(current.rectangles[index], m_snapshot.rectangles[index]);
     for(usize index = 0u; index < current.selections.size(); ++index)
@@ -130,14 +143,14 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
         , value[10], value[11], value[12], value[13], value[14], value[15], value[16], value[17], value[18], value[19]
-        , value[20], value[21], value[22]
+        , value[20], value[21], value[22], value[23], value[24]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
         , current.sequence, current.scroll.x, current.scroll.y, current.measure.x, current.measure.y
-        , current.lineHeight, current.selectionCount
+        , current.lineHeight, current.selectionCount, current.maximum.x, current.maximum.y
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index){
         const Rect& rectangle = current.rectangles[index];

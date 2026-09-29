@@ -314,21 +314,30 @@ bool InputRouter::isInteractive(const HitTarget& target)const{
 
 void InputRouter::reconcileTargets(){
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || focused->control != m_focusControl){
+    const bool focusedText = focused != nullptr && focused->textEditable && !focused->owner.valid();
+    if(
+        focused == nullptr || !isInteractive(*focused) || !focused->focusable
+        || (!focusedText && focused->control != m_focusControl)
+    ){
         m_focus = {};
         m_focusDeclaration = 0u;
         m_focusControl = {};
     }
+    else
+        m_focusControl = focused->control;
     const HitTarget* captured = findTarget(m_capture, m_captureDeclaration);
+    const bool capturedText = captured != nullptr && captured->textEditable && !captured->owner.valid();
     if(
         captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup
-        || captured->control != m_captureControl
+        || (!capturedText && captured->control != m_captureControl)
     ){
         m_capture = {};
         m_capturePopup = {};
         m_captureDeclaration = 0u;
         m_captureControl = {};
     }
+    else
+        m_captureControl = captured->control;
     for(usize index = 0u; index < m_actions.size();){
         const InputActionId& action = m_actions[index].id;
         const HitTarget* target = findTarget(action.target, action.declarationGeneration);

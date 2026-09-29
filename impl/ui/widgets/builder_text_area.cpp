@@ -68,6 +68,7 @@ private:
 EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options){
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
+        || !IsFinite(options.wheelLines) || options.wheelLines <= 0.0f
         || model.textMode() != EditTextMode::Multiline || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
@@ -118,12 +119,14 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
         || state.m_visual.selectionGeneration != model.selectionGeneration()
         || state.m_compositionGeneration != model.compositionGeneration()
         || state.m_visual.anchor != model.anchor() || state.m_visual.caret != model.caret()
-        || (!state.m_visual.focused && result.focused))
+        || (!state.m_visual.focused && result.focused
+            && (!m_context.input().capture().valid() || m_context.input().capture() == widget->id)))
     )
         state.m_revealCaret = true;
     if(!firstBinding && state.m_compositionGeneration != model.compositionGeneration())
         state.m_visual.caretElapsed = 0.0f;
     TextAreaFrame frame;
+    frame.wheelLines = options.wheelLines;
     frame.model = &model;
     frame.state = &state;
     frame.focused = result.focused;

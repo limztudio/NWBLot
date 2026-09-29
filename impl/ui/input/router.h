@@ -143,7 +143,8 @@ private:
     );
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(
-        const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result
+        const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta,
+        InputRoutingResult& result, f64 deltaX = 0.0
     );
     [[nodiscard]] bool routeControlKey(
         const InputEvent& event, const HitTarget& host, const HitTarget& source, bool alreadyPressed, InputRoutingResult& result

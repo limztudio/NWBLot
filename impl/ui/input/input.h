@@ -87,6 +87,8 @@ struct HitTarget{
     u64 keyboardOwnerDeclarationGeneration = 0u;
     ControlToken keyboardControl;
     bool contextMenu = false;
+    f64 scrollStepX = 0.0;
+    f64 gestureMaximumX = 0.0;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -132,6 +134,10 @@ struct ControlAction{
     f64 maximum = 0.0;
     u64 sourceDeclarationGeneration = 0u;
     ControlToken sourceControl;
+    // Positive X moves right; positive Y moves up. Each wheel action carries one native event.
+    f64 deltaX = 0.0;
+    f64 stepX = 0.0;
+    f64 maximumX = 0.0;
 };
 
 // One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.

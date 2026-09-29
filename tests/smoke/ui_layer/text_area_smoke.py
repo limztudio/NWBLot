@@ -22,6 +22,11 @@ from window_capture_smoke import (
 INITIAL = "abcdef\nx\nabcdef\n한국어"
 LONG_LINE = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijkl"
 LONG_DOCUMENT = (LONG_LINE + "\n") * 16 + "tail"
+MODEL_EPOCHS = ("model_revision", "external_revision", "selection_generation")
+
+
+def scroll_matches(state, expected):
+    return all(abs(actual - wanted) <= 0.05 for actual, wanted in zip(state["scroll"], expected))
 
 
 class TextAreaRun:
@@ -45,11 +50,15 @@ class TextAreaRun:
 
     def focus(self, stage):
         x, y, width, height = self.snapshot["rectangles"]["caret"]
-        self.native.click(*self.point(x + width * 0.5, y + height * 0.5))
+        cx, cy, cw, ch = self.snapshot["rectangles"]["content"]
+        target = (min(max(x + width * 0.5, cx + 1.0), cx + cw - 1.0),
+            min(max(y + height * 0.5, cy + 1.0), cy + ch - 1.0))
+        self.native.click(*self.point(*target))
+        self.native.pointer(*self.point(28.0, 394.0))
         self.checkpoint(stage, focus=1, anchor=self.snapshot["caret"], preferred_valid=0, preferred_bits=0)
 
     def checkpoint(self, name, *, text=None, anchor=None, caret=None, extent=None, extra=None,
-        minimum_selection_lines=0, settle=0.25, **changes):
+        minimum_selection_lines=0, settle=0.25, allow_offscreen_caret=False, **changes):
         if text is not None:
             if anchor is None or caret is None:
                 raise ValueError("text checkpoints require exact UTF-8 anchor and caret positions")
@@ -81,7 +90,8 @@ class TextAreaRun:
             else:
                 self.backend.capture_client_window(self.handle, path)
             report = observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin,
-                extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines)
+                extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines,
+                allow_offscreen_caret=allow_offscreen_caret)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})
@@ -113,12 +123,126 @@ class TextAreaRun:
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "skin": self.args.skin, "stages": self.stages,
-            "failure": self.failure_report, "marker_count_per_gate": 53,
-            "input_path": "Win32 maintained cursor, posted text/keys/buttons, modifier chords, CF_UNICODETEXT reads"
-                if self.native.windows else "X11 synthetic ASCII keys/buttons, native focus, UTF8_STRING selection reads",
+            "failure": self.failure_report, "marker_count_per_gate": 57,
+            "input_path": "Win32 maintained cursor, posted text/keys/buttons and positioned WM_MOUSEWHEEL/WM_MOUSEHWHEEL, modifier chords, CF_UNICODETEXT reads"
+                if self.native.windows else "X11 synthetic ASCII keys/buttons, positioned wheel buttons4/5/6/7, native focus, UTF8_STRING selection reads",
             "ordered_batch_scope": "Text then Down then text has no displayed-state wait; native delivery may cross frames.",
             "runtime_limit": "No fake preedit injection, live IME, native Wayland, or physical keyboard/grab qualification."}
         (self.args.output_directory / "text_area.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+    def manual_checkpoint(self, name, **changes):
+        self.native.pointer(4, 4)
+        self.checkpoint(name, allow_offscreen_caret=True, **changes)
+
+    def track_click(self, axis, after):
+        name = "x" if axis == 0 else "y"
+        track, thumb = (self.snapshot["rectangles"][name + suffix] for suffix in ("_track", "_thumb"))
+        start = thumb[axis] + thumb[axis + 2] if after else track[axis]
+        end = track[axis] + track[axis + 2] if after else thumb[axis]
+        if end - start < 4.0:
+            raise SmokeFailure(f"the accepted {name} scrollbar has no usable {'after' if after else 'before'} track")
+        position = list(center(track))
+        position[axis] = (start + end) / 2.0
+        self.native.click(*self.point(*position))
+
+    def thumb_drag(self, axis, at_end):
+        name = "x" if axis == 0 else "y"
+        track, thumb = (self.snapshot["rectangles"][name + suffix] for suffix in ("_track", "_thumb"))
+        if track[axis + 2] <= thumb[axis + 2]:
+            raise SmokeFailure(f"the accepted {name} scrollbar thumb has no travel")
+        destination = list(center(thumb))
+        destination[axis] = track[axis] + track[axis + 2] + 16.0 if at_end else track[axis] - 16.0
+        self.native.drag(self.point(*center(thumb)), self.point(*destination))
+
+    def scrolling_gates(self):
+        self.expected.update({name: self.snapshot[name] for name in (*MODEL_EPOCHS, "can_undo", "can_redo")})
+        old = self.snapshot["scroll"]
+        target = (max(0.0, old[0] - self.snapshot["rectangles"]["content"][2]), old[1])
+        self.track_click(0, False)
+        self.manual_checkpoint("unfocused_horizontal_track_pages_without_selecting", focus=1,
+            extra=lambda state: scroll_matches(state, target))
+        self.manual_checkpoint("manual_track_scroll_survives_idle_frames", settle=0.5,
+            extra=lambda state: scroll_matches(state, target))
+        old = self.snapshot["scroll"]
+        target = (old[0], max(0.0, old[1] - self.snapshot["line_height"] * 3.0))
+        self.native.wheel(1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        self.manual_checkpoint("positive_vertical_wheel_scrolls_up_without_selection", extra=lambda state: scroll_matches(state, target))
+        old = self.snapshot["scroll"]
+        target = (max(0.0, old[0] - 48.0), old[1])
+        self.native.wheel_x(-1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        self.manual_checkpoint("negative_horizontal_wheel_scrolls_left_only", extra=lambda state: scroll_matches(state, target))
+        old = self.snapshot["scroll"]
+        target = (min(self.snapshot["maximum"][0], old[0] + 48.0),
+            min(self.snapshot["maximum"][1], old[1] + self.snapshot["line_height"] * 3.0))
+        position = self.point(*center(self.snapshot["rectangles"]["content"]))
+        self.native.wheel_x(1, *position)
+        self.native.wheel(-1, *position)
+        self.manual_checkpoint("right_down_wheel_axes_preserve_plain_model", extra=lambda state: scroll_matches(state, target))
+        target = (0.0, self.snapshot["scroll"][1])
+        self.thumb_drag(0, False)
+        self.manual_checkpoint("horizontal_thumb_clamps_to_document_left", extra=lambda state: scroll_matches(state, target))
+        target = (self.snapshot["maximum"][0], self.snapshot["scroll"][1])
+        self.thumb_drag(0, True)
+        self.manual_checkpoint("horizontal_thumb_clamps_to_document_right", extra=lambda state: scroll_matches(state, target))
+        target = (self.snapshot["scroll"][0], 0.0)
+        self.thumb_drag(1, False)
+        self.manual_checkpoint("vertical_thumb_clamps_to_document_top", extra=lambda state: scroll_matches(state, target))
+        target = (self.snapshot["scroll"][0], self.snapshot["rectangles"]["content"][3])
+        self.track_click(1, True)
+        self.manual_checkpoint("vertical_after_track_pages_one_accepted_viewport", extra=lambda state: scroll_matches(state, target))
+        target = (self.snapshot["scroll"][0], self.snapshot["maximum"][1])
+        self.thumb_drag(1, True)
+        self.manual_checkpoint("vertical_thumb_clamps_to_document_bottom", extra=lambda state: scroll_matches(state, target))
+        target = (max(0.0, self.snapshot["scroll"][0] - self.snapshot["rectangles"]["content"][2]), self.snapshot["scroll"][1])
+        self.track_click(0, False)
+        self.manual_checkpoint("horizontal_before_track_pages_one_accepted_viewport", extra=lambda state: scroll_matches(state, target))
+        self.manual_checkpoint("two_axis_manual_scroll_persists_without_editing", settle=0.5,
+            extra=lambda state: scroll_matches(state, target))
+        for name in MODEL_EPOCHS:
+            self.expected.pop(name)
+        self.native.tap("Left")
+        self.checkpoint("caret_move_resumes_reveal_after_manual_scroll", anchor=1038, caret=1038,
+            extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
+        self.native.tap("Right")
+        self.checkpoint("caret_move_restores_original_plain_position", anchor=1039, caret=1039)
+        self.expected.update({name: self.snapshot[name] for name in MODEL_EPOCHS})
+        target = self.snapshot["scroll"]
+        self.controller("readonly")
+        self.manual_checkpoint("readonly_policy_preserves_manual_document", readonly=1, focus=0,
+            extra=lambda state: scroll_matches(state, target))
+        old = self.snapshot["scroll"]
+        target = (old[0], max(0.0, old[1] - self.snapshot["line_height"] * 3.0))
+        self.native.wheel(1, *self.point(*center(self.snapshot["rectangles"]["content"])))
+        self.manual_checkpoint("readonly_vertical_wheel_still_scrolls", extra=lambda state: scroll_matches(state, target))
+        target = (0.0, self.snapshot["scroll"][1])
+        self.thumb_drag(0, False)
+        self.manual_checkpoint("readonly_horizontal_thumb_preserves_selection", focus=1,
+            extra=lambda state: scroll_matches(state, target))
+        target = self.snapshot["scroll"]
+        self.controller("enabled")
+        self.manual_checkpoint("disabled_scrollbars_publish_disabled_skin", enabled=0, focus=0,
+            extra=lambda state: scroll_matches(state, target))
+        position = self.point(*center(self.snapshot["rectangles"]["content"]))
+        self.native.wheel_x(1, *position)
+        self.native.wheel(-1, *position)
+        self.thumb_drag(1, False)
+        self.manual_checkpoint("disabled_wheel_and_thumb_cannot_scroll_or_select", extra=lambda state: scroll_matches(state, target))
+        self.controller("enabled")
+        self.manual_checkpoint("reenabled_scrollbars_preserve_plain_document", enabled=1, focus=0,
+            extra=lambda state: scroll_matches(state, target))
+        self.controller("readonly")
+        self.manual_checkpoint("editable_policy_preserves_scroll_and_selection", readonly=0, focus=0,
+            extra=lambda state: scroll_matches(state, target))
+        self.native.click(*self.point(*center(self.snapshot["rectangles"]["corner"])))
+        self.manual_checkpoint("corner_focus_preserves_manual_scroll_without_selecting", focus=1,
+            extra=lambda state: scroll_matches(state, target))
+        for name in MODEL_EPOCHS:
+            self.expected.pop(name)
+        self.native.tap("Left")
+        self.native.tap("Right")
+        self.native.pointer(4, 4)
+        self.checkpoint("text_navigation_after_corner_restores_caret_reveal", anchor=1039, caret=1039,
+            extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
 
     def execute(self):
         self.native.pointer(4, 4)
@@ -215,6 +339,7 @@ class TextAreaRun:
         self.controller("viewport")
         self.checkpoint("smaller_viewport_reveals_caret", compact=1,
             extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
+        self.scrolling_gates()
         self.focus("small_viewport_focus_precedes_home")
         self.native.tap("Home", control=True)
         self.checkpoint("document_home_restores_top_left", anchor=0, caret=0, preferred_valid=0, preferred_bits=0,
@@ -222,7 +347,7 @@ class TextAreaRun:
         page = min(16, math.floor(0.5 + self.snapshot["rectangles"]["content"][3] / self.snapshot["line_height"]))
         self.native.tap("Page_Down", shift=True)
         self.checkpoint("page_down_uses_accepted_content_height", anchor=0, caret=page * 65, preferred_valid=1,
-            minimum_selection_lines=2)
+            minimum_selection_lines=max(1, min(2, page - 1)), extra=lambda state: state["selection_count"] == page)
         self.native.tap("Page_Up")
         self.checkpoint("page_up_returns_to_document_start", anchor=0, caret=0)
         self.native.tap("End", control=True)

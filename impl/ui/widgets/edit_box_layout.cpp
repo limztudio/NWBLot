@@ -63,15 +63,30 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
     )
         return false;
-    EditBoxPlacement placement;
-    placement.bounds = bounds;
-    placement.frameClip = __hidden_ui_edit_box_layout::Intersection(bounds, clip);
     const f32 left = bounds.x + Min(padding.left, bounds.width);
     const f32 top = bounds.y + Min(padding.top, bounds.height);
     const f32 right = Max(left, bounds.x + bounds.width - Min(padding.right, bounds.width));
     const f32 bottom = Max(top, bounds.y + bounds.height - Min(padding.bottom, bounds.height));
-    placement.content = { left, top, right - left, bottom - top };
-    placement.clip = __hidden_ui_edit_box_layout::Intersection(placement.content, clip);
+    return arrangeViewport(bounds, { left, top, right - left, bottom - top }, clip, previousScroll, output, caretWidth, revealCaret);
+}
+
+bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip,
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const{
+    if(
+        !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
+        || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y
+        || viewport.x + viewport.width > bounds.x + bounds.width || viewport.y + viewport.height > bounds.y + bounds.height
+        || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f
+        || !IsFinite(caretWidth) || caretWidth <= 0.0f
+    )
+        return false;
+    EditBoxPlacement placement;
+    placement.bounds = bounds;
+    placement.frameClip = __hidden_ui_edit_box_layout::Intersection(bounds, clip);
+    placement.content = viewport;
+    placement.clip = __hidden_ui_edit_box_layout::Intersection(viewport, clip);
+    const f32 left = viewport.x;
+    const f32 top = viewport.y;
     Rect caret;
     if(!m_geometry.caretRect(m_caret, caret))
         return false;

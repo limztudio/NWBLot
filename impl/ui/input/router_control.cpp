@@ -21,7 +21,9 @@ bool InputRouter::validControlTargets()const{
         if(
             (!target.control.empty() && !target.control.valid())
             || !IsFinite(target.scrollStep) || target.scrollStep < 0.0
+            || !IsFinite(target.scrollStepX) || target.scrollStepX < 0.0
             || !IsFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
+            || !IsFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
             || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
             || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
         )
@@ -124,8 +126,19 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
     const HitTarget* accepted = findTarget(host);
     if(accepted == nullptr || (accepted->declarationGeneration == declarationGeneration && accepted->control == token))
         return;
+    const bool preserveText = accepted->declarationGeneration == declarationGeneration
+        && accepted->textEditable && !accepted->owner.valid() && (accepted->scrollable || accepted->control.empty());
     for(auto& target : m_targets){
-        if(target.id == host || target.owner == host)
+        if(target.id == host){
+            if(preserveText){
+                target.control = {};
+                target.scrollable = false;
+                target.navigable = false;
+            }
+            else
+                target.enabled = false;
+        }
+        else if(target.owner == host)
             target.enabled = false;
     }
     reconcileTargets();
@@ -147,7 +160,7 @@ void InputRouter::reconcileControlActions(){
 
 void InputRouter::appendControlAction(
     const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta,
-    InputRoutingResult& result){
+    InputRoutingResult& result, const f64 deltaX){
     if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -165,6 +178,9 @@ void InputRouter::appendControlAction(
     action.maximum = host.gestureMaximum;
     action.sourceDeclarationGeneration = source.declarationGeneration;
     action.sourceControl = source.control;
+    action.deltaX = deltaX;
+    action.stepX = host.scrollStepX;
+    action.maximumX = host.gestureMaximumX;
     m_controlActions.push_back(action);
     ++m_nextActionSequence;
 }
@@ -177,12 +193,12 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
     result.pointerConsumed |= wantsPointer();
     if(
         (m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed)
-        || hit == nullptr || event.scrollY == 0.0
+        || hit == nullptr || (event.scrollX == 0.0 && event.scrollY == 0.0)
     )
         return;
     const HitTarget* host = controlHost(*hit);
-    if(host != nullptr && host->scrollable)
-        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result);
+    if(host != nullptr && host->scrollable && (event.scrollY != 0.0 || host->scrollStepX > 0.0))
+        appendControlAction(*host, *hit, ControlActionKind::Wheel, event.scrollY, result, event.scrollX);
 }
 
 bool InputRouter::routeControlKey(

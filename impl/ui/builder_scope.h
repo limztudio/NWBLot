@@ -12,6 +12,7 @@
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
 #include "widgets/text_area.h"
+#include "widgets/scrollbar_style.h"
 #include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
@@ -86,6 +87,7 @@ private:
     };
 
     struct TextAreaFrame{
+        f32 wheelLines = 3.0f;
         const EditModel* model = nullptr;
         TextAreaState* state = nullptr;
         EditNavigationSnapshot navigation;

@@ -4,6 +4,8 @@
 
 #include "../builder.h"
 
+#include <global/simplemath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,8 +24,28 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
         return false;
     TextAreaState& state = *frame.state;
     EditBoxPlacement placement;
+    ScrollViewportPlacement viewport;
+    const Rect clip = visibleClip(box.clip);
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
-    if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), state.scroll(), placement, caretWidth, state.m_revealCaret))
+    if(!ScrollbarLayout::Calculate(
+        box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth,
+        state.scroll(), m_scrollbarStyle.thickness, m_scrollbarStyle.minimumThumb, viewport
+    ))
+        return false;
+    const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
+    const Point step{ item.editView.layout().fontSize() * frame.wheelLines, lineHeight * frame.wheelLines };
+    if(!IsFinite(step.x) || !IsFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
+        return false;
+    const ControlToken token = state.m_scrollInput.prepare(
+        item.state, m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model,
+        item.editOptions.enabled, item.editOptions.readOnly, viewport, step
+    );
+    m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
+    if(
+        !applyTextAreaScrollInput(item, frame, token)
+        || !item.editView.arrangeViewport(box.rectangle, viewport.viewport, clip, state.scroll(), placement, caretWidth, state.m_revealCaret)
+        || !state.m_scrollInput.updateOffsets({ placement.scroll, placement.scrollY })
+    )
         return false;
     if(!item.editView.paint(m_text, m_paint, *m_skin, placement, m_editStyle, item.editFlags) || !textAreaMatches(frame))
         return false;
@@ -37,7 +59,13 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     target.focusable = item.editOptions.enabled;
     target.textEditable = item.editOptions.enabled;
     target.contextMenu = item.contextMenu;
-    if(!m_context.addTarget(item.state, target))
+    target.control = token;
+    target.scrollable = item.editOptions.enabled;
+    target.scrollStep = step.y;
+    target.scrollStepX = step.x;
+    target.gestureMaximum = state.scrollbars().vertical.maximum;
+    target.gestureMaximumX = state.scrollbars().horizontal.maximum;
+    if(!m_context.addTarget(item.state, target) || !paintTextAreaScrollbars(item, state.scrollbars(), clip, token))
         return false;
     const bool published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
     if(!published || !textAreaMatches(frame))

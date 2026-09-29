@@ -1,6 +1,11 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_area_state_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/scrollbar_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_input_scroll_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_scroll_lifetime_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/wheel_input_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_control_lifetime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_area_navigation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_area_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/text_area_builder_tests.cpp"

@@ -4,6 +4,7 @@
 
 #include "renderer.h"
 #include "renderer_internal.h"
+#include "renderer_frame_timing_task.h"
 
 #include <core/common/log.h>
 
@@ -171,6 +172,11 @@ GpuRenderer::~GpuRenderer(){
 bool GpuRenderer::validateResources(const u32 width, const u32 height){
     if(width == 0u || height == 0u || width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;
+    m_state->m_frameTimingScopePrepared = m_state->m_graphics.gpuTiming().prepareScopeQueries(
+        GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), 2u
+    );
+    if(!m_state->m_frameTimingScopePrepared)
+        NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
     if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
         return true;
     if(m_state->m_pending)
@@ -203,6 +209,7 @@ void GpuRenderer::invalidateResources(){
     m_state->m_resources.reset();
     m_state->m_width = 0u;
     m_state->m_height = 0u;
+    m_state->m_frameTimingScopePrepared = false;
     m_state->m_claimed = false;
     m_state->m_declaredGraph = nullptr;
     m_state->m_graphGeneration = 0u;

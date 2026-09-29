@@ -299,7 +299,8 @@ public:
         StandaloneTaskGraphDeclaration declareTask,
         QueueSubmissionToken& outSubmissionToken,
         GpuPhysicalQueueId requiredTerminalQueue = {},
-        GpuTimingRecorder* timingRecorder = nullptr
+        GpuTimingRecorder* timingRecorder = nullptr,
+        GpuTimingFrameTransaction* frameTimingTransaction = nullptr
     )const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 

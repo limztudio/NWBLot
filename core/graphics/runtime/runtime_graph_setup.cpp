@@ -74,7 +74,9 @@ struct SetupUploadReadinessBridgeGraphTask{
 struct StandaloneTaskGraphRecoveryTask{
     inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
 
-    struct Payload{};
+    struct Payload{
+        GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+    };
 
 
     [[nodiscard]] static bool record(
@@ -82,14 +84,18 @@ struct StandaloneTaskGraphRecoveryTask{
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
-        static_cast<void>(payload);
-        static_cast<void>(commandList);
         static_cast<void>(context);
-        return true;
+        return !payload.frameTimingTransaction
+            || !payload.frameTimingTransaction->needsRetirement()
+            || payload.frameTimingTransaction->recordEnd(commandList)
+        ;
     }
 };
 
-[[nodiscard]] static GpuTaskId DeclareStandaloneTaskGraphRecoveryTask(GpuTaskGraph& graph){
+[[nodiscard]] static GpuTaskId DeclareStandaloneTaskGraphRecoveryTask(
+    GpuTaskGraph& graph,
+    GpuTimingFrameTransaction* const frameTimingTransaction
+){
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = false;
@@ -105,7 +111,7 @@ struct StandaloneTaskGraphRecoveryTask{
     ;
     return graph.addTask<StandaloneTaskGraphRecoveryTask>(
         recoveryDesc,
-        StandaloneTaskGraphRecoveryTask::Payload{}
+        StandaloneTaskGraphRecoveryTask::Payload{ frameTimingTransaction }
     );
 }
 
@@ -394,10 +400,11 @@ bool SubmitGraphOwnedStandaloneTask(
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
     CpuTaskScheduler* const readyFrontierScheduler,
-    GpuTimingRecorder* const timingRecorder
+    GpuTimingRecorder* const timingRecorder,
+    GpuTimingFrameTransaction* const frameTimingTransaction
 ){
     outSubmissionToken = {};
-    if(!declareTask)
+    if(!declareTask || (frameTimingTransaction && !timingRecorder))
         return false;
 
     auto& device = graphics.getDevice();
@@ -406,7 +413,18 @@ bool SubmitGraphOwnedStandaloneTask(
     const GpuTaskId terminalTask = declareTask(userData, graph);
     if(!terminalTask.valid())
         return false;
-    const GpuTaskId recoveryTask = __hidden_graphics_graph_setup::DeclareStandaloneTaskGraphRecoveryTask(graph);
+    GpuTaskId frameTimingBeginTask;
+    if(frameTimingTransaction){
+        const GpuTaskGraph::DeclarationReadView declaredTasks(graph);
+        if(!declaredTasks.valid() || declaredTasks.taskCount() < 2u)
+            return false;
+        frameTimingBeginTask = declaredTasks.taskAt(0u).id;
+        if(!frameTimingBeginTask.valid() || frameTimingBeginTask == terminalTask)
+            return false;
+    }
+    const GpuTaskId recoveryTask = __hidden_graphics_graph_setup::DeclareStandaloneTaskGraphRecoveryTask(
+        graph, frameTimingTransaction
+    );
     if(!recoveryTask.valid())
         return false;
 
@@ -417,6 +435,11 @@ bool SubmitGraphOwnedStandaloneTask(
     GpuGraphSubmissionTransaction transaction(graphArena);
     Alloc::ScratchArena scratchArena(__hidden_graphics_graph_setup::s_StandaloneTaskGraphScratchArena);
     const GpuTaskScheduler& scheduler = graphics.gpuTasks();
+    GpuTaskGraphCompileOptions compileOptions;
+    if(frameTimingTransaction){
+        compileOptions.packetTimingEnvelope.firstTask = frameTimingBeginTask;
+        compileOptions.packetTimingEnvelope.lastTask = terminalTask;
+    }
     if(!scheduler.scheduleGraph(
         graph,
         analysis,
@@ -424,7 +447,8 @@ bool SubmitGraphOwnedStandaloneTask(
         compiledGraph,
         recordedGraph,
         transaction,
-        scratchArena
+        scratchArena,
+        compileOptions
     )){
         const auto& analysisDiagnostic = analysis.diagnostic();
         const auto& queueDiagnostic = assignments.diagnostic();
@@ -442,6 +466,10 @@ bool SubmitGraphOwnedStandaloneTask(
 
     const GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalTask);
     const GpuSubmissionPacketId recoveryPacket = compiledPlan.packetForTask(recoveryTask);
+    const GpuSubmissionPacketId frameTimingBeginPacket = frameTimingTransaction
+        ? compiledPlan.packetForTask(frameTimingBeginTask)
+        : GpuSubmissionPacketId{}
+    ;
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(
         !terminalPacket.valid()
@@ -461,6 +489,25 @@ bool SubmitGraphOwnedStandaloneTask(
         return false;
     if(requiredTerminalQueue.valid() && terminalPacketView.plan->queue != requiredTerminalQueue)
         return false;
+    if(frameTimingTransaction){
+        const GpuCompiledPacketView beginPacketView = compiledPlan.packet(frameTimingBeginPacket);
+        const GpuSubmissionPacketRange timingEnvelope = compiledPlan.packetTimingEnvelopeRange();
+        if(
+            !beginPacketView.valid()
+            || frameTimingBeginPacket != compiledPlan.packetIdAt(0u)
+            || frameTimingBeginPacket == terminalPacket
+            || beginPacketView.plan->taskCount != 1u
+            || beginPacketView.tasks[0u] != frameTimingBeginTask
+            || beginPacketView.plan->queue != graphicsQueue
+            || terminalPacketView.plan->queue != graphicsQueue
+            || !beginPacketView.plan->recordsTiming
+            || !terminalPacketView.plan->recordsTiming
+            || !timingEnvelope.valid()
+            || timingEnvelope.first != frameTimingBeginPacket
+            || timingEnvelope.first.index + timingEnvelope.packetCount - 1u != terminalPacket.index
+        )
+            return false;
+    }
 
     const GpuSubmissionPacket& recoveryPacketPlan = *recoveryPacketView.plan;
     if(
@@ -483,7 +530,17 @@ bool SubmitGraphOwnedStandaloneTask(
         timingRecorder,
         scratchArena
     );
+    const QueueSubmissionToken terminalToken = transaction.taskToken(compiledPlan, terminalTask);
     if(!graphAccepted){
+        bool timingRecovered = true;
+        if(frameTimingTransaction){
+            if(terminalToken.valid())
+                timingRecovered = frameTimingTransaction->confirmEndSubmission(terminalToken, false);
+            else if(frameTimingTransaction->needsRetirement())
+                timingRecovered = frameTimingTransaction->prepareForRecovery();
+            if(!timingRecovered)
+                frameTimingTransaction->discard();
+        }
         const bool recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(
             graph,
             compiledGraph,
@@ -493,6 +550,14 @@ bool SubmitGraphOwnedStandaloneTask(
             timingRecorder,
             scratchArena
         );
+        if(recovered && frameTimingTransaction && frameTimingTransaction->needsRetirement()){
+            const QueueSubmissionToken recoveryToken = transaction.taskToken(compiledPlan, recoveryTask);
+            timingRecovered = frameTimingTransaction->confirmEndSubmission(recoveryToken, false) && timingRecovered;
+        }
+        if(!timingRecovered){
+            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing could not be retired after graph rejection"));
+            frameTimingTransaction->discard();
+        }
         const bool discarded = transaction.discardUnaccepted(
             graph,
             compiledGraph,
@@ -504,17 +569,25 @@ bool SubmitGraphOwnedStandaloneTask(
         return false;
     }
 
-    outSubmissionToken = transaction.taskToken(compiledPlan, terminalTask);
-    if(!transaction.discardUnaccepted(
+    const bool discarded = transaction.discardUnaccepted(
         graph,
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
-    )){
+    );
+    const bool timingConfirmed = !frameTimingTransaction
+        || frameTimingTransaction->confirmEndSubmission(terminalToken, discarded && terminalToken.valid())
+    ;
+    if(!timingConfirmed){
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing confirmation failed"));
+        frameTimingTransaction->discard();
+    }
+    if(!discarded || !terminalToken.valid()){
         graphics.requestDeviceRecreation();
         outSubmissionToken = {};
         return false;
     }
-    return outSubmissionToken.valid();
+    outSubmissionToken = terminalToken;
+    return true;
 }
 
 bool SubmitGraphOwnedSetupUpload(
@@ -600,7 +673,8 @@ bool GraphicsRuntime::submitStandaloneTaskGraph(
     const StandaloneTaskGraphDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
-    GpuTimingRecorder* const timingRecorder
+    GpuTimingRecorder* const timingRecorder,
+    GpuTimingFrameTransaction* const frameTimingTransaction
 )const{
     outSubmissionToken = {};
     if(!declareTask)
@@ -614,7 +688,8 @@ bool GraphicsRuntime::submitStandaloneTaskGraph(
         outSubmissionToken,
         requiredTerminalQueue,
         &m_cpuScheduler,
-        timingRecorder
+        timingRecorder,
+        frameTimingTransaction
     );
 }
 

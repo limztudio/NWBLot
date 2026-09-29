@@ -268,7 +268,10 @@ struct GpuRendererState final : NoCopy{
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer);
-    [[nodiscard]] Core::GpuTaskId declareStandalone(Core::GpuTaskGraph& graph);
+    [[nodiscard]] Core::GpuTaskId declareStandalone(
+        Core::GpuTaskGraph& graph,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction
+    );
 
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
@@ -290,6 +293,7 @@ struct GpuRendererState final : NoCopy{
     GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     u32 m_width = 0u;
     u32 m_height = 0u;
+    bool m_frameTimingScopePrepared = false;
     bool m_claimed = false;
     bool m_readyToDeclare = false;
 };

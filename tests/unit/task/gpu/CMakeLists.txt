@@ -60,6 +60,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_version_test_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_state_texture_subresource_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_storage_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_standalone_timing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_submission_binding_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_submission_validation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_terminal_dependency_tests.cpp"

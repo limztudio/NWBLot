@@ -3,8 +3,10 @@
 
 
 #include "renderer_internal.h"
+#include "renderer_frame_timing_task.h"
 
 #include <core/common/log.h>
+#include <core/task/gpu/frame_timing_begin_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,18 +24,9 @@ namespace __hidden_ui_gpu_standalone{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PresentationTailTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::None, true };
-    struct Payload{};
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commands,
-        const Core::GpuTaskRecordContext& context){
-        static_cast<void>(payload);
-        static_cast<void>(context);
-        return !commands.commandRecordingFailed();
-    }
+struct StandaloneDeclarationContext{
+    GpuRendererState& state;
+    Core::GpuTimingFrameTransaction& frameTimingTransaction;
 };
 
 
@@ -46,9 +39,30 @@ struct PresentationTailTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph){
+Core::GpuTaskId GpuRendererState::declareStandalone(
+    Core::GpuTaskGraph& graph,
+    Core::GpuTimingFrameTransaction& frameTimingTransaction
+){
+    if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
+        return {};
+    Core::GpuTaskSchedulingHint beginScheduling;
+    beginScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    beginScheduling.forceSubmissionBoundary = true;
+    beginScheduling.allowPacketMerge = false;
+    const Core::GpuTaskId begin = graph.addTask<Core::FrameTimingBeginGraphTask>(
+        Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_begin")).setMarkerLabel("UI Frame Timing Begin")
+            .setScheduling(beginScheduling)
+            .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
+        Core::FrameTimingBeginGraphTask::Payload{
+            .frameTimingTransaction = &frameTimingTransaction,
+            .device = &m_graphics.getDevice(),
+            .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{},
+        }
+    );
+    if(!begin.valid() || !graph.setNormalExecutionPrelude(begin))
+        return {};
     Core::GpuTaskGraphOutputLayer layer;
-    if(!declare(graph, layer) || !layer.color.valid() || !m_pending)
+    if(!declare(graph, layer) || !layer.color.valid())
         return {};
     const GpuFrame frame = m_pending;
     const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(
@@ -86,25 +100,26 @@ Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph){
     );
     if(!output.valid())
         return {};
-    Core::GpuTaskId terminal = output;
+    Core::GpuTaskId timingEndDependency = output;
     if(m_presentationContributor && m_presentationContributor->hasTaskGraphPresentationWork()){
-        const Core::GpuTaskId contribution = m_presentationContributor->declareTaskGraphPresentation(
+        timingEndDependency = m_presentationContributor->declareTaskGraphPresentation(
             graph, frame->m_acquired, backBuffer, output
         );
-        if(!contribution.valid())
+        if(!timingEndDependency.valid())
             return {};
-        Core::GpuTaskSchedulingHint terminalScheduling;
-        terminalScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        terminalScheduling.overlapPreferred = false;
-        terminalScheduling.avoidQueueCrossing = true;
-        terminalScheduling.forceSubmissionBoundary = true;
-        terminalScheduling.allowPacketMerge = false;
-        terminal = graph.addTask<__hidden_ui_gpu_standalone::PresentationTailTask>(
-            Core::GpuTaskDesc().setIdentity(Name("ui.presentation_tail")).setMarkerLabel("UI Presentation Tail")
-                .setScheduling(terminalScheduling).setDependencies(&contribution, 1u),
-            __hidden_ui_gpu_standalone::PresentationTailTask::Payload{}
-        );
     }
+    Core::GpuTaskSchedulingHint timingEndScheduling;
+    timingEndScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    timingEndScheduling.overlapPreferred = false;
+    timingEndScheduling.avoidQueueCrossing = true;
+    timingEndScheduling.forceSubmissionBoundary = true;
+    timingEndScheduling.allowPacketMerge = false;
+    const Core::GpuTaskId terminal = graph.addTask<GpuFrameTimingEndTask>(
+        Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_end")).setMarkerLabel("UI Frame Timing End")
+            .setScheduling(timingEndScheduling).setDependencies(&timingEndDependency, 1u)
+            .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
+        GpuFrameTimingEndTask::Payload{ &frameTimingTransaction }
+    );
     if(!terminal.valid() || !graph.declarePresentEndpoint({ terminal, backBuffer }))
         return {};
     return terminal;
@@ -142,15 +157,19 @@ bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame)
     if(!queue.valid())
         return false;
     const GpuFrame pending = m_state->m_pending;
+    Core::GpuTimingFrameTransaction frameTimingTransaction(m_state->m_graphics.gpuTiming());
+    __hidden_ui_gpu_standalone::StandaloneDeclarationContext declarationContext{ *m_state, frameTimingTransaction };
     Core::QueueSubmissionToken submission;
     const bool submitted = m_state->m_graphics.submitStandaloneTaskGraph(
-        m_state.get(),
+        &declarationContext,
         [](void* context, Core::GpuTaskGraph& graph){
-            return static_cast<GpuRendererState*>(context)->declareStandalone(graph);
+            auto& declaration = *static_cast<__hidden_ui_gpu_standalone::StandaloneDeclarationContext*>(context);
+            return declaration.state.declareStandalone(graph, declaration.frameTimingTransaction);
         },
         submission,
         queue,
-        &m_state->m_graphics.gpuTiming()
+        &m_state->m_graphics.gpuTiming(),
+        &frameTimingTransaction
     );
     m_state->m_presentationContributor = nullptr;
     if(pending->m_finalConsumer.valid())

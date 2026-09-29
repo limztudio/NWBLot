@@ -74,6 +74,12 @@ public:
 
 public:
     void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode);
+    // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
+    void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin);
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selectedSkin()const{ return m_skinSelection.selected(); }
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const{ return m_skinSelection.requestedChange(); }
+    [[nodiscard]] bool skinRequestPending()const{ return m_skinSelection.changePending(); }
+    [[nodiscard]] bool skinRequestFailed()const{ return m_skinSelection.changeFailed(); }
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
@@ -134,7 +140,6 @@ private:
     u8 m_pointerOwner = 0u;
     bool m_blockNativeChars = false;
     u64 m_frameGeneration = 0u;
-    u64 m_skinGeneration = 1u;
     u32 m_width = 0u;
     u32 m_height = 0u;
     bool m_resourcesReady = false;

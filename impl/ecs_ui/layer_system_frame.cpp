@@ -24,6 +24,23 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
     m_frameDelta.add(delta);
     synchronizeInput();
+    const UiSkinChangeResult::Enum skinChange = m_skinSelection.applyChangeIfReady(
+        m_resourcesReady,
+        m_renderer.hasPendingFrame(),
+        m_context.ready(),
+        [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
+            UniquePtr<Core::Assets::IAsset> candidateAsset;
+            const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
+                ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
+            );
+            if(!skin || !m_renderer.setSkin(ref, *skin, generation))
+                return false;
+            m_skinAsset = Move(candidateAsset);
+            return true;
+        }
+    );
+    if(skinChange == UiSkinChangeResult::Failed)
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
         return;
     if(m_frameGeneration == Limit<u64>::s_Max)
@@ -42,7 +59,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     m_paint.begin(
         m_display,
         m_frameGeneration,
-        m_skinGeneration,
+        m_skinSelection.generation(),
         m_skinSelection.selected(),
         *skin
     );

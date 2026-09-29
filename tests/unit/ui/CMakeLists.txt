@@ -1,5 +1,7 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/image_source_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/image_loader_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/image_layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/image_builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/progress_layout_tests.cpp"
@@ -123,7 +125,7 @@ target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_font_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_baked_tests.cpp"
 )
-target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb::harfbuzz)
+target_link_libraries(nwb_ui_tests PRIVATE nwb_ui_images nwb_ui_edit nwb_ui_widgets nwb_ui nwb_ui_text nwb::harfbuzz)
 target_compile_definitions(nwb_ui_tests PRIVATE
     NWB_TEST_FONT_DIRECTORY="${CMAKE_SOURCE_DIR}/impl/assets/ui/fonts/default"
 )

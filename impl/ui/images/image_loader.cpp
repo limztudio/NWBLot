@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "image_loader.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SharedImageSource LoadImageSource(
+    Core::Alloc::GlobalArena& arena,
+    const Core::Assets::AssetManager& assets,
+    const Core::Assets::AssetRef<Texture>& identity){
+    if(!identity.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: texture asset reference is empty"));
+        return {};
+    }
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    const Texture* texture = assets.loadTypedSync<Texture>(
+        identity.name(),
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("LoadImageSource")),
+        MakeNotNull("texture")
+    );
+    if(!texture)
+        return {};
+    if(texture->virtualPath() != identity.name()){
+        NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: loaded texture identity does not match the requested asset"));
+        return {};
+    }
+    return MakeImageSource(arena, *texture);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

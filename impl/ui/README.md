@@ -80,6 +80,8 @@ text service and loaded skin; neither CPU type knows ECS, native windows or ImGu
 `nwb_ui_widgets` contains the builder and control painting, while `nwb_ui` owns ID/state/layout/input.
 The same UI arena outlives these objects, text/font pages and every frozen draw snapshot.
 
+`Builder::setSkin()` applies a version-2 skin's 17 linear RGBA palette roles to the shipped widget color fields. It leaves font sizes, spacing, region names and other style metrics alone. A version-1 skin restores the original widget color defaults, including when selected after a version-2 skin. The ECS host resets and binds its selected skin before calling the application each frame, so application style overrides made inside that callback still take precedence for that frame.
+
 A host begins a uniquely numbered frame and a generational `WidgetRoot`, then declares controls:
 
 ```cpp

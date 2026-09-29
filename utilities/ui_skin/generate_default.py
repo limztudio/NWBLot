@@ -66,6 +66,27 @@ ICONS = [
     ("white", "white"),
 ]
 
+# Linear RGB and straight alpha, in UiSkinColorRole order. Default values preserve the legacy widget styles.
+COLOR_ROLES = [
+    {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
+    {"name": "text.disabled", "rgba": [0.48, 0.50, 0.55, 1.0]},
+    {"name": "text.tooltip", "rgba": [1.0, 1.0, 1.0, 1.0]},
+    {"name": "edit.background", "rgba": [0.08, 0.10, 0.14, 1.0]},
+    {"name": "edit.selection", "rgba": [0.20, 0.40, 0.78, 0.75]},
+    {"name": "edit.inactive_selection", "rgba": [0.28, 0.31, 0.38, 0.55]},
+    {"name": "edit.caret", "rgba": [0.95, 0.97, 1.0, 1.0]},
+    {"name": "edit.preedit", "rgba": [0.50, 0.72, 1.0, 1.0]},
+    {"name": "scrollbar.track", "rgba": [0.08, 0.10, 0.14, 1.0]},
+    {"name": "scrollbar.thumb", "rgba": [0.35, 0.40, 0.48, 1.0]},
+    {"name": "scrollbar.disabled", "rgba": [0.25, 0.28, 0.32, 1.0]},
+    {"name": "popup.backdrop", "rgba": [0.0, 0.0, 0.0, 0.4]},
+    {"name": "control.hover_tint", "rgba": [1.08, 1.08, 1.08, 1.0]},
+    {"name": "control.pressed_tint", "rgba": [0.85, 0.85, 0.85, 1.0]},
+    {"name": "control.disabled_tint", "rgba": [0.55, 0.55, 0.55, 0.6]},
+    {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
+    {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
+]
+
 
 def rounded_distance(x: float, y: float, radius: float = 5.0) -> float:
     half = REGION_SIZE / 2
@@ -157,12 +178,14 @@ def generate(directory: Path) -> None:
             alias.update(padding=[8.0, 6.0, 8.0, 6.0], minimum_size=[12.0, 12.0])
         regions.append(alias)
     lines = [
-        "ui_skin asset;", "", "asset.schema_version = 1;",
+        "ui_skin asset;", "", "asset.schema_version = 2;",
         'asset.texture = "engine/ui/skins/default/texture";',
         f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];",
         "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = [",
     ]
     lines.extend("    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions)
+    lines.extend(["];", "asset.colors = ["])
+    lines.extend("    " + json.dumps(color, separators=(", ", ": ")) + "," for color in COLOR_ROLES)
     lines.extend(["];", ""])
     (directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))
 

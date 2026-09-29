@@ -30,6 +30,7 @@ namespace __hidden_ui_skin_runtime{
 
 
 NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_UiSkinAssetCodecAutoRegistrar, UiSkinAssetCodec);
+static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColorCount, "UI skin palette layout drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +97,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         MakeNotNull(NWB_TEXT("UI skin"))
     ))
         return false;
-    if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
+    if(header.version != UiSkinBinaryPayload::s_UiSkinVersion && header.version != UiSkinBinaryPayload::s_UiSkinPaletteVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
     }
@@ -139,6 +140,18 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         region.minimumHeight = packed.minimumHeight;
         region.drawMode = static_cast<UiSkinDrawMode::Enum>(packed.drawMode);
         candidate.m_regions.push_back(region);
+    }
+    if(header.version == UiSkinBinaryPayload::s_UiSkinPaletteVersion){
+        UiSkinPalette palette;
+        for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
+            UiSkinBinaryPayload::ColorBinary packed;
+            if(!ReadPOD(binary, cursor, packed)){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
+                return false;
+            }
+            palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
+        }
+        candidate.setPalette(palette);
     }
     if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("UiSkin::loadBinary"))))
         return false;
@@ -183,6 +196,20 @@ bool UiSkin::validatePayload()const{
             }
         }
     }
+    if(m_hasPalette){
+        for(usize index = 0u; index < m_palette.colors.size(); ++index){
+            const UiSkinColor& color = m_palette.colors[index];
+            if(
+                !IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f
+                || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f
+                || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f
+                || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
+                return false;
+            }
+        }
+    }
     return true;
 }
 
@@ -211,6 +238,8 @@ void UiSkin::setAtlas(
     m_atlasHeight = height;
     m_referenceDensity = referenceDensity;
     m_regions = Move(regions);
+    m_palette = {};
+    m_hasPalette = false;
 }
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const{

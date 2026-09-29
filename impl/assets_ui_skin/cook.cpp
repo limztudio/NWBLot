@@ -38,8 +38,15 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
+    if(skin.hasPalette() && !AddBinaryRepeatedReserveBytes(
+        reserveBytes, UiSkinColorRole::Count, sizeof(UiSkinBinaryPayload::ColorBinary)
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
+        return false;
+    }
 
     UiSkinBinaryPayload::HeaderBinary header;
+    header.version = skin.hasPalette() ? UiSkinBinaryPayload::s_UiSkinPaletteVersion : UiSkinBinaryPayload::s_UiSkinVersion;
     header.textureNameHash = skin.texture().name().hash();
     header.atlasWidth = skin.atlasWidth();
     header.atlasHeight = skin.atlasHeight();
@@ -69,6 +76,16 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         packed.drawMode = static_cast<u32>(region.drawMode);
         AppendPOD(outBinary, packed);
     }
+    if(skin.hasPalette()){
+        for(const UiSkinColor& color : skin.palette().colors){
+            UiSkinBinaryPayload::ColorBinary packed;
+            packed.r = color.r;
+            packed.g = color.g;
+            packed.b = color.b;
+            packed.a = color.a;
+            AppendPOD(outBinary, packed);
+        }
+    }
     return true;
 }
 
@@ -84,6 +101,8 @@ bool BuildUiSkinAsset(const UiSkinCookEntry& entry, UiSkin& outSkin){
     UiSkin candidate(entry.arena, entry.virtualPath);
     UiSkin::RegionVector regions(entry.regions.begin(), entry.regions.end(), entry.arena);
     candidate.setAtlas(entry.texture, entry.atlasWidth, entry.atlasHeight, entry.referenceDensity, Move(regions));
+    if(entry.hasPalette)
+        candidate.setPalette(entry.palette);
     if(!candidate.validatePayload() || (entry.completeToolkitSkin && !ValidateUiSkinToolkitContract(candidate)))
         return false;
     outSkin = Move(candidate);

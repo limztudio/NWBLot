@@ -35,6 +35,8 @@ struct UiSkinCookEntry{
     u32 atlasHeight = 0u;
     f32 referenceDensity = 1.0f;
     bool completeToolkitSkin = false;
+    UiSkinPalette palette;
+    bool hasPalette = false;
 
 
     explicit UiSkinCookEntry(Core::Assets::AssetArena& memoryArena)

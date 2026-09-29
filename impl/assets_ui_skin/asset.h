@@ -63,6 +63,40 @@ struct UiSkinRegion{
     UiSkinDrawMode::Enum drawMode = UiSkinDrawMode::Sprite;
 };
 
+namespace UiSkinColorRole{
+    enum Enum : u8{
+        TextNormal,
+        TextDisabled,
+        TextTooltip,
+        EditBackground,
+        EditSelection,
+        EditInactiveSelection,
+        EditCaret,
+        EditPreedit,
+        ScrollbarTrack,
+        ScrollbarThumb,
+        ScrollbarDisabled,
+        PopupBackdrop,
+        ControlHoverTint,
+        ControlPressedTint,
+        ControlDisabledTint,
+        ProgressTrackTint,
+        ProgressFillTint,
+        Count,
+    };
+};
+
+struct UiSkinColor{
+    f32 r = 0.0f;
+    f32 g = 0.0f;
+    f32 b = 0.0f;
+    f32 a = 0.0f;
+};
+
+struct UiSkinPalette{
+    Array<UiSkinColor, UiSkinColorRole::Count> colors{};
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,6 +126,7 @@ public:
     [[nodiscard]] bool validateTexture(const Texture& texture)const;
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
+    void setPalette(const UiSkinPalette& palette){ m_palette = palette; m_hasPalette = true; }
 
 
 public:
@@ -100,6 +135,8 @@ public:
     [[nodiscard]] u32 atlasHeight()const{ return m_atlasHeight; }
     [[nodiscard]] f32 referenceDensity()const{ return m_referenceDensity; }
     [[nodiscard]] const RegionVector& regions()const{ return m_regions; }
+    [[nodiscard]] bool hasPalette()const{ return m_hasPalette; }
+    [[nodiscard]] const UiSkinPalette& palette()const{ return m_palette; }
     [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const;
 
 
@@ -109,6 +146,8 @@ private:
     u32 m_atlasWidth = 0u;
     u32 m_atlasHeight = 0u;
     f32 m_referenceDensity = 1.0f;
+    UiSkinPalette m_palette;
+    bool m_hasPalette = false;
 };
 
 

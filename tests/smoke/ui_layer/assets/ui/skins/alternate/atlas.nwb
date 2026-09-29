@@ -1,16 +1,11 @@
 ui_skin asset;
 
-asset.schema_version = 1;
+asset.schema_version = 2;
 asset.texture = "project/ui/skins/alternate/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
 asset.toolkit_contract = "widgets_v1";
 asset.regions = [
-    {"name": "list.background", "rect": [228, 68, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
-    {"name": "list.row.normal", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
-    {"name": "list.row.disabled", "rect": [4, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
-    {"name": "scroll.track", "rect": [196, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
-    {"name": "scroll.thumb", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
     {"name": "separator", "rect": [4, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "focus.overlay", "rect": [36, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "progress.fill", "rect": [68, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
@@ -52,9 +47,33 @@ asset.regions = [
     {"name": "combo.arrow", "rect": [196, 132, 24, 24]},
     {"name": "radio.mark", "rect": [228, 132, 24, 24]},
     {"name": "checkbox.mark", "rect": [4, 164, 24, 24]},
+    {"name": "list.background", "rect": [228, 68, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
+    {"name": "list.row.normal", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "list.row.disabled", "rect": [4, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "scroll.track", "rect": [196, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "scroll.thumb", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
     {"name": "combo.normal", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 6.0, 8.0, 6.0], "minimum_size": [12.0, 12.0]},
     {"name": "combo.hover", "rect": [68, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 6.0, 8.0, 6.0], "minimum_size": [12.0, 12.0]},
     {"name": "combo.open", "rect": [36, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 6.0, 8.0, 6.0], "minimum_size": [12.0, 12.0]},
     {"name": "combo.focused", "rect": [196, 68, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 6.0, 8.0, 6.0], "minimum_size": [12.0, 12.0]},
     {"name": "combo.disabled", "rect": [4, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 6.0, 8.0, 6.0], "minimum_size": [12.0, 12.0]},
+];
+asset.colors = [
+    {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
+    {"name": "text.disabled", "rgba": [0.48, 0.5, 0.55, 1.0]},
+    {"name": "text.tooltip", "rgba": [1.0, 0.58, 0.26, 1.0]},
+    {"name": "edit.background", "rgba": [0.08, 0.1, 0.14, 1.0]},
+    {"name": "edit.selection", "rgba": [0.2, 0.4, 0.78, 0.75]},
+    {"name": "edit.inactive_selection", "rgba": [0.28, 0.31, 0.38, 0.55]},
+    {"name": "edit.caret", "rgba": [0.95, 0.97, 1.0, 1.0]},
+    {"name": "edit.preedit", "rgba": [0.5, 0.72, 1.0, 1.0]},
+    {"name": "scrollbar.track", "rgba": [0.08, 0.1, 0.14, 1.0]},
+    {"name": "scrollbar.thumb", "rgba": [0.35, 0.4, 0.48, 1.0]},
+    {"name": "scrollbar.disabled", "rgba": [0.25, 0.28, 0.32, 1.0]},
+    {"name": "popup.backdrop", "rgba": [0.0, 0.0, 0.0, 0.4]},
+    {"name": "control.hover_tint", "rgba": [1.08, 1.08, 1.08, 1.0]},
+    {"name": "control.pressed_tint", "rgba": [0.85, 0.85, 0.85, 1.0]},
+    {"name": "control.disabled_tint", "rgba": [0.55, 0.55, 0.55, 0.6]},
+    {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
+    {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
 ];

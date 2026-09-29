@@ -58,6 +58,13 @@ static constexpr AStringView s_Metadata =
     "  { \"name\": \"combo.arrow\", \"rect\": [28, 4, 12, 8] },\r\n"
     "];\r\n"
 ;
+static constexpr AStringView s_PaletteRoleNames[] = {
+    "text.normal", "text.disabled", "text.tooltip", "edit.background", "edit.selection",
+    "edit.inactive_selection", "edit.caret", "edit.preedit", "scrollbar.track", "scrollbar.thumb",
+    "scrollbar.disabled", "popup.backdrop", "control.hover_tint", "control.pressed_tint",
+    "control.disabled_tint", "progress.track_tint", "progress.fill_tint",
+};
+static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin palette role fixture drifted");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,6 +116,41 @@ static constexpr AStringView s_Metadata =
     return region;
 }
 
+[[nodiscard]] static TestAString PaletteMetadata(const u32 variant = 0u){
+    TestAString metadata(s_Metadata);
+    metadata.append("asset.schema_version = 2;\r\n");
+    if(variant == 1u)
+        return metadata;
+    metadata.append("asset.colors = [\r\n");
+    const usize count = variant == 2u ? UiSkinColorRole::Count - 1u : UiSkinColorRole::Count;
+    for(usize index = 0u; index < count; ++index){
+        const AStringView name = variant == 3u && index == count - 1u
+            ? s_PaletteRoleNames[0u]
+            : variant == 4u && index == count - 1u ? AStringView("unknown.role") : s_PaletteRoleNames[index];
+        metadata.append("  { \"name\": \"");
+        metadata.append(name);
+        metadata.append("\", \"rgba\": ");
+        metadata.append(variant == 5u && index == 0u
+            ? "[16.1, 0.5, 0.75, 1.0]"
+            : variant == 6u && index == 0u ? "[0.25, 0.5, 0.75, 1.1]"
+            : index == UiSkinColorRole::ControlHoverTint ? "[1.08, 1.08, 1.08, 1.0]" : "[0.25, 0.5, 0.75, 1.0]");
+        metadata.append(" },\r\n");
+    }
+    metadata.append("];\r\n");
+    return metadata;
+}
+
+[[nodiscard]] static Core::Assets::AssetBytes MakePaletteBinary(
+    SkinTestArena& testArena,
+    const UiSkinBinaryPayload::ColorBinary& color){
+    UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+    header.version = UiSkinBinaryPayload::s_UiSkinPaletteVersion;
+    Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
+    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index)
+        AppendPOD(binary, color);
+    return binary;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -122,15 +164,21 @@ TEST(AssetsUiSkin, CookAndCodecRoundTripPreservesAtlasAndMetrics){
     EXPECT_EQ(entry.virtualPath, Name("project/ui/atlas"));
     UiSkin skin(testArena.arena);
     ASSERT_TRUE(BuildUiSkinAsset(entry, skin));
+    EXPECT_FALSE(skin.hasPalette());
 
     UiSkinAssetCodec codec;
     Core::Assets::AssetBytes binary(testArena.arena);
     ASSERT_TRUE(codec.serialize(skin, binary));
     EXPECT_EQ(binary.size(), sizeof(UiSkinBinaryPayload::HeaderBinary) + 2u * sizeof(UiSkinBinaryPayload::RegionBinary));
+    UiSkinBinaryPayload::HeaderBinary serializedHeader;
+    usize cursor = 0u;
+    ASSERT_TRUE(ReadPOD(binary, cursor, serializedHeader));
+    EXPECT_EQ(serializedHeader.version, UiSkinBinaryPayload::s_UiSkinVersion);
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     ASSERT_TRUE(codec.deserialize(testArena.arena, skin.virtualPath(), binary, loadedAsset));
     const UiSkin* loaded = Core::Assets::CastAsset<UiSkin>(loadedAsset.get());
     ASSERT_NE(loaded, nullptr);
+    EXPECT_FALSE(loaded->hasPalette());
     EXPECT_EQ(loaded->texture().name(), Name("project/ui/texture"));
     EXPECT_EQ(loaded->atlasWidth(), 64u);
     EXPECT_EQ(loaded->atlasHeight(), 32u);
@@ -161,6 +209,102 @@ TEST(AssetsUiSkin, CookAndCodecRoundTripPreservesAtlasAndMetrics){
     EXPECT_FLOAT_EQ(arrow->padding.left, 0.0f);
     EXPECT_FLOAT_EQ(arrow->minimumWidth, 0.0f);
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsUiSkin, PaletteVersionTwoCooksAndRoundTripsAllRoles){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    UiSkinCookEntry entry(testArena.arena);
+    ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
+    ASSERT_TRUE(entry.hasPalette);
+    UiSkin skin(testArena.arena);
+    ASSERT_TRUE(BuildUiSkinAsset(entry, skin));
+    ASSERT_TRUE(skin.hasPalette());
+
+    UiSkinAssetCodec codec;
+    Core::Assets::AssetBytes binary(testArena.arena);
+    ASSERT_TRUE(codec.serialize(skin, binary));
+    EXPECT_EQ(binary.size(), sizeof(UiSkinBinaryPayload::HeaderBinary)
+        + 2u * sizeof(UiSkinBinaryPayload::RegionBinary)
+        + UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary));
+    UiSkinBinaryPayload::HeaderBinary header;
+    usize cursor = 0u;
+    ASSERT_TRUE(ReadPOD(binary, cursor, header));
+    EXPECT_EQ(header.version, UiSkinBinaryPayload::s_UiSkinPaletteVersion);
+    UiSkin loaded(testArena.arena, skin.virtualPath());
+    ASSERT_TRUE(loaded.loadBinary(binary));
+    ASSERT_TRUE(loaded.hasPalette());
+    ASSERT_EQ(loaded.regions().size(), 2u);
+    for(usize index = 0u; index < UiSkinColorRole::Count; ++index){
+        const UiSkinColor& color = loaded.palette().colors[index];
+        EXPECT_FLOAT_EQ(color.r, index == UiSkinColorRole::ControlHoverTint ? 1.08f : 0.25f);
+        EXPECT_FLOAT_EQ(color.g, index == UiSkinColorRole::ControlHoverTint ? 1.08f : 0.5f);
+        EXPECT_FLOAT_EQ(color.b, index == UiSkinColorRole::ControlHoverTint ? 1.08f : 0.75f);
+        EXPECT_FLOAT_EQ(color.a, 1.0f);
+    }
+    UiSkin::RegionVector replacementRegions(loaded.regions().begin(), loaded.regions().end(), testArena.arena);
+    loaded.setAtlas(loaded.texture(), loaded.atlasWidth(), loaded.atlasHeight(), loaded.referenceDensity(), Move(replacementRegions));
+    EXPECT_FALSE(loaded.hasPalette());
+    ASSERT_TRUE(codec.serialize(loaded, binary));
+    cursor = 0u;
+    ASSERT_TRUE(ReadPOD(binary, cursor, header));
+    EXPECT_EQ(header.version, UiSkinBinaryPayload::s_UiSkinVersion);
+    EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsUiSkin, PaletteVersionTwoRejectsMalformedFooterWithoutReplacingSkin){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    UiSkinBinaryPayload::ColorBinary color;
+    color.r = 0.25f;
+    color.g = 0.5f;
+    color.b = 0.75f;
+    color.a = 1.0f;
+    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    ASSERT_TRUE(skin.loadBinary(MakePaletteBinary(testArena, color)));
+
+    for(u32 variant = 0u; variant < 6u; ++variant){
+        UiSkinBinaryPayload::ColorBinary candidateColor = color;
+        if(variant == 2u)
+            candidateColor.r = Limit<f32>::s_QuietNaN;
+        if(variant == 3u)
+            candidateColor.g = -0.1f;
+        if(variant == 4u)
+            candidateColor.b = 16.1f;
+        if(variant == 5u)
+            candidateColor.a = 1.1f;
+        Core::Assets::AssetBytes binary = MakePaletteBinary(testArena, candidateColor);
+        if(variant == 0u)
+            binary.pop_back();
+        if(variant == 1u)
+            binary.push_back(0u);
+        EXPECT_FALSE(skin.loadBinary(binary)) << variant;
+        ASSERT_TRUE(skin.hasPalette());
+        ASSERT_EQ(skin.regions().size(), 1u);
+        EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
+        EXPECT_FLOAT_EQ(skin.palette().colors[UiSkinColorRole::TextNormal].r, 0.25f);
+    }
+}
+
+TEST(AssetsUiSkin, PaletteMetadataRequiresEveryKnownRoleAndValidRgba){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    UiSkinCookEntry entry(testArena.arena);
+    ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
+    ASSERT_TRUE(entry.hasPalette);
+    for(u32 variant = 1u; variant <= 6u; ++variant){
+        EXPECT_FALSE(ParseMetadata(testArena, PaletteMetadata(variant), entry)) << variant;
+        EXPECT_TRUE(entry.hasPalette);
+        EXPECT_EQ(entry.virtualPath, Name("project/ui/atlas"));
+        EXPECT_FLOAT_EQ(entry.palette.colors[UiSkinColorRole::TextNormal].r, 0.25f);
+    }
+    TestAString legacyWithColors(s_Metadata);
+    legacyWithColors.append("asset.colors = [];\r\n");
+    EXPECT_FALSE(ParseMetadata(testArena, legacyWithColors, entry));
+    EXPECT_TRUE(entry.hasPalette);
 }
 
 TEST(AssetsUiSkin, RuntimeAndCookRegistrarsProvideTypedAsset){
@@ -262,7 +406,7 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
         UiSkinBinaryPayload::HeaderBinary header = validHeader;
         switch(variant){
         case 0u: header.magic = 0u; break;
-        case 1u: header.version = 2u; break;
+        case 1u: header.version = 3u; break;
         case 2u: header.reserved0 = 1u; break;
         case 3u: header.reserved1 = 1u; break;
         case 4u: header.regionCount = 0u; break;
@@ -367,7 +511,7 @@ TEST(AssetsUiSkin, CookRejectsUnsupportedSchemaUnknownFieldsAndMalformedArrays){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
     static constexpr AStringView s_Overrides[] = {
-        "asset.schema_version = 2;\r\n",
+        "asset.schema_version = 3;\r\n",
         "asset.unknown_field = 1;\r\n",
         "asset.texture = \"\";\r\n",
         "asset.atlas_extent = [64];\r\n",

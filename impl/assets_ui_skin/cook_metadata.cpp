@@ -38,6 +38,13 @@ static constexpr Core::Assets::NamedEnumCase<UiSkinDrawMode::Enum> s_DrawModeCas
     { "sprite", UiSkinDrawMode::Sprite },
     { "nine_slice", UiSkinDrawMode::NineSlice },
 };
+static constexpr AStringView s_ColorNames[] = {
+    "text.normal", "text.disabled", "text.tooltip", "edit.background", "edit.selection",
+    "edit.inactive_selection", "edit.caret", "edit.preedit", "scrollbar.track", "scrollbar.thumb",
+    "scrollbar.disabled", "popup.backdrop", "control.hover_tint", "control.pressed_tint",
+    "control.disabled_tint", "progress.track_tint", "progress.fill_tint",
+};
+static_assert(LengthOf(s_ColorNames) == UiSkinColorRole::Count, "UI skin color names must match palette roles");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -150,6 +157,70 @@ template<usize Count>
     return true;
 }
 
+[[nodiscard]] static bool ParsePalette(const Path& path, const Value& asset, UiSkinPalette& outPalette){
+    const Value* colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, "colors");
+    if(!colors)
+        return false;
+    if(colors->asList().size() != UiSkinColorRole::Count){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(path)
+            , static_cast<u32>(UiSkinColorRole::Count)
+        );
+        return false;
+    }
+
+    Array<bool, UiSkinColorRole::Count> seen{};
+    for(const Value& value : colors->asList()){
+        if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix)
+            || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { "name", "rgba" }))
+            return false;
+        AStringView name;
+        if(!Core::Assets::ReadMetadataStringField(path, value, s_DiagnosticPrefix, "name", true, name))
+            return false;
+        usize role = UiSkinColorRole::Count;
+        for(usize index = 0u; index < UiSkinColorRole::Count; ++index){
+            if(name == s_ColorNames[index]){
+                role = index;
+                break;
+            }
+        }
+        if(role == UiSkinColorRole::Count || seen[role]){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unknown or duplicate palette role '{}'")
+                , StringConvert(s_DiagnosticPrefix)
+                , PathToString<tchar>(path)
+                , StringConvert(name)
+            );
+            return false;
+        }
+        const Value* rgba = FindField(value, "rgba");
+        if(!rgba || !rgba->isList() || rgba->asList().size() != 4u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components")
+                , StringConvert(s_DiagnosticPrefix)
+                , PathToString<tchar>(path)
+                , StringConvert(name)
+            );
+            return false;
+        }
+        f32 components[4u] = {};
+        for(usize index = 0u; index < 4u; ++index){
+            if(!Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_DiagnosticPrefix, "rgba", components[index]))
+                return false;
+            if(components[index] < 0.0f || components[index] > (index == 3u ? 1.0f : 16.0f)){
+                NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]")
+                    , StringConvert(s_DiagnosticPrefix)
+                    , PathToString<tchar>(path)
+                    , StringConvert(name)
+                );
+                return false;
+            }
+        }
+        outPalette.colors[role] = { components[0u], components[1u], components[2u], components[3u] };
+        seen[role] = true;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -177,19 +248,33 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions" }
+        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions", "colors" }
     ))
         return false;
 
     const Value* schema = FindField(asset, "schema_version");
     u32 schemaVersion = 0u;
-    if(!schema || !ReadU32Value(nwbFilePath, *schema, "schema_version", schemaVersion) || schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}")
+    if(!schema || !ReadU32Value(nwbFilePath, *schema, "schema_version", schemaVersion)
+        || (schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion && schemaVersion != UiSkinBinaryPayload::s_UiSkinPaletteVersion)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {} or {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , UiSkinBinaryPayload::s_UiSkinVersion
+            , UiSkinBinaryPayload::s_UiSkinPaletteVersion
         );
         return false;
+    }
+    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinVersion && FindField(asset, "colors")){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': version-1 skins cannot contain colors")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinPaletteVersion){
+        if(!ParsePalette(nwbFilePath, asset, parsed.palette))
+            return false;
+        parsed.hasPalette = true;
     }
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena))
         return false;
@@ -256,6 +341,8 @@ bool ParseUiSkinCookMetadata(
     outEntry.atlasHeight = parsed.atlasHeight;
     outEntry.referenceDensity = parsed.referenceDensity;
     outEntry.completeToolkitSkin = parsed.completeToolkitSkin;
+    outEntry.palette = parsed.palette;
+    outEntry.hasPalette = parsed.hasPalette;
     return true;
 }
 

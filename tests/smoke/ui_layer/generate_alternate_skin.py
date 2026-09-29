@@ -35,19 +35,29 @@ def generate(work_directory, output_directory, converter):
     artwork.PANELS = [(name, *PALETTE.get(name, (fill, border))) for name, fill, border in reversed(artwork.PANELS)]
     artwork.ICONS = list(reversed(artwork.ICONS))
     artwork.generate(work_directory)
-    regions = [json.loads(line.strip().rstrip(","))
-        for line in (work_directory / "atlas.nwb").read_text(encoding="utf-8").splitlines()
-        if line.strip().startswith("{")]
+    metadata = (work_directory / "atlas.nwb").read_text(encoding="utf-8")
+    region_lines = metadata.split("asset.regions = [", 1)[1].split("];", 1)[0].splitlines()
+    regions = [json.loads(line.strip().rstrip(",")) for line in region_lines if line.strip().startswith("{")]
+    expected_regions = len(artwork.PANELS) + len(artwork.ICONS) + 10  # Default artwork plus semantic aliases.
+    if (len(regions) != expected_regions or len({region["name"] for region in regions}) != len(regions)
+        or any("rect" not in region for region in regions)):
+        raise ValueError("default skin region catalog changed unexpectedly")
     for region in regions:
         if region["name"] == "window.normal":
             region["padding"] = [6.0, 7.0, 10.0, 5.0]
         elif region["name"] == "window.title":
             region["padding"] = [10.0, 4.0, 6.0, 8.0]
-    lines = ["ui_skin asset;", "", "asset.schema_version = 1;",
+    colors = [dict(color) for color in artwork.COLOR_ROLES]
+    for color in colors:
+        if color["name"] == "text.tooltip":
+            color["rgba"] = [1.0, 0.58, 0.26, 1.0]
+    lines = ["ui_skin asset;", "", "asset.schema_version = 2;",
         'asset.texture = "project/ui/skins/alternate/texture";',
         "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;",
         "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = ["]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
+    lines += ["];", "asset.colors = ["]
+    lines += ["    " + json.dumps(color, separators=(", ", ": ")) + "," for color in colors]
     lines += ["];", ""]
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))

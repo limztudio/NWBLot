@@ -110,6 +110,7 @@ target_sources(nwb_ui_widgets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/builder_separator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/../builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../builder_skin_palette.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../builder_scope.h"
     "${CMAKE_CURRENT_LIST_DIR}/../builder_scope.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/label.h"

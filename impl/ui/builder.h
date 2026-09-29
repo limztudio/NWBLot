@@ -110,7 +110,7 @@ public:
     // Observe accepted input without retaining target pointers across frame publication.
     [[nodiscard]] const InputRouter& input()const{ return m_context.input(); }
     [[nodiscard]] bool failed()const{ return m_context.failed(); }
-    void setSkin(const UiSkin& skin){ if(declarationBlocked()) m_context.fail(); else m_skin = &skin; }
+    void setSkin(const UiSkin& skin);
     [[nodiscard]] WidgetStyle& style(){ if(declarationBlocked()) m_context.fail(); return m_style; }
     [[nodiscard]] ScrollbarStyle& scrollbarStyle(){ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
     [[nodiscard]] EditBoxStyle& editStyle(){ if(declarationBlocked()) m_context.fail(); return m_editStyle; }

@@ -47,6 +47,20 @@ def encoded(value):
     return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
 
 
+def tooltip_ink_coverage(observed, background, foreground):
+    def linear(color):
+        return tuple(channel / 255.0 / 12.92 if channel <= 10 else
+            ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
+
+    actual, backdrop = linear(observed), linear(background)
+    direction = tuple(target - base for target, base in zip(foreground, backdrop))
+    coverage = sum((value - base) * component for value, base, component in zip(actual, backdrop, direction))
+    coverage /= sum(component * component for component in direction)
+    coverage = max(0.0, min(1.0, coverage))
+    expected = linear_rgb_bytes(tuple(base + coverage * component for base, component in zip(backdrop, direction)))
+    return coverage, max(abs(value - target) for value, target in zip(observed, expected))
+
+
 def observe_popup_tools(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -76,6 +90,16 @@ def observe_popup_tools(frame, snapshot, expected, *, extent=None, skin="default
         geometry_matches = geometry_matches and 0.0 < tw <= 320.0 and th > 12.0
         if tw > 20.0 and th > 12.0:
             probe("tooltip_normal_skin", (tx + tw - 12.0, ty + th - 6.0), (39, 48, 61), 8)
+            foreground = (1.0, 0.58, 0.26) if skin == "alternate" else (1.0, 1.0, 1.0)
+            left, top = round((tx + 8.0) * scale_x), round((ty + 8.0) * scale_y)
+            right, bottom = round((tx + tw - 8.0) * scale_x), round((ty + th - 8.0) * scale_y)
+            candidates = [(*tooltip_ink_coverage(rows[y][x], (39, 48, 61), foreground), rows[y][x], x, y)
+                for y in range(max(0, top), min(height, bottom)) for x in range(max(0, left), min(width, right))]
+            passing = [candidate for candidate in candidates if candidate[0] >= 0.45 and candidate[1] <= 12]
+            best = max(passing, default=(0.0, 255, (0, 0, 0), left, top), key=lambda candidate: candidate[0])
+            probes.append({"name": "tooltip_text_palette", "position": [best[3], best[4]],
+                "expected": list(linear_rgb_bytes(foreground)), "observed": list(best[2]),
+                "coverage": best[0], "error": best[1], "passed": bool(passing)})
     if snapshot["open"]:
         mx, my, mw, mh = snapshot["rectangles"]["menu"]
         geometry_matches = geometry_matches and 0.0 <= mx <= logical_width - mw and 0.0 <= my <= logical_height - mh

@@ -113,6 +113,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
             return true;
         const bool matching = model.revision() == event.surroundingModelRevision
             && model.externalRevision() == event.geometryExternalRevision
+            && model.selectionGeneration() == event.surroundingSelectionGeneration
             && model.anchor() == event.surroundingAnchor && model.caret() == event.surroundingCaret
             && (!actions || (m_session.owner() == entry.owner && m_session.token() == event.native.token));
         const auto status = ApplyUiTextEditEvent(model, event.native, event.surroundingRevision, matching);

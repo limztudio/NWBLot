@@ -34,6 +34,7 @@ struct EditBoxState{
     f32 caretElapsed = 0.0f;
     u64 modelGeneration = 0u;
     u64 revision = 0u;
+    u64 selectionGeneration = 0u;
     usize anchor = 0u;
     usize caret = 0u;
     bool focused = false;

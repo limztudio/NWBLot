@@ -60,6 +60,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const u64 queryRevision = search ? search->query().revision() : 0u;
     const u64 queryExternalRevision = search ? search->query().externalRevision() : 0u;
     const u64 queryCompositionGeneration = search ? search->query().compositionGeneration() : 0u;
+    const u64 querySelectionGeneration = search ? search->query().selectionGeneration() : 0u;
     const usize queryAnchor = search ? search->query().anchor() : 0u;
     const usize queryCaret = search ? search->query().caret() : 0u;
     if(!ComboBehavior::Reconcile(state, source)){
@@ -69,6 +70,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     if(
         search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
             || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().selectionGeneration() != querySelectionGeneration
             || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
     ){
         m_context.fail();
@@ -78,6 +80,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         search && (!SearchComboBehavior::Filter(*search, *searchSource) || search->query().revision() != queryRevision
             || search->query().externalRevision() != queryExternalRevision
             || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().selectionGeneration() != querySelectionGeneration
             || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
     ){
         m_context.fail();
@@ -91,6 +94,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     if(
         search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
             || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().selectionGeneration() != querySelectionGeneration
             || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
     ){
         m_context.fail();

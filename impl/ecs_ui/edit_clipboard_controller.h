@@ -76,6 +76,8 @@ private:
     usize m_expectedCaret = 0u;
     u64 m_expectedRevision = 0u;
     u64 m_expectedExternalRevision = 0u;
+    u64 m_expectedSelectionGeneration = 0u;
+    u64 m_expectedCompositionGeneration = 0u;
 };
 
 

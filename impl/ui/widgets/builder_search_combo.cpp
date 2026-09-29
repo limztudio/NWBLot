@@ -88,6 +88,7 @@ void Builder::snapshotComboQuery(ComboFrame& frame){
     frame.queryGeneration = query.instanceGeneration();
     frame.queryRevision = query.revision();
     frame.queryCompositionGeneration = query.compositionGeneration();
+    frame.querySelectionGeneration = query.selectionGeneration();
     frame.queryExternalRevision = query.externalRevision();
     frame.queryAnchor = query.anchor();
     frame.queryCaret = query.caret();

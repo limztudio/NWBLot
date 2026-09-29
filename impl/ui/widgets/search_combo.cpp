@@ -31,6 +31,7 @@ struct QuerySnapshot{
     u64 externalRevision = 0u;
     u64 revision = 0u;
     u64 compositionGeneration = 0u;
+    u64 selectionGeneration = 0u;
     usize anchor = 0u;
     usize caret = 0u;
 };
@@ -55,6 +56,7 @@ struct QuerySnapshot{
     return
         state.query().instanceGeneration() == query.generation && state.query().externalRevision() == query.externalRevision
         && state.query().revision() == query.revision && state.query().compositionGeneration() == query.compositionGeneration
+        && state.query().selectionGeneration() == query.selectionGeneration
         && state.query().anchor() == query.anchor && state.query().caret() == query.caret
         && state.combo().inputGeneration() == comboGeneration
         && state.combo().listState().inputGeneration() == previewGeneration
@@ -84,7 +86,7 @@ SearchComboState::SearchComboState(Core::Alloc::GlobalArena& arena)
 bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSource& source){
     using namespace __hidden_ui_search_combo;
     const QuerySnapshot query{ state.m_query.instanceGeneration(), state.m_query.externalRevision(), state.m_query.revision(),
-        state.m_query.compositionGeneration(), state.m_query.anchor(), state.m_query.caret() };
+        state.m_query.compositionGeneration(), state.m_query.selectionGeneration(), state.m_query.anchor(), state.m_query.caret() };
     const u64 comboGeneration = state.m_combo.inputGeneration();
     const u64 previewGeneration = state.m_combo.listState().inputGeneration();
     const SourceSnapshot full = Snapshot(source);

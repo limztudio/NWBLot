@@ -5,6 +5,7 @@
 #include "edit_clipboard_controller.h"
 
 #include <impl/ui/edit/single_line_text.h>
+#include <impl/ui/edit/multiline_text.h>
 
 #include <global/termination.h>
 
@@ -113,6 +114,8 @@ bool UiEditClipboardController::matchesModel(const Ui::EditModel& model)const{
     const auto composition = model.composition();
     return
         model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision
+        && model.selectionGeneration() == m_expectedSelectionGeneration
+        && model.compositionGeneration() == m_expectedCompositionGeneration
         && model.text() == AStringView(m_expectedText)
         && model.anchor() == m_expectedAnchor && model.caret() == m_expectedCaret
         && composition.active == m_expectedComposition.active && composition.text == AStringView(m_expectedPreedit)
@@ -128,6 +131,8 @@ void UiEditClipboardController::captureModel(const Ui::EditModel& model){
     m_expectedCaret = model.caret();
     m_expectedRevision = model.revision();
     m_expectedExternalRevision = model.externalRevision();
+    m_expectedSelectionGeneration = model.selectionGeneration();
+    m_expectedCompositionGeneration = model.compositionGeneration();
     m_expectedComposition = model.composition();
     m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
     m_expectedComposition.text = {};
@@ -162,9 +167,12 @@ UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& 
         const usize retainedBytes = model.text().size() - (model.selectionEnd() - model.selectionStart());
         if(retainedBytes > model.limits().maxBytes)
             return { UiEditClipboardStatus::TooLarge };
-        const auto status = Ui::NormalizeSingleLineText(
-            AStringView(m_completion.text), m_insertText, model.limits().maxBytes - retainedBytes
-        );
+        const auto source = AStringView(m_completion.text);
+        const usize maxBytes = model.limits().maxBytes - retainedBytes;
+        const auto status = model.textMode() == Ui::EditTextMode::Multiline
+            ? Ui::NormalizeMultilineText(source, m_insertText, maxBytes)
+            : Ui::NormalizeSingleLineText(source, m_insertText, maxBytes)
+        ;
         if(status != Ui::EditTextStatus::Accepted)
             return { status == Ui::EditTextStatus::TooLarge ? UiEditClipboardStatus::TooLarge : UiEditClipboardStatus::InvalidText };
         if(m_insertText.empty())

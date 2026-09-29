@@ -17,8 +17,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace EditTextMode{
+    enum Enum : u8{ SingleLine, Multiline };
+};
+
 namespace EditMove{
-    enum Enum : u8{ Left, Right, Home, End, WordLeft, WordRight };
+    enum Enum : u8{ Left, Right, Home, End, WordLeft, WordRight, DocumentHome, DocumentEnd };
 };
 
 struct EditLimits{
@@ -55,7 +59,7 @@ private:
 
 
 public:
-    explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {});
+    explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {}, EditTextMode::Enum mode = EditTextMode::SingleLine);
 
 
 public:
@@ -64,6 +68,7 @@ public:
     [[nodiscard]] u64 externalRevision()const{ return m_externalRevision; }
     [[nodiscard]] u64 revision()const{ return m_revision; }
     [[nodiscard]] u64 compositionGeneration()const{ return m_compositionGeneration; }
+    [[nodiscard]] u64 selectionGeneration()const{ return m_selectionGeneration; }
     [[nodiscard]] usize anchor()const{ return m_anchor; }
     [[nodiscard]] usize caret()const{ return m_caret; }
     [[nodiscard]] usize selectionStart()const{ return Min(m_anchor, m_caret); }
@@ -72,9 +77,11 @@ public:
     [[nodiscard]] AStringView selectedText()const{ return text().substr(selectionStart(), selectionEnd() - selectionStart()); }
     [[nodiscard]] const Vector<usize, Core::Alloc::GlobalArena>& graphemeBoundaries()const{ return m_boundaries; }
     [[nodiscard]] const EditLimits& limits()const{ return m_limits; }
+    [[nodiscard]] EditTextMode::Enum textMode()const{ return m_textMode; }
     [[nodiscard]] bool setText(AStringView text);
     [[nodiscard]] bool setSelection(usize anchor, usize caret);
     [[nodiscard]] bool selectAll();
+    // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false);
     [[nodiscard]] bool replaceSelection(AStringView text);
@@ -100,10 +107,13 @@ private:
     [[nodiscard]] usize nextBoundary(usize position)const;
     [[nodiscard]] usize wordBoundary(usize position, bool forward)const;
     [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
+    [[nodiscard]] bool validateText(AStringView text)const;
+    [[nodiscard]] bool buildBoundaries(AStringView text, Vector<usize, Core::Alloc::GlobalArena>& output)const;
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret,
         AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory();
     void advanceRevision();
+    void advanceSelectionGeneration();
     void advanceCompositionGeneration();
 
 
@@ -111,6 +121,7 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     const u64 m_instanceGeneration;
     const EditLimits m_limits;
+    const EditTextMode::Enum m_textMode;
     AString<Core::Alloc::GlobalArena> m_text;
     Vector<usize, Core::Alloc::GlobalArena> m_boundaries;
     Vector<HistoryRecord, Core::Alloc::GlobalArena> m_history;
@@ -126,6 +137,7 @@ private:
     u64 m_revision = 1u;
     u64 m_externalRevision = 1u;
     u64 m_compositionGeneration = 1u;
+    u64 m_selectionGeneration = 1u;
     bool m_compositionActive = false;
 };
 

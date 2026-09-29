@@ -31,6 +31,7 @@ struct UiEditModelSnapshot{
     u64 revision = 0u;
     u64 externalRevision = 0u;
     u64 compositionGeneration = 0u;
+    u64 selectionGeneration = 0u;
 
     explicit UiEditModelSnapshot(Core::Alloc::GlobalArena& arena) : text(arena), preedit(arena){}
     void capture(const Ui::EditModel& model);
@@ -89,6 +90,7 @@ private:
         u64 geometryExternalRevision = 0u;
         u64 surroundingRevision = 0u;
         u64 surroundingModelRevision = 0u;
+        u64 surroundingSelectionGeneration = 0u;
         usize surroundingAnchor = 0u;
         usize surroundingCaret = 0u;
         UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Key;

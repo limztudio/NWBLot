@@ -51,6 +51,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(
     m_publishedCaret = model.caret();
     m_publishedModelRevision = model.revision();
     m_publishedExternalRevision = model.externalRevision();
+    m_publishedSelectionGeneration = model.selectionGeneration();
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }
@@ -137,6 +138,8 @@ bool UiTextEditSession::matchesModel(const Ui::EditModel& model)const{
     const auto composition = model.composition();
     return
         model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision
+        && model.selectionGeneration() == m_expectedSelectionGeneration
+        && model.compositionGeneration() == m_expectedCompositionGeneration
         && model.text() == AStringView(m_expectedText)
         && model.anchor() == m_expectedAnchor && model.caret() == m_expectedCaret
         && composition.active == m_expectedComposition.active && composition.text == AStringView(m_expectedPreedit)
@@ -149,6 +152,7 @@ bool UiTextEditSession::matchesModel(const Ui::EditModel& model)const{
 bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const{
     return
         model.revision() == m_publishedModelRevision && model.externalRevision() == m_publishedExternalRevision
+        && model.selectionGeneration() == m_publishedSelectionGeneration
         && model.text() == AStringView(m_publishedText)
         && model.anchor() == m_publishedAnchor && model.caret() == m_publishedCaret
     ;
@@ -160,6 +164,8 @@ void UiTextEditSession::captureModel(const Ui::EditModel& model){
     m_expectedCaret = model.caret();
     m_expectedRevision = model.revision();
     m_expectedExternalRevision = model.externalRevision();
+    m_expectedSelectionGeneration = model.selectionGeneration();
+    m_expectedCompositionGeneration = model.compositionGeneration();
     m_expectedComposition = model.composition();
     m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
     m_expectedComposition.text = {};
@@ -177,6 +183,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(
     m_publishedCaret = model.caret();
     m_publishedModelRevision = model.revision();
     m_publishedExternalRevision = model.externalRevision();
+    m_publishedSelectionGeneration = model.selectionGeneration();
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }

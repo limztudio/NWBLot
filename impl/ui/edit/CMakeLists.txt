@@ -11,6 +11,8 @@ target_sources(nwb_ui_edit PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/actions.h"
     "${CMAKE_CURRENT_LIST_DIR}/commands.h"
     "${CMAKE_CURRENT_LIST_DIR}/commands.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_text.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/single_line_text.h"
     "${CMAKE_CURRENT_LIST_DIR}/single_line_text.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/navigation.cpp"

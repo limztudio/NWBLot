@@ -21,13 +21,14 @@ bool EditModel::undo(){
     const HistoryRecord& record = m_history[m_historyCursor - 1u];
     EditBoundaryVector boundaries(m_arena);
     const AStringView value(record.before.data(), record.before.size());
-    if(!GraphemeSegmentation::Build(value, boundaries, true))
+    if(!buildBoundaries(value, boundaries))
         return false;
     AString<Core::Alloc::GlobalArena> candidate(record.before, m_arena);
     m_text = Move(candidate);
     m_boundaries = Move(boundaries);
     m_anchor = record.beforeAnchor;
     m_caret = record.beforeCaret;
+    advanceSelectionGeneration();
     --m_historyCursor;
     cancelComposition();
     advanceRevision();
@@ -40,13 +41,14 @@ bool EditModel::redo(){
     const HistoryRecord& record = m_history[m_historyCursor];
     EditBoundaryVector boundaries(m_arena);
     const AStringView value(record.after.data(), record.after.size());
-    if(!GraphemeSegmentation::Build(value, boundaries, true))
+    if(!buildBoundaries(value, boundaries))
         return false;
     AString<Core::Alloc::GlobalArena> candidate(record.after, m_arena);
     m_text = Move(candidate);
     m_boundaries = Move(boundaries);
     m_anchor = record.afterAnchor;
     m_caret = record.afterCaret;
+    advanceSelectionGeneration();
     ++m_historyCursor;
     cancelComposition();
     advanceRevision();

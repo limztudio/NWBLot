@@ -25,6 +25,7 @@ bool Builder::comboStateMatches(const ComboFrame& frame)const{
         && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration
             && frame.search->query().revision() == frame.queryRevision
             && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
+            && frame.search->query().selectionGeneration() == frame.querySelectionGeneration
             && frame.search->query().externalRevision() == frame.queryExternalRevision
             && frame.search->query().anchor() == frame.queryAnchor && frame.search->query().caret() == frame.queryCaret))
     ;

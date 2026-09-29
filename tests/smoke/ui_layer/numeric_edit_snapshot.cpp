@@ -53,6 +53,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("integer_bounds"), NWB_TEXT
 [[nodiscard]] static bool Coherent(const Impl::Ui::EditModel& model, const Impl::Ui::EditBoxState& state){
     return
         state.modelGeneration == model.instanceGeneration() && state.revision == model.revision()
+        && state.selectionGeneration == model.selectionGeneration()
         && state.anchor == model.anchor() && state.caret == model.caret()
     ;
 }

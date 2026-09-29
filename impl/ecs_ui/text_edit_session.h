@@ -89,7 +89,7 @@ public:
     [[nodiscard]] bool preeditCaretVisible()const{ return m_preeditCaretVisible; }
     [[nodiscard]] u64 surroundingRevision()const{ return m_token.valid() ? m_surroundingRevision : 0u; }
     [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const{
-        return m_token.valid() && m_owner == owner && matchesPublishedModel(model);
+        return m_token.valid() && m_owner == owner && matchesModel(model) && matchesPublishedModel(model);
     }
 
 
@@ -119,8 +119,11 @@ private:
     usize m_publishedCaret = 0u;
     u64 m_expectedRevision = 0u;
     u64 m_expectedExternalRevision = 0u;
+    u64 m_expectedSelectionGeneration = 0u;
+    u64 m_expectedCompositionGeneration = 0u;
     u64 m_publishedModelRevision = 0u;
     u64 m_publishedExternalRevision = 0u;
+    u64 m_publishedSelectionGeneration = 0u;
     u64 m_surroundingRevision = 0u;
     u64 m_lastSequence = 0u;
     bool m_preeditCaretVisible = true;

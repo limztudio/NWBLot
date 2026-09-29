@@ -90,6 +90,7 @@ private:
         u64 draftRevision = 0u;
         u64 draftExternalRevision = 0u;
         u64 draftCompositionGeneration = 0u;
+        u64 draftSelectionGeneration = 0u;
         usize anchor = 0u;
         usize caret = 0u;
         u32 item = s_LayoutNoParent;
@@ -134,6 +135,7 @@ private:
         u64 queryGeneration = 0u;
         u64 queryRevision = 0u;
         u64 queryCompositionGeneration = 0u;
+        u64 querySelectionGeneration = 0u;
         u64 queryExternalRevision = 0u;
         usize queryAnchor = 0u;
         usize queryCaret = 0u;

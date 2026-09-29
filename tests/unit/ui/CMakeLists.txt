@@ -1,5 +1,12 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_text_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_model_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_composition_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_command_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_selection_epoch_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/search_selection_epoch_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/numeric_parse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/numeric_format_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/numeric_model_fixture.h"

@@ -4,6 +4,7 @@
 
 #include "model.h"
 #include "grapheme.h"
+#include "multiline_text.h"
 
 #include <global/termination.h>
 
@@ -54,15 +55,18 @@ static EditLimits BoundedLimits(const EditLimits& limits){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits)
+EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, const EditTextMode::Enum mode)
     : m_arena(arena)
     , m_instanceGeneration(__hidden_ui_edit_model::NextIdentity())
     , m_limits(__hidden_ui_edit_model::BoundedLimits(limits))
+    , m_textMode(mode)
     , m_text(arena)
     , m_boundaries(arena)
     , m_history(arena)
     , m_preedit(arena)
 {
+    if(mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
+        TerminateInvariant();
     m_boundaries.push_back(0u);
 }
 
@@ -70,7 +74,7 @@ bool EditModel::setText(const AStringView value){
     if(value.size() > m_limits.maxBytes)
         return false;
     EditBoundaryVector boundaries(m_arena);
-    if(!GraphemeSegmentation::Build(value, boundaries, true))
+    if(!buildBoundaries(value, boundaries))
         return false;
     AString<Core::Alloc::GlobalArena> candidate(m_arena);
     if(!value.empty())
@@ -80,6 +84,7 @@ bool EditModel::setText(const AStringView value){
     m_boundaries = Move(boundaries);
     m_anchor = m_text.size();
     m_caret = m_anchor;
+    advanceSelectionGeneration();
     clearHistory();
     cancelComposition();
     if(changed)
@@ -96,6 +101,7 @@ bool EditModel::setSelection(const usize anchor, const usize caret){
     cancelComposition();
     m_anchor = anchor;
     m_caret = caret;
+    advanceSelectionGeneration();
     return true;
 }
 
@@ -131,7 +137,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     if(begin > end || !isBoundary(begin) || !isBoundary(end) || replacement.size() > m_limits.maxBytes)
         return false;
     const usize retainedBytes = m_text.size() - (end - begin);
-    if(retainedBytes > m_limits.maxBytes - replacement.size() || !GraphemeSegmentation::Validate(replacement, true))
+    if(retainedBytes > m_limits.maxBytes - replacement.size() || !validateText(replacement))
         return false;
     AString<Core::Alloc::GlobalArena> candidate(m_arena);
     candidate.reserve(retainedBytes + replacement.size());
@@ -140,7 +146,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
         candidate.append(replacement.data(), replacement.size());
     candidate.append(m_text.data() + end, m_text.size() - end);
     EditBoundaryVector boundaries(m_arena);
-    if(!GraphemeSegmentation::Build({ candidate.data(), candidate.size() }, boundaries, true))
+    if(!buildBoundaries({ candidate.data(), candidate.size() }, boundaries))
         return false;
     // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
     usize caret = begin + replacement.size();
@@ -158,15 +164,32 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     m_boundaries = Move(boundaries);
     m_anchor = caret;
     m_caret = caret;
+    advanceSelectionGeneration();
     cancelComposition();
     if(changed)
         advanceRevision();
     return true;
 }
 
+bool EditModel::validateText(const AStringView value)const{
+    return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
+}
+
+bool EditModel::buildBoundaries(const AStringView value, Vector<usize, Core::Alloc::GlobalArena>& output)const{
+    if(m_textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
+        return false;
+    return GraphemeSegmentation::Build(value, output, m_textMode == EditTextMode::SingleLine);
+}
+
 void EditModel::advanceRevision(){
     if(m_revision != Limit<u64>::s_Max)
         ++m_revision;
+}
+
+void EditModel::advanceSelectionGeneration(){
+    if(m_selectionGeneration == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++m_selectionGeneration;
 }
 
 

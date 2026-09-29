@@ -90,6 +90,7 @@ void UiEditBoxHost::collectNative(){
         event.kind = UiEditBoxEventKind::Native;
         event.surroundingRevision = m_session.surroundingRevision();
         event.surroundingModelRevision = m_nativePublished.revision;
+        event.surroundingSelectionGeneration = m_nativePublished.selectionGeneration;
         event.geometryExternalRevision = m_nativePublished.externalRevision;
         event.surroundingAnchor = m_nativePublished.anchor;
         event.surroundingCaret = m_nativePublished.caret;

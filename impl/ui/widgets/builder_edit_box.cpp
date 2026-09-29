@@ -118,6 +118,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
 bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){
     if(
         state.modelGeneration != model.instanceGeneration() || state.revision != model.revision()
+        || state.selectionGeneration != model.selectionGeneration()
         || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused
     )
         state.caretElapsed = 0.0f;
@@ -127,6 +128,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
         state.scroll = 0.0f;
     state.modelGeneration = model.instanceGeneration();
     state.revision = model.revision();
+    state.selectionGeneration = model.selectionGeneration();
     state.anchor = model.anchor();
     state.caret = model.caret();
     state.focused = result.focused;

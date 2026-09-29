@@ -57,7 +57,7 @@ static RunClass::Enum Classify(const AStringView text, const usize offset){
 
 
 bool EditModel::move(const EditMove::Enum movement, const bool extend){
-    if(movement > EditMove::WordRight)
+    if(movement > EditMove::DocumentEnd)
         return false;
     usize target = m_caret;
     if(!extend && hasSelection() && (movement == EditMove::Left || movement == EditMove::Right))
@@ -66,16 +66,33 @@ bool EditModel::move(const EditMove::Enum movement, const bool extend){
         switch(movement){
         case EditMove::Left: target = previousBoundary(target); break;
         case EditMove::Right: target = nextBoundary(target); break;
-        case EditMove::Home: target = 0u; break;
-        case EditMove::End: target = m_text.size(); break;
+        case EditMove::Home:
+            if(m_textMode == EditTextMode::SingleLine)
+                target = 0u;
+            else{
+                while(target != 0u && m_text[target - 1u] != '\n')
+                    --target;
+            }
+            break;
+        case EditMove::End:
+            if(m_textMode == EditTextMode::SingleLine)
+                target = m_text.size();
+            else{
+                while(target < m_text.size() && m_text[target] != '\n')
+                    ++target;
+            }
+            break;
         case EditMove::WordLeft: target = wordBoundary(target, false); break;
         case EditMove::WordRight: target = wordBoundary(target, true); break;
+        case EditMove::DocumentHome: target = 0u; break;
+        case EditMove::DocumentEnd: target = m_text.size(); break;
         }
     }
     cancelComposition();
     if(!extend)
         m_anchor = target;
     m_caret = target;
+    advanceSelectionGeneration();
     return true;
 }
 

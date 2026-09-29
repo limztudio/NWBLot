@@ -24,7 +24,7 @@ static bool IsMutation(const EditCommand::Enum command){
     return
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
         || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
-        || command == EditCommand::Undo || command == EditCommand::Redo
+        || command == EditCommand::Undo || command == EditCommand::Redo || command == EditCommand::Newline
     ;
 }
 
@@ -57,18 +57,24 @@ static bool EraseWord(EditModel& model, const bool forward){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke){
+EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke, const EditTextMode::Enum mode){
     EditCommandRequest request{ EditCommand::None, stroke.shift, stroke.repeat };
-    if(stroke.alt || stroke.key == EditKey::None || stroke.key > EditKey::Escape)
+    if(stroke.alt || stroke.key == EditKey::None || stroke.key > EditKey::Escape || mode > EditTextMode::Multiline)
         return request;
     switch(stroke.key){
     case EditKey::Left: request.command = stroke.control ? EditCommand::WordLeft : EditCommand::Left; break;
     case EditKey::Right: request.command = stroke.control ? EditCommand::WordRight : EditCommand::Right; break;
-    case EditKey::Home: request.command = EditCommand::Home; break;
-    case EditKey::End: request.command = EditCommand::End; break;
+    case EditKey::Home:
+        request.command = stroke.control && mode == EditTextMode::Multiline ? EditCommand::DocumentHome : EditCommand::Home;
+        break;
+    case EditKey::End:
+        request.command = stroke.control && mode == EditTextMode::Multiline ? EditCommand::DocumentEnd : EditCommand::End;
+        break;
     case EditKey::Backspace: request.command = stroke.control ? EditCommand::WordBackspace : EditCommand::Backspace; break;
     case EditKey::Delete: request.command = stroke.control ? EditCommand::WordDelete : EditCommand::Delete; break;
-    case EditKey::Enter: request.command = EditCommand::Submit; break;
+    case EditKey::Enter:
+        request.command = mode == EditTextMode::Multiline && !stroke.control ? EditCommand::Newline : EditCommand::Submit;
+        break;
     case EditKey::Escape: request.command = EditCommand::Cancel; break;
     default:
         if(!stroke.control)
@@ -89,7 +95,7 @@ EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke){
 
 EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, const bool readOnly){
     EditCommandResult result;
-    if(request.command == EditCommand::None || request.command > EditCommand::Cancel)
+    if(request.command == EditCommand::None || request.command > EditCommand::Newline)
         return result;
     result.handled = true;
     if(request.repeat && __hidden_ui_edit_commands::SuppressRepeat(request.command))
@@ -114,6 +120,9 @@ EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& r
     case EditCommand::End: applied = model.move(EditMove::End, request.extend); break;
     case EditCommand::WordLeft: applied = model.move(EditMove::WordLeft, request.extend); break;
     case EditCommand::WordRight: applied = model.move(EditMove::WordRight, request.extend); break;
+    case EditCommand::DocumentHome: applied = model.move(EditMove::DocumentHome, request.extend); break;
+    case EditCommand::DocumentEnd: applied = model.move(EditMove::DocumentEnd, request.extend); break;
+    case EditCommand::Newline: applied = model.replaceSelection("\n"); break;
     case EditCommand::Backspace: applied = model.backspace(); break;
     case EditCommand::Delete: applied = model.eraseForward(); break;
     case EditCommand::WordBackspace: applied = __hidden_ui_edit_commands::EraseWord(model, false); break;

@@ -100,7 +100,7 @@ GpuGlyphVersion::~GpuGlyphVersion()noexcept{
 
 bool GpuRendererState::validateGlyphPages(const DrawSnapshot& snapshot){
     const auto& pages = snapshot.glyphPages();
-    if(pages.size() + snapshot.sdfPages().size() > s_PaintMaxImages)
+    if(pages.size() + snapshot.sdfPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
     for(usize index = 0u; index < pages.size(); ++index){
         if(!__hidden_ui_gpu_glyphs::ValidPage(pages[index]))
@@ -119,7 +119,10 @@ bool GpuRendererState::validateGlyphPages(const DrawSnapshot& snapshot){
             if(command.glyphPageIndex != Limit<u32>::s_Max)
                 return false;
         }
-        else if(command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin){
+        else if(
+            command.material == PaintMaterial::Solid || command.material == PaintMaterial::Skin
+            || command.material == PaintMaterial::Image
+        ){
             if(command.glyphPageIndex != Limit<u32>::s_Max || command.sdfPageIndex != Limit<u32>::s_Max || command.sdfChannel != 0u)
                 return false;
         }
@@ -186,12 +189,8 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
     // Frames retain superseded versions; evicting a cache entry never overwrites an image or frees a live frame's descriptor.
     if(replaceIndex < m_glyphCache.size())
         m_glyphCache.erase(m_glyphCache.begin() + static_cast<isize>(replaceIndex));
-    else if(m_glyphCache.size() + m_sdfCache.size() == s_PaintMaxImages){
-        if(!m_glyphCache.empty())
-            m_glyphCache.erase(m_glyphCache.begin());
-        else
-            m_sdfCache.erase(m_sdfCache.begin());
-    }
+    else if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() == s_PaintMaxImages)
+        evictImageCacheEntry();
     m_glyphCache.push_back(version);
     // Cache accepted uploads before descriptor publication so descriptor exhaustion retries cannot discard their readiness.
     if(!__hidden_ui_gpu_glyphs::PrepareDescriptor(*version))

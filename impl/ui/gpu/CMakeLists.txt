@@ -8,6 +8,8 @@ target_sources(nwb_ui_gpu PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_image_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_sdf_resources.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_sdf_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_texture_resources.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_texture_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_raster.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_standalone.cpp"

@@ -29,6 +29,10 @@ namespace __hidden_ui_image_paint{
         && first.generation == second.generation && first.index == second.index
     ;
 }
+
+[[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second){
+    return first.identity() == second.identity() && first.generation() == second.generation();
+}
 };
 
 
@@ -39,11 +43,14 @@ bool PaintBuilder::prepareImages(
     const SharedGlyphPage* const glyphPages,
     const usize glyphCount,
     const SharedSdfAtlasPage* const sdfPages,
-    const usize sdfCount){
+    const usize sdfCount,
+    const SharedImageSource* const textureImages,
+    const usize textureCount){
     NWB_ASSERT(m_recording);
     if(
-        glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages
+        glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages
         || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages)
+        || (textureCount != 0u && !textureImages)
     )
         return false;
     usize addedGlyphs = 0u;
@@ -62,7 +69,8 @@ bool PaintBuilder::prepareImages(
         }
         for(usize previous = 0u; previous < candidate; ++previous){
             if(__hidden_ui_image_paint::SameGlyphKey(binding, glyphPages[previous]->binding())){
-                if(binding.width != glyphPages[previous]->binding().width || binding.height != glyphPages[previous]->binding().height)
+                const GlyphPageBinding& previousBinding = glyphPages[previous]->binding();
+                if(binding.width != previousBinding.width || binding.height != previousBinding.height)
                     return false;
                 found = true;
                 break;
@@ -96,12 +104,34 @@ bool PaintBuilder::prepareImages(
         if(!found)
             ++addedSdf;
     }
-    const usize existingCount = m_snapshot.m_glyphPages.size() + m_snapshot.m_sdfPages.size();
-    if(addedGlyphs + addedSdf > s_PaintMaxImages - existingCount)
+    usize addedTextures = 0u;
+    for(usize candidate = 0u; candidate < textureCount; ++candidate){
+        if(!textureImages[candidate])
+            return false;
+        bool found = false;
+        for(const SharedImageSource& existing : m_snapshot.m_textureImages){
+            if(__hidden_ui_image_paint::SameTextureKey(*textureImages[candidate], *existing)){
+                found = true;
+                break;
+            }
+        }
+        for(usize previous = 0u; previous < candidate; ++previous){
+            if(__hidden_ui_image_paint::SameTextureKey(*textureImages[candidate], *textureImages[previous])){
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            ++addedTextures;
+    }
+    const usize existingCount =
+        m_snapshot.m_glyphPages.size() + m_snapshot.m_sdfPages.size() + m_snapshot.m_textureImages.size();
+    if(existingCount > s_PaintMaxImages || addedGlyphs + addedSdf + addedTextures > s_PaintMaxImages - existingCount)
         return false;
-    // Both sets are admitted before either binding set is published, so a mixed label fails without partial upgrades.
+    // All image kinds are admitted before any binding is published, including append-only coverage upgrades.
     m_snapshot.m_glyphPages.reserve(m_snapshot.m_glyphPages.size() + addedGlyphs);
     m_snapshot.m_sdfPages.reserve(m_snapshot.m_sdfPages.size() + addedSdf);
+    m_snapshot.m_textureImages.reserve(m_snapshot.m_textureImages.size() + addedTextures);
     for(usize candidate = 0u; candidate < glyphCount; ++candidate){
         SharedGlyphPage* existing = nullptr;
         for(SharedGlyphPage& bound : m_snapshot.m_glyphPages){
@@ -125,6 +155,17 @@ bool PaintBuilder::prepareImages(
         }
         if(!found)
             m_snapshot.m_sdfPages.push_back(sdfPages[candidate]);
+    }
+    for(usize candidate = 0u; candidate < textureCount; ++candidate){
+        bool found = false;
+        for(const SharedImageSource& bound : m_snapshot.m_textureImages){
+            if(__hidden_ui_image_paint::SameTextureKey(*bound, *textureImages[candidate])){
+                found = true;
+                break;
+            }
+        }
+        if(!found)
+            m_snapshot.m_textureImages.push_back(textureImages[candidate]);
     }
     return true;
 }

@@ -99,6 +99,7 @@ GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snaps
     , m_skin(Move(skin))
     , m_glyphPages(arena)
     , m_sdfPages(arena)
+    , m_textureImages(arena)
 {}
 
 bool GpuFrameData::prefixComplete(Core::Device& device)const{
@@ -121,6 +122,10 @@ bool GpuFrameData::complete(Core::Device& device)const{
         if(!__hidden_ui_gpu::TokenComplete(device, page->m_readinessToken))
             return false;
     }
+    for(const auto& image : m_textureImages){
+        if(!__hidden_ui_gpu::TokenComplete(device, image->m_texture.readinessToken))
+            return false;
+    }
     return true;
 }
 
@@ -139,9 +144,11 @@ GpuRendererState::GpuRendererState(
     , m_resolver(Move(resolver))
     , m_glyphCache(arena)
     , m_sdfCache(arena)
+    , m_textureCache(arena)
 {
     m_glyphCache.reserve(s_GpuMaxGlyphPages);
     m_sdfCache.reserve(s_GpuMaxSdfPages);
+    m_textureCache.reserve(s_GpuMaxTextureImages);
 }
 
 
@@ -191,6 +198,7 @@ void GpuRenderer::invalidateResources(){
     m_state->m_skin.reset();
     m_state->m_glyphCache.clear();
     m_state->m_sdfCache.clear();
+    m_state->m_textureCache.clear();
     m_state->m_resources.reset();
     m_state->m_width = 0u;
     m_state->m_height = 0u;
@@ -257,7 +265,10 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
         || display.pixelScaleX <= 0.0f || display.pixelScaleY <= 0.0f
     )
         return false;
-    if(!GpuRendererState::validateGlyphPages(snapshot) || !GpuRendererState::validateSdfPages(snapshot))
+    if(
+        !GpuRendererState::validateGlyphPages(snapshot) || !GpuRendererState::validateSdfPages(snapshot)
+        || !GpuRendererState::validateTextureImages(snapshot)
+    )
         return false;
     m_state->m_pending = MakeGpuVersion<GpuFrameData>(
         m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin

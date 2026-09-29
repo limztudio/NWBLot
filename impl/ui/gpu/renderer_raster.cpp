@@ -41,6 +41,15 @@ bool GpuRasterTask::record(
         if(context.declarations.textureForResource(payload.sdfPages[index]) != frame->m_sdfPages[index]->m_texture.get())
             return false;
     }
+    if(payload.textureImages.size() != frame->m_textureImages.size())
+        return false;
+    for(usize index = 0u; index < payload.textureImages.size(); ++index){
+        if(
+            context.declarations.textureForResource(payload.textureImages[index])
+            != frame->m_textureImages[index]->m_texture.texture.get()
+        )
+            return false;
+    }
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const DisplayMetrics& display = frame->m_snapshot.displayMetrics();
     GpuPaintPushConstants push;
@@ -89,6 +98,11 @@ bool GpuRasterTask::record(
             push.sdfChannel = draw.sdfChannel;
             push.sdfSpreadPixels = page->m_page->binding().spreadPixels;
             push.sdfDistanceEncoding = page->m_page->binding().distanceEncoding;
+        }
+        else if(draw.material == PaintMaterial::Image){
+            if(draw.textureImageIndex >= frame->m_textureImages.size())
+                return false;
+            push.textureSlot = frame->m_textureImages[draw.textureImageIndex]->m_texture.sampledImageHeapHandle.slot();
         }
         commands.setPushConstants(&push, sizeof(push));
         Core::DrawArguments arguments;

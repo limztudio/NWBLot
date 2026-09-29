@@ -62,7 +62,14 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
         if(found == m_sdfCache.end())
             ++missing;
     }
-    if(m_glyphCache.size() + m_sdfCache.size() + missing <= s_PaintMaxImages)
+    for(const SharedImageSource& source : snapshot.textureImages()){
+        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const auto& cached){
+            return cached->m_source->generation() == source->generation();
+        });
+        if(found == m_textureCache.end())
+            ++missing;
+    }
+    if(m_glyphCache.size() + m_sdfCache.size() + m_textureCache.size() + missing <= s_PaintMaxImages)
         return;
     // Retain requested logical keys even when their immutable metadata conflicts; preparation must reject that conflict.
     // Live frames retain evicted versions. Removing only cache ownership never changes sampled pixels or live descriptors.
@@ -86,6 +93,26 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
         else
             ++index;
     }
+    for(usize index = 0u; index < m_textureCache.size();){
+        const auto& cached = m_textureCache[index];
+        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const auto& source){
+            return cached->m_source->generation() == source->generation();
+        });
+        if(found == snapshot.textureImages().end())
+            m_textureCache.erase(m_textureCache.begin() + static_cast<isize>(index));
+        else
+            ++index;
+    }
+}
+
+void GpuRendererState::evictImageCacheEntry(){
+    // Pending and in-flight frames keep their own strong version references after cache ownership is removed.
+    if(!m_glyphCache.empty())
+        m_glyphCache.erase(m_glyphCache.begin());
+    else if(!m_sdfCache.empty())
+        m_sdfCache.erase(m_sdfCache.begin());
+    else if(!m_textureCache.empty())
+        m_textureCache.erase(m_textureCache.begin());
 }
 
 

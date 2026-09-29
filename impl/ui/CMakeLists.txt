@@ -31,6 +31,7 @@ target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/paint_overlay.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_glyph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_images.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/paint_texture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_sdf.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text/sdf_page.h"
     "${CMAKE_CURRENT_LIST_DIR}/text/sdf_page.cpp"
@@ -42,6 +43,7 @@ target_link_libraries(nwb_ui PUBLIC nwb_assets_ui_skin nwb_assets_font nwb_asset
 add_subdirectory(edit)
 add_subdirectory(text)
 add_subdirectory(images)
+target_link_libraries(nwb_ui PUBLIC nwb_ui_images)
 add_subdirectory(widgets)
 add_subdirectory(gpu)
 

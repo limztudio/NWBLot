@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "images/image_source.h"
 #include "text/glyph_page.h"
 #include "text/sdf_page.h"
 
@@ -62,7 +63,7 @@ struct DisplayMetrics{
 };
 
 namespace PaintMaterial{
-    enum Enum : u8{ Solid, Skin, Glyph, SdfGlyph };
+    enum Enum : u8{ Solid, Skin, Glyph, SdfGlyph, Image };
 };
 
 struct DrawCommand{
@@ -75,6 +76,7 @@ struct DrawCommand{
     u32 sdfChannel = 0u;
     // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
     u32 layer = 0u;
+    u32 textureImageIndex = Limit<u32>::s_Max;
 };
 
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
@@ -122,6 +124,7 @@ public:
     [[nodiscard]] const PaintVector<DrawCommand>& commands()const{ return m_commands; }
     [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const{ return m_glyphPages; }
     [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const{ return m_sdfPages; }
+    [[nodiscard]] const PaintVector<SharedImageSource>& textureImages()const{ return m_textureImages; }
 
 
 private:
@@ -133,6 +136,7 @@ private:
     PaintVector<DrawCommand> m_commands;
     PaintVector<SharedGlyphPage> m_glyphPages;
     PaintVector<SharedSdfAtlasPage> m_sdfPages;
+    PaintVector<SharedImageSource> m_textureImages;
 };
 
 
@@ -167,10 +171,17 @@ public:
     [[nodiscard]] bool prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
     [[nodiscard]] bool prepareImages(
         const SharedGlyphPage* glyphPages, usize glyphCount,
-        const SharedSdfAtlasPage* sdfPages, usize sdfCount
+        const SharedSdfAtlasPage* sdfPages, usize sdfCount,
+        const SharedImageSource* textureImages = nullptr, usize textureCount = 0u
     );
     [[nodiscard]] bool drawSdfGlyph(
         const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}
+    );
+    [[nodiscard]] bool prepareTextureImages(const SharedImageSource* images, usize count);
+    // Invisible valid images consume no binding slot; invalid arguments leave bindings and geometry unchanged.
+    [[nodiscard]] bool drawImage(
+        const SharedImageSource& source, const Rect& rectangle, const Rect& uv = { 0.0f, 0.0f, 1.0f, 1.0f },
+        const Color& tint = {}
     );
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const{ return m_snapshot.displayMetrics(); }
@@ -180,7 +191,8 @@ public:
 private:
     void emitQuad(
         const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material,
-        u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u
+        u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u,
+        u32 textureImageIndex = Limit<u32>::s_Max
     );
     void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint);
 

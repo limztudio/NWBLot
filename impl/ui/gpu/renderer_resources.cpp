@@ -330,7 +330,7 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
         if(slot.inFlight)
             continue;
         if(
-            !prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending)
+            !prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending) || !prepareTextureImages(*m_pending)
             || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired)
         )
             return false;

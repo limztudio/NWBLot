@@ -7,6 +7,7 @@
 
 #include "renderer.h"
 #include "renderer_sdf_resources.h"
+#include "renderer_texture_resources.h"
 
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
@@ -65,13 +66,16 @@ static_assert(static_cast<u32>(PaintMaterial::Solid) == NWB_UI_MATERIAL_SOLID);
 static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
 static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);
 static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_GLYPH);
+static_assert(static_cast<u32>(PaintMaterial::Image) == NWB_UI_MATERIAL_IMAGE);
 static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
 inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxImages;
 inline constexpr usize s_GpuMaxSdfPages = s_PaintMaxImages;
+inline constexpr usize s_GpuMaxTextureImages = s_PaintMaxImages;
 using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + 4u>;
 using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
 using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
+using GpuTextureGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxTextureImages>;
 
 
 template<typename T>
@@ -149,6 +153,7 @@ struct GpuFrameData : NoCopy{
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphPages;
     Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfPages;
+    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureImages;
     GpuVersion<GpuTargetVersion> m_target;
     GpuVersion<GpuSharedResources> m_resources;
     Core::BufferHandle m_vertices;
@@ -187,6 +192,7 @@ struct GpuRasterTask{
         Core::GpuGraphResourceId skin;
         GpuGlyphGraphResources glyphPages;
         GpuSdfGraphResources sdfPages;
+        GpuTextureGraphResources textureImages;
     };
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
@@ -223,6 +229,7 @@ struct GpuRendererState final : NoCopy{
     );
     [[nodiscard]] static bool validateGlyphPages(const DrawSnapshot& snapshot);
     [[nodiscard]] static bool validateSdfPages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool validateTextureImages(const DrawSnapshot& snapshot);
     [[nodiscard]] bool createResources();
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
@@ -241,7 +248,16 @@ struct GpuRendererState final : NoCopy{
         GpuSdfGraphResources& resources,
         GpuRasterResourceUses& uses
     );
+    [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
+    [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
+    [[nodiscard]] bool declareTextureImages(
+        Core::GpuTaskGraph& graph,
+        const GpuFrame& frame,
+        GpuTextureGraphResources& resources,
+        GpuRasterResourceUses& uses
+    );
     void trimImageCache(const DrawSnapshot& snapshot);
+    void evictImageCacheEntry();
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
@@ -256,6 +272,7 @@ struct GpuRendererState final : NoCopy{
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
     Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
+    Vector<GpuVersion<GpuTextureImageVersion>, Core::Alloc::GlobalArena> m_textureCache;
     Array<GpuFrameSlot, 3u> m_slots;
     GpuFrame m_pending;
     Core::AcquiredPresentationFrame m_lastAcceptedAcquired;

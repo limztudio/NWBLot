@@ -89,7 +89,7 @@ GpuSdfAtlasVersion::~GpuSdfAtlasVersion()noexcept{
 
 bool GpuRendererState::validateSdfPages(const DrawSnapshot& snapshot){
     const auto& pages = snapshot.sdfPages();
-    if(pages.size() + snapshot.glyphPages().size() > s_PaintMaxImages)
+    if(pages.size() + snapshot.glyphPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;
     for(usize index = 0u; index < pages.size(); ++index){
         if(!__hidden_ui_gpu_sdf::ValidPage(pages[index]))
@@ -157,12 +157,8 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
         return {};
     // Native accepted upload commands retain their destination image until the physical queue completes.
     // Frame owners retain sampled descriptors; cache eviction therefore releases neither a live image nor a live draw view.
-    if(m_sdfCache.size() + m_glyphCache.size() == s_PaintMaxImages){
-        if(!m_sdfCache.empty())
-            m_sdfCache.erase(m_sdfCache.begin());
-        else
-            m_glyphCache.erase(m_glyphCache.begin());
-    }
+    if(m_sdfCache.size() + m_glyphCache.size() + m_textureCache.size() == s_PaintMaxImages)
+        evictImageCacheEntry();
     m_sdfCache.push_back(version);
     // Preserve every accepted upload before descriptor publication; retrying a failed descriptor never uploads again.
     if(!__hidden_ui_gpu_sdf::PrepareDescriptor(*version))

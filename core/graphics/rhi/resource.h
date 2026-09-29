@@ -216,7 +216,7 @@ struct TextureSlice{
     u32 z = 0;
 
     // AllDimensions means the entire dimension is part of the region.
-    // resolve() will translate these values into actual dimensions
+    // resolve() will translate these values into actual dimensions.
     u32 width = AllDimensions;
     u32 height = AllDimensions;
     u32 depth = AllDimensions;

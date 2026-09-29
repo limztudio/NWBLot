@@ -302,10 +302,10 @@ struct DepthStencilState{
 
 
 struct ViewportState{
-    //These are in pixels
-    // note: you can only set each of these either in the PSO or per draw call in DrawArguments
-    // it is not legal to have the same state set in both the PSO and DrawArguments
-    // leaving these vectors empty means no state is set
+    // These are in pixels.
+    // Note: you can only set each of these either in the PSO or per draw call in DrawArguments.
+    // It is not legal to have the same state set in both the PSO and DrawArguments.
+    // Leaving these vectors empty means no state is set.
     FixedVector<Viewport, s_MaxViewports> viewports;
     FixedVector<Rect, s_MaxViewports> scissorRects;
 

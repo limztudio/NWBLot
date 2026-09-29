@@ -35,7 +35,7 @@ public:
     // Called during ordinary renderer preparation, before graph compilation and native recording. A false return
     // leaves this frame's scene presentation usable without the optional contributor.
     [[nodiscard]] virtual bool prepareTaskGraphPresentation(const AcquiredPresentationFrame& frame) = 0;
-    // Preparation may succeed while there is no visible overlay work (for example, an empty ImGui draw list).
+    // Preparation may succeed while there is no visible overlay work (for example, an empty overlay snapshot).
     // Such a frame deliberately skips declaration instead of manufacturing an empty presentation packet.
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const = 0;
     // `previousTask` is the scene-output endpoint and `backbuffer` is the exact typed acquired texture imported by

@@ -3,7 +3,6 @@
 
 
 #include "layer_system.h"
-#include "system.h"
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -30,8 +29,7 @@ UiLayerSystem::UiLayerSystem(
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
     const FontReferences& fonts,
-    const UiLayerPresentation::Enum presentation,
-    UiSystem* legacyInput)
+    const UiLayerPresentation::Enum presentation)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
     , m_world(world)
@@ -49,13 +47,10 @@ UiLayerSystem::UiLayerSystem(
     , m_liveRoots(arena)
     , m_rootIdentities(arena)
     , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
-    , m_legacyInput(legacyInput)
 {
     writeAccess<UiPaintComponent>();
     m_liveRoots.reserve(Ui::s_InputMaxTargets);
     m_rootIdentities.reserve(Ui::s_InputMaxTargets);
-    if(m_legacyInput)
-        m_legacyInput->setInputDelegated(true);
     m_input.addHandlerToBack(*this);
     if(m_presentation == UiLayerPresentation::Scene)
         m_graphics.setTaskGraphOutputLayerContributor(&m_renderer);

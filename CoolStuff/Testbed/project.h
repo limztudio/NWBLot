@@ -25,7 +25,7 @@ private:
 
 
 private:
-    void drawUiControls();
+    void drawUiControls(NWB::Impl::UiPaintContext& context);
     void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
     [[nodiscard]] bool createDefaultScene();
     void registerInputHandler();
@@ -51,6 +51,7 @@ public:
 
 public:
     virtual void windowFocusUpdate(bool focused)override;
+    virtual void pointerCaptureLost()override;
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
@@ -60,6 +61,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     TestbedUiSkinPreview m_uiPreview;
+    NWB::Impl::Ui::WindowState m_uiWindow;
     f64 m_lastMouseX = 0.0;
     f64 m_lastMouseY = 0.0;
     f32 m_pendingMouseDeltaX = 0.0f;

@@ -84,17 +84,15 @@ static constexpr char s_InitWorldFailedNarrow[] = "ProjectTestbed initialization
 }
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
-    if(const auto* customUi = world.getSystem<NWB::Impl::UiLayerSystem>())
-        return customUi->wantsKeyboard();
-    const auto* legacyUi = world.getSystem<NWB::Impl::UiSystem>();
-    return legacyUi && legacyUi->wantsKeyboardCapture();
+    const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
+    NWB_ASSERT(ui);
+    return ui->wantsKeyboard();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
-    if(const auto* customUi = world.getSystem<NWB::Impl::UiLayerSystem>())
-        return customUi->wantsPointer();
-    const auto* legacyUi = world.getSystem<NWB::Impl::UiSystem>();
-    return legacyUi && legacyUi->wantsMouseCapture();
+    const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
+    NWB_ASSERT(ui);
+    return ui->wantsPointer();
 }
 
 static void ResolveFlyCameraAnglesFromRotation(
@@ -328,14 +326,10 @@ bool ProjectTestbed::createDefaultScene(){
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
-    auto& ui = uiEntity.addComponent<NWB::Impl::UiComponent>();
-    ui.draw = [this](NWB::Impl::UiDrawContext& context){
-        static_cast<void>(context);
-        drawUiControls();
-    };
     auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
     customUi.paint = [this](NWB::Impl::UiPaintContext& context){
         drawCustomUiControls(context);
+        drawUiControls(context);
     };
 
     NWB_LOGGER_ESSENTIAL_INFO(
@@ -404,8 +398,9 @@ bool ProjectTestbed::keyPressed(const i32 key)const{
 
 void ProjectTestbed::updateMainCamera(const f32 delta){
     const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
-    const f32 mouseDeltaX = pointerCaptured ? 0.0f : m_pendingMouseDeltaX;
-    const f32 mouseDeltaY = pointerCaptured ? 0.0f : m_pendingMouseDeltaY;
+    // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
+    const f32 mouseDeltaX = m_pendingMouseDeltaX;
+    const f32 mouseDeltaY = m_pendingMouseDeltaY;
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
     if(pointerCaptured){
@@ -444,6 +439,16 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
 void ProjectTestbed::windowFocusUpdate(const bool focused){
     if(!focused)
         clearInputState();
+}
+
+void ProjectTestbed::pointerCaptureLost(){
+    // Ordinary button-up already completed the gesture; keep its accumulated camera motion.
+    if(!m_mouseLookActive)
+        return;
+    m_mouseLookActive = false;
+    m_mousePositionValid = false;
+    m_pendingMouseDeltaX = 0.0f;
+    m_pendingMouseDeltaY = 0.0f;
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){

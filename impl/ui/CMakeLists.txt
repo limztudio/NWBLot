@@ -10,6 +10,7 @@ target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/input/router.h"
     "${CMAKE_CURRENT_LIST_DIR}/input/router.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_pointer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/input/router_gesture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_keyboard.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layout/tree.h"
     "${CMAKE_CURRENT_LIST_DIR}/layout/tree.cpp"

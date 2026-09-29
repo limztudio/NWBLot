@@ -95,14 +95,6 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         meshSystem,
         context.shaderPathResolver
     );
-    auto& uiSystem = world->addSystem<NWB::Impl::UiSystem>(
-        *world,
-        context.graphics,
-        context.input,
-        context.clipboard,
-        context.assetManager,
-        context.shaderPathResolver
-    );
     const Impl::UiLayerSystem::FontReferences fonts{
         { { __hidden_testbed_entry::s_DefaultLatin, __hidden_testbed_entry::s_DefaultLatinAtlas },
             { __hidden_testbed_entry::s_DefaultKorean, __hidden_testbed_entry::s_DefaultKoreanAtlas } }, context.objectArena
@@ -116,13 +108,11 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.shaderPathResolver,
         __hidden_testbed_entry::s_DefaultUiSkin,
         fonts,
-        NWB::Impl::UiLayerPresentation::Scene,
-        &uiSystem
+        NWB::Impl::UiLayerPresentation::Scene
     );
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
     context.graphics.addRenderPassToBack(uiLayerSystem);
-    context.graphics.addRenderPassToBack(uiSystem);
     context.frameGraphRegistry.registerContributor(rendererSystem);
 
     outWorld = Move(world);
@@ -142,10 +132,6 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     NWB_ASSERT(rendererSystemPtr);
     NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
 
-    auto* uiSystemPtr = world->getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystemPtr);
-    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
-
     auto* uiLayerSystemPtr = world->getSystem<NWB::Impl::UiLayerSystem>();
     NWB_ASSERT(uiLayerSystemPtr);
     NWB::Impl::UiLayerSystem& uiLayerSystem = *uiLayerSystemPtr;
@@ -154,7 +140,6 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(meshSkinningSystem);
     context.graphics.removeRenderPass(rendererSystem);
     context.graphics.removeRenderPass(uiLayerSystem);
-    context.graphics.removeRenderPass(uiSystem);
 
     context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();
@@ -163,7 +148,6 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         __hidden_testbed_entry::s_DestroyRequiresIdleOrLoss
     );
 
-    uiLayerSystem.detachLegacyInput();
     world->clear();
     world.reset();
 }

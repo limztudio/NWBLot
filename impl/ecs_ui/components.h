@@ -41,21 +41,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UiDrawContext{
-    Core::ECS::World& world;
-    Core::IClipboardService& clipboard;
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
-    f32 deltaSeconds = 0.0f;
-};
-
-using UiDrawCallback = Function<void(UiDrawContext&)>;
-
-struct UiComponent{
-    UiDrawCallback draw;
-    bool visible = true;
-};
-
-
 struct UiPaintContext{
     Core::ECS::World& world;
     Core::IClipboardService& clipboard;

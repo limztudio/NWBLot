@@ -9,6 +9,7 @@
 #include "layout/tree.h"
 #include "text/service.h"
 #include "widgets/style.h"
+#include "widgets/window.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,6 +42,21 @@ private:
         Item& operator=(const Item&) = delete;
     };
 
+    struct WindowFrame{
+        WindowState* state = nullptr;
+        WindowOptions options;
+        WindowMetrics metrics;
+        WidgetState titleState;
+        WidgetState collapseState;
+        WidgetState resizeState;
+        TextLayout title;
+        bool firstUse = false;
+
+        explicit WindowFrame(Core::Alloc::GlobalArena& arena)
+            : title(arena)
+        {}
+    };
+
 
 public:
     Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
@@ -49,6 +65,10 @@ public:
 public:
     [[nodiscard]] bool beginPanel(AStringView stableKey, const Rect& bounds, LayoutDirection::Enum direction = LayoutDirection::Column);
     [[nodiscard]] bool endPanel();
+    // Returns content visibility. A collapsed window still opens a scope and requires endWindow().
+    // The borrowed WindowState must remain alive through that matching endWindow().
+    [[nodiscard]] bool beginWindow(AStringView stableKey, StringView title, WindowState& state, const WindowOptions& options = {});
+    [[nodiscard]] bool endWindow();
     [[nodiscard]] bool beginRow(AStringView stableKey, const ContainerOptions& options = {});
     [[nodiscard]] bool beginColumn(AStringView stableKey, const ContainerOptions& options = {});
     [[nodiscard]] bool endContainer();
@@ -56,10 +76,13 @@ public:
     // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
     [[nodiscard]] bool button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
     [[nodiscard]] bool checkbox(AStringView stableKey, StringView text, bool& checked, const WidgetOptions& options = {});
-    [[nodiscard]] bool balanced()const{ return !m_panelActive; }
+    [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
+    [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive; }
     void reset();
     void setSkin(const UiSkin& skin){ m_skin = &skin; }
     [[nodiscard]] WidgetStyle& style(){ return m_style; }
+    // Valid while a window scope is open, including a collapsed window.
+    [[nodiscard]] const WindowMetrics& windowMetrics()const{ return m_window.metrics; }
 
 
 private:
@@ -68,6 +91,10 @@ private:
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const;
     void buttonMetrics(Point& size, Insets& padding)const;
     [[nodiscard]] bool paintPanel();
+    [[nodiscard]] bool paintWindow();
+    [[nodiscard]] bool paintWindowTitle();
+    [[nodiscard]] bool paintWindowResize();
+    [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
 
@@ -82,9 +109,11 @@ private:
     LayoutTree m_layout;
     PaintVector<Item> m_items;
     PaintVector<u32> m_stack;
+    WindowFrame m_window;
     WidgetState m_panelState;
     Rect m_bounds;
     bool m_panelActive = false;
+    bool m_windowActive = false;
 };
 
 

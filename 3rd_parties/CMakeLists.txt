@@ -43,7 +43,6 @@ add_subdirectory(vulkan_headers)
 add_subdirectory(volk)
 add_subdirectory(aftermath)
 add_subdirectory(VulkanMemoryAllocator)
-add_subdirectory(imgui)
 add_subdirectory(ufbx)
 add_subdirectory(curl)
 add_subdirectory(libmicrohttpd)
@@ -55,7 +54,6 @@ add_subdirectory(wmi)
 # Policy section 1.1: static C/C++ vendor libraries linked by engine targets must use the engine CRT and
 # _ITERATOR_DEBUG_LEVEL. The helper is guarded so platform-specific targets (for example vendored curl) are safe.
 foreach(_nwb_engine_static_vendor_target
-    nwb_vendor_imgui
     nwb_vendor_volk
     nwb_vendor_ufbx
     nwb_vendor_curl

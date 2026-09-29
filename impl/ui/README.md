@@ -65,10 +65,10 @@ storage until GPU completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
-font shaping (`text/`), and skinned panels, labels, buttons and checkboxes (`Builder`).
+font shaping (`text/`), and skinned windows, panels, labels, separators, buttons and checkboxes (`Builder`).
 `nwb_ui_gpu` owns GPU uploads, resource retention,
 and offscreen rendering in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
-`core/os/` owns native IME and clipboard behavior, `impl/assets_ui_skin/` owns skin validation/cooking,
+`core/os/` owns clipboard/native selection services and the future IME contract, `impl/assets_ui_skin/` owns skin validation/cooking,
 and `impl/ecs_render/` owns final composition with the scene. The GPU module consumes frozen snapshots
 without invoking callbacks or accessing live ECS data.
 
@@ -123,4 +123,16 @@ when declaring the corresponding live/enabled control. These queues are bounded,
 
 Resize, scale changes and device invalidation reset input publication. The ECS adapter additionally validates
 host-root lifetime before native input and frame builds. IME, OS pointer services, clipboard/selection,
-editable text, lists, popups and window movement remain subsequent toolkit work.
+editable text, lists and popups remain subsequent toolkit work.
+
+## Windows and separators
+
+`Builder::beginWindow(key, title, WindowState&, WindowOptions)` opens one scoped window and returns whether its content is visible. Call `endWindow()` even when the window is collapsed; a failed begin marks the context failed. Do not nest windows/panels or retain a builder's open scope beyond the owning callback. `WindowState` is host-owned and must remain alive through that matching end. Frozen snapshots never reference it.
+
+`WindowOptions` supplies the initial bounds, minimum size, optional first-use content sizing, layout direction, and independent movement/resize/collapse capabilities. Initialize only once, then keep the same model to preserve placement and collapse state across ordinary frames. Placement is constrained so the window's title stays reachable after viewport changes; cross-run persistence belongs to the application. The migrated Testbed window retains its original initial position and content, while its UI is prepared and composed through the custom GPU layer.
+
+The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (`window_layout.cpp`), declarations (`builder_window.cpp`), and paint/chrome targets (`window_paint.cpp`). Title and resize gestures carry the exact committed reference geometry, so a pending candidate cannot shift the gesture's baseline. Coalesced updates retain a complete press/move/release sequence until the next declaration; each update is consumed once. Pointer loss cancels an active gesture, while an ordinary release keeps completed movement.
+
+`separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
+
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard and native selection remain borrowed OS services. Edit models, popups/lists/combos and OS IME integration are later increments.

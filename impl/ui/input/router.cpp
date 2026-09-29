@@ -54,6 +54,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_stagedLookup(arena)
     , m_events(arena)
     , m_actions(arena)
+    , m_pointerGestures(arena)
 {
     m_targets.reserve(s_InputMaxTargets);
     m_stagedTargets.reserve(s_InputMaxTargets);
@@ -61,10 +62,11 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     m_stagedLookup.reserve(s_InputMaxTargets);
     m_events.reserve(s_InputMaxEvents);
     m_actions.reserve(s_InputMaxActions);
+    m_pointerGestures.reserve(s_InputMaxPointerGestures);
 }
 
 bool InputRouter::queue(const InputEvent& event){
-    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::PointerLeave)
+    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::PointerCaptureLost)
         return false;
     if(event.type <= InputEventType::PrimaryUp && (!IsFinite(event.position.x) || !IsFinite(event.position.y)))
         return false;
@@ -85,6 +87,10 @@ InputRoutingResult InputRouter::process(){
             result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed;
             result.keyboardConsumed |= m_focus.valid() || m_consumedKeys != 0u;
             cancelInteraction();
+        }
+        else if(event.type == InputEventType::PointerCaptureLost){
+            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed;
+            cancelPointerCapture();
         }
         else{
             result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed;
@@ -112,6 +118,8 @@ bool InputRouter::commitTargets(const HitTarget* targets, const usize count, con
             !target.id.valid() || target.declarationGeneration == 0u
             || !__hidden_ui_input_router::ValidRectangle(target.rectangle)
             || !__hidden_ui_input_router::ValidRectangle(target.clip)
+            || !__hidden_ui_input_router::ValidRectangle(target.gestureReference)
+            || ((target.gestureReference.width == 0.0f) != (target.gestureReference.height == 0.0f))
         )
             return false;
         m_stagedTargets.push_back(target);
@@ -247,6 +255,7 @@ void InputRouter::reconcileTargets(){
         else
             ++index;
     }
+    reconcilePointerGestures();
     updateHover();
 }
 
@@ -254,8 +263,28 @@ void InputRouter::updateHover(){
     m_hover = m_pointerKnown ? hitTest(m_pointer) : WidgetId{};
 }
 
+void InputRouter::cancelPointerCapture(){
+    if(!m_primaryDown)
+        return;
+    for(usize index = 0u; index < m_pointerGestures.size(); ++index){
+        if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
+            m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
+            break;
+        }
+    }
+    m_activeGestureSequence = 0u;
+    m_hover = {};
+    m_capture = {};
+    m_captureDeclaration = 0u;
+    m_pointerKnown = false;
+    m_primaryDown = false;
+    m_pointerSequenceConsumed = false;
+}
+
 void InputRouter::cancelInteraction(){
     m_actions.clear();
+    m_pointerGestures.clear();
+    m_activeGestureSequence = 0u;
     m_hover = {};
     m_focus = {};
     m_capture = {};

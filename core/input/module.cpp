@@ -53,6 +53,20 @@ void InputDispatcher::windowFocusUpdate(const bool focused){
     });
 }
 
+void InputDispatcher::pointerLeave(){
+    dispatchToHandlers([](IInputEventHandler& handler){
+        handler.pointerLeave();
+        return false;
+    });
+}
+
+void InputDispatcher::pointerCaptureLost(){
+    dispatchToHandlers([](IInputEventHandler& handler){
+        handler.pointerCaptureLost();
+        return false;
+    });
+}
+
 void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
     if(key == Key::Unknown)
         return;

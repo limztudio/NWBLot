@@ -5,9 +5,8 @@
 #pragma once
 
 
-// UI subsystem aggregation: components plus system.
+// Custom UI ECS integration: callbacks and the independent GPU layer.
 #include "components.h"
-#include "system.h"
 #include "layer_system.h"
 
 

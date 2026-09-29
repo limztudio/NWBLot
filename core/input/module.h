@@ -211,6 +211,8 @@ public:
 
 public:
     virtual void windowFocusUpdate(bool){}
+    virtual void pointerLeave(){}
+    virtual void pointerCaptureLost(){}
     virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
     virtual bool keyboardCharInput(u32, i32){ return false; }
     virtual bool mousePosUpdate(f64, f64){ return false; }
@@ -253,6 +255,9 @@ public:
     [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
     // Focus is window lifecycle state; every current handler observes each transition.
     void windowFocusUpdate(bool focused);
+    // Native pointer lifecycle reaches every owner and never consumes keyboard state.
+    void pointerLeave();
+    void pointerCaptureLost();
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     void keyboardCharInput(u32 unicode, i32 mods);

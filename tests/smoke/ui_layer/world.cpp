@@ -6,6 +6,7 @@
 #include "interactive_scene.h"
 #include "paint_scene.h"
 #include "text_samples.h"
+#include "window_scene.h"
 
 #include <impl/ecs_ui/layer_system.h>
 
@@ -32,6 +33,7 @@ namespace Tests::Smoke{
 
 namespace __hidden_ui_layer_smoke_world{
 static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"engine/ui/skins/default/atlas"};
+static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"project/ui/skins/alternate/atlas"};
 static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
 static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
 static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin_atlas"};
@@ -58,6 +60,11 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         { { __hidden_ui_layer_smoke_world::s_DefaultLatin, __hidden_ui_layer_smoke_world::s_DefaultLatinAtlas },
             { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas } }, context.objectArena
     };
+    const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
+    const bool alternateSkin = windowSmoke && IsUiLayerWindowSkinSmokeEnabled();
+    const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
+    if(windowSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -65,13 +72,19 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         context.clipboard,
         context.assetManager,
         context.shaderPathResolver,
-        __hidden_ui_layer_smoke_world::s_DefaultSkin,
+        skin,
         fonts,
         Impl::UiLayerPresentation::Standalone
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(IsUiLayerInteractionSmokeEnabled()){
+    if(windowSmoke){
+        paint.paint = [scene = CreateUiWindowSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: window UI paint failed"));
+        };
+    }
+    else if(IsUiLayerInteractionSmokeEnabled()){
         paint.paint = [scene = CreateUiInteractiveSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: interactive UI paint failed"));

@@ -42,6 +42,7 @@ public:
     [[nodiscard]] WidgetState* declare(AStringView stableKey, WidgetKind::Enum kind);
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
     [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
+    [[nodiscard]] bool takePointerGesture(const WidgetState& state, bool enabled, PointerGesture& gesture);
     [[nodiscard]] bool finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [[nodiscard]] bool commitFrame(u64 generation);

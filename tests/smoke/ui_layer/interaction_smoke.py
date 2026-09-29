@@ -63,8 +63,8 @@ class WinInput(ctypes.Structure):
     _fields_ = [("type", ctypes.c_uint32), ("data", WinInputUnion)]
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description=__doc__)
+def parse_args(argv, *, description=__doc__):
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
@@ -315,6 +315,8 @@ def run(args):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     environment = build_launch_environment(args)
     environment["NWB_UI_LAYER_INTERACTIVE"] = "1"
+    environment["NWB_UI_LAYER_WINDOW"] = "0"
+    environment["NWB_UI_LAYER_WINDOW_SKIN"] = "0"
     if platform.system() == "Linux":
         environment["NWB_LINUX_BACKEND"] = "x11"
     for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",

@@ -129,6 +129,16 @@ bool Context::takeActivation(const WidgetState& state, const bool enabled){
     return !m_failed && m_input.consumeActivation(state.id);
 }
 
+bool Context::takePointerGesture(const WidgetState& state, const bool enabled, PointerGesture& gesture){
+    if(m_failed || !currentDeclaration(state))
+        return false;
+    if(!enabled){
+        m_input.invalidateTarget(state.id);
+        return false;
+    }
+    return m_input.consumePointerGesture(state.id, state.declarationGeneration, gesture);
+}
+
 bool Context::finishFrame(){
     if(m_failed || m_frameGeneration == 0u || m_rootActive){
         fail();

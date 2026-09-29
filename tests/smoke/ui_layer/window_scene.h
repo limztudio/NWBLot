@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_ui/components.h>
+#include <impl/ui/widgets/window.h>
+
+#include <core/alloc/general.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiWindowSmokeScene : NoCopy{
+public:
+    [[nodiscard]] bool paint(Impl::UiPaintContext& context);
+
+
+private:
+    void observeDisplay(const Impl::Ui::DisplayMetrics& display);
+    void observeState(const Impl::Ui::WindowMetrics& metrics);
+    void logAction(TStringView action);
+    void paintMarkers(Impl::UiPaintContext& context, const Impl::Ui::WindowMetrics& metrics)const;
+
+
+private:
+    Impl::Ui::WindowState m_window;
+    Impl::Ui::WindowState m_lastWindow;
+    Impl::Ui::DisplayMetrics m_lastDisplay;
+    u32 m_count = 0u;
+    u32 m_lastCount = 0u;
+    u32 m_actions = 0u;
+    u32 m_sequence = 0u;
+    bool m_locked = false;
+    bool m_lastLocked = false;
+    bool m_displayChanged = false;
+};
+
+using SharedUiWindowSmokeScene = RefCountPtr<
+    RefCounter<UiWindowSmokeScene>, ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena>
+>;
+
+[[nodiscard]] bool IsUiLayerWindowSmokeEnabled();
+[[nodiscard]] bool IsUiLayerWindowSkinSmokeEnabled();
+[[nodiscard]] SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& arena);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -28,6 +28,10 @@ bool Builder::paintPanel(){
     barrier.clip = visibleClip(panel->clip);
     if(!painted || !popped || !m_context.addTarget(m_panelState, barrier))
         return false;
+    return paintItems();
+}
+
+bool Builder::paintItems(){
     for(const auto& item : m_items){
         const LayoutBox* box = m_layout.box(item.node);
         if(!box || !paintItem(item, *box))
@@ -46,6 +50,11 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     bool painted = true;
     Point origin{ box.rectangle.x, box.rectangle.y };
     const Point measured = item.text.measure();
+    if(item.state.kind == WidgetKind::Separator){
+        painted = m_paint.drawRegion(m_style.separator, box.rectangle);
+        const bool popped = m_paint.popClip();
+        return painted && popped;
+    }
     if(item.state.kind == WidgetKind::Button){
         const Name& preferred = !item.enabled ? m_style.buttonDisabled
             : captured && hover ? m_style.buttonPressed : hover ? m_style.buttonHover : m_style.button;

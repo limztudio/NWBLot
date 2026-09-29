@@ -211,8 +211,15 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     break;
 
     case DestroyNotify:
+        frame.input().pointerCaptureLost();
+        frame.input().pointerLeave();
         SetX11Window(frameData, 0);
         return false;
+
+    case UnmapNotify:
+        frame.input().pointerCaptureLost();
+        frame.input().pointerLeave();
+        break;
 
     case FocusIn:
         frameData.setActive(true);
@@ -293,6 +300,10 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
 
     case EnterNotify:
         frame.input().mousePosUpdate(static_cast<f64>(event.xcrossing.x), static_cast<f64>(event.xcrossing.y));
+        break;
+
+    case LeaveNotify:
+        frame.input().pointerLeave();
         break;
 
     case MappingNotify: {

@@ -17,6 +17,8 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_samples.h"
     "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/window_scene.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/window_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/../framebuffer_capture.cpp"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES
@@ -43,7 +45,10 @@ else()
     set(_nwb_ui_smoke_logserver_args)
 endif()
 
-file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false "${PROJECT_SOURCE_DIR}/impl/assets/*")
+file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false
+    "${PROJECT_SOURCE_DIR}/impl/assets/*"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/*"
+)
 set(_nwb_ui_smoke_asset_stamp "${_nwb_ui_smoke_runtime_root}/res/.nwb_ui_layer_assets_$<CONFIG>.stamp")
 add_custom_command(
     OUTPUT "${_nwb_ui_smoke_asset_stamp}"
@@ -52,6 +57,7 @@ add_custom_command(
         --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
         --repo-root "${PROJECT_SOURCE_DIR}"
         --asset-root "impl/assets"
+        --asset-root "tests/smoke/ui_layer/assets"
         --output-directory "${_nwb_ui_smoke_runtime_root}/res"
         --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
         --configuration "$<CONFIG>"
@@ -59,7 +65,7 @@ add_custom_command(
     DEPENDS nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
         "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_ui_smoke_asset_inputs}
     WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
-    COMMENT "Cooking standalone UI smoke engine assets for $<CONFIG>..."
+    COMMENT "Cooking standalone UI smoke engine and fixture assets for $<CONFIG>..."
     VERBATIM
     USES_TERMINAL
 )
@@ -81,7 +87,7 @@ foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu"
-        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0"
     )
 endforeach()
 
@@ -97,6 +103,38 @@ set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0"
+)
+
+add_test(NAME nwb_ui_layer_window_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_smoke.py"
+        --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+        --working-directory "${_nwb_ui_smoke_runtime_root}"
+        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window"
+        ${_nwb_ui_smoke_logserver_args}
+)
+set_tests_properties(nwb_ui_layer_window_smoke PROPERTIES
+    RESOURCE_LOCK nwb_display
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150
+    LABELS "ui;standalone_gpu;native_input;window"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0"
+)
+
+add_test(NAME nwb_ui_layer_window_skin_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/window_smoke.py"
+        --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+        --working-directory "${_nwb_ui_smoke_runtime_root}"
+        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window_skin"
+        --skin alternate
+        ${_nwb_ui_smoke_logserver_args}
+)
+set_tests_properties(nwb_ui_layer_window_skin_smoke PROPERTIES
+    RESOURCE_LOCK nwb_display
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150
+    LABELS "ui;standalone_gpu;native_input;window;skin"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1"
 )
 
 unset(_nwb_ui_smoke_runtime_root)

@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. Font/text foundation commit `1f55b1616` is pushed. The offline SDF increment is pushed as `4cd702d2b`. The interactive foundation follows after merging `main` through `99ff9fea4` and is described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
+Status: implementation is on `custom_ui`. Foundation `81481aa88`, GPU composition `37a37a0f6`, Linux OS `b93bace2d`, font/text `1f55b1616`, offline SDF `4cd702d2b`, and interactive foundation `2c7c723ef` are pushed. Main is merged through `c962f5c23` in `d3365b34f`, including its shader compiler refactor. M3 implements window/separator parity and removes the ImGui dependency; validation is recorded below. Edit boxes, combo boxes, lists, and Win32/Linux IME remain subsequent milestones.
 
 Implemented in the first increment:
 
@@ -56,7 +56,7 @@ Validation for the OS increment:
 - Actual Linux x86_64 target syntax checks pass for 14 production and five test translation units: 19 with Wayland/primary selection, 19 with Wayland without primary selection, and 16 with X11 only, for 54 successful checks. The disposable harness uses genuine libc/libstdc++/Linux/X11/Wayland headers and generated protocol headers. Saved source/header hashes match the final files; command lines, package/source hashes, and logs are retained under `__artifacts/custom_ui/linux_sysroot/`. This does not qualify Linux ARM64 or linking.
 - Linux-only pipe and X11 tests are provided for execution on Linux. This Windows host has no installed WSL, container runtime, or Linux compositor, so live X11/Wayland clipboard behavior and Linux linking remain unqualified.
 
-The interactive toolkit increment below adds stable IDs/state, layout, focus/hit testing and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
+The interactive toolkit increment below adds stable IDs/state, layout, focus/hit testing and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. The M3 increment below adds window/separator parity and retires the ImGui runtime, assets, build target, and vendor sources.
 
 Build an engine-owned UI toolkit under `impl/ui/`, keep `impl/ecs_ui/` as the ECS/runtime adapter, and render UI into a transparent texture through the existing GPU task graph. Join that texture with the scene in the final output pass, after scene display mapping and before output encoding. IME, clipboard/native selection exchange, and other window-system services belong to a separate OS feature layer that `ecs_ui` borrows. Controls use a customizable skin texture plus atlas information authored in an `.nwb` file; the engine ships one default texture/atlas pair. Remove ImGui once current application behavior is covered; continue the larger widget library independently.
 
@@ -139,9 +139,36 @@ ImGui dependency removal still needs movable/window/separator parity and Testbed
 IME for Win32/Linux, edit boxes, combo boxes, popups/modals, virtualized lists, selection, docking, broader
 Unicode editing and native Linux/HDR runtime qualification retain their later milestone gates.
 
+## Window parity and ImGui retirement increment
+
+Merged `main` through `c962f5c23` before implementation. Window chrome, behavior, layout, painting, builder integration, and separators are separate sources under `impl/ui/widgets/`. A host-owned `WindowState` retains bounds and collapse state; `WindowOptions` supplies first-use geometry, optional first-use content sizing, minimum dimensions, and movement/resizing/collapse policy. Every admitted window pairs `beginWindow()` with `endWindow()`, including collapsed windows. Internal chrome IDs belong to the window scope; normal controls keep their existing declaration lifetime and keyboard focus rules.
+
+Pointer gestures are bounded immutable records of the committed displayed target and full reference geometry. Complete press/move/release batches survive until the next callback, active motion is coalesced once per press, and new drags start from their displayed geometry even when the host model contains an unaccepted candidate. Native pointer leave retains logical capture. Capture loss cancels the unfinished pointer sequence without erasing completed actions or keyboard focus/ownership. Focus loss performs full interaction cancellation.
+
+Win32 forwards mouse leave, capture change, and cancel mode. X11 forwards leave/unmap/destruction without treating an ordinary implicit-grab release as cancellation. Wayland forwards real leave, seat/pointer capability loss, and close through the existing event boundary. Core input broadcasts these lifecycle notifications to every current handler with the same mutation-safe dispatch used for focus. The ECS adapter owns custom/scene routing and borrows native services; its callbacks and live host state remain outside GPU snapshots.
+
+Testbed's original window, two labels, and separator use the custom builder. The application has one `UiPaintComponent` and one `UiLayerSystem`, with the custom window above the preview gallery. Camera input respects custom target and held-input ownership; capture cancellation only clears an active mouse-look gesture.
+
+An isolated replacement skin supplies a separately converted amber/green texture and an atlas with remapped UVs, different content padding, and changed title height. The same window/controls and native interaction sequence run against default and replacement skins; capture probes compare their actual sampled colors and chrome dimensions. The fixture pair stays under `tests/smoke/ui_layer/assets/`, with a deterministic generator and no checked-in source PNG.
+
+The legacy ECS adapter/callbacks, ImGui shaders and metadata, CMake dependency, runtime-list entry, and vendor directory are removed. Generic task graph presentation, acceptance, recovery, output-layer, and timing contracts remain. Both scene and standalone paths use the existing independent UI GPU layer and exact accepted presentation receipt.
+
+Validation for the M3 increment on Windows ARM64 / Clang, `opt` configuration:
+
+- A fresh CMake build directory with the ImGui directory absent builds the custom toolkit, ECS adapter, Testbed, standalone UI executable, and affected unit targets. Fresh output/cache paths cook and gather 134 Testbed assets and 119 standalone assets (117 engine plus the replacement atlas/texture). No production/build/asset source, compile command, or cooked input manifest retains an ImGui dependency.
+- All five core suites pass: 143 UI, 11 input, 51 graphics presentation, 319 enabled GPU task, and 21 OS checks, for 545 enabled checks. The 90 pre-existing GPU task checks remain disabled. Thirteen targeted ECS output-layer, SDR/HDR color, glyph, and timing checks also pass; the unrelated stale surfel-normal source check noted above is outside this filtered run.
+- GPU-validation standalone framebuffer, resize, basic interaction, default-window, and replacement-window smoke tests pass. The two window runs each verify 20 displayed stages and six exact action logs; the basic control run verifies 14 stages and nine actions. Default/replacement skin colors and geometry, collapse/body inactivity, minimum resize, drag completion, locking, capture/focus loss, pointer leave, and first interactions after resize are checked against real displayed pixels.
+- A scene/Testbed capture with GPU validation passes at a 1280x900 original client and after a 901x607 resize. The original labels/window use the custom font/skin path, with an explicit one-logical-unit separator. Testbed and both skin captures were visually inspected.
+- Linux x86_64 syntax validation passes 119 checks over 97 distinct production/test translation units: 97 with primary selection, 12 without it, and 10 X11-only. All 725 source/header hashes per mode remain unchanged, and final current-hash comparison has zero mismatches. Commands and logs remain under `__artifacts/custom_ui/ui_retirement_linux/`. The two existing newer-Wayland listener-tail warning types remain; newly introduced warnings are resolved.
+- New/modified authored C++ and asset text pass UTF-8, CRLF, banner/separator gaps, exact source EOF, and whitespace checks. Production window concerns are separate sources of at most 160 lines; the largest newly authored C++ file is the 604-line gesture test source.
+
+M3 removes the ImGui dependency and demonstrates replacement texture/atlas skins. Win32 native message delivery/rendering is qualified here. Linux linking/native X11/Wayland execution, physical pointer grabs, and live HDR remain unqualified on this Windows host. M4/M5 continue the requested edit box, combo box, list, and OS IME work.
+
 ## 1. Starting point and scope
 
-| Existing code | What it means for this work |
+The table records the repository baseline before the migration; legacy UI paths listed here have been removed by M3.
+
+| Baseline code | What it meant for the migration |
 | --- | --- |
 | `impl/ecs_ui/components.h` | `UiComponent` already hosts a visible UI callback. Keep this application/ECS integration concept and add an explicit custom UI context. |
 | `impl/ecs_ui/system.h`, `system_frame.cpp` | `UiSystem` owns ImGui, input handling, an ECS update, render-pass lifecycle, and presentation contribution. Its update is currently main-thread work. Split these responsibilities by owner. |
@@ -156,7 +183,7 @@ Initial target: desktop UI in the existing application window, keyboard and mous
 
 ## 2. Ownership and public API
 
-Target layout; some foundation modules now exist as described above, while context/layout/text/widgets/GPU names remain proposed:
+Target layout; identity, context, layout, text, basic widgets, windows, GPU composition, and the clipboard OS bridge now exist as described above. The editing and larger widget domains remain proposed:
 
 ```text
 core/
@@ -367,6 +394,8 @@ The first increment adds behavioral tests for its paint, clipboard, and skin con
 Offscreen composition adds memory traffic and is not automatically faster than the current tiny direct overlay. The architectural benefit is independent preparation and a reusable UI layer; performance claims require whole-frame measurements on the target GPU. Share the existing task telemetry and capture infrastructure rather than creating a parallel profiler.
 
 ## 9. ImGui removal checklist
+
+All runtime/build/asset/vendor removal items below are implemented in the M3 increment. The fresh build/cook and dependency audit are its verification gates.
 
 1. Replace the `ImGui` calls in `CoolStuff/Testbed/ui_controls.cpp` and update callback wiring to pass the custom context explicitly.
 2. Remove ImGui context/input/frame/draw/texture types from `impl/ecs_ui/`, including `system.h`, `system.cpp`, `system_frame.cpp`, `input_events.cpp`, graphics/texture helpers, task payloads, and legacy presentation. Move reusable GPU mechanics into `impl/ui/gpu/`; retire callback-specific machinery when no caller needs it.

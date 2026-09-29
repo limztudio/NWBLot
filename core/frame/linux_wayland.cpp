@@ -423,6 +423,8 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     context.frame->input().windowFocusUpdate(false);
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         AttachWaylandClipboardSeat(*clipboard, nullptr, 0u);
+    context.frame->input().pointerCaptureLost();
+    context.frame->input().pointerLeave();
     DestroyKeyboard(context);
     DestroyPointer(context);
     if(context.seatVersion >= 5u)
@@ -487,6 +489,8 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     static_cast<void>(toplevel);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    context.frame->input().pointerCaptureLost();
+    context.frame->input().pointerLeave();
     context.shouldClose = true;
     context.visible = false;
     StopKeyRepeat(context);
@@ -529,10 +533,14 @@ static void OnPointerEnter(void* data, wl_pointer* pointer, u32 serial, wl_surfa
 }
 
 static void OnPointerLeave(void* data, wl_pointer* pointer, u32 serial, wl_surface* surface){
-    static_cast<void>(data);
     static_cast<void>(pointer);
     static_cast<void>(serial);
     static_cast<void>(surface);
+
+    auto& context = *static_cast<WaylandContext*>(data);
+    context.frame->input().pointerLeave();
+    // The compositor retains pointer focus during the implicit grab; leave terminates any remaining grab.
+    context.frame->input().pointerCaptureLost();
 }
 
 static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_t sx, wl_fixed_t sy){
@@ -836,6 +844,10 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
         }
     }
     else{
+        if(context.pointer){
+            context.frame->input().pointerCaptureLost();
+            context.frame->input().pointerLeave();
+        }
         DestroyPointer(context);
     }
 

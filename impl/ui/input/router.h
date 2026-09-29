@@ -20,6 +20,11 @@ NWB_IMPL_UI_BEGIN
 // A single CPU owner serializes input and layout publication; native capture, IME, and clipboard remain OS services.
 class InputRouter final : NoCopy{
 private:
+    struct PointerGestureRecord{
+        PointerGesture gesture;
+        bool pendingUpdate = true;
+    };
+
     struct TargetLookup{
         u64 value = 0u;
         u32 index = 0u;
@@ -43,6 +48,8 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
     [[nodiscard]] bool consumeActivation(WidgetId id);
+    // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
+    [[nodiscard]] bool consumePointerGesture(WidgetId id, u64 declarationGeneration, PointerGesture& gesture);
     [[nodiscard]] WidgetId hitTest(const Point& position)const;
     [[nodiscard]] bool wouldConsumePointer(const Point& position)const;
     [[nodiscard]] u64 layoutGeneration()const{ return m_layoutGeneration; }
@@ -67,8 +74,12 @@ private:
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     void reconcileTargets();
     void updateHover();
+    void cancelPointerCapture();
     void cancelInteraction();
     void appendActivation(const HitTarget& target, InputActionSource::Enum source, InputRoutingResult& result);
+    void appendPointerGesture(const HitTarget& target, InputRoutingResult& result);
+    void updatePointerGesture(const Point& position, bool completed);
+    void reconcilePointerGestures();
     void routePointer(const InputEvent& event, InputRoutingResult& result);
     void routeKeyboard(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool moveFocus(bool reverse);
@@ -81,8 +92,10 @@ private:
     InputVector<TargetLookup> m_stagedLookup;
     InputVector<InputEvent> m_events;
     InputVector<InputAction> m_actions;
+    InputVector<PointerGestureRecord> m_pointerGestures;
     u64 m_layoutGeneration = 0u;
     u64 m_nextActionSequence = 1u;
+    u64 m_activeGestureSequence = 0u;
     WidgetId m_hover;
     WidgetId m_focus;
     WidgetId m_capture;

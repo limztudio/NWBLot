@@ -436,9 +436,27 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return 0;
 
         case WM_MOUSEMOVE: {
+            TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd, 0u };
+            if(!TrackMouseEvent(&tracking))
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 mouse-leave tracking failed"));
             DispatchMousePosition(*frame, lParam);
         }
         return 0;
+
+        case WM_MOUSELEAVE:
+            frame->input().pointerLeave();
+            return 0;
+
+        case WM_CAPTURECHANGED:
+            if(reinterpret_cast<HWND>(lParam) != hwnd)
+                frame->input().pointerCaptureLost();
+            return 0;
+
+        case WM_CANCELMODE:
+            frame->input().pointerCaptureLost();
+            if(GetCapture() == hwnd && !ReleaseCapture())
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 pointer capture release failed"));
+            return 0;
 
         case WM_LBUTTONDOWN:
         case WM_RBUTTONDOWN:

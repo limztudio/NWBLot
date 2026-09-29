@@ -23,8 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiSystem;
-
 namespace UiLayerPresentation{
     enum Enum : u8{ Scene, Standalone };
 };
@@ -65,8 +63,7 @@ public:
         ShaderPathResolveCallback shaderPathResolver,
         const Core::Assets::AssetRef<UiSkin>& skin,
         const FontReferences& fonts,
-        UiLayerPresentation::Enum presentation,
-        UiSystem* legacyInput = nullptr
+        UiLayerPresentation::Enum presentation
     );
     virtual ~UiLayerSystem()override;
 
@@ -90,17 +87,16 @@ public:
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
     virtual bool mouseScrollUpdate(f64 xoffset, f64 yoffset)override;
     virtual void windowFocusUpdate(bool focused)override;
+    virtual void pointerLeave()override;
+    virtual void pointerCaptureLost()override;
     [[nodiscard]] bool wantsKeyboard()const;
     [[nodiscard]] bool wantsPointer()const;
-    // Call before destroying the borrowed legacy system, or when removing only this adapter.
-    void detachLegacyInput();
 
 
 private:
     [[nodiscard]] bool collectRoots();
     void synchronizeInput();
     void routeInput(const Ui::InputEvent& event);
-    [[nodiscard]] bool legacyHit()const;
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
 
@@ -123,13 +119,11 @@ private:
     Ui::PaintVector<Ui::WidgetRoot> m_rootIdentities;
     Ui::GpuRenderer m_renderer;
     Ui::DisplayMetrics m_display;
-    UiSystem* m_legacyInput = nullptr;
     Ui::Point m_pointer;
     // One bounded native-key owner per held sequence; normalized navigation keys additionally use the CPU router.
     Array<u8, 512u> m_nativeKeyOwners{};
     u32 m_pressedButtons = 0u;
     u8 m_pointerOwner = 0u;
-    bool m_legacyKeyboardOwned = false;
     bool m_blockNativeChars = false;
     u64 m_frameGeneration = 0u;
     u64 m_skinGeneration = 1u;

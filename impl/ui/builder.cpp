@@ -24,13 +24,17 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_layout(arena)
     , m_items(arena)
     , m_stack(arena)
+    , m_window(arena)
 {
     m_items.reserve(s_LayoutMaxNodes);
     m_stack.reserve(64u);
 }
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
-    if(m_panelActive || !m_skin || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)){
+    if(
+        m_panelActive || m_windowActive || !m_skin
+        || (direction != LayoutDirection::Row && direction != LayoutDirection::Column)
+    ){
         m_context.fail();
         return false;
     }
@@ -60,7 +64,7 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
 }
 
 bool Builder::endPanel(){
-    if(!m_panelActive || m_stack.size() != 1u || m_context.failed() || !m_layout.arrange(m_bounds)){
+    if(!m_panelActive || m_windowActive || m_stack.size() != 1u || m_context.failed() || !m_layout.arrange(m_bounds)){
         m_context.fail();
         return false;
     }
@@ -111,9 +115,11 @@ bool Builder::checkbox(const AStringView stableKey, const StringView text, bool&
 }
 
 void Builder::reset(){
-    if(m_panelActive)
+    if(m_panelActive || m_windowActive)
         m_context.fail();
     m_panelActive = false;
+    m_windowActive = false;
+    m_window.state = nullptr;
     m_items.clear();
     m_stack.clear();
     m_layout.reset();
@@ -121,7 +127,10 @@ void Builder::reset(){
 
 bool Builder::beginContainer(
     const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
-    if(!m_panelActive || m_stack.size() >= 64u || !m_context.declare(stableKey, WidgetKind::Container)){
+    if(
+        !m_panelActive || (m_windowActive && m_window.state->collapsed) || m_stack.size() >= 64u
+        || !m_context.declare(stableKey, WidgetKind::Container)
+    ){
         m_context.fail();
         return false;
     }
@@ -142,7 +151,10 @@ bool Builder::beginContainer(
 
 Builder::Item* Builder::addItem(
     const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
-    if(!m_panelActive || m_context.failed() || m_items.size() >= s_LayoutMaxNodes){
+    if(
+        !m_panelActive || (m_windowActive && m_window.state->collapsed)
+        || m_context.failed() || m_items.size() >= s_LayoutMaxNodes
+    ){
         m_context.fail();
         return nullptr;
     }

@@ -20,6 +20,8 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     updateHover();
     const HitTarget* hit = findTarget(m_hover);
     if(event.type == InputEventType::PointerMove){
+        if(m_primaryDown)
+            updatePointerGesture(event.position, false);
         result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : hit != nullptr;
         return;
     }
@@ -35,6 +37,8 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         m_captureDeclaration = hit == nullptr ? 0u : hit->declarationGeneration;
         m_focus = hit != nullptr && hit->focusable ? hit->id : WidgetId{};
         m_focusDeclaration = m_focus.valid() ? hit->declarationGeneration : 0u;
+        if(hit != nullptr && hit->pointerGesture)
+            appendPointerGesture(*hit, result);
         return;
     }
     result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : hit != nullptr;
@@ -43,6 +47,8 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
         && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable
     )
         appendActivation(*hit, InputActionSource::Pointer, result);
+    if(m_primaryDown)
+        updatePointerGesture(event.position, true);
     m_primaryDown = false;
     m_pointerSequenceConsumed = false;
     m_capture = {};

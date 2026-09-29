@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace InputEventType{
-    enum Enum : u8{ PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave };
+    enum Enum : u8{ PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost };
 };
 
 namespace InputKey{
@@ -28,6 +28,10 @@ namespace InputKey{
 
 namespace InputActionSource{
     enum Enum : u8{ Pointer, Keyboard };
+};
+
+namespace PointerGestureState{
+    enum Enum : u8{ Active, Completed };
 };
 
 struct InputEvent{
@@ -48,6 +52,9 @@ struct HitTarget{
     bool enabled = true;
     bool focusable = false;
     bool activatable = false;
+    bool pointerGesture = false;
+    // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
+    Rect gestureReference{};
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -67,12 +74,23 @@ struct InputAction{
     InputActionSource::Enum source = InputActionSource::Pointer;
 };
 
+// One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
+struct PointerGesture{
+    InputActionId id;
+    Point origin;
+    Point position;
+    Rect targetRectangle;
+    Rect referenceRectangle;
+    PointerGestureState::Enum state = PointerGestureState::Active;
+};
+
 struct InputRoutingResult{
     bool pointerConsumed = false;
     bool keyboardConsumed = false;
     bool wantsPointer = false;
     bool wantsKeyboard = false;
     bool activationOverflow = false;
+    bool gestureOverflow = false;
     WidgetId hover;
     WidgetId focus;
     WidgetId capture;
@@ -81,6 +99,7 @@ struct InputRoutingResult{
 inline constexpr usize s_InputMaxTargets = 4096u;
 inline constexpr usize s_InputMaxEvents = 256u;
 inline constexpr usize s_InputMaxActions = 256u;
+inline constexpr usize s_InputMaxPointerGestures = 256u;
 
 template<typename T>
 using InputVector = Vector<T, Core::Alloc::GlobalArena>;

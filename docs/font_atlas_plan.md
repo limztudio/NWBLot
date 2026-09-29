@@ -1,12 +1,12 @@
 # Offline RGBA SDF font atlases
 
-Status: implemented on `custom_ui`. The offline utility, CPU asset/cooker, immutable UI image bindings, GPU resource owner, and channel-selecting shader are available. This increment extends the existing native font and HarfBuzz text service; interactive controls and ImGui retirement remain later toolkit work.
+Status: implemented on `custom_ui`. The offline utility, CPU asset/cooker, immutable UI image bindings, GPU resource owner, and channel-selecting shader are available. Generated and default atlas packages now use authoring schema 2 with all atlas data embedded in one `.nwb` file. This extends the existing native font and HarfBuzz text service; ongoing toolkit work is tracked in [the custom UI plan](custom_ui_plan.md).
 
 ## 1. Delivered result
 
 `utilities/font_atlas` reads an admitted static `.ttf` or `.otf` face and bakes every source glyph ID into a scalar signed distance field. Four independent pages occupy R, G, B, and A of one lossless linear RGBA8 image. Further pages allocate another RGBA group. Each glyph selects exactly one channel; alpha is another distance plane.
 
-The utility publishes a readable `font_atlas asset;` `.nwb` document and adjacent content-addressed `.rgba`, `.kern`, `.GPOS`, and `.GDEF` payloads as needed. The regular asset pipeline validates and cooks that package into one versioned `FontAtlas` asset. Runtime decoding needs no image decoder or sidecar filesystem access. The matching original `Font` remains necessary for shaping and native coverage fallback.
+The utility publishes one readable `font_atlas asset;` `.nwb` document containing glyph metadata, every RGBA group, and original `kern`, `GPOS`, and `GDEF` tables as present in the source face. Authoring schema 2 embeds each binary payload as deterministic Zstd-compressed bytes encoded in canonical base64 chunks. New packages contain no hash-named payload files. Payload SHA-256 values are retained solely for decoded-content integrity checks. The regular asset pipeline validates and cooks the document into one `FontAtlas` asset using the unchanged runtime `FTA1` version 1 format. The matching original `Font` remains a separate asset required for shaping and native coverage fallback. Legacy authoring schema 1 documents with adjacent payload files remain valid cooker inputs.
 
 Four packed channels use the same uncompressed pixel bytes as four equally sized R8 pages. This arrangement reduces texture objects and descriptors; it is not compression. GPU performance gains require measurements of the actual workload.
 
@@ -19,17 +19,18 @@ The bundled Latin atlas has 3,748 indexed glyphs, six logical pages, and two 102
 | Utility | `main.cpp`, `command_line.cpp`, `global.h`, `launch.py` | Process logger/arenas, arguments, portable paths, and exit status. |
 | Utility | `font_source.*`, `sdf_raster.cpp` | Exact source admission, native face lifetime, glyph enumeration, explicit FreeType rendering, and padded bounds. |
 | Utility | `atlas_pack.cpp`, `kerning.cpp`, `bake.cpp` | Deterministic packing, exact positioning-table export, and candidate construction. |
-| Utility | `asset_writer.cpp` | Canonical metadata, hashes, verified payload staging, and final publication. |
+| Utility | `asset_metadata.*`, `asset_writer.cpp` | Canonical embedded metadata, integrity hashes, verified single-file staging, and final publication. |
 | CPU asset | `impl/assets_font_atlas/model.h`, `asset.h`, `validation.cpp`, `positioning_validation.cpp`, `source_match.cpp` | Typed identity, immutable records, format-wide bounds, positioning admission, and exact font matching. |
+| Authoring payload | `source_payload.*`, target `nwb_assets_font_atlas_source` | Shared deterministic compression, decoded-size bounds, exact-frame admission, and failure-atomic decompression. |
 | CPU codec | `binary_payload.h`, `binary.cpp`, `runtime.cpp` | Explicit little-endian serialization, bounded decoding, and failure-atomic asset loading. |
-| Cooker | `cook_metadata*`, `cook.cpp`, `volume_entry.cpp` | Strict declarative schema, adjacent dependencies, normal package cooking, and registrars. |
+| Cooker | `cook_metadata*`, `cook.cpp`, `volume_entry.cpp` | Strict schema 2 embedded payload admission, legacy schema 1 import, normal package cooking, and registrars. |
 | UI text | `impl/ui/text/baked_atlas.*`, `sdf_page.*`, `service_paint.cpp` | Strong immutable image versions, shaped glyph geometry, scale policy, and native coverage fallback. |
 | Paint | `impl/ui/paint_images.cpp`, `paint_sdf.cpp` | Atomic mixed-image admission, clipping, material selection, and adjacent batching. |
 | GPU | `impl/ui/gpu/renderer_sdf_resources.*`, `renderer_image_cache.cpp` | Upload readiness, descriptors, graph imports, shared image capacity, and completion lifetimes. |
 | Shader | `impl/assets/graphics/ui/glyph_sdf.slangi`, `ps.slang`, `push_constants.h` | One-channel reconstruction, antialiasing, and checked CPU/shader ABI. |
 | ECS adapter | `impl/ecs_ui/layer_system_fonts.cpp` | Load explicit typed font/atlas bindings and borrow the existing text service. |
 
-The utility uses vendored FreeType, project scalar/container/path types, and caller-owned arenas. It does not depend on system font discovery or platform font rendering APIs. Win32 and Linux share the algorithm and byte format. `core/os` continues to own clipboard/native selection and future IME services; font generation does not move those responsibilities into UI or ECS.
+The utility uses vendored FreeType and Zstd, project scalar/container/path types, and caller-owned arenas. It does not depend on system font discovery or platform font rendering APIs. Win32 and Linux share the algorithm and byte format. `core/os` owns clipboard/native selection and IME services; font generation does not move those responsibilities into UI or ECS.
 
 ## 3. Generator admission and publication
 
@@ -39,7 +40,7 @@ The source must be one regular static SFNT `.ttf` or `.otf` file, at most 32 MiB
 
 The restored SDF sources and module registrations come from the exact FreeType 2.14.3 revision `0a0221a1347e2f1e07c395263540026e9a0aa7c7` recorded in the vendor manifest. The default `--renderer bitmap` creates unhinted grayscale coverage and then invokes the bitmap-SDF renderer. `--renderer outline` explicitly requests direct outline SDF. A native raster error aborts that bake; renderer selection never changes silently.
 
-Default utility settings are 64 ppem, spread 8, extent 1024, and at most eight RGBA groups. Schema 1 bounds are:
+Default utility settings are 64 ppem, spread 8, extent 1024, and at most eight RGBA groups. Shared decoded-payload bounds for authoring schemas 1 and 2 and runtime `FTA1` version 1 are:
 
 - 65,535 glyphs, eight RGBA groups, and group extent at most 2048 by 2048.
 - At most 128 MiB of decoded RGBA bytes and 32 MiB of positioning-table bytes.
@@ -47,21 +48,23 @@ Default utility settings are 64 ppem, spread 8, extent 1024, and at most eight R
 
 Packing sorts descending bitmap height, descending width, then ascending glyph ID. A deterministic shelf traversal visits logical pages in ascending order without rotating glyphs. An oversized glyph or exhausted group budget reports failure instead of scaling or omitting the glyph.
 
-The complete candidate is validated before publication. Payload filenames contain their full SHA-256, and any existing file at that identity must match its exact bytes. New payloads are written and verified before the staged metadata is atomically renamed into place. Replacing existing metadata requires `--overwrite`. Failed admission/publication preserves the previous package; old content-addressed and unrelated files remain available. An occupied staging path is preserved and reported as a publication failure.
+The complete candidate is validated before publication. Each group and table is compressed into one Zstd frame at fixed level 9, with declared content size and checksum, without a dictionary or worker threads. The frame is encoded into canonical base64 chunks of at most 4,096 characters, with every nonfinal chunk exactly 4,096 characters. The generator stages, flushes, and verifies the complete `.nwb` document before atomically renaming it into place. Replacing an existing atlas requires `--overwrite`. Failed admission/publication preserves the previous atlas. An occupied staging path is preserved and reported as a publication failure.
 
-Metadata order and locale-independent numeric formatting are stable. Generator comments record the pinned implementation rather than timestamps or host paths. Repeated native Windows bakes are byte-identical. Equivalent native Linux execution remains a qualification gate.
+Metadata order, compression settings, and locale-independent numeric formatting are stable. Generator comments record the pinned implementation rather than timestamps or host paths. Deterministic repeat generation is a qualification requirement. Equivalent native Linux execution remains a qualification gate.
 
 ## 4. Pixel, glyph, metadata, and binary contracts
 
 Logical page `p` maps to group `p / 4` and channel `p % 4`, in R/G/B/A order. Rows are top to bottom, pixels left to right, and each pixel has four consecutive bytes. A group has exactly `width * height * 4` bytes, with no row padding or mip data. Unused texels/channels contain exterior zero.
 
-Schema 1 uses linear `RGBA8_UNORM`, bilinear clamp sampling, and the FreeType scalar distance encoding. No sRGB conversion, premultiplication, alpha processing, lossy compression, or ordinary image mip generation touches these payloads. `FontAtlas` owns raw bytes because the current general texture pipeline uses compressed transport and a complete mip chain.
+The decoded atlas uses linear `RGBA8_UNORM`, bilinear clamp sampling, and the FreeType scalar distance encoding. No sRGB conversion, premultiplication, alpha processing, lossy compression, or ordinary image mip generation touches these payloads. Authoring compression restores the exact original pixel bytes before asset validation and cooking. `FontAtlas` owns raw bytes because the current general texture pipeline uses compressed transport and a complete mip chain.
 
 Every drawable glyph records its source glyph ID, group/channel, integer sampled rectangle, padded baseline-relative plane bounds, and inspection advance. Plane bounds use font design units with positive Y downward and come from the SDF bitmap's actual bearings and dimensions, including its spread. The extra guard lies outside the sampled rectangle. Same-channel guarded rectangles cannot overlap; different channels may share coordinates.
 
-The `.nwb` also records schema/encoding tokens, a typed `AssetRef<Font>`, exact font SHA-256, face index, source glyph count, units per em, vertical metrics, raster settings, group hashes/lengths, and positioning-table sidecars/hashes. Unknown fields, malformed hashes, unsupported tokens, incomplete glyph lists, unsafe paths, duplicate basenames, invalid metrics, altered payloads, and inconsistent bounds fail admission. See a [small runnable metadata fixture](../tests/integration/assets_font_atlas/fixtures/atlas.nwb) or the full default atlas documents for the implemented syntax.
+The `.nwb` also records schema/encoding tokens, a typed `AssetRef<Font>`, exact font SHA-256, face index, source glyph count, units per em, vertical metrics, raster settings, group hashes/lengths, and positioning-table records. Schema 2 declares `payload_encoding = "zstd_base64"`; each group/table record stores `data_base64`, `packed_byte_count`, decoded `byte_count`, and decoded `sha256`. The cooker preflights exact chunk count, canonical alphabet/padding, chunk extents, and the packed-byte bound before allocation. Compressed data is limited to `ZSTD_compressBound` for the admitted decoded size. Decode requires exactly one complete frame with the declared content size and checksum and rejects malformed, unknown-size, dictionary, excessive-window, skippable, concatenated, truncated, or trailing data.
 
-The binary codec encodes values explicitly in little endian. It has a fixed 164-byte header, canonical sequential sections, 52-byte glyph records, 44-byte group headers followed by exact pixels, and 40-byte positioning headers followed by exact table bytes. Counts/ranges are checked before allocation; reserved fields must be zero and the final section must consume the exact asset length. Failed parsing, decoding, or loading leaves previously published output intact.
+Unknown fields, malformed hashes, unsupported tokens, incomplete glyph lists, invalid metrics, altered decoded payloads, and inconsistent bounds fail admission. Legacy schema 1 additionally requires distinct adjacent payload basenames, safe paths, and exact file sizes. See the [small legacy schema 1 fixture](../tests/integration/assets_font_atlas/fixtures/atlas.nwb) or the full default schema 2 atlas documents for the implemented syntax.
+
+The unchanged runtime `FTA1` version 1 binary codec encodes values explicitly in little endian. It has a fixed 164-byte header, canonical sequential sections, 52-byte glyph records, 44-byte group headers followed by exact pixels, and 40-byte positioning headers followed by exact table bytes. Authoring schema versioning is independent of this runtime version. Counts/ranges are checked before allocation; reserved fields must be zero and the final section must consume the exact asset length. Failed parsing, decoding, or loading leaves previously published output intact.
 
 ## 5. Font identity, shaping, and kerning
 
@@ -101,7 +104,7 @@ Each snapshot-local SDF image has a distinct graph identity and explicit ready/r
 
 ## 8. Validation and remaining gates
 
-Windows ARM64 / Clang, `opt`, validation for this increment:
+Historical Windows ARM64 / Clang, `opt`, qualification of the original font-atlas and rendering increment is retained below. These counts predate the schema 2 single-file packaging update and do not describe its current validation run:
 
 - Production libraries, utility, asset builder, UI-only smoke, and Testbed build. Their pipelines cook 119 engine-only and 136 Testbed assets, including both default atlases and the updated shader.
 - 42 UI tests, 12 font-atlas asset tests, six bake tests, eight source-font asset tests, and 12 affected graphics/composition/shader checks pass.
@@ -110,4 +113,4 @@ Windows ARM64 / Clang, `opt`, validation for this increment:
 - Both GPU-validation acquired-backbuffer smoke tests pass: 25 numeric probes per capture across three captures, plus Latin/Korean/clipping/edge checks. The resized Testbed capture at 901 by 607 was visually inspected.
 - All 55 unique affected production and test translation units pass Linux x86_64 syntax compilation using actual Linux libc/libstdc++/FreeType/HarfBuzz/platform headers. Logs and source hashes are retained in the disposable local sysroot artifacts. This Windows host has no Linux runtime, so Linux linking, native baking equivalence, and GPU execution remain unqualified.
 
-The following remain separate increments: interactive state/layout/focus/input, controls and editing, OS IME for Win32/Linux, additional font/scale qualification, live HDR presentation, native Linux execution, and eventual ImGui removal. The raw table export remains the declared kerning representation; a normalized positioning evaluator would require its own format and scope.
+Current schema 2 packaging qualification must additionally verify actual single-file generation and deterministic repetition, exact decoded pixels and positioning bytes, strict malformed/chunk/frame admission, failure-atomic replacement, and normal asset-pipeline cooking. Toolkit progress, including ImGui retirement and Win32/Linux OS IME services, is recorded in [the custom UI plan](custom_ui_plan.md). Additional font/scale qualification, live HDR presentation, and native Linux execution remain separate gates. The raw table export remains the declared kerning representation; a normalized positioning evaluator would require its own format and scope.

@@ -1,6 +1,6 @@
 # Offline font atlas utility
 
-`font_atlas` turns every glyph ID in one admitted static `.ttf` or `.otf` SFNT face into a scalar signed distance field. Four independent pages occupy R, G, B and A of a lossless linear RGBA texture. The utility emits `font_atlas` metadata plus adjacent content-addressed raw payloads for the `impl/assets_font_atlas` cooker/runtime. Alpha is a fourth distance plane, not image opacity.
+`font_atlas` turns every glyph ID in one admitted static `.ttf` or `.otf` SFNT face into a scalar signed distance field. Four independent pages occupy R, G, B and A of a lossless linear RGBA texture. The utility emits one self-contained `.nwb` file for the `impl/assets_font_atlas` cooker/runtime. Its metadata, every RGBA texture group and the original positioning tables are stored together. Alpha is a fourth distance plane, not image opacity.
 
 ## Build and usage
 
@@ -21,17 +21,19 @@ python -m launcher font-atlas --skip-build --config opt -- --font "C:/WorkStatio
 
 Replace the checkout prefix with your own absolute path on Windows or Linux. You may also build `nwb_font_atlas` directly and run `font_atlas` from a chosen working directory.
 
-The required font asset identity names the separately cooked `Font`, not the source filename. Default settings are 64 pixels per em, spread 8, square 1024-pixel planes and up to 8 RGBA groups. `--ppem` accepts 16..256, `--spread` accepts 2..32, `--extent` accepts 32..2048, and `--max-groups` accepts 1..8. Total decoded group capacity remains at most 128 MiB. An individually oversized glyph or exhausted capacity fails with a glyph/footprint diagnostic. It never drops glyphs or changes the bake size.
+The required font asset identity names the separately cooked `Font`, not the source filename. The source font remains a separate shaping asset: the atlas stores its identity and hash so the runtime can verify the selected face before sampling the texture. Default settings are 64 pixels per em, spread 8, square 1024-pixel planes and up to 8 RGBA groups. `--ppem` accepts 16..256, `--spread` accepts 2..32, `--extent` accepts 32..2048, and `--max-groups` accepts 1..8. Total decoded group capacity remains at most 128 MiB. An individually oversized glyph or exhausted capacity fails with a glyph/footprint diagnostic. It never drops glyphs or changes the bake size.
 
 `--renderer bitmap` is the default: FreeType renders an unhinted grayscale bitmap, then its pinned bitmap-SDF renderer produces the field. This handles intersecting outlines consistently. `--renderer outline` requests direct outline SDF; native unsupported-outline errors fail explicitly, without switching algorithms. Both exact FreeType 2.14.3 SDF renderers are built from the vendored commit recorded in `3rd_parties/freetype/nwb_update.txt`.
 
 ## Output contract
 
-Metadata records the source SHA-256, face index, glyph count, units per em, ascender/descender/line gap, bake settings, renderer, and distance encoding. Every source glyph has a record, including whitespace with its design-unit advance and no drawable rectangle. Shaped ligatures and contextual forms therefore remain addressable by their actual glyph IDs.
+Source schema 2 records the source SHA-256, face index, glyph count, units per em, ascender/descender/line gap, bake settings, renderer, and distance encoding. Every source glyph has a record, including whitespace with its design-unit advance and no drawable rectangle. Shaped ligatures and contextual forms therefore remain addressable by their actual glyph IDs.
+
+Each texture-group and positioning-table record embeds a losslessly compressed Zstandard frame as canonical base64 text chunks. `asset.payload_encoding = "zstd_base64"` describes this transport. `data_base64` is a list of quoted chunks of at most 4096 characters; all nonfinal chunks have exactly 4096 characters. `packed_byte_count` describes the decoded compressed frame, while `byte_count` and `sha256` describe the original RGBA or OpenType table bytes. Hashes verify integrity and font identity; they do not name external payload files. Multiple RGBA groups remain inside the same `.nwb`.
 
 A drawable record identifies a group/channel and sampled pixel rectangle. Its design-unit plane bounds come from the SDF bitmap's actual bearing and dimensions, including the distance spread. Geometry and logical advances must use HarfBuzz's positions, offsets and selected face. The utility's unshaped advance is inspection data.
 
-Packing sorts descending bitmap height, descending width, then ascending glyph ID. A deterministic shelf traversal checks logical pages in R/G/B/A group order without rotation. Sampled rectangles have one exterior guard texel. Rows are top to bottom and pixels are interleaved RGBA bytes, without row padding or mip data. Empty texels and channels are encoded exterior zero. No lossy compressor, sRGB conversion, alpha processing or ordinary mip generation is applied.
+Packing sorts descending bitmap height, descending width, then ascending glyph ID. A deterministic shelf traversal checks logical pages in R/G/B/A group order without rotation. Sampled rectangles have one exterior guard texel. Rows are top to bottom and pixels are interleaved RGBA bytes, without row padding or mip data. Empty texels and channels are encoded exterior zero. The source file uses deterministic lossless Zstandard compression and base64 for text transport. Decoding restores the original bytes before cooking. No lossy image compressor, sRGB conversion, alpha processing or ordinary mip generation is applied.
 
 For `freetype_sdf_u8_v1`, byte 128 is zero distance and positive distance is inside the glyph. The shader selects one channel and decodes `(sample * 255 - 128) * spread / 128`; derivative-based coverage adjusts antialiasing to display scale. Scalar fields do not guarantee arbitrary zoom or preserve detail missing from the bake.
 
@@ -45,8 +47,8 @@ Admission checks bounded table versions, roots and lookup references; legacy for
 
 ## Publication and reproducibility
 
-A bake validates the complete candidate before touching output. Payload names contain their full SHA-256. Existing payloads with the same name must match every byte. The utility writes and verifies new payloads before atomically renaming the staged `.nwb` file into place. `--overwrite` is required to replace metadata. Failed capacity, raster or validation admission leaves the previous package usable; failed final publication leaves its metadata and payloads intact. Old content-addressed files remain available and unrelated output files are never deleted.
+A bake validates and encodes the complete candidate before staging one `.nwb` file. It creates `<output>.tmp` exclusively, writes and flushes it, verifies every staged byte, then atomically renames that file into place. An occupied temporary path fails without modifying or deleting that path. `--overwrite` is required to replace an existing regular atlas file. Failed capacity, raster, validation, staging or final publication leaves the previous atlas usable. The utility creates no payload sidecars and never deletes unrelated files or older outputs automatically.
 
-Record order and locale-independent numeric formatting are stable. Metadata excludes timestamps and host/source paths, and records the pinned generator/FreeType revision in comments. Repeat bakes on one platform must be byte-identical. Native Win32/Linux byte equivalence requires actual execution on both platforms; syntax compilation alone does not establish it.
+Record order, compression settings and locale-independent numeric formatting are stable. The `.nwb` excludes timestamps and host/source paths, and records the pinned generator/FreeType revision in comments. Repeat bakes on one platform must be byte-identical. Native Win32/Linux byte equivalence requires actual execution on both platforms; syntax compilation alone does not establish it.
 
-`tests/integration/font_atlas` covers independent channels, transitions beyond four pages, bounded legacy/class kerning records, malformed offsets, full Latin/Korean generation, payload identity, repeat bakes, overwrite refusal and preservation of an existing package after failure.
+`tests/integration/font_atlas` covers independent channels, transitions beyond four pages, bounded legacy/class kerning records, malformed offsets, full Latin/Korean generation, single-file publication, embedded payload identity, repeat bakes, overwrite refusal, occupied temporary-path preservation and preservation of an existing atlas after failure.

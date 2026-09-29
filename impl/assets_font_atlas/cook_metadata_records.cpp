@@ -28,17 +28,22 @@ namespace FontAtlasMetadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ReadGroups(const Path& path, const Core::Metascript::Value& asset, FontAtlasPayload& outPayload){
+bool ReadGroups(const Path& path, const Core::Metascript::Value& asset, const u32 schemaVersion, FontAtlasPayload& outPayload){
     const Core::Metascript::Value* groups = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, "groups");
     if(!groups || groups->asList().empty() || groups->asList().size() > s_FontAtlasMaxGroupCount)
         return false;
     outPayload.groups.reserve(groups->asList().size());
     u64 totalBytes = 0u;
     for(const Core::Metascript::Value& record : groups->asList()){
-        if(
-            !Core::Assets::CheckMetadataAssetMap(path, record, s_DiagnosticPrefix)
-            || !Core::Assets::ValidateMetadataAssetFields(path, record, s_DiagnosticPrefix, { "extent", "data", "byte_count", "sha256" })
-        )
+        if(!Core::Assets::CheckMetadataAssetMap(path, record, s_DiagnosticPrefix))
+            return false;
+        if(schemaVersion == 1u){
+            if(!Core::Assets::ValidateMetadataAssetFields(path, record, s_DiagnosticPrefix, { "extent", "data", "byte_count", "sha256" }))
+                return false;
+        }
+        else if(!Core::Assets::ValidateMetadataAssetFields(
+            path, record, s_DiagnosticPrefix, { "extent", "data_base64", "packed_byte_count", "byte_count", "sha256" }
+        ))
             return false;
         FontAtlasGroup group(outPayload.groups.get_allocator().arena());
         u32 extent[2u] = {};
@@ -55,7 +60,11 @@ bool ReadGroups(const Path& path, const Core::Metascript::Value& asset, FontAtla
             || static_cast<u64>(group.width) * group.height * 4u != byteCount || totalBytes + byteCount > s_FontAtlasMaxPixelBytes
         )
             return false;
-        if(!ReadRawPayload(path, record, byteCount, group.pixels))
+        if(schemaVersion == 1u){
+            if(!ReadRawPayload(path, record, byteCount, group.pixels))
+                return false;
+        }
+        else if(!ReadEmbeddedPayload(path, record, byteCount, group.pixels))
             return false;
         totalBytes += byteCount;
         outPayload.groups.push_back(Move(group));
@@ -110,17 +119,22 @@ bool ReadGlyphs(const Path& path, const Core::Metascript::Value& asset, FontAtla
     return true;
 }
 
-bool ReadPositioning(const Path& path, const Core::Metascript::Value& asset, FontAtlasPayload& outPayload){
+bool ReadPositioning(const Path& path, const Core::Metascript::Value& asset, const u32 schemaVersion, FontAtlasPayload& outPayload){
     const Core::Metascript::Value* tables = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, "positioning_tables");
     if(!tables || tables->asList().size() > 3u)
         return false;
     outPayload.positioningTables.reserve(tables->asList().size());
     u64 totalBytes = 0u;
     for(const Core::Metascript::Value& record : tables->asList()){
-        if(
-            !Core::Assets::CheckMetadataAssetMap(path, record, s_DiagnosticPrefix)
-            || !Core::Assets::ValidateMetadataAssetFields(path, record, s_DiagnosticPrefix, { "tag", "data", "byte_count", "sha256" })
-        )
+        if(!Core::Assets::CheckMetadataAssetMap(path, record, s_DiagnosticPrefix))
+            return false;
+        if(schemaVersion == 1u){
+            if(!Core::Assets::ValidateMetadataAssetFields(path, record, s_DiagnosticPrefix, { "tag", "data", "byte_count", "sha256" }))
+                return false;
+        }
+        else if(!Core::Assets::ValidateMetadataAssetFields(
+            path, record, s_DiagnosticPrefix, { "tag", "data_base64", "packed_byte_count", "byte_count", "sha256" }
+        ))
             return false;
         FontAtlasPositioningTable table(outPayload.positioningTables.get_allocator().arena());
         AStringView tag;
@@ -138,10 +152,13 @@ bool ReadPositioning(const Path& path, const Core::Metascript::Value& asset, Fon
             table.tag = s_FontAtlasGdefTag;
         else
             return false;
-        if(
-            byteCount == 0u || totalBytes + byteCount > s_FontAtlasMaxPositioningBytes
-            || !ReadRawPayload(path, record, s_FontAtlasMaxPositioningBytes, table.bytes)
-        )
+        if(byteCount == 0u || totalBytes + byteCount > s_FontAtlasMaxPositioningBytes)
+            return false;
+        if(schemaVersion == 1u){
+            if(!ReadRawPayload(path, record, s_FontAtlasMaxPositioningBytes, table.bytes))
+                return false;
+        }
+        else if(!ReadEmbeddedPayload(path, record, byteCount, table.bytes))
             return false;
         totalBytes += byteCount;
         outPayload.positioningTables.push_back(Move(table));

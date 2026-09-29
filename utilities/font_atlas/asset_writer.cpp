@@ -3,8 +3,14 @@
 
 
 #include "bake.h"
+#include "asset_metadata.h"
 
+#include <global/blocking_io.h>
 #include <logger/client/logger.h>
+
+#if defined(NWB_PLATFORM_LINUX)
+#include <fcntl.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,33 +28,6 @@ namespace __hidden_font_atlas_writer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MetadataString = ::AString<Core::Assets::AssetArena>;
-
-[[nodiscard]] static AString HashText(const Sha256Digest& hash){
-    constexpr AStringView digits = "0123456789abcdef";
-    AString text(64u, '0');
-    for(u32 index = 0u; index < 32u; ++index){
-        text[index * 2u] = digits[hash.bytes[index] >> 4u];
-        text[index * 2u + 1u] = digits[hash.bytes[index] & 15u];
-    }
-    return text;
-}
-
-[[nodiscard]] static AString TableTag(const u32 tag){
-    if(tag == Impl::s_FontAtlasKernTag)
-        return "kern";
-    if(tag == Impl::s_FontAtlasGposTag)
-        return "GPOS";
-    return "GDEF";
-}
-
-[[nodiscard]] static AString PayloadName(const Sha256Digest& hash, const AStringView extension){
-    AString name = "atlas_";
-    name += HashText(hash);
-    name += extension;
-    return name;
-}
-
 class TemporaryFile final : NoCopy{
 public:
     explicit TemporaryFile(const Path& path)
@@ -64,15 +43,29 @@ public:
 
 
 public:
-    [[nodiscard]] bool claim(){
-        ErrorCode error;
-        const bool exists = FileExists(m_path, error);
-        if(error || exists){
+    [[nodiscard]] bool stage(const AStringView text){
+#if defined(NWB_PLATFORM_WINDOWS)
+        const HANDLE handle = CreateFile(m_path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if(handle == INVALID_HANDLE_VALUE){
             NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: temporary path unavailable '{}'"), PathToString<tchar>(m_path));
             return false;
         }
         m_owned = true;
-        return true;
+        const bool written = WriteAllWin32Handle(handle, text.data(), text.size());
+        const bool flushed = written && FlushFileBuffers(handle);
+        const bool closed = CloseHandle(handle);
+#else
+        const int descriptor = open(m_path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666u);
+        if(descriptor < 0){
+            NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: temporary path unavailable '{}'"), PathToString<tchar>(m_path));
+            return false;
+        }
+        m_owned = true;
+        const bool written = WriteAllFileDescriptor(descriptor, text.data(), text.size());
+        const bool flushed = written && fsync(descriptor) == 0;
+        const bool closed = close(descriptor) == 0;
+#endif
+        return written && flushed && closed;
     }
     void published(){ m_owned = false; }
 
@@ -82,90 +75,14 @@ private:
     bool m_owned = false;
 };
 
-[[nodiscard]] static bool PublishPayload(const Path& path, const Core::Assets::AssetBytes& bytes){
+[[nodiscard]] static bool OutputAvailable(const BakeOptions& options){
     ErrorCode error;
-    const bool exists = FileExists(path, error);
-    if(error)
-        return false;
-    if(exists){
-        Core::Assets::AssetBytes previous(bytes.get_allocator().arena());
-        if(
-            FileSize(path, error) != bytes.size()
-            || error
-            || !ReadBinaryFile(path, previous, error)
-            || error
-            || previous.size() != bytes.size()
-            || NWB_MEMCMP(previous.data(), bytes.data(), bytes.size()) != 0
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: content-addressed payload mismatch '{}'"), PathToString<tchar>(path));
-            return false;
-        }
-        return true;
-    }
-    Path temporary(path);
-    temporary += ".tmp";
-    TemporaryFile cleanup(temporary);
-    if(!cleanup.claim() || !WriteBinaryFile(temporary, bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: cannot stage payload '{}'"), PathToString<tchar>(path));
+    const bool exists = FileExists(options.output, error);
+    if(error || (exists && (!options.overwrite || !IsRegularFile(options.output, error))) || error){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: output unavailable; pass --overwrite to replace a regular file"));
         return false;
     }
-    Core::Assets::AssetBytes staged(bytes.get_allocator().arena());
-    if(
-        !ReadBinaryFile(temporary, staged, error)
-        || error
-        || staged.size() != bytes.size()
-        || NWB_MEMCMP(staged.data(), bytes.data(), bytes.size()) != 0
-        || !RenamePath(temporary, path, error)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: cannot verify/publish payload '{}'"), PathToString<tchar>(path));
-        return false;
-    }
-    cleanup.published();
     return true;
-}
-
-[[nodiscard]] static MetadataString BuildMetadata(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
-    MetadataString text(payload.glyphs.get_allocator().arena());
-    const AString escapedFont = MakeJsonEscapedText<AString>(options.fontAsset);
-    const AString sourceHash = HashText(payload.fontSha256);
-    StringAppendFormat(text, "// Generated by font_atlas schema1; FreeType2.14.3 0a0221a1347e2f1e07c395263540026e9a0aa7c7.\r\n");
-    StringAppendFormat(text, "// Kerning scope: lossless original kern/GPOS/GDEF tables, not normalized pairs or a shaping result.\r\n");
-    StringAppendFormat(text, "font_atlas asset;\r\n\r\nasset.schema_version = 1;\r\nasset.font = \"{}\";\r\nasset.font_sha256 = \"{}\";\r\n", escapedFont, sourceHash);
-    StringAppendFormat(text, "asset.face_index = {};\r\nasset.units_per_em = {};\r\nasset.source_glyph_count = {};\r\nasset.glyph_policy = \"all\";\r\n", payload.faceIndex, payload.unitsPerEm, payload.sourceGlyphCount);
-    StringAppendFormat(text, "asset.bake_ppem = {};\r\nasset.sdf_renderer = \"{}\";\r\nasset.spread_pixels = {};\r\n", payload.bakePpem, options.outline ? "outline" : "bitmap", payload.spreadPixels);
-    StringAppendFormat(text, "asset.distance_encoding = \"freetype_sdf_u8_v1\";\r\nasset.guard_texels = {};\r\nasset.payload_format = \"rgba8_linear\";\r\nasset.mip_count = 1;\r\n", payload.guardTexels);
-    StringAppendFormat(text, "asset.ascender_units = {};\r\nasset.descender_units = {};\r\nasset.line_gap_units = {};\r\n", payload.ascenderUnits, payload.descenderUnits, payload.lineGapUnits);
-    StringAppendFormat(text, "asset.groups = [\r\n");
-    for(usize index = 0u; index < payload.groups.size(); ++index){
-        const auto& group = payload.groups[index];
-        StringAppendFormat(text, "    {{\"extent\": [{}, {}], \"data\": \"{}\", \"byte_count\": {}, \"sha256\": \"{}\"}}{}\r\n"
-            , group.width, group.height, PayloadName(group.sha256, ".rgba"), group.pixels.size(), HashText(group.sha256)
-            , index + 1u == payload.groups.size() ? "" : ","
-        );
-    }
-    StringAppendFormat(text, "];\r\nasset.glyphs = [\r\n");
-    for(usize index = 0u; index < payload.glyphs.size(); ++index){
-        const auto& glyph = payload.glyphs[index];
-        StringAppendFormat(text, "    {{\"glyph_id\": {}, \"drawable\": {}, \"advance_units\": {}", glyph.glyphId, glyph.drawable, glyph.advanceUnits);
-        if(glyph.drawable != 0u){
-            StringAppendFormat(text, ", \"group\": {}, \"channel\": {}, \"rect\": [{}, {}, {}, {}], \"plane_bounds_units\": [{}, {}, {}, {}]"
-                , glyph.group, glyph.channel, glyph.x, glyph.y, glyph.width, glyph.height
-                , glyph.planeLeft, glyph.planeTop, glyph.planeRight, glyph.planeBottom
-            );
-        }
-        StringAppendFormat(text, "}}{}\r\n", index + 1u == payload.glyphs.size() ? "" : ",");
-    }
-    StringAppendFormat(text, "];\r\nasset.kerning_mode = \"opentype_tables\";\r\nasset.positioning_tables = [\r\n");
-    for(usize index = 0u; index < payload.positioningTables.size(); ++index){
-        const auto& table = payload.positioningTables[index];
-        const AString extension = "." + TableTag(table.tag);
-        StringAppendFormat(text, "    {{\"tag\": \"{}\", \"data\": \"{}\", \"byte_count\": {}, \"sha256\": \"{}\"}}{}\r\n"
-            , TableTag(table.tag), PayloadName(table.sha256, extension), table.bytes.size(), HashText(table.sha256)
-            , index + 1u == payload.positioningTables.size() ? "" : ","
-        );
-    }
-    StringAppendFormat(text, "];\r\n");
-    return text;
 }
 
 
@@ -179,45 +96,33 @@ private:
 
 
 bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
-    if(!Impl::ValidateFontAtlasPayload(payload))
+    if(!Impl::ValidateFontAtlasPayload(payload) || !__hidden_font_atlas_writer::OutputAvailable(options))
+        return false;
+    MetadataString metadata(payload.glyphs.get_allocator().arena());
+    if(!BuildFontAtlasMetadata(options, payload, metadata))
         return false;
     ErrorCode error;
-    const bool exists = FileExists(options.output, error);
-    if(error || (exists && (!options.overwrite || !IsRegularFile(options.output, error))) || error){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: output metadata unavailable; pass --overwrite to replace a regular file"));
-        return false;
-    }
     const Path directory = options.output.parent_path();
     if(!directory.empty() && !EnsureDirectories(directory, error)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: cannot create output directory"));
         return false;
     }
-    const auto metadata = __hidden_font_atlas_writer::BuildMetadata(options, payload);
     Path temporary(options.output);
     temporary += ".tmp";
     __hidden_font_atlas_writer::TemporaryFile cleanup(temporary);
-    if(!cleanup.claim() || !WriteTextFile(temporary, AStringView(metadata.data(), metadata.size()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: cannot stage metadata"));
+    if(!cleanup.stage(AStringView(metadata.data(), metadata.size()))){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: cannot stage atlas file"));
         return false;
     }
-    ::AString<Core::Assets::AssetArena> staged(payload.glyphs.get_allocator().arena());
+    MetadataString staged(payload.glyphs.get_allocator().arena());
     if(!ReadTextFile(temporary, staged) || staged != metadata){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: staged metadata verification failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: staged atlas verification failed"));
         return false;
     }
-    for(const auto& group : payload.groups){
-        const Path path = directory / Path(UtilityDetail::Arena(), __hidden_font_atlas_writer::PayloadName(group.sha256, ".rgba"));
-        if(!__hidden_font_atlas_writer::PublishPayload(path, group.pixels))
-            return false;
-    }
-    for(const auto& table : payload.positioningTables){
-        const AString extension = "." + __hidden_font_atlas_writer::TableTag(table.tag);
-        const Path path = directory / Path(UtilityDetail::Arena(), __hidden_font_atlas_writer::PayloadName(table.sha256, extension));
-        if(!__hidden_font_atlas_writer::PublishPayload(path, table.bytes))
-            return false;
-    }
+    if(!__hidden_font_atlas_writer::OutputAvailable(options))
+        return false;
     if(!RenamePath(temporary, options.output, error)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: final metadata publication failed; previous package remains valid"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_atlas: final atlas publication failed; previous file remains valid"));
         return false;
     }
     cleanup.published();

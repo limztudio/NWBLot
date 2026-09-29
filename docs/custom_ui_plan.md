@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation is on `custom_ui`. Foundation `81481aa88`, GPU composition `37a37a0f6`, Linux OS `b93bace2d`, font/text `1f55b1616`, offline SDF `4cd702d2b`, and interactive foundation `2c7c723ef` are pushed. Main is merged through `c962f5c23` in `d3365b34f`, including its shader compiler refactor. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation now includes an owned Unicode edit model, OS text-input/IME services for Win32 and Linux, and a borrowed ECS edit-session adapter; validation is recorded below. Visual edit boxes, edit-key/clipboard routing, combo boxes and lists remain subsequent increments.
+Status: implementation is on `custom_ui`. Foundation `81481aa88`, GPU composition `37a37a0f6`, Linux OS `b93bace2d`, font/text `1f55b1616`, offline SDF `4cd702d2b`, and interactive foundation `2c7c723ef` are pushed. Main is merged through `c962f5c23` in `d3365b34f`, including its shader compiler refactor. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation now includes an owned Unicode edit model, OS text-input/IME services for Win32 and Linux, and a borrowed ECS edit-session adapter. Generated font atlases now use one self-contained `.nwb` each; implementation and validation are recorded below. Visual edit boxes, edit-key/clipboard routing, combo boxes and lists remain subsequent increments.
 
 Implemented in the first increment:
 
@@ -186,6 +186,26 @@ Validation for this increment on Windows ARM64 / Clang 22.1.4, `dbg` configurati
 - Modified/new authored C++ sources pass UTF-8, CRLF, exact separator/EOF and whitespace checks. New production translation units are split by domain and remain below 650 lines; the existing Frame Wayland file receives only native forwarding/lifetime hooks.
 
 The next increment binds this session adapter to committed edit-box focus/identity, routes editing and clipboard commands, and paints text, selection, caret and preedit through the existing frozen GPU layer. Multiline/numeric editors and compound combo/list controls follow after the single-line editor is qualified. Live Korean IME composition and Linux linking/native compositor execution require their respective target environments; deterministic event/Unicode checks alone do not qualify them.
+
+## Single-file font atlas increment
+
+The utility now publishes one authoring schema 2 `.nwb` containing glyph metadata, all RGBA groups, and the original OpenType positioning tables. Each decoded payload is compressed into a deterministic Zstd frame and embedded as canonical base64 chunks. Decoded byte counts and SHA-256 remain integrity checks; generated packages no longer refer to hash-named payload files. Native source fonts remain separate typed `Font` assets for shaping.
+
+- `global/base64.h` owns bounded canonical encoding/decoding, including failure preservation and aliased input/output.
+- `impl/assets_font_atlas/source_payload.*` owns the shared source compression contract. `cook_metadata_payload.cpp` validates chunks and frame limits before publishing decoded data. The cooker retains legacy authoring schema 1 imports and the runtime `FTA1` format remains version 1.
+- `utilities/font_atlas/asset_metadata.*` builds the complete document separately from exclusive temporary-file staging and final publication in `asset_writer.cpp`. Both Win32 and Linux file paths stage, flush, verify and replace one requested atlas. Unrelated output files are preserved.
+- The default Latin and Korean atlases are regenerated into one `.nwb` each, and their ten old sidecars are removed. Independent decoding verifies unchanged source-font hashes, 3,748 / 24,964 glyph records, 2 / 4 RGBA groups, and exact original `GPOS`/`GDEF` bytes. The new files contain 5,176,115 / 51,901,890 bytes, compared with 9,094,378 / 71,528,974 bytes for their previous metadata-plus-sidecar packages.
+
+Validation on Windows ARM64 / Clang 22.1.4, `dbg` configuration:
+
+- Seven base64, eighteen font-atlas asset, and six bake tests pass. Asset coverage exercises deterministic compression, corrupt or unsupported frames, malformed chunk layout, bounded admission, isolated-file cooking, and preservation on failure.
+- The eleven-case CLI integration suite passes with the real utility and importer. It verifies single-file publication and relocation into an otherwise empty directory, exact decoded texture/table hashes, all-glyph coverage, channel packing, repeated byte-identical output, overwrite behavior, failed bakes, and occupied temporary-file preservation.
+- The production cook/gather passes for 134 Testbed assets and 119 engine-only smoke assets after sidecar removal. All 177 UI tests and the default-atlas SDF quality case pass, including its 36 Latin/Korean comparisons against supersampled native outlines across the qualified zoom/DPI range.
+- GPU-validation framebuffer, resize and Testbed capture tests pass. Standalone captures pass 25 / 50 numeric probes; current standalone and 1280 x 900 Testbed text captures are visually inspected.
+- Sixteen affected C++ translation units pass Linux x86_64 syntax checks using genuine Linux libc/libstdc++ headers and the existing vendored dependency headers, with no final diagnostics. Native Linux linking, execution and cross-platform bake byte equivalence remain unqualified on this Windows host.
+- All fourteen changed/new authored C++ files pass UTF-8, CRLF, exact separator/EOF and whitespace checks. The largest new translation unit is the 357-line source-import test; production sources are split by compression, import, metadata and publication domains.
+
+This packaging increment leaves the next widget step unchanged: connect the existing OS session adapter to a visual single-line edit box, route edit/clipboard commands, and paint selection, caret and preedit through the frozen UI layer.
 
 ## 1. Starting point and scope
 

@@ -9,7 +9,7 @@
 
 
 #include "cook_metadata.h"
-#include "binary_payload.h"
+#include "source_payload.h"
 
 #include <core/assets/paths.h>
 
@@ -101,20 +101,26 @@ bool ParseFontAtlasCookMetadata(
             nwbFilePath, asset, s_DiagnosticPrefix,
             { "schema_version", "font", "font_sha256", "face_index", "units_per_em", "source_glyph_count", "glyph_policy",
               "bake_ppem", "sdf_renderer", "spread_pixels", "distance_encoding", "guard_texels", "payload_format", "mip_count",
-              "ascender_units", "descender_units", "line_gap_units", "groups", "glyphs", "kerning_mode", "positioning_tables" }
+              "ascender_units", "descender_units", "line_gap_units", "groups", "glyphs", "kerning_mode", "positioning_tables", "payload_encoding" }
         )
     )
         return false;
     u32 schema = 0u, mipCount = 0u;
     FontAtlasPayload& payload = parsed.payload;
     if(
-        !ReadU32(nwbFilePath, asset, "schema_version", schema) || schema != FontAtlasBinaryPayload::s_Version
+        !ReadU32(nwbFilePath, asset, "schema_version", schema) || (schema != 1u && schema != FontAtlasSource::s_SchemaVersion)
         || !ReadU32(nwbFilePath, asset, "mip_count", mipCount) || mipCount != 1u
         || !CheckToken(nwbFilePath, asset, "glyph_policy", "all")
         || !CheckToken(nwbFilePath, asset, "distance_encoding", "freetype_sdf_u8_v1")
         || !CheckToken(nwbFilePath, asset, "payload_format", "rgba8_linear")
         || !CheckToken(nwbFilePath, asset, "kerning_mode", "opentype_tables")
     )
+        return false;
+    if(schema == 1u){
+        if(Core::Metascript::FindField(asset, "payload_encoding"))
+            return false;
+    }
+    else if(!CheckToken(nwbFilePath, asset, "payload_encoding", "zstd_base64"))
         return false;
     if(
         !__hidden_font_atlas_cook_metadata::CheckFontIdentity(nwbFilePath, asset)
@@ -146,9 +152,9 @@ bool ParseFontAtlasCookMetadata(
     )
         return false;
     if(
-        !__hidden_font_atlas_cook_metadata::CheckDistinctPayloadFiles(nwbFilePath, asset)
-        || !ReadGroups(nwbFilePath, asset, payload) || !ReadGlyphs(nwbFilePath, asset, payload)
-        || !ReadPositioning(nwbFilePath, asset, payload) || !ValidateFontAtlasPayload(payload)
+        (schema == 1u && !__hidden_font_atlas_cook_metadata::CheckDistinctPayloadFiles(nwbFilePath, asset))
+        || !ReadGroups(nwbFilePath, asset, schema, payload) || !ReadGlyphs(nwbFilePath, asset, payload)
+        || !ReadPositioning(nwbFilePath, asset, schema, payload) || !ValidateFontAtlasPayload(payload)
         || !Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena)
     )
         return false;

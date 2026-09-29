@@ -13,16 +13,18 @@ To reproduce the bundled bytes, download the files from the pinned commits in th
 
 ## Generated SDF atlases
 
-The adjacent `latin_atlas.nwb` and `korean_atlas.nwb` are typed `FontAtlas` assets at `engine/ui/fonts/default/latin_atlas` and `engine/ui/fonts/default/korean_atlas`. They match the exact original font hashes above and enumerate every source glyph ID, including ligatures, contextual forms and nondrawable whitespace. The source fonts and their license notices remain unchanged.
+The adjacent `latin_atlas.nwb` and `korean_atlas.nwb` are typed `FontAtlas` assets at `engine/ui/fonts/default/latin_atlas` and `engine/ui/fonts/default/korean_atlas`. Each atlas is one authoring schema 2 `.nwb` document containing its glyph metadata, every RGBA group, and exact original positioning tables. They match the exact original font hashes above and enumerate every source glyph ID, including ligatures, contextual forms and nondrawable whitespace. The native shaping fonts remain separate `Font` assets; their source bytes and license notices remain unchanged.
 
 Both defaults use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, the `freetype_sdf_u8_v1` distance encoding, and lossless linear RGBA8 with one base mip. Each R/G/B/A channel is an independent scalar page, including alpha. Generation uses all-glyph policy and a maximum of 8 RGBA groups.
 
-| Atlas identity | Glyph records | Used logical pages | RGBA groups | Group extent | Raw pixel storage |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `engine/ui/fonts/default/latin_atlas` | 3,748 | 6 | 2 | 1024 × 1024 | 8 MiB (8,388,608 bytes) |
-| `engine/ui/fonts/default/korean_atlas` | 24,964 | 13 | 4 | 2048 × 2048 | 64 MiB (67,108,864 bytes) |
+| Atlas identity | Glyph records | Used logical pages | RGBA groups | Group extent | Raw pixel storage | Single `.nwb` bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `engine/ui/fonts/default/latin_atlas` | 3,748 | 6 | 2 | 1024 × 1024 | 8 MiB (8,388,608 bytes) | 5,176,115 |
+| `engine/ui/fonts/default/korean_atlas` | 24,964 | 13 | 4 | 2048 × 2048 | 64 MiB (67,108,864 bytes) | 51,901,890 |
 
-Storage includes all four channels of each allocated group, including unused pages and exterior texels; metadata and retained positioning tables are additional bytes. The `.nwb` files list authoritative SHA-256 identities and content-addressed payload filenames. Their `opentype_tables` records retain exact original `GPOS` and `GDEF` table bytes. This preserves modern kerning/class positioning information without expanding glyph pairs. HarfBuzz shapes from the original source font; atlas positioning data must not be applied again after shaping.
+Raw pixel storage includes all four channels of each allocated group, including unused pages and exterior texels; metadata and retained positioning tables are additional decoded bytes. The authoring `.nwb` files use `payload_encoding = "zstd_base64"`: each group and table contains one deterministic Zstd level 9 frame, with declared content size and checksum, stored as canonical base64 chunks of at most 4,096 characters. Each record retains its decoded byte count and SHA-256 for exact content verification. These packages contain no hash-named image or positioning sidecars. Compression changes file storage without changing texture extents, glyph records, channel assignment, or decoded runtime pixels. The runtime `FTA1` binary format remains version 1; the cooker also supports older authoring schema 1 sidecar packages.
+
+The `opentype_tables` records retain exact original `GPOS` and `GDEF` table bytes. This preserves modern kerning/class positioning information without expanding glyph pairs. HarfBuzz shapes from the original source font; atlas positioning data must not be applied again after shaping.
 
 To regenerate these defaults from this Windows checkout, use absolute source/output paths because the repository launcher runs the utility from its runtime output directory:
 
@@ -31,6 +33,6 @@ python -m launcher font-atlas --config opt -- --font "C:/WorkStation/NWBLot/impl
 python -m launcher font-atlas --skip-build --config opt -- --font "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/NotoSansKR-Regular.otf" --font-asset engine/ui/fonts/default/korean --output "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/korean_atlas.nwb" --ppem 32 --spread 8 --extent 2048 --max-groups 8 --renderer bitmap --overwrite
 ```
 
-Replace the checkout prefix with your own absolute path on Windows or Linux. `--overwrite` is explicit because these metadata files already exist. Repeated generation on the qualified Windows host is byte-identical; native Linux execution is still required to establish cross-platform byte equivalence. The utility keeps old content-addressed files and never deletes unrelated files.
+Replace the checkout prefix with your own absolute path on Windows or Linux. `--overwrite` is explicit because these atlas files already exist. The utility stages and verifies the complete document before replacing the requested file. Its compression uses fixed settings without worker threads for deterministic generation; native Linux execution is still required to establish cross-platform byte equivalence.
 
 The renderer currently uses these atlases at 16..48 physical pixels per em, corresponding to 0.5..1.5 times their 32-ppem bake, and uses native grayscale coverage outside this measured range. See [the utility guide](../../../../../utilities/font_atlas/README.md) for generation, transport, kerning and rendering limits.

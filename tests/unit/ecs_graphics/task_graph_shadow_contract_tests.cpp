@@ -14,6 +14,9 @@
 namespace __hidden_ecs_graphics_task_graph_shadow_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ECS_RENDER = "ecs_render";
 static constexpr AStringView s_RAYTRACE = "raytrace";

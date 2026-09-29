@@ -21,6 +21,11 @@ namespace Tests::Smoke{
 
 
 namespace __hidden_ui_text_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr StringView s_Korean = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB0\xED\x95\xA9";
 static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
 

@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_hybrid_fallback_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C = "RendererSystem: created RayQuery shadow compute pipeline";
 
 

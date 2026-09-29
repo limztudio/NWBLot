@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_timing_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_CORE = "core";
 static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_IMPL = "impl";

@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_descriptor_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_CORE = "core";
 static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_VULKAN = "vulkan";
@@ -25,8 +28,7 @@ using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
-// Descriptor heap lifetime is owned by the Device rather than any deferred graph attempt or physical queue. Keep
-// one by-value current snapshot on the persistent renderer label so no-graph frames retain this diagnostic context.
+// Descriptor heap lifetime is owned by the Device rather than any deferred graph attempt or physical queue. Keep one by-value current snapshot on the persistent renderer label so no-graph frames retain this diagnostic context.
 TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

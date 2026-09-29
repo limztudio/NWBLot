@@ -29,6 +29,11 @@ namespace Tests::Smoke{
 
 
 namespace __hidden_ui_window_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr Impl::Ui::Color s_TitleAnchor{ 0.70f, 0.02f, 0.35f, 1.0f };
 static constexpr Impl::Ui::Color s_ContentAnchor{ 0.02f, 0.30f, 0.75f, 1.0f };
 static constexpr f32 s_LabelHeight = 18.0f;

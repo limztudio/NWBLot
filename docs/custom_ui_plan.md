@@ -80,12 +80,12 @@ Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 
 Implemented in the offline SDF increment:
 
-- `utilities/font_atlas/`: a portable offline C++ utility and repository launcher, with separate source admission, SDF rendering, deterministic shelf packing, positioning-table export, and atomic package publication. The exact pinned FreeType SDF modules are restored.
-- `impl/assets_font_atlas/`: typed `FontAtlas` assets, strict readable `.nwb` schema, raw linear RGBA payloads, content hashes, bounded shared validation, explicit little-endian binary codec, normal cooker registration, and exact source-font matching. Four independent scalar distance pages use R/G/B/A; alpha is another distance page.
+- `utilities/font_builder/`: a portable offline C++ utility and repository launcher, with separate source admission, SDF rendering, deterministic shelf packing, positioning-table export, and paired binary package publication. The exact pinned FreeType SDF modules are restored.
+- `impl/assets_font_atlas/`: typed `FontAtlas` assets, binary `.atlas` payloads, raw linear RGBA data, content hashes, bounded shared validation, explicit little-endian codec, and exact source-font matching. One same-stem `.nwb` declaration pairs `.font` and `.atlas` at cook time. Four independent scalar distance pages use R/G/B/A; alpha is another distance page.
 - Kerning metadata preserves the original `kern`, `GPOS`, and `GDEF` table bytes, including class matrices, script/feature scope, and lookup order without quadratic pair expansion. HarfBuzz still shapes the original source font; exported data is never applied a second time.
 - `impl/ui/text/baked_atlas.*`, `sdf_page.*`, and `service_paint.cpp`: copied immutable atlas versions, actual shaped-face/glyph lookup, padded geometry, mixed SDF/native coverage painting, and snapshot lifetime after asset release or replacement. Optional unavailable/mismatched atlases retain the same face's native coverage path.
 - `impl/ui/paint_images.cpp`, `paint_sdf.cpp`, and `gpu/renderer_sdf_resources.*` / `renderer_image_cache.cpp`: atomic mixed-image admission, channel-aware adjacent batching, linear RGBA uploads, descriptors prepared before draw recording, accepted upload readiness retained across descriptor retries, exact graph imports, shared bounded-cache capacity, completed-frame retirement before descriptor allocation, and resources retained through the final consumer.
-- Engine-default Latin and Korean atlas assets are generated at 32 ppem/spread 8 and selected explicitly by Testbed and the UI-only smoke. They contain 3,748 and 24,964 glyph records respectively, with 8 MiB and 64 MiB of raw image payloads. Source font bytes/licences remain available.
+- Engine-default Latin and Korean atlas assets are generated at 32 ppem/spread 8 and selected explicitly by Testbed and the UI-only smoke. They contain 3,748 and 24,964 glyph records respectively, with 8 MiB and 64 MiB of raw image payloads. Exact source SFNT bytes remain in `.font`, alongside the original license notices.
 
 The qualified policy uses SDF at 0.5..1.5 times the bake ppem in physical pixels, with native coverage outside it. For the default 32-ppem atlases, that is 16..48 physical pixels per em. Thirty-six Latin A/o/e and Korean Hangul comparisons against supersampled native rendering have maximum edge displacement one pixel and maximum mean coverage error 0.0068433573. Larger candidate magnifications failed the one-pixel edge gate at sharp corners, so this increment does not claim arbitrary zoom quality. The implemented format, utility, and runtime contract are documented in [font_atlas_plan.md](font_atlas_plan.md).
 
@@ -187,13 +187,13 @@ Validation for this increment on Windows ARM64 / Clang 22.1.4, `dbg` configurati
 
 The visual edit-box increment below binds this session adapter to committed focus/identity, routes editing and clipboard commands, and paints text, selection, caret and preedit through the existing frozen GPU layer. Multiline/numeric editors and compound combo/list controls follow after the single-line editor is qualified. Live Korean IME composition and Linux linking/native compositor execution require their respective target environments; deterministic event/Unicode checks alone do not qualify them.
 
-## Single-file font atlas increment
+## Historical single-file font atlas increment
 
-The utility now publishes one authoring schema 2 `.nwb` containing glyph metadata, all RGBA groups, and the original OpenType positioning tables. Each decoded payload is compressed into a deterministic Zstd frame and embedded as canonical base64 chunks. Decoded byte counts and SHA-256 remain integrity checks; generated packages no longer refer to hash-named payload files. Native source fonts remain separate typed `Font` assets for shaping.
+This earlier increment published one authoring schema 2 `.nwb` containing glyph metadata, all RGBA groups, and the original OpenType positioning tables. Each decoded payload was compressed into a deterministic Zstd frame and embedded as canonical base64 chunks. It removed hash-named payload sidecars. The paired binary font-bundle contract below supersedes this authoring transport; this section retains the historical validation record.
 
 - `global/base64.h` owns bounded canonical encoding/decoding, including failure preservation and aliased input/output.
 - `impl/assets_font_atlas/source_payload.*` owns the shared source compression contract. `cook_metadata_payload.cpp` validates chunks and frame limits before publishing decoded data. The cooker retains legacy authoring schema 1 imports and the runtime `FTA1` format remains version 1.
-- `utilities/font_atlas/asset_metadata.*` builds the complete document separately from exclusive temporary-file staging and final publication in `asset_writer.cpp`. Both Win32 and Linux file paths stage, flush, verify and replace one requested atlas. Unrelated output files are preserved.
+- The former text generator built a complete document separately from exclusive temporary-file staging and final publication. Its replacement in `utilities/font_builder/` stages and verifies all three paired outputs.
 - The default Latin and Korean atlases are regenerated into one `.nwb` each, and their ten old sidecars are removed. Independent decoding verifies unchanged source-font hashes, 3,748 / 24,964 glyph records, 2 / 4 RGBA groups, and exact original `GPOS`/`GDEF` bytes. The new files contain 5,176,115 / 51,901,890 bytes, compared with 9,094,378 / 71,528,974 bytes for their previous metadata-plus-sidecar packages.
 
 Validation on Windows ARM64 / Clang 22.1.4, `dbg` configuration:
@@ -205,7 +205,14 @@ Validation on Windows ARM64 / Clang 22.1.4, `dbg` configuration:
 - Sixteen affected C++ translation units pass Linux x86_64 syntax checks using genuine Linux libc/libstdc++ headers and the existing vendored dependency headers, with no final diagnostics. Native Linux linking, execution and cross-platform bake byte equivalence remain unqualified on this Windows host.
 - All fourteen changed/new authored C++ files pass UTF-8, CRLF, exact separator/EOF and whitespace checks. The largest new translation unit is the 357-line source-import test; production sources are split by compression, import, metadata and publication domains.
 
-This packaging increment changes only font authoring transport. The visual single-line editor below consumes the same immutable runtime font pages and shaping assets.
+This packaging increment changed only font authoring transport. The visual single-line editor below consumes the same immutable runtime font pages and shaping assets.
+
+## Paired binary font-bundle increment
+
+The current authoring format uses `font_builder` and one same-stem trio per face: `<stem>.nwb` declares `font_bundle` schema 1, `<stem>.font` is a FON1 binary containing the exact original SFNT bytes, and `<stem>.atlas` is a binary FTA1 atlas. The `.nwb` names no font source or partner. Cooking derives the typed `Font` virtual identity from the metadata path and `FontAtlas` at the same identity plus `_atlas`; it verifies the stem marker, font hash, glyph and metric identity, and original positioning tables before publishing both. It reads the prepared binary payloads directly, without parsing the former 52 MiB text atlas or rasterizing at cook time. The original `.ttf`/`.otf` files are no longer checked in; `.font` remains usable as a `font_builder` input for deterministic regeneration.
+
+
+The Win32 and Linux builder publication paths stage, flush, and verify the complete trio before publishing the declaration. A partial trio or occupied work path fails; `--overwrite` replaces only a complete existing trio and restores it on publication failure. Engine defaults, UI consumers, and integration/quality tests use the new paired files. Binary extensions are marked `-text` in `.gitattributes`. Runtime FON1 and FTA1 codecs, SDF scale policy, and UI GPU behavior are unchanged. The [font-bundle contract](font_atlas_plan.md) gives the current file layout and validation rules; the section above is historical.
 
 ## Visual single-line edit-box increment
 

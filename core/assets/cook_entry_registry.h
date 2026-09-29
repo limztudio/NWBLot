@@ -354,6 +354,27 @@ public:
     {}
 
 public:
+    template<typename BucketT>
+    bool registerCustomType(const Name& assetType){
+        if(!assetType){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed custom cook entry type"));
+            return false;
+        }
+
+        auto bucket = MakeUnique<BucketT>(m_arena);
+        ICookEntryBucket* bucketPtr = bucket.get();
+        if(!m_lookup.emplace(assetType, bucketPtr).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
+                , StringConvert(assetType.c_str())
+            );
+            return false;
+        }
+
+        m_buckets.push_back(Move(bucket));
+        return true;
+    }
+
+public:
     template<typename EntryT, typename AssetT, typename CodecT>
     bool registerType(
         const Name& assetType,

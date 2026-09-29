@@ -4,6 +4,8 @@
 
 #include "text_visible_fixture.h"
 
+#include <tests/common/font_fixture.h>
+
 #include <global/filesystem.h>
 
 
@@ -86,8 +88,8 @@ TextVisibleFixture::TextVisibleFixture()
 {}
 
 void TextVisibleFixture::SetUp(){
-    ASSERT_TRUE(loadFont(m_latin, "NotoSans-Regular.ttf"));
-    ASSERT_TRUE(loadFont(m_korean, "NotoSansKR-Regular.otf"));
+    ASSERT_TRUE(loadFont(m_latin, "latin.font"));
+    ASSERT_TRUE(loadFont(m_korean, "korean.font"));
     ASSERT_TRUE(installCoverageFonts());
     UiSkin::RegionVector regions(m_arena);
     m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 4u, 4u, 1.0f, Move(regions));
@@ -97,8 +99,7 @@ bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
         / filename;
     Core::Assets::AssetBytes bytes(m_arena);
-    ErrorCode error;
-    if(!ReadBinaryFile(path, bytes, error))
+    if(!Tests::ReadBundledFontBytes(path, bytes))
         return false;
     font.setFontBytes(Move(bytes));
     return font.validatePayload();

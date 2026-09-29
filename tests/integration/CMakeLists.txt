@@ -136,6 +136,6 @@ if(Python3_Interpreter_FOUND)
     endif()
 endif()
 
-if(TARGET nwb_font_atlas)
-    add_subdirectory(font_atlas)
+if(TARGET nwb_font_builder)
+    add_subdirectory(font_builder)
 endif()

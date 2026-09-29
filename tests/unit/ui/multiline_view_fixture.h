@@ -7,6 +7,8 @@
 
 #include <impl/ui/widgets/edit_box.h>
 
+#include <tests/common/font_fixture.h>
+
 #include <global/filesystem.h>
 #include <global/simplemath.h>
 
@@ -146,10 +148,9 @@ protected:
 
     [[nodiscard]] bool loadFont(){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-            / "NotoSans-Regular.ttf";
+            / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        ErrorCode error;
-        if(!ReadBinaryFile(path, bytes, error))
+        if(!Tests::ReadBundledFontBytes(path, bytes))
             return false;
         m_font.setFontBytes(Move(bytes));
         if(!m_font.validatePayload())

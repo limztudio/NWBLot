@@ -5,6 +5,8 @@
 #include <impl/ui/text/atlas.h>
 #include <impl/ui/text/service.h>
 
+#include <tests/common/font_fixture.h>
+
 #include <global/filesystem.h>
 #include <global/simplemath.h>
 
@@ -39,8 +41,8 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(loadFont(m_latin, "NotoSans-Regular.ttf"));
-        ASSERT_TRUE(loadFont(m_korean, "NotoSansKR-Regular.otf"));
+        ASSERT_TRUE(loadFont(m_latin, "latin.font"));
+        ASSERT_TRUE(loadFont(m_korean, "korean.font"));
         const FontSource sources[]{
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u },
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
@@ -53,8 +55,7 @@ protected:
     [[nodiscard]] bool loadFont(Font& font, StringView filename){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
         Core::Assets::AssetBytes bytes(m_arena);
-        ErrorCode error;
-        if(!ReadBinaryFile(path, bytes, error))
+        if(!Tests::ReadBundledFontBytes(path, bytes))
             return false;
         font.setFontBytes(Move(bytes));
         return font.validatePayload();

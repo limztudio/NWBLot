@@ -1,38 +1,26 @@
-# Default UI fonts
+# Default UI font bundles
 
-The engine ships an unmodified deterministic Latin primary font and a Korean fallback. The defaults are typed `Font` assets at `engine/ui/fonts/default/latin` and `engine/ui/fonts/default/korean`. Loading and fallback policy belong to the UI text service; the asset layer retains these original SFNT bytes.
+The engine ships a Latin primary face and a Korean fallback. Each face is a paired, same-stem trio: `latin.nwb`, `latin.font`, `latin.atlas`, and likewise for `korean`. The small `.nwb` declares `font_bundle` schema 1. The `.font` is a FON1 envelope around the exact original SFNT bytes needed by FreeType and HarfBuzz. The `.atlas` is a binary FTA1 package containing SDF glyph records, RGBA groups, and exact original positioning tables. The cooker derives the font identity from the stem and the atlas identity by appending `_atlas`; the metadata contains no source filename or font reference.
 
-| Source file | Pinned upstream source | Bytes | SHA256 |
+| Stem | Cooked `Font` identity | Cooked `FontAtlas` identity | Glyphs | RGBA groups | Atlas bytes |
+| --- | --- | --- | ---: | ---: | ---: |
+| `latin` | `engine/ui/fonts/default/latin` | `engine/ui/fonts/default/latin_atlas` | 3,748 | 2 × 1024² | 8,657,014 |
+| `korean` | `engine/ui/fonts/default/korean` | `engine/ui/fonts/default/korean_atlas` | 24,964 | 4 × 2048² | 68,451,728 |
+
+Each RGBA channel is an independent scalar signed-distance page, including alpha. Both atlases use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, and linear RGBA8 without mips. The Latin atlas uses six logical pages, and the Korean atlas uses thirteen. All glyph IDs, including nondrawable spaces and shaped forms, have records. The `kern`, `GPOS`, and `GDEF` tables present in each source are retained exactly. HarfBuzz shapes from `.font`; atlas table bytes are not applied to positions a second time.
+
+The original `.ttf` and `.otf` files are not retained beside the bundles. Their exact SFNT bytes remain in `.font`, so font rendering and repeat atlas generation require no external download. The source revisions and hashes are:
+
+| Face | Pinned upstream source | SFNT bytes | SFNT SHA-256 |
 | --- | --- | ---: | --- |
-| `NotoSans-Regular.ttf` | [Noto Sans at ffebf8c1ee449e544955a7e813c54f9b73848eac](https://github.com/notofonts/noto-fonts/blob/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSans/NotoSans-Regular.ttf) | 569208 | `b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5` |
-| `NotoSansKR-Regular.otf` | [Noto Sans CJK KR subset at Sans2.004 / 523d033d6cb47f4a80c58a35753646f5c3608a78](https://github.com/notofonts/noto-cjk/blob/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf) | 4644748 | `69975a0ac8472717870aefeab0a4d52739308d90856b9955313b2ad5e0148d68` |
+| Latin | [Noto Sans at ffebf8c1ee449e544955a7e813c54f9b73848eac](https://github.com/notofonts/noto-fonts/blob/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSans/NotoSans-Regular.ttf) | 569,208 | `b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5` |
+| Korean | [Noto Sans CJK KR subset at Sans2.004 / 523d033d6cb47f4a80c58a35753646f5c3608a78](https://github.com/notofonts/noto-cjk/blob/523d033d6cb47f4a80c58a35753646f5c3608a78/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf) | 4,644,748 | `69975a0ac8472717870aefeab0a4d52739308d90856b9955313b2ad5e0148d68` |
 
-Both fonts use the SIL Open Font License 1.1. Exact upstream notices and licence terms are preserved as `LICENSE-NotoSans.txt` and `LICENSE-NotoSansKR.txt`. The Korean region subset includes Korean coverage without carrying the full pan-CJK font. Font files are unchanged, and their original upstream names are retained.
-
-To reproduce the bundled bytes, download the files from the pinned commits in the table (replace the GitHub `blob` URL prefix with `https://raw.githubusercontent.com/notofonts/<repository>/<commit>/`), then verify byte counts and SHA256 values. Download the `LICENSE` file from the same respective commit and retain it under the licence filename above. The metadata files declare schema 1, the adjacent source file, and face index zero. Asset cooking performs no font conversion.
-
-## Generated SDF atlases
-
-The adjacent `latin_atlas.nwb` and `korean_atlas.nwb` are typed `FontAtlas` assets at `engine/ui/fonts/default/latin_atlas` and `engine/ui/fonts/default/korean_atlas`. Each atlas is one authoring schema 2 `.nwb` document containing its glyph metadata, every RGBA group, and exact original positioning tables. They match the exact original font hashes above and enumerate every source glyph ID, including ligatures, contextual forms and nondrawable whitespace. The native shaping fonts remain separate `Font` assets; their source bytes and license notices remain unchanged.
-
-Both defaults use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, the `freetype_sdf_u8_v1` distance encoding, and lossless linear RGBA8 with one base mip. Each R/G/B/A channel is an independent scalar page, including alpha. Generation uses all-glyph policy and a maximum of 8 RGBA groups.
-
-| Atlas identity | Glyph records | Used logical pages | RGBA groups | Group extent | Raw pixel storage | Single `.nwb` bytes |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `engine/ui/fonts/default/latin_atlas` | 3,748 | 6 | 2 | 1024 × 1024 | 8 MiB (8,388,608 bytes) | 5,176,115 |
-| `engine/ui/fonts/default/korean_atlas` | 24,964 | 13 | 4 | 2048 × 2048 | 64 MiB (67,108,864 bytes) | 51,901,890 |
-
-Raw pixel storage includes all four channels of each allocated group, including unused pages and exterior texels; metadata and retained positioning tables are additional decoded bytes. The authoring `.nwb` files use `payload_encoding = "zstd_base64"`: each group and table contains one deterministic Zstd level 9 frame, with declared content size and checksum, stored as canonical base64 chunks of at most 4,096 characters. Each record retains its decoded byte count and SHA-256 for exact content verification. These packages contain no hash-named image or positioning sidecars. Compression changes file storage without changing texture extents, glyph records, channel assignment, or decoded runtime pixels. The runtime `FTA1` binary format remains version 1; the cooker also supports older authoring schema 1 sidecar packages.
-
-The `opentype_tables` records retain exact original `GPOS` and `GDEF` table bytes. This preserves modern kerning/class positioning information without expanding glyph pairs. HarfBuzz shapes from the original source font; atlas positioning data must not be applied again after shaping.
-
-To regenerate these defaults from this Windows checkout, use absolute source/output paths because the repository launcher runs the utility from its runtime output directory:
+Both fonts use the SIL Open Font License 1.1. The source notices and terms remain in `LICENSE-NotoSans.txt` and `LICENSE-NotoSansKR.txt`. To inspect the original SFNT, read the 24-byte FON1 header and then the remaining `.font` bytes. The builder also accepts `.font` directly:
 
 ```text
-python -m launcher font-atlas --config opt -- --font "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/NotoSans-Regular.ttf" --font-asset engine/ui/fonts/default/latin --output "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/latin_atlas.nwb" --ppem 32 --spread 8 --extent 1024 --max-groups 8 --renderer bitmap --overwrite
-python -m launcher font-atlas --skip-build --config opt -- --font "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/NotoSansKR-Regular.otf" --font-asset engine/ui/fonts/default/korean --output "C:/WorkStation/NWBLot/impl/assets/ui/fonts/default/korean_atlas.nwb" --ppem 32 --spread 8 --extent 2048 --max-groups 8 --renderer bitmap --overwrite
+python -m launcher font-builder --config opt -- --font "/absolute/path/impl/assets/ui/fonts/default/latin.font" --output "/absolute/path/output/latin.nwb" --ppem 32 --spread 8 --extent 1024
+python -m launcher font-builder --skip-build --config opt -- --font "/absolute/path/impl/assets/ui/fonts/default/korean.font" --output "/absolute/path/output/korean.nwb" --ppem 32 --spread 8 --extent 2048
 ```
 
-Replace the checkout prefix with your own absolute path on Windows or Linux. `--overwrite` is explicit because these atlas files already exist. The utility stages and verifies the complete document before replacing the requested file. Its compression uses fixed settings without worker threads for deterministic generation; native Linux execution is still required to establish cross-platform byte equivalence.
-
-The renderer currently uses these atlases at 16..48 physical pixels per em, corresponding to 0.5..1.5 times their 32-ppem bake, and uses native grayscale coverage outside this measured range. See [the utility guide](../../../../../utilities/font_atlas/README.md) for generation, transport, kerning and rendering limits.
+`--overwrite` is required to replace an existing complete trio. The renderer uses these atlases at 16..48 physical pixels per em, corresponding to 0.5..1.5 times their 32-ppem bake, and uses native grayscale coverage outside that measured range. See the [font-builder guide](../../../../../utilities/font_builder/README.md) for the binary contract and generation limits.

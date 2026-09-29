@@ -4,6 +4,8 @@
 
 #include <impl/ui/widgets/edit_box.h>
 
+#include <tests/common/font_fixture.h>
+
 #include <global/filesystem.h>
 #include <global/simplemath.h>
 
@@ -300,10 +302,9 @@ TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSk
 TEST_F(EditBoxLayoutTests, FontPaintingUsesLogicalCaretGeometryAndCurrentDisplayScale){
     Font font(m_arena, Name("tests/ui/edit_box/font"));
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-        / "NotoSans-Regular.ttf";
+        / "latin.font";
     Core::Assets::AssetBytes bytes(m_arena);
-    ErrorCode error;
-    ASSERT_TRUE(ReadBinaryFile(path, bytes, error));
+    ASSERT_TRUE(Tests::ReadBundledFontBytes(path, bytes));
     font.setFontBytes(Move(bytes));
     ASSERT_TRUE(font.validatePayload());
     TextService service(m_arena);

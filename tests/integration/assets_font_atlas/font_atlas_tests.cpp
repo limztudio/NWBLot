@@ -10,6 +10,7 @@
 #include <core/assets/cook_entry_registry.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
 
 #include <global/filesystem.h>
@@ -373,10 +374,9 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
-    const Path sourcePath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "NotoSans-Regular.ttf";
+    const Path sourcePath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
     Core::Assets::AssetBytes bytes(testArena.arena);
-    ErrorCode error;
-    ASSERT_TRUE(ReadBinaryFile(sourcePath, bytes, error));
+    ASSERT_TRUE(ReadBundledFontBytes(sourcePath, bytes));
     Font font(testArena.arena, Name("project/fonts/body"));
     font.setFontBytes(Move(bytes));
     ASSERT_TRUE(font.validatePayload());

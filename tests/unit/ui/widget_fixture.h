@@ -7,6 +7,8 @@
 
 #include <impl/ui/builder.h>
 
+#include <tests/common/font_fixture.h>
+
 #include <global/filesystem.h>
 
 #include <gtest/gtest.h>
@@ -46,10 +48,9 @@ public:
 protected:
     virtual void SetUp()override{
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
-            / "NotoSans-Regular.ttf";
+            / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        ErrorCode error;
-        ASSERT_TRUE(ReadBinaryFile(path, bytes, error));
+        ASSERT_TRUE(Tests::ReadBundledFontBytes(path, bytes));
         m_font.setFontBytes(Move(bytes));
         ASSERT_TRUE(m_font.validatePayload());
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };

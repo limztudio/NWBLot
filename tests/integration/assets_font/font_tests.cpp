@@ -11,6 +11,7 @@
 #include <core/assets/cook_entry_registry.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
 
 #include <global/binary.h>
@@ -58,10 +59,22 @@ static constexpr AStringView s_LatinMetadata =
 
 
 [[nodiscard]] static Path AssetRoot(FontTestArena& testArena){
-    return Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets";
+    return Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "assets_font_legacy_tests";
+}
+
+[[nodiscard]] static bool PrepareLegacySource(FontTestArena& testArena){
+    const Path bundled = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
+    Core::Assets::AssetBytes source(testArena.arena);
+    if(!ReadBundledFontBytes(bundled, source))
+        return false;
+    const Path sourcePath = AssetRoot(testArena) / "ui" / "fonts" / "default" / "NotoSans-Regular.ttf";
+    ErrorCode error;
+    return EnsureDirectories(sourcePath.parent_path(), error) && WriteBinaryFile(sourcePath, source);
 }
 
 [[nodiscard]] static bool ParseMetadata(FontTestArena& testArena, const AStringView metadata, FontCookEntry& entry){
+    if(!PrepareLegacySource(testArena))
+        return false;
     Core::Metascript::Document document(testArena.arena);
     if(!document.parse(metadata))
         return false;
@@ -117,38 +130,35 @@ static void WriteBigU32(u8* bytes, const u32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsFont, BundledLatinAndKoreanCookAndRoundTripWithoutChangingSourceBytes){
+TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceBytes){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    const Path assetRoot = AssetRoot(testArena);
-    static constexpr AStringView s_MetadataNames[] = { "latin.nwb", "korean.nwb" };
-    static constexpr AStringView s_SourceNames[] = { "NotoSans-Regular.ttf", "NotoSansKR-Regular.otf" };
+    const Path bundledRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
+    static constexpr AStringView s_BundledNames[] = { "latin.font", "korean.font" };
     static constexpr Name s_Names[] = { Name("engine/ui/fonts/default/latin"), Name("engine/ui/fonts/default/korean") };
     static constexpr usize s_SourceSizes[] = { 569208u, 4644748u };
-    for(usize index = 0u; index < LengthOf(s_MetadataNames); ++index){
-        const Path metadataPath = assetRoot / "ui" / "fonts" / "default" / s_MetadataNames[index];
-        Core::Assets::AssetString metadata(testArena.arena);
-        ASSERT_TRUE(ReadTextFile(metadataPath, metadata));
-        Core::Metascript::Document document(testArena.arena);
-        ASSERT_TRUE(document.parse(metadata));
-        Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-        FontCookEntry entry(testArena.arena);
-        ASSERT_TRUE(ParseFontCookMetadata(assetRoot, "engine", metadataPath, document, entry, scratchArena));
-        EXPECT_EQ(entry.virtualPath, s_Names[index]);
-        EXPECT_EQ(entry.faceIndex, 0u);
-        ASSERT_EQ(entry.fontBytes.size(), s_SourceSizes[index]);
-        Font font(testArena.arena);
-        ASSERT_TRUE(BuildFontAsset(entry, font));
-
+    for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){
+        const Path bundledPath = bundledRoot / s_BundledNames[index];
         Core::Assets::AssetBytes source(testArena.arena);
-        ErrorCode error;
-        ASSERT_TRUE(ReadBinaryFile(metadataPath.parent_path() / s_SourceNames[index], source, error));
+        ASSERT_TRUE(ReadBundledFontBytes(bundledPath, source));
+        ASSERT_EQ(source.size(), s_SourceSizes[index]);
+        Font font(testArena.arena, s_Names[index]);
+        Core::Assets::AssetBytes sourceCopy(source.begin(), source.end(), testArena.arena);
+        font.setFontBytes(Move(sourceCopy));
+        ASSERT_TRUE(font.validatePayload());
+        EXPECT_EQ(font.virtualPath(), s_Names[index]);
+        EXPECT_EQ(font.faceIndex(), 0u);
         EXPECT_EQ(font.fontBytes(), source);
+
+        Core::Assets::AssetBytes prepared(testArena.arena);
+        ErrorCode error;
+        ASSERT_TRUE(ReadBinaryFile(bundledPath, prepared, error));
         FontAssetCodec codec;
         Core::Assets::AssetBytes binary(testArena.arena);
         ASSERT_TRUE(codec.serialize(font, binary));
         EXPECT_EQ(binary.size(), sizeof(FontBinaryPayload::HeaderBinary) + s_SourceSizes[index]);
+        EXPECT_EQ(binary, prepared);
         UniquePtr<Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, font.virtualPath(), binary, loadedAsset));
         const Font* loaded = Core::Assets::CastAsset<Font>(loadedAsset.get());

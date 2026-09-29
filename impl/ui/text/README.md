@@ -81,6 +81,11 @@ and complete original positioning-table bytes. It copies rendering records and R
 images into a strong immutable `BakedFontAtlas` version. Missing or mismatched optional
 atlases leave that same face available through native coverage.
 
+At authoring time, `<stem>.nwb`, `<stem>.font`, and `<stem>.atlas` form one bundle.
+The cooker derives `Font` and `FontAtlas` identities from that common stem. The
+`.font` contains the original SFNT bytes in a FON1 envelope; the binary `.atlas`
+contains the FTA1 glyph and image data. UI text receives the two cooked assets.
+
 The baker packs four independent scalar SDF pages into R/G/B/A. Each drawable shaped
 glyph selects its actual face's group and channel; padded plane bounds combine with
 HarfBuzz's baseline position and offsets. Neither atlas inspection advances nor
@@ -178,7 +183,7 @@ Ui::DrawSnapshot snapshot = paint.freeze();
 ```
 
 The [offline font-atlas contract](../../../docs/font_atlas_plan.md) and
-[utility README](../../../utilities/font_atlas/README.md) describe generation,
+[utility README](../../../utilities/font_builder/README.md) describe generation,
 lossless payloads, positioning-table export, qualified scale, and GPU ownership.
 `UiFontBinding` in the ECS adapter selects typed font/atlas references explicitly;
 the text service itself consumes already loaded CPU assets and owns no loader,

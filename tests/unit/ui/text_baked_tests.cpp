@@ -5,6 +5,7 @@
 #include <impl/ui/text/service.h>
 
 #include <tests/common/capturing_logger.h>
+#include <tests/common/font_fixture.h>
 
 #include <global/filesystem.h>
 
@@ -42,8 +43,8 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ASSERT_TRUE(loadFont(m_font, "NotoSans-Regular.ttf"));
-        ASSERT_TRUE(loadFont(m_korean, "NotoSansKR-Regular.otf"));
+        ASSERT_TRUE(loadFont(m_font, "latin.font"));
+        ASSERT_TRUE(loadFont(m_korean, "korean.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
         ASSERT_TRUE(m_text.setFonts(&source, 1u));
         ASSERT_EQ(m_text.layout({ .text = "AV ffi", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
@@ -110,8 +111,7 @@ protected:
     [[nodiscard]] bool loadFont(Font& font, StringView filename){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
         Core::Assets::AssetBytes bytes(m_arena);
-        ErrorCode error;
-        if(!ReadBinaryFile(path, bytes, error))
+        if(!Tests::ReadBundledFontBytes(path, bytes))
             return false;
         font.setFontBytes(Move(bytes));
         return font.validatePayload();

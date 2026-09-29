@@ -5,33 +5,22 @@
 #pragma once
 
 
-#include "ui_combo_gallery.h"
-#include "ui_edit_gallery.h"
 #include "ui_list_gallery.h"
-#include "ui_popup_gallery.h"
 
-#include <impl/ecs_ui/components.h>
+#include <impl/ui/widgets/combo.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiWidgetGallery final : NoCopy{
-public:
-    explicit TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena);
-
-
+class TestbedUiComboGallery final : NoCopy{
 public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
-    TestbedUiEditGallery m_edits;
-    TestbedUiListGallery m_lists;
-    TestbedUiComboGallery m_combos;
-    TestbedUiPopupGallery m_popups;
-    u32 m_count = 0u;
-    bool m_enabled = true;
+    TestbedUiListSource m_source;
+    NWB::Impl::Ui::ComboState m_state;
 };
 
 

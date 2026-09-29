@@ -23,6 +23,10 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/edit_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/popup_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/popup_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/combo_scene.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/combo_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/combo_source.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/combo_source.h"
     "${CMAKE_CURRENT_LIST_DIR}/list_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/list_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/list_source.cpp"
@@ -95,7 +99,7 @@ foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu"
-        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
     )
 endforeach()
 
@@ -111,7 +115,7 @@ set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
 )
 
 add_test(NAME nwb_ui_layer_window_smoke
@@ -126,7 +130,7 @@ set_tests_properties(nwb_ui_layer_window_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input;window"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
 )
 
 add_test(NAME nwb_ui_layer_window_skin_smoke
@@ -142,7 +146,7 @@ set_tests_properties(nwb_ui_layer_window_skin_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input;window;skin"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
 )
 
 add_test(NAME nwb_ui_layer_edit_smoke
@@ -157,7 +161,7 @@ set_tests_properties(nwb_ui_layer_edit_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input;edit"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=1;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=1;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
 )
 
 foreach(_nwb_ui_popup_skin IN ITEMS default alternate)
@@ -181,7 +185,7 @@ foreach(_nwb_ui_popup_skin IN ITEMS default alternate)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu;native_input;popup;skin"
-        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=1;NWB_UI_LAYER_POPUP_SKIN=${_nwb_ui_popup_skin_flag};NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=1;NWB_UI_LAYER_POPUP_SKIN=${_nwb_ui_popup_skin_flag};NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
     )
 endforeach()
 
@@ -206,7 +210,33 @@ foreach(_nwb_ui_list_skin IN ITEMS default alternate)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu;native_input;list;skin"
-        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=1;NWB_UI_LAYER_LIST_SKIN=${_nwb_ui_list_skin_flag}"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=1;NWB_UI_LAYER_LIST_SKIN=${_nwb_ui_list_skin_flag};NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0"
+    )
+endforeach()
+
+foreach(_nwb_ui_combo_skin IN ITEMS default alternate)
+    if(_nwb_ui_combo_skin STREQUAL "alternate")
+        set(_nwb_ui_combo_test "nwb_ui_layer_combo_skin_smoke")
+        set(_nwb_ui_combo_skin_flag 1)
+    else()
+        set(_nwb_ui_combo_test "nwb_ui_layer_combo_smoke")
+        set(_nwb_ui_combo_skin_flag 0)
+    endif()
+    add_test(NAME "${_nwb_ui_combo_test}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/combo_smoke.py"
+            --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+            --working-directory "${_nwb_ui_smoke_runtime_root}"
+            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_combo_${_nwb_ui_combo_skin}"
+            --skin "${_nwb_ui_combo_skin}"
+            --timeout 180
+            ${_nwb_ui_smoke_logserver_args}
+    )
+    set_tests_properties("${_nwb_ui_combo_test}" PROPERTIES
+        RESOURCE_LOCK nwb_display
+        SKIP_RETURN_CODE 77
+        TIMEOUT 240
+        LABELS "ui;standalone_gpu;native_input;combo;skin"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=1;NWB_UI_LAYER_COMBO_SKIN=${_nwb_ui_combo_skin_flag}"
     )
 endforeach()
 
@@ -222,3 +252,6 @@ unset(_nwb_ui_popup_skin_flag)
 unset(_nwb_ui_list_skin)
 unset(_nwb_ui_list_test)
 unset(_nwb_ui_list_skin_flag)
+unset(_nwb_ui_combo_skin)
+unset(_nwb_ui_combo_test)
+unset(_nwb_ui_combo_skin_flag)

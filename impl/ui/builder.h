@@ -15,6 +15,8 @@
 #include "widgets/popup_style.h"
 #include "widgets/list.h"
 #include "widgets/list_style.h"
+#include "widgets/combo.h"
+#include "widgets/combo_style.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,6 +42,7 @@ private:
         f32 checkboxExtent = 0.0f;
         u32 node = 0u;
         u32 list = s_LayoutNoParent;
+        u32 combo = s_LayoutNoParent;
         bool enabled = true;
         bool checked = false;
 
@@ -78,6 +81,24 @@ private:
         bool focusOnCommit = false;
     };
 
+    struct ComboFrame{
+        const IListDataSource* source = nullptr;
+        ComboState* state = nullptr;
+        ComboOptions options;
+        WidgetState popup;
+        WidgetState rows;
+        PopupToken popupToken;
+        ControlToken token;
+        ControlToken listToken;
+        Rect visibleField;
+        u64 rowCount = 0u;
+        u32 list = s_LayoutNoParent;
+        f32 arrowExtent = 0.0f;
+        bool open = false;
+        bool focusOnCommit = false;
+        bool listFocusOnCommit = false;
+    };
+
 
 public:
     Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
@@ -104,6 +125,9 @@ public:
     // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
     // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
     [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options = {});
+    // The field and its popup borrow state/source through endPanel/endWindow; popup input is consumed in this declaration.
+    // Internal popup/list scopes are emitted automatically after the containing scope's layout. User-popup nesting is not supported.
+    [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive && !m_popupState; }
@@ -113,6 +137,7 @@ public:
     [[nodiscard]] EditBoxStyle& editStyle(){ return m_editStyle; }
     [[nodiscard]] PopupStyle& popupStyle(){ return m_popupStyle; }
     [[nodiscard]] ListStyle& listStyle(){ return m_listStyle; }
+    [[nodiscard]] ComboStyle& comboStyle(){ return m_comboStyle; }
     void setEditHost(IEditBoxHost* host){ m_editHost = host; }
     void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
     // Valid while a window scope is open, including a collapsed window.
@@ -135,6 +160,13 @@ private:
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture);
+    [[nodiscard]] bool paintCombo(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintCombos();
+    [[nodiscard]] bool paintComboPopup(ComboFrame& frame);
+    [[nodiscard]] bool comboStateMatches(const ComboFrame& frame)const;
+    [[nodiscard]] bool comboMatches(const ComboFrame& frame)const;
+    [[nodiscard]] bool applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
+    [[nodiscard]] bool applyComboListInput(ComboFrame& frame, ComboResult& result);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
@@ -150,6 +182,7 @@ private:
     EditBoxStyle m_editStyle;
     PopupStyle m_popupStyle;
     ListStyle m_listStyle;
+    ComboStyle m_comboStyle;
     PopupState* m_popupState = nullptr;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
@@ -158,6 +191,7 @@ private:
     LayoutTree m_layout;
     PaintVector<Item> m_items;
     PaintVector<ListFrame> m_lists;
+    PaintVector<ComboFrame> m_combos;
     PaintVector<u32> m_stack;
     WindowFrame m_window;
     WidgetState m_panelState;

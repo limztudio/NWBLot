@@ -41,6 +41,8 @@ bool Builder::paintItems(){
 }
 
 bool Builder::paintItem(const Item& item, const LayoutBox& box){
+    if(item.state.kind == WidgetKind::ComboBox)
+        return paintCombo(item, box);
     if(item.state.kind == WidgetKind::EditBox)
         return paintEditBox(item, box);
     if(item.state.kind == WidgetKind::Selectable)

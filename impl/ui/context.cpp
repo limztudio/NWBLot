@@ -28,6 +28,7 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     , m_scopes(arena)
     , m_targets(arena)
     , m_popups(arena)
+    , m_stateClaims(arena)
     , m_commitTargets(arena)
     , m_commitPopups(arena)
 {
@@ -47,6 +48,7 @@ bool Context::beginFrame(const u64 generation){
     m_failed = false;
     m_targets.clear();
     m_popups.clear();
+    m_stateClaims.clear();
     return true;
 }
 
@@ -98,19 +100,30 @@ WidgetState* Context::declare(const AStringView stableKey, const WidgetKind::Enu
     if(m_failed || !m_rootActive)
         return nullptr;
     const WidgetId id = MakeWidgetId(m_scopes.back(), stableKey);
-    const WidgetState* previous = nullptr;
-    for(const auto& entry : m_states.entries()){
-        if(entry.id == id){
-            previous = &entry;
-            break;
+    return declareId(id, kind);
+}
+
+WidgetState* Context::declarePart(const WidgetState& owner, const AStringView stableKey, const WidgetKind::Enum kind){
+    if(m_failed || !currentDeclaration(owner)){
+        fail();
+        return nullptr;
+    }
+    return declareId(MakeWidgetId(owner.id, stableKey), kind);
+}
+
+bool Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
+    if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaims.size() == s_InputMaxTargets){
+        fail();
+        return false;
+    }
+    for(const auto& claim : m_stateClaims){
+        if(claim.kind == owner.kind && claim.instanceGeneration == instanceGeneration){
+            fail();
+            return false;
         }
     }
-    if(previous && previous->kind != kind)
-        m_input.invalidateTarget(id);
-    WidgetState* state = m_states.touch(id, m_root, kind, m_frameGeneration);
-    if(!state)
-        fail();
-    return state;
+    m_stateClaims.push_back({ instanceGeneration, owner.kind });
+    return true;
 }
 
 bool Context::addTarget(const WidgetState& state, HitTarget target){
@@ -226,6 +239,22 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
         if(!ContainsRoot(roots, count, m_popups[index - 1u].root))
             m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
+}
+
+WidgetState* Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
+    const WidgetState* previous = nullptr;
+    for(const auto& entry : m_states.entries()){
+        if(entry.id == id){
+            previous = &entry;
+            break;
+        }
+    }
+    if(previous && previous->kind != kind)
+        m_input.invalidateTarget(id);
+    WidgetState* state = m_states.touch(id, m_root, kind, m_frameGeneration);
+    if(!state)
+        fail();
+    return state;
 }
 
 bool Context::currentDeclaration(const WidgetState& state)const{

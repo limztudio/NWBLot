@@ -136,7 +136,7 @@ The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips/context menus and numeric/multiline editors are later increments.
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists and combo boxes are implemented in the subsequent increments below; tooltips/context menus and numeric/multiline editors remain later work.
 
 ## Popups and modals
 
@@ -167,7 +167,7 @@ The accepted top popup traps Tab/Shift+Tab within eligible children and owns poi
 
 `PaintBuilder::beginOverlay(layer)` and `endOverlay()` support a balanced nonnested low-level overlay scope. Base commands use layer zero; a positive overlay layer uses the viewport clip and restores the prior clip when ended. Freezing orders command ranges by layer while preserving painter order within a layer and existing vertex/index/image ownership. Popup layers therefore render above later ordinary host roots. All layers still rasterize into the same independent GPU UI texture; popup layering adds no per-popup GPU target or task.
 
-Fixed-height virtualized lists and selectable rows now use these popup/input contracts. Tooltips, context menus, nested popup layout and combo boxes remain separate controls work. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
+Fixed-height virtualized lists and selectable rows now use these popup/input contracts. Combo boxes now compose these contracts below. Tooltips, context menus and nested popup layout remain separate controls work. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
 
 ## Single-line edit boxes
 
@@ -202,3 +202,9 @@ This increment provides one line with LTR cluster geometry. Paragraph bidi, RTL 
 `Builder::virtualList(key, source, state, options)` borrows an `interface IListDataSource` and persistent `ListState` through the matching scope end. The source provides stable keys, revisions, efficient index lookup and enabled-row search. `ListOptions` sets sizing, fixed row height, wheel rows and navigation selection policy. The result separates selected-key changes from pointer/Enter/Space activation. Arrow/Page/Home/End navigation skips disabled rows and ensures the cursor is visible; wheel and scrollbar dragging preserve selection.
 
 Only clipped visible rows are shaped, painted and published as parts of one focusable host. The state retains stable selected/cursor keys and double scroll offset; reorder/removal and source replacement reconcile those values without scanning the dataset. Source/state changes fence queued intentions, capture, focus and held navigation. Accepted targets carry copied tokens and press geometry, and frozen GPU work retains no source/model pointer. See [the widget contract](widgets/README.md#keyed-lists-and-scrolling) for source lifetime rules, bounds, skin roles and behavior details.
+
+## Combo selection
+
+`Builder::comboBox(key, source, ComboState&, ComboOptions)` uses the same keyed source as `virtualList`. Keep source/state alive and unchanged through the enclosing panel/window end. The component declares its field and internal popup/list identities, consumes input from the last accepted layout during declaration, and automatically paints the popup after arranging the containing scope. `ComboResult::committed` and `selectionChanged` are available immediately; the field text reflects that accepted selection in the same callback.
+
+The popup previews enabled rows with Arrow/Page/Home/End, wheel and thumb scrolling. Enter/Space or a row release commits; Escape/outside/native focus loss cancels. Selected keys remain stable through reorder, and openings ensure the committed row is visible without walking the full dataset. Omission/recreation, source replacement and explicit state changes retire previous input lifetimes. Skin appearance, exact loan/lifetime rules, popup Tab behavior and current composition limits are documented in [the combo contract](widgets/README.md#combo-boxes).

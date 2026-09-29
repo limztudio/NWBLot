@@ -147,10 +147,14 @@ def generate(directory: Path) -> None:
     # Semantic aliases reuse artwork; they never allocate another tile or texture.
     parts = {region["name"]: region for region in regions}
     for name, source in (("list.background", "edit.normal"), ("list.row.normal", "button.normal"),
-        ("list.row.disabled", "button.disabled"), ("scroll.track", "panel.normal"), ("scroll.thumb", "button.normal")):
+        ("list.row.disabled", "button.disabled"), ("scroll.track", "panel.normal"), ("scroll.thumb", "button.normal"),
+        ("combo.normal", "button.normal"), ("combo.hover", "button.hover"), ("combo.open", "button.pressed"),
+        ("combo.focused", "edit.focused"), ("combo.disabled", "button.disabled")):
         alias = {"name": name, "rect": parts[source]["rect"], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]}
         if name == "list.background":
             alias.update(padding=[8.0, 8.0, 8.0, 8.0], minimum_size=[12.0, 12.0])
+        if name.startswith("combo."):
+            alias.update(padding=[8.0, 6.0, 8.0, 6.0], minimum_size=[12.0, 12.0])
         regions.append(alias)
     lines = [
         "ui_skin asset;", "", "asset.schema_version = 1;",

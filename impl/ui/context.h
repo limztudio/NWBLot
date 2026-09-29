@@ -31,6 +31,11 @@ private:
         WidgetRoot root;
     };
 
+    struct StateClaim{
+        u64 instanceGeneration = 0u;
+        WidgetKind::Enum kind = WidgetKind::Panel;
+    };
+
     [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
 
 
@@ -45,6 +50,10 @@ public:
     [[nodiscard]] bool pushScope(AStringView stableKey);
     [[nodiscard]] bool popScope();
     [[nodiscard]] WidgetState* declare(AStringView stableKey, WidgetKind::Enum kind);
+    // Compound controls declare internal scopes from their owning widget instead of borrowing the current layout scope.
+    [[nodiscard]] WidgetState* declarePart(const WidgetState& owner, AStringView stableKey, WidgetKind::Enum kind);
+    // A state instance may own only one control of a given kind in a frame, even across balanced roots/scopes.
+    [[nodiscard]] bool claimState(const WidgetState& owner, u64 instanceGeneration);
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
     [[nodiscard]] bool addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
     [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
@@ -72,6 +81,7 @@ public:
 
 
 private:
+    [[nodiscard]] WidgetState* declareId(WidgetId id, WidgetKind::Enum kind);
     [[nodiscard]] bool currentDeclaration(const WidgetState& state)const;
 
 
@@ -81,6 +91,7 @@ private:
     PaintVector<WidgetId> m_scopes;
     PaintVector<OwnedTarget> m_targets;
     PaintVector<OwnedPopup> m_popups;
+    PaintVector<StateClaim> m_stateClaims;
     InputVector<HitTarget> m_commitTargets;
     InputVector<PopupScope> m_commitPopups;
     PopupToken m_currentPopup;

@@ -24,6 +24,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_layout(arena)
     , m_items(arena)
     , m_lists(arena)
+    , m_combos(arena)
     , m_stack(arena)
     , m_window(arena)
 {
@@ -73,9 +74,10 @@ bool Builder::endPanel(){
     const bool popped = m_context.popScope();
     m_panelActive = false;
     m_stack.clear();
-    if(!painted || !popped)
+    const bool combosPainted = painted && popped && paintCombos();
+    if(!combosPainted)
         m_context.fail();
-    return painted && popped;
+    return combosPainted;
 }
 
 bool Builder::beginRow(const AStringView stableKey, const ContainerOptions& options){
@@ -124,6 +126,7 @@ void Builder::reset(){
     m_popupState = nullptr;
     m_items.clear();
     m_lists.clear();
+    m_combos.clear();
     m_stack.clear();
     m_layout.reset();
 }

@@ -1,5 +1,7 @@
 nwb_declare_executable(testbed)
 target_sources(testbed PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.h"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_image_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_progress_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_progress_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_slider_gallery.h"

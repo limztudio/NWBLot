@@ -15,6 +15,7 @@
 #include "radio_group_scene.h"
 #include "slider_scene.h"
 #include "progress_scene.h"
+#include "image_scene.h"
 #include "search_combo_scene.h"
 #include "text_samples.h"
 #include "text_area_scene.h"
@@ -89,6 +90,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     const bool radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
     const bool sliderSmoke = IsUiLayerSliderSmokeEnabled();
     const bool progressSmoke = IsUiLayerProgressSmokeEnabled();
+    const bool imageSmoke = IsUiLayerImageSmokeEnabled();
     const bool textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
     const bool numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
     const bool listSmoke = IsUiLayerListSmokeEnabled();
@@ -104,7 +106,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         || (textAreaSmoke && IsUiLayerTextAreaSkinSmokeEnabled())
         || (radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled())
         || (sliderSmoke && IsUiLayerSliderSkinSmokeEnabled())
-        || (progressSmoke && IsUiLayerProgressSkinSmokeEnabled());
+        || (progressSmoke && IsUiLayerProgressSkinSmokeEnabled())
+        || (imageSmoke && IsUiLayerImageSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
@@ -130,6 +133,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSliderSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(progressSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiProgressSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
+    if(imageSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -144,7 +149,13 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(progressSmoke){
+    if(imageSmoke){
+        paint.paint = [scene = CreateUiImageSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: image UI paint failed"));
+        };
+    }
+    else if(progressSmoke){
         paint.paint = [scene = CreateUiProgressSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: progress UI paint failed"));

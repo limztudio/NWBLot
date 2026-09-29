@@ -21,6 +21,7 @@
 #include "widgets/radio_group_frame.h"
 #include "widgets/slider_frame.h"
 #include "widgets/progress_frame.h"
+#include "widgets/image_frame.h"
 #include "widgets/combo.h"
 #include "widgets/combo_style.h"
 #include "widgets/search_combo.h"
@@ -58,6 +59,7 @@ private:
         u32 radioGroup = s_LayoutNoParent;
         u32 slider = s_LayoutNoParent;
         u32 progress = s_LayoutNoParent;
+        u32 image = s_LayoutNoParent;
         u32 combo = s_LayoutNoParent;
         u32 textArea = s_LayoutNoParent;
         u32 integerEdit = s_LayoutNoParent;
@@ -242,6 +244,7 @@ private:
     PaintVector<Core::GlobalUniquePtr<RadioGroupFrame>> m_radioGroups;
     PaintVector<Core::GlobalUniquePtr<SliderFrame>> m_sliders;
     PaintVector<ProgressFrame> m_progress;
+    PaintVector<ImageFrame> m_images;
     PaintVector<ComboFrame> m_combos;
     PaintVector<Item> m_comboEditors;
     PaintVector<TooltipFrame> m_tooltips;

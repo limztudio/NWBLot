@@ -1,5 +1,11 @@
 nwb_declare_static_library(nwb_ui_widgets)
 target_sources(nwb_ui_widgets PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/image.h"
+    "${CMAKE_CURRENT_LIST_DIR}/image_layout.h"
+    "${CMAKE_CURRENT_LIST_DIR}/image_layout.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/image_frame.h"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_image.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/image_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/progress.h"
     "${CMAKE_CURRENT_LIST_DIR}/progress_style.h"
     "${CMAKE_CURRENT_LIST_DIR}/progress_layout.h"

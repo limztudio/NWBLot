@@ -24,6 +24,7 @@ BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     , m_radioGroups(arena)
     , m_sliders(arena)
     , m_progress(arena)
+    , m_images(arena)
     , m_combos(arena)
     , m_comboEditors(arena)
     , m_tooltips(arena)
@@ -51,6 +52,7 @@ void BuilderScopeFrame::reset(){
     m_radioGroups.clear();
     m_sliders.clear();
     m_progress.clear();
+    m_images.clear();
     m_combos.clear();
     m_comboEditors.clear();
     m_tooltips.clear();

@@ -135,3 +135,10 @@ The track seeks on pointer down. A thumb press retains the exact accepted `f64` 
 `Builder::progress(key, fraction, options)` copies a finite `f64` fraction and its resolved skin style at declaration. Finite values outside 0..1 clamp visually; nonfinite values reject the candidate. The application owns its value, and may change that value or later styles after declaration without changing the earlier item. A progress bar has no state loan, Tab stop, activation, pointer capture or control token. Tooltips and context menus can attach through the same passive annotation target policy as labels.
 
 `ProgressOptions` defaults to stretch width and minimum height 32. `progressStyle()` selects progress.track and progress.fill, with explicit scrollbar fallbacks, independent linear tints and optional content padding. Track padding and region minima can increase the dimensions; only pixel slice borders divide by reference density. A partial fill draws a fraction-sized nine-slice canvas. For an amount narrower than its minimum, the painter reveals a clipped minimum-sized canvas, preserving the authored borders. Zero emits only the track; full progress uses exact content endpoints.
+
+
+## Atlas images
+
+`Builder::image(key, regionName, options)` copies an authored skin region name, dimensions and linear tint at declaration. The default Content dimensions use atlas pixels divided by reference density and respect logical and slice minimums. Region padding does not inset an image. Fixed and Stretch width/height policies use the arranged rectangle; Sprite and NineSlice retain their authored drawing modes. Images are passive, with optional tooltip/context-menu annotations following the label target policy. Unknown regions, invalid dimensions and nonfinite tints reject the candidate. Empty or fully transparent images remain valid.
+
+Frozen paint retains the skin binding and copied UV/geometry through the existing GPU skin-version path. General texture sources require the separate owned image-source and GPU binding increment.

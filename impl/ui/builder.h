@@ -82,6 +82,8 @@ public:
     [[nodiscard]] bool slider(AStringView stableKey, SliderState& state, const SliderOptions& options = {});
     // A passive declaration copies its finite fraction and resolved skin style.
     [[nodiscard]] bool progress(AStringView stableKey, f64 fraction, const ProgressOptions& options = {});
+    // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
+    [[nodiscard]] bool image(AStringView stableKey, const Name& regionName, const ImageOptions& options = {});
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
@@ -163,6 +165,7 @@ private:
     [[nodiscard]] bool prepareSlider(SliderFrame& frame);
     [[nodiscard]] bool paintSlider(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintProgress(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintImage(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
     [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
     void publishSliderResults(bool valid);

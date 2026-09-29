@@ -6,6 +6,7 @@
 
 
 #include "style.h"
+#include "edit_caret_geometry.h"
 
 #include <impl/ui/edit/model.h>
 #include <impl/ui/edit/grapheme.h>
@@ -21,17 +22,6 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct EditBoxCaretStop{
-    usize committedByte = 0u;
-    usize displayByte = 0u;
-    f32 x = 0.0f;
-};
-
-struct EditBoxRange{
-    usize begin = 0u;
-    usize end = 0u;
-};
-
 struct EditBoxPlacement{
     Rect bounds;
     Rect frameClip;
@@ -42,6 +32,7 @@ struct EditBoxPlacement{
     Rect selection;
     Rect preeditUnderline;
     f32 scroll = 0.0f;
+    f32 scrollY = 0.0f;
 };
 
 struct EditBoxStyle{
@@ -75,7 +66,7 @@ struct EditBoxPaintFlags{
 
 
 // Owns this declaration's display bytes and immutable font versions; the edit model is borrowed only during snapshot().
-// Single-line LTR geometry interpolates grapheme caret stops inside ligatures; it does not provide paragraph bidi.
+// Hard-line LTR geometry interpolates grapheme caret stops inside ligatures; it does not provide wrap or paragraph bidi.
 class EditBoxView final{
 public:
     explicit EditBoxView(Core::Alloc::GlobalArena& arena);
@@ -89,10 +80,12 @@ public:
     [[nodiscard]] bool snapshot(const EditModel& model);
     // request.text is supplied by the owned snapshot. Font size remains logical; TextService applies paint DPI.
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
-    // Admits only matching source bytes and one line with LTR cluster edges. Failure leaves prior geometry intact.
+    // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout);
     [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
         f32 previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f)const;
+    [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
+        Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f)const;
     [[nodiscard]] bool hitTest(Point point, const EditBoxPlacement& placement, usize& committedByte)const;
     [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const UiSkin& skin,
         const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
@@ -100,8 +93,10 @@ public:
 
 public:
     [[nodiscard]] StringView displayText()const{ return { m_display.data(), m_display.size() }; }
-    [[nodiscard]] const TextLayout& layout()const{ return m_layout; }
-    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const{ return m_stops; }
+    [[nodiscard]] const TextLayout& layout()const{ return m_geometry.layout(); }
+    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const{ return m_geometry.caretStops(); }
+    [[nodiscard]] const EditCaretGeometry& caretGeometry()const{ return m_geometry; }
+    [[nodiscard]] EditTextMode::Enum textMode()const{ return m_textMode; }
     [[nodiscard]] u64 revision()const{ return m_revision; }
     [[nodiscard]] usize committedBytes()const{ return m_committedBytes; }
     [[nodiscard]] usize displayCaret()const{ return m_caret; }
@@ -113,22 +108,17 @@ public:
 
 
 private:
-    [[nodiscard]] bool caretX(const TextLayout& layout, usize byteOffset, f32& x)const;
-    [[nodiscard]] Rect rangeRect(EditBoxRange range, Point origin)const;
-
-
-private:
-    Core::Alloc::GlobalArena* m_arena;
+    NotNull<Core::Alloc::GlobalArena*> m_arena;
     AString<Core::Alloc::GlobalArena> m_display;
-    EditBoundaryVector m_boundaries;
-    PaintVector<EditBoxCaretStop> m_stops;
-    TextLayout m_layout;
+    PaintVector<EditCaretMapping> m_mapping;
+    EditCaretGeometry m_geometry;
     EditBoxRange m_selection;
     EditBoxRange m_preedit;
     EditBoxRange m_replacement;
     usize m_caret = 0u;
     usize m_committedBytes = 0u;
     u64 m_revision = 0u;
+    EditTextMode::Enum m_textMode = EditTextMode::SingleLine;
     bool m_composing = false;
     bool m_ready = false;
 };

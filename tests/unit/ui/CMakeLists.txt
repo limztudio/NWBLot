@@ -1,5 +1,10 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/edit_caret_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_caret_geometry_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_caret_range_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_view_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/multiline_view_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/multiline_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/multiline_text_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/multiline_model_tests.cpp"

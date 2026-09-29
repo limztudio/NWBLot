@@ -72,11 +72,36 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     paint.pushClip(placement.clip);
     if(painted){
         const Color& selection = flags.focused && flags.enabled ? style.selection : style.inactiveSelection;
-        paint.fillRect(placement.selection, selection);
-        painted = text.paint(paint, m_layout, placement.textOrigin, flags.enabled ? style.text : style.disabledText);
+        for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
+            Rect segment;
+            if(!m_geometry.rangeOnLine(m_selection, line, placement.caret.width, segment)){
+                painted = false;
+                break;
+            }
+            if(segment.width > 0.0f){
+                segment.x += placement.textOrigin.x;
+                segment.y += placement.textOrigin.y;
+                paint.fillRect(segment, selection);
+            }
+        }
+        painted = painted && text.paint(paint, layout(), placement.textOrigin, flags.enabled ? style.text : style.disabledText);
     }
-    if(painted && m_composing && flags.focused && flags.enabled)
-        paint.fillRect(placement.preeditUnderline, style.preedit);
+    if(painted && m_composing && flags.focused && flags.enabled){
+        for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
+            Rect segment;
+            if(!m_geometry.rangeOnLine(m_preedit, line, placement.caret.width, segment)){
+                painted = false;
+                break;
+            }
+            if(segment.width > 0.0f){
+                const f32 thickness = Min(placement.caret.width, segment.height);
+                segment.x += placement.textOrigin.x;
+                segment.y += placement.textOrigin.y + Max(0.0f, segment.height - thickness);
+                segment.height = thickness;
+                paint.fillRect(segment, style.preedit);
+            }
+        }
+    }
     if(
         painted && flags.focused && flags.enabled && !flags.readOnly
         && (m_composing ? flags.preeditCaretVisible : flags.caretVisible)

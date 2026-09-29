@@ -26,7 +26,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     const EditBoxOptions& options, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
-        || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
+        || model.textMode() != EditTextMode::SingleLine || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
     ){
         m_context.fail();
         return {};

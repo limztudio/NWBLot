@@ -10,6 +10,8 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
+
+#include <global/scope_exit.h>
 #include <global/sync.h>
 
 #include <basisu_transcoder.h>
@@ -386,6 +388,25 @@ bool TextureAssetLoader::Create(
         }
     }
 
+    // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
+    const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
+    if(!sampledImageHandle.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        return false;
+    }
+    ScopeExit releaseDescriptor([&heap, sampledImageHandle]()noexcept{ heap.free(sampledImageHandle); });
+
+    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::Texture_SRV(
+        0u,
+        texture.get(),
+        format,
+        Core::s_AllSubresources,
+        textureDimension
+    ))){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        return false;
+    }
+
     Core::QueueSubmissionToken uploadToken;
     if(!graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
         .destination = texture,
@@ -401,27 +422,11 @@ bool TextureAssetLoader::Create(
         return false;
     }
 
-    const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
-    if(!sampledImageHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
-        return false;
-    }
-    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::Texture_SRV(
-        0u,
-        texture.get(),
-        format,
-        Core::s_AllSubresources,
-        textureDimension
-    ))){
-        heap.free(sampledImageHandle);
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
-        return false;
-    }
-
     outResource.texture = Move(texture);
     outResource.sampledImageHeapHandle = sampledImageHandle;
     outResource.format = format;
     outResource.readinessToken = uploadToken;
+    releaseDescriptor.release();
     return true;
 }
 

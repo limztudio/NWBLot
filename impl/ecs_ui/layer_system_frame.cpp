@@ -22,6 +22,7 @@ NWB_IMPL_BEGIN
 
 void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
+    m_frameDelta.add(delta);
     synchronizeInput();
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
         return;
@@ -32,6 +33,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     NWB_FATAL_ASSERT(skin);
     if(!m_context.beginFrame(m_frameGeneration))
         TerminateInvariant();
+    const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
@@ -39,10 +41,9 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     m_ui.setSkin(*skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinGeneration, m_skinRef, *skin);
     m_paint.reserve(256u);
-    const f32 safeDelta = IsFinite(delta) && delta >= 0.0f ? delta : 0.0f;
-    m_ui.setDeltaSeconds(safeDelta);
+    m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u);
-    UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::ENTITY_ID_INVALID, safeDelta };
+    UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::ENTITY_ID_INVALID, frameDelta };
     for(const auto& root : m_liveRoots){
         UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
         if(!component || !component->visible || !component->paint)

@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../edit/caret_clock.h"
 
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
@@ -121,9 +122,9 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
         || state.selectionGeneration != model.selectionGeneration()
         || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused
     )
-        state.caretElapsed = 0.0f;
-    else if(IsFinite(m_deltaSeconds) && m_deltaSeconds > 0.0f)
-        state.caretElapsed = FMod(state.caretElapsed + Min(m_deltaSeconds, 1.0f), 1.0f);
+        state.caretElapsed = 0.0;
+    else
+        state.caretElapsed = AdvanceCaretPhase(state.caretElapsed, static_cast<f64>(m_deltaSeconds));
     if(state.modelGeneration != model.instanceGeneration())
         state.scroll = 0.0f;
     state.modelGeneration = model.instanceGeneration();
@@ -134,7 +135,7 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
     state.focused = result.focused;
 
     item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly,
-        state.caretElapsed < 0.5f };
+        state.caretElapsed < 0.5 };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
     if(!item.editView.snapshot(model) || item.editView.shape(m_text, { {}, m_style.fontSize }) != TextLayoutStatus::Success){
         m_context.fail();

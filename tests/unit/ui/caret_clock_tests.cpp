@@ -1,0 +1,56 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ui/edit/caret_clock.h>
+
+#include <global/limit.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_caret_clock_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using namespace NWB;
+using namespace NWB::Impl::Ui;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(UiCaretClockTests, FiniteLongDeltaPreservesWholeCycleRemainder){
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.125, 2.25), 0.375);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.75, 2.75), 0.5);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.25, 1000000.75), 0.0);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, Limit<f64>::s_Max), 0.375);
+}
+
+TEST(UiCaretClockTests, InvalidAndNonpositiveDeltasKeepCurrentPhase){
+    const f64 invalid[]{ 0.0, -0.25, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity,
+        Limit<f64>::s_QuietNaN };
+    for(const f64 delta : invalid)
+        EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, delta), 0.375);
+}
+
+TEST(UiCaretClockTests, InvalidPhaseStartsAtZeroAndFinitePhaseIsNormalized){
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(Limit<f64>::s_QuietNaN, 2.25), 0.25);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(-1.0, 0.25), 0.25);
+    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(1.25, 2.5), 0.75);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -1,5 +1,7 @@
 nwb_declare_static_library(nwb_ui_edit)
 target_sources(nwb_ui_edit PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/caret_clock.h"
+    "${CMAKE_CURRENT_LIST_DIR}/caret_clock.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vertical_navigation.h"
     "${CMAKE_CURRENT_LIST_DIR}/vertical_navigation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/navigation_commands.cpp"

@@ -7,6 +7,7 @@
 
 #include "components.h"
 #include "edit_box_host.h"
+#include "frame_delta.h"
 
 #include <impl/ui/gpu/renderer.h>
 
@@ -123,6 +124,7 @@ private:
     Ui::PaintVector<LiveRoot> m_liveRoots;
     Ui::PaintVector<Ui::WidgetRoot> m_rootIdentities;
     Ui::GpuRenderer m_renderer;
+    UiFrameDelta m_frameDelta;
     Ui::DisplayMetrics m_display;
     Ui::Point m_pointer;
     // One bounded native-key owner per held sequence; normalized navigation keys additionally use the CPU router.

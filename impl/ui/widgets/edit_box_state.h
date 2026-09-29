@@ -32,7 +32,7 @@ struct EditBoxOptions{
 struct EditBoxState{
     EditBoxPlacement placement;
     f32 scroll = 0.0f;
-    f32 caretElapsed = 0.0f;
+    f64 caretElapsed = 0.0;
     u64 modelGeneration = 0u;
     u64 revision = 0u;
     u64 selectionGeneration = 0u;

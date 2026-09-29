@@ -54,7 +54,7 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
 }
 
 bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth)const{
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(clip)
         || !IsFinite(padding.left) || !IsFinite(padding.top) || !IsFinite(padding.right) || !IsFinite(padding.bottom)
@@ -79,9 +79,9 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
     if(!IsFinite(maximumScroll))
         return false;
     placement.scroll = Clamp(previousScroll.x, 0.0f, maximumScroll);
-    if(caret.x < placement.scroll)
+    if(revealCaret && caret.x < placement.scroll)
         placement.scroll = caret.x;
-    if(caret.x + caretWidth > placement.scroll + placement.content.width)
+    if(revealCaret && caret.x + caretWidth > placement.scroll + placement.content.width)
         placement.scroll = caret.x + caretWidth - placement.content.width;
     placement.scroll = Clamp(placement.scroll, 0.0f, maximumScroll);
     if(m_textMode == EditTextMode::Multiline){
@@ -89,9 +89,9 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
         if(!IsFinite(maximumScrollY))
             return false;
         placement.scrollY = Clamp(previousScroll.y, 0.0f, maximumScrollY);
-        if(caret.y < placement.scrollY)
+        if(revealCaret && caret.y < placement.scrollY)
             placement.scrollY = caret.y;
-        if(caret.y + caret.height > placement.scrollY + placement.content.height)
+        if(revealCaret && caret.y + caret.height > placement.scrollY + placement.content.height)
             placement.scrollY = caret.y + caret.height - placement.content.height;
         placement.scrollY = Clamp(placement.scrollY, 0.0f, maximumScrollY);
         placement.textOrigin = { left - placement.scroll, top - placement.scrollY };

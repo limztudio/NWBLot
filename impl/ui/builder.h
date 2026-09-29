@@ -12,6 +12,7 @@
 #include "widgets/style.h"
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
+#include "widgets/text_area.h"
 #include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
@@ -38,6 +39,7 @@ NWB_IMPL_UI_BEGIN
 class Builder final : NoCopy{
 private:
     using Item = BuilderScopeFrame::Item;
+    using TextAreaFrame = BuilderScopeFrame::TextAreaFrame;
     using NumericEditFrame = BuilderScopeFrame::NumericEditFrame;
     using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
     using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
@@ -84,6 +86,8 @@ public:
         ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
+    // Multiline model and viewport remain lent through the enclosing scope or outermost popup end.
+    [[nodiscard]] EditBoxResult textArea(AStringView stableKey, EditModel& model, TextAreaState& state, const TextAreaOptions& options = {});
     // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
     [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model,
         EditBoxState& state, const IntegerEditOptions& options = {});
@@ -123,6 +127,10 @@ private:
     [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, EditModel& model, EditBoxState& state,
         const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr,
         FloatEditFrame* floatFrame = nullptr);
+    [[nodiscard]] bool paintTextArea(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool textAreaAvailable(const EditModel& model, const TextAreaState& state)const;
+    void snapshotTextArea(TextAreaFrame& frame);
+    [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const;
     void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft);
     [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const;
     [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const;

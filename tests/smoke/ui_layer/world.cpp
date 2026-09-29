@@ -14,6 +14,7 @@
 #include "popup_tools_scene.h"
 #include "search_combo_scene.h"
 #include "text_samples.h"
+#include "text_area_scene.h"
 #include "window_scene.h"
 
 #include <impl/ecs_ui/layer_system.h>
@@ -82,6 +83,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
     const bool popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
     const bool nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
+    const bool textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
     const bool numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
     const bool listSmoke = IsUiLayerListSmokeEnabled();
     const bool comboSmoke = IsUiLayerComboSmokeEnabled();
@@ -92,7 +94,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         || (searchComboSmoke && IsUiLayerSearchComboSkinSmokeEnabled())
         || (popupToolsSmoke && IsUiLayerPopupToolsSkinSmokeEnabled())
         || (nestedPopupSmoke && IsUiLayerNestedPopupSkinSmokeEnabled())
-        || (numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled());
+        || (numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled())
+        || (textAreaSmoke && IsUiLayerTextAreaSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
@@ -110,6 +113,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(numericEditSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNumericEditSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
+    if(textAreaSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -124,7 +129,13 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(numericEditSmoke){
+    if(textAreaSmoke){
+        paint.paint = [scene = CreateUiTextAreaSmokeScene(context.objectArena, context.clipboard)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text area UI paint failed"));
+        };
+    }
+    else if(numericEditSmoke){
         paint.paint = [scene = CreateUiNumericEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));

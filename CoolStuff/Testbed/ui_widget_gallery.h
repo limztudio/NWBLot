@@ -13,6 +13,7 @@
 #include "ui_popup_gallery.h"
 #include "ui_popup_tools_gallery.h"
 #include "ui_search_combo_gallery.h"
+#include "ui_text_area_gallery.h"
 
 #include <impl/ecs_ui/components.h>
 
@@ -38,6 +39,7 @@ private:
     TestbedUiPopupToolsGallery m_popupTools;
     TestbedUiNestedPopupGallery m_nestedPopups;
     TestbedUiNumericEditGallery m_numericEdits;
+    TestbedUiTextAreaGallery m_textAreas;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

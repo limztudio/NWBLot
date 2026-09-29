@@ -71,3 +71,18 @@ Searchable-combo qualification on Windows ARM64 / Clang 22.1.4, `dbg`: both skin
 Each skin passes 48 displayed/native/pixel gates on Windows ARM64 / Clang `dbg` with graphics validation. Gates cover exact parent layout restoration, editing and list selection on both sides of the child declaration, child focus and Tab trapping, child Escape/outside dismissal, accepted parent focus restoration, ancestor closure and fresh reopening, compound control selection, native focus loss and client resize. A secondary-button context menu restores the previously focused parent control; it does not move focus to its clicked anchor. Captures match frozen model markers, accepted popup ancestry and independently sampled atlas interiors. Default child clipping and alternate search/query visuals were inspected.
 
 Fixture-only F8 closes the ancestor. The Win32 driver sets the actual cursor, posts native messages and restores the prior cursor on completion; Linux uses the shared X11 synthetic path. Results live under `ui_layer_nested_popup_default`/`alternate` as stage BMPs, `nested_popup.log` and `nested_popup.json`. The fixture requires an 800x540 logical client; unavailable supported input/capture or insufficient display space returns skip code 77. These runs do not qualify live IME, physical pointer grabs, native Linux linking/execution or Wayland compositor interaction.
+
+
+## Multiline text-area fixture
+
+`nwb_ui_layer_text_area_smoke` and `nwb_ui_layer_text_area_skin_smoke` use a standalone UI GPU task with a Multiline model and separate viewport/navigation state. The scene owns document controllers before its text-area loan and captures document hashes, selections, placement, two-axis offsets and navigation alongside displayed-frame marker pixels. The native driver uses real clipboard requests, keyboard/pointer input and frozen framebuffer probes; default and replacement skin runs share the behavior gates.
+
+Run both variants with:
+
+```powershell
+ctest --test-dir __cmake/build/windows-clang-arm64-ui-retirement -C dbg -R '^nwb_ui_layer_text_area(_skin)?_smoke$' --output-on-failure
+```
+
+The fixture qualifies LF/submit commands, preferred-column navigation, Page height, line/document edges, cross-line selections, clipboard CRLF conversion/history, caret reveal, policy/focus changes and resize. It does not inject synthetic preedit or claim live Korean IME qualification. The separate model/View/host unit suites cover composition geometry and lifetime fencing.
+
+Both skins pass all 42 displayed/native/pixel gates on Windows ARM64 / Clang `dbg`, with graphics validation. The same increment passes 959 toolkit and 160 ECS UI tests plus genuine Linux syntax/type checks for 235 translation units. Native Linux linking/compositor execution and live IME remain unqualified.

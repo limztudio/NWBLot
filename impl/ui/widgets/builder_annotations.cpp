@@ -67,6 +67,10 @@ bool Builder::validateDeferredSources()const{
 
 bool Builder::validateDeferredStates()const{
     // No source callbacks run after these model checks until every scope's loans have been released.
+    for(const auto& frame : m_scope->m_textAreas){
+        if(!textAreaMatches(frame))
+            return false;
+    }
     for(const auto& frame : m_scope->m_integerEdits){
         if(!integerEditMatches(frame))
             return false;
@@ -96,6 +100,12 @@ bool Builder::validateDeferredStates()const{
 
 void Builder::releaseDeferredLoans(){
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
+    for(auto& frame : m_scope->m_textAreas){
+        frame.model = nullptr;
+        frame.state = nullptr;
+        if(frame.item < m_scope->m_items.size())
+            m_scope->m_items[frame.item].editState = nullptr;
+    }
     for(auto& frame : m_scope->m_integerEdits){
         frame.model = nullptr;
         frame.state = nullptr;

@@ -24,7 +24,7 @@ WidgetStateStore::WidgetStateStore(Core::Alloc::GlobalArena& arena)
 
 WidgetState* WidgetStateStore::touch(
     const WidgetId id, const WidgetRoot& root, const WidgetKind::Enum kind, const u64 frameGeneration){
-    if(!id.valid() || root.generation == 0u || frameGeneration == 0u || kind > WidgetKind::ContextMenu)
+    if(!id.valid() || root.generation == 0u || frameGeneration == 0u || kind > WidgetKind::TextArea)
         return nullptr;
     for(auto& entry : m_entries){
         if(entry.id != id)

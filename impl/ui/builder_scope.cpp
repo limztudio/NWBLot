@@ -17,6 +17,7 @@ NWB_IMPL_UI_BEGIN
 BuilderScopeFrame::BuilderScopeFrame(Core::Alloc::GlobalArena& arena)
     : m_layout(arena)
     , m_items(arena)
+    , m_textAreas(arena)
     , m_integerEdits(arena)
     , m_floatEdits(arena)
     , m_lists(arena)
@@ -40,6 +41,7 @@ void BuilderScopeFrame::reset(){
     m_popupToken = {};
     m_popupVisible = false;
     m_items.clear();
+    m_textAreas.clear();
     m_integerEdits.clear();
     m_floatEdits.clear();
     m_lists.clear();

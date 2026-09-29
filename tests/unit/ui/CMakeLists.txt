@@ -1,5 +1,14 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_state_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_navigation_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_builder_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_scroll_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_loan_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_reentry_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_area_view_tests.cpp"
+
     "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_caret_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/edit_caret_geometry_tests.cpp"

@@ -11,6 +11,7 @@
 #include "widgets/style.h"
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
+#include "widgets/text_area.h"
 #include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
@@ -51,6 +52,7 @@ private:
         u32 node = 0u;
         u32 list = s_LayoutNoParent;
         u32 combo = s_LayoutNoParent;
+        u32 textArea = s_LayoutNoParent;
         u32 integerEdit = s_LayoutNoParent;
         u32 floatEdit = s_LayoutNoParent;
         bool enabled = true;
@@ -81,6 +83,22 @@ private:
         explicit WindowFrame(Core::Alloc::GlobalArena& arena)
             : title(arena)
         {}
+    };
+
+    struct TextAreaFrame{
+        const EditModel* model = nullptr;
+        TextAreaState* state = nullptr;
+        EditNavigationSnapshot navigation;
+        u64 stateRevision = 0u;
+        u64 modelGeneration = 0u;
+        u64 modelRevision = 0u;
+        u64 externalRevision = 0u;
+        u64 selectionGeneration = 0u;
+        u64 compositionGeneration = 0u;
+        usize anchor = 0u;
+        usize caret = 0u;
+        u32 item = s_LayoutNoParent;
+        bool focused = false;
     };
 
     struct NumericEditFrame{
@@ -209,6 +227,7 @@ private:
     PopupPlacement m_popupPlacement;
     LayoutTree m_layout;
     PaintVector<Item> m_items;
+    PaintVector<TextAreaFrame> m_textAreas;
     PaintVector<IntegerEditFrame> m_integerEdits;
     PaintVector<FloatEditFrame> m_floatEdits;
     PaintVector<ListFrame> m_lists;

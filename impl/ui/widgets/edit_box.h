@@ -85,7 +85,7 @@ public:
     [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
         f32 previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f)const;
     [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-        Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f)const;
+        Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f, bool revealCaret = true)const;
     [[nodiscard]] bool hitTest(Point point, const EditBoxPlacement& placement, usize& committedByte)const;
     [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const UiSkin& skin,
         const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;

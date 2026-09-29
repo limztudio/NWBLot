@@ -604,3 +604,16 @@ Published editor geometry now owns hard-line records, caret stops and mode. Poin
 Qualification on Windows ARM64 / Clang, `dbg`: all 887 toolkit and 160 ECS UI tests pass, including ten navigation-state/translation and forty ordered host/lifetime/hit cases. The ordinary edit, searchable-combo and numeric GPU regressions pass.
 
 Genuine Linux x86_64 syntax/type checking passes for 220 translation units; all 9980 hashed inputs and 1255 actual dependencies remain unchanged, with no missing dependency hashes. Native Linux linking, compositor execution and live IME remain unqualified on this Windows host. All 20 changed C++ sources pass UTF-8 without BOM, CRLF, banner/separator, exact EOF and size checks (maximum 390 lines); authored text and `git diff --check` also pass. M6 measurement and tuning remain deferred.
+
+
+## Multiline text-area widget increment
+
+`Builder::textArea()` now lends a Multiline model and separate immovable viewport state through the enclosing scope or outermost popup end. The state owns two-axis scroll and preferred navigation; public scroll/reset epochs and complete model/navigation snapshots fence later callbacks and aliases. Declaration, state, loan validation, paint and fresh-shaping resolver remain separate sources. Existing edit skin parts serve the field and the default viewport height is 160 logical pixels.
+
+Each vertical key resolves the current model between copied events. Page uses accepted viewport height, clamps the caret's line center in f64 and preserves the active caret at document boundaries. Explicit scroll remains authoritative across first binding, idle frames and resize; later observed editing/selection/composition/focus and known-model rebinding reveal the caret. Painting clamps both axes, emits per-hard-line selection/preedit ranges and publishes owned geometry through the existing ECS/OS bridge. Actions report submission/cancel/focus without rewriting the document.
+
+The Testbed gallery and dedicated default/replacement-skin GPU fixtures exercise the public widget. Scrollbar/wheel control integration follows this increment. M6 performance measurement and tuning remain deferred.
+
+Qualification on Windows ARM64 / Clang, `dbg`: all 959 toolkit and 160 ECS UI tests pass. The ordinary edit, searchable-combo and numeric GPU regressions pass, and both text-area skins pass all 42 displayed/native/pixel gates, including completed cross-line Cut and one Undo, canonical clipboard history, preferred-column navigation, resize and focus retirement.
+
+Genuine Linux x86_64 syntax/type checking passes for 235 translation units; all 10,001 hashed inputs and 1,276 actual dependencies remain unchanged, with no missing dependency hashes. Native Linux linking, compositor execution and live IME remain unqualified on this Windows host. All 33 changed C++ sources pass UTF-8 without BOM, CRLF, banner/separator, exact EOF and size checks (maximum 521 lines); authored text and `git diff --check` also pass. M6 measurement and tuning remain deferred.

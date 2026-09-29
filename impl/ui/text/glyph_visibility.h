@@ -34,7 +34,8 @@ public:
         f32 fontSize,
         f32 physicalSize,
         const Point& topLeft,
-        const Rect& clip
+        const Rect& clip,
+        Point pixelScale = { 1.0f, 1.0f }
     );
     [[nodiscard]] static bool atlasRectangle(
         const PlacedGlyph& glyph,
@@ -48,7 +49,8 @@ public:
         const AtlasGlyph& record,
         f32 rasterScale,
         const Point& topLeft,
-        Rect& out
+        Rect& out,
+        Point pixelScale = { 1.0f, 1.0f }
     );
     [[nodiscard]] static TextGlyphIntersection::Enum intersect(const Rect& rectangle, const Rect& clip);
 };

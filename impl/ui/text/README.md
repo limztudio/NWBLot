@@ -134,8 +134,10 @@ views; eviction, cache tuning and performance measurement remain later work.
 `TextService::paint()` reads the builder's saved display metrics. It rasterizes at
 `ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with hinting disabled, while layout
 measurement stays in logical units. Raster bitmap bounds are converted back using
-the actual raster scale. Shaped ink bounds and raster pixel bounds can differ by
-the bitmap's integer fringe.
+the actual raster scale, then their top-left edges are snapped to the physical pixel
+grid before drawing. Shaping positions, caret geometry, and baked SDF quads remain
+fractional. Shaped ink bounds and raster pixel bounds can differ by the bitmap's
+integer fringe.
 
 Glyph coverage is linear R8 with one mip and a transparent one-pixel packing border.
 The cache key includes the exact CPU font version, glyph ID, and physical pixel size.

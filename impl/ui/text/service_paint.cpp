@@ -41,6 +41,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         return true;
     const u32 pixelSize = static_cast<u32>(physicalSize);
     const f32 rasterScale = physicalSize / layout.fontSize();
+    const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ui/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
     candidates.reserve(layout.glyphs().size());
@@ -49,7 +50,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         const PlacedGlyph& glyph = layout.glyphs()[index];
         const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize);
         const TextGlyphIntersection::Enum status = TextGlyphVisibility::candidate(
-            glyph, atlas, layout.fontSize(), physicalSize, topLeft, clip
+            glyph, atlas, layout.fontSize(), physicalSize, topLeft, clip, deviceScale
         );
         if(status == TextGlyphIntersection::Invalid)
             return false;
@@ -78,7 +79,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
-            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle))
+            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle, deviceScale))
                 return false;
         }
         const TextGlyphIntersection::Enum status = TextGlyphVisibility::intersect(rectangle, clip);
@@ -152,7 +153,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             if(!page)
                 return false;
             Rect rectangle;
-            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle))
+            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle, deviceScale))
                 return false;
             const Rect uv{
                 record->pixels.x / s_GlyphAtlasPageExtent,

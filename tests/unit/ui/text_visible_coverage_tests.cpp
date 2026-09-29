@@ -69,8 +69,10 @@ protected:
         if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
             return false;
         const f32 scale = physicalSize / fontSize;
-        rectangle = { origin.x + glyph.position.x + static_cast<f32>(m_bitmap.bearingX) / scale,
-            origin.y + glyph.position.y - static_cast<f32>(m_bitmap.bearingY) / scale,
+        const f64 unsnappedX = static_cast<f64>(origin.x) + glyph.position.x + static_cast<f64>(m_bitmap.bearingX) / scale;
+        const f64 unsnappedY = static_cast<f64>(origin.y) + glyph.position.y - static_cast<f64>(m_bitmap.bearingY) / scale;
+        rectangle = { static_cast<f32>(Floor(unsnappedX * display.pixelScaleX + 0.5) / display.pixelScaleX),
+            static_cast<f32>(Floor(unsnappedY * display.pixelScaleY + 0.5) / display.pixelScaleY),
             static_cast<f32>(m_bitmap.width) / scale, static_cast<f32>(m_bitmap.height) / scale };
         return rectangle.width > 0.0f && rectangle.height > 0.0f;
     }
@@ -240,6 +242,24 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     EXPECT_NEAR(snapshot.vertices()[2u].position.y, clip.y + clip.height, 0.0001f);
     EXPECT_FLOAT_EQ(m_layout.measure().x, measured.x);
     EXPECT_FLOAT_EQ(m_layout.measure().y, measured.y);
+}
+
+TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid){
+    const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
+    const Point origin{ 40.375f, 20.125f };
+    ASSERT_EQ(m_text.layout({ .text = "g", .fontSize = 17.25f }, m_layout), TextLayoutStatus::Success);
+    ASSERT_EQ(m_layout.glyphs().size(), 1u);
+    Rect raster;
+    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, raster));
+    beginPaint(1u, display);
+    ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
+    const DrawSnapshot snapshot = m_paint.freeze();
+    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
+    ASSERT_EQ(snapshot.vertices().size(), 4u);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster.x, 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster.y, 0.0001f);
+    EXPECT_NEAR(raster.x * display.pixelScaleX, Floor(raster.x * display.pixelScaleX + 0.5f), 0.0001f);
+    EXPECT_NEAR(raster.y * display.pixelScaleY, Floor(raster.y * display.pixelScaleY + 0.5f), 0.0001f);
 }
 
 TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin){

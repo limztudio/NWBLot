@@ -109,11 +109,13 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
     const f32 fontSize,
     const f32 physicalSize,
     const Point& topLeft,
-    const Rect& clip){
+    const Rect& clip,
+    const Point pixelScale){
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !IsFinite(physicalSize)
         || physicalSize < 1.0f || physicalSize > 4096.0f || !ValidRect(clip)
+        || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
         return TextGlyphIntersection::Invalid;
     if(clip.width <= 0.0f || clip.height <= 0.0f)
@@ -139,17 +141,19 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
     const f64 shapedSize = Floor(static_cast<f64>(fontSize) * 64.0 + 0.5) / 64.0;
     const f64 correction = glyph.coverage.known ? 1.0 : static_cast<f64>(fontSize) / shapedSize;
     const f64 rasterScale = static_cast<f64>(physicalSize) / fontSize;
-    // Native outline bounds already include their design-unit allowance; both paths retain raster pixel rounding.
+    // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize) / glyph.face->unitsPerEm();
-    const f64 margin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
+    const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
+    const f64 marginX = rasterMargin + 0.5 / pixelScale.x;
+    const f64 marginY = rasterMargin + 0.5 / pixelScale.y;
     const f64 inkRight = static_cast<f64>(ink.x) + ink.width;
     const f64 inkBottom = static_cast<f64>(ink.y) + ink.height;
     const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x;
     const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y;
-    const f64 left = x + Min(static_cast<f64>(ink.x), ink.x * correction) - margin;
-    const f64 top = y + Min(static_cast<f64>(ink.y), ink.y * correction) - margin;
-    const f64 right = x + Max(inkRight, inkRight * correction) + margin;
-    const f64 bottom = y + Max(inkBottom, inkBottom * correction) + margin;
+    const f64 left = x + Min(static_cast<f64>(ink.x), ink.x * correction) - marginX;
+    const f64 top = y + Min(static_cast<f64>(ink.y), ink.y * correction) - marginY;
+    const f64 right = x + Max(inkRight, inkRight * correction) + marginX;
+    const f64 bottom = y + Max(inkBottom, inkBottom * correction) + marginY;
     return IntersectBounds(left, top, right, bottom, clip);
 }
 
@@ -188,9 +192,13 @@ bool TextGlyphVisibility::coverageRectangle(
     const AtlasGlyph& record,
     const f32 rasterScale,
     const Point& topLeft,
-    Rect& out){
+    Rect& out,
+    const Point pixelScale){
     using namespace __hidden_ui_glyph_visibility;
-    if(!ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !ValidRect(record.pixels))
+    if(
+        !ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !ValidRect(record.pixels)
+        || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
+    )
         return false;
     if(record.pageIndex == s_GlyphAtlasNoPage){
         out = {};
@@ -198,9 +206,12 @@ bool TextGlyphVisibility::coverageRectangle(
     }
     const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x + static_cast<f64>(record.bearingX) / rasterScale;
     const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y - static_cast<f64>(record.bearingY) / rasterScale;
+    // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
+    const f64 alignedX = Floor(x * pixelScale.x + 0.5) / pixelScale.x;
+    const f64 alignedY = Floor(y * pixelScale.y + 0.5) / pixelScale.y;
     return MakeRect(
-        x,
-        y,
+        alignedX,
+        alignedY,
         record.pixels.width / static_cast<f64>(rasterScale),
         record.pixels.height / static_cast<f64>(rasterScale),
         out

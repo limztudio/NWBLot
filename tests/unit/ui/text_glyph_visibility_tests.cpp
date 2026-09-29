@@ -201,6 +201,36 @@ TEST(TextGlyphVisibilityTests, CoverageRectangleSupportsFractionalRasterScale){
     ExpectRectangle(rectangle, { 2.0f, 4.0f, 2.0f, 4.0f });
 }
 
+TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtOneToOneScale){
+    PlacedGlyph glyph;
+    glyph.position = { 0.25f, 0.25f };
+    AtlasGlyph record;
+    record.pageIndex = 0u;
+    record.pixels = { 0.0f, 0.0f, 5.0f, 7.0f };
+    record.bearingX = -2;
+    record.bearingY = 3;
+    Rect rectangle;
+    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.0f, { 10.0f, 20.0f }, rectangle, { 1.0f, 1.0f }));
+    ExpectRectangle(rectangle, { 8.0f, 17.0f, 5.0f, 7.0f });
+    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.0f, { 10.5f, 20.5f }, rectangle, { 1.0f, 1.0f }));
+    ExpectRectangle(rectangle, { 9.0f, 18.0f, 5.0f, 7.0f });
+}
+
+TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelScale){
+    PlacedGlyph glyph;
+    glyph.position = { 0.25f, 0.25f };
+    AtlasGlyph record;
+    record.pageIndex = 0u;
+    record.pixels = { 0.0f, 0.0f, 6.0f, 9.0f };
+    record.bearingX = -3;
+    record.bearingY = 6;
+    Rect rectangle;
+    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, rectangle, { 1.5f, 1.5f }));
+    ExpectRectangle(rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
+    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, rectangle, { 1.0f, 1.5f }));
+    ExpectRectangle(rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
+}
+
 TEST(TextGlyphVisibilityTests, CoverageRecordWithoutAnImageProducesAnEmptyExactRectangle){
     PlacedGlyph glyph;
     AtlasGlyph record;
@@ -229,6 +259,28 @@ TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryPreservesTheOutput){
     glyph.position.x = Limit<f32>::s_QuietNaN;
     EXPECT_FALSE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.0f, {}, rectangle));
     ExpectRectangle(rectangle, original);
+}
+
+TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverageWithoutChangingTheOutput){
+    PlacedGlyph glyph;
+    glyph.coverage = { { 1.0f, 2.0f, 3.0f, 4.0f }, true };
+    AtlasGlyph record;
+    record.pageIndex = 0u;
+    record.pixels = { 0.0f, 0.0f, 3.0f, 4.0f };
+    const Rect original{ 1.0f, 2.0f, 3.0f, 4.0f };
+    Rect rectangle = original;
+    const Point invalidScales[]{
+        { 0.0f, 1.0f }, { -1.0f, 1.0f }, { Limit<f32>::s_Infinity, 1.0f },
+        { 1.0f, 0.0f }, { 1.0f, -1.0f }, { 1.0f, Limit<f32>::s_QuietNaN },
+    };
+    for(const Point& pixelScale : invalidScales){
+        EXPECT_FALSE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.0f, {}, rectangle, pixelScale));
+        ExpectRectangle(rectangle, original);
+        EXPECT_EQ(
+            TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 10.0f, 10.0f }, pixelScale),
+            TextGlyphIntersection::Invalid
+        );
+    }
 }
 
 TEST(TextGlyphVisibilityTests, UnrepresentableCoverageGeometryPreservesTheOutput){
@@ -293,6 +345,26 @@ TEST(TextGlyphVisibilityTests, NativeRasterAllowanceTracksPhysicalScale){
     const Rect clip{ 8.5f, 10.0f, 0.25f, 1.0f };
     EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Visible);
     EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 64.0f, {}, clip), TextGlyphIntersection::Invisible);
+}
+
+TEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFringeAsCandidate){
+    PlacedGlyph glyph;
+    glyph.position = { 10.32f, 20.0f };
+    glyph.coverage = { { 0.0f, 0.0f, 1.0f, 1.0f }, true };
+    AtlasGlyph record;
+    record.pageIndex = 0u;
+    record.pixels = { 0.0f, 0.0f, 3.0f, 3.0f };
+    record.bearingX = -3;
+    const Point pixelScale{ 1.5f, 1.0f };
+    const Rect clip{ 8.6f, 20.0f, 0.1f, 1.0f };
+    Rect rectangle;
+    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.5f, {}, rectangle, pixelScale));
+    ExpectRectangle(rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
+    EXPECT_EQ(TextGlyphVisibility::intersect(rectangle, clip), TextGlyphIntersection::Visible);
+    EXPECT_EQ(
+        TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale),
+        TextGlyphIntersection::Visible
+    );
 }
 
 TEST(TextGlyphVisibilityTests, CandidateRejectsInvalidParametersAndKnownBounds){

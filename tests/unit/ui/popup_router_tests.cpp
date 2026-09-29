@@ -156,6 +156,68 @@ TEST_F(UiPopupRouterTests, TabAndReverseTabWrapOnlyWithinTheAcceptedTopScope){
     EXPECT_FALSE(m_router.consumeActivation({ 2u }));
 }
 
+TEST_F(UiPopupRouterTests, OptedInSingleStopPopupTabsToTheNextParentStopAfterAcceptance){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissTab = true;
+    scope.tabAnchor = { 1u };
+    scope.tabAnchorDeclarationGeneration = 1u;
+    auto targets = Targets(scope);
+    ASSERT_TRUE(m_router.commitTargets(targets.data(), 4u, 2u, &scope, 1u));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
+    EXPECT_FALSE(m_router.focus().valid());
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab, .repeat = true }).keyboardConsumed);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_EQ(reason, PopupDismissReason::Tab);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
+    EXPECT_EQ(m_router.focus().value, 2u);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
+    EXPECT_FALSE(m_router.ownsKey(InputKey::Tab));
+}
+
+TEST_F(UiPopupRouterTests, OptedInPopupReverseTabsToThePreviousParentStop){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissTab = true;
+    scope.tabAnchor = { 1u };
+    scope.tabAnchorDeclarationGeneration = 1u;
+    auto targets = Targets(scope);
+    ASSERT_TRUE(m_router.commitTargets(targets.data(), 4u, 2u, &scope, 1u));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    key(InputKey::Tab, true);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_EQ(reason, PopupDismissReason::Tab);
+    const auto base = BaseTargets();
+    ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
+    EXPECT_EQ(m_router.focus().value, 2u);
+}
+
+TEST_F(UiPopupRouterTests, OptedInTwoStopPopupMovesInsideBeforeLeaving){
+    focusBase();
+    PopupScope scope = Scope();
+    scope.dismissTab = true;
+    scope.tabAnchor = { 1u };
+    scope.tabAnchorDeclarationGeneration = 1u;
+    ASSERT_TRUE(install(scope, 2u));
+    ASSERT_EQ(m_router.focus().value, 101u);
+    key(InputKey::Tab);
+    EXPECT_EQ(m_router.focus().value, 102u);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    key(InputKey::Tab, true);
+    EXPECT_EQ(m_router.focus().value, 101u);
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    key(InputKey::Tab);
+    key(InputKey::Tab);
+    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_EQ(reason, PopupDismissReason::Tab);
+}
+
 TEST_F(UiPopupRouterTests, EmptyPopupStillOwnsKeysAndOutsidePointerInput){
     const PopupScope scope = Scope();
     const auto base = BaseTargets();

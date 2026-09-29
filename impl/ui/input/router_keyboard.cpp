@@ -4,6 +4,8 @@
 
 #include "router.h"
 
+#include <global/simplemath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,7 +36,7 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
     if(routeContextMenuKey(event, focused, alreadyPressed, result))
         consumed = true;
     else if(event.key == InputKey::Tab)
-        consumed |= moveFocus(event.shift) || hasPopup();
+        consumed |= moveFocusOnTab(event.shift) || hasPopup();
     else if(event.key == InputKey::Escape && !(focused && focused->textEditable)){
         if(hasPopup()){
             const bool dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Escape);
@@ -98,6 +100,81 @@ bool InputRouter::moveFocus(const bool reverse){
         }
     }
     return false;
+}
+
+bool InputRouter::moveFocusOnTab(const bool reverse){
+    if(m_popups.empty() || !m_popups.back().scope.dismissTab)
+        return moveFocus(reverse);
+    const PopupRecord& top = m_popups.back();
+    if(top.closing)
+        return true;
+    usize current = m_targets.size();
+    for(usize index = 0u; index < m_targets.size(); ++index){
+        if(m_targets[index].id == m_focus && m_targets[index].declarationGeneration == m_focusDeclaration){
+            current = index;
+            break;
+        }
+    }
+    const PopupToken token = top.scope.token;
+    if(reverse){
+        for(usize index = current; index > 0u; --index){
+            const HitTarget& target = m_targets[index - 1u];
+            if(target.popup != token || !target.focusable || !isInteractive(target))
+                continue;
+            m_focus = target.id;
+            m_focusDeclaration = target.declarationGeneration;
+            m_focusControl = target.control;
+            return true;
+        }
+    }
+    else{
+        for(usize index = current == m_targets.size() ? 0u : current + 1u; index < m_targets.size(); ++index){
+            const HitTarget& target = m_targets[index];
+            if(target.popup != token || !target.focusable || !isInteractive(target))
+                continue;
+            m_focus = target.id;
+            m_focusDeclaration = target.declarationGeneration;
+            m_focusControl = target.control;
+            return true;
+        }
+    }
+    const PopupToken parent = top.scope.parent;
+    usize anchor = m_targets.size();
+    for(usize index = 0u; index < m_targets.size(); ++index){
+        const HitTarget& target = m_targets[index];
+        if(target.id == top.scope.tabAnchor && target.declarationGeneration == top.scope.tabAnchorDeclarationGeneration
+            && target.popup == parent){
+            anchor = index;
+            break;
+        }
+    }
+    WidgetId nextFocus;
+    u64 nextDeclaration = 0u;
+    for(usize offset = 1u; offset <= m_targets.size(); ++offset){
+        const usize index = anchor == m_targets.size()
+            ? (reverse ? m_targets.size() - offset : offset - 1u)
+            : (reverse ? (anchor + m_targets.size() - offset) % m_targets.size()
+                : (anchor + offset) % m_targets.size());
+        const HitTarget& target = m_targets[index];
+        if(
+            target.popup != parent || !target.enabled || !target.focusable || target.owner.valid()
+            || Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width)
+                <= Max(target.rectangle.x, target.clip.x)
+            || Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height)
+                <= Max(target.rectangle.y, target.clip.y)
+        )
+            continue;
+        nextFocus = target.id;
+        nextDeclaration = target.declarationGeneration;
+        break;
+    }
+    if(!dismissPopup(PopupDismissReason::Tab))
+        return true;
+    PopupRecord& closing = m_popups.back();
+    closing.restoreFocus = nextFocus;
+    closing.restoreDeclaration = nextDeclaration;
+    closing.restorePopup = parent;
+    return true;
 }
 
 

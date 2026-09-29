@@ -40,7 +40,7 @@ struct PopupToken{
 }
 
 namespace PopupDismissReason{
-    enum Enum : u8{ None, Escape, OutsideClick, FocusLost };
+    enum Enum : u8{ None, Escape, OutsideClick, Tab, FocusLost };
 };
 
 struct PopupScope{
@@ -51,8 +51,11 @@ struct PopupScope{
     bool modal = false;
     bool dismissOutside = true;
     bool dismissEscape = true;
+    bool dismissTab = false;
     bool autofocus = true;
     PopupToken parent;
+    WidgetId tabAnchor;
+    u64 tabAnchorDeclarationGeneration = 0u;
 };
 
 struct PopupDismissal{

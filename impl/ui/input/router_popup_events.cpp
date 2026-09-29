@@ -32,6 +32,7 @@ bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){
     if(
         top.closing || (reason == PopupDismissReason::Escape && !top.scope.dismissEscape)
         || (reason == PopupDismissReason::OutsideClick && !top.scope.dismissOutside)
+        || (reason == PopupDismissReason::Tab && !top.scope.dismissTab)
     )
         return false;
     if(m_popupDismissals.size() == s_InputMaxPopups)

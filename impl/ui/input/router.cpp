@@ -179,6 +179,16 @@ bool InputRouter::commitTargets(
         }
         if(!owner)
             return false;
+        if(popup.scope.dismissTab){
+            bool anchor = false;
+            for(const auto& target : m_stagedTargets){
+                anchor |= target.id == popup.scope.tabAnchor
+                    && target.declarationGeneration == popup.scope.tabAnchorDeclarationGeneration
+                    && target.popup == popup.scope.parent && target.focusable && target.enabled && !target.owner.valid();
+            }
+            if(!anchor)
+                return false;
+        }
     }
     m_targets.swap(m_stagedTargets);
     m_lookup.swap(m_stagedLookup);

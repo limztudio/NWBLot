@@ -60,6 +60,45 @@ TEST_F(UiSearchComboBuilderTests, PopupBorrowsAnExplicitEditorScopeAndDelegatesT
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
 }
 
+TEST_F(UiSearchComboBuilderTests, TabMovesFromQueryToResultsThenExitsWithoutCommittingPreview){
+    m_search.combo().select(1u);
+    ASSERT_TRUE(acceptSearch(1u));
+    ASSERT_TRUE(openSearch(2u));
+    press(InputKey::Down);
+    ASSERT_TRUE(acceptSearch(3u));
+    ASSERT_EQ(m_search.combo().listState().cursorKey(), 2u);
+    ASSERT_EQ(m_context.input().focus(), query());
+    press(InputKey::Tab);
+    EXPECT_EQ(m_context.input().focus(), list());
+    press(InputKey::Tab);
+    ASSERT_TRUE(acceptSearch(4u));
+    EXPECT_TRUE(m_searchResult.combo.closed);
+    EXPECT_FALSE(m_searchResult.combo.committed);
+    EXPECT_EQ(m_search.combo().selectedKey(), 1u);
+    EXPECT_EQ(m_search.combo().listState().cursorKey(), 1u);
+    EXPECT_EQ(m_context.input().focus(), host());
+}
+
+TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCommittedValue){
+    m_search.combo().select(1u);
+    ASSERT_TRUE(acceptSearch(1u));
+    ASSERT_TRUE(openSearch(2u));
+    ASSERT_TRUE(m_search.query().beginComposition());
+    ASSERT_TRUE(m_search.query().updateComposition("preedit", 0u, 7u));
+    ASSERT_TRUE(m_search.query().composition().active);
+    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab, .shift = true };
+    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab, .shift = true };
+    EXPECT_TRUE(send(reverseDown).keyboardConsumed);
+    EXPECT_TRUE(send(reverseUp).keyboardConsumed);
+    ASSERT_TRUE(acceptSearch(3u));
+    EXPECT_TRUE(m_searchResult.combo.closed);
+    EXPECT_FALSE(m_searchResult.combo.committed);
+    EXPECT_EQ(m_search.combo().selectedKey(), 1u);
+    EXPECT_FALSE(m_search.query().composition().active);
+    EXPECT_TRUE(m_search.query().text().empty());
+    EXPECT_EQ(m_context.input().focus(), host());
+}
+
 TEST_F(UiSearchComboBuilderTests, ClosedArrowOpensUsingTheFilteredLifetimeAndKeepsTheCommittedKey){
     m_search.combo().select(1u);
     ASSERT_TRUE(m_search.query().setText("Second"));

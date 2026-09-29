@@ -138,7 +138,7 @@ The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips, context menus and numeric editors are implemented in the increments below; multiline content and geometry precede the remaining Builder text-area control.
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips, context menus and numeric editors are implemented in the increments below; multiline text areas and their two-axis scrollbar are implemented below.
 
 ## Popups and modals
 

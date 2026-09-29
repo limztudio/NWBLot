@@ -180,6 +180,7 @@ private:
     void routePointer(const InputEvent& event, InputRoutingResult& result);
     void routeKeyboard(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool moveFocus(bool reverse);
+    [[nodiscard]] bool moveFocusOnTab(bool reverse);
 
 
 private:

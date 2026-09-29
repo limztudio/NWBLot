@@ -144,6 +144,60 @@ TEST_F(UiComboBuilderTests, EscapeCancelsPreviewAndRestoresTheFieldFocus){
     EXPECT_FALSE(m_context.input().hasPopup());
 }
 
+TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWithoutCommittingPreview){
+    m_source.count = 4u;
+    m_state.select(1u);
+    const auto acceptNeighbors = [this](const u64 generation){
+        if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
+            return false;
+        const bool beforeActivated = m_builder.button("before", "Before");
+        m_result = m_builder.comboBox("combo", m_source, m_state, Options());
+        const bool afterActivated = m_builder.button("after", "After");
+        static_cast<void>(beforeActivated);
+        static_cast<void>(afterActivated);
+        return m_result.valid && finishPanel() && m_context.commitFrame(generation);
+    };
+    m_state.open();
+    ASSERT_TRUE(acceptNeighbors(1u));
+    ASSERT_EQ(m_context.input().focus(), list());
+    press(InputKey::Down);
+    ASSERT_TRUE(acceptNeighbors(2u));
+    ASSERT_EQ(m_state.listState().cursorKey(), 2u);
+    press(InputKey::Tab);
+    ASSERT_TRUE(acceptNeighbors(3u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
+    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
+    m_state.open();
+    ASSERT_TRUE(acceptNeighbors(4u));
+    ASSERT_EQ(m_context.input().focus(), list());
+    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab, .shift = true };
+    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab, .shift = true };
+    EXPECT_TRUE(send(reverseDown).keyboardConsumed);
+    EXPECT_TRUE(send(reverseUp).keyboardConsumed);
+    ASSERT_TRUE(acceptNeighbors(5u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_EQ(m_state.selectedKey(), 1u);
+    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
+}
+
+TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
+    m_source.count = 0u;
+    ASSERT_TRUE(accept(1u));
+    ASSERT_TRUE(openByPointer(2u));
+    ASSERT_EQ(m_state.selectedKey(), 0u);
+    press(InputKey::Tab);
+    ASSERT_TRUE(accept(3u));
+    EXPECT_TRUE(m_result.closed);
+    EXPECT_FALSE(m_result.committed);
+    EXPECT_FALSE(m_result.selectionChanged);
+    EXPECT_EQ(m_state.selectedKey(), 0u);
+    EXPECT_EQ(m_state.listState().cursorKey(), 0u);
+    EXPECT_EQ(m_context.input().focus(), host());
+}
+
 TEST_F(UiComboBuilderTests, PointerRowReleaseCommitsImmediatelyAndClosesTheOverlay){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));

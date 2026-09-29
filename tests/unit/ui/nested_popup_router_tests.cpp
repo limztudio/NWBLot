@@ -181,6 +181,32 @@ TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParen
     EXPECT_EQ(reason, PopupDismissReason::Escape);
 }
 
+TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus){
+    focusBase();
+    const PopupScope parent = Scope(100u, 1u);
+    ASSERT_TRUE(install(&parent, 1u, 2u));
+    key(InputKey::Tab);
+    ASSERT_EQ(m_router.focus().value, 102u);
+    PopupScope child = Scope(200u, 2u, parent.token);
+    child.dismissTab = true;
+    child.tabAnchor = { 102u };
+    child.tabAnchorDeclarationGeneration = 10u;
+    const PopupScope scopes[]{ parent, child };
+    ASSERT_TRUE(install(scopes, 2u, 3u));
+    ASSERT_EQ(m_router.focus().value, 201u);
+    key(InputKey::Tab);
+    EXPECT_EQ(m_router.focus().value, 202u);
+    key(InputKey::Tab);
+    PopupDismissReason::Enum reason = PopupDismissReason::None;
+    EXPECT_TRUE(m_router.consumePopupDismissal(child.token, reason));
+    EXPECT_EQ(reason, PopupDismissReason::Tab);
+    EXPECT_FALSE(m_router.consumePopupDismissal(parent.token, reason));
+    ASSERT_TRUE(install(&parent, 1u, 4u));
+    EXPECT_EQ(m_router.popupCount(), 1u);
+    EXPECT_EQ(m_router.topPopupToken(), parent.token);
+    EXPECT_EQ(m_router.focus().value, 101u);
+}
+
 TEST_F(UiNestedPopupRouterTests, OutsideChildPressOverParentConsumesReleaseWithoutParentActivation){
     const PopupScope parent = Scope(100u, 1u);
     const PopupScope child = Scope(200u, 2u, parent.token);

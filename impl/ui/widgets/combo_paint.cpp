@@ -115,6 +115,9 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     scope.parent = frame.parentToken;
     scope.bounds = placement.bounds;
     scope.viewport = placement.viewport;
+    scope.dismissTab = true;
+    scope.tabAnchor = frame.state->m_owner;
+    scope.tabAnchorDeclarationGeneration = frame.state->m_ownerDeclaration;
     if(!m_context.updatePopupScope(frame.popupToken, scope) || !m_context.activatePopupScope(frame.popupToken))
         return false;
     if(!m_paint.beginOverlay(m_context.popupLayer())){

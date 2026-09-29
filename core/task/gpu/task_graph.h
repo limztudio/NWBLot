@@ -835,6 +835,8 @@ public:
 public:
     // Metadata-only tasks support graph analysis and scheduling. A task executed through scheduler-owned native recording must provide a payload thunk through the templated overload below.
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, const GpuTaskCommandRequirements& commands = {});
+    // The first isolated primary-Graphics task gates later normal roots without ordering independent branches.
+    [[nodiscard]] bool setNormalExecutionPrelude(const GpuTaskId& task);
 
     // Adds a graph-owned native buffer copy. The helper derives command requirements and CopySource/CopyDest resource uses from its regions and retains the imported buffers through recording. The caller must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
@@ -1352,6 +1354,7 @@ private:
     mutable Futex m_lifecycleMutex;
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
+    GpuTaskId m_normalExecutionPrelude;
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
     GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;

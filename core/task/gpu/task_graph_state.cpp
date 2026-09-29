@@ -172,6 +172,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         }
         m_tasks.clear();
         m_dependencies.clear();
+        m_normalExecutionPrelude = {};
         m_externalDependencies.clear();
         m_externalStateSources.clear();
         m_resourceUses.clear();

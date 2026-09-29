@@ -38,6 +38,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_runtime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_payload_lifecycle_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_presentation_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_prelude_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_buffer_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_retained_texture_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_primitive_texture_queue_tests.cpp"

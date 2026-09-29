@@ -123,6 +123,37 @@ GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc, const GpuTaskCommandReq
     return appendTaskWithinMutation(desc, commands, nullptr, nullptr, nullptr, nullptr, nullptr, 0u, mutation);
 }
 
+bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
+    DeclarationMutationScope mutation(*this);
+    if(
+        !mutation.valid() || m_normalExecutionPrelude.valid() || !validTask(task)
+        || task.index != 0u || m_tasks.size() != 1u
+    )
+        return false;
+
+    const GpuTaskNode& prelude = m_tasks[0u];
+    if(
+        !prelude.commands.requiresPrimaryGraphicsQueue
+        || (static_cast<u8>(prelude.commands.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
+        || prelude.commands.externalQueue.valid()
+        || !prelude.scheduling.forceSubmissionBoundary
+        || prelude.scheduling.allowPacketMerge
+        || prelude.scheduling.joinsAcceptedQueueFrontier
+        || prelude.scheduling.isRecoverySubmission
+        || prelude.dependencyCount != 0u
+        || prelude.externalDependencyCount != 0u
+        || prelude.externalStateSourceCount != 0u
+        || prelude.resourceUseCount != 0u
+        || prelude.declaredResourceSetUseCount != 0u
+        || prelude.resourceVersionUseCount != 0u
+    )
+        return false;
+
+    m_normalExecutionPrelude = task;
+    m_declarationRevision = allocateGeneration();
+    return true;
+}
+
 GpuGraphResourceVersionId GpuTaskGraph::declareResourceVersion(const GpuGraphResourceVersionDesc& desc){
     return appendResourceVersion(desc);
 }

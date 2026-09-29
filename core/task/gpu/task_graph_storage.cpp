@@ -124,13 +124,20 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     if(!mutationAccess.validFor(*this))
         return {};
 
+    const bool appendPreludeDependency = m_normalExecutionPrelude.valid()
+        && desc.dependencyCount == 0u
+        && !desc.scheduling.joinsAcceptedQueueFrontier
+        && !desc.scheduling.isRecoverySubmission
+    ;
+    const usize preludeDependencyCount = appendPreludeDependency ? 1u : 0u;
     if(
         !desc.identity
         || desc.markerLabel.empty()
         || desc.markerLabel.size() > Limit<u32>::s_Max
         || desc.markerLabel.size() > Limit<u32>::s_Max - m_markerText.size()
         || m_tasks.size() >= Limit<u32>::s_Max
-        || desc.dependencyCount > Limit<u32>::s_Max - m_dependencies.size()
+        || m_dependencies.size() > Limit<u32>::s_Max - preludeDependencyCount
+        || desc.dependencyCount > Limit<u32>::s_Max - m_dependencies.size() - preludeDependencyCount
         || desc.externalDependencyCount > Limit<u32>::s_Max - m_externalDependencies.size()
         || desc.externalStateSourceCount > Limit<u32>::s_Max - m_externalStateSources.size()
         || desc.resourceUseCount > Limit<u32>::s_Max
@@ -192,7 +199,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     }
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
-    ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount);
+    ContainerDetail::ReserveGrowingCapacity(m_dependencies, m_dependencies.size() + desc.dependencyCount + preludeDependencyCount);
     ContainerDetail::ReserveGrowingCapacity(
         m_externalDependencies,
         m_externalDependencies.size() + desc.externalDependencyCount
@@ -231,7 +238,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     task.markerLabelOffset = markerLabelOffset;
     task.markerLabelSize = markerLabelSize;
     task.dependencyOffset = static_cast<u32>(m_dependencies.size());
-    task.dependencyCount = static_cast<u32>(desc.dependencyCount);
+    task.dependencyCount = static_cast<u32>(desc.dependencyCount + preludeDependencyCount);
     task.externalDependencyOffset = static_cast<u32>(m_externalDependencies.size());
     task.externalDependencyCount = static_cast<u32>(desc.externalDependencyCount);
     task.externalStateSourceOffset = static_cast<u32>(m_externalStateSources.size());
@@ -253,6 +260,8 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
 
     for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);
+    if(appendPreludeDependency)
+        m_dependencies.push_back(m_normalExecutionPrelude);
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){

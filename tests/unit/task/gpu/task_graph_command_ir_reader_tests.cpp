@@ -236,7 +236,7 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(
             bytes,
-            offsetof(Graphics::GpuCommandIrStreamHeader, payloadBytes),
+            offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes),
             static_cast<u64>(bytes.size())
         );
     }, Graphics::GpuCommandIrStreamValidationError::PayloadSizeMismatch);
@@ -436,7 +436,7 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
         );
         WriteCommandIrPod(
             bytes,
-            offsetof(Graphics::GpuCommandIrStreamHeader, payloadBytes),
+            offsetof(Graphics::GpuCommandIrStreamHeader, commandBytes),
             static_cast<u64>(bytes.size() - sizeof(Graphics::GpuCommandIrStreamHeader))
         );
     }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord);

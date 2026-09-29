@@ -525,6 +525,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
+    const BinaryByteView blobBytes,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& queue
@@ -540,6 +541,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return ValidateTextureClearRecord(record, graph, task, queue);
     case GpuCommandIrOpcode::ClearTextureRectUInt:
         return ValidateTextureRectUIntClearRecord(record, graph, task, queue);
+    case GpuCommandIrOpcode::UploadBuffer:
+    case GpuCommandIrOpcode::UploadTexture:
+        return GpuCommandIrDetail::ValidateUploadOperation(record, blobBytes, graph, task, queue);
     default:
         return GpuCommandIrReplayError::InvalidStream;
     }
@@ -658,6 +662,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
         const GpuTaskGraphTaskView task = graph.taskAt(record.task.index);
         const GpuCommandIrReplayError::Enum operationError = __hidden_gpu_command_ir_replay_preflight::ValidateOperation(
             record,
+            reader.blobBytes(),
             graph,
             task,
             *queue

@@ -6,6 +6,7 @@
 #include "compiled_graph.h"
 #include "task_graph_builtin_internal.h"
 
+#include <core/task/gpu/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
 
@@ -26,11 +27,12 @@ namespace __hidden_gpu_task_graph_builtin_uploads{
 
 
 struct UploadBufferPayload{
-        GpuUploadBlobId source;
-        BufferHandle destination;
-        u64 destinationOffsetBytes = 0u;
-        ResourceStates::Mask finalState = ResourceStates::CopyDest;
-        QueueSubmissionToken* acceptedToken = nullptr;
+    GpuUploadBlobId source;
+    GpuGraphResourceId destinationResource;
+    BufferHandle destination;
+    u64 destinationOffsetBytes = 0u;
+    ResourceStates::Mask finalState = ResourceStates::CopyDest;
+    QueueSubmissionToken* acceptedToken = nullptr;
 };
 
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
@@ -46,9 +48,21 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
             || !bytes
             || byteSize == 0u
             || payload.finalState == ResourceStates::Unknown
-            // Upload bytes are intentionally not part of the optional command-IR format. Reject capture rather than
-            // emitting an incomplete record that could replay with stale caller data.
-            || context.commandIrCapture
+        )
+            return false;
+
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureUploadBuffer(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.source,
+                payload.destinationResource,
+                payload.destinationOffsetBytes,
+                BinaryByteView{ static_cast<const u8*>(bytes), byteSize },
+                payload.finalState
+            )
         )
             return false;
 
@@ -69,15 +83,18 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
 };
 
 struct UploadTexturePayload{
-        GpuUploadBlobId source;
-        TextureHandle destination;
-        u32 arraySlice = 0u;
-        u32 mipLevel = 0u;
-        usize rowPitch = 0u;
-        usize depthPitch = 0u;
-        ResourceStates::Mask finalState = ResourceStates::CopyDest;
-        TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
-        QueueSubmissionToken* acceptedToken = nullptr;
+    GpuUploadBlobId source;
+    GpuGraphResourceId destinationResource;
+    TextureHandle destination;
+    TextureSlice destinationSlice;
+    u32 arraySlice = 0u;
+    u32 mipLevel = 0u;
+    usize rowPitch = 0u;
+    usize depthPitch = 0u;
+    usize requiredBytes = 0u;
+    ResourceStates::Mask finalState = ResourceStates::CopyDest;
+    TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
+    QueueSubmissionToken* acceptedToken = nullptr;
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
@@ -91,9 +108,27 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         if(
             !payload.destination
             || !bytes
-            || byteSize == 0u
+            || payload.requiredBytes == 0u
+            || byteSize < payload.requiredBytes
             || payload.finalState == ResourceStates::Unknown
-            || context.commandIrCapture
+        )
+            return false;
+
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureUploadTexture(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.source,
+                payload.destinationResource,
+                payload.destinationSlice,
+                payload.rowPitch,
+                payload.depthPitch,
+                payload.aspect,
+                BinaryByteView{ static_cast<const u8*>(bytes), payload.requiredBytes },
+                payload.finalState
+            )
         )
             return false;
 
@@ -124,110 +159,6 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
     }
 };
 
-[[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(
-    const TextureDesc& resourceDesc,
-    const ResourceStates::Mask graphInitialState,
-    const ResourceStates::Mask externalFinalState,
-    const ResourceStates::Mask uploadFinalState
-)noexcept{
-    if(!resourceDesc.keepInitialState)
-        return true;
-    if(
-        resourceDesc.initialState == ResourceStates::Unknown
-        || uploadFinalState != resourceDesc.initialState
-        || (
-            externalFinalState != ResourceStates::Unknown
-            && externalFinalState != resourceDesc.initialState
-        )
-    )
-        return false;
-    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState,
-    // an explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source requirement above.
-    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
-}
-
-[[nodiscard]] static bool ComputeTextureUploadByteSize(
-    const TextureDesc& textureDesc,
-    const u32 arraySlice,
-    const u32 mipLevel,
-    const usize rowPitch,
-    const usize depthPitch,
-    const TextureUploadAspect::Enum aspect,
-    usize& outRequiredBytes
-)noexcept{
-    outRequiredBytes = 0u;
-    if(
-        textureDesc.width == 0u
-        || textureDesc.height == 0u
-        || textureDesc.depth == 0u
-        || textureDesc.mipLevels == 0u
-        || textureDesc.arraySize == 0u
-        || textureDesc.sampleCount != 1u
-        || mipLevel >= textureDesc.mipLevels
-        || arraySlice >= textureDesc.arraySize
-        || static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)
-    )
-        return false;
-
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    TextureUploadAspectLayout aspectLayout;
-    if(!GetTextureUploadAspectLayout(formatInfo, aspect, aspectLayout))
-        return false;
-
-    const u32 width = Max<u32>(1u, textureDesc.width >> mipLevel);
-    const u32 height = Max<u32>(1u, textureDesc.height >> mipLevel);
-    const u32 depth = textureDesc.dimension == TextureDimension::Texture3D
-        ? Max<u32>(1u, textureDesc.depth >> mipLevel)
-        : 1u
-    ;
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout.blockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout.blockHeight));
-    if(blockCountX > Limit<u64>::s_Max / aspectLayout.bytesPerBlock)
-        return false;
-
-    const u64 naturalRowPitch = blockCountX * aspectLayout.bytesPerBlock;
-    const u64 effectiveRowPitch = rowPitch != 0u ? static_cast<u64>(rowPitch) : naturalRowPitch;
-    if(
-        effectiveRowPitch == 0u
-        || effectiveRowPitch < naturalRowPitch
-        || (effectiveRowPitch % aspectLayout.bytesPerBlock) != 0u
-        || blockCountY > Limit<u64>::s_Max / effectiveRowPitch
-    )
-        return false;
-
-    const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
-    const u64 effectiveDepthPitch = depthPitch != 0u ? static_cast<u64>(depthPitch) : packedSlicePitch;
-    if(
-        effectiveDepthPitch == 0u
-        || effectiveDepthPitch < packedSlicePitch
-        || (effectiveDepthPitch % effectiveRowPitch) != 0u
-    )
-        return false;
-
-    // These pitches become VkBufferImageCopy's 32-bit texel fields in CommandList::writeTexture. Validate them at
-    // declaration time so an accepted graph upload cannot lower to a native no-op after the command list rejects it.
-    const u64 bufferRowBlocks = effectiveRowPitch / aspectLayout.bytesPerBlock;
-    const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
-    if(
-        bufferRowBlocks > Limit<u64>::s_Max / aspectLayout.blockWidth
-        || bufferImageBlocks > Limit<u64>::s_Max / aspectLayout.blockHeight
-        || bufferRowBlocks * aspectLayout.blockWidth > Limit<u32>::s_Max
-        || bufferImageBlocks * aspectLayout.blockHeight > Limit<u32>::s_Max
-    )
-        return false;
-
-    if(depth > 1u && static_cast<u64>(depth - 1u) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
-        return false;
-
-    const u64 requiredBytes = depth > 1u
-        ? effectiveDepthPitch * static_cast<u64>(depth - 1u) + packedSlicePitch
-        : packedSlicePitch
-    ;
-    if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
-    outRequiredBytes = static_cast<usize>(requiredBytes);
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -324,6 +255,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         return {};
     ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
+    payload->destinationResource = uploadDesc.destination;
     payload->destination = destinationResource.buffer;
     payload->destinationOffsetBytes = uploadDesc.destinationOffsetBytes;
     payload->finalState = uploadDesc.finalState;
@@ -385,14 +317,14 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(!ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect, resolvedAspect))
         return {};
     if(
-        !__hidden_gpu_task_graph_builtin_uploads::UploadTextureTaskCanMaterializeRetainedState(
+        !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(
             destinationDesc,
             destinationResource.initialState,
             destinationResource.externalFinalState,
             uploadDesc.finalState
         )
         ||
-        !__hidden_gpu_task_graph_builtin_uploads::ComputeTextureUploadByteSize(
+        !GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
             destinationDesc,
             uploadDesc.arraySlice,
             uploadDesc.mipLevel,
@@ -411,11 +343,17 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         return {};
     ProvisionalPayloadOwner<UploadTask::Payload> payload(m_arena, payloadObject);
     payload->source = uploadDesc.source;
+    payload->destinationResource = uploadDesc.destination;
     payload->destination = destinationResource.texture;
+    TextureSlice destinationSlice;
+    destinationSlice.mipLevel = uploadDesc.mipLevel;
+    destinationSlice.arraySlice = uploadDesc.arraySlice;
+    payload->destinationSlice = destinationSlice.resolve(destinationDesc);
     payload->arraySlice = uploadDesc.arraySlice;
     payload->mipLevel = uploadDesc.mipLevel;
     payload->rowPitch = uploadDesc.rowPitch;
     payload->depthPitch = uploadDesc.depthPitch;
+    payload->requiredBytes = requiredBytes;
     payload->finalState = uploadDesc.finalState;
     payload->acceptedToken = uploadDesc.acceptedToken;
     payload->aspect = uploadDesc.aspect;

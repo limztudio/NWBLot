@@ -69,7 +69,7 @@ public:
         GpuTaskGraph::PacketRecordingLease& recordingLease,
         GpuTaskGraph::PacketRecordingAbort* const deferredAbort,
         GpuCommandIrCapture* const commandIrCapture,
-        const usize captureRecordCount,
+        const GpuCommandIrCaptureCheckpoint*& captureCheckpoint,
         CommandListResourceStateHandoff*& packetStateSeed
     )noexcept
         : m_graph(graph)
@@ -83,19 +83,19 @@ public:
         , m_commandIrCapture(commandIrCapture)
         , m_packet(packet)
         , m_recordingAttemptGeneration(recordingAttemptGeneration)
-        , m_captureRecordCount(captureRecordCount)
+        , m_captureCheckpoint(captureCheckpoint)
         , m_uncaughtExceptionCount(UncaughtExceptionCount())
     {}
     ~PacketRecordingExceptionScope()noexcept{
         static_assert(noexcept(static_cast<CommandListResourceStateHandoff*>(nullptr)->reset()));
-        static_assert(noexcept(static_cast<GpuCommandIrCapture*>(nullptr)->rollback(0u)));
+        static_assert(noexcept(static_cast<GpuCommandIrCapture*>(nullptr)->rollback(GpuCommandIrCaptureCheckpoint{})));
 
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
         if(m_packetStateSeed)
             m_packetStateSeed->reset();
-        if(m_commandIrCapture)
-            m_commandIrCapture->rollback(m_captureRecordCount);
+        if(m_commandIrCapture && m_captureCheckpoint && !m_commandIrCapture->rollback(*m_captureCheckpoint))
+            TerminateInvariant();
         if(m_recordingLease.valid()){
             if(m_deferredAbort){
                 const bool abortDeferred = m_graph.deferPacketRecordingAbort(
@@ -150,7 +150,7 @@ private:
     GpuCommandIrCapture* m_commandIrCapture = nullptr;
     GpuSubmissionPacketId m_packet;
     u64 m_recordingAttemptGeneration = 0u;
-    usize m_captureRecordCount = 0u;
+    const GpuCommandIrCaptureCheckpoint*& m_captureCheckpoint;
     i32 m_uncaughtExceptionCount = 0;
 };
 
@@ -244,7 +244,8 @@ bool GpuNativePacketRecorder::recordPacket(
         return false;
     const CommandListResourceStateHandoff* initialStates = nullptr;
     CommandListResourceStateHandoff* packetStateSeed = nullptr;
-    const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
+    GpuCommandIrCaptureCheckpoint captureCheckpoint;
+    const GpuCommandIrCaptureCheckpoint* capturedPrefix = nullptr;
     GpuTaskGraph::PacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         if(deferredAbort){
@@ -287,7 +288,7 @@ bool GpuNativePacketRecorder::recordPacket(
         recordingLease,
         deferredAbort,
         commandIrCapture,
-        captureRecordCount,
+        capturedPrefix,
         packetStateSeed
     );
     const Timer recordingBegin = TimerNow();
@@ -337,6 +338,10 @@ bool GpuNativePacketRecorder::recordPacket(
         abortPacketRecording();
         return false;
     }
+    if(commandIrCapture){
+        captureCheckpoint = commandIrCapture->checkpoint();
+        capturedPrefix = &captureCheckpoint;
+    }
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
@@ -346,8 +351,8 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!commandList){
         packetStateSeed->reset();
         abortPacketRecording();
-        if(commandIrCapture)
-            commandIrCapture->rollback(captureRecordCount);
+        if(commandIrCapture && !commandIrCapture->rollback(captureCheckpoint))
+            TerminateInvariant();
         return false;
     }
 
@@ -641,8 +646,8 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!recorded){
         packetStateSeed->reset();
         abortPacketRecording();
-        if(commandIrCapture)
-            commandIrCapture->rollback(captureRecordCount);
+        if(commandIrCapture && !commandIrCapture->rollback(captureCheckpoint))
+            TerminateInvariant();
         return false;
     }
     const Timer recordingEnd = TimerNow();

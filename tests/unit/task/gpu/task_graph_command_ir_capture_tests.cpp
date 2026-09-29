@@ -156,7 +156,7 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     EXPECT_EQ(resetHeader.graphGeneration, 0u);
     EXPECT_EQ(resetHeader.planGeneration, 0u);
     EXPECT_EQ(resetHeader.recordCount, 0u);
-    EXPECT_EQ(resetHeader.payloadBytes, 0u);
+    EXPECT_EQ(resetHeader.commandBytes, 0u);
     EXPECT_EQ(resetCursor, resetBytes.size());
 }
 
@@ -286,7 +286,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     EXPECT_EQ(streamHeader.graphGeneration, 0u);
     EXPECT_EQ(streamHeader.planGeneration, 0u);
     EXPECT_EQ(streamHeader.recordCount, 0u);
-    EXPECT_EQ(streamHeader.payloadBytes, 0u);
+    EXPECT_EQ(streamHeader.commandBytes, 0u);
     EXPECT_EQ(cursor, emptyBytes.size());
 
     Graphics::TextureSlice sourceSlice;
@@ -330,7 +330,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     EXPECT_EQ(streamHeader.planGeneration, packet.generation);
     EXPECT_EQ(streamHeader.recordCount, 4u);
     EXPECT_EQ(
-        streamHeader.payloadBytes,
+        streamHeader.commandBytes,
         sizeof(Graphics::GpuCommandIrCopyBufferRecord)
             + sizeof(Graphics::GpuCommandIrCopyTextureRecord)
             + sizeof(Graphics::GpuCommandIrClearBufferRecord)
@@ -450,7 +450,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     ASSERT_TRUE(ReadPOD(rolledBackBytes, cursor, streamHeader));
     EXPECT_EQ(streamHeader.recordCount, s_ExpectedDualCount);
     EXPECT_EQ(
-        streamHeader.payloadBytes,
+        streamHeader.commandBytes,
         sizeof(Graphics::GpuCommandIrCopyBufferRecord) + sizeof(Graphics::GpuCommandIrCopyTextureRecord)
     );
 }

@@ -143,6 +143,23 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
+[[nodiscard]] bool UploadTextureTaskCanMaterializeRetainedState(
+    const TextureDesc& resourceDesc,
+    ResourceStates::Mask graphInitialState,
+    ResourceStates::Mask externalFinalState,
+    ResourceStates::Mask uploadFinalState
+)noexcept;
+
+[[nodiscard]] bool ComputeTextureUploadByteSize(
+    const TextureDesc& textureDesc,
+    u32 arraySlice,
+    u32 mipLevel,
+    usize rowPitch,
+    usize depthPitch,
+    TextureUploadAspect::Enum aspect,
+    usize& outRequiredBytes
+)noexcept;
+
 [[nodiscard]] inline bool BuiltinDeclarationHasNoCallerResourceUses(const GpuTaskDesc& desc)noexcept{
     return !desc.resourceUses && desc.resourceUseCount == 0u && !desc.resourceSetUses && desc.resourceSetUseCount == 0u;
 }

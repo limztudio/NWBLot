@@ -28,6 +28,8 @@ namespace GpuCommandIrOpcode{
         ClearBuffer,
         ClearTexture,
         ClearTextureRectUInt,
+        UploadBuffer,
+        UploadTexture,
 
         kCount,
     };
@@ -53,6 +55,8 @@ namespace GpuCommandIrWireOpcode{
         BeginMarker,
         EndMarker,
         ClearTextureRectUInt,
+        UploadBuffer,
+        UploadTexture,
 
         kCount,
     };
@@ -60,7 +64,7 @@ namespace GpuCommandIrWireOpcode{
 
 // Same-host tooling format; magic/version reject incompatible layouts.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
-inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
+inline constexpr u16 s_GpuCommandIrStreamVersion = 4u;
 
 #pragma pack(push, 1)
 struct GpuCommandIrStreamHeaderPrefix{
@@ -77,7 +81,8 @@ struct GpuCommandIrStreamHeader{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordCount = 0u;
-    u64 payloadBytes = 0u;
+    u64 commandBytes = 0u;
+    u64 blobBytes = 0u;
 };
 
 struct GpuCommandIrHeader{
@@ -198,11 +203,40 @@ struct GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrRect clearRect;
     GpuCommandIrUIntColor uintClearValue;
 };
+
+// Blob offsets are relative to the owned section after all fixed command records.
+struct GpuCommandIrUploadBufferRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 sourceUploadBlobIndex = Limit<u32>::s_Max;
+    u32 destinationResourceIndex = Limit<u32>::s_Max;
+    u64 blobOffsetBytes = 0u;
+    u64 blobSizeBytes = 0u;
+    u64 destinationOffsetBytes = 0u;
+    u32 finalState = ResourceStates::Unknown;
+    u32 reserved = 0u;
+};
+
+struct GpuCommandIrUploadTextureRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 sourceUploadBlobIndex = Limit<u32>::s_Max;
+    u32 destinationResourceIndex = Limit<u32>::s_Max;
+    u64 blobOffsetBytes = 0u;
+    u64 blobSizeBytes = 0u;
+    GpuCommandIrTextureSlice destinationSlice;
+    u64 rowPitch = 0u;
+    u64 depthPitch = 0u;
+    u32 finalState = ResourceStates::Unknown;
+    u8 aspect = TextureUploadAspect::Automatic;
+    u8 reserved0 = 0u;
+    u16 reserved1 = 0u;
+};
 #pragma pack(pop)
 
 static constexpr usize s_GpuCommandIrStreamHeaderPrefixByteSize = 8u;
 static_assert(sizeof(GpuCommandIrStreamHeaderPrefix) == s_GpuCommandIrStreamHeaderPrefixByteSize, "Command IR stream header prefix wire layout drifted");
-static constexpr usize s_GpuCommandIrStreamHeaderByteSize = 40u;
+static constexpr usize s_GpuCommandIrStreamHeaderByteSize = 48u;
 static_assert(sizeof(GpuCommandIrStreamHeader) == s_GpuCommandIrStreamHeaderByteSize, "Command IR stream header wire layout drifted");
 static constexpr usize s_GpuCommandIrHeaderByteSize = 4u;
 static_assert(sizeof(GpuCommandIrHeader) == s_GpuCommandIrHeaderByteSize, "Command IR command header wire layout drifted");
@@ -224,6 +258,10 @@ static constexpr usize s_GpuCommandIrClearTextureRecordByteSize = 92u;
 static_assert(sizeof(GpuCommandIrClearTextureRecord) == s_GpuCommandIrClearTextureRecordByteSize, "Command IR clear-texture wire layout drifted");
 static constexpr usize s_GpuCommandIrClearTextureRectUIntRecordByteSize = 68u;
 static_assert(sizeof(GpuCommandIrClearTextureRectUIntRecord) == s_GpuCommandIrClearTextureRectUIntRecordByteSize, "Command IR rectangular clear wire layout drifted");
+static constexpr usize s_GpuCommandIrUploadBufferRecordByteSize = 56u;
+static_assert(sizeof(GpuCommandIrUploadBufferRecord) == s_GpuCommandIrUploadBufferRecordByteSize, "Command IR upload-buffer wire layout drifted");
+static constexpr usize s_GpuCommandIrUploadTextureRecordByteSize = 96u;
+static_assert(sizeof(GpuCommandIrUploadTextureRecord) == s_GpuCommandIrUploadTextureRecordByteSize, "Command IR upload-texture wire layout drifted");
 static constexpr usize s_CommandIrPackedAlignBytes = 1u;
 static_assert(alignof(GpuCommandIrStreamHeader) == s_CommandIrPackedAlignBytes, "Command IR stream header must stay packed");
 static_assert(alignof(GpuCommandIrCopyBufferRecord) == s_CommandIrPackedAlignBytes, "Command IR records must stay packed");
@@ -239,6 +277,8 @@ static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRecord>, "Command IR re
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRecord>, "Command IR records must be binary-serializable");
 static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
+static_assert(IsStandardLayout_V<GpuCommandIrUploadBufferRecord> && IsTriviallyCopyable_V<GpuCommandIrUploadBufferRecord>);
+static_assert(IsStandardLayout_V<GpuCommandIrUploadTextureRecord> && IsTriviallyCopyable_V<GpuCommandIrUploadTextureRecord>);
 
 
 struct GpuCommandIrBuiltinTaskRecord{
@@ -246,9 +286,14 @@ struct GpuCommandIrBuiltinTaskRecord{
     GpuSubmissionPacketId packet;
     GpuGraphResourceId source;
     GpuGraphResourceId destination;
+    GpuUploadBlobId sourceUploadBlob;
     u64 sourceOffsetBytes = 0u;
     u64 destinationOffsetBytes = 0u;
     u64 dataSizeBytes = 0u;
+    u64 blobOffsetBytes = 0u;
+    u64 blobSizeBytes = 0u;
+    u64 rowPitch = 0u;
+    u64 depthPitch = 0u;
     TextureSlice sourceSlice;
     TextureSlice destinationSlice;
     TextureSubresourceSet destinationSubresources = s_AllSubresources;
@@ -260,6 +305,8 @@ struct GpuCommandIrBuiltinTaskRecord{
     f32 depthClearValue = 1.f;
     GpuCommandIrOpcode::Enum opcode = GpuCommandIrOpcode::CopyBuffer;
     GpuClearTextureTaskValueType::Enum clearTextureValueType = GpuClearTextureTaskValueType::UInt;
+    TextureUploadAspect::Enum uploadAspect = TextureUploadAspect::Automatic;
+    ResourceStates::Mask finalState = ResourceStates::Unknown;
     u8 stencilClearValue = 0u;
     bool clearDepth = false;
     bool clearStencil = false;
@@ -290,8 +337,9 @@ namespace GpuCommandIrStreamValidationError{
         TruncatedRecord,
         InvalidRecordSize,
         UnsupportedOpcode,
-        InvalidRecord,
-        TrailingPayload,
+    InvalidRecord,
+    TrailingPayload,
+    InvalidBlobRange,
     };
 };
 
@@ -321,6 +369,7 @@ public:
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
+    [[nodiscard]] BinaryByteView blobBytes()const noexcept;
 
 
 private:
@@ -336,6 +385,8 @@ private:
     GpuCommandIrStreamValidationResult m_validation;
     usize m_cursor = 0u;
     usize m_payloadEnd = 0u;
+    usize m_blobBegin = 0u;
+    usize m_nextBlobOffset = 0u;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordCount = 0u;
@@ -344,6 +395,46 @@ private:
 
 // Walks a stream with the syntax reader; returns success or first bad location.
 [[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
+
+
+class GpuCommandIrCapture;
+
+// A checkpoint identifies an exact prefix of one capture and one recording attempt.
+class GpuCommandIrCaptureCheckpoint final{
+public:
+    GpuCommandIrCaptureCheckpoint() = default;
+
+
+private:
+    friend class GpuCommandIrCapture;
+
+    u64 m_ownerIdentity = 0u;
+    u64 m_resetEpoch = 0u;
+    u64 m_prefixSerial = 0u;
+    u64 m_graphGeneration = 0u;
+    u64 m_planGeneration = 0u;
+    u64 m_recordingAttemptGeneration = 0u;
+    usize m_recordCount = 0u;
+    usize m_commandSize = 0u;
+    usize m_blobSize = 0u;
+};
+
+// Caller-arena-owned immutable exported bytes; capture reset and graph teardown cannot change them.
+class GpuCommandIrOwnedStream final : NoCopy{
+public:
+    explicit GpuCommandIrOwnedStream(GraphicsArena& arena);
+
+
+public:
+    [[nodiscard]] BinaryByteView bytes()const noexcept{ return BinaryByteView{ m_bytes.data(), m_bytes.size() }; }
+
+
+private:
+    friend class GpuCommandIrCapture;
+
+    GraphicsArena& m_arena;
+    GraphicsBytes m_bytes;
+};
 
 
 // Replay is opt-in; streams hold task bodies lowered into fresh packets.
@@ -379,6 +470,8 @@ namespace GpuCommandIrReplayError{
         CommandListRecordingFailed,
         BackendResourceNotReady,
         PermanentResourceStateMismatch,
+        InvalidBufferUpload,
+        InvalidTextureUpload,
     };
 };
 
@@ -432,13 +525,7 @@ struct GpuCommandIrReplayResult{
 
 class GpuCommandIrCapture final : NoCopy{
 public:
-    explicit GpuCommandIrCapture(GraphicsArena& arena)
-        : m_recordEndOffsets(arena)
-        , m_commandBytes(arena)
-    {
-        m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
-        writeStreamHeader();
-    }
+    explicit GpuCommandIrCapture(GraphicsArena& arena);
 
 
 public:
@@ -451,12 +538,37 @@ public:
     // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan
     // remain unchanged across a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
-    [[nodiscard]] BinaryByteView commandBytes()const noexcept{
-        return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
-    }
+    [[nodiscard]] BinaryByteView commandBytes()const;
+    [[nodiscard]] bool exportOwned(GpuCommandIrOwnedStream& outStream)const;
+    [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
+    [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& checkpoint)noexcept;
     // Packet recording checkpoints before invoking task payloads and rolls back an incomplete task-recording
     // attempt. This is a recording trace; a later reader may separately correlate it with submission acceptance.
     void rollback(usize recordCount)noexcept;
+
+    [[nodiscard]] bool captureUploadBuffer(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        GpuUploadBlobId sourceBlob,
+        GpuGraphResourceId destination,
+        u64 destinationOffsetBytes,
+        BinaryByteView sourceBytes,
+        ResourceStates::Mask finalState
+    );
+    [[nodiscard]] bool captureUploadTexture(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        GpuUploadBlobId sourceBlob,
+        GpuGraphResourceId destination,
+        TextureSlice destinationSlice,
+        usize rowPitch,
+        usize depthPitch,
+        TextureUploadAspect::Enum aspect,
+        BinaryByteView sourceBytes,
+        ResourceStates::Mask finalState
+    );
 
     [[nodiscard]] bool captureCopyBuffer(
         GpuTaskId task,
@@ -502,13 +614,23 @@ public:
 
 private:
     [[nodiscard]] bool append(const GpuCommandIrBuiltinTaskRecord& record);
+    [[nodiscard]] bool appendUpload(GpuCommandIrBuiltinTaskRecord record, BinaryByteView bytes);
     [[nodiscard]] bool appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
     void writeStreamHeader()noexcept;
+    void rollbackPrefix(usize recordCount, u64 graphGeneration, u64 planGeneration, u64 attemptGeneration)noexcept;
 
 
 private:
     GraphicsVector<usize> m_recordEndOffsets;
+    GraphicsVector<usize> m_blobEndOffsets;
+    GraphicsVector<u64> m_recordSerials;
     GraphicsBytes m_commandBytes;
+    GraphicsBytes m_blobBytes;
+    mutable GraphicsBytes m_packedBytes;
+    mutable bool m_packedDirty = true;
+    u64 m_ownerIdentity = 0u;
+    u64 m_resetEpoch = 1u;
+    u64 m_nextSerial = 1u;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;

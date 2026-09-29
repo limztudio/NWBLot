@@ -17,6 +17,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct GpuTaskGraphTaskView;
+
+
 namespace GpuCommandIrDetail{
 
 
@@ -24,6 +27,25 @@ namespace GpuCommandIrDetail{
 
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadOperation(
+    const GpuCommandIrBuiltinTaskRecord& record,
+    BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
+)noexcept;
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
+    const GpuCommandIrBuiltinTaskRecord& record,
+    const GpuTaskGraphDeclarationReadView& graph,
+    CommandList& commandList,
+    const GpuPhysicalQueueInfo& queue
+)noexcept;
+[[nodiscard]] bool LowerUploadOperation(
+    const GpuCommandIrBuiltinTaskRecord& record,
+    BinaryByteView blobBytes,
+    const GpuTaskGraphDeclarationReadView& graph,
+    CommandList& commandList
+)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(
     const CommandListParameters& commandListDescription,
     const GpuPhysicalQueueId& packetQueue,

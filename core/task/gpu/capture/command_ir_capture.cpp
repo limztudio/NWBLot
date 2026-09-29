@@ -23,6 +23,7 @@ namespace GpuCommandIrDetail{
 
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept{
+    constexpr u32 allowedResourceStates = (static_cast<u32>(ResourceStates::ConvertCoopVecMatrixOutput) << 1u) - 1u;
     if(
         record.opcode >= GpuCommandIrOpcode::kCount
         || !record.task.valid()
@@ -59,6 +60,30 @@ namespace GpuCommandIrDetail{
             && record.clearRect.maxX > record.clearRect.minX
             && record.clearRect.maxY > record.clearRect.minY
         ;
+    case GpuCommandIrOpcode::UploadBuffer:
+        return record.sourceUploadBlob.valid()
+            && record.sourceUploadBlob.generation == record.task.generation
+            && record.blobSizeBytes != 0u
+            && record.finalState != ResourceStates::Unknown
+            && (static_cast<u32>(record.finalState) & ~allowedResourceStates) == 0u
+        ;
+    case GpuCommandIrOpcode::UploadTexture:
+        return record.sourceUploadBlob.valid()
+            && record.sourceUploadBlob.generation == record.task.generation
+            && record.blobSizeBytes != 0u
+            && record.finalState != ResourceStates::Unknown
+            && (static_cast<u32>(record.finalState) & ~allowedResourceStates) == 0u
+            && record.uploadAspect < TextureUploadAspect::kCount
+            && record.destinationSlice.x == 0u
+            && record.destinationSlice.y == 0u
+            && record.destinationSlice.z == 0u
+            && record.destinationSlice.width != 0u
+            && record.destinationSlice.height != 0u
+            && record.destinationSlice.depth != 0u
+            && record.destinationSlice.width != TextureSlice::AllDimensions
+            && record.destinationSlice.height != TextureSlice::AllDimensions
+            && record.destinationSlice.depth != TextureSlice::AllDimensions
+        ;
     default:
         return false;
     }
@@ -78,6 +103,18 @@ namespace __hidden_gpu_command_ir_capture{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 AllocateCaptureIdentity()noexcept{
+    static Atomic<u64> s_NextIdentity{ 1u };
+    u64 identity = s_NextIdentity.load(MemoryOrder::relaxed);
+    while(identity != 0u && identity != Limit<u64>::s_Max){
+        if(s_NextIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
+            return identity;
+    }
+    NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
+    TerminateInvariant();
+}
 
 
 template<typename RecordT>
@@ -183,6 +220,114 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GraphicsArena& arena)
+    : m_arena(arena)
+    , m_bytes(arena)
+{}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuCommandIrCapture::GpuCommandIrCapture(GraphicsArena& arena)
+    : m_recordEndOffsets(arena)
+    , m_blobEndOffsets(arena)
+    , m_recordSerials(arena)
+    , m_commandBytes(arena)
+    , m_blobBytes(arena)
+    , m_packedBytes(arena)
+    , m_ownerIdentity(__hidden_gpu_command_ir_capture::AllocateCaptureIdentity())
+{
+    m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
+    writeStreamHeader();
+}
+
+BinaryByteView GpuCommandIrCapture::commandBytes()const{
+    if(m_blobBytes.empty())
+        return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
+
+    if(m_packedDirty){
+        NWB_FATAL_ASSERT_MSG(
+            m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(),
+            "Command IR stream size exceeded addressable storage"
+        );
+        const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
+        m_packedBytes.resize(totalSize);
+        NWB_MEMCPY(m_packedBytes.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
+        NWB_MEMCPY(
+            m_packedBytes.data() + m_commandBytes.size(),
+            m_blobBytes.size(),
+            m_blobBytes.data(),
+            m_blobBytes.size()
+        );
+        m_packedDirty = false;
+    }
+    return BinaryByteView{ m_packedBytes.data(), m_packedBytes.size() };
+}
+
+bool GpuCommandIrCapture::exportOwned(GpuCommandIrOwnedStream& outStream)const{
+    if(m_commandBytes.size() > Limit<usize>::s_Max - m_blobBytes.size())
+        return false;
+    const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
+    GraphicsBytes candidate(outStream.m_arena);
+    candidate.resize(totalSize);
+    NWB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
+    if(!m_blobBytes.empty()){
+        NWB_MEMCPY(
+            candidate.data() + m_commandBytes.size(),
+            m_blobBytes.size(),
+            m_blobBytes.data(),
+            m_blobBytes.size()
+        );
+    }
+    outStream.m_bytes.swap(candidate);
+    return true;
+}
+
+GpuCommandIrCaptureCheckpoint GpuCommandIrCapture::checkpoint()const noexcept{
+    GpuCommandIrCaptureCheckpoint result;
+    result.m_ownerIdentity = m_ownerIdentity;
+    result.m_resetEpoch = m_resetEpoch;
+    result.m_recordCount = m_recordEndOffsets.size();
+    result.m_prefixSerial = m_recordSerials.empty() ? 0u : m_recordSerials.back();
+    result.m_graphGeneration = m_graphGeneration;
+    result.m_planGeneration = m_planGeneration;
+    result.m_recordingAttemptGeneration = m_recordingAttemptGeneration;
+    result.m_commandSize = m_commandBytes.size();
+    result.m_blobSize = m_blobBytes.size();
+    return result;
+}
+
+bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)noexcept{
+    if(
+        target.m_ownerIdentity != m_ownerIdentity
+        || target.m_resetEpoch != m_resetEpoch
+        || target.m_recordingAttemptGeneration != m_recordingAttemptGeneration
+        || target.m_recordCount > m_recordEndOffsets.size()
+        || target.m_commandSize != (
+            target.m_recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[target.m_recordCount - 1u]
+        )
+        || target.m_blobSize != (target.m_recordCount == 0u ? 0u : m_blobEndOffsets[target.m_recordCount - 1u])
+        || target.m_prefixSerial != (target.m_recordCount == 0u ? 0u : m_recordSerials[target.m_recordCount - 1u])
+        || (target.m_recordCount != 0u && (
+            target.m_graphGeneration != m_graphGeneration || target.m_planGeneration != m_planGeneration
+        ))
+    )
+        return false;
+
+    rollbackPrefix(
+        target.m_recordCount,
+        target.m_recordCount == 0u ? 0u : target.m_graphGeneration,
+        target.m_recordCount == 0u ? 0u : target.m_planGeneration,
+        target.m_recordCount == 0u ? 0u : target.m_recordingAttemptGeneration
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
@@ -195,7 +340,16 @@ void GpuCommandIrCapture::reset()noexcept{
 
     // Shrinking resize keeps capacity without allocating.
     m_recordEndOffsets.clear();
+    m_blobEndOffsets.clear();
+    m_recordSerials.clear();
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
+    m_blobBytes.clear();
+    m_packedDirty = true;
+    if(m_resetEpoch == Limit<u64>::s_Max){
+        NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
+        TerminateInvariant();
+    }
+    ++m_resetEpoch;
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
     m_recordingAttemptGeneration = 0u;
@@ -215,16 +369,39 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     if(recordCount > m_recordEndOffsets.size())
         return;
 
+    rollbackPrefix(
+        recordCount,
+        recordCount == 0u ? 0u : m_graphGeneration,
+        recordCount == 0u ? 0u : m_planGeneration,
+        recordCount == 0u ? 0u : m_recordingAttemptGeneration
+    );
+}
+
+void GpuCommandIrCapture::rollbackPrefix(
+    const usize recordCount,
+    const u64 graphGeneration,
+    const u64 planGeneration,
+    const u64 attemptGeneration
+)noexcept{
     const usize byteOffset = recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[recordCount - 1u];
+    const usize blobEnd = recordCount == 0u ? 0u : m_blobEndOffsets[recordCount - 1u];
     static_assert(IsNothrowDestructible_V<usize>);
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     // Both resizes only shrink, so they cannot allocate.
     m_recordEndOffsets.resize(recordCount);
+    m_blobEndOffsets.resize(recordCount);
+    m_recordSerials.resize(recordCount);
     m_commandBytes.resize(byteOffset);
+    m_blobBytes.resize(blobEnd);
+    m_graphGeneration = graphGeneration;
+    m_planGeneration = planGeneration;
+    m_recordingAttemptGeneration = attemptGeneration;
     if(recordCount == 0u){
-        m_graphGeneration = 0u;
-        m_planGeneration = 0u;
-        m_recordingAttemptGeneration = 0u;
+        if(m_resetEpoch == Limit<u64>::s_Max){
+            NWB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
+            TerminateInvariant();
+        }
+        ++m_resetEpoch;
     }
     writeStreamHeader();
 }
@@ -344,15 +521,25 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
         return false;
 
     const usize nextRecordCount = m_recordEndOffsets.size() + 1u;
-    if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextRecordCount))
+    if(
+        nextRecordCount == 0u
+        || m_nextSerial == Limit<u64>::s_Max
+        || !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextRecordCount)
+        || !BinaryDetail::CanStoreValueCount(m_blobEndOffsets, nextRecordCount)
+        || !BinaryDetail::CanStoreValueCount(m_recordSerials, nextRecordCount)
+    )
         return false;
 
     // Reserve first so failure leaves both sequences unchanged.
     ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextRecordCount);
+    ContainerDetail::ReserveGrowingCapacity(m_blobEndOffsets, nextRecordCount);
+    ContainerDetail::ReserveGrowingCapacity(m_recordSerials, nextRecordCount);
 
     if(!appendCommandBytes(record))
         return false;
     m_recordEndOffsets.push_back(m_commandBytes.size());
+    m_blobEndOffsets.push_back(m_blobBytes.size());
+    m_recordSerials.push_back(m_nextSerial++);
 
     if(m_graphGeneration == 0u)
         m_graphGeneration = record.task.generation;
@@ -430,6 +617,33 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
         encoded.uintClearValue = EncodeColor(record.uintClearValue);
         return AppendEncodedRecord(m_commandBytes, encoded);
     }
+    case GpuCommandIrOpcode::UploadBuffer:{
+        GpuCommandIrUploadBufferRecord encoded;
+        InitializeRecord(encoded, GpuCommandIrWireOpcode::UploadBuffer);
+        encoded.context = EncodeContext(record);
+        encoded.sourceUploadBlobIndex = record.sourceUploadBlob.index;
+        encoded.destinationResourceIndex = record.destination.index;
+        encoded.blobOffsetBytes = record.blobOffsetBytes;
+        encoded.blobSizeBytes = record.blobSizeBytes;
+        encoded.destinationOffsetBytes = record.destinationOffsetBytes;
+        encoded.finalState = static_cast<u32>(record.finalState);
+        return AppendEncodedRecord(m_commandBytes, encoded);
+    }
+    case GpuCommandIrOpcode::UploadTexture:{
+        GpuCommandIrUploadTextureRecord encoded;
+        InitializeRecord(encoded, GpuCommandIrWireOpcode::UploadTexture);
+        encoded.context = EncodeContext(record);
+        encoded.sourceUploadBlobIndex = record.sourceUploadBlob.index;
+        encoded.destinationResourceIndex = record.destination.index;
+        encoded.blobOffsetBytes = record.blobOffsetBytes;
+        encoded.blobSizeBytes = record.blobSizeBytes;
+        encoded.destinationSlice = EncodeTextureSlice(record.destinationSlice);
+        encoded.rowPitch = record.rowPitch;
+        encoded.depthPitch = record.depthPitch;
+        encoded.finalState = static_cast<u32>(record.finalState);
+        encoded.aspect = static_cast<u8>(record.uploadAspect);
+        return AppendEncodedRecord(m_commandBytes, encoded);
+    }
     default:
         return false;
     }
@@ -441,8 +655,10 @@ void GpuCommandIrCapture::writeStreamHeader()noexcept{
     header.graphGeneration = m_graphGeneration;
     header.planGeneration = m_planGeneration;
     header.recordCount = static_cast<u64>(m_recordEndOffsets.size());
-    header.payloadBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
+    header.commandBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
+    header.blobBytes = static_cast<u64>(m_blobBytes.size());
     NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
+    m_packedDirty = true;
 }
 
 

@@ -179,6 +179,9 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             commandList,
             commandQueue
         );
+    case GpuCommandIrOpcode::UploadBuffer:
+    case GpuCommandIrOpcode::UploadTexture:
+        return GpuCommandIrDetail::ValidateUploadBackendOperand(record, graph, commandList, commandQueue);
     default:
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
     }
@@ -474,7 +477,17 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             );
         }
 
-        __hidden_gpu_command_ir_replay_lowering::LowerOperation(record, graph, commandList);
+        if(record.opcode == GpuCommandIrOpcode::UploadBuffer || record.opcode == GpuCommandIrOpcode::UploadTexture){
+            if(!GpuCommandIrDetail::LowerUploadOperation(record, reader.blobBytes(), graph, commandList)){
+                return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+                    GpuCommandIrReplayError::CommandListRecordingFailed,
+                    result.streamValidation,
+                    recordIndex
+                );
+            }
+        }
+        else
+            __hidden_gpu_command_ir_replay_lowering::LowerOperation(record, graph, commandList);
         if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::CommandListRecordingFailed,

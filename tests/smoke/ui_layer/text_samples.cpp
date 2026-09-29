@@ -96,7 +96,7 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
     , m_coverage(__hidden_ui_text_smoke::MakeCoveragePage(arena))
     , m_sdf(__hidden_ui_text_smoke::MakeSdfPage(arena))
 {
-    const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81", .fontSize = 22.0f })
+    const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81 gqyp", .fontSize = 22.0f })
         == Impl::Ui::TextLayoutStatus::Success
         && m_clipped.setText({ .text = "Clipped coverage label", .fontSize = 22.0f }) == Impl::Ui::TextLayoutStatus::Success
         && m_korean.setText({

@@ -234,6 +234,24 @@ TEST_F(TextBakedTests, ZoomAndDpiReuseTheExactImmutableImageAndOutsideRangeUsesC
     EXPECT_TRUE(paint().sdfPages().empty());
 }
 
+TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
+    ASSERT_TRUE(installAtlas());
+    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 22.f }, m_layout), TextLayoutStatus::Success);
+    ASSERT_TRUE(m_layout.glyphs()[0u].face->bakedAtlas());
+    const DrawSnapshot small = paint();
+    EXPECT_TRUE(small.sdfPages().empty());
+    ASSERT_EQ(small.glyphPages().size(), 1u);
+    ASSERT_EQ(small.commands().size(), 1u);
+    EXPECT_EQ(small.commands()[0u].material, PaintMaterial::Glyph);
+
+    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    const DrawSnapshot threshold = paint();
+    EXPECT_TRUE(threshold.glyphPages().empty());
+    ASSERT_EQ(threshold.sdfPages().size(), 1u);
+    ASSERT_EQ(threshold.commands().size(), 1u);
+    EXPECT_EQ(threshold.commands()[0u].material, PaintMaterial::SdfGlyph);
+}
+
 TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
     ASSERT_TRUE(installAtlas());
     ASSERT_EQ(m_text.layout({ .text = "   ", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);

@@ -66,6 +66,26 @@ def analyze_text_region(rows, name, left, top, right, bottom, minimum_ink=80):
     }
 
 
+def analyze_latin_descenders(rows, width, height):
+    # The 22-pixel Latin label starts at (0.04 * width, 0.80 * height). These ranges isolate
+    # the four final glyphs in "office ffi e\u0301 gqyp" without depending on the viewport extent.
+    label_left = math.floor(width * 0.04)
+    descender_row = math.floor(height * 0.80) + 29
+    glyph_ranges = (("g", 107, 121), ("q", 123, 135), ("y", 134, 144), ("p", 145, 160))
+    checks = []
+    for glyph, left_offset, right_offset in glyph_ranges:
+        left = label_left + left_offset
+        right = label_left + right_offset
+        ink = sum(max(pixel) > 20 for pixel in rows[descender_row][left:right])
+        checks.append({
+            "name": f"Latin {glyph} descender reaches lower antialiasing row",
+            "rectangle": [left, descender_row, right, descender_row + 1],
+            "ink_pixels": ink,
+            "passed": ink >= 2,
+        })
+    return checks
+
+
 def analyze_frame(frame):
     width, height, rows = frame
     if width < 320 or height < 240:
@@ -101,7 +121,7 @@ def analyze_frame(frame):
         "ink_pixels": sum(max(pixel) > 2 for pixel in outside_pixels),
         "passed": all(max(pixel) <= 2 for pixel in outside_pixels),
     }
-    text_checks = [*text_regions, clipped_outside]
+    text_checks = [*text_regions, *analyze_latin_descenders(rows, width, height), clipped_outside]
     return {"width": width, "height": height,
         "passed": all(probe["passed"] for probe in results) and all(check["passed"] for check in text_checks),
         "probes": results, "text_checks": text_checks}

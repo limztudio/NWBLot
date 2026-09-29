@@ -91,13 +91,14 @@ glyph selects its actual face's group and channel; padded plane bounds combine w
 HarfBuzz's baseline position and offsets. Neither atlas inspection advances nor
 exported `kern`/GPOS/GDEF bytes are applied again after shaping.
 
-SDF is selected when physical font size is within 0.5..1.5 times its bake ppem. The
-shipped 32-ppem atlases therefore serve 16..48 physical pixels per em. Outside the
+SDF is selected when physical font size is within 0.75..1.5 times its bake ppem. The
+shipped 32-ppem atlases therefore serve 24..48 physical pixels per em. Outside the
 interval, native coverage uses the already selected shaping face. Zoom and DPI can
-change the image source without changing logical layout. The interval passed 36
-comparisons of Latin A/o/e and Korean Hangul against supersampled native coverage;
-other fonts require their own visual qualification. Scalar SDF does not guarantee
-arbitrary magnification or recover details missing from its bake.
+change the image source without changing logical layout. Below the interval, native
+coverage also preserves the antialiased bottom row of small descenders. Current atlas
+quality tests compare Latin A/o/e and Korean Hangul against supersampled native
+coverage across zoom and DPI; other fonts require their own visual qualification.
+Scalar SDF does not guarantee arbitrary magnification or recover details missing from its bake.
 
 Layouts retain their exact source font and baked image versions. Paint snapshots pin
 immutable RGBA pages after source asset release or font replacement. Warm SDF painting

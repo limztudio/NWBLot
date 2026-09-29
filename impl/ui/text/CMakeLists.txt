@@ -15,6 +15,8 @@ target_sources(nwb_ui_text PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/service.h"
     "${CMAKE_CURRENT_LIST_DIR}/service.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/service_paint.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/glyph_visibility.h"
+    "${CMAKE_CURRENT_LIST_DIR}/glyph_visibility.cpp"
 )
 target_link_libraries(nwb_ui_text PUBLIC nwb_ui nwb_assets_font_atlas PRIVATE nwb::freetype nwb::harfbuzz)
 

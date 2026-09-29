@@ -9,6 +9,7 @@
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
+#include FT_OUTLINE_H
 #include <hb.h>
 #include <hb-ot.h>
 
@@ -23,6 +24,17 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace __hidden_ui_text_font{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool HasTable(hb_face_t& face, hb_tag_t tag){
+    hb_blob_t* blob = hb_face_reference_table(&face, tag);
+    const bool present = hb_blob_get_length(blob) != 0u;
+    hb_blob_destroy(blob);
+    return present;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -138,11 +150,19 @@ public:
             nullptr
         );
         m_hbFace = hb_face_create(m_blob, source.font.faceIndex());
-        m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && hb_face_get_upem(m_hbFace) != 0u;
+        m_unitsPerEm = hb_face_get_upem(m_hbFace);
+        m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && m_unitsPerEm != 0u;
         if(!m_ready){
             NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz font face initialization failed"));
             return;
         }
+        m_allowOutlineBounds = !FT_IS_TRICKY(m_face);
+        m_coverageInkReliable =
+            m_allowOutlineBounds && __hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('g', 'l', 'y', 'f'))
+            && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'F', 'F', ' '))
+            && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('s', 'b', 'i', 'x'))
+            && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'B', 'D', 'T'))
+            && !__hidden_ui_text_font::HasTable(*m_hbFace, HB_TAG('C', 'O', 'L', 'R'));
         if(source.atlas){
             const FontAtlasPayload& payload = source.atlas->payload();
             if(
@@ -172,8 +192,44 @@ public:
 
 
 private:
+    [[nodiscard]] GlyphCoverageBounds coverageBounds(u32 glyphId, f32 fontSize)const{
+        if(!m_allowOutlineBounds || m_coverageInkReliable)
+            return {};
+        if(FT_Load_Glyph(m_face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP | FT_LOAD_NO_AUTOHINT) != 0){
+            NWB_LOGGER_WARNING(NWB_TEXT("UI glyph outline bounds unavailable; retaining conservative coverage candidate"));
+            return {};
+        }
+        const FT_GlyphSlot slot = m_face->glyph;
+        if(slot->format != FT_GLYPH_FORMAT_OUTLINE)
+            return {};
+        if(slot->outline.n_points == 0)
+            return { {}, true };
+        FT_BBox box{};
+        FT_Outline_Get_CBox(&slot->outline, &box);
+        // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
+        const f64 scale = static_cast<f64>(fontSize) / m_face->units_per_EM;
+        const f64 left = (static_cast<f64>(box.xMin) - 1.0) * scale;
+        const f64 top = (-static_cast<f64>(box.yMax) - 1.0) * scale;
+        const f64 width = (static_cast<f64>(box.xMax) - box.xMin + 2.0) * scale;
+        const f64 height = (static_cast<f64>(box.yMax) - box.yMin + 2.0) * scale;
+        const f64 limit = Limit<f32>::s_Max;
+        if(
+            !IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height)
+            || Abs(left) > limit || Abs(top) > limit || width < 0.0 || height < 0.0 || width > limit || height > limit
+            || Abs(left + width) > limit || Abs(top + height) > limit
+        )
+            return {};
+        const Rect ink{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(width), static_cast<f32>(height) };
+        if(!IsFinite(ink.x + ink.width) || !IsFinite(ink.y + ink.height))
+            return {};
+        return { ink, true };
+    }
+
+
+private:
     Core::Assets::AssetRef<Font> m_identity;
     u64 m_generation;
+    u32 m_unitsPerEm = 0u;
     PaintVector<u8> m_bytes;
     SharedBakedFontAtlas m_bakedAtlas;
     FT_MemoryRec_ m_memory{};
@@ -182,6 +238,8 @@ private:
     hb_blob_t* m_blob = nullptr;
     hb_face_t* m_hbFace = nullptr;
     bool m_ready = false;
+    bool m_allowOutlineBounds = false;
+    bool m_coverageInkReliable = false;
 };
 
 
@@ -199,6 +257,10 @@ bool FontFace::valid()const{ return m_state->m_ready; }
 const Core::Assets::AssetRef<Font>& FontFace::identity()const{ return m_state->m_identity; }
 
 u64 FontFace::generation()const{ return m_state->m_generation; }
+
+u32 FontFace::unitsPerEm()const{ return m_state->m_unitsPerEm; }
+
+bool FontFace::coverageInkReliable()const{ return m_state->m_coverageInkReliable; }
 
 const SharedBakedFontAtlas& FontFace::bakedAtlas()const{ return m_state->m_bakedAtlas; }
 
@@ -288,7 +350,8 @@ bool FontFace::shape(
             }
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd,
                 { static_cast<f32>(positions[index].x_offset) / 64.0f, -static_cast<f32>(positions[index].y_offset) / 64.0f },
-                { static_cast<f32>(positions[index].x_advance) / 64.0f, -static_cast<f32>(positions[index].y_advance) / 64.0f }, ink });
+                { static_cast<f32>(positions[index].x_advance) / 64.0f, -static_cast<f32>(positions[index].y_advance) / 64.0f },
+                ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;
         first = end;

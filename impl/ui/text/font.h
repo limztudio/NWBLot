@@ -27,6 +27,11 @@ struct FontSource{
     const FontAtlas* atlas = nullptr;
 };
 
+struct GlyphCoverageBounds{
+    Rect ink{};
+    bool known = false;
+};
+
 struct RawShapedGlyph{
     u32 glyphId = 0u;
     u32 byteBegin = 0u;
@@ -34,6 +39,7 @@ struct RawShapedGlyph{
     Point offset;
     Point advance;
     Rect ink;
+    GlyphCoverageBounds coverage{};
 };
 
 struct GlyphBitmap{
@@ -54,7 +60,7 @@ class FontFaceState;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Native faces borrow copied immutable bytes. Native raster calls belong to this version's owning UI thread.
+// Native faces borrow copied immutable bytes. Native outline/raster calls belong to this version's owning UI thread.
 class FontFace : NoCopy{
 public:
     FontFace(Core::Alloc::GlobalArena& arena, const FontSource& source);
@@ -65,6 +71,8 @@ public:
     [[nodiscard]] bool valid()const;
     [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const;
     [[nodiscard]] u64 generation()const;
+    [[nodiscard]] u32 unitsPerEm()const;
+    [[nodiscard]] bool coverageInkReliable()const;
     [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const;
     [[nodiscard]] bool metrics(f32 fontSize, FontMetrics& output)const;
     [[nodiscard]] bool shape(

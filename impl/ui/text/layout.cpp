@@ -24,11 +24,28 @@ namespace __hidden_ui_text_layout{
     return offset <= text.size() && (offset == text.size() || (static_cast<u8>(text[offset]) & 0xc0u) != 0x80u);
 }
 
+[[nodiscard]] static bool FitsCoordinate(f64 value){
+    return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
+}
+
+[[nodiscard]] static bool TranslateInk(const Point& position, const Rect& ink, Rect& output){
+    const f64 left = static_cast<f64>(position.x) + ink.x;
+    const f64 top = static_cast<f64>(position.y) + ink.y;
+    if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
+        return false;
+    const Rect rectangle{ static_cast<f32>(left), static_cast<f32>(top), ink.width, ink.height };
+    if(!IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
+        return false;
+    output = rectangle;
+    return true;
+}
+
 [[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction){
     if(
         !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
         || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
         || run.metrics.ascender + run.metrics.descender <= 0.0f || run.glyphs.size() > s_TextMaxBytes
+        || !FitsCoordinate(static_cast<f64>(run.metrics.ascender) + run.metrics.descender + run.metrics.lineGap)
     )
         return false;
     u32 previous = direction == TextDirection::LeftToRight ? 0u : static_cast<u32>(text.size());
@@ -38,8 +55,20 @@ namespace __hidden_ui_text_layout{
             || !IsFinite(glyph.advance.x) || !IsFinite(glyph.advance.y) || glyph.advance.x < 0.0f || glyph.advance.y != 0.0f
             || !IsFinite(glyph.offset.x) || !IsFinite(glyph.offset.y) || !IsFinite(glyph.ink.x) || !IsFinite(glyph.ink.y)
             || !IsFinite(glyph.ink.width) || !IsFinite(glyph.ink.height) || glyph.ink.width < 0.0f || glyph.ink.height < 0.0f
+            || !FitsCoordinate(static_cast<f64>(glyph.ink.x) + glyph.ink.width)
+            || !FitsCoordinate(static_cast<f64>(glyph.ink.y) + glyph.ink.height)
         )
             return false;
+        if(glyph.coverage.known){
+            const Rect& coverage = glyph.coverage.ink;
+            if(
+                !IsFinite(coverage.x) || !IsFinite(coverage.y) || !IsFinite(coverage.width) || !IsFinite(coverage.height)
+                || coverage.width < 0.0f || coverage.height < 0.0f
+                || !FitsCoordinate(static_cast<f64>(coverage.x) + coverage.width)
+                || !FitsCoordinate(static_cast<f64>(coverage.y) + coverage.height)
+            )
+                return false;
+        }
         if(direction == TextDirection::LeftToRight ? glyph.byteBegin < previous : glyph.byteBegin > previous)
             return false;
         previous = glyph.byteBegin;
@@ -47,20 +76,26 @@ namespace __hidden_ui_text_layout{
     return true;
 }
 
-static void IncludeInk(Rect& bounds, bool& hasInk, const Rect& ink){
+[[nodiscard]] static bool IncludeInk(Rect& bounds, bool& hasInk, const Rect& ink){
     if(ink.width <= 0.0f || ink.height <= 0.0f)
-        return;
+        return true;
     if(!hasInk){
         bounds = ink;
         hasInk = true;
-        return;
+        return true;
     }
-    const f32 right = Max(bounds.x + bounds.width, ink.x + ink.width);
-    const f32 bottom = Max(bounds.y + bounds.height, ink.y + ink.height);
-    bounds.x = Min(bounds.x, ink.x);
-    bounds.y = Min(bounds.y, ink.y);
-    bounds.width = right - bounds.x;
-    bounds.height = bottom - bounds.y;
+    const f64 left = Min(static_cast<f64>(bounds.x), static_cast<f64>(ink.x));
+    const f64 top = Min(static_cast<f64>(bounds.y), static_cast<f64>(ink.y));
+    const f64 right = Max(static_cast<f64>(bounds.x) + bounds.width, static_cast<f64>(ink.x) + ink.width);
+    const f64 bottom = Max(static_cast<f64>(bounds.y) + bounds.height, static_cast<f64>(ink.y) + ink.height);
+    if(!FitsCoordinate(right - left) || !FitsCoordinate(bottom - top))
+        return false;
+    const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left),
+        static_cast<f32>(bottom - top) };
+    if(!IsFinite(combined.x + combined.width) || !IsFinite(combined.y + combined.height))
+        return false;
+    bounds = combined;
+    return true;
 }
 
 
@@ -193,8 +228,12 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
         line.glyphCount = static_cast<u32>(run.glyphs.size());
         line.firstCluster = static_cast<u32>(result.m_clusters.size());
         line.top = result.m_measure.y;
-        line.baseline = line.top + run.metrics.ascender;
-        line.height = run.metrics.ascender + run.metrics.descender + run.metrics.lineGap;
+        const f64 baseline = static_cast<f64>(line.top) + run.metrics.ascender;
+        const f64 height = static_cast<f64>(run.metrics.ascender) + run.metrics.descender + run.metrics.lineGap;
+        if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
+            return TextLayoutStatus::InvalidParameters;
+        line.baseline = static_cast<f32>(baseline);
+        line.height = static_cast<f32>(height);
         usize first = 0u;
         f32 pen = 0.0f;
         while(first < run.glyphs.size()){
@@ -205,12 +244,26 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const Point position{ pen + glyph.offset.x, line.baseline + glyph.offset.y };
+                const f64 x = static_cast<f64>(pen) + glyph.offset.x;
+                const f64 y = static_cast<f64>(line.baseline) + glyph.offset.y;
+                const f64 nextPen = static_cast<f64>(pen) + glyph.advance.x;
+                if(
+                    !__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y)
+                    || !__hidden_ui_text_layout::FitsCoordinate(nextPen)
+                )
+                    return TextLayoutStatus::InvalidParameters;
+                const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
+                Rect ink;
+                if(
+                    !__hidden_ui_text_layout::TranslateInk(position, glyph.ink, ink)
+                    || !__hidden_ui_text_layout::IncludeInk(result.m_inkBounds, hasInk, ink)
+                )
+                    return TextLayoutStatus::InvalidParameters;
+                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(position, glyph.coverage.ink, ink))
+                    return TextLayoutStatus::InvalidParameters;
                 result.m_glyphs.push_back({ glyph.face, glyph.glyphId,
-                    line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position });
-                __hidden_ui_text_layout::IncludeInk(result.m_inkBounds, hasInk,
-                    { position.x + glyph.ink.x, position.y + glyph.ink.y, glyph.ink.width, glyph.ink.height });
-                pen += glyph.advance.x;
+                    line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
+                pen = static_cast<f32>(nextPen);
             }
             TextCluster cluster;
             cluster.byteBegin = line.byteBegin + run.glyphs[first].byteBegin;

@@ -88,6 +88,12 @@ target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/paint_glyph_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_sdf_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_layout_ink_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_glyph_visibility_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_visible_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_visible_fixture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_visible_coverage_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_visible_baked_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_font_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_baked_tests.cpp"
 )

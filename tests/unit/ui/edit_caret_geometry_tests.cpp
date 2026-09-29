@@ -317,9 +317,14 @@ TEST_F(EditCaretFixture, NonfiniteDerivedGlyphPlacementCannotReplaceReadyGeometr
     ASSERT_TRUE(adoptText("base", EditTextMode::SingleLine));
     m_shaper.fault = ShaperFault::NonfinitePlacement;
     TextLayout malformed(m_arena);
+    EXPECT_FALSE(layout("ab", malformed));
+    EXPECT_TRUE(malformed.glyphs().empty());
+    EXPECT_EQ(m_geometry.layout().utf8(), "base");
+    expectCaret(1u, 10.0f, 0.0f);
+    m_shaper.fault = ShaperFault::None;
     ASSERT_TRUE(layout("ab", malformed));
     ASSERT_EQ(malformed.glyphs().size(), 2u);
-    EXPECT_FALSE(IsFinite(malformed.glyphs()[1u].position.x));
+    const_cast<PlacedGlyph&>(malformed.glyphs()[1u]).position.x = Limit<f32>::s_Infinity;
     ASSERT_TRUE(identityMapping("ab"));
     EXPECT_FALSE(m_geometry.adoptLayout(Move(malformed), "ab", m_mapping, 2u, EditTextMode::SingleLine));
     EXPECT_EQ(m_geometry.layout().utf8(), "base");

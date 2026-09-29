@@ -23,6 +23,9 @@ struct PlacedGlyph{
     u32 byteBegin = 0u;
     u32 byteEnd = 0u;
     Point position;
+    // Shaping ink is relative to the glyph baseline origin; an empty rectangle is conservatively unknown at paint time.
+    Rect ink{};
+    GlyphCoverageBounds coverage{};
 };
 
 struct TextCluster{

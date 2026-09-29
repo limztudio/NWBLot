@@ -25,6 +25,7 @@ struct ShapedGlyph{
     Point offset;
     Point advance;
     Rect ink;
+    GlyphCoverageBounds coverage{};
 };
 
 struct ShapedRun{

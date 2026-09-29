@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "layout.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AtlasGlyph;
+
+namespace TextGlyphIntersection{
+    enum Enum : u8{ Invalid, Invisible, Visible };
+};
+
+// Stateless queries borrow immutable layout/atlas metadata; rejected exact rectangles preserve the caller's output.
+class TextGlyphVisibility final{
+public:
+    [[nodiscard]] static const BakedFontAtlas* selectAtlas(const PlacedGlyph& glyph, f32 physicalSize);
+    // Unknown ink or untrusted native bounds remain Visible so existing shapers retain conservative preparation.
+    [[nodiscard]] static TextGlyphIntersection::Enum candidate(
+        const PlacedGlyph& glyph,
+        const BakedFontAtlas* selectedAtlas,
+        f32 fontSize,
+        f32 physicalSize,
+        const Point& topLeft,
+        const Rect& clip
+    );
+    [[nodiscard]] static bool atlasRectangle(
+        const PlacedGlyph& glyph,
+        const BakedFontAtlas& atlas,
+        f32 fontSize,
+        const Point& topLeft,
+        Rect& out
+    );
+    [[nodiscard]] static bool coverageRectangle(
+        const PlacedGlyph& glyph,
+        const AtlasGlyph& record,
+        f32 rasterScale,
+        const Point& topLeft,
+        Rect& out
+    );
+    [[nodiscard]] static TextGlyphIntersection::Enum intersect(const Rect& rectangle, const Rect& clip);
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

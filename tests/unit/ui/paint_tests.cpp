@@ -48,6 +48,33 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(UiPaintTests, CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay){
+    const Rect display = m_builder.currentClip();
+    EXPECT_FLOAT_EQ(display.width, 200.0f);
+    EXPECT_FLOAT_EQ(display.height, 100.0f);
+    m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });
+    m_builder.pushClip({ 20.0f, 5.0f, 40.0f, 20.0f });
+    const Rect nested = m_builder.currentClip();
+    EXPECT_FLOAT_EQ(nested.x, 20.0f);
+    EXPECT_FLOAT_EQ(nested.y, 10.0f);
+    EXPECT_FLOAT_EQ(nested.width, 20.0f);
+    EXPECT_FLOAT_EQ(nested.height, 15.0f);
+    ASSERT_TRUE(m_builder.beginOverlay(1u));
+    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 200.0f);
+    m_builder.pushClip({ 250.0f, 0.0f, 1.0f, 1.0f });
+    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 0.0f);
+    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(m_builder.endOverlay());
+    EXPECT_FLOAT_EQ(m_builder.currentClip().x, nested.x);
+    EXPECT_FLOAT_EQ(m_builder.currentClip().height, nested.height);
+    ASSERT_TRUE(m_builder.popClip());
+    ASSERT_TRUE(m_builder.popClip());
+    const auto snapshot = m_builder.freeze();
+    EXPECT_TRUE(snapshot.vertices().empty());
+    EXPECT_TRUE(snapshot.commands().empty());
+    EXPECT_FLOAT_EQ(display.width, 200.0f);
+}
+
 TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
     EXPECT_FALSE(m_builder.popClip());
     m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });

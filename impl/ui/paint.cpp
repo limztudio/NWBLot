@@ -166,6 +166,11 @@ DrawSnapshot PaintBuilder::freeze(){
     return Move(m_snapshot);
 }
 
+Rect PaintBuilder::currentClip()const{
+    NWB_ASSERT(m_recording);
+    return m_clips.back();
+}
+
 void PaintBuilder::emitQuad(
     const Rect& rectangle,
     const Rect& uv,

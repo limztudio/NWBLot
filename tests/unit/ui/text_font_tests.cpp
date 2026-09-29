@@ -6,6 +6,7 @@
 #include <impl/ui/text/service.h>
 
 #include <global/filesystem.h>
+#include <global/simplemath.h>
 
 #include <gtest/gtest.h>
 
@@ -222,6 +223,60 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
     EXPECT_FALSE(atlas.prepare(glyph.face, glyph.glyphId, 476u));
     EXPECT_EQ(atlas.pageCount(), s_GlyphAtlasMaxPages);
 }
+
+TEST_F(TextFontTests, OrdinaryTrueTypeInkAndNativeCffCoverageRemainDistinct){
+    ASSERT_EQ(m_service.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    ASSERT_EQ(m_layout.glyphs().size(), 1u);
+    EXPECT_TRUE(m_layout.glyphs()[0].face->coverageInkReliable());
+    EXPECT_GT(m_layout.glyphs()[0].face->unitsPerEm(), 0u);
+    EXPECT_FALSE(m_layout.glyphs()[0].coverage.known);
+    ShapeRequest request{ "\xed\x95\x9c" };
+    request.scriptTag = 0x48616e67u;
+    request.language = "ko";
+    ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+    ASSERT_EQ(m_layout.glyphs().size(), 1u);
+    const PlacedGlyph& glyph = m_layout.glyphs()[0];
+    EXPECT_FALSE(glyph.face->coverageInkReliable());
+    EXPECT_TRUE(glyph.coverage.known);
+    EXPECT_GT(glyph.coverage.ink.width, 0.0f);
+    EXPECT_GT(glyph.coverage.ink.height, 0.0f);
+    EXPECT_FLOAT_EQ(m_layout.inkBounds().x, glyph.position.x + glyph.ink.x);
+    EXPECT_FLOAT_EQ(m_layout.inkBounds().y, glyph.position.y + glyph.ink.y);
+    const Rect saved = glyph.coverage.ink;
+    const FontSource replacement{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 2u };
+    ASSERT_TRUE(m_service.setFonts(&replacement, 1u));
+    EXPECT_TRUE(glyph.coverage.known);
+    EXPECT_FLOAT_EQ(glyph.coverage.ink.x, saved.x);
+    EXPECT_FLOAT_EQ(glyph.coverage.ink.width, saved.width);
+    EXPECT_TRUE(glyph.face->valid());
+}
+
+TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringesWithoutChangingInk){
+    const f32 sizes[]{ 32.0078125f, 64.21875f, 320.0078125f };
+    for(const f32 fontSize : sizes){
+        ShapeRequest request{ "\xed\x95\x9c" };
+        request.scriptTag = 0x48616e67u;
+        request.language = "ko";
+        request.fontSize = fontSize;
+        ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+        ASSERT_EQ(m_layout.glyphs().size(), 1u);
+        const PlacedGlyph& glyph = m_layout.glyphs()[0];
+        ASSERT_TRUE(glyph.coverage.known);
+        const u32 pixelSize = static_cast<u32>(Ceil(fontSize * 1.375f));
+        GlyphBitmap bitmap(m_arena);
+        ASSERT_TRUE(glyph.face->rasterize(glyph.glyphId, pixelSize, bitmap));
+        const f32 scale = static_cast<f32>(pixelSize) / fontSize;
+        const f32 fringe = 2.0f / scale;
+        const Rect& bounds = glyph.coverage.ink;
+        EXPECT_GE(static_cast<f32>(bitmap.bearingX) / scale, bounds.x - fringe);
+        EXPECT_GE(-static_cast<f32>(bitmap.bearingY) / scale, bounds.y - fringe);
+        EXPECT_LE((static_cast<f32>(bitmap.bearingX) + bitmap.width) / scale, bounds.x + bounds.width + fringe);
+        EXPECT_LE((-static_cast<f32>(bitmap.bearingY) + bitmap.height) / scale, bounds.y + bounds.height + fringe);
+        EXPECT_FLOAT_EQ(m_layout.inkBounds().width, glyph.ink.width);
+        EXPECT_FLOAT_EQ(m_layout.inkBounds().height, glyph.ink.height);
+    }
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

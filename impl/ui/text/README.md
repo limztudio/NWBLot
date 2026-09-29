@@ -99,6 +99,30 @@ immutable RGBA pages after source asset release or font replacement. Warm SDF pa
 and supported DPI changes reuse the same pages; native coverage maintains a separate
 raster cache. Both image kinds are admitted atomically before quads are emitted.
 
+## Visible glyph preparation
+
+`TextLayout` keeps every source byte, line, cluster, position and caret edge, including
+text outside the viewport. Layout and native glyph preparation run on the owning UI
+thread. The layout also retains per-glyph shaping ink and separate copied
+native coverage bounds when HarfBuzz extents may describe a different image. Ordinary
+static TrueType outlines use conservative shaping bounds. Non-tricky CFF and fonts
+with bitmap/color extent tables use transformed unscaled FreeType outline control
+boxes, including native font/subfont matrices. These bounds do not replace shaping
+ink, advance measurement or selection geometry. Tricky faces and unavailable bounds
+remain conservative candidates.
+
+Painting reads `PaintBuilder::currentClip()` and validates candidates before atlas
+preparation. Coverage bounds include scale rounding and the raster fringe; baked SDF
+candidates use the complete padded plane rectangle. Only candidates prepare dynamic
+atlas entries. The exact prepared bitmap rectangles then exclude hidden images before
+one combined coverage/SDF page admission and ordered quad emission. Empty clips and
+zero alpha prepare no glyphs or image bindings after normal parameter validation.
+
+This removes hidden-document atlas exhaustion without changing resource limits. A
+conservative candidate can still warm the coverage cache even when its final bitmap
+is outside the clip. Cache limits apply cumulatively to glyphs encountered by visible
+views; eviction, cache tuning and performance measurement remain later work.
+
 ## Native coverage fallback
 
 `TextService::paint()` reads the builder's saved display metrics. It rasterizes at

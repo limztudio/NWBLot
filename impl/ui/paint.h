@@ -174,6 +174,7 @@ public:
     );
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const{ return m_snapshot.displayMetrics(); }
+    [[nodiscard]] Rect currentClip()const;
 
 
 private:

@@ -38,6 +38,12 @@ For `freetype_sdf_u8_v1`, byte 128 represents zero distance and positive distanc
 
 Installed font versions copy SFNT bytes and immutable atlas image records. Existing layouts and paint snapshots retain their versions across asset release, font replacement, and display-scale changes. The GPU path uploads the RGBA group, selects a single channel per glyph draw, imports readiness into the frame graph, and retains resources through the final compositor consumer. The independently prepared UI layer and premultiplied SDR/HDR composition are unchanged by the authoring migration.
 
+### UASTC trial
+
+The conditional UASTC preference was tested against the shipped four-channel atlases. The pinned LDR `tex_conv --linear` encoder compressed block-aligned 96x96 crops from the actual RGBA pages; the pinned Basis decoder reconstructed their first mip. A probe selected each glyph's assigned channel and compared bilinear SDF coverage with the lossless page at 24, 32, and 48 physical pixels per em. The sample included Latin `A`, `o`, `e`, `i`, `m`, `g`, `q` and Korean `한`, `가`.
+
+The compressed `g` and `q` edges moved up to **2 pixels** at 48 pixels per em; `A` and `한` also reached 2 pixels. At the stored distance threshold, `g` changed sign in 43 of 1,344 glyph texels and `한` in 69 of 1,980. The largest additional mean coverage error against the lossless page was 0.0306 (`한` at 32 pixels per em). This representative comparison did not repeat the native-outline qualification, but it already exceeds the current one-pixel edge budget relative to the lossless atlas. FTA1 therefore keeps exact RGBA8 pages for this packing and encoder. Directly sampled UASTC could reduce the default raw texel payloads from 8 to 2 MiB and 64 to 16 MiB; a per-channel compression strategy would need its own native-outline quality gate before changing the format.
+
 ## Verification
 
 The paired-output integration suite exercises complete Latin and Korean generation, FON1 and FTA1 decoding, all-glyph coverage, four-channel packing, exact source positioning bytes, deterministic repetition, raw-SFNT and prepared-font equivalence, overwrite refusal, failed-capacity preservation, and relocation of a whole trio. The font-bundle cooker tests cover missing/mismatched companions and transactional publication. The quality test compares real default atlases against supersampled native outlines across the qualified scale interval. UI smoke and Testbed exercise the cooked default pair through the normal asset pipeline.

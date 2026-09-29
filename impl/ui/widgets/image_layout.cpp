@@ -97,6 +97,17 @@ bool ImageLayout::Measure(
     return true;
 }
 
+bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out){
+    using namespace __hidden_ui_image_layout;
+    if(!ValidSize(options.width) || !ValidSize(options.height) || !ValidColor(options.tint))
+        return false;
+    const Texture& texture = source.texture();
+    // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.
+    const ImageMetrics candidate{ { static_cast<f32>(texture.width()), static_cast<f32>(texture.height()) } };
+    out = candidate;
+    return true;
+}
+
 bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& out){
     using namespace __hidden_ui_image_layout;
     if(!ValidRect(bounds) || !ValidRect(clip))

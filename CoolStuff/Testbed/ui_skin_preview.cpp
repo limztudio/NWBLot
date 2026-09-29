@@ -73,7 +73,8 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiSkinPreview::TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
+TestbedUiSkinPreview::TestbedUiSkinPreview(
+    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_normal(arena)
     , m_hover(arena)
     , m_pressed(arena)
@@ -81,7 +82,7 @@ TestbedUiSkinPreview::TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     , m_edit(arena)
     , m_caption(arena)
     , m_korean(arena)
-    , m_widgets(arena)
+    , m_widgets(arena, assets)
 {
     using namespace __hidden_ui_skin_preview;
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")

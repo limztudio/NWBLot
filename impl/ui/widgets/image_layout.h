@@ -41,6 +41,8 @@ public:
         f32 density,
         ImageMetrics& out
     );
+    // Engine images use one logical unit per texel without atlas density, slices or control padding.
+    [[nodiscard]] static bool Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out);
     // Invalid inputs preserve the previous output; empty visibility remains valid.
     [[nodiscard]] static bool Place(const Rect& bounds, const Rect& clip, ImagePlacement& out);
 };

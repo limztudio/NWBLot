@@ -18,6 +18,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Content dimensions use atlas reference density for named regions and logical texel extent for engine sources.
 struct ImageOptions{
     LayoutSize width = { LayoutSizePolicy::Content, 0.0f };
     LayoutSize height = { LayoutSizePolicy::Content, 0.0f };

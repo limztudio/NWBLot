@@ -16,7 +16,7 @@
 
 class TestbedUiSkinPreview final : NoCopy{
 public:
-    explicit TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena);
+    TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:

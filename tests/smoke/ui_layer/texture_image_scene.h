@@ -29,7 +29,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RefCounter owns the scene; direct paint declarations copy immutable source versions and geometry.
+// RefCounter owns the scene; primitive and Builder image declarations copy immutable source versions and geometry.
 class UiTextureImageSmokeScene : public Core::IInputEventHandler, NoCopy{
 public:
     UiTextureImageSmokeScene(
@@ -46,8 +46,8 @@ private:
     [[nodiscard]] bool replaceVersion();
     [[nodiscard]] bool paintControls(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
     [[nodiscard]] bool paintImages(Impl::UiPaintContext& context, f32 width, f32 right, f32 otherWidth);
+    [[nodiscard]] bool paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds);
     [[nodiscard]] bool paintPopups(Impl::UiPaintContext& context, f32 right);
-    [[nodiscard]] bool paintPopupImage(Impl::UiPaintContext& context, bool child);
     void observeState(Impl::UiPaintContext& context);
     void paintMarkers(Impl::UiPaintContext& context)const;
 

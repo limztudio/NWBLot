@@ -7,13 +7,23 @@
 
 #include <impl/ecs_ui/components.h>
 
+#include <core/assets/manager.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class TestbedUiImageGallery final : NoCopy{
 public:
+    TestbedUiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+
+
+public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+
+
+private:
+    NWB::Impl::Ui::SharedImageSource m_source;
 };
 
 

@@ -1,4 +1,4 @@
-"""Decode owned texture snapshots and qualify independent bindings, UVs and primitive overlays."""
+"""Decode owned texture snapshots and qualify independent bindings, UVs and deferred Builder images."""
 from __future__ import annotations
 
 import math
@@ -12,18 +12,18 @@ from window_capture_smoke import SmokeFailure
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiTextureImageSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
-STATE = re.compile(r"UiTextureImageSmoke: state sequence=(\d+) values=((?:\d+,){13}\d+)")
+STATE = re.compile(r"UiTextureImageSmoke: state sequence=(\d+) values=((?:\d+,){15}\d+)")
 SOURCES = re.compile(r"UiTextureImageSmoke: sources sequence=(\d+) generations=(\d+),(\d+),(\d+) same_identity=(\d+)")
 GEOMETRY = re.compile(rf"UiTextureImageSmoke: geometry sequence=(\d+) (\w+)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SKIN = re.compile(r"UiTextureImageSmoke: skin=(default|alternate)")
 FIELDS = (
     "phase", "focus_code", "before_clicks", "after_clicks", "parent", "child", "popup_count", "image_targets",
     "declared_source", "post_handle_empty", "replacement_count", "replacement_alternate",
-    "eviction_remaining", "eviction_completed",
+    "eviction_remaining", "eviction_completed", "builder_source", "builder_handle_empty",
 )
 RECTANGLES = (
     "before", "after", "default_tile", "alternate_tile", "tinted", "zero_alpha", "frozen", "external", "external_clip",
-    "default_atlas", "alternate_atlas", "skin_fill", "parent_image", "child_image", "parent", "child",
+    "default_atlas", "alternate_atlas", "skin_fill", "parent_image", "child_image", "parent", "child", "builder_image",
 )
 DEFAULT = ((24, 29, 37), (63, 77, 93))
 ALTERNATE = ((39, 63, 34), (116, 150, 79))
@@ -128,6 +128,7 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
         "default_atlas": (32.0, 280.0, 256.0, 128.0),
         "alternate_atlas": (right + 8.0, 280.0, 256.0, 128.0),
         "skin_fill": (right + 8.0, 416.0, other_width - 16.0, 24.0),
+        "builder_image": (right + 8.0, 32.0, other_width - 16.0, 80.0),
     }
     geometry_matches = geometry_matches and all(all(abs(actual - wanted) <= 0.025
         for actual, wanted in zip(rectangles[name], declaration)) for name, declaration in declarations.items())
@@ -176,6 +177,31 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
         (0.5, 0.75, 1.0, 0.5) if phase else WHITE)
     image("external", "panel", DEFAULT, crop=(12.0, 0.0, 12.0, 24.0), constraint=rectangles["external_clip"])
 
+    def atlas(name, alternate, tint=WHITE, backdrop=SENTINEL):
+        bounds = rectangles[name]
+        bx, by, bw, bh = bounds
+        separator = SEPARATOR if alternate else ((65, 80, 99), (65, 80, 99))
+        samples = [
+            (16.0, 16.0, "panel", (4.0, 4.0), separator if alternate else DEFAULT),
+            (208.0, 112.0, "panel", (196.0, 100.0), ALTERNATE if alternate else separator),
+        ]
+        samples += ([(80.0, 16.0, "panel", (68.0, 4.0), FILL),
+            (240.0, 144.0, "dot", (228.0, 132.0), (MARK, MARK))] if alternate else
+            [(112.0, 16.0, "panel", (100.0, 4.0), ((45, 60, 80), (79, 101, 126))),
+                (144.0, 112.0, "panel", (132.0, 100.0), FILL),
+                (16.0, 144.0, "dot", (4.0, 132.0), (MARK, MARK))])
+        samples.append((1.0, 1.0, "panel", (4.0, 4.0), DEFAULT))
+        for index, (tx, ty, kind, origin, palette) in enumerate(samples):
+            position = pixel((bx + tx / 256.0 * bw, by + ty / 256.0 * bh))
+            if not inside(bounds, position) or (name != "child_image" and obscured(position, name != "parent_image")):
+                continue
+            source, alpha = sampled_texture(kind, bounds, position, scale, *palette,
+                crop=(-origin[0], -origin[1], 256.0, 256.0))
+            record(f"{name}_full_atlas_{index}", position, compose(source, alpha, tint, backdrop))
+
+    atlas("builder_image", bool(phase or snapshot["replacement_alternate"]),
+        (0.5, 0.75, 1.0, 0.5) if phase else WHITE, ALTERNATE[0] if skin == "alternate" else DEFAULT[0])
+
     atlas_samples = {
         "default_atlas": ((16.0, 16.0, DEFAULT[0]), (112.0, 16.0, (45, 60, 80)),
             (144.0, 112.0, FILL[0]), (16.0, 144.0, MARK), (1.0, 1.0, SENTINEL)),
@@ -194,18 +220,19 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
         if not obscured(position):
             source, alpha = sampled_region(rectangles["skin_fill"], position, scale, *FILL)
             record(f"skin_fill_{label}", position, compose(source, alpha, WHITE, SENTINEL))
-    for opened, name, palette, kind, tint in (
-            ("parent", "parent_image", ALTERNATE, "panel", WHITE),
-            ("child", "child_image", (MARK, MARK), "dot", (0.5, 1.0, 0.5, 0.75))):
+    for opened, name, alternate, tint in (
+            ("parent", "parent_image", True, WHITE),
+            ("child", "child_image", False, (0.5, 1.0, 0.5, 0.75))):
         if snapshot[opened]:
             popup = rectangles[opened]
-            declaration = popup[0] + 8.0, popup[1] + 44.0, popup[2] - 16.0, 40.0
+            top = 44.0 if opened == "parent" else 8.0
+            declaration = popup[0] + 8.0, popup[1] + top, popup[2] - 16.0, 64.0
             geometry_matches = geometry_matches and all(abs(actual - wanted) <= 0.025
                 for actual, wanted in zip(rectangles[name], declaration))
-            image(name, kind, palette, tint, POPUP)
-            position = pixel((popup[0] + 12.0, popup[1] + 12.0))
+            atlas(name, alternate, tint, POPUP)
+            position = pixel((popup[0] + 12.0, popup[1] + 120.0))
             if opened == "child" or not obscured(position, False):
-                record(f"{opened}_manual_chrome_above_deferred_controls", position, POPUP)
+                record(f"{opened}_actual_builder_chrome_over_late_base", position, POPUP)
         else:
             geometry_matches = geometry_matches and rectangles[name][2:] == (0.0, 0.0) \
                 and rectangles[opened][2:] == (0.0, 0.0)
@@ -214,7 +241,8 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
         if snapshot["replacement_count"] == 0 else generations[2] not in generations[:2])
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     model_matches = model_matches and snapshot["declared_source"] == (2 if phase else 1) \
-        and snapshot["post_handle_empty"] == 1
+        and snapshot["post_handle_empty"] == 1 and snapshot["builder_source"] == (2 if phase else 1) \
+        and snapshot["builder_handle_empty"] == 1
     return {
         "extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,
         "geometry_matches": geometry_matches, "source_matches": source_matches,

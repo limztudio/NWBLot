@@ -29,11 +29,11 @@ namespace __hidden_ui_texture_image_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Array<TStringView, 16u> s_RectNames{
+static constexpr Array<TStringView, 17u> s_RectNames{
     NWB_TEXT("before"), NWB_TEXT("after"), NWB_TEXT("default_tile"), NWB_TEXT("alternate_tile"), NWB_TEXT("tinted"),
     NWB_TEXT("zero_alpha"), NWB_TEXT("frozen"), NWB_TEXT("external"), NWB_TEXT("external_clip"),
     NWB_TEXT("default_atlas"), NWB_TEXT("alternate_atlas"), NWB_TEXT("skin_fill"), NWB_TEXT("parent_image"),
-    NWB_TEXT("child_image"), NWB_TEXT("parent"), NWB_TEXT("child")
+    NWB_TEXT("child_image"), NWB_TEXT("parent"), NWB_TEXT("child"), NWB_TEXT("builder_image")
 };
 
 
@@ -81,8 +81,8 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
             code = 4u;
         if(target.id == input.focus())
             focusCode = code;
-        for(usize index = 2u; index < 14u; ++index){
-            if(index == 8u || current.rectangles[index].width == 0.0f)
+        for(usize index = 2u; index < current.rectangles.size(); ++index){
+            if(index == 8u || index == 14u || index == 15u || current.rectangles[index].width == 0.0f)
                 continue;
             if(SameRect(target.rectangle, current.rectangles[index]))
                 ++imageTargets;
@@ -120,9 +120,9 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     }
     const auto& value = current.values;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},")
-        NWB_TEXT("{},{},{},{},{},{},{}")
+        NWB_TEXT("{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5]
-        , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13]
+        , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
     );
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
         , current.sequence, current.generations[0], current.generations[1], current.generations[2]

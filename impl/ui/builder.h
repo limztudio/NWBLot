@@ -84,6 +84,8 @@ public:
     [[nodiscard]] bool progress(AStringView stableKey, f64 fraction, const ProgressOptions& options = {});
     // Copies an authored skin region and its sizing/tint policy; default dimensions use its natural extent.
     [[nodiscard]] bool image(AStringView stableKey, const Name& regionName, const ImageOptions& options = {});
+    // Retains an immutable engine texture source and copied options; natural size is its texel extent in logical units.
+    [[nodiscard]] bool image(AStringView stableKey, const SharedImageSource& source, const ImageOptions& options = {});
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});

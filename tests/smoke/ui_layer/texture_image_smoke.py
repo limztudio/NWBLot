@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify owned concrete texture bindings, copied paint inputs, cache lifetimes and primitive overlay order."""
+"""Qualify owned concrete texture bindings, copied inputs, cache lifetimes and Builder popup images."""
 from __future__ import annotations
 
 import json
@@ -31,7 +31,7 @@ class TextureImageRun:
             "phase": 0, "focus_code": 0, "before_clicks": 0, "after_clicks": 0,
             "parent": 0, "child": 0, "popup_count": 0, "image_targets": 0,
             "declared_source": 1, "post_handle_empty": 1, "replacement_count": 0, "replacement_alternate": 0,
-            "eviction_remaining": 0, "eviction_completed": 0,
+            "eviction_remaining": 0, "eviction_completed": 0, "builder_source": 1, "builder_handle_empty": 1,
         }
 
     def logs(self):
@@ -88,10 +88,11 @@ class TextureImageRun:
             "failure": self.failure_report,
             "input_path": "Win32 constrained physical cursor with posted pointer/key messages"
                 if self.native.windows else "X11 XSendEvent keys/buttons and XSetInputFocus",
-            "runtime_limit": ("No native Wayland, physical button injection, live IME, "
-                "or Builder engine-image overload coverage."),
-            "overlay_contract": ("Direct source commands use manual skin-backed layers "
-                "above deferred Builder popup chrome."),
+            "runtime_limit": "No native Wayland, physical button injection or live IME coverage.",
+            "overlay_contract": ("Actual Builder source widgets paint in the parent/child popup family above "
+                "late base sentinels; primitive UV/crop checks remain separate."),
+            "builder_contract": ("A passive Stretch/Fixed image retains copied source/options after the caller "
+                "resets its handle and changes width, height and tint before deferred painting."),
             "cache_contract": ("F7 creates and displays one fresh same-path payload per accepted paint callback "
                 "for 72 versions."),
         }
@@ -108,6 +109,10 @@ class TextureImageRun:
         for key in ("Right", "Home", "Return"):
             self.native.tap(key)
         self.checkpoint("direct_images_have_no_keyboard_or_pointer_state", focus_code=0)
+        self.click("builder_image")
+        for key in ("Right", "Home", "Return"):
+            self.native.tap(key)
+        self.checkpoint("actual_builder_image_stays_passive_after_pointer_and_keys", focus_code=0)
         old_generation = self.snapshot["generations"][2]
         self.native.tap("F6")
         self.checkpoint("same_identity_new_payload_preserves_original_source_pixels", replacement_count=1,
@@ -125,7 +130,8 @@ class TextureImageRun:
             extra=lambda snapshot: snapshot["generations"][:2] == original_generations
                 and snapshot["generations"][2] != old_generation)
         self.native.tap("F4")
-        self.checkpoint("paint_declaration_copies_source_handle_rectangle_uv_and_tint", phase=1, declared_source=2)
+        self.checkpoint("paint_declaration_copies_source_handle_rectangle_uv_and_tint",
+            phase=1, declared_source=2, builder_source=2)
         old_extent = self.snapshot["logical_extent"]
         old_width = self.snapshot["rectangles"]["frozen"][2]
         target_extent = round(old_extent[0]) + 96, round(old_extent[1]) + 64
@@ -137,18 +143,19 @@ class TextureImageRun:
                 and abs(snapshot["logical_extent"][0] - target_extent[0]) < 1.0
                 and abs(snapshot["logical_extent"][1] - target_extent[1]) < 1.0)
         self.native.tap("F5")
-        self.checkpoint("primitive_child_parent_layers_override_emission_order_and_late_base", parent=1, child=1,
+        self.checkpoint("actual_builder_child_parent_images_cover_late_base_sentinels", parent=1, child=1,
             popup_count=2, focus_code=4)
         self.native.tap("Tab")
         self.checkpoint("accepted_child_keyboard_scope_remains_active", focus_code=4)
         self.native.tap("Escape")
-        self.checkpoint("child_close_retires_primitive_overlay_and_restores_parent", parent=1, child=0,
+        self.checkpoint("child_close_retires_builder_source_image_and_restores_parent", parent=1, child=0,
             popup_count=1, focus_code=3)
         self.native.tap("Escape")
-        self.checkpoint("parent_close_retires_primitive_overlay_and_restores_root", parent=0, child=0,
+        self.checkpoint("parent_close_retires_builder_source_image_and_restores_root", parent=0, child=0,
             popup_count=0, focus_code=0)
         self.native.tap("F4")
-        self.checkpoint("final_original_and_replacement_versions_remain_independent", phase=0, declared_source=1)
+        self.checkpoint("final_original_and_replacement_versions_remain_independent",
+            phase=0, declared_source=1, builder_source=1)
 
 def run(args):
     if not args.executable.is_file():

@@ -260,7 +260,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(createInitialWorldOrDie(context))
-    , m_uiPreview(context.objectArena)
+    , m_uiPreview(context.objectArena, context.assetManager)
 {}
 
 ProjectTestbed::~ProjectTestbed(){

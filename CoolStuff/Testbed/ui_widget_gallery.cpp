@@ -11,12 +11,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiWidgetGallery::TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
+TestbedUiWidgetGallery::TestbedUiWidgetGallery(
+    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_edits(arena)
     , m_searchCombos(arena)
     , m_nestedPopups(arena)
     , m_numericEdits(arena)
     , m_textAreas(arena)
+    , m_images(arena, assets)
 {}
 
 void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){

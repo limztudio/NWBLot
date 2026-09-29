@@ -5,6 +5,7 @@ target_sources(nwb_ui_widgets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/image_layout.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/image_frame.h"
     "${CMAKE_CURRENT_LIST_DIR}/builder_image.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_texture_image.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/image_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/progress.h"
     "${CMAKE_CURRENT_LIST_DIR}/progress_style.h"

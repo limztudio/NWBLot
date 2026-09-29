@@ -93,7 +93,8 @@ bool UiTextureImageSmokeScene::paint(Impl::UiPaintContext& context){
     const f32 otherWidth = Max(220.0f, context.display.logicalWidth - right - 24.0f);
     if(
         !paintControls(ui, { 24.0f, 24.0f, width, 112.0f })
-        || !paintImages(context, width, right, otherWidth) || !paintPopups(context, right) || ui.failed()
+        || !paintImages(context, width, right, otherWidth)
+        || !paintBuilderImages(ui, { right, 24.0f, otherWidth, 112.0f }) || !paintPopups(context, right) || ui.failed()
     )
         return false;
     observeState(context);
@@ -218,6 +219,28 @@ bool UiTextureImageSmokeScene::paintImages(
         && paint.drawRegion(Name("progress.fill"), rectangles[11u]);
 }
 
+bool UiTextureImageSmokeScene::paintBuilderImages(Impl::Ui::Builder& ui, const Impl::Ui::Rect& bounds){
+    using namespace Impl::Ui;
+    if(!ui.beginPanel("texture_image_builder", bounds))
+        return false;
+    ImageOptions options;
+    options.width = { LayoutSizePolicy::Stretch, 1.0f };
+    options.height = { LayoutSizePolicy::Fixed, 80.0f };
+    options.tint = m_phase ? Color{ 0.5f, 0.75f, 1.0f, 0.5f } : Color{};
+    SharedImageSource source = m_phase ? m_alternate : m_replacement;
+    m_declared.rectangles[16u] = { bounds.x + 8.0f, bounds.y + 8.0f, bounds.width - 16.0f, 80.0f };
+    m_declared.values[14u] = m_phase ? 2u : 1u;
+    if(!ui.image("owned_source", source, options))
+        return false;
+    source = m_phase ? m_default : m_alternate;
+    source.reset();
+    options.width = { LayoutSizePolicy::Fixed, 1.0f };
+    options.height = { LayoutSizePolicy::Fixed, 1.0f };
+    options.tint = { 0.0f, 0.0f, 0.0f, 1.0f };
+    m_declared.values[15u] = static_cast<u64>(!source);
+    return ui.endPanel();
+}
+
 bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const f32 right){
     using namespace Impl::Ui;
     auto& ui = context.ui;
@@ -228,51 +251,44 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
         return !ui.failed();
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
     static_cast<void>(ui.button("parent_action", "Parent action", button));
+    ImageOptions options;
+    options.width = { LayoutSizePolicy::Stretch, 1.0f };
+    options.height = { LayoutSizePolicy::Fixed, 64.0f };
+    SharedImageSource source = m_alternate;
+    if(!ui.image("parent_source", source, options))
+        return false;
+    source.reset();
     PopupOptions child;
     child.anchor = { right + 100.0f, 370.0f, 8.0f, 16.0f };
     child.size = { 240.0f, 128.0f };
     if(ui.beginPopup("texture_image_child", m_child, child)){
+        source = m_default;
+        options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };
+        if(!ui.image("child_source", source, options))
+            return false;
+        source.reset();
         static_cast<void>(ui.button("child_action", "Child action", button));
         if(!ui.endPopup())
             return false;
     }
+    options.width = { LayoutSizePolicy::Fixed, 1.0f };
+    options.height = { LayoutSizePolicy::Fixed, 1.0f };
+    options.tint = { 0.0f, 0.0f, 0.0f, 1.0f };
     if(ui.failed() || !ui.endPopup())
         return false;
     m_declared.rectangles[14u] = m_parent.placement().bounds;
     const Rect& parentBounds = m_declared.rectangles[14u];
-    m_declared.rectangles[12u] = { parentBounds.x + 8.0f, parentBounds.y + 44.0f, parentBounds.width - 16.0f, 40.0f };
+    m_declared.rectangles[12u] = { parentBounds.x + 8.0f, parentBounds.y + 44.0f, parentBounds.width - 16.0f, 64.0f };
     if(m_child.isOpen()){
         m_declared.rectangles[15u] = m_child.placement().bounds;
         const Rect& childBounds = m_declared.rectangles[15u];
-        m_declared.rectangles[13u] = { childBounds.x + 8.0f, childBounds.y + 44.0f, childBounds.width - 16.0f, 40.0f };
-        if(!paintPopupImage(context, true))
-            return false;
+        m_declared.rectangles[13u] = { childBounds.x + 8.0f, childBounds.y + 8.0f, childBounds.width - 16.0f, 64.0f };
     }
-    // Direct overlays have their own chrome above deferred Builder popup layers; child is deliberately emitted first.
-    if(!paintPopupImage(context, false))
-        return false;
+    // Both late base commands must remain beneath the actual deferred Builder popup chrome and source images.
     context.paint.fillRect(m_declared.rectangles[12u], { 0.8f, 0.0f, 0.0f, 1.0f });
+    if(m_child.isOpen())
+        context.paint.fillRect(m_declared.rectangles[13u], { 0.0f, 0.0f, 0.8f, 1.0f });
     return true;
-}
-
-bool UiTextureImageSmokeScene::paintPopupImage(Impl::UiPaintContext& context, const bool child){
-    using namespace Impl::Ui;
-    using namespace __hidden_ui_texture_image_scene;
-    auto& paint = context.paint;
-    const Rect& bounds = m_declared.rectangles[child ? 15u : 14u];
-    if(!paint.beginOverlay(child ? 4u : 3u))
-        return false;
-    paint.pushClip(bounds);
-    const bool chrome = paint.drawRegion(Name("popup.normal"), bounds);
-    const bool image = chrome && paint.drawImage(
-        child ? m_default : m_alternate,
-        m_declared.rectangles[child ? 13u : 12u],
-        child ? TextureUv(4.0f, 132.0f) : TextureUv(196.0f, 100.0f),
-        child ? Color{ 0.5f, 1.0f, 0.5f, 0.75f } : Color{}
-    );
-    const bool popped = paint.popClip();
-    const bool ended = paint.endOverlay();
-    return image && popped && ended;
 }
 
 

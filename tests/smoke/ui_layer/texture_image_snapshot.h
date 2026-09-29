@@ -25,9 +25,9 @@ namespace Tests::Smoke{
 
 // The fixture records copied source generations, displayed markers and expected passive geometry.
 struct UiTextureImageSnapshot{
-    Array<u64, 14u> values{};
+    Array<u64, 16u> values{};
     Array<u64, 3u> generations{};
-    Array<Impl::Ui::Rect, 16u> rectangles{};
+    Array<Impl::Ui::Rect, 17u> rectangles{};
     Impl::Ui::DisplayMetrics display;
     u64 sequence = 0u;
 };

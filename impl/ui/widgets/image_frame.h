@@ -20,6 +20,8 @@ NWB_IMPL_UI_BEGIN
 
 struct ImageFrame{
     Name region;
+    // Null selects the atlas-region path; engine frames own the immutable source through deferred paint.
+    SharedImageSource source;
     ImageOptions options;
     ImageMetrics metrics;
 };

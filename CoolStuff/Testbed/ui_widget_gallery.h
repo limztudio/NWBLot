@@ -27,7 +27,7 @@
 
 class TestbedUiWidgetGallery final : NoCopy{
 public:
-    explicit TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena);
+    TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:

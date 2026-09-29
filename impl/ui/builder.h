@@ -80,6 +80,8 @@ public:
         RadioGroupState& state, const RadioGroupOptions& options = {});
     // Values and results become available after the successful enclosing scope or outermost popup end.
     [[nodiscard]] bool slider(AStringView stableKey, SliderState& state, const SliderOptions& options = {});
+    // A passive declaration copies its finite fraction and resolved skin style.
+    [[nodiscard]] bool progress(AStringView stableKey, f64 fraction, const ProgressOptions& options = {});
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
@@ -112,6 +114,7 @@ public:
     [[nodiscard]] ListStyle& listStyle(){ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
     [[nodiscard]] RadioGroupStyle& radioGroupStyle(){ if(declarationBlocked()) m_context.fail(); return m_radioGroupStyle; }
     [[nodiscard]] SliderStyle& sliderStyle(){ if(declarationBlocked()) m_context.fail(); return m_sliderStyle; }
+    [[nodiscard]] ProgressStyle& progressStyle(){ if(declarationBlocked()) m_context.fail(); return m_progressStyle; }
     [[nodiscard]] ComboStyle& comboStyle(){ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
     [[nodiscard]] TooltipStyle& tooltipStyle(){ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
     void setEditHost(IEditBoxHost* host){ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
@@ -159,6 +162,7 @@ private:
     [[nodiscard]] bool prepareRadioGroup(RadioGroupFrame& frame);
     [[nodiscard]] bool prepareSlider(SliderFrame& frame);
     [[nodiscard]] bool paintSlider(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintProgress(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
     [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
     void publishSliderResults(bool valid);
@@ -221,6 +225,7 @@ private:
     ListStyle m_listStyle;
     RadioGroupStyle m_radioGroupStyle;
     SliderStyle m_sliderStyle;
+    ProgressStyle m_progressStyle;
     ComboStyle m_comboStyle;
     TooltipStyle m_tooltipStyle;
     IEditBoxHost* m_editHost = nullptr;

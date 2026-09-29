@@ -57,6 +57,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     m_textAreas.paint(context, Max(18.0f, x - 584.0f), y + 490.0f);
     m_radioGroups.paint(context, Max(18.0f, x - 876.0f), y + 550.0f);
     m_sliders.paint(context, x, y + 550.0f);
+    m_progress.paint(context, x, y + 358.0f);
     m_popups.paint(context, x, y);
 }
 

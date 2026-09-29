@@ -55,6 +55,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         return paintRadioGroup(item, box);
     if(item.state.kind == WidgetKind::Slider)
         return paintSlider(item, box);
+    if(item.state.kind == WidgetKind::Progress)
+        return paintProgress(item, box);
     const InputRouter& input = m_context.input();
     const bool hover = input.hover() == item.state.id;
     const bool captured = input.capture() == item.state.id && input.primaryDown();

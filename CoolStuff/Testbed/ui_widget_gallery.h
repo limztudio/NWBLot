@@ -15,6 +15,7 @@
 #include "ui_radio_group_gallery.h"
 #include "ui_search_combo_gallery.h"
 #include "ui_slider_gallery.h"
+#include "ui_progress_gallery.h"
 #include "ui_text_area_gallery.h"
 
 #include <impl/ecs_ui/components.h>
@@ -44,6 +45,7 @@ private:
     TestbedUiTextAreaGallery m_textAreas;
     TestbedUiRadioGroupGallery m_radioGroups;
     TestbedUiSliderGallery m_sliders;
+    TestbedUiProgressGallery m_progress;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

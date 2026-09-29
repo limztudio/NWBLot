@@ -5,16 +5,15 @@
 #pragma once
 
 
-#include "global.h"
-
-#include <global/type_properties.h>
+#include <cstdint>
+#include <utility>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace TerminalErrorExitPolicy{
-    enum Enum : u8{
+    enum Enum : std::uint8_t{
         PreserveHandlerResult,
         ApplicationFailure,
     };
@@ -29,14 +28,14 @@ template<typename Error, typename Invoke, typename ErrorHandler, typename Unexpe
     const TerminalErrorExitPolicy::Enum errorExitPolicy = TerminalErrorExitPolicy::PreserveHandlerResult
 ){
     try{
-        return Forward<Invoke>(invoke)();
+        return std::forward<Invoke>(invoke)();
     }
     catch(const Error& error){
-        const int result = Forward<ErrorHandler>(handleError)(error);
+        const int result = std::forward<ErrorHandler>(handleError)(error);
         return errorExitPolicy == TerminalErrorExitPolicy::ApplicationFailure ? -1 : result;
     }
     catch(...){
-        return Forward<UnexpectedHandler>(handleUnexpected)();
+        return std::forward<UnexpectedHandler>(handleUnexpected)();
     }
 }
 

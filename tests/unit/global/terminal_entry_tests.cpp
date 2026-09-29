@@ -4,6 +4,7 @@
 
 #include <global/terminal_entry.h>
 #include <global/scope_exit.h>
+#include <global/type.h>
 
 #include <gtest/gtest.h>
 

@@ -67,7 +67,7 @@ TEST(OutputLayer, FinalPresentAcceptanceForwardsExactImmutableGenerationAndConsu
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
 }
 
-TEST(OutputLayer, RendererJoinsProducedVersionBeforeTerminalOverlayAndKeepsSceneTimingScopeExplicit){
+TEST(OutputLayer, RendererJoinsProducedVersionBeforeTerminalOverlayAndKeepsFrameTimingScopeExplicit){
     TestArena testArena;
     const TestPath root = RepoRoot(testArena);
     AString suffixSource;
@@ -91,7 +91,7 @@ TEST(OutputLayer, RendererJoinsProducedVersionBeforeTerminalOverlayAndKeepsScene
     EXPECT_TRUE(ContainsText(shader, "nwbOutputLayerOver(float3(sdrColor), outputLayer.rgb, outputLayer.a)"));
     EXPECT_TRUE(ContainsText(shader, "nwbHdr10EncodeSceneWithUi(float3(exposedColor), outputLayer.rgb, outputLayer.a)"));
     const AStringView timing(timingSource.data(), timingSource.size());
-    EXPECT_TRUE(ContainsText(timing, "Independent UI work before scene begin is excluded"));
+    EXPECT_TRUE(ContainsText(timing, "render.frame starts in the isolated primary-Graphics graph prelude"));
 }
 
 

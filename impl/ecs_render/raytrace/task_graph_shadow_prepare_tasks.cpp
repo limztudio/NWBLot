@@ -4,10 +4,7 @@
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
 
-#include <impl/ecs_render/kernel/timing_names.h>
-
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/compiled_graph.h>
 
 
@@ -33,22 +30,14 @@ bool ShadowPrepareGraphTask::record(
 ){
     static_cast<void>(context);
     if(
-        !payload.graphics
-        || !payload.raytracingSystem
+        !payload.raytracingSystem
         || !payload.outcome
         || !payload.targets
-        || !payload.frameTimingTransaction
         || !payload.timingTicket
     )
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    if(!payload.frameTimingTransaction->begin(
-        RendererGpuTimingScope::s_Frame,
-        payload.graphics->getDevice(),
-        commandList
-    ))
-        return false;
     payload.outcome->ready = false;
     // Selector state is ConstantBuffer; normal graph frames need no native bridge.
     const bool shadowResourcesPrepared = payload.targets->bindless.valid()

@@ -41,7 +41,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
     const usize softwareBvhBuildStateResourceCount,
     const bool softwareTraceResourcesPrepared,
-    Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace RendererTaskGraphDetail;
@@ -917,11 +916,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
-            .graphics = &m_graphics,
             .raytracingSystem = &m_raytracingSystem,
             .outcome = &m_shadowPreparationOutcome,
             .targets = &deferredTargets,
-            .frameTimingTransaction = &frameTimingTransaction,
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,

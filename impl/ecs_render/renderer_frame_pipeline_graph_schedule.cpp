@@ -23,6 +23,7 @@
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/frame_timing_begin_task.h>
 #include <core/task/gpu/scheduler.h>
 #include <core/graphics/gpu_timing.h>
 
@@ -31,6 +32,7 @@
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 #include <impl/ecs_render/kernel/task_graph_frame_recovery_task.h>
 #include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
@@ -76,6 +78,36 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTransaction& frameTimingTransaction){
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    m_deferredFrameTimingBeginTask = m_deferredLightingTaskGraph.addTask<Core::FrameTimingBeginGraphTask>(
+        Core::GpuTaskDesc{}
+            .setIdentity(Name("render.frame_timing_begin"))
+            .setMarkerLabel("Frame Timing Begin")
+            .setScheduling(scheduling),
+        Core::FrameTimingBeginGraphTask::Payload{
+            .frameTimingTransaction = &frameTimingTransaction,
+            .device = &m_graphics.getDevice(),
+            .scopeDefinition = RendererGpuTimingScope::s_Frame,
+        }
+    );
+    if(
+        !m_deferredFrameTimingBeginTask.valid()
+        || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(m_deferredFrameTimingBeginTask)
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare frame timing prelude"));
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena){
     m_deferredLightingTaskGraphScheduled = false;
     if(!m_deferredLightingTaskGraphDeclared)
@@ -86,7 +118,7 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
     // This exposes the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     // Time accepted normal-rendering packets through the graph-owned presentation endpoint. Late readback, history-copy, and recovery tails retain separate diagnostic/lifecycle policy.
-    compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;
+    compileOptions.packetTimingEnvelope.firstTask = m_deferredFrameTimingBeginTask;
     compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;
     m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
     compileOptions.declarationSeconds = m_deferredLightingTaskGraphDeclarationSeconds;

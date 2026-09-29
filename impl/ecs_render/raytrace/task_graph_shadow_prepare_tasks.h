@@ -32,15 +32,12 @@ namespace ECSRenderDetail{
 
 
 struct ShadowPrepareGraphTask{
-    // Frame timing begins here and retires through the primary presentation/recovery timeline.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
 
     struct Payload{
-        Core::GraphicsRuntime* graphics = nullptr;
         RendererRayTracingSystem* raytracingSystem = nullptr;
         ShadowPreparationOutcome* outcome = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;

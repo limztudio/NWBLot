@@ -31,7 +31,6 @@ public:
 
 
     struct ShadowPrepareStateLifecycleContext{
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         RendererFramePipeline* renderer = nullptr;
         Core::Alloc::ScratchArena& scratchArena;
         Core::GpuPersistentResourceStateCache::Candidate* stateCandidate = nullptr;

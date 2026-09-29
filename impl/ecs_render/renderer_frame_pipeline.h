@@ -207,6 +207,7 @@ private:
         const Core::GpuCompiledGraph::ReadView& compiledGraph,
         Core::Alloc::ScratchArena& scratchArena
     );
+    [[nodiscard]] bool declareFrameTimingBeginTask(Core::GpuTimingFrameTransaction& frameTimingTransaction);
     [[nodiscard]] bool scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena);
     void commitFrameTargets(DeferredFrameTargets&& targets);
     void resetFrameTargets();
@@ -232,7 +233,6 @@ private:
         const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
         usize softwareBvhBuildStateResourceCount,
         bool softwareTraceResourcesPrepared,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
@@ -453,6 +453,7 @@ private:
     Core::GpuTaskId m_sceneBvhInstancesUploadTask;
     // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
+    Core::GpuTaskId m_deferredFrameTimingBeginTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
     // Pure-software prepared per-mesh builds lower their typed sentinel clears and native compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that same packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;

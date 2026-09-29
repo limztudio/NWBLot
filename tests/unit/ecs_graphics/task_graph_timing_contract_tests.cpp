@@ -386,7 +386,12 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 
     AString systemSource;
     AString taskGraphSource;
+    AString frameTimingBeginSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "task" / "gpu" / "frame_timing_begin_task.cpp",
+        frameTimingBeginSource
+    ));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -403,11 +408,13 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
             "deferred/task_graph_suffix_builder.h",
             "deferred/task_graph_suffix_builder.cpp",
             s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
+            "renderer_frame_pipeline_graph_schedule.cpp",
         },
         taskGraphSource
     ));
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView frameTimingBegin(frameTimingBeginSource.data(), frameTimingBeginSource.size());
 
     const usize deferredPresentOffset = taskGraph.find("struct DeferredPresentGraphTask");
     const usize frameTimingEndOffset = taskGraph.find("struct FrameTimingEndGraphTask", deferredPresentOffset);
@@ -433,9 +440,13 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(taskGraph, ".backBuffer = backbuffer,"));
 
     const AStringView shadowPrepare = taskGraph.substr(shadowPrepareOffset, meshViewSetupOffset - shadowPrepareOffset);
-    EXPECT_TRUE(ContainsText(shadowPrepare, "frameTimingTransaction->begin("));
+    EXPECT_FALSE(ContainsText(shadowPrepare, "frameTimingTransaction->begin("));
     const AStringView meshViewSetup = taskGraph.substr(meshViewSetupOffset, deferredPresentOffset - meshViewSetupOffset);
     EXPECT_FALSE(ContainsText(meshViewSetup, "frameTimingTransaction->begin("));
+    EXPECT_TRUE(ContainsText(taskGraph, "m_deferredLightingTaskGraph.setNormalExecutionPrelude(m_deferredFrameTimingBeginTask)"));
+    EXPECT_TRUE(ContainsText(taskGraph, ".scopeDefinition = RendererGpuTimingScope::s_Frame,"));
+    EXPECT_TRUE(ContainsText(frameTimingBegin, "frameTimingTransaction->begin("));
+    EXPECT_TRUE(ContainsText(frameTimingBegin, "frameTimingTransaction->confirmBeginSubmission(token)"));
 
     const AStringView recovery = taskGraph.substr(recoveryOffset, deferredPresentOffset - recoveryOffset);
     EXPECT_TRUE(ContainsText(recovery, "frameTimingTransaction->recordEnd(commandList)"));
@@ -455,9 +466,12 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
         shadowPrepareAcceptanceOffset,
         normalTimingCallbacksOffset - shadowPrepareAcceptanceOffset
     );
-    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission(token)"));
+    EXPECT_FALSE(ContainsText(shadowPrepareAcceptance, "confirmBeginSubmission(token)"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(system, "frameTimingBeginQueue->id != primaryGraphicsQueue"));
+    EXPECT_TRUE(ContainsText(system, "frameTimingBeginPacket.index != 0u"));
+    EXPECT_TRUE(ContainsText(system, "frameTimingBeginSubmissionToken.matchesPhysicalQueue("));
     EXPECT_TRUE(ContainsText(system, "frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true)"));
     EXPECT_TRUE(ContainsText(system, "surfelCounterReadbackFollowsPresentation"));
     EXPECT_TRUE(ContainsText(system, "laggedLightingHistoryFollowsPresentation"));
@@ -523,7 +537,7 @@ TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
 }
 
 
-// Every normal renderer packet from the packet containing Shadow Preparation through the accepted presentation endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
+// Every normal renderer packet from the isolated frame prelude through the accepted presentation endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
 TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -551,7 +565,7 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     const usize optionsOffset = build.find("Core::GpuTaskGraphCompileOptions compileOptions;", graphSchedulingOffset);
     ASSERT_NE(optionsOffset, AStringView::npos);
     const usize firstTaskOffset = build.find(
-        "compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;",
+        "compileOptions.packetTimingEnvelope.firstTask = m_deferredFrameTimingBeginTask;",
         optionsOffset
     );
     ASSERT_NE(firstTaskOffset, AStringView::npos);

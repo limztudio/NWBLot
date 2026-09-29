@@ -46,22 +46,17 @@ NWB_IMPL_BEGIN
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
+    static_cast<void>(token);
     FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext* const context =
         static_cast<ShadowPrepareStateLifecycleContext*>(rawContext)
     ;
     if(
         !context
-        || !context->frameTimingTransaction
         || !context->renderer
         || !context->stateCandidate
         || !context->statePrepared
     )
         return false;
-
-    if(!context->frameTimingTransaction->confirmBeginSubmission(token)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm accepted frame timing prefix; quarantining timing without rejecting native work"));
-        context->frameTimingTransaction->discard();
-    }
 
     RendererFramePipeline& renderer = *context->renderer;
     if(

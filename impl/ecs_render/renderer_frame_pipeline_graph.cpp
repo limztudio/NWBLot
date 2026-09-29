@@ -157,6 +157,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_sceneBvhNodesUploadTask = {};
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
+    m_deferredFrameTimingBeginTask = {};
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
@@ -176,6 +177,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     resetDeferredTaskGraphRuntime();
     // Declaration runs between artifact discard and execution-time compilation.
     const Timer declarationBegin = TimerNow();
+    if(!declareFrameTimingBeginTask(frameTimingTransaction))
+        return;
 
     const auto& device = m_graphics.getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
@@ -475,7 +478,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         softwareBvhBuildStateResources.data(),
         softwareBvhBuildStateResources.size(),
         softwareTraceResourcesPrepared,
-        frameTimingTransaction,
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));

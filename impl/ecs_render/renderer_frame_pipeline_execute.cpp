@@ -546,6 +546,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgReceiverComputeEmulationMerged;
     const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgIntervalSampleComputeEmulationMerged;
     const bool graphicsPrefixCsgIntervalClearBundleMerged = opaqueEmulationMerge.csgIntervalClearBundleMerged;
+    const Core::GpuPhysicalQueueInfo* const frameTimingBeginQueue =
+        deferredCompiledPlan.queueInfoForTask(m_deferredFrameTimingBeginTask);
+    const Core::GpuSubmissionPacketId frameTimingBeginPacket =
+        deferredCompiledPlan.packetForTask(m_deferredFrameTimingBeginTask);
+    const Core::GpuSubmissionPacketRange frameTimingEnvelope =
+        deferredCompiledPlan.packetTimingEnvelopeRange();
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
         deferredCompiledPlan.queueInfoForTask(m_deferredShadowPrepareTask);
     const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =
@@ -637,8 +643,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     if(
         !deferredGraphScheduled
         || !m_deferredLightingTaskGraphScheduled
+        || !m_deferredFrameTimingBeginTask.valid()
+        || !taskIsCompiled(m_deferredFrameTimingBeginTask)
+        || !frameTimingBeginQueue
+        || frameTimingBeginQueue->queueClass != Core::CommandQueue::Graphics
+        || frameTimingBeginQueue->id != primaryGraphicsQueue
+        || !frameTimingBeginPacket.valid()
+        || frameTimingBeginPacket.index != 0u
+        || !frameTimingEnvelope.valid()
+        || frameTimingEnvelope.first != frameTimingBeginPacket
         || !m_deferredShadowPrepareTask.valid()
         || !taskIsCompiled(m_deferredShadowPrepareTask)
+        || deferredCompiledPlan.tasksSharePacket(m_deferredFrameTimingBeginTask, m_deferredShadowPrepareTask)
         || !shadowPrepareSoftwareBvhBuildsMerged
         || !shadowPreparePacket.softwareSceneRefitMerged
         || !shadowPrepareAccelStructFinalizeMerged
@@ -994,7 +1010,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
 
     FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext shadowPrepareStateLifecycle{
-        .frameTimingTransaction = &frameTimingTransaction,
         .renderer = this,
         .scratchArena = shadowPrepareStateScratchArena,
         .stateCandidate = &shadowPrepareAcceptedStateCandidate,
@@ -1349,6 +1364,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         normalExecutionScratchArena
     );
 
+    const Core::QueueSubmissionToken frameTimingBeginSubmissionToken =
+        m_deferredLightingSubmissionTransaction.taskToken(
+            deferredCompiledPlan,
+            m_deferredFrameTimingBeginTask
+        )
+    ;
     const Core::QueueSubmissionToken shadowPrepareSubmissionToken =
         m_deferredLightingSubmissionTransaction.taskToken(
             deferredCompiledPlan,
@@ -1442,7 +1463,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         : softwareCausticsStateLifecycle.stateReady
     ;
     const bool normalSemanticTokensReady =
-        shadowPrepareSubmissionToken.valid()
+        frameTimingBeginSubmissionToken.valid()
+        && frameTimingBeginSubmissionToken.matchesPhysicalQueue(
+            primaryGraphicsQueue.index,
+            primaryGraphicsQueue.deviceGeneration
+        )
+        && shadowPrepareSubmissionToken.valid()
         && graphicsPrefixSubmissionToken.valid()
         && shadowVisibilitySubmissionToken.valid()
         && selectedCausticsSubmissionToken.valid()

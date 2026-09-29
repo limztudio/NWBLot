@@ -1,0 +1,48 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "frame_timing_begin_task.h"
+
+#include <core/common/log.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool FrameTimingBeginGraphTask::record(
+    const Payload& payload,
+    CommandList& commandList,
+    const GpuTaskRecordContext& context
+){
+    static_cast<void>(context);
+    return payload.frameTimingTransaction
+        && payload.device
+        && payload.frameTimingTransaction->begin(payload.scopeDefinition, *payload.device, commandList)
+    ;
+}
+
+void FrameTimingBeginGraphTask::accepted(Payload& payload, const QueueSubmissionToken& token){
+    if(!payload.frameTimingTransaction)
+        return;
+    if(!payload.frameTimingTransaction->confirmBeginSubmission(token)){
+        NWB_LOGGER_WARNING(NWB_TEXT("GPU task graph: failed to confirm accepted frame timing begin; discarding timing reservation"));
+        payload.frameTimingTransaction->discard();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

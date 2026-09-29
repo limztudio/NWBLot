@@ -338,6 +338,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     }
 
     m_deferredLightingTaskGraph.reset();
+    m_deferredFrameTimingBeginTask = {};
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
     m_deferredLightingCompiledGraph.reset();

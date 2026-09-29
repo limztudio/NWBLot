@@ -5,6 +5,7 @@
 *.h text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.hpp text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.inl text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
+*.inc text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.slang text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.slangi text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.bind text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof

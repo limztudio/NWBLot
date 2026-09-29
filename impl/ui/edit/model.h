@@ -1,0 +1,133 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace EditMove{
+    enum Enum : u8{ Left, Right, Home, End, WordLeft, WordRight };
+};
+
+struct EditLimits{
+    usize maxBytes = 4096u;
+    usize maxHistoryRecords = 64u;
+    usize maxHistoryBytes = 131072u;
+};
+
+struct EditCompositionView{
+    AStringView text;
+    usize anchor = 0u;
+    usize caret = 0u;
+    usize replacementStart = 0u;
+    usize replacementEnd = 0u;
+    bool active = false;
+};
+
+// UTF8 byte selections always lie on Unicode 17 extended grapheme boundaries; preedit stays separate from committed text.
+class EditModel final : NoCopy{
+private:
+    struct HistoryRecord{
+        AString<Core::Alloc::GlobalArena> before;
+        AString<Core::Alloc::GlobalArena> after;
+        usize beforeAnchor = 0u;
+        usize beforeCaret = 0u;
+        usize afterAnchor = 0u;
+        usize afterCaret = 0u;
+
+        explicit HistoryRecord(Core::Alloc::GlobalArena& arena)
+            : before(arena)
+            , after(arena)
+        {}
+    };
+
+
+public:
+    explicit EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits = {});
+
+
+public:
+    [[nodiscard]] AStringView text()const{ return { m_text.data(), m_text.size() }; }
+    [[nodiscard]] u64 revision()const{ return m_revision; }
+    [[nodiscard]] usize anchor()const{ return m_anchor; }
+    [[nodiscard]] usize caret()const{ return m_caret; }
+    [[nodiscard]] usize selectionStart()const{ return Min(m_anchor, m_caret); }
+    [[nodiscard]] usize selectionEnd()const{ return Max(m_anchor, m_caret); }
+    [[nodiscard]] bool hasSelection()const{ return m_anchor != m_caret; }
+    [[nodiscard]] AStringView selectedText()const{ return text().substr(selectionStart(), selectionEnd() - selectionStart()); }
+    [[nodiscard]] const Vector<usize, Core::Alloc::GlobalArena>& graphemeBoundaries()const{ return m_boundaries; }
+    [[nodiscard]] const EditLimits& limits()const{ return m_limits; }
+    [[nodiscard]] bool setText(AStringView text);
+    [[nodiscard]] bool setSelection(usize anchor, usize caret);
+    [[nodiscard]] bool selectAll();
+    // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
+    [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false);
+    [[nodiscard]] bool replaceSelection(AStringView text);
+    [[nodiscard]] bool backspace();
+    [[nodiscard]] bool eraseForward();
+    // Native surrounding deletion uses byte distances from the caret and preserves the original selection in undo.
+    [[nodiscard]] bool eraseSurrounding(usize beforeBytes, usize afterBytes);
+    [[nodiscard]] bool undo();
+    [[nodiscard]] bool redo();
+    [[nodiscard]] bool canUndo()const{ return m_historyCursor != 0u; }
+    [[nodiscard]] bool canRedo()const{ return m_historyCursor < m_history.size(); }
+    [[nodiscard]] bool beginComposition();
+    // Preedit positions are validated UTF8 scalar boundaries, because native IMEs may select part of a grapheme.
+    [[nodiscard]] bool updateComposition(AStringView text, usize anchor, usize caret);
+    [[nodiscard]] bool commitComposition(AStringView text);
+    void cancelComposition();
+    [[nodiscard]] EditCompositionView composition()const;
+
+
+private:
+    [[nodiscard]] bool isBoundary(usize position)const;
+    [[nodiscard]] usize previousBoundary(usize position)const;
+    [[nodiscard]] usize nextBoundary(usize position)const;
+    [[nodiscard]] usize wordBoundary(usize position, bool forward)const;
+    [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
+    void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret,
+        AStringView after, usize afterAnchor, usize afterCaret);
+    void clearHistory();
+    void advanceRevision();
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    const EditLimits m_limits;
+    AString<Core::Alloc::GlobalArena> m_text;
+    Vector<usize, Core::Alloc::GlobalArena> m_boundaries;
+    Vector<HistoryRecord, Core::Alloc::GlobalArena> m_history;
+    AString<Core::Alloc::GlobalArena> m_preedit;
+    usize m_anchor = 0u;
+    usize m_caret = 0u;
+    usize m_historyCursor = 0u;
+    usize m_historyBytes = 0u;
+    usize m_compositionAnchor = 0u;
+    usize m_compositionCaret = 0u;
+    usize m_preeditAnchor = 0u;
+    usize m_preeditCaret = 0u;
+    u64 m_revision = 1u;
+    bool m_compositionActive = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -12,6 +12,7 @@
 
 #include <core/ecs/entity_id.h>
 #include <core/os/clipboard.h>
+#include <core/os/text_input.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,6 +45,7 @@ NWB_IMPL_BEGIN
 struct UiPaintContext{
     Core::ECS::World& world;
     Core::IClipboardService& clipboard;
+    Core::ITextInputService& textInput;
     Ui::PaintBuilder& paint;
     Ui::TextService& text;
     const Ui::DisplayMetrics& display;

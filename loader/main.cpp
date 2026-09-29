@@ -393,6 +393,7 @@ static int RunProjectRuntime(
                 frame.graphics(),
                 frame.input(),
                 frame.clipboard(),
+                frame.textInput(),
                 frame.projectObjectArena(),
                 frame.cpuTasks(),
                 frame.gpuTasks(),

@@ -59,6 +59,7 @@ public:
         Core::GraphicsRuntime& graphics,
         Core::InputDispatcher& input,
         Core::IClipboardService& clipboard,
+        Core::ITextInputService& textInput,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver,
         const Core::Assets::AssetRef<UiSkin>& skin,
@@ -106,6 +107,7 @@ private:
     Core::GraphicsRuntime& m_graphics;
     Core::InputDispatcher& m_input;
     Core::IClipboardService& m_clipboard;
+    Core::ITextInputService& m_textInput;
     Core::Assets::AssetManager& m_assetManager;
     Core::Assets::AssetRef<UiSkin> m_skinRef;
     UiLayerPresentation::Enum m_presentation;

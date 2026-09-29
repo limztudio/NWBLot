@@ -77,6 +77,7 @@ Frame::~Frame()noexcept(false){
     // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
     if(UncaughtExceptionCount() > 0){
         m_cpuTasks.drain();
+        m_textInput.reset();
         m_clipboard.reset();
         cleanupPlatform();
         return;
@@ -84,6 +85,7 @@ Frame::~Frame()noexcept(false){
 
     ScopeExit drainOnFailure([this]()noexcept{
         m_cpuTasks.drain();
+        m_textInput.reset();
         m_clipboard.reset();
         cleanupPlatform();
     });
@@ -91,6 +93,7 @@ Frame::~Frame()noexcept(false){
     m_cpuTasks.wait();
     cleanup();
     m_cpuTasks.drain();
+    m_textInput.reset();
     m_clipboard.reset();
     cleanupPlatform();
     drainOnFailure.release();
@@ -101,6 +104,11 @@ bool Frame::startup(){
     m_clipboard = createPlatformClipboardService();
     if(!m_clipboard){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame: native clipboard initialization failed"));
+        return false;
+    }
+    m_textInput = createPlatformTextInputService();
+    if(!m_textInput){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: native text-input initialization failed"));
         return false;
     }
     if(!m_graphics.init(data<Common::FrameData>())){
@@ -233,6 +241,11 @@ bool Frame::render(){
 IClipboardService& Frame::clipboard(){
     NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
     return *m_clipboard;
+}
+
+ITextInputService& Frame::textInput(){
+    NWB_FATAL_ASSERT_MSG(m_textInput, NWB_TEXT("Frame text-input service requires completed startup"));
+    return *m_textInput;
 }
 
 NotNull<const tchar*> Frame::windowTitleOrDefault()const{

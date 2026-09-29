@@ -70,6 +70,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         context.graphics,
         context.input,
         context.clipboard,
+        context.textInput,
         context.assetManager,
         context.shaderPathResolver,
         skin,

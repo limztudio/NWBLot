@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 #include <core/os/linux/wayland/clipboard.h>
+#include <core/os/linux/wayland/text_input.h>
 
 #include <global/thread.h>
 
@@ -139,6 +140,8 @@ static void ApplyBufferScale(WaylandContext& context, i32 value){
     context.bufferScale = ClampBufferScale(value);
     if(context.surface)
         wl_surface_set_buffer_scale(context.surface, context.bufferScale);
+    if(ITextInputService* const textInput = context.frame->tryTextInput())
+        SetWaylandTextInputBufferScale(*textInput, context.bufferScale);
 }
 
 static i32 LogicalDimensionForPixels(u16 pixelDimension, i32 bufferScale){
@@ -220,6 +223,10 @@ static void DispatchTextInput(InputDispatcher& input, const WaylandContext& cont
     if(unicode < s_TextInputControlCodePointLimit || unicode == s_TextInputDeleteCodePoint)
         return;
 
+    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(DispatchWaylandDirectTextInput(*textInput, unicode))
+            return;
+    }
     input.keyboardCharInput(unicode, mods);
 }
 
@@ -406,6 +413,8 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
         AttachSeatListener(context);
         if(IClipboardService* const clipboard = context.frame->tryClipboard())
             AttachWaylandClipboardSeat(*clipboard, context.seat, name);
+        if(ITextInputService* const textInput = context.frame->tryTextInput())
+            AttachWaylandTextInputSeat(*textInput, context.seat, name);
     }
     else if(NWB_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandWmBaseBindVersion ? version : s_WaylandWmBaseBindVersion;
@@ -420,6 +429,11 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
         return;
     context.keyboardFocused = false;
     context.inputSerial = 0u;
+    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
+            NWB_FATAL_ASSERT(false);
+        AttachWaylandTextInputSeat(*textInput, nullptr, 0u);
+    }
     context.frame->input().windowFocusUpdate(false);
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         AttachWaylandClipboardSeat(*clipboard, nullptr, 0u);
@@ -491,6 +505,10 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     auto& context = *static_cast<WaylandContext*>(data);
     context.frame->input().pointerCaptureLost();
     context.frame->input().pointerLeave();
+    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
+            NWB_FATAL_ASSERT(false);
+    }
     context.shouldClose = true;
     context.visible = false;
     StopKeyRepeat(context);
@@ -682,11 +700,16 @@ static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 
 static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface, wl_array* keys){
     static_cast<void>(keyboard);
     static_cast<void>(serial);
-    static_cast<void>(surface);
     static_cast<void>(keys);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    if(surface != context.surface)
+        return;
     context.keyboardFocused = true;
+    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(!SetWaylandTextInputKeyboardFocus(*textInput, true))
+            NWB_FATAL_ASSERT(false);
+    }
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, true);
     context.frame->data<Common::LinuxFrame>().setActive(true);
@@ -696,11 +719,16 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
 static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
     static_cast<void>(keyboard);
     static_cast<void>(serial);
-    static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    if(surface != context.surface)
+        return;
     context.keyboardFocused = false;
     context.inputSerial = 0u;
+    if(ITextInputService* const textInput = context.frame->tryTextInput()){
+        if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
+            NWB_FATAL_ASSERT(false);
+    }
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, false);
     context.frame->data<Common::LinuxFrame>().setActive(false);
@@ -860,6 +888,10 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     else{
         context.keyboardFocused = false;
         context.inputSerial = 0u;
+        if(ITextInputService* const textInput = context.frame->tryTextInput()){
+            if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
+                NWB_FATAL_ASSERT(false);
+        }
         if(IClipboardService* const clipboard = context.frame->tryClipboard())
             SetWaylandClipboardKeyboardFocus(*clipboard, false);
         DestroyKeyboard(context);
@@ -1087,6 +1119,19 @@ GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame){
         SetWaylandClipboardKeyboardFocus(*service, context->keyboardFocused);
         if(context->inputSerial)
             ObserveWaylandClipboardInputSerial(*service, context->inputSerial);
+    }
+    return service;
+}
+
+GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame){
+    WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
+    NWB_FATAL_ASSERT(context && context->display && context->surface);
+    auto service = CreateWaylandTextInputService(frame.projectObjectArena(), *context->display, *context->surface);
+    if(service){
+        AttachWaylandTextInputSeat(*service, context->seat, context->seatGlobalName);
+        SetWaylandTextInputBufferScale(*service, context->bufferScale);
+        if(!SetWaylandTextInputKeyboardFocus(*service, context->keyboardFocused))
+            NWB_FATAL_ASSERT(false);
     }
     return service;
 }

@@ -25,6 +25,7 @@
 
 #include <core/common/log.h>
 #include <core/os/linux/x11/clipboard.h>
+#include <core/os/linux/x11/text_input.h>
 
 #include <global/thread.h>
 
@@ -186,15 +187,42 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
     }
 }
 
-static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action){
+static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText){
     XKeyEvent translatedEvent = keyEvent;
-    const KeySym keySym = XLookupKeysym(&translatedEvent, 0);
+    const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
     const i32 key = TranslateKey(keySym);
     const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
 
-    frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
-    if(action != InputAction::Release)
-        DispatchTextInput(frame.input(), translatedEvent, mods);
+    if(keyEvent.keycode)
+        frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
+    if(dispatchText && action != InputAction::Release){
+        ITextInputService* const textInput = frame.tryTextInput();
+        if(!textInput || !DispatchX11TextInputKey(*textInput, translatedEvent))
+            DispatchTextInput(frame.input(), translatedEvent, mods);
+    }
+}
+
+static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dispatchText){
+    const u32 keycode = static_cast<u32>(event.keycode);
+    if(event.type == KeyPress){
+        i32 action = InputAction::Press;
+        if(keycode > 0u && keycode < s_KeyStateCount){
+            action = s_KeyStates[keycode] ? InputAction::Repeat : InputAction::Press;
+            s_KeyStates[keycode] = true;
+        }
+        DispatchKeyEvent(frame, event, action, dispatchText);
+        return;
+    }
+    const auto& frameData = frame.data<Common::LinuxFrame>();
+    if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
+        XEvent nextEvent{};
+        XPeekEvent(GetX11Display(frameData), &nextEvent);
+        if(nextEvent.type == KeyPress && nextEvent.xkey.keycode == event.keycode && nextEvent.xkey.time == event.time)
+            return;
+    }
+    if(keycode < s_KeyStateCount)
+        s_KeyStates[keycode] = false;
+    DispatchKeyEvent(frame, event, InputAction::Release, false);
 }
 
 static bool ProcessEvent(Frame& frame, const XEvent& event){
@@ -211,58 +239,47 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     break;
 
     case DestroyNotify:
+        if(ITextInputService* const textInput = frame.tryTextInput()){
+            if(!textInput->setFocused(false))
+                NWB_FATAL_ASSERT(false);
+        }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
         SetX11Window(frameData, 0);
         return false;
 
     case UnmapNotify:
+        if(ITextInputService* const textInput = frame.tryTextInput()){
+            if(!textInput->setFocused(false))
+                NWB_FATAL_ASSERT(false);
+        }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
         break;
 
     case FocusIn:
+        if(ITextInputService* const textInput = frame.tryTextInput()){
+            if(!textInput->setFocused(true))
+                NWB_FATAL_ASSERT(false);
+        }
         frameData.setActive(true);
         frame.input().windowFocusUpdate(true);
         break;
 
     case FocusOut:
+        if(ITextInputService* const textInput = frame.tryTextInput()){
+            if(!textInput->setFocused(false))
+                NWB_FATAL_ASSERT(false);
+        }
         frameData.setActive(false);
         ResetKeyStates();
         frame.input().windowFocusUpdate(false);
         break;
 
-    case KeyPress: {
-        const u32 keycode = static_cast<u32>(event.xkey.keycode);
-        i32 action = InputAction::Press;
-        if(keycode < s_KeyStateCount){
-            action = s_KeyStates[keycode] ? InputAction::Repeat : InputAction::Press;
-            s_KeyStates[keycode] = true;
-        }
-
-        DispatchKeyEvent(frame, event.xkey, action);
-    }
-    break;
-
-    case KeyRelease: {
-        if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
-            XEvent nextEvent = {};
-            XPeekEvent(GetX11Display(frameData), &nextEvent);
-            if(
-                nextEvent.type == KeyPress
-                && nextEvent.xkey.keycode == event.xkey.keycode
-                && nextEvent.xkey.time == event.xkey.time
-            )
-                break;
-        }
-
-        const u32 keycode = static_cast<u32>(event.xkey.keycode);
-        if(keycode < s_KeyStateCount)
-            s_KeyStates[keycode] = false;
-
-        DispatchKeyEvent(frame, event.xkey, InputAction::Release);
-    }
-    break;
+    case KeyPress:
+    case KeyRelease:
+        ProcessKeyEvent(frame, event.xkey, true);
+        break;
 
     case ButtonPress: {
         f64 xoffset = 0.0;
@@ -484,6 +501,26 @@ bool RunX11Frame(Frame& frame){
                 if(DispatchX11ClipboardEvent(*clipboard, event))
                     continue;
             }
+            if(ITextInputService* const textInput = frame.tryTextInput()){
+                const XEvent physical = event;
+                if(FilterX11TextInputEvent(*textInput, event)){
+                    // XIM filtering owns text. Normalized physical presses/releases must remain balanced.
+                    if(
+                        physical.xany.window == GetX11Window(frameData)
+                        && (physical.type == KeyPress || physical.type == KeyRelease)
+                        && physical.xkey.keycode != 0u
+                    )
+                        ProcessKeyEvent(frame, physical.xkey, false);
+                    else if(
+                        physical.type == FocusIn || physical.type == FocusOut
+                        || physical.type == UnmapNotify || physical.type == DestroyNotify
+                    ){
+                        if(!ProcessEvent(frame, physical))
+                            return true;
+                    }
+                    continue;
+                }
+            }
             if(!ProcessEvent(frame, event))
                 return true;
         }
@@ -520,6 +557,16 @@ GlobalUniquePtr<IClipboardService> CreateX11FrameClipboard(Frame& frame){
     Display* const display = GetX11Display(frame.data<Common::LinuxFrame>());
     NWB_FATAL_ASSERT(display);
     return CreateX11ClipboardService(frame.projectObjectArena(), *display);
+}
+
+GlobalUniquePtr<ITextInputService> CreateX11FrameTextInput(Frame& frame){
+    const auto& frameData = frame.data<Common::LinuxFrame>();
+    Display* const display = GetX11Display(frameData);
+    NWB_FATAL_ASSERT(display && GetX11Window(frameData));
+    auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
+    if(service && !service->setFocused(frameData.isActive()))
+        NWB_FATAL_ASSERT(false);
+    return service;
 }
 
 void CleanupX11Frame(Frame& frame)noexcept{

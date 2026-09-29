@@ -104,6 +104,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.graphics,
         context.input,
         context.clipboard,
+        context.textInput,
         context.assetManager,
         context.shaderPathResolver,
         __hidden_testbed_entry::s_DefaultUiSkin,

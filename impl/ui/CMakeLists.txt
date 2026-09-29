@@ -29,6 +29,7 @@ target_sources(nwb_ui PRIVATE
 )
 target_link_libraries(nwb_ui PUBLIC nwb_assets_ui_skin nwb_assets_font nwb_assets_font_atlas)
 
+add_subdirectory(edit)
 add_subdirectory(text)
 add_subdirectory(widgets)
 add_subdirectory(gpu)

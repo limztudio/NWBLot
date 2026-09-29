@@ -1,0 +1,16 @@
+nwb_declare_static_library(nwb_ui_edit)
+target_sources(nwb_ui_edit PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/model.h"
+    "${CMAKE_CURRENT_LIST_DIR}/model.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/navigation.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/history.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/composition.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/grapheme.h"
+    "${CMAKE_CURRENT_LIST_DIR}/grapheme.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/properties.h"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/property_table.h"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/gcb_properties.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/incb_properties.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/unicode/emoji_properties.cpp"
+)
+target_link_libraries(nwb_ui_edit PUBLIC nwb_ui)

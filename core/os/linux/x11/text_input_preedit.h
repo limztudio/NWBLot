@@ -1,0 +1,53 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <core/alloc/general.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// XIM draw offsets count Unicode characters, while the public OS events expose UTF-8 byte offsets.
+class X11PreeditBuffer final : private NoCopy{
+public:
+    static constexpr usize s_MaxBytes = 64u * 1024u;
+
+
+public:
+    explicit X11PreeditBuffer(Alloc::GlobalArena& arena);
+
+
+public:
+    [[nodiscard]] AStringView text()const noexcept{ return m_text; }
+    [[nodiscard]] usize caretByte()const noexcept{ return m_caretByte; }
+    void clear();
+    [[nodiscard]] bool replace(usize firstCharacter, usize characterCount, AStringView insertion, usize caretCharacter);
+    [[nodiscard]] bool moveCaret(usize caretCharacter);
+    [[nodiscard]] usize moveCaretToEnd();
+
+
+private:
+    AString<Alloc::GlobalArena> m_text;
+    AString<Alloc::GlobalArena> m_candidate;
+    usize m_caretByte = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

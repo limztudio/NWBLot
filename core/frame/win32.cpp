@@ -22,6 +22,7 @@
 #include "input_helpers.h"
 
 #include <core/common/log.h>
+#include <core/os/win32/text_input.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,12 +52,6 @@ static constexpr usize s_Win32VirtualScancodeMask = 0xffu;
 static constexpr usize s_Win32WordMask = 0xffffu;
 static constexpr int s_Win32KeyDownMask = 0x8000;
 static constexpr int s_Win32KeyToggleMask = 0x0001;
-static constexpr u32 s_HighSurrogateStart = 0xd800u;
-static constexpr u32 s_HighSurrogateEnd = 0xdbffu;
-static constexpr u32 s_LowSurrogateStart = 0xdc00u;
-static constexpr u32 s_LowSurrogateEnd = 0xdfffu;
-static constexpr u32 s_SupplementaryPlaneCodePointBase = 0x10000u;
-static constexpr usize s_SurrogatePayloadBitCount = 10u;
 static constexpr u32 s_AsciiDigitFirst = '0';
 static constexpr u32 s_AsciiDigitLast = '9';
 static constexpr u32 s_AsciiUpperFirst = 'A';
@@ -331,35 +326,33 @@ static void DispatchKeyEvent(Frame& frame, WPARAM wParam, LPARAM lParam, i32 act
 
 static void DispatchCharInput(Frame& frame, WPARAM wParam){
 #if defined(NWB_UNICODE)
-    static u16 highSurrogate = 0;
-    const u32 codeUnit = static_cast<u32>(wParam);
-
-    if(codeUnit >= s_HighSurrogateStart && codeUnit <= s_HighSurrogateEnd){
-        highSurrogate = static_cast<u16>(codeUnit);
-        return;
-    }
-
-    if(codeUnit >= s_LowSurrogateStart && codeUnit <= s_LowSurrogateEnd){
-        if(highSurrogate != 0){
-            const u32 unicode = s_SupplementaryPlaneCodePointBase
-                + ((static_cast<u32>(highSurrogate) - s_HighSurrogateStart) << s_SurrogatePayloadBitCount)
-                + (codeUnit - s_LowSurrogateStart)
-            ;
-            highSurrogate = 0;
+    if(auto* textInput = frame.tryTextInput()){
+        u32 unicode = 0u;
+        if(DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam), unicode))
             DispatchUnicodeInput(frame, unicode);
-        }
-        return;
     }
-
-    highSurrogate = 0;
-    DispatchUnicodeInput(frame, codeUnit);
 #else
     DispatchUnicodeInput(frame, static_cast<u32>(wParam & s_AnsiCharMask));
 #endif
 }
 
+static void DispatchTextInputFocus(Frame& frame, const bool focused){
+    if(auto* textInput = frame.tryTextInput()){
+        if(!ResetWin32FallbackCharInput(*textInput))
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
+        if(!textInput->setFocused(focused))
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input focus update failed"));
+    }
+}
+
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
+        if(uMsg == WM_SETFOCUS || uMsg == WM_KILLFOCUS){
+            const bool focused = uMsg == WM_SETFOCUS;
+            DispatchTextInputFocus(*frame, focused);
+            frame->input().windowFocusUpdate(focused);
+            return 0;
+        }
         LRESULT lifecycleResult = 0;
         if(
             ::HandleWin32FrameLifecycleMessage(
@@ -369,12 +362,18 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 [](){},
                 [&](const bool isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
+                    DispatchTextInputFocus(*frame, isActive && GetFocus() == hwnd);
                     frame->input().windowFocusUpdate(isActive);
                 },
                 lifecycleResult
             )
         )
             return lifecycleResult;
+
+        if(auto* textInput = frame->tryTextInput()){
+            if(DispatchWin32TextInputMessage(*textInput, uMsg, wParam, lParam))
+                return 0;
+        }
 
         PAINTSTRUCT ps;
 
@@ -431,6 +430,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_UNICHAR: {
             if(wParam == UNICODE_NOCHAR)
                 return TRUE;
+            if(GetFocus() != hwnd || !frame->data<Common::WinFrame>().isActive())
+                return 0;
+            if(auto* textInput = frame->tryTextInput()){
+                if(!ResetWin32FallbackCharInput(*textInput))
+                    NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
+            }
             DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
         }
         return 0;
@@ -655,6 +660,14 @@ bool Frame::mainLoop(){
 
 GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
     return CreateClipboardService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
+}
+
+GlobalUniquePtr<ITextInputService> Frame::createPlatformTextInputService(){
+    const auto hwnd = data<Common::WinFrame>().hwnd();
+    auto service = CreateTextInputService(m_projectObjectArena, hwnd);
+    if(service && !service->setFocused(GetFocus() == hwnd))
+        return {};
+    return service;
 }
 
 void Frame::setupPlatform(void* inst){

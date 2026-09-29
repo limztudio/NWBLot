@@ -23,6 +23,7 @@ NWB_CORE_BEGIN
 class GraphicsRuntime;
 class InputDispatcher;
 interface IClipboardService;
+interface ITextInputService;
 
 namespace ECS{
     class World;
@@ -86,6 +87,7 @@ struct ProjectRuntimeContext{
     Core::GraphicsRuntime& graphics;
     Core::InputDispatcher& input;
     Core::IClipboardService& clipboard;
+    Core::ITextInputService& textInput;
     Core::Alloc::GlobalArena& objectArena;
     Core::CpuTaskScheduler& cpuTasks;
     Core::GpuTaskScheduler& gpuTasks;

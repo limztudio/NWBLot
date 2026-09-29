@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation is on `custom_ui`. Foundation `81481aa88`, GPU composition `37a37a0f6`, Linux OS `b93bace2d`, font/text `1f55b1616`, offline SDF `4cd702d2b`, and interactive foundation `2c7c723ef` are pushed. Main is merged through `c962f5c23` in `d3365b34f`, including its shader compiler refactor. M3 implements window/separator parity and removes the ImGui dependency; validation is recorded below. Edit boxes, combo boxes, lists, and Win32/Linux IME remain subsequent milestones.
+Status: implementation is on `custom_ui`. Foundation `81481aa88`, GPU composition `37a37a0f6`, Linux OS `b93bace2d`, font/text `1f55b1616`, offline SDF `4cd702d2b`, and interactive foundation `2c7c723ef` are pushed. Main is merged through `c962f5c23` in `d3365b34f`, including its shader compiler refactor. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation now includes an owned Unicode edit model, OS text-input/IME services for Win32 and Linux, and a borrowed ECS edit-session adapter; validation is recorded below. Visual edit boxes, edit-key/clipboard routing, combo boxes and lists remain subsequent increments.
 
 Implemented in the first increment:
 
@@ -164,6 +164,29 @@ Validation for the M3 increment on Windows ARM64 / Clang, `opt` configuration:
 
 M3 removes the ImGui dependency and demonstrates replacement texture/atlas skins. Win32 native message delivery/rendering is qualified here. Linux linking/native X11/Wayland execution, physical pointer grabs, and live HDR remain unqualified on this Windows host. M4/M5 continue the requested edit box, combo box, list, and OS IME work.
 
+## Text-edit and OS IME foundation increment
+
+This increment establishes M4's editing state and native input boundaries. It does not yet add a visual Builder edit box or complete M4's exit gates.
+
+- `impl/ui/edit/`: an arena-owned single-line UTF8 edit model, byte selections on Unicode 17 extended grapheme boundaries, selection/navigation/deletion, bounded copied undo/redo, external value replacement, and transient composition. Sources are split into model, navigation, history, composition and Unicode segmentation/property domains. Surrounding-text deletion preserves the original selection in undo. Word navigation uses documented whitespace/punctuation/text runs.
+- `impl/ui/edit/unicode/`: generated, pinned Unicode 17 grapheme/Indic/pictograph tables, the Unicode license and a SHA256 source manifest. `generate_tables.py` reproduces the split tables and the official 766-case GraphemeBreakTest fixture using pinned inputs or an offline source directory. Grapheme tests include Indic conjuncts, Korean jamo, combining sequences, emoji ZWJ/modifiers and regional-indicator pairing.
+- `core/os/text_input*`: `interface ITextInputService` and a bounded owning event queue for one event-thread session. Tokens include service/lifetime generation; all text and UTF8 byte ranges are copied/validated. Preedit may coalesce between commit barriers. Focus loss or overflow leaves an explicit terminal cancellation. Published surrounding revisions fence deletion, and native update cancellation is reported by the update result.
+- `core/os/win32/`: separate IMM32 session, message, composition and native-context sources. UTF16 decoding and its pending surrogate belong to the native service for active editor commits and inactive scene fallback, with resets on focus and session changes. IME result text commits once; consumed composition/IME-char messages bypass duplicate default synthesis. Native composition/candidate geometry follows the host caret rectangle. Surrounding/deletion capabilities remain unsupported by this backend.
+- `core/os/linux/x11/`: owned XIM/XIC lifetimes, `XFilterEvent`/`Xutf8LookupString`, callback preedit and character-to-UTF8-byte conversion, insertion-caret updates and focus cancellation. Filtered physical keys retain normal key ownership while text delivery follows XIM. Unavailable XIM/preedit styles report actual capabilities.
+- `core/os/linux/wayland/`: optional text-input-v3 manager/device and protocol generation, selected-seat/surface/keyboard focus, pixel-to-surface caret conversion, atomic `done(serial)` batches, and exact native surrounding provenance. Without build/compositor protocol support the service accepts direct xkb commits and advertises unavailable preedit/surrounding capabilities. Delayed current-session commits remain valid; stale, unavailable, or nonzero deletion against a selected surrounding range terminates the session. Input-method feedback preserves its native change cause, including deferred updates.
+- `core/frame/` and `loader/`: Frame creates and tears down the OS service around project borrowers, forwards native focus/messages, and passes a required borrowed `ProjectRuntimeContext.textInput`. `UiLayerSystem` and `UiPaintContext` borrow it alongside clipboard/native-selection services.
+- `impl/ecs_ui/text_edit_session*`: a separate host-call adapter that applies owned events to a temporarily lent model. Widget/declaration/model generations and copied text/selection/composition reject old-owner or externally changed state. Preedit stays out of application text/history. Destruction releases the OS token without borrowing a model; explicit end with the old model also clears its transient preedit.
+
+Validation for this increment on Windows ARM64 / Clang 22.1.4, `dbg` configuration:
+
+- The coordinated build of the production UI/OS/ECS libraries, Testbed, UI smoke executable, and affected unit targets passes. Runtime asset cooking gathers 134 Testbed assets and 119 engine-only smoke assets.
+- All 338 unit tests pass: 177 UI, 16 ECS UI, 83 OS, 11 input, and 51 graphics-presentation cases, with no failures or disabled cases in these suites. This includes 112 new tests for editing, text-input services and their ECS adapter; one grapheme case additionally checks all 766 official Unicode 17 conformance rows. The OS suite includes 20 actual hidden-HWND native cases and 21 portable Linux backend-model cases.
+- All five GPU-validation UI smoke tests pass: completed-backbuffer painting (25 probes), resize (50 probes across two captures), native interaction (14 observed states), windows (20 observed states), and alternate skin/windows (20 observed states). The GPU-validation Testbed startup/shutdown capture also passes and is visually inspected at 1280 x 900.
+- Linux x86_64 target syntax qualification passes 201 C++ checks: 124 with Wayland/text-input-v3/primary selection, 27 without primary selection, 27 without text-input-v3, and 23 with X11 only. The protocol header/private C source are generated by the actual upstream Wayland scanner; the generated C also passes a target syntax check. Ten affected C++ checks are repeated after final formatting changes. Genuine Linux libc/libstdc++/X11/Wayland headers, commands, source hashes, generation provenance and logs are retained under `__artifacts/custom_ui/`.
+- Modified/new authored C++ sources pass UTF-8, CRLF, exact separator/EOF and whitespace checks. New production translation units are split by domain and remain below 650 lines; the existing Frame Wayland file receives only native forwarding/lifetime hooks.
+
+The next increment binds this session adapter to committed edit-box focus/identity, routes editing and clipboard commands, and paints text, selection, caret and preedit through the existing frozen GPU layer. Multiline/numeric editors and compound combo/list controls follow after the single-line editor is qualified. Live Korean IME composition and Linux linking/native compositor execution require their respective target environments; deterministic event/Unicode checks alone do not qualify them.
+
 ## 1. Starting point and scope
 
 The table records the repository baseline before the migration; legacy UI paths listed here have been removed by M3.
@@ -183,7 +206,7 @@ Initial target: desktop UI in the existing application window, keyboard and mous
 
 ## 2. Ownership and public API
 
-Target layout; identity, context, layout, text, basic widgets, windows, GPU composition, and the clipboard OS bridge now exist as described above. The editing and larger widget domains remain proposed:
+Target layout; identity, context, layout, text, basic widgets, windows, GPU composition, and the clipboard OS bridge now exist as described above. The visual editor and larger widget domains remain proposed:
 
 ```text
 core/
@@ -200,7 +223,8 @@ impl/
     context.{h,cpp}            identity, state, frame lifecycle, actions
     layout/                   measure/arrange, containers, scrolling
     input/                    hit testing, focus, capture, navigation
-    text/                     fonts, shaping, text layout, editing
+    text/                     fonts, shaping, text layout
+    edit/                     Unicode model, navigation, history, composition
     paint/                    primitives and immutable paint output
     widgets/                  controls composed from the above services
     style/                    skin region resolution, metrics, control states

@@ -214,6 +214,20 @@ GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
     }
 }
 
+GlobalUniquePtr<ITextInputService> Frame::createPlatformTextInputService(){
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        return FrameDetail::CreateX11FrameTextInput(*this);
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::CreateWaylandFrameTextInput(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        return {};
+    }
+}
+
 void Frame::setupPlatform(void* inst){
     static_cast<void>(inst);
 

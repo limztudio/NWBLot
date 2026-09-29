@@ -11,6 +11,7 @@
 #include <core/common/module.h>
 #include <core/input/module.h>
 #include <core/os/clipboard.h>
+#include <core/os/text_input.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/session.h>
 #include <core/telemetry/codec.h>
@@ -90,6 +91,8 @@ public:
     [[nodiscard]] IClipboardService& clipboard();
     // Native startup/teardown callbacks may arrive while the platform service is not attached.
     [[nodiscard]] inline IClipboardService* tryClipboard()noexcept{ return m_clipboard.get(); }
+    [[nodiscard]] ITextInputService& textInput();
+    [[nodiscard]] inline ITextInputService* tryTextInput()noexcept{ return m_textInput.get(); }
 
     // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const{ return m_perfSession; }
@@ -107,6 +110,7 @@ public:
 
 private:
     [[nodiscard]] GlobalUniquePtr<IClipboardService> createPlatformClipboardService();
+    [[nodiscard]] GlobalUniquePtr<ITextInputService> createPlatformTextInputService();
     void setupPlatform(void* inst);
     void cleanupPlatform()noexcept;
     bool updateFrame(f32 delta);
@@ -124,6 +128,7 @@ private:
 
     Alloc::GlobalArena m_projectObjectArena;
     GlobalUniquePtr<IClipboardService> m_clipboard;
+    GlobalUniquePtr<ITextInputService> m_textInput;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;

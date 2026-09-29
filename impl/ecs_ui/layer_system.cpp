@@ -25,6 +25,7 @@ UiLayerSystem::UiLayerSystem(
     Core::GraphicsRuntime& graphics,
     Core::InputDispatcher& input,
     Core::IClipboardService& clipboard,
+    Core::ITextInputService& textInput,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
@@ -36,6 +37,7 @@ UiLayerSystem::UiLayerSystem(
     , m_graphics(graphics)
     , m_input(input)
     , m_clipboard(clipboard)
+    , m_textInput(textInput)
     , m_assetManager(assetManager)
     , m_skinRef(skin)
     , m_presentation(presentation)

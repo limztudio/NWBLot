@@ -31,6 +31,7 @@ namespace FrameDetail{
 
 bool InitX11Frame(Frame& frame);
 [[nodiscard]] GlobalUniquePtr<IClipboardService> CreateX11FrameClipboard(Frame& frame);
+[[nodiscard]] GlobalUniquePtr<ITextInputService> CreateX11FrameTextInput(Frame& frame);
 bool ShowX11Frame(Frame& frame);
 bool RunX11Frame(Frame& frame);
 void CleanupX11Frame(Frame& frame)noexcept;
@@ -38,6 +39,7 @@ void CleanupX11Frame(Frame& frame)noexcept;
 #if defined(NWB_WITH_WAYLAND)
 bool InitWaylandFrame(Frame& frame);
 [[nodiscard]] GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame);
+[[nodiscard]] GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame);
 bool ShowWaylandFrame(Frame& frame);
 bool RunWaylandFrame(Frame& frame);
 void CleanupWaylandFrame(Frame& frame)noexcept;

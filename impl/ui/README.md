@@ -65,10 +65,10 @@ storage until GPU completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
-font shaping (`text/`), and skinned windows, panels, labels, separators, buttons and checkboxes (`Builder`).
+font shaping (`text/`), owned Unicode edit state (`edit/`), and skinned windows, panels, labels, separators, buttons and checkboxes (`Builder`).
 `nwb_ui_gpu` owns GPU uploads, resource retention,
 and offscreen rendering in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
-`core/os/` owns clipboard/native selection services and the future IME contract, `impl/assets_ui_skin/` owns skin validation/cooking,
+`core/os/` owns clipboard/native selection and text-input/IME services, `impl/assets_ui_skin/` owns skin validation/cooking,
 and `impl/ecs_render/` owns final composition with the scene. The GPU module consumes frozen snapshots
 without invoking callbacks or accessing live ECS data.
 

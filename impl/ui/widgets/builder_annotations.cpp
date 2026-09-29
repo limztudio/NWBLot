@@ -50,6 +50,10 @@ bool Builder::paintDeferredContents(){
 
 bool Builder::validateDeferredSources()const{
     // Every loan remains live through all later source callbacks, including those in an ended child scope.
+    for(const auto& frame : m_scope->m_radioGroups){
+        if(!radioGroupMatches(*frame))
+            return false;
+    }
     for(const auto& frame : m_scope->m_lists){
         if(!listMatches(frame))
             return false;
@@ -79,6 +83,10 @@ bool Builder::validateDeferredStates()const{
         if(!floatEditMatches(frame))
             return false;
     }
+    for(const auto& frame : m_scope->m_radioGroups){
+        if(!radioGroupStateMatches(*frame))
+            return false;
+    }
     for(const auto& frame : m_scope->m_lists){
         if(!listStateMatches(frame))
             return false;
@@ -100,6 +108,7 @@ bool Builder::validateDeferredStates()const{
 
 void Builder::releaseDeferredLoans(){
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
+    m_scope->m_radioGroups.clear();
     for(auto& frame : m_scope->m_textAreas){
         frame.model = nullptr;
         frame.state = nullptr;

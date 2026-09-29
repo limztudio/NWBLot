@@ -12,6 +12,7 @@
 #include "ui_numeric_edit_gallery.h"
 #include "ui_popup_gallery.h"
 #include "ui_popup_tools_gallery.h"
+#include "ui_radio_group_gallery.h"
 #include "ui_search_combo_gallery.h"
 #include "ui_text_area_gallery.h"
 
@@ -40,6 +41,7 @@ private:
     TestbedUiNestedPopupGallery m_nestedPopups;
     TestbedUiNumericEditGallery m_numericEdits;
     TestbedUiTextAreaGallery m_textAreas;
+    TestbedUiRadioGroupGallery m_radioGroups;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

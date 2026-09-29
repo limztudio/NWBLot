@@ -46,6 +46,7 @@ private:
         WidgetId source;
         u64 sourceDeclarationGeneration = 0u;
         ControlToken sourceControl;
+        bool horizontal = false;
     };
 
     struct ContextMenuOwner{

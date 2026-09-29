@@ -1,5 +1,16 @@
 nwb_declare_static_library(nwb_ui_widgets)
 target_sources(nwb_ui_widgets PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group.h"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_style.h"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_layout.h"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_layout.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_state.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_behavior.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_frame.h"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_frame.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_radio_group.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_loan.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_area.h"
     "${CMAKE_CURRENT_LIST_DIR}/text_area.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scrollbar.h"

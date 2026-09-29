@@ -68,6 +68,7 @@ bool InputRouter::currentControlKeyOwner(const ControlKeyOwner& owner)const{
         host == nullptr || !isInteractive(*host) || !host->navigable || host->owner.valid()
         || host->control != owner.control || host->popup != owner.popup || source == nullptr
         || !isInteractive(*source) || source->control != owner.sourceControl
+        || (owner.horizontal && !host->horizontalNavigation)
     )
         return false;
     return source == host || keyboardHost(*source) == host;

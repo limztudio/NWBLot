@@ -89,6 +89,7 @@ struct HitTarget{
     bool contextMenu = false;
     f64 scrollStepX = 0.0;
     f64 gestureMaximumX = 0.0;
+    bool horizontalNavigation = false;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.

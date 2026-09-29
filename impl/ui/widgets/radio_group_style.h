@@ -1,0 +1,50 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../paint.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct RadioGroupStyle{
+    Name normal = Name("radio.normal");
+    Name hover = Name("radio.hover");
+    Name pressed = Name("radio.pressed");
+    Name checked = Name("radio.checked");
+    Name disabled = Name("radio.disabled");
+    Name mark = Name("radio.mark");
+    Name fallback = Name("checkbox.normal");
+    Name checkedFallback = Name("checkbox.checked");
+    Name markFallback = Name("checkbox.mark");
+    Name focus = Name("focus.overlay");
+    Color hoverTint = { 1.08f, 1.08f, 1.08f, 1.0f };
+    Color pressedTint = { 0.85f, 0.85f, 0.85f, 1.0f };
+    Color disabledTint = { 0.55f, 0.55f, 0.55f, 0.6f };
+    Insets padding = { 4.0f, 4.0f, 4.0f, 4.0f };
+    f32 rowGap = 4.0f;
+    f32 indicatorExtent = 24.0f;
+    f32 gap = 8.0f;
+    // Fraction of the indicator extent inset on each side of its checked mark.
+    f32 markInset = 0.3f;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

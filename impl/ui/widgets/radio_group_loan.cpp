@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../builder.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool Builder::radioGroupStateMatches(const RadioGroupFrame& frame)const{
+    return popupAncestorsVisible() && frame.m_state.matches(frame.m_snapshot);
+}
+
+bool Builder::radioGroupMatches(const RadioGroupFrame& frame)const{
+    // Repeat the stamp fence to catch a one-shot metadata mutation from the final count callback.
+    for(u32 pass = 0u; pass < 2u; ++pass){
+        if(
+            !radioGroupStateMatches(frame)
+            || frame.m_source.instanceGeneration() != frame.m_choices.sourceGeneration || !radioGroupStateMatches(frame)
+            || frame.m_source.revision() != frame.m_choices.sourceRevision || !radioGroupStateMatches(frame)
+            || frame.m_source.rowCount() != frame.m_choices.count || !radioGroupStateMatches(frame)
+        )
+            return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

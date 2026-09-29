@@ -55,6 +55,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     m_nestedPopups.paint(context, Max(18.0f, x - 876.0f), y);
     m_numericEdits.paint(context, Max(18.0f, x - 876.0f), y + 270.0f);
     m_textAreas.paint(context, Max(18.0f, x - 584.0f), y + 490.0f);
+    m_radioGroups.paint(context, Max(18.0f, x - 876.0f), y + 550.0f);
     m_popups.paint(context, x, y);
 }
 

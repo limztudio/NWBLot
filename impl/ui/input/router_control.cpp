@@ -25,6 +25,7 @@ bool InputRouter::validControlTargets()const{
             || !IsFinite(target.gestureMaximum) || target.gestureMaximum < 0.0 || target.pageRows == 0u
             || !IsFinite(target.gestureMaximumX) || target.gestureMaximumX < 0.0
             || ((target.navigable || target.scrollable) && (!target.control.valid() || !target.focusable || target.owner.valid()))
+            || (target.horizontalNavigation && !target.navigable)
             || (target.focusOnCommit && (!target.focusable || target.owner.valid()))
         )
             return false;
@@ -35,7 +36,7 @@ bool InputRouter::validControlTargets()const{
         }
         if(
             target.owner == target.id || target.ownerDeclarationGeneration == 0u || !target.control.valid()
-            || target.focusable || target.navigable || target.scrollable || target.focusOnCommit
+            || target.focusable || target.navigable || target.scrollable || target.focusOnCommit || target.horizontalNavigation
         )
             return false;
         usize begin = 0u;
@@ -82,7 +83,10 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
     if(action.kind == ControlActionKind::Wheel)
         return host->scrollable;
     if(action.kind != ControlActionKind::Activate){
-        if(!host->navigable)
+        if(
+            !host->navigable
+            || ((action.kind == ControlActionKind::Left || action.kind == ControlActionKind::Right) && !host->horizontalNavigation)
+        )
             return false;
         if(action.source == host->id)
             return true;
@@ -134,6 +138,7 @@ void InputRouter::fenceControl(const WidgetId host, const u64 declarationGenerat
                 target.control = {};
                 target.scrollable = false;
                 target.navigable = false;
+                target.horizontalNavigation = false;
             }
             else
                 target.enabled = false;
@@ -206,6 +211,16 @@ bool InputRouter::routeControlKey(
     InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.key){
+    case InputKey::Left:
+        if(!host.horizontalNavigation)
+            return false;
+        kind = ControlActionKind::Left;
+        break;
+    case InputKey::Right:
+        if(!host.horizontalNavigation)
+            return false;
+        kind = ControlActionKind::Right;
+        break;
     case InputKey::Up: kind = ControlActionKind::Up; break;
     case InputKey::Down: kind = ControlActionKind::Down; break;
     case InputKey::PageUp: kind = ControlActionKind::PageUp; break;
@@ -219,7 +234,8 @@ bool InputRouter::routeControlKey(
     auto& owner = m_controlKeyOwners[static_cast<usize>(event.key) - 1u];
     if(!alreadyPressed && !event.repeat)
         owner = { host.id, host.declarationGeneration, host.popup, host.control,
-            source.id, source.declarationGeneration, source.control };
+            source.id, source.declarationGeneration, source.control,
+            kind == ControlActionKind::Left || kind == ControlActionKind::Right };
     if(
         owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
         && owner.popup == host.popup && owner.control == host.control

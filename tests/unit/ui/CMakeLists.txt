@@ -1,5 +1,17 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_state_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_behavior_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_fixture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_builder_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_loan_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/radio_group_popup_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/horizontal_navigation_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/horizontal_navigation_fixture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/horizontal_navigation_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/horizontal_navigation_lifetime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_area_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scrollbar_layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_area_input_scroll_tests.cpp"

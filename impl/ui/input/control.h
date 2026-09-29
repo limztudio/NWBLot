@@ -39,7 +39,7 @@ struct ControlToken{
 }
 
 namespace ControlActionKind{
-    enum Enum : u8{ Wheel, Up, Down, PageUp, PageDown, Home, End, Submit, Activate };
+    enum Enum : u8{ Wheel, Up, Down, PageUp, PageDown, Home, End, Submit, Activate, Left, Right };
 };
 
 

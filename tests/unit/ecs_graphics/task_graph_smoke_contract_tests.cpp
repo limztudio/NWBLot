@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_smoke_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_TESTS = "tests";
 static constexpr AStringView s_SMOKE = "smoke";
 static constexpr AStringView s_AB = "ab";

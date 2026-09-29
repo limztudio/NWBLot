@@ -14,6 +14,9 @@
 namespace __hidden_telemetry_frame_graph_registry_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_TARGET = "target";
 
 
@@ -21,7 +24,6 @@ static constexpr AStringView s_TARGET = "target";
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
-
 
 
 using namespace TelemetryTestDetail;

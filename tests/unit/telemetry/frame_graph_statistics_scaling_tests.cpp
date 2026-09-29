@@ -17,6 +17,9 @@
 namespace __hidden_frame_graph_statistics_scaling_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_QUEUE_ALIAS_OWNER = "queue_alias_owner";
 static constexpr AStringView s_QUEUE_ALIAS_OWNER_2 = "Queue alias owner";
 

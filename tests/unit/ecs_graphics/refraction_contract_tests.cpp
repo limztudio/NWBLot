@@ -14,6 +14,9 @@
 namespace __hidden_refraction_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ASSETS = "assets";
 static constexpr AStringView s_GRAPHICS = "graphics";

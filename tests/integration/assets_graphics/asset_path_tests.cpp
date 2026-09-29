@@ -19,6 +19,9 @@
 namespace __hidden_asset_path_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_PROJECT = "project";
 static constexpr AStringView s_STALE_OUTPUT = "stale/output";
 static constexpr AStringView s_STALE_NAME = "stale/name";

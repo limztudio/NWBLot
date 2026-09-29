@@ -21,6 +21,9 @@
 namespace __hidden_material_texture_import_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_TESTS_TEXTURE_IMPORT_SCRATCH = "tests/texture_import/scratch";
 static constexpr AStringView s_MATERIAL_TEXTURE = "Material Texture";
 static constexpr AStringView s_EXISTING_MATERIAL_TEXTURE = "Existing Material Texture";

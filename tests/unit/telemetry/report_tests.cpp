@@ -14,6 +14,9 @@
 namespace __hidden_telemetry_report_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_GBUFFER = "gbuffer";
 static constexpr AStringView s_PHYSICALQUEUES_NULL = "\"physicalQueues\": null";
 static constexpr AStringView s_RUNTIME_STATISTICS_NONE = "runtime_statistics=\"none\"";

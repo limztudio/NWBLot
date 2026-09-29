@@ -12,6 +12,9 @@
 namespace __hidden_telemetry_perf_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_MEMORY_PROJECT_ARENA = "memory/project_arena";
 static constexpr AStringView s_RENDERER_FRAME = "renderer/frame";
 static constexpr AStringView s_RENDERER_FRAME_TEXT = "Renderer Frame";
@@ -26,9 +29,7 @@ constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
 
-
 using namespace TelemetryTestDetail;
-
 
 
 TEST(Telemetry, PerfTimingPayloadRoundTrip){

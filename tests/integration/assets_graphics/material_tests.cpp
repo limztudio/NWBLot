@@ -31,6 +31,9 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_material{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE = "project/material_interfaces/test_surface";
 static constexpr AStringView s_PROJECT_MATERIALS_TEST_MATERIAL = "project/materials/test_material";
 static constexpr AStringView s_SURFACE = "surface";

@@ -31,6 +31,9 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_shader{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_PS = "ps";
 static constexpr AStringView s_PROJECT_SHADERS_TEST_SHADER = "project/shaders/test_shader";
 static constexpr AStringView s_PROJECT_SHADERS_STANDALONE_PS = "project/shaders/standalone_ps";

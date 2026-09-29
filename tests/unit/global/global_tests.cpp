@@ -52,6 +52,9 @@
 namespace __hidden_global_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_ALPHA = "alpha";
 static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/namesymbols/before_registry_live";

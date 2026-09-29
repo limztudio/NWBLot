@@ -31,6 +31,9 @@ constexpr u32 s_ExpectedDualCount = 2u;
 namespace __hidden_assets_graphics_model_fixture{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_RIG = "rig";
 static constexpr AStringView s_MODEL_FIXTURE_NWB = "model_fixture.nwb";
 

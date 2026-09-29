@@ -24,6 +24,9 @@
 namespace __hidden_csg_shadow_smoke{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_ENGINE_CSG_SPHERE = "engine/csg/sphere";
 static constexpr AStringView s_DIRECTIONAL = "directional";
 static constexpr AStringView s_POINT = "point";
@@ -55,7 +58,7 @@ static constexpr f32 s_CameraDepth = -4.0f;
 static constexpr u32 s_MoveUpdate = 40u;
 
 namespace Arm{
-enum Enum : u8{ Reference, Cut, Uncut, Moved, CameraShift };
+    enum Enum : u8{ Reference, Cut, Uncut, Moved, CameraShift };
 };
 
 struct Box{

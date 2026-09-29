@@ -15,6 +15,9 @@
 namespace __hidden_swapchain_native_identity_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_CORE = "core";
 static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_VULKAN = "vulkan";

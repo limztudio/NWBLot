@@ -19,6 +19,9 @@
 namespace __hidden_model_cook_normalization_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
 static constexpr AStringView s_TESTS_MODEL_COOK_NORMALIZATION_MESH = "tests/model_cook_normalization/mesh";

@@ -15,6 +15,9 @@
 namespace __hidden_ecs_graphics_gi_material_surface_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ECS_RENDER = "ecs_render";
 static constexpr AStringView s_ASSETS = "assets";

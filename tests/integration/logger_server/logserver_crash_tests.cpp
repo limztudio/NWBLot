@@ -38,6 +38,9 @@
 namespace __hidden_logger_server_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_PLATFORM_LINUX = "platform=linux";
 static constexpr AStringView s_SECRET_TOKEN = "secret-token";
 static constexpr AStringView s_EVENT = "[event]";

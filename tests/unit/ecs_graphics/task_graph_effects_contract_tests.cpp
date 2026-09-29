@@ -13,6 +13,9 @@
 namespace __hidden_ecs_graphics_task_graph_effects_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ECS_RENDER = "ecs_render";
 static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_ = "renderer_frame_pipeline_graph_surfel_gi.cpp";

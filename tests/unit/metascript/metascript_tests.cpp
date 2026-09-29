@@ -17,6 +17,9 @@
 namespace __hidden_metascript_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr char s_MODEL[] = "model";
 static constexpr char s_MESH[] = "mesh";
 static constexpr char s_NAME[] = "name";

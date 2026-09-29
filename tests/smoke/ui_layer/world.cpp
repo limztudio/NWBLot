@@ -9,6 +9,7 @@
 #include "list_scene.h"
 #include "paint_scene.h"
 #include "popup_scene.h"
+#include "search_combo_scene.h"
 #include "text_samples.h"
 #include "window_scene.h"
 
@@ -78,9 +79,11 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
     const bool listSmoke = IsUiLayerListSmokeEnabled();
     const bool comboSmoke = IsUiLayerComboSmokeEnabled();
+    const bool searchComboSmoke = IsUiLayerSearchComboSmokeEnabled();
     const bool alternateSkin = (windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
         || (popupSmoke && IsUiLayerPopupSkinSmokeEnabled()) || (listSmoke && IsUiLayerListSkinSmokeEnabled())
-        || (comboSmoke && IsUiLayerComboSkinSmokeEnabled());
+        || (comboSmoke && IsUiLayerComboSkinSmokeEnabled())
+        || (searchComboSmoke && IsUiLayerSearchComboSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
@@ -90,6 +93,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(comboSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
+    if(searchComboSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSearchComboSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -104,7 +109,13 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(comboSmoke){
+    if(searchComboSmoke){
+        paint.paint = [scene = CreateUiSearchComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
+        };
+    }
+    else if(comboSmoke){
         paint.paint = [scene = CreateUiComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: combo UI paint failed"));

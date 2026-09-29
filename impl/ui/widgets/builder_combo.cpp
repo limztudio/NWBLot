@@ -18,6 +18,12 @@ NWB_IMPL_UI_BEGIN
 
 ComboResult Builder::comboBox(
     const AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options){
+    return declareCombo(stableKey, source, state, options);
+}
+
+ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& source,
+    ComboState& state, const ComboOptions& options, SearchComboState* search,
+    ISearchableListDataSource* searchSource, const SearchComboOptions* searchOptions){
     ComboResult result;
     if(
         !m_panelActive || m_popupState || (m_windowActive && m_window.state->collapsed) || m_context.failed()
@@ -29,7 +35,7 @@ ComboResult Builder::comboBox(
         m_context.fail();
         return result;
     }
-    WidgetState* widget = m_context.declare(stableKey, WidgetKind::ComboBox);
+    WidgetState* widget = m_context.declare(stableKey, search ? WidgetKind::SearchComboBox : WidgetKind::ComboBox);
     if(!widget)
         return result;
     const WidgetState field = *widget;
@@ -41,16 +47,58 @@ ComboResult Builder::comboBox(
         || !ComboBehavior::Bind(state, field.id, field.declarationGeneration)
     )
         return result;
-    if(!ComboBehavior::Reconcile(state, source) || !ListBehavior::Reconcile(state.m_list, source)){
+    const u64 queryRevision = search ? search->query().revision() : 0u;
+    const u64 queryExternalRevision = search ? search->query().externalRevision() : 0u;
+    const u64 queryCompositionGeneration = search ? search->query().compositionGeneration() : 0u;
+    const usize queryAnchor = search ? search->query().anchor() : 0u;
+    const usize queryCaret = search ? search->query().caret() : 0u;
+    if(!ComboBehavior::Reconcile(state, source)){
+        m_context.fail();
+        return result;
+    }
+    if(
+        search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
+            || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
+    ){
+        m_context.fail();
+        return result;
+    }
+    if(
+        search && (!SearchComboBehavior::Filter(*search, *searchSource) || search->query().revision() != queryRevision
+            || search->query().externalRevision() != queryExternalRevision
+            || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
+    ){
+        m_context.fail();
+        return result;
+    }
+    const IListDataSource& results = search ? searchSource->filtered() : source;
+    if(!ListBehavior::Reconcile(state.m_list, results)){
+        m_context.fail();
+        return result;
+    }
+    if(
+        search && (search->query().revision() != queryRevision || search->query().externalRevision() != queryExternalRevision
+            || search->query().compositionGeneration() != queryCompositionGeneration
+            || search->query().anchor() != queryAnchor || search->query().caret() != queryCaret)
+    ){
         m_context.fail();
         return result;
     }
     ComboFrame frame;
     frame.source = &source;
+    frame.results = &results;
+    frame.searchSource = searchSource;
+    frame.search = search;
+    frame.queryHeight = searchOptions ? searchOptions->queryHeight : 0.0f;
+    frame.queryGap = searchOptions ? searchOptions->queryGap : 0.0f;
+    snapshotComboQuery(frame);
     frame.state = &state;
     frame.options = options;
     frame.token = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
     frame.rowCount = source.rowCount();
+    frame.resultCount = results.rowCount();
     WidgetState* popup = m_context.declarePart(field, "popup", WidgetKind::Popup);
     if(!popup)
         return result;
@@ -61,7 +109,7 @@ ComboResult Builder::comboBox(
     frame.rows = *rows;
     frame.popupToken = { frame.popup.id, frame.popup.declarationGeneration,
         state.m_popup.instanceGeneration(), state.m_popup.openGeneration() };
-    frame.listToken = { state.m_list.inputGeneration(), frame.token.contentGeneration, frame.token.contentRevision };
+    frame.listToken = { state.m_list.inputGeneration(), results.instanceGeneration(), results.revision() };
     frame.open = state.isOpen();
     const bool previouslyListFocused = m_context.input().focus() == frame.rows.id;
     if(!comboMatches(frame) || !applyComboInput(field, frame, result)){
@@ -69,6 +117,8 @@ ComboResult Builder::comboBox(
         return {};
     }
     frame.open = state.isOpen();
+    if(search && !frame.open)
+        search->m_editor.focused = false;
     frame.popupToken.openGeneration = state.m_popup.openGeneration();
     frame.listToken.instanceGeneration = state.m_list.inputGeneration();
     frame.focusOnCommit = options.enabled && previouslyFocused && m_context.input().focus() != field.id && !frame.open;
@@ -117,7 +167,7 @@ ComboResult Builder::comboBox(
     }
     frame.options.placeholder = {};
     ListFrame list;
-    list.source = &source;
+    list.source = frame.results;
     list.state = &state.m_list;
     list.options.rowHeight = options.rowHeight;
     list.options.wheelRows = options.wheelRows;
@@ -125,7 +175,9 @@ ComboResult Builder::comboBox(
     list.options.selectOnNavigate = false;
     list.token = frame.listToken;
     list.focusOnCommit = frame.listFocusOnCommit;
-    list.rowCount = frame.rowCount;
+    list.rowCount = frame.resultCount;
+    if(frame.editor != s_LayoutNoParent)
+        list.keyboardFocus = m_comboEditors[frame.editor].state.id;
     list.padding = m_listStyle.padding;
     const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
     if(!background){
@@ -155,7 +207,8 @@ ComboResult Builder::comboBox(
     result.selectionChanged = previousSelection != state.selectedKey();
     result.opened = !previouslyOpen && state.isOpen();
     result.closed = previouslyOpen && !state.isOpen();
-    result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id);
+    result.focused = options.enabled && (m_context.input().focus() == field.id || m_context.input().focus() == frame.rows.id
+        || (frame.editor != s_LayoutNoParent && m_context.input().focus() == m_comboEditors[frame.editor].state.id));
     return result;
 }
 

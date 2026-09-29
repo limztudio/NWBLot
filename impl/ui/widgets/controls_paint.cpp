@@ -41,7 +41,7 @@ bool Builder::paintItems(){
 }
 
 bool Builder::paintItem(const Item& item, const LayoutBox& box){
-    if(item.state.kind == WidgetKind::ComboBox)
+    if(item.state.kind == WidgetKind::ComboBox || item.state.kind == WidgetKind::SearchComboBox)
         return paintCombo(item, box);
     if(item.state.kind == WidgetKind::EditBox)
         return paintEditBox(item, box);

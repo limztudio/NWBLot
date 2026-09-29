@@ -17,6 +17,7 @@
 #include "widgets/list_style.h"
 #include "widgets/combo.h"
 #include "widgets/combo_style.h"
+#include "widgets/search_combo.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,10 +80,14 @@ private:
         Insets padding;
         u64 rowCount = 0u;
         bool focusOnCommit = false;
+        WidgetId keyboardFocus;
     };
 
     struct ComboFrame{
         const IListDataSource* source = nullptr;
+        const IListDataSource* results = nullptr;
+        ISearchableListDataSource* searchSource = nullptr;
+        SearchComboState* search = nullptr;
         ComboState* state = nullptr;
         ComboOptions options;
         WidgetState popup;
@@ -92,11 +97,23 @@ private:
         ControlToken listToken;
         Rect visibleField;
         u64 rowCount = 0u;
+        u64 resultCount = 0u;
+        u64 queryGeneration = 0u;
+        u64 queryRevision = 0u;
+        u64 queryCompositionGeneration = 0u;
+        u64 queryExternalRevision = 0u;
+        usize queryAnchor = 0u;
+        usize queryCaret = 0u;
+        u32 editor = s_LayoutNoParent;
         u32 list = s_LayoutNoParent;
         f32 arrowExtent = 0.0f;
+        f32 queryHeight = 0.0f;
+        f32 queryGap = 0.0f;
         bool open = false;
         bool focusOnCommit = false;
         bool listFocusOnCommit = false;
+        bool editorSubmitted = false;
+        bool queryChanged = false;
     };
 
 
@@ -128,6 +145,8 @@ public:
     // The field and its popup borrow state/source through endPanel/endWindow; popup input is consumed in this declaration.
     // Internal popup/list scopes are emitted automatically after the containing scope's layout. User-popup nesting is not supported.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
+    [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
+        SearchComboState& state, const SearchComboOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive && !m_popupState; }
@@ -155,11 +174,15 @@ private:
     [[nodiscard]] bool paintWindowResize();
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
-    [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
+    [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture);
+    [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
+        ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
+        ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr);
     [[nodiscard]] bool paintCombo(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintCombos();
     [[nodiscard]] bool paintComboPopup(ComboFrame& frame);
@@ -167,6 +190,9 @@ private:
     [[nodiscard]] bool comboMatches(const ComboFrame& frame)const;
     [[nodiscard]] bool applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
     [[nodiscard]] bool applyComboListInput(ComboFrame& frame, ComboResult& result);
+    [[nodiscard]] bool prepareComboSearch(const WidgetState& field, ComboFrame& frame);
+    void snapshotComboQuery(ComboFrame& frame);
+    [[nodiscard]] bool paintComboQuery(ComboFrame& frame, LayoutBox& content);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
@@ -192,6 +218,7 @@ private:
     PaintVector<Item> m_items;
     PaintVector<ListFrame> m_lists;
     PaintVector<ComboFrame> m_combos;
+    PaintVector<Item> m_comboEditors;
     PaintVector<u32> m_stack;
     WindowFrame m_window;
     WidgetState m_panelState;

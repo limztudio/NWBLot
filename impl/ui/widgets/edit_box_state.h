@@ -7,6 +7,7 @@
 
 #include "edit_box.h"
 #include "../state/store.h"
+#include "../input/popup.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,6 +60,9 @@ public:
 
 public:
     [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, EditModel& model, const EditBoxOptions& options) = 0;
+    // Deferred composite controls lend an explicit popup identity before its candidate geometry is emitted.
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model,
+        const EditBoxOptions& options, const PopupToken&){ return edit(widget, model, options); }
     [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view,
         const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };

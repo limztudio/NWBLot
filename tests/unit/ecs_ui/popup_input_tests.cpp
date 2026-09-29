@@ -209,6 +209,61 @@ protected:
         return true;
     }
 
+    [[nodiscard]] bool prepareDeferred(){
+        ++m_generation;
+        if(!m_context.beginFrame(m_generation))
+            return false;
+        m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
+        if(!m_context.beginRoot({ 17u, 1u }))
+            return false;
+        const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
+        if(!declared)
+            return false;
+        const Ui::WidgetState popup = *declared;
+        m_token = { popup.id, popup.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
+        m_context.input().fencePopup(m_token);
+        if(m_popupState.isOpen()){
+            declared = m_context.declarePart(popup, "edit", Ui::WidgetKind::EditBox);
+            if(!declared)
+                return false;
+            m_popupWidget = *declared;
+            m_popupResult = m_host.editInPopup(m_popupWidget, m_popupModel, {}, m_token);
+            if(!m_popupResult.valid || m_context.popupToken().valid())
+                return false;
+            Ui::EditBoxView view(m_arena);
+            Ui::TextLayout layout(m_arena);
+            Ui::EditBoxPlacement placement;
+            if(!view.snapshot(m_popupModel) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
+                return false;
+            if(!view.adoptLayout(Move(layout)) || !view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, 0.0f, placement))
+                return false;
+            Ui::PopupScope scope;
+            scope.token = m_token;
+            scope.bounds = { 230.0f, 40.0f, 240.0f, 100.0f };
+            scope.viewport = m_viewport;
+            if(!m_context.beginPopupScope(popup, scope) || !m_host.publish(m_popupWidget, view, placement, {}))
+                return false;
+            Ui::HitTarget barrier;
+            barrier.rectangle = scope.bounds;
+            barrier.clip = m_viewport;
+            if(!m_context.addTarget(popup, barrier))
+                return false;
+            Ui::HitTarget target;
+            target.rectangle = placement.bounds;
+            target.clip = m_viewport;
+            target.focusable = true;
+            target.textEditable = true;
+            if(!m_context.addTarget(m_popupWidget, target) || !m_context.endPopupScope(true))
+                return false;
+        }
+        else
+            m_context.input().closePopup(m_token);
+        if(!m_context.endRoot() || !m_context.finishFrame())
+            return false;
+        m_host.finishFrame();
+        return true;
+    }
+
     [[nodiscard]] bool commit(){
         if(!m_context.commitFrame(m_generation))
             return false;
@@ -450,6 +505,103 @@ TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreA
     EXPECT_EQ(m_context.input().focus(), m_baseWidget.id);
     EXPECT_TRUE(m_textInput.activeSession().valid());
     EXPECT_EQ(m_textInput.publishedText(), "base");
+}
+
+
+TEST_F(UiPopupInputTests, DeferredEditorStartsNativeSessionOnlyAfterPopupGeometryAcceptance){
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred());
+    EXPECT_FALSE(m_context.popupToken().valid());
+    EXPECT_FALSE(m_context.input().hasPopup());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    ASSERT_TRUE(commit());
+    EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    ASSERT_TRUE(prepareDeferred());
+    EXPECT_TRUE(m_popupResult.focused);
+    EXPECT_TRUE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_textInput.publishedText(), "popup");
+    ASSERT_TRUE(commit());
+}
+
+TEST_F(UiPopupInputTests, DeferredEditorRejectsQueuedNativeCommitWhenPopupLifetimeChanges){
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_TRUE(prepareDeferred() && commit());
+    const auto old = m_textInput.activeSession();
+    ASSERT_TRUE(old.valid());
+    ASSERT_EQ(m_textInput.commit(old, "late"), TextInputAdmission::Accepted);
+    m_popupState.close();
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred());
+    EXPECT_EQ(m_popupModel.text(), "popup");
+    EXPECT_FALSE(m_popupResult.textChanged);
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+    EXPECT_EQ(m_textInput.commit(old, "later"), TextInputAdmission::InvalidSession);
+    ASSERT_TRUE(commit());
+}
+
+TEST_F(UiPopupInputTests, DeferredEditorKeepsPreeditSeparateAndGatesEnterUntilCompositionEnds){
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_EQ(m_textInput.preedit("한"), TextInputAdmission::Accepted);
+    key(Ui::InputKey::Enter);
+    ASSERT_TRUE(prepareDeferred() && commit());
+    EXPECT_TRUE(m_popupModel.composition().active);
+    EXPECT_EQ(m_popupModel.text(), "popup");
+    EXPECT_FALSE(m_popupResult.submitted);
+    key(Ui::InputKey::Escape);
+    ASSERT_TRUE(prepareDeferred() && commit());
+    EXPECT_FALSE(m_popupModel.composition().active);
+    EXPECT_FALSE(m_popupResult.cancelled);
+    EXPECT_TRUE(m_context.input().hasPopup());
+    key(Ui::InputKey::Enter);
+    ASSERT_TRUE(prepareDeferred() && commit());
+    EXPECT_TRUE(m_popupResult.submitted);
+}
+
+TEST_F(UiPopupInputTests, DeferredEditorRejectsCompletedPasteFromPriorPopupLifetime){
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_TRUE(prepareDeferred() && commit());
+    key(Ui::InputKey::V, true);
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_TRUE(m_clipboard.pump());
+    const auto old = m_clipboard.startedToken;
+    ASSERT_TRUE(old.valid());
+    ASSERT_TRUE(m_clipboard.complete(old, "late paste"));
+    m_popupState.close();
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred());
+    EXPECT_EQ(m_popupModel.text(), "popup");
+    EXPECT_FALSE(m_popupResult.textChanged);
+    EXPECT_FALSE(m_popupModel.canUndo());
+    EXPECT_FALSE(m_clipboard.complete(old, "later"));
+    ASSERT_TRUE(commit());
+}
+
+
+TEST_F(UiPopupInputTests, DeferredEditorRejectsNativeIntentionAfterCompositionReturnsToIdenticalState){
+    m_popupState.open();
+    ASSERT_TRUE(prepareDeferred() && commit());
+    ASSERT_TRUE(prepareDeferred() && commit());
+    const auto old = m_textInput.activeSession();
+    ASSERT_TRUE(old.valid());
+    ASSERT_EQ(m_textInput.commit(old, "late"), TextInputAdmission::Accepted);
+    const u64 revision = m_popupModel.revision();
+    const u64 generation = m_popupModel.compositionGeneration();
+    ASSERT_TRUE(m_popupModel.beginComposition());
+    ASSERT_TRUE(m_popupModel.updateComposition("한", 0u, 3u));
+    m_popupModel.cancelComposition();
+    ASSERT_EQ(m_popupModel.revision(), revision);
+    ASSERT_GT(m_popupModel.compositionGeneration(), generation);
+    ASSERT_TRUE(prepareDeferred() && commit());
+    EXPECT_EQ(m_popupModel.text(), "popup");
+    EXPECT_FALSE(m_popupResult.textChanged);
+    EXPECT_FALSE(m_popupModel.canUndo());
+    EXPECT_NE(m_textInput.activeSession(), old);
+    EXPECT_EQ(m_textInput.commit(old, "later"), TextInputAdmission::InvalidSession);
 }
 
 

@@ -5,6 +5,8 @@
 #include "model.h"
 #include "grapheme.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -24,6 +26,7 @@ bool EditModel::beginComposition(){
     m_preeditAnchor = 0u;
     m_preeditCaret = 0u;
     m_compositionActive = true;
+    advanceCompositionGeneration();
     return true;
 }
 
@@ -42,6 +45,7 @@ bool EditModel::updateComposition(const AStringView value, const usize anchor, c
     m_preedit = Move(candidate);
     m_preeditAnchor = anchor;
     m_preeditCaret = caret;
+    advanceCompositionGeneration();
     return true;
 }
 
@@ -52,6 +56,8 @@ bool EditModel::commitComposition(const AStringView value){
 }
 
 void EditModel::cancelComposition(){
+    if(m_compositionActive)
+        advanceCompositionGeneration();
     m_preedit.clear();
     m_preeditAnchor = 0u;
     m_preeditCaret = 0u;
@@ -63,6 +69,13 @@ void EditModel::cancelComposition(){
 EditCompositionView EditModel::composition()const{
     return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret,
         Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
+}
+
+
+void EditModel::advanceCompositionGeneration(){
+    if(m_compositionGeneration == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++m_compositionGeneration;
 }
 
 

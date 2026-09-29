@@ -49,8 +49,12 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
     }
     else{
         consumed |= hasPopup() || focused != nullptr;
-        const bool controlHandled = focused != nullptr && focused->navigable
-            && routeControlKey(event, *focused, alreadyPressed, result);
+        const bool delegatedKey = event.key == InputKey::Up || event.key == InputKey::Down
+            || event.key == InputKey::PageUp || event.key == InputKey::PageDown || event.key == InputKey::Enter;
+        const HitTarget* keyboardOwner = focused != nullptr && delegatedKey ? keyboardHost(*focused) : nullptr;
+        const HitTarget* control = keyboardOwner != nullptr ? keyboardOwner : focused;
+        const bool controlHandled = control != nullptr && focused != nullptr && control->navigable
+            && routeControlKey(event, *control, *focused, alreadyPressed, result);
         if(
             !controlHandled && focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
             && (event.key == InputKey::Enter || event.key == InputKey::Space)

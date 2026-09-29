@@ -80,6 +80,10 @@ struct HitTarget{
     u64 pageRows = 1u;
     f64 gestureMaximum = 0.0;
     bool focusOnCommit = false;
+    // A focused editor may borrow vertical navigation and an Enter intention from another accepted control lifetime.
+    WidgetId keyboardOwner;
+    u64 keyboardOwnerDeclarationGeneration = 0u;
+    ControlToken keyboardControl;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -114,6 +118,8 @@ struct ControlAction{
     u64 pageRows = 1u;
     f64 offset = 0.0;
     f64 maximum = 0.0;
+    u64 sourceDeclarationGeneration = 0u;
+    ControlToken sourceControl;
 };
 
 // One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.

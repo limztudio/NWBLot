@@ -163,7 +163,7 @@ bool InputRouter::commitTargets(
         if(m_stagedLookup[index - 1u].value == m_stagedLookup[index].value)
             return false;
     }
-    if(!validControlTargets())
+    if(!validControlTargets() || !validKeyboardOwners())
         return false;
     for(const auto& popup : m_stagedPopups){
         bool owner = false;

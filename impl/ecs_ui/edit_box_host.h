@@ -30,6 +30,7 @@ struct UiEditModelSnapshot{
     usize caret = 0u;
     u64 revision = 0u;
     u64 externalRevision = 0u;
+    u64 compositionGeneration = 0u;
 
     explicit UiEditModelSnapshot(Core::Alloc::GlobalArena& arena) : text(arena), preedit(arena){}
     void capture(const Ui::EditModel& model);
@@ -101,6 +102,8 @@ public:
 public:
     [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model,
         const Ui::EditBoxOptions& options)override;
+    [[nodiscard]] virtual Ui::EditBoxResult editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
+        const Ui::EditBoxOptions& options, const Ui::PopupToken& popup)override;
     [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
         const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
     void beginFrame(u64 generation, const Ui::DisplayMetrics& display);

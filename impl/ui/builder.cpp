@@ -25,6 +25,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_items(arena)
     , m_lists(arena)
     , m_combos(arena)
+    , m_comboEditors(arena)
     , m_stack(arena)
     , m_window(arena)
 {
@@ -127,6 +128,7 @@ void Builder::reset(){
     m_items.clear();
     m_lists.clear();
     m_combos.clear();
+    m_comboEditors.clear();
     m_stack.clear();
     m_layout.reset();
 }

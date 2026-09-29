@@ -79,8 +79,17 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
         return false;
     if(action.kind == ControlActionKind::Wheel)
         return host->scrollable;
-    if(action.kind != ControlActionKind::Activate)
-        return host->navigable;
+    if(action.kind != ControlActionKind::Activate){
+        if(!host->navigable)
+            return false;
+        if(action.source == host->id)
+            return true;
+        const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
+        return
+            source != nullptr && isInteractive(*source) && source->control == action.sourceControl
+            && keyboardHost(*source) == host
+        ;
+    }
     const HitTarget* source = findTarget(action.source);
     return
         source != nullptr && isInteractive(*source) && source->activatable
@@ -131,11 +140,7 @@ void InputRouter::reconcileControlActions(){
     }
     // Losing an initial-down owner is terminal for that held key even if its token later returns.
     for(auto& owner : m_controlKeyOwners){
-        const HitTarget* host = findTarget(owner.host, owner.declarationGeneration);
-        if(
-            host == nullptr || !isInteractive(*host) || !host->navigable || host->owner.valid()
-            || host->control != owner.control || host->popup != owner.popup
-        )
+        if(!currentControlKeyOwner(owner))
             owner = {};
     }
 }
@@ -158,6 +163,8 @@ void InputRouter::appendControlAction(
     action.step = host.scrollStep;
     action.pageRows = host.pageRows;
     action.maximum = host.gestureMaximum;
+    action.sourceDeclarationGeneration = source.declarationGeneration;
+    action.sourceControl = source.control;
     m_controlActions.push_back(action);
     ++m_nextActionSequence;
 }
@@ -176,7 +183,8 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
 }
 
 bool InputRouter::routeControlKey(
-    const InputEvent& event, const HitTarget& host, const bool alreadyPressed, InputRoutingResult& result){
+    const InputEvent& event, const HitTarget& host, const HitTarget& source, const bool alreadyPressed,
+    InputRoutingResult& result){
     ControlActionKind::Enum kind;
     switch(event.key){
     case InputKey::Up: kind = ControlActionKind::Up; break;
@@ -191,13 +199,16 @@ bool InputRouter::routeControlKey(
     }
     auto& owner = m_controlKeyOwners[static_cast<usize>(event.key) - 1u];
     if(!alreadyPressed && !event.repeat)
-        owner = { host.id, host.declarationGeneration, host.popup, host.control };
+        owner = { host.id, host.declarationGeneration, host.popup, host.control,
+            source.id, source.declarationGeneration, source.control };
     if(
         owner.host == host.id && owner.declarationGeneration == host.declarationGeneration
         && owner.popup == host.popup && owner.control == host.control
+        && owner.source == source.id && owner.sourceDeclarationGeneration == source.declarationGeneration
+        && owner.sourceControl == source.control
         && (kind != ControlActionKind::Submit || (!alreadyPressed && !event.repeat))
     )
-        appendControlAction(host, host, kind, 0.0, result);
+        appendControlAction(host, source, kind, 0.0, result);
     return true;
 }
 

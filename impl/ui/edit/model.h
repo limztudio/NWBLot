@@ -63,6 +63,7 @@ public:
     [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
     [[nodiscard]] u64 externalRevision()const{ return m_externalRevision; }
     [[nodiscard]] u64 revision()const{ return m_revision; }
+    [[nodiscard]] u64 compositionGeneration()const{ return m_compositionGeneration; }
     [[nodiscard]] usize anchor()const{ return m_anchor; }
     [[nodiscard]] usize caret()const{ return m_caret; }
     [[nodiscard]] usize selectionStart()const{ return Min(m_anchor, m_caret); }
@@ -103,6 +104,7 @@ private:
         AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory();
     void advanceRevision();
+    void advanceCompositionGeneration();
 
 
 private:
@@ -123,6 +125,7 @@ private:
     usize m_preeditCaret = 0u;
     u64 m_revision = 1u;
     u64 m_externalRevision = 1u;
+    u64 m_compositionGeneration = 1u;
     bool m_compositionActive = false;
 };
 

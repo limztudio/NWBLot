@@ -94,7 +94,12 @@ bool Builder::paintCombos(){
         m_lists[frame.list].source = nullptr;
         m_lists[frame.list].state = nullptr;
         frame.source = nullptr;
+        frame.results = nullptr;
+        frame.searchSource = nullptr;
+        frame.search = nullptr;
         frame.state = nullptr;
+        if(frame.editor != s_LayoutNoParent)
+            m_comboEditors[frame.editor].editState = nullptr;
     }
     return true;
 }
@@ -108,6 +113,11 @@ bool Builder::paintComboPopup(ComboFrame& frame){
         m_context.input().closePopup(frame.popupToken);
         ComboBehavior::Close(*frame.state);
         frame.open = false;
+        if(frame.search){
+            frame.search->m_editor.focused = false;
+            frame.search->query().cancelComposition();
+            snapshotComboQuery(frame);
+        }
         frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
         return true;
     }
@@ -148,7 +158,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
             Max(0.0f, placement.bounds.width - padding.left - padding.right),
             Max(0.0f, placement.bounds.height - padding.top - padding.bottom) };
         box.clip = placement.bounds;
-        painted = paintList(listItem, box) && comboMatches(frame);
+        painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }
     const bool overlayEnded = m_paint.endOverlay();
     const bool scopeEnded = m_context.endPopupScope(painted);

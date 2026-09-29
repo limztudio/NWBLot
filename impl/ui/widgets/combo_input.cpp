@@ -21,13 +21,21 @@ bool Builder::comboStateMatches(const ComboFrame& frame)const{
         && frame.state->isOpen() == frame.open
         && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
         && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration
+        && (!frame.search || (frame.search->query().instanceGeneration() == frame.queryGeneration
+            && frame.search->query().revision() == frame.queryRevision
+            && frame.search->query().compositionGeneration() == frame.queryCompositionGeneration
+            && frame.search->query().externalRevision() == frame.queryExternalRevision
+            && frame.search->query().anchor() == frame.queryAnchor && frame.search->query().caret() == frame.queryCaret))
     ;
 }
 
 bool Builder::comboMatches(const ComboFrame& frame)const{
     return
-        frame.source && comboStateMatches(frame) && frame.source->instanceGeneration() == frame.token.contentGeneration
+        frame.source && comboStateMatches(frame) && (!frame.searchSource || &frame.searchSource->filtered() == frame.results)
+        && frame.source->instanceGeneration() == frame.token.contentGeneration
         && frame.source->revision() == frame.token.contentRevision && frame.source->rowCount() == frame.rowCount
+        && frame.results && frame.results->instanceGeneration() == frame.listToken.contentGeneration
+        && frame.results->revision() == frame.listToken.contentRevision && frame.results->rowCount() == frame.resultCount
         && comboStateMatches(frame)
     ;
 }
@@ -41,6 +49,10 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
         input.invalidateTarget(field.id);
         ComboBehavior::Close(state);
         input.closePopup(frame.popupToken);
+        if(frame.search){
+            frame.search->query().cancelComposition();
+            snapshotComboQuery(frame);
+        }
         return true;
     }
     PopupDismissReason::Enum reason = PopupDismissReason::None;
@@ -60,20 +72,20 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
         )
             continue;
         ComboBehavior::Open(state);
-        if(!ListBehavior::Reconcile(state.m_list, *frame.source))
+        if(!ListBehavior::Reconcile(state.m_list, *frame.results))
             return false;
         if(action.kind != ControlActionKind::Submit){
-            action.control.instanceGeneration = state.m_list.inputGeneration();
+            action.control = { state.m_list.inputGeneration(), frame.results->instanceGeneration(), frame.results->revision() };
             ListOptions options;
             options.rowHeight = frame.options.rowHeight;
             options.wheelRows = frame.options.wheelRows;
             options.selectOnNavigate = false;
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, *frame.source, options, action, preview))
+            if(!ListBehavior::Apply(state.m_list, *frame.results, options, action, preview))
                 return false;
         }
     }
-    if(!ListBehavior::Reconcile(state.m_list, *frame.source))
+    if(!ListBehavior::Reconcile(state.m_list, *frame.results))
         return false;
     frame.popupToken.openGeneration = state.m_popup.openGeneration();
     frame.listToken.instanceGeneration = state.m_list.inputGeneration();
@@ -81,6 +93,8 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
     input.fencePopup(frame.popupToken);
     input.fenceControl(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
     if(!comboMatches(frame))
+        return false;
+    if(frame.search && !prepareComboSearch(field, frame))
         return false;
     return !state.isOpen() || applyComboListInput(frame, result);
 }
@@ -109,8 +123,17 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
                 && gesture.control == frame.listToken && gesture.popup == frame.popupToken;
         }
         else{
+            const bool fromEditor = frame.editor != s_LayoutNoParent && action.source == m_comboEditors[frame.editor].state.id;
+            if(
+                fromEditor && (frame.search->query().composition().active
+                    || (action.kind == ControlActionKind::Submit && !frame.editorSubmitted))
+            ){
+                haveAction = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken, action)
+                    && action.popup == frame.popupToken;
+                continue;
+            }
             ListResult preview;
-            if(!ListBehavior::Apply(state.m_list, *frame.source, options, action, preview) || !comboMatches(frame))
+            if(!ListBehavior::Apply(state.m_list, *frame.results, options, action, preview) || !comboMatches(frame))
                 return false;
             if(preview.activated){
                 if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))

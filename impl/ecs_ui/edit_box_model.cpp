@@ -17,6 +17,11 @@ NWB_IMPL_BEGIN
 
 
 Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditModel& model, const Ui::EditBoxOptions& options){
+    return editInPopup(widget, model, options, m_context.popupToken());
+}
+
+Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup){
     Ui::EditBoxResult result;
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget.id;
@@ -32,7 +37,7 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
         entry->owner = owner;
         entry->expected.capture(model);
     }
-    else if(entry->owner != owner || entry->popup != m_context.popupToken() || !entry->expected.matches(model)){
+    else if(entry->owner != owner || entry->popup != popup || !entry->expected.matches(model)){
         if(
             m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner)
             || (m_primary.pending() && m_primaryOwner == entry->owner)
@@ -45,7 +50,7 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
         entry->expected.capture(model);
     }
     entry->widget = widget;
-    entry->popup = m_context.popupToken();
+    entry->popup = popup;
     entry->seen = m_generation;
     const u64 beforeRevision = model.revision();
     const usize beforeAnchor = model.anchor();

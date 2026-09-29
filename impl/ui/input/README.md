@@ -6,7 +6,7 @@ The UI input domain owns platform-neutral hit testing and interaction state. It 
 
 ## Events and ownership
 
-The router accepts logical-coordinate pointer movement, primary-button down/up, pointer leave/capture loss, key down/up, and window focus loss. Its current normalized key set is Tab, Enter, Space, and Escape. Native key codes, character events, modifiers beyond Shift, text editing, shortcuts, and composition are adapter or future control concerns. The ECS adapter retains native key ownership separately, including keys outside this normalized set, so a held press/repeat/up sequence keeps its original custom or scene owner across focus transfer.
+The router accepts logical-coordinate pointer movement and wheel deltas, primary-button down/up, pointer leave/capture loss, key down/up, and window focus changes. Normalized keys cover focus and activation (Tab, Enter, Space, Escape), caret and selection editing (Left/Right, Home/End, Backspace/Delete), clipboard/history shortcut letters (A/C/X/V/Z/Y), and vertical result navigation (Up/Down/PageUp/PageDown), with Shift/Control/Alt modifiers. The ECS edit adapter translates native keys and character delivery into text commands; composition and clipboard protocols stay with the borrowed OS services. The ECS adapter retains native key ownership separately, including keys outside this normalized set, so a held press/repeat/up sequence keeps its original custom or scene owner across focus transfer.
 
 Call `queue(event)` and then `process()` before offering a native event to another input owner. The ECS adapter processes each event immediately, so the first click over a UI target is consumed even before that target has keyboard focus. `process()` drains admitted events once and preserves already accepted actions across later calls.
 
@@ -54,6 +54,12 @@ Stable widget IDs derive from the host root identity and lifetime generation plu
 `ControlAction` copies wheel, navigation, Submit and keyed Activate intentions into a bounded 256-entry ordered queue. Wheel targets the top accepted hit and its scrollable owner; an unrelated overlap or popup blocks lower lists. Wheel step, page row count and maximum come from accepted geometry. Navigation may repeat, while Enter/Space submit once per press. The initial key-down pins its host/control/popup owner until release; losing that owner permanently retires the navigation intention while preserving release consumption. `fenceControl()` disables old host/part interaction and prunes stale actions, capture, focus and gestures when a state/source lifetime changes.
 
 Thumb gestures copy the accepted maximum with their track and thumb rectangles. Their identity sequence retains the press baseline; `updateSequence` orders the latest coalesced movement/release against other copied actions. A replacement list can request guarded `focusOnCommit` after a source change, but native focus loss or an active higher popup prevents that focus restoration. No router target or action borrows a list source or model.
+
+## Keyboard delegation from editors
+
+An enabled text editor can explicitly bind `keyboardOwner`, `keyboardOwnerDeclarationGeneration` and `keyboardControl` to an accepted navigable host in the same popup and paint layer. Up/Down/PageUp/PageDown and Enter then enqueue ordered control intentions while focus remains with the editor. Home/End, Left/Right and Space retain editor behavior. The editor host still handles Enter and IME composition; a composite control must gate its copied Submit intention on a noncomposing editor submission.
+
+Delegated actions and held keys copy both the source editor and destination host lifetimes. Removing, disabling, rebinding or replacing either one permanently retires the original held intention; restoring an old binding cannot revive it. Publication validates the complete binding atomically. Composition can remove delegation while leaving the editor enabled for native text services.
 
 ## Bounds and failure behavior
 

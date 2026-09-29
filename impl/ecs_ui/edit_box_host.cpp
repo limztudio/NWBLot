@@ -23,6 +23,7 @@ void UiEditModelSnapshot::capture(const Ui::EditModel& model){
     caret = model.caret();
     revision = model.revision();
     externalRevision = model.externalRevision();
+    compositionGeneration = model.compositionGeneration();
     composition = model.composition();
     preedit.assign(composition.text.data(), composition.text.size());
     composition.text = {};
@@ -32,6 +33,7 @@ bool UiEditModelSnapshot::matches(const Ui::EditModel& model)const{
     const auto current = model.composition();
     return
         text == model.text() && revision == model.revision() && externalRevision == model.externalRevision()
+        && compositionGeneration == model.compositionGeneration()
         && anchor == model.anchor() && caret == model.caret() && preedit == current.text
         && composition.active == current.active && composition.anchor == current.anchor && composition.caret == current.caret
         && composition.replacementStart == current.replacementStart && composition.replacementEnd == current.replacementEnd

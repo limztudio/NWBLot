@@ -43,6 +43,9 @@ private:
         u64 declarationGeneration = 0u;
         PopupToken popup;
         ControlToken control;
+        WidgetId source;
+        u64 sourceDeclarationGeneration = 0u;
+        ControlToken sourceControl;
     };
 
 
@@ -104,6 +107,9 @@ private:
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     [[nodiscard]] bool validControlTargets()const;
+    [[nodiscard]] bool validKeyboardOwners()const;
+    [[nodiscard]] const HitTarget* keyboardHost(const HitTarget& source)const;
+    [[nodiscard]] bool currentControlKeyOwner(const ControlKeyOwner& owner)const;
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
     [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
     void reconcileControlActions();
@@ -111,7 +117,7 @@ private:
         const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result
     );
     [[nodiscard]] bool routeControlKey(
-        const InputEvent& event, const HitTarget& host, bool alreadyPressed, InputRoutingResult& result
+        const InputEvent& event, const HitTarget& host, const HitTarget& source, bool alreadyPressed, InputRoutingResult& result
     );
     void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;

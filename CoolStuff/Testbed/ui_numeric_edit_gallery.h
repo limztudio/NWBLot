@@ -1,0 +1,33 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_ui/components.h>
+#include <impl/ui/widgets/numeric_edit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TestbedUiNumericEditGallery final : NoCopy{
+public:
+    explicit TestbedUiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena);
+
+
+public:
+    void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+
+
+private:
+    NWB::Impl::Ui::IntegerEditModel m_integer;
+    NWB::Impl::Ui::FloatEditModel m_float;
+    NWB::Impl::Ui::EditBoxState m_integerState;
+    NWB::Impl::Ui::EditBoxState m_floatState;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

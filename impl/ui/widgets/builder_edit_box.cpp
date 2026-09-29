@@ -19,6 +19,11 @@ NWB_IMPL_UI_BEGIN
 
 EditBoxResult Builder::editBox(
     const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
+    return declareEditBox(stableKey, model, state, options);
+}
+
+EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& model, EditBoxState& state,
+    const EditBoxOptions& options, IEditActionSink* actions, IntegerEditFrame* integerFrame, FloatEditFrame* floatFrame){
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
         || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes
@@ -36,16 +41,41 @@ EditBoxResult Builder::editBox(
     WidgetState* widget = m_context.declare(stableKey, WidgetKind::EditBox);
     if(!widget)
         return {};
+    if((integerFrame || floatFrame) && (!numericStateAvailable(state) || !m_context.claimState(*widget, model.instanceGeneration()))){
+        m_context.fail();
+        return {};
+    }
     if(!options.enabled)
         m_context.input().invalidateTarget(widget->id);
     EditBoxResult result;
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget->id;
-    if(m_editHost)
-        result = m_editHost->edit(*widget, model, options);
-    if(!result.valid){
+    if(m_editHost){
+        result = actions ? m_editHost->editActions(*widget, model, options, m_context.popupToken(), *actions)
+            : m_editHost->edit(*widget, model, options);
+    }
+    if(!result.valid || m_context.failed()){
+        result.valid = false;
         m_context.fail();
         return result;
+    }
+    if(integerFrame){
+        if(!integerFrame->model || integerFrame->model->revision() != integerFrame->revision){
+            m_context.fail();
+            result.valid = false;
+            return result;
+        }
+        snapshotNumericEdit(*integerFrame, model);
+        integerFrame->focused = result.focused;
+    }
+    if(floatFrame){
+        if(!floatFrame->model || floatFrame->model->revision() != floatFrame->revision){
+            m_context.fail();
+            result.valid = false;
+            return result;
+        }
+        snapshotNumericEdit(*floatFrame, model);
+        floatFrame->focused = result.focused;
     }
     Item item(m_arena);
     item.state = *widget;
@@ -54,6 +84,15 @@ EditBoxResult Builder::editBox(
         result.valid = false;
         return result;
     }
+    if((integerFrame && !integerEditMatches(*integerFrame)) || (floatFrame && !floatEditMatches(*floatFrame))){
+        m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    if(integerFrame)
+        item.integerEdit = static_cast<u32>(m_scope->m_integerEdits.size());
+    if(floatFrame)
+        item.floatEdit = static_cast<u32>(m_scope->m_floatEdits.size());
     Point minimum{ 120.0f, 0.0f };
     const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
@@ -118,6 +157,8 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
 }
 
 bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation){
+    if(!numericEditMatches(item))
+        return false;
     EditBoxPlacement placement;
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
     if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), item.editState->scroll, placement, caretWidth))
@@ -135,7 +176,8 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     target.contextMenu = item.contextMenu;
     if(!m_context.addTarget(item.state, target))
         return false;
-    return !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
+    const bool published = !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
+    return published && numericEditMatches(item);
 }
 
 

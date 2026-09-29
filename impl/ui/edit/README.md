@@ -20,7 +20,7 @@ Default limits allow 4096 committed bytes, 64 copied history records, and 131072
 
 `NormalizeSingleLineText` in `single_line_text.*` is the clipboard insertion policy. CRLF becomes one space; individual line breaks, Unicode NEXT LINE/LINE SEPARATOR/PARAGRAPH SEPARATOR and tabs become spaces. NUL, other ASCII controls, malformed UTF8 and an excessive normalized byte count are rejected before allocation/mutation. Other scalars remain unchanged. This utility is separate from the raw model's strict single-line validation and does not normalize Unicode composition.
 
-Rendering stays in `impl/ui/widgets/edit_box*`: an owned `EditBoxView` maps model bytes, grapheme boundaries, shaped LTR clusters and transient preedit to clipped text, selection and caret geometry. The application lends its model during a live declaration; frozen paint retains owned text/font resources. The edit domain remains independent of OS, ECS, font and GPU implementations. Paragraph bidi, numeric editing and multiline layout are later domains.
+Rendering stays in `impl/ui/widgets/edit_box*`: an owned `EditBoxView` maps model bytes, grapheme boundaries, shaped LTR clusters and transient preedit to clipped text, selection and caret geometry. The application lends its model during a live declaration; frozen paint retains owned text/font resources. The edit domain remains independent of OS, ECS, font and GPU implementations. Paragraph bidi and multiline layout are later domains.
 
 ## Ordered component actions
 
@@ -31,6 +31,14 @@ Rendering stays in `impl/ui/widgets/edit_box*`: an owned `EditBoxView` maps mode
 Ordinary focus transfer queues a copied Blur boundary after the owner's preceding text events, then immediately retires native sessions and pending clipboard mutation. A later matching loan can process those events before Blur. Copied focus generations distinguish loss and reacquisition of the same widget before the next loan. Cancellation retires its old focus generation without clearing a later reacquired owner. New/rebound, omitted/recreated or reset action ownership and disabled/read-only policy transitions invoke Abandon at the next live loan; no missing model is accessed during retirement. Explicit same-owner external draft replacement fences old input while preserving the application's replacement.
 
 The ECS host rejects reentrant mutation or reset while a model/action transaction is borrowed, preserving entry and event storage until the rejected drain ends. OS composition still owns Enter and the first Escape during preedit. Restoration can renew external text revisions and native sessions without applying surrounding deletion to a retired native baseline. Component-specific parsing and typed values remain separate from this event/action contract.
+
+## Numeric drafts and typed values
+
+`IntegerEditModel` and `FloatEditModel` own a committed `i64`/finite `f64` and a separate 128-byte `EditModel` draft. Intermediate signs, decimal points and unfinished exponents remain editable without changing the application value. `numeric_parse.*` classifies Complete, Incomplete, Invalid and OutOfRange before conversion; it trims ASCII edge whitespace, accepts decimal syntax only, consumes the whole input and leaves output untouched on failure. Integers never pass through floating-point conversion. `global/text_numeric_format.h` formats into caller-owned bounded storage; finite doubles use shortest roundtrip text, including signed zero.
+
+`submit(bounds)` commits a complete representable draft with Reject or Clamp bounds. A successful unclamped Submit preserves the exact accepted bytes, caret and history; an invalid Submit leaves the draft available for correction. `blur(bounds)` commits valid input and canonicalizes it, or restores the committed value after rejection. Cancel and Abandon restore canonical committed text and clear transient draft history/composition; only Cancel reports a user cancellation. Numeric overflow/underflow is rejected before bounds clamping. Bounds must be finite/ordered and use a supported policy; invalid bounds leave all model state unchanged.
+
+`setValue()` is authoritative even outside current widget bounds, rejects nonfinite doubles, canonicalizes the draft and fences prior input even for the same value. `setDraft()` explicitly replaces a bounded draft without changing the typed value. `revision()` tracks model actions and external changes; draft revisions, external revisions, selections and composition epochs independently track borrowed editing. Dirty compares the current draft bytes with the last accepted draft baseline. `lendDraft()` is a synchronous editing loan and must not escape into asynchronous or GPU work.
 
 # Unicode data and conformance
 

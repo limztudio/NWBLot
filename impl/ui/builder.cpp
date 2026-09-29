@@ -72,6 +72,7 @@ bool Builder::endPanel(){
     m_scope->m_panelActive = false;
     m_scope->m_stack.clear();
     const bool combosPainted = painted && popped && paintDeferred();
+    releaseDeferredLoans();
     if(!combosPainted)
         m_context.fail();
     return combosPainted;

@@ -12,6 +12,7 @@
 #include "widgets/style.h"
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
+#include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
 #include "widgets/list.h"
@@ -37,6 +38,9 @@ NWB_IMPL_UI_BEGIN
 class Builder final : NoCopy{
 private:
     using Item = BuilderScopeFrame::Item;
+    using NumericEditFrame = BuilderScopeFrame::NumericEditFrame;
+    using IntegerEditFrame = BuilderScopeFrame::IntegerEditFrame;
+    using FloatEditFrame = BuilderScopeFrame::FloatEditFrame;
     using ListFrame = BuilderScopeFrame::ListFrame;
     using ComboFrame = BuilderScopeFrame::ComboFrame;
     using TooltipFrame = BuilderScopeFrame::TooltipFrame;
@@ -80,6 +84,11 @@ public:
         ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
+    // Numeric model and editor state remain lent through the enclosing scope or outermost user popup end.
+    [[nodiscard]] NumericEditBoxResult integerEdit(AStringView stableKey, IntegerEditModel& model,
+        EditBoxState& state, const IntegerEditOptions& options = {});
+    [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model,
+        EditBoxState& state, const FloatEditOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
     void reset();
     // Observe accepted input without retaining target pointers across frame publication.
@@ -111,6 +120,15 @@ private:
     [[nodiscard]] bool paintWindowResize();
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
+    [[nodiscard]] EditBoxResult declareEditBox(AStringView stableKey, EditModel& model, EditBoxState& state,
+        const EditBoxOptions& options, IEditActionSink* actions = nullptr, IntegerEditFrame* integerFrame = nullptr,
+        FloatEditFrame* floatFrame = nullptr);
+    void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft);
+    [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const;
+    [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const;
+    [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const;
+    [[nodiscard]] bool numericEditMatches(const Item& item)const;
+    [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const;
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);

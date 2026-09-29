@@ -1,5 +1,8 @@
 nwb_declare_static_library(nwb_ui_widgets)
 target_sources(nwb_ui_widgets PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_edit.h"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_numeric_edit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_loan.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/style.h"
     "${CMAKE_CURRENT_LIST_DIR}/controls_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scroll.h"

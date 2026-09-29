@@ -1,5 +1,14 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_parse_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_format_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_model_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/integer_model_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/float_model_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_model_lifetime_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_builder_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/numeric_edit_loan_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_model_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_command_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_single_line_text_tests.cpp"

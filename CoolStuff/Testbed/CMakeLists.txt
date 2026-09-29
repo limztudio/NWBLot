@@ -22,6 +22,8 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ui_nested_popup_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_nested_popup_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_nested_popup_gallery.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_numeric_edit_gallery.h"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_numeric_edit_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_combo_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_list_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_list_gallery.cpp"

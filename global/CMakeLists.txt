@@ -18,5 +18,6 @@ target_sources(nwb_global PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/termination.h"
     "${CMAKE_CURRENT_LIST_DIR}/terminal_entry.h"
     "${CMAKE_CURRENT_LIST_DIR}/texture_payload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/text_numeric_format.h"
 )
 

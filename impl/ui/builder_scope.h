@@ -11,6 +11,7 @@
 #include "widgets/style.h"
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
+#include "widgets/numeric_edit.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
 #include "widgets/list.h"
@@ -50,6 +51,8 @@ private:
         u32 node = 0u;
         u32 list = s_LayoutNoParent;
         u32 combo = s_LayoutNoParent;
+        u32 integerEdit = s_LayoutNoParent;
+        u32 floatEdit = s_LayoutNoParent;
         bool enabled = true;
         bool checked = false;
         bool contextMenu = false;
@@ -78,6 +81,27 @@ private:
         explicit WindowFrame(Core::Alloc::GlobalArena& arena)
             : title(arena)
         {}
+    };
+
+    struct NumericEditFrame{
+        EditBoxState* state = nullptr;
+        u64 revision = 0u;
+        u64 draftGeneration = 0u;
+        u64 draftRevision = 0u;
+        u64 draftExternalRevision = 0u;
+        u64 draftCompositionGeneration = 0u;
+        usize anchor = 0u;
+        usize caret = 0u;
+        u32 item = s_LayoutNoParent;
+        bool focused = false;
+    };
+
+    struct IntegerEditFrame : NumericEditFrame{
+        const IntegerEditModel* model = nullptr;
+    };
+
+    struct FloatEditFrame : NumericEditFrame{
+        const FloatEditModel* model = nullptr;
     };
 
     struct ListFrame{
@@ -183,6 +207,8 @@ private:
     PopupPlacement m_popupPlacement;
     LayoutTree m_layout;
     PaintVector<Item> m_items;
+    PaintVector<IntegerEditFrame> m_integerEdits;
+    PaintVector<FloatEditFrame> m_floatEdits;
     PaintVector<ListFrame> m_lists;
     PaintVector<ComboFrame> m_combos;
     PaintVector<Item> m_comboEditors;

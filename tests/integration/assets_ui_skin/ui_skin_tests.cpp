@@ -227,7 +227,7 @@ TEST(AssetsUiSkin, EngineDefaultAtlasAndTextureCookAndLoadTogether){
     EXPECT_EQ(loadedSkin.atlasWidth(), 256u);
     EXPECT_EQ(loadedSkin.atlasHeight(), 256u);
     EXPECT_FLOAT_EQ(loadedSkin.referenceDensity(), 1.0f);
-    ASSERT_EQ(loadedSkin.regions().size(), 41u);
+    ASSERT_EQ(loadedSkin.regions().size(), skin.regions().size());
     const UiSkinRegion* panel = loadedSkin.findRegion(Name("panel.normal"));
     ASSERT_NE(panel, nullptr);
     EXPECT_EQ(panel->rectangle.x, 4u);

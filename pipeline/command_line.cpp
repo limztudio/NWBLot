@@ -60,9 +60,13 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
     m_app.add_option(s_PipelineInputListOption, m_inputList, "UTF-8 newline-separated input paths");
     m_app.add_option(s_PipelineOutputOption, m_outputDirectory,
         m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
-    if(m_tool == PipelineTool::AssetBuilder){
+    if(m_tool == PipelineTool::DependencyComputer)
+        m_app.add_flag(s_PipelineSkinDependenciesOption, m_includeSkinDependencies, "Include the textures referenced by selected UI skins");
+    if(m_tool == PipelineTool::AssetBuilder || m_tool == PipelineTool::DependencyComputer){
         m_app.add_option(s_PipelineRepoRootOption, m_repoRoot, "Repository root; defaults to the working directory");
         m_app.add_option(s_PipelineAssetRootOption, m_assetRoots, "Asset root directories used to resolve virtual paths");
+    }
+    if(m_tool == PipelineTool::AssetBuilder){
         m_app.add_option(s_PipelineCacheDirectoryOption, m_cacheDirectory, "Asset build cache directory");
         m_app.add_option(s_PipelineAssetTypeOption, m_assetType, "Asset build domain; graphics is currently supported");
     }
@@ -98,6 +102,7 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
             || !NWB::Core::Assets::ReadAssetInputList(Path(listPath.get_allocator().arena(), listPath), options.inputs, m_tool == PipelineTool::AssetGatherer))
             return false;
     }
+    options.includeSkinDependencies = m_includeSkinDependencies;
     return true;
 }
 

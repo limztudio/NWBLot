@@ -40,6 +40,8 @@ def make_parser() -> argparse.ArgumentParser:
                         help="Persistent directory for standalone .nwba artifacts")
     parser.add_argument("--configuration", help="Asset configuration label; defaults to the selected --config")
     parser.add_argument("--asset-type", default="graphics")
+    parser.add_argument("--include-skin-dependencies", action="store_true",
+                        help="Include textures referenced by selected UI skins")
     parser.add_argument("--tool-directory", type=Path,
                         help="Directory containing the three built pipeline executables")
     parser.add_argument("--dependency-computer", "--dependeny-computer", type=Path)
@@ -138,6 +140,11 @@ def pipeline_commands(
     dependency, builder, gatherer = tools
     initial_list = workspace / "inputs.list"
     dependency_list = workspace / "dependencies.list"
+    dependency_arguments = ["--input-list", str(initial_list), "--output", str(dependency_list)]
+    if options.include_skin_dependencies:
+        dependency_arguments.extend(["--include-skin-dependencies", "--repo-root", str(repo_root)])
+        for root in roots:
+            dependency_arguments.extend(["--asset-root", str(root)])
     builder_arguments = [
         "--input-list", str(dependency_list), "--repo-root", str(repo_root),
         "--output-directory", str(built), "--cache-directory", str(cache),
@@ -150,7 +157,7 @@ def pipeline_commands(
         builder_arguments.extend(["--configuration", configuration])
         gatherer_arguments.extend(["--configuration", configuration])
     return [
-        (dependency, ["--input-list", str(initial_list), "--output", str(dependency_list)]),
+        (dependency, dependency_arguments),
         (builder, builder_arguments),
         (gatherer, gatherer_arguments),
     ]

@@ -23,6 +23,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
     )
+    add_test(
+        NAME nwb_skin_dependency_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/skin_dependency_launcher_tests.py"
+    )
     # Parser/report self-tests stay in ordinary CTest. The matching GPU runs remain opt-in: M4 and lagged lighting
     # need a distinct compute family plus a window, hybrid capture is target-hardware, and transfer-queue needs a
     # Transfer-only family plus an external bandwidth capture.

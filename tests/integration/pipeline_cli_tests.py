@@ -10,6 +10,8 @@ import sys
 import tempfile
 from unittest import mock
 
+from skin_dependency_cli_tests import run_skin_dependency_tests
+
 # Shared literals (no inline hardcodes below this block).
 LIT_DEPENDENCY_COMPUTER = "--dependency-computer"
 LIT_ASSET_BUILDER = "--asset-builder"
@@ -376,6 +378,7 @@ def main() -> int:
         temporary_parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="p", dir=temporary_parent) as temporary_directory:
             run_pipeline_tests(args, pathlib.Path(temporary_directory))
+            run_skin_dependency_tests(args, pathlib.Path(temporary_directory), sys.modules[__name__])
     except (AssertionError, OSError, struct.error) as error:
         print(f"pipeline CLI integration failed: {error}", file=sys.stderr)
         return 1

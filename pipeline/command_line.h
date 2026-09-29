@@ -34,6 +34,7 @@ inline constexpr char s_PipelineAssetRootOption[] = "--asset-root";
 inline constexpr char s_PipelineCacheDirectoryOption[] = "--cache-directory";
 inline constexpr char s_PipelineAssetTypeOption[] = "--asset-type";
 inline constexpr char s_PipelineConfigurationOption[] = "--configuration";
+inline constexpr char s_PipelineSkinDependenciesOption[] = "--include-skin-dependencies";
 inline constexpr char s_PipelineCliHelpRequestName[] = "CallForHelp";
 
 struct PipelineOptions{
@@ -44,6 +45,7 @@ struct PipelineOptions{
     NWB::Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
     ACompactString assetType;
+    bool includeSkinDependencies = false;
 
     explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)
         : inputs(arena)
@@ -86,6 +88,7 @@ private:
     AInteropString m_cacheDirectory;
     AInteropString m_configuration;
     AInteropString m_assetType;
+    bool m_includeSkinDependencies = false;
     PipelineTool::Enum m_tool;
     CLI::App m_app;
 };

@@ -214,6 +214,15 @@ static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVo
 }
 
 static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context){
+    const GraphicsVolumeMetadata* selectedGraphics = Core::Assets::FindParsedMetadataExtension<GraphicsVolumeMetadata>(
+        context.parsedMetadata,
+        s_GraphicsVolumeMetadataExtensionName
+    );
+    const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
+    // Only selected graphics metadata or materials require generated modules and the shader index.
+    if(!selectedGraphics && (!materialBucket || materialBucket->size() == 0u))
+        return true;
+
     GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
     if(!ParseMaterialBindFiles(context, graphicsMetadata))
         return false;

@@ -76,11 +76,8 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         const bool hasColor = outputLayer.color.valid();
         if(
             !declarations.valid()
-            || (outputLayer.readyTask.valid() != (outputLayer.frameGeneration != 0u))
+            || !outputLayer.validShape()
             || (outputLayer.readyTask.valid() && !declarations.validTask(outputLayer.readyTask))
-            || (hasColor && !outputLayer.readyTask.valid())
-            || hasColor != outputLayer.colorVersion.valid()
-            || hasColor != outputLayer.sampledImage.valid()
         )
             return false;
         if(hasColor){

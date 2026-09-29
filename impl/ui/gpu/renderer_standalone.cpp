@@ -62,7 +62,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
     if(!begin.valid() || !graph.setNormalExecutionPrelude(begin))
         return {};
     Core::GpuTaskGraphOutputLayer layer;
-    if(!declare(graph, layer) || !layer.color.valid())
+    if(!declare(graph, layer, false) || !layer.color.valid())
         return {};
     const GpuFrame frame = m_pending;
     const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(

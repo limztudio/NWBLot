@@ -267,7 +267,7 @@ struct GpuRendererState final : NoCopy{
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
-    [[nodiscard]] bool declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer);
+    [[nodiscard]] bool declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer, bool allowEmptySceneLayer);
     [[nodiscard]] Core::GpuTaskId declareStandalone(
         Core::GpuTaskGraph& graph,
         Core::GpuTimingFrameTransaction& frameTimingTransaction

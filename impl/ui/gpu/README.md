@@ -5,7 +5,8 @@
 resolver, and the caller's `GlobalArena`; it has no ECS or ImGui dependency.
 
 Call `validateResources(width, height)`, then `setSkin(identity, loadedSkin,
-skinGeneration)` during setup. `setSkin` loads and validates the referenced texture,
+skinGeneration)`. `setSkin` can also rebind a later skin generation without a GPU
+idle wait. It loads and validates the referenced texture,
 creates its concrete GPU image and descriptor, and saves the loader's authoritative
 static-upload completion token. Skin identities and generation must match the
 snapshot submitted by `submit(Move(snapshot))`. Asset references identify assets;
@@ -27,11 +28,14 @@ with no declared layer and keeps the pending snapshot. No frame waits for GPU id
 
 `prepareTaskGraphOutputLayer(acquired)` captures the exact acquired frame.
 `declareTaskGraphOutputLayer(graph, layer)` declares graph-owned geometry uploads,
-a transparent target clear, and `ui.raster`. The raster produces an explicit color
-resource version. It has no scene dependency, so the graph can schedule it alongside
-scene work. The final output consumer must depend on `readyTask`, read `colorVersion`,
-and sample `sampledImage` before output transfer encoding. Only accepted final
-consumption calls `acceptTaskGraphOutputLayer(frameGeneration, token)`.
+a transparent target clear, and `ui.raster` for a painted frame. The raster produces
+an explicit color resource version. It has no scene dependency, so the graph can
+schedule it alongside scene work. The final output consumer depends on `readyTask`,
+reads `colorVersion`, and samples `sampledImage` before output transfer encoding.
+An empty scene-UI snapshot declares no UI graph work or color resource; it returns
+only `frameGeneration` so the accepted final consumer still retires that exact
+snapshot. A rejected graph leaves the generation pending for retry. Only accepted
+final consumption calls `acceptTaskGraphOutputLayer(frameGeneration, token)`.
 
 Each graph payload owns the frozen snapshot and concrete skin, target, geometry,
 pipeline, sampler, and descriptor versions it reads. Descriptor slots remain
@@ -74,9 +78,9 @@ or caller arena. Resize/device recreation uses that same joined invalidation and
 validation boundary. Main-thread setup/submission methods do not provide concurrent
 producer admission.
 
-Raster and output draws use native `CommandList` recording. Graph resource imports,
-versions, barriers, uploads, clears, and `ui.raster`/`ui.output` task timing are
-available to graph capture and telemetry. The new native draw path has no complete
-draw-command IR/replay adapter, and task timing does not claim a whole-frame span.
+Raster and output draws support direct native recording and command IR replay.
+Graph resource imports, versions, barriers, uploads, clears, and `ui.raster`/`ui.output`
+task timing are available to graph capture and telemetry. Standalone presentation
+also records the `render.frame` timing scope around its graph work.
 Widgets, retained interaction state, text shaping/fonts, focus/navigation, and OS
-IME/clipboard borrowing remain separate extension domains above this renderer.
+IME/clipboard borrowing live in separate domains above this renderer.

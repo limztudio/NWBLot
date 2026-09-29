@@ -312,7 +312,7 @@ bool GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFr
 }
 
 bool GpuRenderer::declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer){
-    return m_state->declare(graph, outLayer);
+    return m_state->declare(graph, outLayer, true);
 }
 
 void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken){

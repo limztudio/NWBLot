@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer){
+bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer, bool allowEmptySceneLayer){
     outLayer = {};
     if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
         return true;
@@ -40,6 +40,23 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     frame->m_indexUpload = {};
     frame->m_clear = {};
     frame->m_raster = {};
+    const DrawSnapshot& snapshot = frame->m_snapshot;
+    if(
+        allowEmptySceneLayer
+        && snapshot.commands().empty()
+        && snapshot.vertices().empty()
+        && snapshot.indices().empty()
+        && snapshot.glyphPages().empty()
+        && snapshot.sdfPages().empty()
+        && snapshot.textureImages().empty()
+    ){
+        outLayer.frameGeneration = snapshot.generation();
+        m_declaredLayer = outLayer;
+        m_declaredGraph = &graph;
+        m_graphGeneration = generation;
+        m_claimed = true;
+        return true;
+    }
     const Core::GpuExternalCompletionId targetReady = graph.importExternalCompletion(
         Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion")
             .setToken(frame->m_target->m_readinessToken)

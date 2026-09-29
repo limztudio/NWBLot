@@ -1,0 +1,96 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <core/task/gpu/output_layer_contributor.h>
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_output_layer_shape_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(OutputLayerShape, AcceptsNoWorkAndGenerationOnlyWithoutGraphResources){
+    Core::GpuTaskGraphOutputLayer layer;
+    EXPECT_TRUE(layer.validShape());
+
+    layer.frameGeneration = 17u;
+    EXPECT_TRUE(layer.validShape());
+    EXPECT_FALSE(layer.readyTask.valid());
+    EXPECT_FALSE(layer.color.valid());
+    EXPECT_FALSE(layer.colorVersion.valid());
+    EXPECT_FALSE(layer.sampledImage.valid());
+}
+
+TEST(OutputLayerShape, PreservesUploadOnlyAndCompleteColorForms){
+    Core::GpuTaskGraphOutputLayer layer;
+    layer.readyTask = { 3u, 0u };
+    EXPECT_FALSE(layer.validShape());
+
+    layer.frameGeneration = 17u;
+    EXPECT_TRUE(layer.validShape());
+
+    layer.color = { 3u, 1u };
+    EXPECT_FALSE(layer.validShape());
+    layer.colorVersion = { 3u, 2u };
+    EXPECT_FALSE(layer.validShape());
+    layer.sampledImage = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 4u);
+    EXPECT_TRUE(layer.validShape());
+
+    layer.readyTask = {};
+    EXPECT_FALSE(layer.validShape());
+    layer.readyTask = { 3u, 0u };
+    layer.frameGeneration = 0u;
+    EXPECT_FALSE(layer.validShape());
+}
+
+TEST(OutputLayerShape, RejectsPartialColorWithoutAReadyTask){
+    Core::GpuTaskGraphOutputLayer layer;
+    layer.frameGeneration = 17u;
+    layer.colorVersion = { 3u, 2u };
+    EXPECT_FALSE(layer.validShape());
+
+    layer.colorVersion = {};
+    layer.sampledImage = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 4u);
+    EXPECT_FALSE(layer.validShape());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

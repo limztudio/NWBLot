@@ -8,6 +8,8 @@ An omitted skin reference selects the engine default atlas. At startup, a custom
 
 Visible `UiPaintComponent` roots are sorted by explicit `order`, then their complete generational EntityID. Removing/hiding a root retires its input/actions even while a GPU snapshot is pending. Callbacks execute on the owning main thread only when a new frame can be built. Their mutable captured state stays alive if the callback removes or replaces its component. A pending generation retries frozen data without rebuilding callbacks or replaying their actions.
 
+`wantsTextInput()` reports a focused, enabled, editable control from the committed layout while the window and UI resources are active. Pending declarations do not change this answer until their frame is accepted; read-only controls can retain selection focus without requesting text input.
+
 The candidate hit layout has the same generation as submitted paint. Final output acceptance identifies the acquired backbuffer used by that generation; only its exact native presentation receipt publishes the layout. A later scene-only frame cannot qualify it. Rejected matching presentation abandons the candidate before rebuilding. This is accepted native queueing, rather than display scan-out completion. Resize/DPI/device boundaries clear stale input geometry.
 
 Native handler dispatch joins outstanding world work before reading roots. System update uses scheduler component dependencies and never joins its own task. Coordinates are logical; the OS dispatcher normalizes DPI. The first held pointer button assigns scene/custom ownership through release, including wheel input. Supported held UI keys keep their owner across focus transfer. Focus broadcasts and key/button releases visit all handlers.

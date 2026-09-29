@@ -139,6 +139,7 @@ public:
     [[nodiscard]] bool character(u32 unicode);
     [[nodiscard]] bool pastePrimary(Ui::Point position);
     [[nodiscard]] bool hasTextFocus()const;
+    [[nodiscard]] bool wantsTextInput()const;
     [[nodiscard]] bool takeClipboardFailure();
     void synchronizeFocus();
     void reset();

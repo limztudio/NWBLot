@@ -151,6 +151,13 @@ bool UiEditBoxHost::hasTextFocus()const{
     return false;
 }
 
+bool UiEditBoxHost::wantsTextInput()const{
+    if(!m_context.input().windowFocused() || !hasTextFocus())
+        return false;
+    const Entry* entry = find(m_context.input().focus());
+    return entry && !entry->displayed.options.readOnly;
+}
+
 bool UiEditBoxHost::takeClipboardFailure(){
     if(rejectBorrowedMutation())
         return false;

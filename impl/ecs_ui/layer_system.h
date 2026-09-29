@@ -102,6 +102,7 @@ public:
     virtual void pointerCaptureLost()override;
     [[nodiscard]] bool wantsKeyboard()const;
     [[nodiscard]] bool wantsPointer()const;
+    [[nodiscard]] bool wantsTextInput()const;
 
 
 private:

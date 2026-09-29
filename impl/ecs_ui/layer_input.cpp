@@ -259,6 +259,10 @@ bool UiLayerSystem::wantsPointer()const{
     return m_resourcesReady && m_context.input().wantsPointer();
 }
 
+bool UiLayerSystem::wantsTextInput()const{
+    return m_resourcesReady && m_editHost.wantsTextInput();
+}
+
 void UiLayerSystem::routeInput(const Ui::InputEvent& event){
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();

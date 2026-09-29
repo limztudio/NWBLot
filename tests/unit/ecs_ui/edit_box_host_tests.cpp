@@ -163,6 +163,46 @@ TEST_F(UiEditBoxHostTests, ReadOnlyPolicyChangeDiscardsQueuedMutationAndNativeSe
     EXPECT_EQ(m_model.text(), "basefresh");
 }
 
+TEST_F(UiEditBoxHostTests, TextInputCaptureUsesTheCommittedEditableFrame){
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(activate());
+    EXPECT_TRUE(m_host.wantsTextInput());
+
+    Ui::EditBoxOptions readOnly;
+    readOnly.readOnly = true;
+    ASSERT_TRUE(prepare(m_model, readOnly));
+    EXPECT_TRUE(m_host.wantsTextInput());
+    ASSERT_TRUE(commit());
+    EXPECT_TRUE(m_host.hasTextFocus());
+    EXPECT_FALSE(m_host.wantsTextInput());
+    EXPECT_FALSE(m_textInput.activeSession().valid());
+
+    ASSERT_TRUE(prepare(m_model));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(commit());
+    EXPECT_TRUE(m_host.wantsTextInput());
+
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusLost }));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::FocusGained }));
+    EXPECT_FALSE(m_host.wantsTextInput());
+}
+
+TEST_F(UiEditBoxHostTests, TextInputCaptureRetiresWithTheWidgetAndHostReset){
+    ASSERT_TRUE(activate());
+    EXPECT_TRUE(m_host.wantsTextInput());
+    ASSERT_TRUE(emptyFrame());
+    EXPECT_FALSE(m_host.wantsTextInput());
+
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_FALSE(m_host.wantsTextInput());
+    ASSERT_TRUE(key(Ui::InputKey::Tab));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_host.wantsTextInput());
+    m_host.reset();
+    EXPECT_FALSE(m_host.wantsTextInput());
+}
+
 TEST_F(UiEditBoxHostTests, SurroundingDeletionCannotFollowALocalMoveAgainstOldNativeCaret){
     ASSERT_TRUE(m_model.setText("abcd"));
     ASSERT_TRUE(activate());

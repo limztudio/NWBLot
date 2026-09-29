@@ -252,6 +252,29 @@ TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
     EXPECT_EQ(threshold.commands()[0u].material, PaintMaterial::SdfGlyph);
 }
 
+TEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage){
+    ASSERT_TRUE(installAtlas());
+    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 23.5f }, m_layout), TextLayoutStatus::Success);
+    const DrawSnapshot fractionalFont = paint();
+    EXPECT_TRUE(fractionalFont.sdfPages().empty());
+    ASSERT_EQ(fractionalFont.glyphPages().size(), 1u);
+    ASSERT_EQ(fractionalFont.commands().size(), 1u);
+    EXPECT_EQ(fractionalFont.commands()[0u].material, PaintMaterial::Glyph);
+
+    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 16.0f }, m_layout), TextLayoutStatus::Success);
+    const DrawSnapshot fractionalDpi = paint(1.49f);
+    EXPECT_TRUE(fractionalDpi.sdfPages().empty());
+    ASSERT_EQ(fractionalDpi.glyphPages().size(), 1u);
+    ASSERT_EQ(fractionalDpi.commands().size(), 1u);
+    EXPECT_EQ(fractionalDpi.commands()[0u].material, PaintMaterial::Glyph);
+
+    const DrawSnapshot thresholdDpi = paint(1.5f);
+    EXPECT_TRUE(thresholdDpi.glyphPages().empty());
+    ASSERT_EQ(thresholdDpi.sdfPages().size(), 1u);
+    ASSERT_EQ(thresholdDpi.commands().size(), 1u);
+    EXPECT_EQ(thresholdDpi.commands()[0u].material, PaintMaterial::SdfGlyph);
+}
+
 TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
     ASSERT_TRUE(installAtlas());
     ASSERT_EQ(m_text.layout({ .text = "   ", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);

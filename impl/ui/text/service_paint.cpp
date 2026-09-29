@@ -24,12 +24,13 @@ NWB_IMPL_UI_BEGIN
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
     const f32 pixelScale = Max(metrics.pixelScaleX, metrics.pixelScaleY);
-    const f32 physicalSize = Ceil(layout.fontSize() * pixelScale);
+    const f32 physicalSize = layout.fontSize() * pixelScale;
+    const f32 rasterPpem = Ceil(physicalSize);
     if(
         layout.lines().empty() || !IsFinite(layout.fontSize())
         || layout.fontSize() < 1.0f / 64.0f || layout.fontSize() > 2048.0f
-        || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsFinite(physicalSize)
-        || physicalSize < 1.0f || physicalSize > 4096.0f || !IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b)
+        || !IsFinite(topLeft.x) || !IsFinite(topLeft.y) || !IsFinite(rasterPpem)
+        || rasterPpem < 1.0f || rasterPpem > 4096.0f || !IsFinite(color.r) || !IsFinite(color.g) || !IsFinite(color.b)
         || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
     )
         return false;
@@ -39,8 +40,8 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         return false;
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
         return true;
-    const u32 pixelSize = static_cast<u32>(physicalSize);
-    const f32 rasterScale = physicalSize / layout.fontSize();
+    const u32 pixelSize = static_cast<u32>(rasterPpem);
+    const f32 rasterScale = rasterPpem / layout.fontSize();
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
     Core::Alloc::ScratchArena scratchArena(Name("impl/ui/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
@@ -50,7 +51,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         const PlacedGlyph& glyph = layout.glyphs()[index];
         const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize);
         const TextGlyphIntersection::Enum status = TextGlyphVisibility::candidate(
-            glyph, atlas, layout.fontSize(), physicalSize, topLeft, clip, deviceScale
+            glyph, atlas, layout.fontSize(), rasterPpem, topLeft, clip, deviceScale
         );
         if(status == TextGlyphIntersection::Invalid)
             return false;

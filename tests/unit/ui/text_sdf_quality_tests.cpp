@@ -87,7 +87,7 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
     static constexpr StringView s_Sources[]{ "latin.font", "korean.font" };
     static constexpr StringView s_Identities[]{ "engine/ui/fonts/default/latin", "engine/ui/fonts/default/korean" };
     static constexpr StringView s_AtlasIdentities[]{ "engine/ui/fonts/default/latin_atlas", "engine/ui/fonts/default/korean_atlas" };
-    static constexpr StringView s_Text[]{ "Aoe", "\xED\x95\x9C" };
+    static constexpr StringView s_Text[]{ "Aoegq", "\xED\x95\x9C" };
     static constexpr f32 s_Zoom[]{ 0.5f, 0.75f, 1.f, 1.5f, 2.f, 4.f };
     static constexpr f32 s_Dpi[]{ 1.f, 1.5f, 2.f };
     u32 comparisons = 0u;
@@ -184,7 +184,7 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
             }
         }
     }
-    EXPECT_GE(comparisons, 32u);
+    EXPECT_GE(comparisons, 48u);
     RecordProperty("comparisons", comparisons);
     RecordProperty("maximum_edge_displacement_pixels", StringFormat(arena, "{}", worstEdge).c_str());
     RecordProperty("maximum_mean_coverage_error", StringFormat(arena, "{}", worstMean).c_str());

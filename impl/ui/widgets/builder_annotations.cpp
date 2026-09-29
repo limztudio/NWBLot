@@ -40,7 +40,6 @@ bool Builder::listMatches(const ListFrame& frame)const{
 bool Builder::paintDeferred(){
     if(!paintDeferredContents() || !validateDeferredSources() || !validateDeferredStates())
         return false;
-    releaseDeferredLoans();
     return true;
 }
 
@@ -71,6 +70,10 @@ bool Builder::validateDeferredSources()const{
 
 bool Builder::validateDeferredStates()const{
     // No source callbacks run after these model checks until every scope's loans have been released.
+    for(const auto& frame : m_scope->m_sliders){
+        if(!sliderMatches(*frame))
+            return false;
+    }
     for(const auto& frame : m_scope->m_textAreas){
         if(!textAreaMatches(frame))
             return false;
@@ -109,6 +112,7 @@ bool Builder::validateDeferredStates()const{
 void Builder::releaseDeferredLoans(){
     // Frozen geometry and input targets retain copied tokens and keys, never source or model loans.
     m_scope->m_radioGroups.clear();
+    m_scope->m_sliders.clear();
     for(auto& frame : m_scope->m_textAreas){
         frame.model = nullptr;
         frame.state = nullptr;

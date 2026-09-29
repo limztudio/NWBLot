@@ -153,6 +153,8 @@ struct PointerGesture{
     ControlToken control;
     f64 maximum = 0.0;
     u64 updateSequence = 0u;
+    // Copied once from the accepted target at the initial press; later updates retain these opaque bits.
+    u64 value = 0u;
 };
 
 struct InputRoutingResult{

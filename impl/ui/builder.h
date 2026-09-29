@@ -78,6 +78,8 @@ public:
     // The complete bounded group borrows source/state through the enclosing scope or outermost popup end.
     [[nodiscard]] RadioGroupResult radioGroup(AStringView stableKey, const IListDataSource& source,
         RadioGroupState& state, const RadioGroupOptions& options = {});
+    // Values and results become available after the successful enclosing scope or outermost popup end.
+    [[nodiscard]] bool slider(AStringView stableKey, SliderState& state, const SliderOptions& options = {});
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
@@ -109,6 +111,7 @@ public:
     [[nodiscard]] PopupStyle& popupStyle(){ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
     [[nodiscard]] ListStyle& listStyle(){ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
     [[nodiscard]] RadioGroupStyle& radioGroupStyle(){ if(declarationBlocked()) m_context.fail(); return m_radioGroupStyle; }
+    [[nodiscard]] SliderStyle& sliderStyle(){ if(declarationBlocked()) m_context.fail(); return m_sliderStyle; }
     [[nodiscard]] ComboStyle& comboStyle(){ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
     [[nodiscard]] TooltipStyle& tooltipStyle(){ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
     void setEditHost(IEditBoxHost* host){ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
@@ -154,6 +157,11 @@ private:
     [[nodiscard]] bool radioGroupStateMatches(const RadioGroupFrame& frame)const;
     [[nodiscard]] bool radioGroupMatches(const RadioGroupFrame& frame)const;
     [[nodiscard]] bool prepareRadioGroup(RadioGroupFrame& frame);
+    [[nodiscard]] bool prepareSlider(SliderFrame& frame);
+    [[nodiscard]] bool paintSlider(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
+    [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
+    void publishSliderResults(bool valid);
     [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture);
     [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
         ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
@@ -212,6 +220,7 @@ private:
     PopupStyle m_popupStyle;
     ListStyle m_listStyle;
     RadioGroupStyle m_radioGroupStyle;
+    SliderStyle m_sliderStyle;
     ComboStyle m_comboStyle;
     TooltipStyle m_tooltipStyle;
     IEditBoxHost* m_editHost = nullptr;

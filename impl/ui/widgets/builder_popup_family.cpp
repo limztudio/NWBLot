@@ -45,6 +45,11 @@ bool Builder::finishPopupFamily(){
     }
     const bool painted = paintPopupFamily(m_scopeFrame);
     const bool valid = painted && validatePopupFamily();
+    for(usize index = 0u; index <= m_popupFrameCount; ++index){
+        BuilderScopeFrame& frame = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
+        m_scope = MakeNotNull(&frame);
+        publishSliderResults(valid && frame.m_popupVisible);
+    }
     releasePopupFamily();
     return valid;
 }

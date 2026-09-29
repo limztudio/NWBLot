@@ -53,6 +53,7 @@ void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResu
     gesture.control = target.control;
     gesture.maximum = target.gestureMaximum;
     gesture.updateSequence = m_nextActionSequence;
+    gesture.value = target.value;
     m_pointerGestures.push_back({ gesture, true });
     m_activeGestureSequence = m_nextActionSequence;
     ++m_nextActionSequence;

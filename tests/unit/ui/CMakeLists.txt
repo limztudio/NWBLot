@@ -1,5 +1,15 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/slider_state_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_behavior_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_fixture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_builder_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_input_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_lifetime_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_popup_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/pointer_gesture_value_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group_behavior_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group_layout_tests.cpp"

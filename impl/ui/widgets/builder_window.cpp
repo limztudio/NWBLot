@@ -146,6 +146,7 @@ bool Builder::endWindow(){
     m_scope->m_window.state = nullptr;
     m_scope->m_stack.clear();
     const bool combosPainted = painted && popped && paintDeferred();
+    publishSliderResults(combosPainted);
     releaseDeferredLoans();
     if(!combosPainted)
         m_context.fail();

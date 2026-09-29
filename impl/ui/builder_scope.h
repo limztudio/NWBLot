@@ -19,6 +19,7 @@
 #include "widgets/list.h"
 #include "widgets/list_style.h"
 #include "widgets/radio_group_frame.h"
+#include "widgets/slider_frame.h"
 #include "widgets/combo.h"
 #include "widgets/combo_style.h"
 #include "widgets/search_combo.h"
@@ -54,6 +55,7 @@ private:
         u32 node = 0u;
         u32 list = s_LayoutNoParent;
         u32 radioGroup = s_LayoutNoParent;
+        u32 slider = s_LayoutNoParent;
         u32 combo = s_LayoutNoParent;
         u32 textArea = s_LayoutNoParent;
         u32 integerEdit = s_LayoutNoParent;
@@ -236,6 +238,7 @@ private:
     PaintVector<FloatEditFrame> m_floatEdits;
     PaintVector<ListFrame> m_lists;
     PaintVector<Core::GlobalUniquePtr<RadioGroupFrame>> m_radioGroups;
+    PaintVector<Core::GlobalUniquePtr<SliderFrame>> m_sliders;
     PaintVector<ComboFrame> m_combos;
     PaintVector<Item> m_comboEditors;
     PaintVector<TooltipFrame> m_tooltips;

@@ -53,6 +53,8 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         return paintList(item, box);
     if(item.state.kind == WidgetKind::RadioGroup)
         return paintRadioGroup(item, box);
+    if(item.state.kind == WidgetKind::Slider)
+        return paintSlider(item, box);
     const InputRouter& input = m_context.input();
     const bool hover = input.hover() == item.state.id;
     const bool captured = input.capture() == item.state.id && input.primaryDown();

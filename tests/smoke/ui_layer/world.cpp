@@ -13,6 +13,7 @@
 #include "popup_scene.h"
 #include "popup_tools_scene.h"
 #include "radio_group_scene.h"
+#include "slider_scene.h"
 #include "search_combo_scene.h"
 #include "text_samples.h"
 #include "text_area_scene.h"
@@ -85,6 +86,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     const bool popupToolsSmoke = IsUiLayerPopupToolsSmokeEnabled();
     const bool nestedPopupSmoke = IsUiLayerNestedPopupSmokeEnabled();
     const bool radioGroupSmoke = IsUiLayerRadioGroupSmokeEnabled();
+    const bool sliderSmoke = IsUiLayerSliderSmokeEnabled();
     const bool textAreaSmoke = IsUiLayerTextAreaSmokeEnabled();
     const bool numericEditSmoke = IsUiLayerNumericEditSmokeEnabled();
     const bool listSmoke = IsUiLayerListSmokeEnabled();
@@ -98,7 +100,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         || (nestedPopupSmoke && IsUiLayerNestedPopupSkinSmokeEnabled())
         || (numericEditSmoke && IsUiLayerNumericEditSkinSmokeEnabled())
         || (textAreaSmoke && IsUiLayerTextAreaSkinSmokeEnabled())
-        || (radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled());
+        || (radioGroupSmoke && IsUiLayerRadioGroupSkinSmokeEnabled())
+        || (sliderSmoke && IsUiLayerSliderSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
@@ -120,6 +123,8 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     if(radioGroupSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
+    if(sliderSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiSliderSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -134,7 +139,13 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(radioGroupSmoke){
+    if(sliderSmoke){
+        paint.paint = [scene = CreateUiSliderSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: slider UI paint failed"));
+        };
+    }
+    else if(radioGroupSmoke){
         paint.paint = [scene = CreateUiRadioGroupSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: radio group UI paint failed"));

@@ -1,5 +1,17 @@
 nwb_declare_static_library(nwb_ui_widgets)
 target_sources(nwb_ui_widgets PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/slider.h"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_style.h"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_layout.h"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_layout.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_state.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_behavior.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_frame.h"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_frame.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_slider.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_loan.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/slider_paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group.h"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group_style.h"
     "${CMAKE_CURRENT_LIST_DIR}/radio_group_layout.h"

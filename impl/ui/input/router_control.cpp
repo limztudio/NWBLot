@@ -174,8 +174,11 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
     m_pointerKnown = true;
     updateHover();
     const HitTarget* hit = findTarget(m_hover);
-    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
-    if((m_primaryDown && !m_pointerSequenceConsumed) || hit == nullptr || event.scrollY == 0.0)
+    result.pointerConsumed |= wantsPointer();
+    if(
+        (m_primaryDown && !m_pointerSequenceConsumed) || (m_secondaryDown && !m_secondarySequenceConsumed)
+        || hit == nullptr || event.scrollY == 0.0
+    )
         return;
     const HitTarget* host = controlHost(*hit);
     if(host != nullptr && host->scrollable)

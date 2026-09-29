@@ -31,6 +31,10 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/search_combo_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/search_combo_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/search_combo_scene.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/popup_tools_source.h"
+    "${CMAKE_CURRENT_LIST_DIR}/popup_tools_source.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/popup_tools_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/popup_tools_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/list_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/list_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/list_source.cpp"
@@ -270,6 +274,32 @@ foreach(_nwb_ui_search_combo_skin IN ITEMS default alternate)
     )
 endforeach()
 
+foreach(_nwb_ui_popup_tools_skin IN ITEMS default alternate)
+    if(_nwb_ui_popup_tools_skin STREQUAL "alternate")
+        set(_nwb_ui_popup_tools_test "nwb_ui_layer_popup_tools_skin_smoke")
+        set(_nwb_ui_popup_tools_skin_flag 1)
+    else()
+        set(_nwb_ui_popup_tools_test "nwb_ui_layer_popup_tools_smoke")
+        set(_nwb_ui_popup_tools_skin_flag 0)
+    endif()
+    add_test(NAME "${_nwb_ui_popup_tools_test}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/popup_tools_smoke.py"
+            --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+            --working-directory "${_nwb_ui_smoke_runtime_root}"
+            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_popup_tools_${_nwb_ui_popup_tools_skin}"
+            --skin "${_nwb_ui_popup_tools_skin}"
+            --timeout 180
+            ${_nwb_ui_smoke_logserver_args}
+    )
+    set_tests_properties("${_nwb_ui_popup_tools_test}" PROPERTIES
+        RESOURCE_LOCK nwb_display
+        SKIP_RETURN_CODE 77
+        TIMEOUT 240
+        LABELS "ui;standalone_gpu;native_input;popup_tools;skin"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=1;NWB_UI_LAYER_POPUP_TOOLS_SKIN=${_nwb_ui_popup_tools_skin_flag}"
+    )
+endforeach()
+
 unset(_nwb_ui_smoke_runtime_root)
 unset(_nwb_ui_smoke_logserver_args)
 unset(_nwb_ui_smoke_asset_inputs)
@@ -288,3 +318,6 @@ unset(_nwb_ui_combo_skin_flag)
 unset(_nwb_ui_search_combo_skin)
 unset(_nwb_ui_search_combo_test)
 unset(_nwb_ui_search_combo_skin_flag)
+unset(_nwb_ui_popup_tools_skin)
+unset(_nwb_ui_popup_tools_test)
+unset(_nwb_ui_popup_tools_skin_flag)

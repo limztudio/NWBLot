@@ -62,8 +62,10 @@ public:
     [[nodiscard]] bool takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled, PointerGesture& gesture);
     [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
     [[nodiscard]] bool endPopupScope(bool visible);
+    [[nodiscard]] WidgetId scopeId()const{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
     [[nodiscard]] PopupToken popupToken()const{ return m_currentPopup; }
     [[nodiscard]] u32 popupLayer()const{ return m_popupLayer; }
+    [[nodiscard]] PopupToken topPopupToken()const{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] bool finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [[nodiscard]] bool commitFrame(u64 generation);

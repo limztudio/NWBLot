@@ -48,6 +48,13 @@ private:
         ControlToken sourceControl;
     };
 
+    struct ContextMenuOwner{
+        WidgetId target;
+        u64 declarationGeneration = 0u;
+        PopupToken popup;
+        ControlToken control;
+    };
+
 
 public:
     explicit InputRouter(Core::Alloc::GlobalArena& arena);
@@ -76,6 +83,7 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
     [[nodiscard]] bool consumeActivation(WidgetId id);
+    [[nodiscard]] bool consumeContextMenu(WidgetId id, u64 declarationGeneration, ContextMenuAction& action);
     [[nodiscard]] bool consumeControlAction(
         WidgetId host, u64 declarationGeneration, const ControlToken& token, ControlAction& action
     );
@@ -93,10 +101,20 @@ public:
     [[nodiscard]] WidgetId focus()const{ return m_focus; }
     [[nodiscard]] WidgetId capture()const{ return m_capture; }
     [[nodiscard]] bool primaryDown()const{ return m_primaryDown; }
-    [[nodiscard]] bool wantsPointer()const{ return m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || m_hover.valid(); }
+    [[nodiscard]] bool secondaryDown()const{ return m_secondaryDown; }
+    [[nodiscard]] bool pointerKnown()const{ return m_pointerKnown; }
+    [[nodiscard]] const Point& pointerPosition()const{ return m_pointer; }
+    [[nodiscard]] bool windowFocused()const{ return m_windowFocused; }
+    [[nodiscard]] bool wantsPointer()const{
+        if(m_primaryDown)
+            return m_pointerSequenceConsumed;
+        if(m_secondaryDown)
+            return m_secondarySequenceConsumed;
+        return hasPopup() || m_hover.valid();
+    }
     [[nodiscard]] bool wantsKeyboard()const{ return hasPopup() || m_focus.valid() || m_consumedKeys != 0u; }
     [[nodiscard]] bool ownsKey(InputKey::Enum key)const{
-        if(key == InputKey::None || key > InputKey::PageDown)
+        if(key == InputKey::None || key > InputKey::F10)
             return false;
         return (m_consumedKeys & (1u << (static_cast<u8>(key) - 1u))) != 0u;
     }
@@ -113,6 +131,13 @@ private:
     [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
     [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
     void reconcileControlActions();
+    [[nodiscard]] bool currentContextMenuOwner(const ContextMenuOwner& owner)const;
+    void reconcileContextMenus();
+    void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
+    [[nodiscard]] bool routeContextMenuKey(
+        const InputEvent& event, const HitTarget* focused, bool alreadyPressed, InputRoutingResult& result
+    );
+    void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(
         const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result
     );
@@ -147,6 +172,7 @@ private:
     InputVector<InputEvent> m_events;
     InputVector<InputAction> m_actions;
     InputVector<ControlAction> m_controlActions;
+    InputVector<ContextMenuAction> m_contextMenuActions;
     InputVector<PointerGestureRecord> m_pointerGestures;
     InputVector<PopupRecord> m_popups;
     InputVector<PopupRecord> m_stagedPopups;
@@ -167,10 +193,14 @@ private:
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;
+    bool m_secondaryDown = false;
+    bool m_secondarySequenceConsumed = false;
+    ContextMenuOwner m_secondaryOwner;
     bool m_windowFocused = true;
     u32 m_pressedKeys = 0u;
     u32 m_consumedKeys = 0u;
     Array<ControlKeyOwner, 32u> m_controlKeyOwners{};
+    Array<ContextMenuOwner, 2u> m_contextMenuKeyOwners{};
 };
 
 

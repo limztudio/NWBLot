@@ -9,6 +9,7 @@
 #include "ui_edit_gallery.h"
 #include "ui_list_gallery.h"
 #include "ui_popup_gallery.h"
+#include "ui_popup_tools_gallery.h"
 #include "ui_search_combo_gallery.h"
 
 #include <impl/ecs_ui/components.h>
@@ -32,6 +33,7 @@ private:
     TestbedUiComboGallery m_combos;
     TestbedUiSearchComboGallery m_searchCombos;
     TestbedUiPopupGallery m_popups;
+    TestbedUiPopupToolsGallery m_popupTools;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

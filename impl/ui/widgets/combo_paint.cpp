@@ -59,6 +59,7 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     target.enabled = item.enabled;
     target.focusable = item.enabled;
     target.activatable = item.enabled;
+    target.contextMenu = item.contextMenu;
     target.navigable = item.enabled;
     target.control = frame.token;
     target.focusOnCommit = frame.focusOnCommit;
@@ -79,28 +80,6 @@ bool Builder::paintCombos(){
         if(frame.open && frame.options.enabled && !paintComboPopup(frame))
             return false;
     }
-    // A later source callback may mutate an earlier field. Validate all loans before releasing any of them.
-    for(const auto& frame : m_combos){
-        if(!comboMatches(frame))
-            return false;
-    }
-    // This final epoch check calls no source code, so reentry during the preceding validation cannot escape detection.
-    for(const auto& frame : m_combos){
-        if(!comboStateMatches(frame))
-            return false;
-    }
-    for(auto& frame : m_combos){
-        // Paint snapshots and accepted targets contain copied keys, tokens and geometry, never host loans.
-        m_lists[frame.list].source = nullptr;
-        m_lists[frame.list].state = nullptr;
-        frame.source = nullptr;
-        frame.results = nullptr;
-        frame.searchSource = nullptr;
-        frame.search = nullptr;
-        frame.state = nullptr;
-        if(frame.editor != s_LayoutNoParent)
-            m_comboEditors[frame.editor].editState = nullptr;
-    }
     return true;
 }
 
@@ -119,6 +98,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
             snapshotComboQuery(frame);
         }
         frame.listToken.instanceGeneration = frame.state->m_list.inputGeneration();
+        m_lists[frame.list].token = frame.listToken;
         return true;
     }
     PopupOptions options;

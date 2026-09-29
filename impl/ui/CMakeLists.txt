@@ -17,6 +17,7 @@ target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/input/router_gesture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_keyboard.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_keyboard_owner.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/input/router_context_menu.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_control.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_popup.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input/router_popup_events.cpp"

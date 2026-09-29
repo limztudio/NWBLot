@@ -88,9 +88,17 @@ bool Builder::endPopup(){
     m_popupState = nullptr;
     m_panelActive = false;
     m_stack.clear();
-    if(!painted || !overlayEnded || !scopePopped || !popupEnded)
+    if(!visible){
+        for(auto& frame : m_tooltips){
+            if(frame.state && frame.state->revision() == frame.revision)
+                frame.state->reset();
+        }
+        releaseDeferredLoans();
+    }
+    const bool deferred = painted && overlayEnded && scopePopped && popupEnded && (!visible || paintDeferred());
+    if(!deferred)
         m_context.fail();
-    return painted && overlayEnded && scopePopped && popupEnded;
+    return deferred;
 }
 
 bool Builder::synchronizePopup(){

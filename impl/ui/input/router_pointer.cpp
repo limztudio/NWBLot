@@ -22,7 +22,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     if(event.type == InputEventType::PointerMove){
         if(m_primaryDown)
             updatePointerGesture(event.position, false);
-        result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || hit != nullptr;
+        result.pointerConsumed |= wantsPointer();
         return;
     }
     if(event.type == InputEventType::PrimaryDown){
@@ -31,8 +31,12 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
             return;
         }
         m_primaryDown = true;
-        m_pointerSequenceConsumed = hasPopup() || hit != nullptr;
+        m_pointerSequenceConsumed = m_secondaryDown ? m_secondarySequenceConsumed : hasPopup() || hit != nullptr;
         result.pointerConsumed |= m_pointerSequenceConsumed;
+        if(!m_pointerSequenceConsumed){
+            clearFocus();
+            return;
+        }
         if(hasPopup() && hit == nullptr){
             const bool dismissed = dismissPopup(PopupDismissReason::OutsideClick);
             if(dismissed)
@@ -55,7 +59,8 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
             appendPointerGesture(*hit, result);
         return;
     }
-    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed : hit != nullptr;
+    result.pointerConsumed |= m_primaryDown ? m_pointerSequenceConsumed
+        : m_secondaryDown ? m_secondarySequenceConsumed : hit != nullptr;
     if(
         m_primaryDown && m_pointerSequenceConsumed && hit != nullptr
         && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable

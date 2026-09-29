@@ -129,6 +129,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     target.enabled = item.editOptions.enabled;
     target.focusable = item.editOptions.enabled;
     target.textEditable = item.editOptions.enabled;
+    target.contextMenu = item.contextMenu;
     if(!m_context.addTarget(item.state, target))
         return false;
     return !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);

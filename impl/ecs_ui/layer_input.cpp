@@ -55,6 +55,8 @@ Ui::InputKey::Enum TranslateKey(const i32 key){
     case Core::Key::Down: return Ui::InputKey::Down;
     case Core::Key::PageUp: return Ui::InputKey::PageUp;
     case Core::Key::PageDown: return Ui::InputKey::PageDown;
+    case Core::Key::Menu: return Ui::InputKey::Menu;
+    case Core::Key::F10: return Ui::InputKey::F10;
     default: return Ui::InputKey::None;
     }
 }
@@ -165,6 +167,15 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         event.type = action == Core::InputAction::Release ? Ui::InputEventType::PrimaryUp : Ui::InputEventType::PrimaryDown;
         event.position = m_pointer;
         event.shift = (mods & Core::InputModifier::Shift) != 0;
+        routeInput(event);
+    }
+    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Right){
+        Ui::InputEvent event;
+        event.type = action == Core::InputAction::Release ? Ui::InputEventType::SecondaryUp : Ui::InputEventType::SecondaryDown;
+        event.position = m_pointer;
+        event.shift = (mods & Core::InputModifier::Shift) != 0;
+        event.control = (mods & Core::InputModifier::Control) != 0;
+        event.alt = (mods & Core::InputModifier::Alt) != 0;
         routeInput(event);
     }
     if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action != Core::InputAction::Release){

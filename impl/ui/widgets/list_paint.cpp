@@ -58,6 +58,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     host.clip = clip;
     host.enabled = item.enabled;
     host.focusable = item.enabled;
+    host.contextMenu = item.contextMenu;
     host.control = frame.token;
     host.navigable = item.enabled;
     host.scrollable = item.enabled;
@@ -97,9 +98,6 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
                 return false;
         }
     }
-    // Draw snapshots and accepted input targets contain no data-source or model loans.
-    frame.source = nullptr;
-    frame.state = nullptr;
     return true;
 }
 

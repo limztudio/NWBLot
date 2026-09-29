@@ -97,14 +97,15 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     const bool popped = m_paint.popClip();
     if(!painted || !popped)
         return false;
-    if(interactive){
+    if(interactive || item.annotated){
         HitTarget target;
         target.rectangle = box.rectangle;
         target.clip = visibleClip(box.clip);
         // Disabled controls still cover the panel; the router consumes the panel barrier beneath them.
         target.enabled = item.enabled;
-        target.focusable = item.enabled;
-        target.activatable = item.enabled;
+        target.focusable = item.enabled && interactive;
+        target.activatable = item.enabled && interactive;
+        target.contextMenu = item.contextMenu;
         return m_context.addTarget(item.state, target);
     }
     return true;

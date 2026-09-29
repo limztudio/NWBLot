@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ui_popup_tools_source.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_testbed_ui_popup_tools_source{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr Array<StringView, 5u> s_Labels{ "Inspect selection", "Duplicate", "Delete (disabled)", "Rename", "Reset view" };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool TestbedUiPopupToolsSource::indexOf(const u64 keyValue, u64& index)const{
+    if(keyValue == 0u || keyValue > rowCount())
+        return false;
+    index = keyValue - 1u;
+    return true;
+}
+
+bool TestbedUiPopupToolsSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+    if(start >= rowCount())
+        return false;
+    if(enabled(start)){
+        index = start;
+        return true;
+    }
+    if(reverse){
+        if(start == 0u)
+            return false;
+        index = start - 1u;
+    }
+    else{
+        if(start + 1u >= rowCount())
+            return false;
+        index = start + 1u;
+    }
+    return enabled(index);
+}
+
+StringView TestbedUiPopupToolsSource::text(const u64 index)const{
+    return index < rowCount() ? __hidden_testbed_ui_popup_tools_source::s_Labels[index] : StringView{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -136,7 +136,7 @@ The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists and combo boxes are implemented in the subsequent increments below; tooltips/context menus and numeric/multiline editors remain later work.
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips and context menus are implemented in the increments below; numeric/multiline editors remain later work.
 
 ## Popups and modals
 
@@ -167,7 +167,7 @@ The accepted top popup traps Tab/Shift+Tab within eligible children and owns poi
 
 `PaintBuilder::beginOverlay(layer)` and `endOverlay()` support a balanced nonnested low-level overlay scope. Base commands use layer zero; a positive overlay layer uses the viewport clip and restores the prior clip when ended. Freezing orders command ranges by layer while preserving painter order within a layer and existing vertex/index/image ownership. Popup layers therefore render above later ordinary host roots. All layers still rasterize into the same independent GPU UI texture; popup layering adds no per-popup GPU target or task.
 
-Fixed-height virtualized lists and selectable rows now use these popup/input contracts. Combo boxes now compose these contracts below. Tooltips, context menus and nested popup layout remain separate controls work. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
+Fixed-height virtualized lists and selectable rows now use these popup/input contracts. Combo boxes now compose these contracts below. Tooltips and context menus use these contracts below; nested popup layout remains separate controls work. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
 
 ## Single-line edit boxes
 
@@ -208,3 +208,37 @@ Only clipped visible rows are shaped, painted and published as parts of one focu
 `Builder::comboBox(key, source, ComboState&, ComboOptions)` uses the same keyed source as `virtualList`. Keep source/state alive and unchanged through the enclosing panel/window end. The component declares its field and internal popup/list identities, consumes input from the last accepted layout during declaration, and automatically paints the popup after arranging the containing scope. `ComboResult::committed` and `selectionChanged` are available immediately; the field text reflects that accepted selection in the same callback.
 
 The popup previews enabled rows with Arrow/Page/Home/End, wheel and thumb scrolling. Enter/Space or a row release commits; Escape/outside/native focus loss cancels. Selected keys remain stable through reorder, and openings ensure the committed row is visible without walking the full dataset. Omission/recreation, source replacement and explicit state changes retire previous input lifetimes. Skin appearance, exact loan/lifetime rules, popup Tab behavior and current composition limits are documented in [the combo contract](widgets/README.md#combo-boxes).
+
+## Tooltips and context menus
+
+Declare `tooltip(key, anchorKey, text, TooltipState&, TooltipOptions)` or
+`contextMenu(key, anchorKey, IListDataSource&, ContextMenuState&, ContextMenuOptions)`
+after its anchor control in the same panel/window/container. Stable keys identify the
+attachment and anchor independently of their labels. A tooltip can also attach to a
+control in a plain user popup. Context menus currently attach in panels/windows;
+nested popup composition is the next increment.
+
+A tooltip measures owned text and starts a configurable delay when the accepted
+anchor is hovered. Leaving, a held pointer button, capture, disabled state, native
+focus loss, changed attachment/options or a higher popup resets that delay. Its
+clamped/flipped overlay has no hit target or focus scope, so an editor can keep
+receiving native text while help is visible. `TooltipStyle` resolves `tooltip.normal`
+with an explicit `panel.normal` fallback in the selected skin.
+
+A context menu opens at an accepted secondary-button press, Menu key or Shift+F10.
+The trigger copies anchor declaration, popup/control lifetimes and client position;
+secondary presses never activate the primary control. Menu commands reuse stable-key
+virtualized lists, enabled-row navigation, scrollbars and popup focus/dismissal.
+`ContextMenuResult` reports opening/closing and the activated command key. Enter,
+Space or a row click activates one enabled command and closes; Escape, outside
+press and focus loss dismiss. Source revision changes retire old input and reset
+preview/scroll; source replacement closes the menu. Disabled/hidden anchors cannot
+open or retain it.
+
+The application keeps list/combo/menu sources and their models alive and unchanged
+through the enclosing `endPanel()`, `endWindow()` or `endPopup()`. Deferred painting
+checks every source before final callback-free model epoch checks and releases all
+loans together. A callback that changes another borrowed model rejects the candidate
+and preserves the application change. Closing a plain popup suppresses its buffered
+body and attached tooltip. Frozen GPU snapshots and accepted input targets retain
+only owned geometry, text, resources, copied keys and lifetime tokens.

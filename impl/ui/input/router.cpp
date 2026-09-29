@@ -56,6 +56,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_events(arena)
     , m_actions(arena)
     , m_controlActions(arena)
+    , m_contextMenuActions(arena)
     , m_pointerGestures(arena)
     , m_popups(arena)
     , m_stagedPopups(arena)
@@ -68,6 +69,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     m_events.reserve(s_InputMaxEvents);
     m_actions.reserve(s_InputMaxActions);
     m_controlActions.reserve(s_InputMaxControlActions);
+    m_contextMenuActions.reserve(s_InputMaxContextMenuActions);
     m_pointerGestures.reserve(s_InputMaxPointerGestures);
     m_popups.reserve(s_InputMaxPopups);
     m_stagedPopups.reserve(s_InputMaxPopups);
@@ -75,10 +77,11 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
 }
 
 bool InputRouter::queue(const InputEvent& event){
-    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::PointerWheel)
+    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::SecondaryUp)
         return false;
     if(
-        (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel)
+        (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel
+            || event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
         && (!IsFinite(event.position.x) || !IsFinite(event.position.y))
     )
         return false;
@@ -86,7 +89,7 @@ bool InputRouter::queue(const InputEvent& event){
         return false;
     if(
         (event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
-        && (event.key == InputKey::None || event.key > InputKey::PageDown)
+        && (event.key == InputKey::None || event.key > InputKey::F10)
     )
         return false;
     m_events.push_back(event);
@@ -98,6 +101,8 @@ InputRoutingResult InputRouter::process(){
     for(const InputEvent& event : m_events){
         if(event.type <= InputEventType::PrimaryUp)
             routePointer(event, result);
+        else if(event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
+            routeSecondary(event, result);
         else if(event.type == InputEventType::PointerWheel)
             routeWheel(event, result);
         else if(event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
@@ -107,7 +112,7 @@ InputRoutingResult InputRouter::process(){
                 TerminateInvariant();
             ++m_focusLossGeneration;
             m_windowFocused = false;
-            result.pointerConsumed |= hasPopup() || m_capture.valid() || m_pointerSequenceConsumed;
+            result.pointerConsumed |= hasPopup() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
             result.keyboardConsumed |= hasPopup() || m_focus.valid() || m_consumedKeys != 0u;
             cancelPopupFocus();
             cancelInteraction();
@@ -115,11 +120,11 @@ InputRoutingResult InputRouter::process(){
         else if(event.type == InputEventType::FocusGained)
             m_windowFocused = true;
         else if(event.type == InputEventType::PointerCaptureLost){
-            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed;
+            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
             cancelPointerCapture();
         }
         else{
-            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed;
+            result.pointerConsumed |= m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
             m_pointerKnown = false;
             m_hover = {};
         }
@@ -252,7 +257,11 @@ WidgetId InputRouter::hitTest(const Point& position)const{
 }
 
 bool InputRouter::wouldConsumePointer(const Point& position)const{
-    return hasPopup() || m_capture.valid() || (m_primaryDown && m_pointerSequenceConsumed) || hitTest(position).valid();
+    if(m_primaryDown)
+        return m_pointerSequenceConsumed;
+    if(m_secondaryDown)
+        return m_secondarySequenceConsumed;
+    return hasPopup() || m_capture.valid() || hitTest(position).valid();
 }
 
 const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const{
@@ -329,6 +338,7 @@ void InputRouter::reconcileTargets(){
     }
     reconcilePointerGestures();
     reconcileControlActions();
+    reconcileContextMenus();
     updateHover();
 }
 
@@ -337,8 +347,17 @@ void InputRouter::updateHover(){
 }
 
 void InputRouter::cancelPointerCapture(){
-    if(!m_primaryDown)
+    const bool secondaryHeld = m_secondaryDown;
+    m_secondaryDown = false;
+    m_secondarySequenceConsumed = false;
+    m_secondaryOwner = {};
+    if(!m_primaryDown){
+        if(secondaryHeld){
+            m_pointerKnown = false;
+            m_hover = {};
+        }
         return;
+    }
     for(usize index = 0u; index < m_pointerGestures.size(); ++index){
         if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
@@ -359,6 +378,7 @@ void InputRouter::cancelPointerCapture(){
 void InputRouter::cancelInteraction(){
     m_actions.clear();
     m_controlActions.clear();
+    m_contextMenuActions.clear();
     m_pointerGestures.clear();
     m_activeGestureSequence = 0u;
     m_hover = {};
@@ -372,9 +392,13 @@ void InputRouter::cancelInteraction(){
     m_pointerKnown = false;
     m_primaryDown = false;
     m_pointerSequenceConsumed = false;
+    m_secondaryDown = false;
+    m_secondarySequenceConsumed = false;
+    m_secondaryOwner = {};
     m_pressedKeys = 0u;
     m_consumedKeys = 0u;
     m_controlKeyOwners.fill({});
+    m_contextMenuKeyOwners.fill({});
 }
 
 void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum source, InputRoutingResult& result){

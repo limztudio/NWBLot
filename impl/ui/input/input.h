@@ -22,17 +22,19 @@ NWB_IMPL_UI_BEGIN
 
 namespace InputEventType{
     enum Enum : u8{
-        PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained, PointerWheel
+        PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained, PointerWheel,
+        SecondaryDown, SecondaryUp
     };
 };
 
 namespace InputKey{
     enum Enum : u8{
-        None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Up, Down, PageUp, PageDown
+        None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Up, Down, PageUp, PageDown,
+        Menu, F10
     };
 };
 
-static_assert(static_cast<u8>(InputKey::PageDown) <= 32u);
+static_assert(static_cast<u8>(InputKey::F10) <= 32u);
 
 namespace InputActionSource{
     enum Enum : u8{ Pointer, Keyboard };
@@ -84,6 +86,7 @@ struct HitTarget{
     WidgetId keyboardOwner;
     u64 keyboardOwnerDeclarationGeneration = 0u;
     ControlToken keyboardControl;
+    bool contextMenu = false;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -103,6 +106,15 @@ struct InputAction{
     InputActionSource::Enum source = InputActionSource::Pointer;
     PopupToken popup;
     ControlToken control;
+};
+
+// Context-menu triggers retain the accepted anchor and lifetime without borrowing the declaration.
+struct ContextMenuAction{
+    InputActionId id;
+    PopupToken popup;
+    ControlToken control;
+    Point position;
+    bool keyboard = false;
 };
 
 // Ordered copied input addressed to a focusable host, including stable values selected by its parts.
@@ -153,6 +165,7 @@ inline constexpr usize s_InputMaxEvents = 256u;
 inline constexpr usize s_InputMaxActions = 256u;
 inline constexpr usize s_InputMaxPointerGestures = 256u;
 inline constexpr usize s_InputMaxControlActions = 256u;
+inline constexpr usize s_InputMaxContextMenuActions = 256u;
 
 template<typename T>
 using InputVector = Vector<T, Core::Alloc::GlobalArena>;

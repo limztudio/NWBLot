@@ -21,13 +21,19 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
         m_pressedKeys &= ~keyMask;
         m_consumedKeys &= ~keyMask;
         m_controlKeyOwners[static_cast<usize>(event.key) - 1u] = {};
+        if(event.key == InputKey::Menu || event.key == InputKey::F10)
+            m_contextMenuKeyOwners[event.key == InputKey::Menu ? 0u : 1u] = {};
         return;
     }
     const bool alreadyPressed = (m_pressedKeys & keyMask) != 0u;
     m_pressedKeys |= keyMask;
     bool consumed = (m_consumedKeys & keyMask) != 0u;
+    if(alreadyPressed && !consumed && (event.key == InputKey::Menu || event.key == InputKey::F10))
+        return;
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(event.key == InputKey::Tab)
+    if(routeContextMenuKey(event, focused, alreadyPressed, result))
+        consumed = true;
+    else if(event.key == InputKey::Tab)
         consumed |= moveFocus(event.shift) || hasPopup();
     else if(event.key == InputKey::Escape && !(focused && focused->textEditable)){
         if(hasPopup()){

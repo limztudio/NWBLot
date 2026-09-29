@@ -48,6 +48,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     m_lists.paint(context, Max(18.0f, x - 292.0f), y);
     m_combos.paint(context, Max(18.0f, x - 292.0f), y + 270.0f);
     m_searchCombos.paint(context, Max(18.0f, x - 584.0f), y + 270.0f);
+    m_popupTools.paint(context, Max(18.0f, x - 584.0f), y);
     m_popups.paint(context, x, y);
 }
 

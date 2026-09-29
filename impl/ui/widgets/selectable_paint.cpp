@@ -65,6 +65,7 @@ bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
     target.enabled = item.enabled;
     target.focusable = item.enabled;
     target.activatable = item.enabled;
+    target.contextMenu = item.contextMenu;
     return m_context.addTarget(item.state, target);
 }
 

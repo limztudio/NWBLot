@@ -18,6 +18,9 @@
 #include "widgets/combo.h"
 #include "widgets/combo_style.h"
 #include "widgets/search_combo.h"
+#include "widgets/tooltip.h"
+#include "widgets/tooltip_style.h"
+#include "widgets/context_menu.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,6 +49,8 @@ private:
         u32 combo = s_LayoutNoParent;
         bool enabled = true;
         bool checked = false;
+        bool contextMenu = false;
+        bool annotated = false;
 
         explicit Item(Core::Alloc::GlobalArena& arena)
             : text(arena)
@@ -117,6 +122,43 @@ private:
     };
 
 
+    struct TooltipFrame{
+        WidgetState widget;
+        WidgetState anchor;
+        TooltipState* state = nullptr;
+        TooltipOptions options;
+        TextLayout text;
+        u64 revision = 0u;
+        u32 anchorIndex = 0u;
+        u32 layer = 1u;
+
+        explicit TooltipFrame(Core::Alloc::GlobalArena& arena)
+            : text(arena)
+        {}
+        TooltipFrame(TooltipFrame&&) = default;
+        TooltipFrame& operator=(TooltipFrame&&) = default;
+        TooltipFrame(const TooltipFrame&) = delete;
+        TooltipFrame& operator=(const TooltipFrame&) = delete;
+    };
+
+    struct ContextMenuFrame{
+        WidgetState widget;
+        WidgetState anchor;
+        WidgetState popup;
+        WidgetState rows;
+        const IListDataSource* source = nullptr;
+        ContextMenuState* state = nullptr;
+        ContextMenuOptions options;
+        PopupToken popupToken;
+        ControlToken listToken;
+        u64 rowCount = 0u;
+        u64 revision = 0u;
+        u32 anchorIndex = 0u;
+        u32 list = s_LayoutNoParent;
+        bool open = false;
+    };
+
+
 public:
     Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
 
@@ -147,6 +189,11 @@ public:
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
     [[nodiscard]] SearchComboResult searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
         SearchComboState& state, const SearchComboOptions& options = {});
+    // Attach to a preceding item in this same container. Models are borrowed until the enclosing scope ends.
+    [[nodiscard]] bool tooltip(AStringView stableKey, AStringView anchorKey, StringView text,
+        TooltipState& state, const TooltipOptions& options = {});
+    [[nodiscard]] ContextMenuResult contextMenu(AStringView stableKey, AStringView anchorKey, const IListDataSource& source,
+        ContextMenuState& state, const ContextMenuOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive && !m_popupState; }
@@ -157,8 +204,10 @@ public:
     [[nodiscard]] PopupStyle& popupStyle(){ return m_popupStyle; }
     [[nodiscard]] ListStyle& listStyle(){ return m_listStyle; }
     [[nodiscard]] ComboStyle& comboStyle(){ return m_comboStyle; }
+    [[nodiscard]] TooltipStyle& tooltipStyle(){ return m_tooltipStyle; }
     void setEditHost(IEditBoxHost* host){ m_editHost = host; }
     void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
+    void setPointerBusy(bool busy){ m_pointerBusy = busy; }
     // Valid while a window scope is open, including a collapsed window.
     [[nodiscard]] const WindowMetrics& windowMetrics()const{ return m_window.metrics; }
 
@@ -193,6 +242,19 @@ private:
     [[nodiscard]] bool prepareComboSearch(const WidgetState& field, ComboFrame& frame);
     void snapshotComboQuery(ComboFrame& frame);
     [[nodiscard]] bool paintComboQuery(ComboFrame& frame, LayoutBox& content);
+    [[nodiscard]] Item* annotationAnchor(AStringView stableKey);
+    [[nodiscard]] bool paintDeferred();
+    void releaseDeferredLoans();
+    [[nodiscard]] bool listStateMatches(const ListFrame& frame)const;
+    [[nodiscard]] bool listMatches(const ListFrame& frame)const;
+    [[nodiscard]] bool paintTooltips();
+    [[nodiscard]] bool prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
+    [[nodiscard]] bool applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
+    void snapshotContextMenu(ContextMenuFrame& frame);
+    [[nodiscard]] bool contextMenuStateMatches(const ContextMenuFrame& frame)const;
+    [[nodiscard]] bool contextMenuMatches(const ContextMenuFrame& frame)const;
+    [[nodiscard]] bool paintContextMenus();
+    [[nodiscard]] bool paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
@@ -209,6 +271,7 @@ private:
     PopupStyle m_popupStyle;
     ListStyle m_listStyle;
     ComboStyle m_comboStyle;
+    TooltipStyle m_tooltipStyle;
     PopupState* m_popupState = nullptr;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
@@ -219,12 +282,15 @@ private:
     PaintVector<ListFrame> m_lists;
     PaintVector<ComboFrame> m_combos;
     PaintVector<Item> m_comboEditors;
+    PaintVector<TooltipFrame> m_tooltips;
+    PaintVector<ContextMenuFrame> m_contextMenus;
     PaintVector<u32> m_stack;
     WindowFrame m_window;
     WidgetState m_panelState;
     Rect m_bounds;
     bool m_panelActive = false;
     bool m_windowActive = false;
+    bool m_pointerBusy = false;
 };
 
 

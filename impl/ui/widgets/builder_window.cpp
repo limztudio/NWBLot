@@ -142,7 +142,7 @@ bool Builder::endWindow(){
     m_windowActive = false;
     m_window.state = nullptr;
     m_stack.clear();
-    const bool combosPainted = painted && popped && paintCombos();
+    const bool combosPainted = painted && popped && paintDeferred();
     if(!combosPainted)
         m_context.fail();
     return combosPainted;

@@ -26,6 +26,8 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_lists(arena)
     , m_combos(arena)
     , m_comboEditors(arena)
+    , m_tooltips(arena)
+    , m_contextMenus(arena)
     , m_stack(arena)
     , m_window(arena)
 {
@@ -75,7 +77,7 @@ bool Builder::endPanel(){
     const bool popped = m_context.popScope();
     m_panelActive = false;
     m_stack.clear();
-    const bool combosPainted = painted && popped && paintCombos();
+    const bool combosPainted = painted && popped && paintDeferred();
     if(!combosPainted)
         m_context.fail();
     return combosPainted;
@@ -129,6 +131,8 @@ void Builder::reset(){
     m_lists.clear();
     m_combos.clear();
     m_comboEditors.clear();
+    m_tooltips.clear();
+    m_contextMenus.clear();
     m_stack.clear();
     m_layout.reset();
 }

@@ -55,6 +55,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_stagedLookup(arena)
     , m_events(arena)
     , m_actions(arena)
+    , m_controlActions(arena)
     , m_pointerGestures(arena)
     , m_popups(arena)
     , m_stagedPopups(arena)
@@ -66,6 +67,7 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     m_stagedLookup.reserve(s_InputMaxTargets);
     m_events.reserve(s_InputMaxEvents);
     m_actions.reserve(s_InputMaxActions);
+    m_controlActions.reserve(s_InputMaxControlActions);
     m_pointerGestures.reserve(s_InputMaxPointerGestures);
     m_popups.reserve(s_InputMaxPopups);
     m_stagedPopups.reserve(s_InputMaxPopups);
@@ -73,11 +75,19 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
 }
 
 bool InputRouter::queue(const InputEvent& event){
-    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::FocusGained)
+    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::PointerWheel)
         return false;
-    if(event.type <= InputEventType::PrimaryUp && (!IsFinite(event.position.x) || !IsFinite(event.position.y)))
+    if(
+        (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel)
+        && (!IsFinite(event.position.x) || !IsFinite(event.position.y))
+    )
         return false;
-    if((event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp) && (event.key == InputKey::None || event.key > InputKey::Y))
+    if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
+        return false;
+    if(
+        (event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
+        && (event.key == InputKey::None || event.key > InputKey::PageDown)
+    )
         return false;
     m_events.push_back(event);
     return true;
@@ -88,6 +98,8 @@ InputRoutingResult InputRouter::process(){
     for(const InputEvent& event : m_events){
         if(event.type <= InputEventType::PrimaryUp)
             routePointer(event, result);
+        else if(event.type == InputEventType::PointerWheel)
+            routeWheel(event, result);
         else if(event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
             routeKeyboard(event, result);
         else if(event.type == InputEventType::FocusLost){
@@ -151,6 +163,8 @@ bool InputRouter::commitTargets(
         if(m_stagedLookup[index - 1u].value == m_stagedLookup[index].value)
             return false;
     }
+    if(!validControlTargets())
+        return false;
     for(const auto& popup : m_stagedPopups){
         bool owner = false;
         for(const auto& target : m_stagedTargets){
@@ -165,31 +179,41 @@ bool InputRouter::commitTargets(
     m_layoutGeneration = layoutGeneration;
     installPopups(expectedFocusLossGeneration);
     reconcileTargets();
+    if(
+        !m_focus.valid() && m_windowFocused
+        && (expectedFocusLossGeneration == Limit<u64>::s_Max || expectedFocusLossGeneration == m_focusLossGeneration)
+    ){
+        for(const auto& target : m_targets){
+            if(target.focusOnCommit && target.focusable && isInteractive(target)){
+                m_focus = target.id;
+                m_focusDeclaration = target.declarationGeneration;
+                m_focusControl = target.control;
+                break;
+            }
+        }
+    }
     return true;
 }
 
 void InputRouter::invalidateTarget(const WidgetId id){
     retirePopup(id);
-    const HitTarget* target = findTarget(id);
-    if(target == nullptr)
-        return;
-    const usize targetIndex = static_cast<usize>(target - m_targets.data());
-    m_targets.erase(m_targets.begin() + static_cast<isize>(targetIndex));
-    for(usize index = 0u; index < m_lookup.size();){
-        if(m_lookup[index].value == id.value)
-            m_lookup.erase(m_lookup.begin() + static_cast<isize>(index));
-        else{
-            if(m_lookup[index].index > targetIndex)
-                --m_lookup[index].index;
-            ++index;
-        }
+    for(usize index = m_targets.size(); index > 0u; --index){
+        if(m_targets[index - 1u].id == id || m_targets[index - 1u].owner == id)
+            m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));
     }
+    m_lookup.clear();
+    for(usize index = 0u; index < m_targets.size(); ++index)
+        m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
+    Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs){
+        return lhs.value < rhs.value;
+    });
     reconcileTargets();
 }
 
 void InputRouter::clearFocus(){
     m_focus = {};
     m_focusDeclaration = 0u;
+    m_focusControl = {};
 }
 
 void InputRouter::reset(){
@@ -211,7 +235,10 @@ bool InputRouter::consumeActivation(const WidgetId id){
         return false;
     for(usize index = 0u; index < m_actions.size(); ++index){
         const InputActionId& action = m_actions[index].id;
-        if(action.target == id && action.declarationGeneration == target->declarationGeneration && m_actions[index].popup == target->popup){
+        if(
+            action.target == id && action.declarationGeneration == target->declarationGeneration
+            && m_actions[index].popup == target->popup && m_actions[index].control == target->control
+        ){
             m_actions.erase(m_actions.begin() + static_cast<isize>(index));
             return true;
         }
@@ -266,30 +293,42 @@ bool InputRouter::isInteractive(const HitTarget& target)const{
     const f32 top = Max(target.rectangle.y, target.clip.y);
     const f32 right = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
     const f32 bottom = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
-    return target.enabled && right > left && bottom > top && allowedByPopup(target);
+    return
+        target.enabled && right > left && bottom > top && allowedByPopup(target)
+        && (!target.owner.valid() || controlHost(target) != nullptr)
+    ;
 }
 
 void InputRouter::reconcileTargets(){
     const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable){
+    if(focused == nullptr || !isInteractive(*focused) || !focused->focusable || focused->control != m_focusControl){
         m_focus = {};
         m_focusDeclaration = 0u;
+        m_focusControl = {};
     }
     const HitTarget* captured = findTarget(m_capture, m_captureDeclaration);
-    if(captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup){
+    if(
+        captured == nullptr || !isInteractive(*captured) || captured->popup != m_capturePopup
+        || captured->control != m_captureControl
+    ){
         m_capture = {};
         m_capturePopup = {};
         m_captureDeclaration = 0u;
+        m_captureControl = {};
     }
     for(usize index = 0u; index < m_actions.size();){
         const InputActionId& action = m_actions[index].id;
         const HitTarget* target = findTarget(action.target, action.declarationGeneration);
-        if(target == nullptr || !isInteractive(*target) || !target->activatable || m_actions[index].popup != target->popup)
+        if(
+            target == nullptr || !isInteractive(*target) || !target->activatable
+            || m_actions[index].popup != target->popup || m_actions[index].control != target->control
+        )
             m_actions.erase(m_actions.begin() + static_cast<isize>(index));
         else
             ++index;
     }
     reconcilePointerGestures();
+    reconcileControlActions();
     updateHover();
 }
 
@@ -311,6 +350,7 @@ void InputRouter::cancelPointerCapture(){
     m_capture = {};
     m_capturePopup = {};
     m_captureDeclaration = 0u;
+    m_captureControl = {};
     m_pointerKnown = false;
     m_primaryDown = false;
     m_pointerSequenceConsumed = false;
@@ -318,12 +358,15 @@ void InputRouter::cancelPointerCapture(){
 
 void InputRouter::cancelInteraction(){
     m_actions.clear();
+    m_controlActions.clear();
     m_pointerGestures.clear();
     m_activeGestureSequence = 0u;
     m_hover = {};
     m_focus = {};
     m_capture = {};
     m_capturePopup = {};
+    m_captureControl = {};
+    m_focusControl = {};
     m_focusDeclaration = 0u;
     m_captureDeclaration = 0u;
     m_pointerKnown = false;
@@ -331,6 +374,7 @@ void InputRouter::cancelInteraction(){
     m_pointerSequenceConsumed = false;
     m_pressedKeys = 0u;
     m_consumedKeys = 0u;
+    m_controlKeyOwners.fill({});
 }
 
 void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum source, InputRoutingResult& result){
@@ -338,7 +382,9 @@ void InputRouter::appendActivation(const HitTarget& target, const InputActionSou
         result.activationOverflow = true;
         return;
     }
-    m_actions.push_back({ { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, source, target.popup });
+    m_actions.push_back({
+        { target.id, target.declarationGeneration, m_layoutGeneration, m_nextActionSequence }, source, target.popup, target.control
+    });
     ++m_nextActionSequence;
 }
 

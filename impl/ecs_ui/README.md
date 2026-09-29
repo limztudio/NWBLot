@@ -24,7 +24,9 @@ Overlay paint uses positive command layers above ordinary layer-zero roots, rega
 
 `UiEditBoxHost` keeps the first Escape with active transient preedit. A subsequent editor cancel requests `PopupDismissReason::Escape` from the CPU router; if there is no dismissible accepted popup, the ordinary editor cancellation path clears focus. Entries and candidate/displayed geometry carry their popup token, so reusing the same edit model after reopening cancels old native/key intentions and pending cut/paste mutation before the new loan. This preserves OS composition ownership and prevents popup dismissal from committing or undoing preedit text. The same borrowed Win32/X11/Wayland service interfaces are used inside and outside popup content.
 
-One Builder scope is open at a time. Nested popup layout, tooltips/context menus, scroll/list/combo behavior and live IME qualification are separate work. Linux target syntax validation with genuine Linux headers checks compile compatibility; it does not establish native Linux linking or X11/Wayland compositor execution. Posted Win32/X11 smoke events also do not qualify physical pointer grabs or live input-method behavior.
+One Builder scope is open at a time. Fixed-height keyed lists now participate in popup scopes and accepted geometry. Nested popup layout, tooltips/context menus, combo composition and live IME qualification are separate work. Linux target syntax validation with genuine Linux headers checks compile compatibility; it does not establish native Linux linking or X11/Wayland compositor execution. Posted Win32/X11 smoke events also do not qualify physical pointer grabs or live input-method behavior.
+
+The shared input adapter maps Up/Down/PageUp/PageDown and positioned wheel deltas into the toolkit's copied control actions. Win32, X11 and Wayland use the same dispatcher path; X11 wheel events publish their event position before the delta so the list under the wheel is the one hit-tested. Existing scene/UI held-pointer ownership remains in force. Selection, list navigation and scrolling are toolkit behavior; clipboard and IME remain borrowed OS services.
 
 ## Visual edit-box host
 

@@ -23,6 +23,7 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_text(text)
     , m_layout(arena)
     , m_items(arena)
+    , m_lists(arena)
     , m_stack(arena)
     , m_window(arena)
 {
@@ -122,6 +123,7 @@ void Builder::reset(){
     m_window.state = nullptr;
     m_popupState = nullptr;
     m_items.clear();
+    m_lists.clear();
     m_stack.clear();
     m_layout.reset();
 }
@@ -172,7 +174,18 @@ Builder::Item* Builder::addItem(
     }
     Point minimum;
     Point measured = item.text.measure();
-    if(kind == WidgetKind::Button){
+    if(kind == WidgetKind::Selectable){
+        const UiSkinRegion* skinRegion = region(m_listStyle.row.normal, m_listStyle.row.fallback);
+        if(!skinRegion){
+            m_context.fail();
+            return nullptr;
+        }
+        item.padding = m_listStyle.row.padding;
+        measured.x += item.padding.left + item.padding.right;
+        measured.y += item.padding.top + item.padding.bottom;
+        minimum = { skinRegion->minimumWidth, skinRegion->minimumHeight };
+    }
+    else if(kind == WidgetKind::Button){
         if(!region(m_style.button, m_style.button)){
             m_context.fail();
             return nullptr;

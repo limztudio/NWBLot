@@ -169,6 +169,8 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     if(previousTop != nextTop){
         m_focus = candidateFocus;
         m_focusDeclaration = candidateDeclaration;
+        const HitTarget* target = findTarget(m_focus, m_focusDeclaration);
+        m_focusControl = target ? target->control : ControlToken{};
     }
 }
 

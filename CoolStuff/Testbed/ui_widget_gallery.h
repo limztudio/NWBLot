@@ -6,6 +6,7 @@
 
 
 #include "ui_edit_gallery.h"
+#include "ui_list_gallery.h"
 #include "ui_popup_gallery.h"
 
 #include <impl/ecs_ui/components.h>
@@ -25,6 +26,7 @@ public:
 
 private:
     TestbedUiEditGallery m_edits;
+    TestbedUiListGallery m_lists;
     TestbedUiPopupGallery m_popups;
     u32 m_count = 0u;
     bool m_enabled = true;

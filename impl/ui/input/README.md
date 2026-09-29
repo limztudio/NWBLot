@@ -47,6 +47,14 @@ Cancellation has distinct meanings:
 
 Stable widget IDs derive from the host root identity and lifetime generation plus explicit scope/key hashes in `../id.h`. Labels and model values do not form identity. The retained context in `../context.h` validates current declaration lifetimes and retires removed ECS roots while a GPU frame remains pending.
 
+## Control hosts and visible parts
+
+`ControlToken` combines state input generation, source instance and source revision. A navigable/scrollable host is one focusable declaration. Its visible row and scrollbar targets carry the same token, owner ID and declaration lifetime, plus an optional stable key. Publication validates those references and popup layers atomically. Parts redirect focus to the host and do not add Tab stops. Removing a host removes its parts immediately.
+
+`ControlAction` copies wheel, navigation, Submit and keyed Activate intentions into a bounded 256-entry ordered queue. Wheel targets the top accepted hit and its scrollable owner; an unrelated overlap or popup blocks lower lists. Wheel step, page row count and maximum come from accepted geometry. Navigation may repeat, while Enter/Space submit once per press. The initial key-down pins its host/control/popup owner until release; losing that owner permanently retires the navigation intention while preserving release consumption. `fenceControl()` disables old host/part interaction and prunes stale actions, capture, focus and gestures when a state/source lifetime changes.
+
+Thumb gestures copy the accepted maximum with their track and thumb rectangles. Their identity sequence retains the press baseline; `updateSequence` orders the latest coalesced movement/release against other copied actions. A replacement list can request guarded `focusOnCommit` after a source change, but native focus loss or an active higher popup prevents that focus restoration. No router target or action borrows a list source or model.
+
 ## Bounds and failure behavior
 
 The router admits at most 4,096 targets, 256 queued events, and 256 pending activations, and 256 pointer gesture records. Its two target/lookup buffers and event/action vectors reserve those bounds from the owner arena when constructed. Sorted lookup tables avoid quadratic duplicate detection during publication.

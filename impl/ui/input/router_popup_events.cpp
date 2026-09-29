@@ -88,6 +88,8 @@ void InputRouter::retirePopup(const WidgetId id){
             if(top){
                 m_focus = restore.restoreFocus;
                 m_focusDeclaration = restore.restoreDeclaration;
+                const HitTarget* target = findTarget(m_focus, m_focusDeclaration);
+                m_focusControl = target ? target->control : ControlToken{};
             }
             removed = true;
         }

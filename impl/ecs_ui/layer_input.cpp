@@ -51,6 +51,10 @@ Ui::InputKey::Enum TranslateKey(const i32 key){
     case Core::Key::V: return Ui::InputKey::V;
     case Core::Key::Z: return Ui::InputKey::Z;
     case Core::Key::Y: return Ui::InputKey::Y;
+    case Core::Key::Up: return Ui::InputKey::Up;
+    case Core::Key::Down: return Ui::InputKey::Down;
+    case Core::Key::PageUp: return Ui::InputKey::PageUp;
+    case Core::Key::PageDown: return Ui::InputKey::PageDown;
     default: return Ui::InputKey::None;
     }
 }
@@ -183,11 +187,17 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
 }
 
 bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
-    static_cast<void>(xoffset);
-    static_cast<void>(yoffset);
+    if(!IsFinite(xoffset) || !IsFinite(yoffset))
+        return false;
     synchronizeNativeInput();
     if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene)
         return false;
+    Ui::InputEvent event;
+    event.type = Ui::InputEventType::PointerWheel;
+    event.position = m_pointer;
+    event.scrollX = xoffset;
+    event.scrollY = yoffset;
+    routeInput(event);
     return m_pointerOwner == __hidden_layer_input::s_Custom || m_context.input().wouldConsumePointer(m_pointer);
 }
 

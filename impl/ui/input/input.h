@@ -8,6 +8,7 @@
 #include "../id.h"
 #include "../paint.h"
 #include "popup.h"
+#include "control.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,12 +21,18 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace InputEventType{
-    enum Enum : u8{ PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained };
+    enum Enum : u8{
+        PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained, PointerWheel
+    };
 };
 
 namespace InputKey{
-    enum Enum : u8{ None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y };
+    enum Enum : u8{
+        None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Up, Down, PageUp, PageDown
+    };
 };
+
+static_assert(static_cast<u8>(InputKey::PageDown) <= 32u);
 
 namespace InputActionSource{
     enum Enum : u8{ Pointer, Keyboard };
@@ -43,6 +50,8 @@ struct InputEvent{
     bool repeat = false;
     bool control = false;
     bool alt = false;
+    f64 scrollX = 0.0;
+    f64 scrollY = 0.0;
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default Tab order.
@@ -61,6 +70,16 @@ struct HitTarget{
     Rect gestureReference{};
     PopupToken popup;
     u32 layer = 0u;
+    ControlToken control;
+    WidgetId owner;
+    u64 ownerDeclarationGeneration = 0u;
+    u64 value = 0u;
+    bool navigable = false;
+    bool scrollable = false;
+    f64 scrollStep = 0.0;
+    u64 pageRows = 1u;
+    f64 gestureMaximum = 0.0;
+    bool focusOnCommit = false;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -79,6 +98,22 @@ struct InputAction{
     InputActionId id;
     InputActionSource::Enum source = InputActionSource::Pointer;
     PopupToken popup;
+    ControlToken control;
+};
+
+// Ordered copied input addressed to a focusable host, including stable values selected by its parts.
+struct ControlAction{
+    InputActionId id;
+    WidgetId source;
+    PopupToken popup;
+    ControlToken control;
+    ControlActionKind::Enum kind = ControlActionKind::Wheel;
+    f64 delta = 0.0;
+    u64 value = 0u;
+    f64 step = 0.0;
+    u64 pageRows = 1u;
+    f64 offset = 0.0;
+    f64 maximum = 0.0;
 };
 
 // One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
@@ -90,6 +125,9 @@ struct PointerGesture{
     Rect referenceRectangle;
     PointerGestureState::Enum state = PointerGestureState::Active;
     PopupToken popup;
+    ControlToken control;
+    f64 maximum = 0.0;
+    u64 updateSequence = 0u;
 };
 
 struct InputRoutingResult{
@@ -108,6 +146,7 @@ inline constexpr usize s_InputMaxTargets = 4096u;
 inline constexpr usize s_InputMaxEvents = 256u;
 inline constexpr usize s_InputMaxActions = 256u;
 inline constexpr usize s_InputMaxPointerGestures = 256u;
+inline constexpr usize s_InputMaxControlActions = 256u;
 
 template<typename T>
 using InputVector = Vector<T, Core::Alloc::GlobalArena>;

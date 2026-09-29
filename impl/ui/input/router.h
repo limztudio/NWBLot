@@ -38,6 +38,13 @@ private:
         bool closing = false;
     };
 
+    struct ControlKeyOwner{
+        WidgetId host;
+        u64 declarationGeneration = 0u;
+        PopupToken popup;
+        ControlToken control;
+    };
+
 
 public:
     explicit InputRouter(Core::Alloc::GlobalArena& arena);
@@ -66,6 +73,11 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
     [[nodiscard]] bool consumeActivation(WidgetId id);
+    [[nodiscard]] bool consumeControlAction(
+        WidgetId host, u64 declarationGeneration, const ControlToken& token, ControlAction& action
+    );
+    // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
+    void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token);
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
     [[nodiscard]] bool consumePointerGesture(WidgetId id, u64 declarationGeneration, PointerGesture& gesture);
     [[nodiscard]] WidgetId hitTest(const Point& position)const;
@@ -73,6 +85,7 @@ public:
     [[nodiscard]] u64 layoutGeneration()const{ return m_layoutGeneration; }
     [[nodiscard]] const InputVector<HitTarget>& targets()const{ return m_targets; }
     [[nodiscard]] const InputVector<InputAction>& actions()const{ return m_actions; }
+    [[nodiscard]] const InputVector<ControlAction>& controlActions()const{ return m_controlActions; }
     [[nodiscard]] WidgetId hover()const{ return m_hover; }
     [[nodiscard]] WidgetId focus()const{ return m_focus; }
     [[nodiscard]] WidgetId capture()const{ return m_capture; }
@@ -80,7 +93,7 @@ public:
     [[nodiscard]] bool wantsPointer()const{ return m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || m_hover.valid(); }
     [[nodiscard]] bool wantsKeyboard()const{ return hasPopup() || m_focus.valid() || m_consumedKeys != 0u; }
     [[nodiscard]] bool ownsKey(InputKey::Enum key)const{
-        if(key == InputKey::None || key > InputKey::Y)
+        if(key == InputKey::None || key > InputKey::PageDown)
             return false;
         return (m_consumedKeys & (1u << (static_cast<u8>(key) - 1u))) != 0u;
     }
@@ -90,6 +103,17 @@ private:
     [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
+    [[nodiscard]] bool validControlTargets()const;
+    [[nodiscard]] const HitTarget* controlHost(const HitTarget& target)const;
+    [[nodiscard]] bool currentControlAction(const ControlAction& action)const;
+    void reconcileControlActions();
+    void appendControlAction(
+        const HitTarget& host, const HitTarget& source, ControlActionKind::Enum kind, f64 delta, InputRoutingResult& result
+    );
+    [[nodiscard]] bool routeControlKey(
+        const InputEvent& event, const HitTarget& host, bool alreadyPressed, InputRoutingResult& result
+    );
+    void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
     [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
     [[nodiscard]] bool validPopupTarget(const HitTarget& target)const;
@@ -116,6 +140,7 @@ private:
     InputVector<TargetLookup> m_stagedLookup;
     InputVector<InputEvent> m_events;
     InputVector<InputAction> m_actions;
+    InputVector<ControlAction> m_controlActions;
     InputVector<PointerGestureRecord> m_pointerGestures;
     InputVector<PopupRecord> m_popups;
     InputVector<PopupRecord> m_stagedPopups;
@@ -128,6 +153,8 @@ private:
     WidgetId m_focus;
     WidgetId m_capture;
     PopupToken m_capturePopup;
+    ControlToken m_captureControl;
+    ControlToken m_focusControl;
     u64 m_focusDeclaration = 0u;
     u64 m_captureDeclaration = 0u;
     Point m_pointer;
@@ -137,6 +164,7 @@ private:
     bool m_windowFocused = true;
     u32 m_pressedKeys = 0u;
     u32 m_consumedKeys = 0u;
+    Array<ControlKeyOwner, 32u> m_controlKeyOwners{};
 };
 
 

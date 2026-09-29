@@ -20,6 +20,7 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
         result.keyboardConsumed |= (m_consumedKeys & keyMask) != 0u;
         m_pressedKeys &= ~keyMask;
         m_consumedKeys &= ~keyMask;
+        m_controlKeyOwners[static_cast<usize>(event.key) - 1u] = {};
         return;
     }
     const bool alreadyPressed = (m_pressedKeys & keyMask) != 0u;
@@ -42,12 +43,16 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
             m_capturePopup = {};
             m_focusDeclaration = 0u;
             m_captureDeclaration = 0u;
+            m_captureControl = {};
+            m_focusControl = {};
         }
     }
     else{
         consumed |= hasPopup() || focused != nullptr;
+        const bool controlHandled = focused != nullptr && focused->navigable
+            && routeControlKey(event, *focused, alreadyPressed, result);
         if(
-            focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
+            !controlHandled && focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
             && (event.key == InputKey::Enter || event.key == InputKey::Space)
         )
             appendActivation(*focused, InputActionSource::Keyboard, result);
@@ -78,6 +83,7 @@ bool InputRouter::moveFocus(const bool reverse){
         if(target.focusable && isInteractive(target)){
             m_focus = target.id;
             m_focusDeclaration = target.declarationGeneration;
+            m_focusControl = target.control;
             return true;
         }
     }

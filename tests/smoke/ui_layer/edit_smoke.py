@@ -183,7 +183,8 @@ def run(args):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     environment = build_launch_environment(args)
     environment.update({"NWB_UI_LAYER_EDIT": "1", "NWB_UI_LAYER_INTERACTIVE": "0",
-        "NWB_UI_LAYER_WINDOW": "0", "NWB_UI_LAYER_WINDOW_SKIN": "0", "NWB_UI_LAYER_POPUP": "0", "NWB_UI_LAYER_POPUP_SKIN": "0"})
+        "NWB_UI_LAYER_WINDOW": "0", "NWB_UI_LAYER_WINDOW_SKIN": "0", "NWB_UI_LAYER_POPUP": "0", "NWB_UI_LAYER_POPUP_SKIN": "0",
+        "NWB_UI_LAYER_LIST": "0", "NWB_UI_LAYER_LIST_SKIN": "0"})
     if platform.system() == "Linux":
         environment["NWB_LINUX_BACKEND"] = "x11"
     for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",

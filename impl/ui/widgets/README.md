@@ -1,6 +1,6 @@
 # UI widgets
 
-`Ui::Builder` declares panels and windows, scoped row/column containers, labels, buttons, checkboxes, and separators. It shapes text and arranges the content before emitting paint and hit targets in the same order. Application values remain in the host model; the GPU snapshot owns copied geometry and image references.
+`Ui::Builder` declares panels and windows, scoped row/column containers, labels, buttons, checkboxes, separators, selectable rows and virtualized lists. It shapes text and arranges the content before emitting paint and hit targets in the same order. Application values remain in the host model; the GPU snapshot owns copied geometry and image references.
 
 ## Windows
 
@@ -29,3 +29,17 @@ A separator does not receive focus or activation. Its direction selects a horizo
 - `builder_window.cpp` owns window declaration and balanced content arrangement.
 - `window_paint.cpp` owns chrome painting and matching hit targets.
 - `builder_separator.cpp` owns divider declaration; `controls_paint.cpp` paints arranged content.
+
+## Keyed lists and scrolling
+
+`Builder::selectable(key, text, selected, options)` paints a selected row and returns one accepted activation. The host owns its selected value. `Builder::virtualList(key, source, state, options)` instead composes a focusable list, fixed-height visible rows and a vertical scrollbar. Keep the `ListState` and `interface IListDataSource` alive through the matching `endPanel()`, `endWindow()` or `endPopup()`. Change the source or explicitly call `state.select()`/`scrollTo()` after that scope ends. Frozen snapshots and accepted input targets retain copied geometry and lifetime values, never these borrowed objects.
+
+The source supplies nonzero unique keys, a unique nonzero instance generation, and a nonzero revision advanced whenever order, count, text or enabled state changes. Generations and revisions must not be reused for a different dataset state. `indexOf()` resolves a key and `findEnabled()` searches inclusively in one direction without wrapping. Implement these efficiently; the toolkit does not scan the full dataset. Row text may use a temporary buffer valid until the next source call. The list immediately shapes and copies it before borrowing another row.
+
+Selection and keyboard cursor are stable keys. Reordering preserves valid enabled keys and ensures the cursor's new index is visible; removal or disabling clears the affected key. Replacing an established source instance clears selection, cursor and offset. `ListResult::selectionChanged` reports selected-key changes, while `activated` reports a row pointer release or first Enter/Space press. Up/Down skip disabled rows; Home/End select an enabled endpoint; PageUp/PageDown use the displayed viewport's row count. `selectOnNavigate=false` moves the cursor without committing selection, for later compound controls. An empty list or a list without an enabled cursor consumes Submit as a no-op.
+
+Wheel scrolling preserves selection and uses the accepted step/range. Scrollbar dragging uses its accepted track, thumb and maximum as the press baseline. Multiple pending gestures and control actions are consumed in sequence; coalesced movement carries the sequence of its latest update. A source revision or explicit state change fences old intentions and cancels old capture. Held keys retain release ownership, and a lost control owner cannot revive after a later token reuse. A previously focused list restores focus only when the replacement frame is accepted, with native focus-loss and popup guards.
+
+`ScrollState` stores double offsets; `ScrollLayout` computes logical padded viewport, clipping, proportional/minimum thumb, visible `[firstRow, endRow)` and row bounds. Ancestor clipping culls rows without altering the logical scroll range. The list retains one widget state and emits only visible part targets; visible-row shaping and painting are proportional to that interval. More than 1,024 visible rows rejects a frame, and the existing 4,096-target limit still bounds the complete context. This bound is independent of dataset size. Variable-height rows, horizontal scrolling, multi-selection and generic scroll containers remain future controls.
+
+`Builder::listStyle()` resolves `list.background`, `list.row.normal/hover/selected/disabled`, `scroll.track`, `scroll.thumb` and optional `focus.overlay` from the selected skin. The default and alternate atlases reuse existing texture tiles for new semantic regions. Missing regions use explicitly named panel/button fallbacks within that skin. `SelectablePainter` is shared by standalone rows and list rows. Geometry/state, keyed model behavior, declaration/input, row painting and shared selectable painting live in separate source files.

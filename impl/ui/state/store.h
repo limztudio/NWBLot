@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace WidgetKind{
-    enum Enum : u8{ Panel, Container, Label, Button, Checkbox, Window, Separator, EditBox, Popup };
+    enum Enum : u8{ Panel, Container, Label, Button, Checkbox, Window, Separator, EditBox, Popup, Selectable, VirtualList };
 };
 
 struct WidgetState{

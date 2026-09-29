@@ -285,6 +285,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
         f64 xoffset = 0.0;
         f64 yoffset = 0.0;
         if(TranslateScroll(event.xbutton.button, xoffset, yoffset)){
+            frame.input().mousePosUpdate(static_cast<f64>(event.xbutton.x), static_cast<f64>(event.xbutton.y));
             frame.input().mouseScrollUpdate(xoffset, yoffset);
             break;
         }

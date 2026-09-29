@@ -58,6 +58,15 @@ WidgetId MakeWidgetId(const WidgetId parent, const AStringView stableKey){
     return { hash == 0u ? 1u : hash };
 }
 
+WidgetId MakeWidgetPartId(const WidgetId parent, const u64 stableKey){
+    if(!parent.valid() || stableKey == 0u)
+        return {};
+    u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, parent.value);
+    hash = __hidden_ui_id::AppendInteger(hash, 0u);
+    hash = __hidden_ui_id::AppendInteger(hash, stableKey);
+    return { hash == 0u ? 1u : hash };
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

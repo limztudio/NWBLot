@@ -26,6 +26,12 @@ the same named regions. Set its typed texture reference, atlas extent, density, 
 insets, content padding, and minimum sizes. Include both texture and skin metadata in the cooked asset input roots.
 Control behavior and font glyph atlases are independent of the skin artwork.
 
+Fixed-height lists use `list.background`, `list.row.normal`, `list.row.hover`, `list.row.selected`,
+`list.row.disabled`, `scroll.track` and `scroll.thumb`. The background, normal/disabled rows and scroll parts
+are semantic aliases of existing edit/button/panel tiles, so this adds no artwork or texture payload.
+Hover and selected rows keep their authored list tiles; focus uses the independent `focus.overlay`.
+The generator reproduces aliases from named source regions, including when the alternate skin remaps its UV tiles.
+
 The single-line edit box uses the nine-slice `edit.normal`, `edit.focused` and `edit.disabled` regions, plus
 the optional `focus.overlay`. A replacement skin can add `edit.hover`; an absent hover region falls back
 to `edit.normal`. Padding and minimum size use the maximum across normal, hover, focused and disabled regions,

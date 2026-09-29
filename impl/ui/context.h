@@ -46,8 +46,11 @@ public:
     [[nodiscard]] bool popScope();
     [[nodiscard]] WidgetState* declare(AStringView stableKey, WidgetKind::Enum kind);
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
+    [[nodiscard]] bool addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
     [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
     [[nodiscard]] bool takePointerGesture(const WidgetState& state, bool enabled, PointerGesture& gesture);
+    [[nodiscard]] bool takeControlAction(const WidgetState& state, bool enabled, const ControlToken& token, ControlAction& action);
+    [[nodiscard]] bool takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled, PointerGesture& gesture);
     [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
     [[nodiscard]] bool endPopupScope(bool visible);
     [[nodiscard]] PopupToken popupToken()const{ return m_currentPopup; }

@@ -13,6 +13,8 @@
 #include "widgets/edit_box_state.h"
 #include "widgets/popup.h"
 #include "widgets/popup_style.h"
+#include "widgets/list.h"
+#include "widgets/list_style.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +39,7 @@ private:
         Insets padding;
         f32 checkboxExtent = 0.0f;
         u32 node = 0u;
+        u32 list = s_LayoutNoParent;
         bool enabled = true;
         bool checked = false;
 
@@ -65,6 +68,16 @@ private:
         {}
     };
 
+    struct ListFrame{
+        const IListDataSource* source = nullptr;
+        ListState* state = nullptr;
+        ListOptions options;
+        ControlToken token;
+        Insets padding;
+        u64 rowCount = 0u;
+        bool focusOnCommit = false;
+    };
+
 
 public:
     Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder& paint, TextService& text);
@@ -87,6 +100,10 @@ public:
     // Return one action at most per declaration. Disabled controls discard stale activation and remain pointer barriers.
     [[nodiscard]] bool button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
     [[nodiscard]] bool checkbox(AStringView stableKey, StringView text, bool& checked, const WidgetOptions& options = {});
+    [[nodiscard]] bool selectable(AStringView stableKey, StringView text, bool selected, const WidgetOptions& options = {});
+    // Borrowed through the matching endPanel/endWindow/endPopup; explicit state/source changes must wait until that scope ends.
+    // Only visible rows are borrowed and shaped; stable keys must be unique and lookup/search efficient.
+    [[nodiscard]] ListResult virtualList(AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive && !m_popupState; }
@@ -95,6 +112,7 @@ public:
     [[nodiscard]] WidgetStyle& style(){ return m_style; }
     [[nodiscard]] EditBoxStyle& editStyle(){ return m_editStyle; }
     [[nodiscard]] PopupStyle& popupStyle(){ return m_popupStyle; }
+    [[nodiscard]] ListStyle& listStyle(){ return m_listStyle; }
     void setEditHost(IEditBoxHost* host){ m_editHost = host; }
     void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
     // Valid while a window scope is open, including a collapsed window.
@@ -113,6 +131,10 @@ private:
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintList(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintListRows(const Item& item, const ListFrame& frame, const ScrollPlacement& placement);
+    [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
@@ -127,6 +149,7 @@ private:
     WidgetStyle m_style;
     EditBoxStyle m_editStyle;
     PopupStyle m_popupStyle;
+    ListStyle m_listStyle;
     PopupState* m_popupState = nullptr;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
@@ -134,6 +157,7 @@ private:
     f32 m_deltaSeconds = 0.0f;
     LayoutTree m_layout;
     PaintVector<Item> m_items;
+    PaintVector<ListFrame> m_lists;
     PaintVector<u32> m_stack;
     WindowFrame m_window;
     WidgetState m_panelState;

@@ -4,6 +4,8 @@
 
 #include "router.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,7 +24,7 @@ bool InputRouter::consumePointerGesture(const WidgetId id, const u64 declaration
         auto& record = m_pointerGestures[index];
         if(
             record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration
-            || !record.pendingUpdate || record.gesture.popup != target->popup
+            || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control
         )
             continue;
         gesture = record.gesture;
@@ -48,6 +50,9 @@ void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResu
     gesture.targetRectangle = target.rectangle;
     gesture.referenceRectangle = target.gestureReference.width > 0.0f ? target.gestureReference : target.rectangle;
     gesture.popup = target.popup;
+    gesture.control = target.control;
+    gesture.maximum = target.gestureMaximum;
+    gesture.updateSequence = m_nextActionSequence;
     m_pointerGestures.push_back({ gesture, true });
     m_activeGestureSequence = m_nextActionSequence;
     ++m_nextActionSequence;
@@ -60,8 +65,12 @@ void InputRouter::updatePointerGesture(const Point& position, const bool complet
         if(record.gesture.id.sequence != m_activeGestureSequence)
             continue;
         if(completed || record.gesture.position.x != position.x || record.gesture.position.y != position.y){
+            if(m_nextActionSequence == 0u)
+                TerminateInvariant();
             record.gesture.position = position;
             record.gesture.state = completed ? PointerGestureState::Completed : PointerGestureState::Active;
+            record.gesture.updateSequence = m_nextActionSequence;
+            ++m_nextActionSequence;
             record.pendingUpdate = true;
         }
         break;
@@ -74,7 +83,10 @@ void InputRouter::reconcilePointerGestures(){
     for(usize index = 0u; index < m_pointerGestures.size();){
         const auto& gesture = m_pointerGestures[index].gesture;
         const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);
-        if(target == nullptr || !isInteractive(*target) || !target->pointerGesture || gesture.popup != target->popup){
+        if(
+            target == nullptr || !isInteractive(*target) || !target->pointerGesture
+            || gesture.popup != target->popup || gesture.control != target->control
+        ){
             if(gesture.id.sequence == m_activeGestureSequence)
                 m_activeGestureSequence = 0u;
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));

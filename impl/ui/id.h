@@ -37,6 +37,8 @@ struct WidgetRoot{
 
 [[nodiscard]] WidgetId MakeRootId(const WidgetRoot& root);
 [[nodiscard]] WidgetId MakeWidgetId(WidgetId parent, AStringView stableKey);
+// Numeric parts occupy a separate identity domain from nonempty textual declarations.
+[[nodiscard]] WidgetId MakeWidgetPartId(WidgetId parent, u64 stableKey);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

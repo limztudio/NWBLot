@@ -40,13 +40,17 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
             m_capture = {};
             m_capturePopup = {};
             m_captureDeclaration = 0u;
+            m_captureControl = {};
             return;
         }
         m_capture = hit == nullptr ? WidgetId{} : hit->id;
         m_captureDeclaration = hit == nullptr ? 0u : hit->declarationGeneration;
         m_capturePopup = hit == nullptr ? PopupToken{} : hit->popup;
-        m_focus = hit != nullptr && hit->focusable ? hit->id : WidgetId{};
-        m_focusDeclaration = m_focus.valid() ? hit->declarationGeneration : 0u;
+        m_captureControl = hit == nullptr ? ControlToken{} : hit->control;
+        const HitTarget* focused = hit != nullptr && hit->owner.valid() ? controlHost(*hit) : hit;
+        m_focus = focused != nullptr && focused->focusable ? focused->id : WidgetId{};
+        m_focusDeclaration = m_focus.valid() ? focused->declarationGeneration : 0u;
+        m_focusControl = m_focus.valid() ? focused->control : ControlToken{};
         if(hit != nullptr && hit->pointerGesture)
             appendPointerGesture(*hit, result);
         return;
@@ -55,9 +59,14 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     if(
         m_primaryDown && m_pointerSequenceConsumed && hit != nullptr
         && hit->id == m_capture && hit->declarationGeneration == m_captureDeclaration && hit->activatable
-        && hit->popup == m_capturePopup
-    )
-        appendActivation(*hit, InputActionSource::Pointer, result);
+        && hit->popup == m_capturePopup && hit->control == m_captureControl
+    ){
+        const HitTarget* host = hit->owner.valid() ? controlHost(*hit) : nullptr;
+        if(host != nullptr)
+            appendControlAction(*host, *hit, ControlActionKind::Activate, 0.0, result);
+        else
+            appendActivation(*hit, InputActionSource::Pointer, result);
+    }
     if(m_primaryDown)
         updatePointerGesture(event.position, true);
     m_primaryDown = false;
@@ -65,6 +74,7 @@ void InputRouter::routePointer(const InputEvent& event, InputRoutingResult& resu
     m_capture = {};
     m_capturePopup = {};
     m_captureDeclaration = 0u;
+    m_captureControl = {};
 }
 
 

@@ -5,6 +5,11 @@ asset.texture = "engine/ui/skins/default/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
 asset.regions = [
+    {"name": "list.background", "rect": [228, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
+    {"name": "list.row.normal", "rect": [100, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "list.row.disabled", "rect": [196, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "scroll.track", "rect": [4, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
+    {"name": "scroll.thumb", "rect": [100, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},
     {"name": "panel.normal", "rect": [4, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "window.normal", "rect": [36, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "window.title", "rect": [68, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},

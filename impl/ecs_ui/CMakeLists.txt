@@ -14,6 +14,8 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/edit_box_input.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_box_model.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_box_actions.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_navigation.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_hit.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/layer_input.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layer_system.h"

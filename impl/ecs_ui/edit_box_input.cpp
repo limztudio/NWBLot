@@ -38,6 +38,10 @@ namespace __hidden_ui_edit_box_input{
     case Ui::InputKey::Y: return Ui::EditKey::Y;
     case Ui::InputKey::Enter: return Ui::EditKey::Enter;
     case Ui::InputKey::Escape: return Ui::EditKey::Escape;
+    case Ui::InputKey::Up: return Ui::EditKey::Up;
+    case Ui::InputKey::Down: return Ui::EditKey::Down;
+    case Ui::InputKey::PageUp: return Ui::EditKey::PageUp;
+    case Ui::InputKey::PageDown: return Ui::EditKey::PageDown;
     default: return Ui::EditKey::None;
     }
 }
@@ -51,16 +55,6 @@ namespace __hidden_ui_edit_box_input{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-bool UiEditBoxHost::append(Event&& event){
-    if(m_events.size() == Ui::s_InputMaxEvents || event.native.text.size() > Core::s_TextInputMaxQueuedTextBytes - m_queuedTextBytes){
-        reset();
-        return false;
-    }
-    m_queuedTextBytes += event.native.text.size();
-    m_events.push_back(Move(event));
-    return true;
-}
 
 void UiEditBoxHost::collectNative(){
     if(rejectBorrowedMutation())
@@ -124,7 +118,14 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
         event.key = { __hidden_ui_edit_box_input::EditKey(input.key), input.control, input.shift, input.alt, input.repeat };
-        if(Ui::TranslateEditCommand(event.key).command == Ui::EditCommand::None)
+        Ui::EditNavigationDirection::Enum direction;
+        const bool navigation = Ui::TranslateEditNavigation(event.key, direction);
+        if(navigation){
+            if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
+                return;
+            event.navigationViewportHeight = entry->displayed.placement.content.height;
+        }
+        else if(Ui::TranslateEditCommand(event.key, entry->displayed.textMode).command == Ui::EditCommand::None)
             return;
         if(!append(Move(event)))
             return;
@@ -209,6 +210,16 @@ bool UiEditBoxHost::pastePrimary(const Ui::Point position){
     event.focusGeneration = entry->focusGeneration;
     event.kind = UiEditBoxEventKind::PastePrimary;
     return append(Move(event));
+}
+
+bool UiEditBoxHost::append(Event&& event){
+    if(m_events.size() == Ui::s_InputMaxEvents || event.native.text.size() > Core::s_TextInputMaxQueuedTextBytes - m_queuedTextBytes){
+        reset();
+        return false;
+    }
+    m_queuedTextBytes += event.native.text.size();
+    m_events.push_back(Move(event));
+    return true;
 }
 
 

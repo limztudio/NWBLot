@@ -170,11 +170,80 @@ namespace __hidden_ui_edit_caret_geometry{
     return true;
 }
 
+[[nodiscard]] static bool NearestStop(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
+    const u32 lineIndex, const Point point, usize& committedByte){
+    if(stops.empty() || lineIndex >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
+        return false;
+    const EditCaretLine& line = lines[lineIndex];
+    if(line.firstStop > stops.size() || line.stopCount > stops.size() - line.firstStop)
+        return false;
+    if(line.stopCount == 0u && (line.firstStop == 0u || line.firstStop >= stops.size()))
+        return false;
+    const usize first = line.stopCount == 0u ? line.firstStop - 1u : line.firstStop;
+    const usize end = line.stopCount == 0u ? static_cast<usize>(line.firstStop) + 1u : first + line.stopCount;
+    f32 minimumX = stops[first].x;
+    if(!IsFinite(minimumX) || minimumX < 0.0f)
+        return false;
+    f32 maximumX = minimumX;
+    for(usize index = first + 1u; index < end; ++index){
+        if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
+            return false;
+        minimumX = Min(minimumX, stops[index].x);
+        maximumX = Max(maximumX, stops[index].x);
+    }
+    const f32 queryX = Clamp(point.x, minimumX, maximumX);
+    f64 nearestY = Limit<f64>::s_Max;
+    f32 nearestX = Limit<f32>::s_Max;
+    usize result = 0u;
+    for(usize index = first; index < end; ++index){
+        const EditBoxCaretStop& stop = stops[index];
+        if(stop.lineIndex >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
+            return false;
+        const EditCaretLine& stopLine = lines[stop.lineIndex];
+        if(
+            !IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f
+            || !IsFinite(stopLine.top + stopLine.height)
+        )
+            return false;
+        const f64 distanceY = line.stopCount == 0u
+            ? Abs(static_cast<f64>(point.y) - (static_cast<f64>(stopLine.top) + static_cast<f64>(stopLine.height) * 0.5)) : 0.0;
+        const f32 distanceX = Abs(queryX - stop.x);
+        if(distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
+            nearestY = distanceY;
+            nearestX = distanceX;
+            result = stop.committedByte;
+        }
+    }
+    committedByte = result;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
+    const Point localPoint, usize& committedByte){
+    if(lines.empty() || lines.size() > Limit<u32>::s_Max || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
+        return false;
+    u32 lineIndex = static_cast<u32>(lines.size() - 1u);
+    for(u32 index = 0u; index < lines.size(); ++index){
+        const EditCaretLine& line = lines[index];
+        if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f || !IsFinite(line.top + line.height))
+            return false;
+        if(localPoint.y < line.top + line.height){
+            lineIndex = index;
+            break;
+        }
+    }
+    return __hidden_ui_edit_caret_geometry::NearestStop(lines, stops, lineIndex, localPoint, committedByte);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -251,16 +320,7 @@ bool EditCaretGeometry::caretRect(const usize displayByte, Rect& output)const{
 }
 
 bool EditCaretGeometry::hitTest(const Point localPoint, usize& committedByte)const{
-    if(!m_ready || m_lines.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
-        return false;
-    u32 lineIndex = static_cast<u32>(m_lines.size() - 1u);
-    for(u32 index = 0u; index < m_lines.size(); ++index){
-        if(localPoint.y < m_lines[index].top + m_lines[index].height){
-            lineIndex = index;
-            break;
-        }
-    }
-    return nearestStop(lineIndex, localPoint, committedByte);
+    return m_ready && HitEditCaretGeometry(m_lines, m_stops, localPoint, committedByte);
 }
 
 bool EditCaretGeometry::verticalTarget(const usize displayCaret, const bool down,
@@ -316,39 +376,7 @@ bool EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineInde
 }
 
 bool EditCaretGeometry::nearestStop(const u32 lineIndex, const Point point, usize& committedByte)const{
-    if(m_stops.empty() || lineIndex >= m_lines.size())
-        return false;
-    const EditCaretLine& line = m_lines[lineIndex];
-    if(line.stopCount == 0u && (line.firstStop == 0u || line.firstStop >= m_stops.size()))
-        return false;
-    const u32 first = line.stopCount == 0u ? line.firstStop - 1u : line.firstStop;
-    const u32 end = line.stopCount == 0u ? line.firstStop + 1u : first + line.stopCount;
-    if(first >= end || end > m_stops.size())
-        return false;
-    f32 minimumX = m_stops[first].x;
-    f32 maximumX = minimumX;
-    for(u32 index = first + 1u; index < end; ++index){
-        minimumX = Min(minimumX, m_stops[index].x);
-        maximumX = Max(maximumX, m_stops[index].x);
-    }
-    const f32 queryX = Clamp(point.x, minimumX, maximumX);
-    f64 nearestY = Limit<f64>::s_Max;
-    f32 nearestX = Limit<f32>::s_Max;
-    usize result = 0u;
-    for(u32 index = first; index < end; ++index){
-        const EditBoxCaretStop& stop = m_stops[index];
-        const EditCaretLine& stopLine = m_lines[stop.lineIndex];
-        const f64 distanceY = line.stopCount == 0u
-            ? Abs(static_cast<f64>(point.y) - (static_cast<f64>(stopLine.top) + static_cast<f64>(stopLine.height) * 0.5)) : 0.0;
-        const f32 distanceX = Abs(queryX - stop.x);
-        if(distanceY < nearestY || (distanceY == nearestY && distanceX < nearestX)){
-            nearestY = distanceY;
-            nearestX = distanceX;
-            result = stop.committedByte;
-        }
-    }
-    committedByte = result;
-    return true;
+    return __hidden_ui_edit_caret_geometry::NearestStop(m_lines, m_stops, lineIndex, point, committedByte);
 }
 
 

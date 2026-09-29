@@ -17,44 +17,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiEditBoxHost::rejectBorrowedMutation(){
-    if(!m_borrowed)
-        return false;
-    m_borrowRejected = true;
-    return true;
-}
-
-u64 UiEditBoxHost::nextFocusGeneration(){
-    if(m_focusGeneration == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return ++m_focusGeneration;
-}
-
-bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions){
-    if(m_clipboard.pending() && m_clipboardOwner == entry.owner && !m_clipboard.cancel())
-        TerminateInvariant();
-    if(m_primary.pending() && m_primaryOwner == entry.owner && !m_primary.cancel())
-        TerminateInvariant();
-    if(action == Ui::EditAction::Blur || action == Ui::EditAction::Abandon)
-        model.cancelComposition();
-    const u64 externalRevision = model.externalRevision();
-    if(m_borrowRejected || !actions.apply(model, action, options.readOnly) || m_borrowRejected)
-        return false;
-    result.submitted |= action == Ui::EditAction::Submit;
-    result.cancelled |= action == Ui::EditAction::Cancel;
-    result.blurred |= action == Ui::EditAction::Blur;
-    result.abandoned |= action == Ui::EditAction::Abandon;
-    if(action != Ui::EditAction::Submit || model.externalRevision() != externalRevision){
-        // Copied commits still apply at their ordered position; surrounding deletion cannot address this retired session.
-        if(m_session.owner() == entry.owner && !m_session.cancel())
-            TerminateInvariant();
-    }
-    return !m_borrowRejected;
-}
-
 bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions){
+    Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+    const u64 revision = model.revision();
+    const u64 externalRevision = model.externalRevision();
+    const u64 selectionGeneration = model.selectionGeneration();
+    const u64 compositionGeneration = model.compositionGeneration();
     const bool clipboard = m_clipboard.cancel();
     const bool primary = m_primary.cancel();
     if(!clipboard || !primary)
@@ -63,11 +31,16 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
         return false;
     const bool composing = model.composition().active;
     if(event.kind == UiEditBoxEventKind::Key){
-        const auto command = Ui::ApplyEditCommand(model, Ui::TranslateEditCommand(event.key), options.readOnly);
+        Ui::EditNavigationDirection::Enum direction;
+        if(Ui::TranslateEditNavigation(event.key, direction))
+            return navigation ? applyNavigation(model, event, *navigation, direction) : true;
+        const auto command = Ui::ApplyEditCommand(model, Ui::TranslateEditCommand(event.key, model.textMode()), options.readOnly);
         result.submitted |= command.submitted;
         result.cancelled |= command.cancelled;
         if(actions && (command.submitted || command.cancelled)){
-            if(!applyAction(entry, model, options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, result, *actions))
+            if(!applyAction(
+                entry, model, options, command.submitted ? Ui::EditAction::Submit : Ui::EditAction::Cancel, result, *actions, navigation
+            ))
                 return false;
         }
         if(command.cancelled){
@@ -150,14 +123,73 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     }
     else if(event.kind == UiEditBoxEventKind::Blur && actions){
         entry.retiredFocusGeneration = event.focusGeneration;
-        return applyAction(entry, model, options, Ui::EditAction::Blur, result, *actions);
+        return applyAction(entry, model, options, Ui::EditAction::Blur, result, *actions, navigation);
+    }
+    else if(event.kind == UiEditBoxEventKind::Focus && navigation){
+        navigation->state.reset();
     }
     if(composing && !model.composition().active && event.kind != UiEditBoxEventKind::Native){
         entry.rejectedNative = m_session.token();
         if(m_session.owner() == entry.owner && !m_session.cancel())
             TerminateInvariant();
     }
+    if(m_borrowRejected)
+        return false;
+    if(
+        navigation && (
+            model.revision() != revision || model.externalRevision() != externalRevision
+            || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration
+        )
+    )
+        navigation->state.reset();
+    return true;
+}
+
+bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
+    const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
+    const u64 revision = model.revision();
+    const u64 selectionGeneration = model.selectionGeneration();
+    const u64 compositionGeneration = model.compositionGeneration();
+    if(m_clipboard.pending() && m_clipboardOwner == entry.owner && !m_clipboard.cancel())
+        TerminateInvariant();
+    if(m_primary.pending() && m_primaryOwner == entry.owner && !m_primary.cancel())
+        TerminateInvariant();
+    if(action == Ui::EditAction::Blur || action == Ui::EditAction::Abandon)
+        model.cancelComposition();
+    const u64 externalRevision = model.externalRevision();
+    if(m_borrowRejected || !actions.apply(model, action, options.readOnly) || m_borrowRejected)
+        return false;
+    if(
+        navigation && (
+            action == Ui::EditAction::Cancel || action == Ui::EditAction::Blur || action == Ui::EditAction::Abandon
+            || model.revision() != revision || model.externalRevision() != externalRevision
+            || model.selectionGeneration() != selectionGeneration || model.compositionGeneration() != compositionGeneration
+        )
+    )
+        navigation->state.reset();
+    result.submitted |= action == Ui::EditAction::Submit;
+    result.cancelled |= action == Ui::EditAction::Cancel;
+    result.blurred |= action == Ui::EditAction::Blur;
+    result.abandoned |= action == Ui::EditAction::Abandon;
+    if(action != Ui::EditAction::Submit || model.externalRevision() != externalRevision){
+        // Copied commits still apply at their ordered position; surrounding deletion cannot address this retired session.
+        if(m_session.owner() == entry.owner && !m_session.cancel())
+            TerminateInvariant();
+    }
     return !m_borrowRejected;
+}
+
+bool UiEditBoxHost::rejectBorrowedMutation(){
+    if(!m_borrowed)
+        return false;
+    m_borrowRejected = true;
+    return true;
+}
+
+u64 UiEditBoxHost::nextFocusGeneration(){
+    if(m_focusGeneration == Limit<u64>::s_Max)
+        TerminateInvariant();
+    return ++m_focusGeneration;
 }
 
 

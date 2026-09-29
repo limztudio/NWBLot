@@ -49,6 +49,10 @@ struct EditCaretLine{
     f32 advance = 0.0f;
 };
 
+// Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
+[[nodiscard]] bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
+    Point localPoint, usize& committedByte);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

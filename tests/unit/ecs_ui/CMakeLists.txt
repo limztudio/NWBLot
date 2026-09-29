@@ -1,5 +1,10 @@
 nwb_declare_gtest_executable(nwb_ecs_ui_tests)
 target_sources(nwb_ecs_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_host_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_order_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_guard_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_lifetime_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_navigation_geometry_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_edit_session_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_edit_owned_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/selection_epoch_tests.cpp"

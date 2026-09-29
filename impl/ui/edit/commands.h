@@ -18,7 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace EditKey{
-    enum Enum : u8{ None, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Enter, Escape };
+    enum Enum : u8{ None, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Enter, Escape,
+        Up, Down, PageUp, PageDown };
 };
 
 namespace EditCommand{

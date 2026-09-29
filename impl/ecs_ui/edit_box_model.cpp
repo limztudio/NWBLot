@@ -31,9 +31,18 @@ Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::
     return editBorrowed(widget, model, options, popup, &actions);
 }
 
+Ui::EditBoxResult UiEditBoxHost::editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
+    Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions){
+    NavigationBorrow borrowed{ navigation, resolver };
+    return editBorrowed(widget, model, options, popup, &actions, &borrowed);
+}
+
 Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions){
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
     if(rejectBorrowedMutation())
+        return {};
+    if(navigation && model.textMode() != Ui::EditTextMode::Multiline)
         return {};
     if(actions)
         synchronizeFocus();
@@ -56,13 +65,17 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
         entry = &m_entries.back();
         entry->owner = owner;
         entry->expected.capture(model);
+        entry->navigationResetPending = navigation != nullptr;
         abandon = actions != nullptr;
     }
     else{
-        const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr);
+        const u64 navigationInstance = navigation ? navigation->state.instanceGeneration() : 0u;
+        const bool rebound = entry->owner != owner || entry->popup != popup || entry->actionCapable != (actions != nullptr)
+            || entry->navigationInstanceGeneration != navigationInstance;
         const bool policyChanged = actions && (entry->enabled != options.enabled || entry->readOnly != options.readOnly);
         abandon = actions && (rebound || policyChanged);
         if(rebound || policyChanged || !entry->expected.matches(model)){
+            entry->navigationResetPending = navigation != nullptr;
             if(
                 m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner)
                 || (m_primary.pending() && m_primaryOwner == entry->owner)
@@ -84,6 +97,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
     entry->popup = popup;
     entry->seen = m_generation;
     entry->actionCapable = actions != nullptr;
+    entry->navigationInstanceGeneration = navigation ? navigation->state.instanceGeneration() : 0u;
     entry->enabled = options.enabled;
     entry->readOnly = options.readOnly;
     if(actions && result.focused && !entry->focused){
@@ -97,7 +111,11 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
         result.valid = false;
         return result;
     }
-    if(abandon && !applyAction(*entry, model, options, Ui::EditAction::Abandon, result, *actions)){
+    if(navigation && entry->navigationResetPending){
+        navigation->state.reset();
+        entry->navigationResetPending = false;
+    }
+    if(abandon && !applyAction(*entry, model, options, Ui::EditAction::Abandon, result, *actions, navigation)){
         result.valid = false;
         discard(owner);
         return result;
@@ -119,7 +137,7 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
         if(actions && event.focusGeneration <= entry->retiredFocusGeneration)
             continue;
         if(options.enabled){
-            if(!apply(*entry, model, options, event, result, actions)){
+            if(!apply(*entry, model, options, event, result, actions, navigation)){
                 result.valid = false;
                 discard(owner);
                 if(
@@ -139,13 +157,17 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
                 TerminateInvariant();
         }
         else{
-            if(m_clipboard.action() == Ui::EditClipboardAction::Cut || m_clipboard.action() == Ui::EditClipboardAction::Paste){
+            const auto action = m_clipboard.action();
+            const bool mutates = action == Ui::EditClipboardAction::Cut || action == Ui::EditClipboardAction::Paste;
+            if(mutates){
                 if(m_session.owner() == owner && !m_session.cancel())
                     TerminateInvariant();
             }
             const auto completion = m_clipboard.drain(owner, model, options.readOnly);
             result.textChanged |= completion.textChanged;
             result.selectionChanged |= completion.selectionChanged;
+            if(navigation && !m_borrowRejected && mutates && completion.status == UiEditClipboardStatus::Applied)
+                navigation->state.reset();
         }
     }
     if(m_primary.pending() && m_primaryOwner == owner){

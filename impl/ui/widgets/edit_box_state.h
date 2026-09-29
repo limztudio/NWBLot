@@ -7,6 +7,7 @@
 
 #include "edit_box.h"
 #include "../edit/actions.h"
+#include "../edit/vertical_navigation.h"
 #include "../state/store.h"
 #include "../input/popup.h"
 
@@ -70,6 +71,9 @@ public:
     // Action-capable hosts invoke the borrowed sink in event order, before returning the draft for a paint snapshot.
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
         const PopupToken&, IEditActionSink&){ return {}; }
+    // Navigation resolves the current model between copied events; application objects are lent only for this call.
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
+        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&){ return {}; }
     [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view,
         const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };

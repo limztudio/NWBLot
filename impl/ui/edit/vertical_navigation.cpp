@@ -1,0 +1,88 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "vertical_navigation.h"
+
+#include <global/simplemath.h>
+#include <global/termination.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_vertical_navigation{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 NextIdentity(){
+    static Atomic<u64> s_NextIdentity{ 1u };
+    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
+    if(identity == 0u || identity == Limit<u64>::s_Max)
+        TerminateInvariant();
+    return identity;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditNavigationState::EditNavigationState()
+    : m_instanceGeneration(__hidden_ui_vertical_navigation::NextIdentity())
+{}
+
+EditNavigationSnapshot EditNavigationState::snapshot()const{
+    return { m_instanceGeneration, m_generation, m_preferredX, m_valid };
+}
+
+bool EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const{
+    return
+        snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation
+        && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid
+    ;
+}
+
+bool EditNavigationState::setPreferredX(const f32 preferredX){
+    if(!IsFinite(preferredX))
+        return false;
+    advanceGeneration();
+    m_preferredX = preferredX;
+    m_valid = true;
+    return true;
+}
+
+void EditNavigationState::reset(){
+    advanceGeneration();
+    m_preferredX = 0.0f;
+    m_valid = false;
+}
+
+void EditNavigationState::advanceGeneration(){
+    if(m_generation == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++m_generation;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

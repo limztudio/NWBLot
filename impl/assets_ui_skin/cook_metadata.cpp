@@ -177,7 +177,7 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        { "schema_version", "texture", "atlas_extent", "reference_density", "regions" }
+        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions" }
     ))
         return false;
 
@@ -203,6 +203,21 @@ bool ParseUiSkinCookMetadata(
     parsed.atlasHeight = extent[1u];
     if(!Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, "reference_density", true, parsed.referenceDensity))
         return false;
+
+    AStringView toolkitContract;
+    bool hasToolkitContract = false;
+    if(!Core::Assets::ReadMetadataStringField(
+        nwbFilePath, asset, s_DiagnosticPrefix, "toolkit_contract", false, toolkitContract, &hasToolkitContract
+    ))
+        return false;
+    if(hasToolkitContract && toolkitContract != "widgets_v1"){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets_v1'")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+        );
+        return false;
+    }
+    parsed.completeToolkitSkin = hasToolkitContract;
 
     const Value* regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "regions");
     if(!regions)
@@ -240,6 +255,7 @@ bool ParseUiSkinCookMetadata(
     outEntry.atlasWidth = parsed.atlasWidth;
     outEntry.atlasHeight = parsed.atlasHeight;
     outEntry.referenceDensity = parsed.referenceDensity;
+    outEntry.completeToolkitSkin = parsed.completeToolkitSkin;
     return true;
 }
 

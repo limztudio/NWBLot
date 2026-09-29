@@ -45,7 +45,8 @@ def generate(work_directory, output_directory, converter):
             region["padding"] = [10.0, 4.0, 6.0, 8.0]
     lines = ["ui_skin asset;", "", "asset.schema_version = 1;",
         'asset.texture = "project/ui/skins/alternate/texture";',
-        "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;", "asset.regions = ["]
+        "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;",
+        "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = ["]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
     lines += ["];", ""]
     output_directory.mkdir(parents=True, exist_ok=True)

@@ -160,7 +160,7 @@ def generate(directory: Path) -> None:
         "ui_skin asset;", "", "asset.schema_version = 1;",
         'asset.texture = "engine/ui/skins/default/texture";',
         f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];",
-        "asset.reference_density = 1.0;", "asset.regions = [",
+        "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = [",
     ]
     lines.extend("    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions)
     lines.extend(["];", ""])

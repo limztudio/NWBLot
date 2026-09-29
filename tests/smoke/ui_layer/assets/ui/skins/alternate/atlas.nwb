@@ -4,6 +4,7 @@ asset.schema_version = 1;
 asset.texture = "project/ui/skins/alternate/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
+asset.toolkit_contract = "widgets_v1";
 asset.regions = [
     {"name": "list.background", "rect": [228, 68, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "list.row.normal", "rect": [100, 100, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6]},

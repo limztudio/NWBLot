@@ -3,6 +3,11 @@
 
 
 #include <impl/ecs_ui/skin_selection.h>
+#include <impl/assets_ui_skin/asset.h>
+#include <impl/assets_ui_skin/toolkit_contract.h>
+
+#include <tests/common/capturing_logger.h>
+#include <tests/common/test_context.h>
 
 #include <gtest/gtest.h>
 
@@ -178,6 +183,50 @@ TEST(UiSkinSelectionTests, EmptyLiveRequestSelectsAndRebindsEngineDefault){
         }
     ), UiSkinChangeResult::Applied);
     EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
+}
+
+TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceSelection){
+    NWB::Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    struct SkinAdmissionArenaTag{};
+    NWB::Tests::TestArena<SkinAdmissionArenaTag> testArena;
+    const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/incomplete/atlas" };
+    UiSkin incomplete(testArena.arena, custom.name());
+    UiSkin::RegionVector regions(testArena.arena);
+    UiSkinRegion panel;
+    panel.name = Name("panel.normal");
+    panel.rectangle = { 0u, 0u, 16u, 16u };
+    regions.push_back(panel);
+    incomplete.setAtlas(Core::Assets::AssetRef<Texture>{ "project/ui/texture" }, 32u, 32u, 1.0f, Move(regions));
+    ASSERT_TRUE(incomplete.validatePayload());
+
+    u32 gpuBinds = 0u;
+    const auto tryBind = [&](const Core::Assets::AssetRef<UiSkin>& ref){
+        if(ref == custom){
+            if(!ValidateUiSkinToolkitContract(incomplete))
+                return false;
+            ++gpuBinds;
+            return true;
+        }
+        EXPECT_EQ(ref, s_DefaultUiSkinRef);
+        return true;
+    };
+    UiSkinSelection startup(custom);
+    EXPECT_EQ(startup.ensure(tryBind), UiSkinSelectionResult::DefaultFallback);
+    EXPECT_EQ(startup.selected(), s_DefaultUiSkinRef);
+    EXPECT_EQ(gpuBinds, 0u);
+
+    UiSkinSelection live(s_DefaultUiSkinRef);
+    ASSERT_EQ(live.ensure(tryBind), UiSkinSelectionResult::Selected);
+    live.requestChange(custom);
+    EXPECT_EQ(live.applyChangeIfReady(true, false, false,
+        [&](const Core::Assets::AssetRef<UiSkin>& ref, const u64){ return tryBind(ref); }
+    ), UiSkinChangeResult::Failed);
+    EXPECT_EQ(live.selected(), s_DefaultUiSkinRef);
+    EXPECT_EQ(live.generation(), 1u);
+    EXPECT_EQ(gpuBinds, 0u);
+    EXPECT_TRUE(live.changeFailed());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
 }
 
 

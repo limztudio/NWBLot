@@ -9,6 +9,7 @@
 
 
 #include "cook.h"
+#include "toolkit_contract.h"
 #include "binary_payload.h"
 
 #include <core/common/log.h>
@@ -83,7 +84,7 @@ bool BuildUiSkinAsset(const UiSkinCookEntry& entry, UiSkin& outSkin){
     UiSkin candidate(entry.arena, entry.virtualPath);
     UiSkin::RegionVector regions(entry.regions.begin(), entry.regions.end(), entry.arena);
     candidate.setAtlas(entry.texture, entry.atlasWidth, entry.atlasHeight, entry.referenceDensity, Move(regions));
-    if(!candidate.validatePayload())
+    if(!candidate.validatePayload() || (entry.completeToolkitSkin && !ValidateUiSkinToolkitContract(candidate)))
         return false;
     outSkin = Move(candidate);
     return true;

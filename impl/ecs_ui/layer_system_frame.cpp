@@ -4,6 +4,8 @@
 
 #include "layer_system.h"
 
+#include <impl/assets_ui_skin/toolkit_contract.h>
+
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 
@@ -33,7 +35,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
             const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
                 ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
             );
-            if(!skin || !m_renderer.setSkin(ref, *skin, generation))
+            if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;
             m_skinAsset = Move(candidateAsset);
             return true;

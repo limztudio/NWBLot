@@ -4,6 +4,8 @@
 
 #include "layer_system.h"
 
+#include <impl/assets_ui_skin/toolkit_contract.h>
+
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
@@ -94,13 +96,14 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     const UiSkinSelectionResult::Enum selection = m_skinSelection.ensure([this](const Core::Assets::AssetRef<UiSkin>& ref){
         if(ref == m_skinSelection.selected() && m_skinAsset){
             const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-            return skin && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
+            return skin && ValidateUiSkinToolkitContract(*skin)
+                && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
         }
         UniquePtr<Core::Assets::IAsset> candidateAsset;
         const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
             ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
         );
-        if(!skin || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
+        if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;
         m_skinAsset = Move(candidateAsset);
         return true;

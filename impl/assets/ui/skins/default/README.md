@@ -43,6 +43,6 @@ font or skin atlas parts. The caret is one physical pixel wide after display sca
 selection/copy behavior and use the ordinary/focused artwork; disabled fields use their separate region.
 The Testbed edit gallery uses this same skin with application-owned text models and borrowed OS services.
 
-Font atlas packaging remains independent: each generated default font atlas is one self-contained `.nwb`
-containing its glyph metadata, compressed RGBA pages and positioning tables. Native source fonts remain
-separate shaping assets. Replacing control artwork does not require rebaking those font packages.
+Font bundles remain independent of the skin artwork. Each default font uses a same-stem `.nwb` declaration,
+prepared `.font` shaping payload and binary `.atlas` with lossless RGBA SDF pages and positioning tables.
+Replacing control artwork does not require rebaking those font bundles.

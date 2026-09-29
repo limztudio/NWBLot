@@ -257,7 +257,7 @@ only owned geometry, text, resources, copied keys and lifetime tokens.
 
 The model and visual state remain lent through the enclosing panel/window or outermost popup end. Separate typed loan records validate both numeric epochs and draft text/selection/composition epochs around preparation, publication and the final callback-free family pass. Frozen paint and hit targets own their data. Application changes to a live loan reject that frame candidate while preserving the application change. Numeric controls use the existing skin's edit states and text/caret/selection colors.
 
-Numeric and searchable-combo declaration loans also include the edit model's monotonic selection generation. A callback that changes and restores a caret, or accepts an identical selection, invalidates the earlier loan even when text and byte positions match again. The multiline content/command foundation uses the same model with canonical LF. Shared multiline geometry is described below; the Builder text-area control remains a following increment.
+Numeric and searchable-combo declaration loans also include the edit model's monotonic selection generation. A callback that changes and restores a caret, or accepts an identical selection, invalidates the earlier loan even when text and byte positions match again. The multiline content/command foundation uses the same model with canonical LF. Shared multiline geometry is described below; the Builder text-area control uses this model and geometry.
 
 ## Shared multiline edit geometry
 
@@ -265,7 +265,7 @@ Numeric and searchable-combo declaration loans also include the edit model's mon
 
 The Point-scroll `EditBoxView::arrange()` overload reveals the caret in both axes and top-aligns multiline content. `scroll` remains horizontal and `scrollY` is vertical. The existing float-scroll overload and SingleLine vertical centering remain available. Painting clips separate per-line selection/preedit segments and text through the existing content clip; `EditBoxPlacement::selection` and `preeditUnderline` describe the first line for compatibility, while multiline segments come from `caretGeometry().rangeOnLine()`. The snapshot owns composition/display mapping and never retains its source model. Geometry retains no service or ECS pointer.
 
-`Builder::editBox()` accepts only SingleLine models. The dedicated multiline Builder declaration and synchronously borrowed vertical-navigation host contract are the next increment.
+`Builder::editBox()` accepts only SingleLine models. The dedicated multiline Builder declaration uses the synchronously borrowed vertical-navigation host contract.
 
 ## Ordered vertical navigation host
 
@@ -273,4 +273,4 @@ The Point-scroll `EditBoxView::arrange()` overload reveals the caret in both axe
 
 The ECS host checks model identity, text/external/selection/composition epochs and values, navigation identity/epoch/value, Context failure and host reentry before applying a returned grapheme target. Failed resolution rejects the candidate and preserves application mutations. Accepted vertical moves retain their preferred X across shorter lines. Accepted pointer, horizontal and text-edit intents reset it, including identical selection intents; Copy and unchanged Submit preserve it. Pending, failed and cancelled clipboard transfers preserve it until an accepted Cut/Paste completion. Blur, Cancel, Abandon and focus regain reset at their ordered event positions. Rebinding, policy changes, omission and native focus loss retire earlier input and reset state only when it is next lent.
 
-Published geometry owns line records and caret stops, so native caret conversion and pointer selection use the accepted two-axis placement after the temporary View is gone. Candidate geometry cannot replace displayed hit geometry before frame acceptance. Entry and event storage retain copied identities and values, with no application model, navigation-state, resolver or sink pointer. The public Builder text-area declaration follows this host foundation.
+Published geometry owns line records and caret stops, so native caret conversion and pointer selection use the accepted two-axis placement after the temporary View is gone. Candidate geometry cannot replace displayed hit geometry before frame acceptance. Entry and event storage retain copied identities and values, with no application model, navigation-state, resolver or sink pointer. The public Builder text-area declaration uses this host foundation.

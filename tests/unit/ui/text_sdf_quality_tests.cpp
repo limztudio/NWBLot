@@ -115,7 +115,10 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
         for(const f32 zoom : s_Zoom){
             for(const f32 dpi : s_Dpi){
                 const u32 pixels = static_cast<u32>(Ceil(payload.bakePpem * zoom * dpi));
-                if(static_cast<f32>(pixels) > payload.bakePpem * s_BakedFontAtlasMaxScale)
+                if(
+                    static_cast<f32>(pixels) < payload.bakePpem * s_BakedFontAtlasMinScale
+                    || static_cast<f32>(pixels) > payload.bakePpem * s_BakedFontAtlasMaxScale
+                )
                     continue;
                 ShapeRequest request{ .text = s_Text[fixture], .fontSize = static_cast<f32>(pixels) };
                 if(fixture == 1u){
@@ -181,7 +184,7 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
             }
         }
     }
-    EXPECT_GE(comparisons, 24u);
+    EXPECT_GE(comparisons, 32u);
     RecordProperty("comparisons", comparisons);
     RecordProperty("maximum_edge_displacement_pixels", StringFormat(arena, "{}", worstEdge).c_str());
     RecordProperty("maximum_mean_coverage_error", StringFormat(arena, "{}", worstMean).c_str());

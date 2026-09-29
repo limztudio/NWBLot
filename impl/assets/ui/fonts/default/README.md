@@ -23,4 +23,4 @@ python -m launcher font-builder --config opt -- --font "/absolute/path/impl/asse
 python -m launcher font-builder --skip-build --config opt -- --font "/absolute/path/impl/assets/ui/fonts/default/korean.font" --output "/absolute/path/output/korean.nwb" --ppem 32 --spread 8 --extent 2048
 ```
 
-`--overwrite` is required to replace an existing complete trio. The renderer uses these atlases at 16..48 physical pixels per em, corresponding to 0.5..1.5 times their 32-ppem bake, and uses native grayscale coverage outside that measured range. See the [font-builder guide](../../../../../utilities/font_builder/README.md) for the binary contract and generation limits.
+`--overwrite` is required to replace an existing complete trio. The renderer uses these atlases at 24..48 physical pixels per em, corresponding to 0.75..1.5 times their 32-ppem bake, and uses native grayscale coverage outside that qualified range. Below 24 pixels, native coverage preserves the antialiased bottom row of small descenders. See the [font-builder guide](../../../../../utilities/font_builder/README.md) for the binary contract and generation limits.

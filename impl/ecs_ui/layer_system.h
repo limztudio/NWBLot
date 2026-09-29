@@ -71,6 +71,7 @@ public:
 
 
 public:
+    void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode);
     [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }

@@ -81,6 +81,8 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     GpuGlyphGraphResources glyphPages;
     GpuSdfGraphResources sdfPages;
     GpuTextureGraphResources textureImages;
+    Core::GpuGraphResourceId vertices;
+    Core::GpuGraphResourceId indices;
     uses.push_back({ color, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write });
     uses.push_back({ skin, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     if(
@@ -89,11 +91,11 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     )
         return false;
     if(!frame->m_snapshot.vertices().empty()){
-        const Core::GpuGraphResourceId vertices = graph.importBuffer(
+        vertices = graph.importBuffer(
             frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer)
                 .setExternalFinalState(Core::ResourceStates::Common)
         );
-        const Core::GpuGraphResourceId indices = graph.importBuffer(
+        indices = graph.importBuffer(
             frame->m_indices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.indices")).setMarkerLabel("UI Indices").setType(Core::GpuGraphResourceType::Buffer)
                 .setExternalFinalState(Core::ResourceStates::Common)
         );
@@ -155,7 +157,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuRasterTask::Payload{ frame, color, skin, Move(glyphPages), Move(sdfPages), Move(textureImages) }
+        GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(glyphPages), Move(sdfPages), Move(textureImages) }
     );
     if(!raster.valid())
         return false;

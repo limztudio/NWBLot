@@ -542,6 +542,21 @@ foreach(_nwb_ui_texture_image_skin IN ITEMS default alternate)
     )
 endforeach()
 
+add_test(NAME nwb_ui_layer_raster_ir_parity_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/raster_ir_parity_smoke.py"
+        --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+        --working-directory "${_nwb_ui_smoke_runtime_root}"
+        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_raster_ir_parity"
+        --replay-marker "UiGpuRenderer: raster command IR replay active"
+        ${_nwb_ui_smoke_logserver_args}
+)
+set_tests_properties(nwb_ui_layer_raster_ir_parity_smoke PROPERTIES
+    RESOURCE_LOCK nwb_display
+    SKIP_RETURN_CODE 77
+    TIMEOUT 720
+    LABELS "ui;standalone_gpu;command_ir"
+)
+
 unset(_nwb_ui_texture_image_skin)
 unset(_nwb_ui_texture_image_test)
 unset(_nwb_ui_texture_image_skin_flag)

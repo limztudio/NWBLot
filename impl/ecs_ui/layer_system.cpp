@@ -67,6 +67,10 @@ UiLayerSystem::~UiLayerSystem(){
     m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
 }
 
+void UiLayerSystem::setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode){
+    m_renderer.setCommandRecordingMode(mode);
+}
+
 bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_resourcesReady = false;

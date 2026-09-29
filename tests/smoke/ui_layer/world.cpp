@@ -21,6 +21,7 @@
 #include "text_samples.h"
 #include "text_area_scene.h"
 #include "window_scene.h"
+#include "../smoke_environment.h"
 
 #include <impl/ecs_ui/layer_system.h>
 
@@ -155,6 +156,10 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         fonts,
         Impl::UiLayerPresentation::Standalone
     );
+    if(ReadSmokeEnvironmentFlag("NWB_UI_IR_REPLAY")){
+        layer.setGpuCommandRecordingMode(Impl::Ui::GpuCommandRecordingMode::CommandIrReplay);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: command IR replay enabled"));
+    }
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
     if(textureImageSmoke){

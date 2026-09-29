@@ -3,6 +3,7 @@
 
 
 #include "renderer_internal.h"
+#include "renderer_command_ir.h"
 
 #include <core/task/gpu/compiled_graph.h>
 
@@ -50,6 +51,8 @@ bool GpuRasterTask::record(
         )
             return false;
     }
+    if(frame->m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
+        return RecordRasterCommandIr(payload, commands, context);
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const DisplayMetrics& display = frame->m_snapshot.displayMetrics();
     GpuPaintPushConstants push;
@@ -132,6 +135,8 @@ bool GpuOutputTask::record(
         || context.declarations.textureForResource(payload.color) != frame->m_target->m_color.get()
     )
         return false;
+    if(frame->m_recordingMode == GpuCommandRecordingMode::CommandIrReplay)
+        return RecordOutputCommandIr(payload, commands, context);
     const Core::TextureDesc& target = payload.acquired.backBuffer.texture->getDescription();
     Core::ViewportState viewport;
     viewport.addViewport(Core::Viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f));

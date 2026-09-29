@@ -82,7 +82,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(Core::GpuTaskGraph& graph){
         Core::GpuTaskDesc().setIdentity(Name("ui.output")).setMarkerLabel("UI Standalone Output").setScheduling(scheduling)
             .setDependencies(&layer.readyTask, 1u).setResourceUses(uses, 2u).setResourceVersionUses(&consume, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuOutputTask::Payload{ frame, backBuffer, layer.color, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
+        GpuOutputTask::Payload{ frame, backBuffer, layer.color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
     );
     if(!output.valid())
         return {};

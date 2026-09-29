@@ -149,6 +149,7 @@ struct GpuFrameData : NoCopy{
     [[nodiscard]] bool complete(Core::Device& device)const;
 
     // Strong version owners keep descriptors allocated through pending recording and final GPU completion.
+    Core::Alloc::GlobalArena& m_arena;
     DrawSnapshot m_snapshot;
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphPages;
@@ -165,6 +166,7 @@ struct GpuFrameData : NoCopy{
     Core::QueueSubmissionToken m_clear;
     Core::QueueSubmissionToken m_raster;
     Core::QueueSubmissionToken m_finalConsumer;
+    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     u32 m_presentationMode = NWB_UI_PRESENTATION_SDR;
     bool m_prepared = false;
 };
@@ -190,6 +192,9 @@ struct GpuRasterTask{
         GpuFrame frame;
         Core::GpuGraphResourceId color;
         Core::GpuGraphResourceId skin;
+        Core::GpuGraphPipelineId pipeline;
+        Core::GpuGraphResourceId vertices;
+        Core::GpuGraphResourceId indices;
         GpuGlyphGraphResources glyphPages;
         GpuSdfGraphResources sdfPages;
         GpuTextureGraphResources textureImages;
@@ -204,6 +209,7 @@ struct GpuOutputTask{
         GpuFrame frame;
         Core::GpuGraphResourceId backBuffer;
         Core::GpuGraphResourceId color;
+        Core::GpuGraphPipelineId graphPipeline;
         Core::AcquiredPresentationFrame acquired;
         Core::GraphicsPipelineHandle pipeline;
         u32 presentationMode = NWB_UI_PRESENTATION_SDR;
@@ -281,6 +287,7 @@ struct GpuRendererState final : NoCopy{
     Core::GpuTaskGraphOutputLayer m_declaredLayer;
     u64 m_graphGeneration = 0u;
     u64 m_lastAcceptedGeneration = 0u;
+    GpuCommandRecordingMode::Enum m_recordingMode = GpuCommandRecordingMode::Direct;
     u32 m_width = 0u;
     u32 m_height = 0u;
     bool m_claimed = false;

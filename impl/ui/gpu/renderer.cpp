@@ -95,7 +95,8 @@ GpuSharedResources::~GpuSharedResources()noexcept{
 
 
 GpuFrameData::GpuFrameData(Core::Alloc::GlobalArena& arena, DrawSnapshot&& snapshot, GpuVersion<GpuSkinVersion> skin)
-    : m_snapshot(Move(snapshot))
+    : m_arena(arena)
+    , m_snapshot(Move(snapshot))
     , m_skin(Move(skin))
     , m_glyphPages(arena)
     , m_sdfPages(arena)
@@ -273,8 +274,18 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
     m_state->m_pending = MakeGpuVersion<GpuFrameData>(
         m_state->m_arena, m_state->m_arena, Move(snapshot), m_state->m_skin
     );
+    if(m_state->m_pending)
+        m_state->m_pending->m_recordingMode = m_state->m_recordingMode;
     m_state->m_claimed = false;
     return m_state->m_pending != nullptr;
+}
+
+void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mode){
+    m_state->m_recordingMode = mode;
+}
+
+GpuCommandRecordingMode::Enum GpuRenderer::commandRecordingMode()const{
+    return m_state->m_recordingMode;
 }
 
 bool GpuRenderer::hasPendingFrame()const{

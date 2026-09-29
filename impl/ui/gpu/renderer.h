@@ -24,6 +24,14 @@ NWB_IMPL_UI_BEGIN
 struct GpuRendererState;
 
 
+namespace GpuCommandRecordingMode{
+    enum Enum : u8{
+        Direct,
+        CommandIrReplay,
+    };
+};
+
+
 // Main-thread owner. Resource invalidation follows the caller's joined GPU/graph teardown boundary.
 class GpuRenderer final : public Core::IGpuTaskGraphOutputLayerContributor, NoCopy{
 public:
@@ -46,6 +54,8 @@ public:
     [[nodiscard]] bool setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);
     // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
     [[nodiscard]] bool submit(DrawSnapshot&& snapshot);
+    void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode);
+    [[nodiscard]] GpuCommandRecordingMode::Enum commandRecordingMode()const;
     [[nodiscard]] bool hasPendingFrame()const;
     [[nodiscard]] u64 lastAcceptedGeneration()const;
     [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const;

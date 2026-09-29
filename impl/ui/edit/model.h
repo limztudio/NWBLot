@@ -60,6 +60,8 @@ public:
 
 public:
     [[nodiscard]] AStringView text()const{ return { m_text.data(), m_text.size() }; }
+    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
+    [[nodiscard]] u64 externalRevision()const{ return m_externalRevision; }
     [[nodiscard]] u64 revision()const{ return m_revision; }
     [[nodiscard]] usize anchor()const{ return m_anchor; }
     [[nodiscard]] usize caret()const{ return m_caret; }
@@ -105,6 +107,7 @@ private:
 
 private:
     Core::Alloc::GlobalArena& m_arena;
+    const u64 m_instanceGeneration;
     const EditLimits m_limits;
     AString<Core::Alloc::GlobalArena> m_text;
     Vector<usize, Core::Alloc::GlobalArena> m_boundaries;
@@ -119,6 +122,7 @@ private:
     usize m_preeditAnchor = 0u;
     usize m_preeditCaret = 0u;
     u64 m_revision = 1u;
+    u64 m_externalRevision = 1u;
     bool m_compositionActive = false;
 };
 

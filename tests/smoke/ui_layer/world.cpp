@@ -3,6 +3,7 @@
 
 
 #include "world.h"
+#include "edit_scene.h"
 #include "interactive_scene.h"
 #include "paint_scene.h"
 #include "text_samples.h"
@@ -89,7 +90,13 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(windowSmoke){
+    if(IsUiLayerEditSmokeEnabled()){
+        paint.paint = [scene = CreateUiEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: edit UI paint failed"));
+        };
+    }
+    else if(windowSmoke){
         paint.paint = [scene = CreateUiWindowSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: window UI paint failed"));

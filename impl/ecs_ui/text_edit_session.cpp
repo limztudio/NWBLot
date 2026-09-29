@@ -50,6 +50,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::begin(
     m_publishedAnchor = model.anchor();
     m_publishedCaret = model.caret();
     m_publishedModelRevision = model.revision();
+    m_publishedExternalRevision = model.externalRevision();
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }
@@ -135,7 +136,8 @@ bool UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
 bool UiTextEditSession::matchesModel(const Ui::EditModel& model)const{
     const auto composition = model.composition();
     return
-        model.revision() == m_expectedRevision && model.text() == AStringView(m_expectedText)
+        model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision
+        && model.text() == AStringView(m_expectedText)
         && model.anchor() == m_expectedAnchor && model.caret() == m_expectedCaret
         && composition.active == m_expectedComposition.active && composition.text == AStringView(m_expectedPreedit)
         && composition.anchor == m_expectedComposition.anchor && composition.caret == m_expectedComposition.caret
@@ -146,7 +148,8 @@ bool UiTextEditSession::matchesModel(const Ui::EditModel& model)const{
 
 bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const{
     return
-        model.revision() == m_publishedModelRevision && model.text() == AStringView(m_publishedText)
+        model.revision() == m_publishedModelRevision && model.externalRevision() == m_publishedExternalRevision
+        && model.text() == AStringView(m_publishedText)
         && model.anchor() == m_publishedAnchor && model.caret() == m_publishedCaret
     ;
 }
@@ -156,14 +159,16 @@ void UiTextEditSession::captureModel(const Ui::EditModel& model){
     m_expectedAnchor = model.anchor();
     m_expectedCaret = model.caret();
     m_expectedRevision = model.revision();
+    m_expectedExternalRevision = model.externalRevision();
     m_expectedComposition = model.composition();
     m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
     m_expectedComposition.text = {};
 }
 
-Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::EditModel& model){
+Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(
+    const Ui::EditModel& model, const Core::TextInputChangeCause::Enum cause){
     const auto admission = m_service.updateSurrounding(
-        m_token, model.text(), model.anchor(), model.caret(), Core::TextInputChangeCause::InputMethod
+        m_token, model.text(), model.anchor(), model.caret(), cause
     );
     if(admission != Core::TextInputAdmission::Accepted)
         return admission;
@@ -171,6 +176,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::publishSurrounding(const Ui::E
     m_publishedAnchor = model.anchor();
     m_publishedCaret = model.caret();
     m_publishedModelRevision = model.revision();
+    m_publishedExternalRevision = model.externalRevision();
     m_surroundingRevision = m_service.surroundingRevision(m_token);
     return Core::TextInputAdmission::Accepted;
 }
@@ -193,37 +199,11 @@ bool UiTextEditSession::release(){
 }
 
 UiTextEditStatus::Enum UiTextEditSession::applyEvent(Ui::EditModel& model){
-    switch(m_event.kind){
-    case Core::TextInputEventKind::Commit:
+    if(m_event.kind == Core::TextInputEventKind::Commit)
         m_preeditCaretVisible = true;
-        return (model.composition().active ? model.commitComposition(m_event.text) : model.replaceSelection(m_event.text))
-            ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
-    case Core::TextInputEventKind::Preedit:
+    else if(m_event.kind == Core::TextInputEventKind::Preedit)
         m_preeditCaretVisible = m_event.caretVisible;
-        if(m_event.text.empty()){
-            model.cancelComposition();
-            return UiTextEditStatus::Applied;
-        }
-        if(!model.composition().active && !model.beginComposition())
-            return UiTextEditStatus::ModelRejected;
-        return model.updateComposition(m_event.text, m_event.anchorByte, m_event.caretByte)
-            ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
-    case Core::TextInputEventKind::DeleteSurrounding: {
-        if(m_event.surroundingRevision != m_surroundingRevision || !matchesPublishedModel(model))
-            return UiTextEditStatus::StaleSurrounding;
-        if(model.hasSelection() && (m_event.deleteBeforeBytes != 0u || m_event.deleteAfterBytes != 0u))
-            return UiTextEditStatus::ModelRejected;
-        const usize caret = model.caret();
-        if(m_event.deleteBeforeBytes > caret || m_event.deleteAfterBytes > model.text().size() - caret)
-            return UiTextEditStatus::InvalidEvent;
-        return model.eraseSurrounding(m_event.deleteBeforeBytes, m_event.deleteAfterBytes)
-            ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected;
-    }
-    case Core::TextInputEventKind::Cancelled:
-        return UiTextEditStatus::Cancelled;
-    default:
-        return UiTextEditStatus::InvalidEvent;
-    }
+    return ApplyUiTextEditEvent(model, m_event, m_surroundingRevision, matchesPublishedModel(model));
 }
 
 

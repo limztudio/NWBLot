@@ -11,6 +11,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TestbedUiWidgetGallery::TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena)
+    : m_edits(arena)
+{}
+
 void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
@@ -38,6 +42,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     valid = ui.endPanel() && valid;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI widget declaration failed"));
+    m_edits.paint(context, x, y + 192.0f);
 }
 
 

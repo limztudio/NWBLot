@@ -2,6 +2,10 @@ nwb_declare_static_library(nwb_ui_edit)
 target_sources(nwb_ui_edit PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/model.h"
     "${CMAKE_CURRENT_LIST_DIR}/model.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/commands.h"
+    "${CMAKE_CURRENT_LIST_DIR}/commands.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/single_line_text.h"
+    "${CMAKE_CURRENT_LIST_DIR}/single_line_text.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/navigation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/history.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/composition.cpp"

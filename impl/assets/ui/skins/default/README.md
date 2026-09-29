@@ -25,3 +25,18 @@ To make a replacement skin, author a texture with the existing `tex_conv` workfl
 the same named regions. Set its typed texture reference, atlas extent, density, rectangles, draw modes, slice
 insets, content padding, and minimum sizes. Include both texture and skin metadata in the cooked asset input roots.
 Control behavior and font glyph atlases are independent of the skin artwork.
+
+The single-line edit box uses the nine-slice `edit.normal`, `edit.focused` and `edit.disabled` regions, plus
+the optional `focus.overlay`. A replacement skin can add `edit.hover`; an absent hover region falls back
+to `edit.normal`. Padding and minimum size use the maximum across normal, hover, focused and disabled regions,
+combined with `Builder::editStyle()` padding, so state changes do not move the text or alter layout. The default atlas supplies eight logical units of padding on
+each edge; a 40-unit field fits the default 16-unit font, while content sizing includes the full line and padding.
+
+Selection, caret and preedit underline are clipped geometry using edit-style colors rather than additional
+font or skin atlas parts. The caret is one physical pixel wide after display scaling. Read-only fields retain
+selection/copy behavior and use the ordinary/focused artwork; disabled fields use their separate region.
+The Testbed edit gallery uses this same skin with application-owned text models and borrowed OS services.
+
+Font atlas packaging remains independent: each generated default font atlas is one self-contained `.nwb`
+containing its glyph metadata, compressed RGBA pages and positioning tables. Native source fonts remain
+separate shaping assets. Replacing control artwork does not require rebaking those font packages.

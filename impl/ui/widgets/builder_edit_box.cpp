@@ -1,0 +1,126 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../builder.h"
+
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+EditBoxResult Builder::editBox(
+    const AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options){
+    if(
+        !m_panelActive || (m_windowActive && m_window.state->collapsed)
+        || m_context.failed() || m_items.size() >= s_LayoutMaxNodes
+    ){
+        m_context.fail();
+        return {};
+    }
+    WidgetState* widget = m_context.declare(stableKey, WidgetKind::EditBox);
+    if(!widget)
+        return {};
+    if(!options.enabled)
+        m_context.input().invalidateTarget(widget->id);
+    EditBoxResult result;
+    result.valid = true;
+    result.focused = options.enabled && m_context.input().focus() == widget->id;
+    if(m_editHost)
+        result = m_editHost->edit(*widget, model, options);
+    if(!result.valid){
+        m_context.fail();
+        return result;
+    }
+    if(
+        state.modelGeneration != model.instanceGeneration() || state.revision != model.revision()
+        || state.anchor != model.anchor() || state.caret != model.caret() || state.focused != result.focused
+    )
+        state.caretElapsed = 0.0f;
+    else if(IsFinite(m_deltaSeconds) && m_deltaSeconds > 0.0f)
+        state.caretElapsed = FMod(state.caretElapsed + Min(m_deltaSeconds, 1.0f), 1.0f);
+    if(state.modelGeneration != model.instanceGeneration())
+        state.scroll = 0.0f;
+    state.modelGeneration = model.instanceGeneration();
+    state.revision = model.revision();
+    state.anchor = model.anchor();
+    state.caret = model.caret();
+    state.focused = result.focused;
+
+    Item item(m_arena);
+    item.state = *widget;
+    item.editState = &state;
+    item.editOptions = options;
+    item.editFlags = { options.enabled, m_context.input().hover() == widget->id, result.focused, options.readOnly,
+        state.caretElapsed < 0.5f };
+    item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
+    if(!item.editView.snapshot(model) || item.editView.shape(m_text, { {}, m_style.fontSize }) != TextLayoutStatus::Success){
+        m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    item.padding = m_editStyle.padding;
+    Point minimum = { 120.0f, 0.0f };
+    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
+    for(const auto& name : names){
+        const UiSkinRegion* skinRegion = region(name, m_editStyle.normal);
+        if(!skinRegion)
+            skinRegion = region(m_editStyle.fallback, m_editStyle.fallback);
+        if(!skinRegion)
+            continue;
+        item.padding.left = Max(item.padding.left, skinRegion->padding.left);
+        item.padding.top = Max(item.padding.top, skinRegion->padding.top);
+        item.padding.right = Max(item.padding.right, skinRegion->padding.right);
+        item.padding.bottom = Max(item.padding.bottom, skinRegion->padding.bottom);
+        minimum.x = Max(minimum.x, skinRegion->minimumWidth);
+        minimum.y = Max(minimum.y, skinRegion->minimumHeight);
+    }
+    LayoutNodeDesc description;
+    description.width = options.width;
+    description.height = options.height;
+    description.intrinsicSize = { minimum.x, Max(minimum.y, item.editView.layout().measure().y + item.padding.top + item.padding.bottom) };
+    if(!m_layout.addNode(m_stack.back(), description, item.node)){
+        m_context.fail();
+        result.valid = false;
+        return result;
+    }
+    m_items.push_back(Move(item));
+    return result;
+}
+
+bool Builder::paintEditBox(const Item& item, const LayoutBox& box){
+    EditBoxPlacement placement;
+    const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
+    if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), item.editState->scroll, placement, caretWidth))
+        return false;
+    if(!item.editView.paint(m_text, m_paint, *m_skin, placement, m_editStyle, item.editFlags))
+        return false;
+    item.editState->placement = placement;
+    item.editState->scroll = placement.scroll;
+    HitTarget target;
+    target.rectangle = box.rectangle;
+    target.clip = visibleClip(box.clip);
+    target.enabled = item.editOptions.enabled;
+    target.focusable = item.editOptions.enabled;
+    target.textEditable = item.editOptions.enabled;
+    if(!m_context.addTarget(item.state, target))
+        return false;
+    return !m_editHost || m_editHost->publish(item.state, item.editView, placement, item.editOptions);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

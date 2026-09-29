@@ -45,12 +45,14 @@ UiLayerSystem::UiLayerSystem(
     , m_paint(arena)
     , m_text(arena)
     , m_context(arena)
+    , m_editHost(arena, m_context, textInput, clipboard)
     , m_ui(arena, m_context, m_paint, m_text)
     , m_liveRoots(arena)
     , m_rootIdentities(arena)
     , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
 {
     writeAccess<UiPaintComponent>();
+    m_ui.setEditHost(&m_editHost);
     m_liveRoots.reserve(Ui::s_InputMaxTargets);
     m_rootIdentities.reserve(Ui::s_InputMaxTargets);
     m_input.addHandlerToBack(*this);
@@ -98,6 +100,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
 
 void UiLayerSystem::invalidateResources(){
     m_resourcesReady = false;
+    m_editHost.reset();
     m_context.abandonFrame();
     m_ui.reset();
     m_pressedButtons = 0u;
@@ -128,6 +131,7 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
     m_context.abandonFrame();
+    m_editHost.reset();
     m_ui.reset();
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
 }

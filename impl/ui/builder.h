@@ -10,6 +10,7 @@
 #include "text/service.h"
 #include "widgets/style.h"
 #include "widgets/window.h"
+#include "widgets/edit_box_state.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,6 +28,10 @@ private:
     struct Item{
         WidgetState state;
         TextLayout text;
+        EditBoxView editView;
+        EditBoxState* editState = nullptr;
+        EditBoxOptions editOptions;
+        EditBoxPaintFlags editFlags;
         Insets padding;
         f32 checkboxExtent = 0.0f;
         u32 node = 0u;
@@ -35,6 +40,7 @@ private:
 
         explicit Item(Core::Alloc::GlobalArena& arena)
             : text(arena)
+            , editView(arena)
         {}
         Item(Item&&) = default;
         Item& operator=(Item&&) = default;
@@ -77,10 +83,14 @@ public:
     [[nodiscard]] bool button(AStringView stableKey, StringView text, const WidgetOptions& options = {});
     [[nodiscard]] bool checkbox(AStringView stableKey, StringView text, bool& checked, const WidgetOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
+    [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
     [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive; }
     void reset();
     void setSkin(const UiSkin& skin){ m_skin = &skin; }
     [[nodiscard]] WidgetStyle& style(){ return m_style; }
+    [[nodiscard]] EditBoxStyle& editStyle(){ return m_editStyle; }
+    void setEditHost(IEditBoxHost* host){ m_editHost = host; }
+    void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
     // Valid while a window scope is open, including a collapsed window.
     [[nodiscard]] const WindowMetrics& windowMetrics()const{ return m_window.metrics; }
 
@@ -96,6 +106,7 @@ private:
     [[nodiscard]] bool paintWindowResize();
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box);
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
 
 
@@ -106,6 +117,9 @@ private:
     TextService& m_text;
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
+    EditBoxStyle m_editStyle;
+    IEditBoxHost* m_editHost = nullptr;
+    f32 m_deltaSeconds = 0.0f;
     LayoutTree m_layout;
     PaintVector<Item> m_items;
     PaintVector<u32> m_stack;

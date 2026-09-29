@@ -41,6 +41,8 @@ bool Builder::paintItems(){
 }
 
 bool Builder::paintItem(const Item& item, const LayoutBox& box){
+    if(item.state.kind == WidgetKind::EditBox)
+        return paintEditBox(item, box);
     const InputRouter& input = m_context.input();
     const bool hover = input.hover() == item.state.id;
     const bool captured = input.capture() == item.state.id && input.primaryDown();

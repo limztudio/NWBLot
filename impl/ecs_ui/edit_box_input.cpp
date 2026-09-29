@@ -1,0 +1,204 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "edit_box_host.h"
+
+#include <global/termination.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_edit_box_input{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static Ui::EditKey::Enum EditKey(const Ui::InputKey::Enum key){
+    switch(key){
+    case Ui::InputKey::Left: return Ui::EditKey::Left;
+    case Ui::InputKey::Right: return Ui::EditKey::Right;
+    case Ui::InputKey::Home: return Ui::EditKey::Home;
+    case Ui::InputKey::End: return Ui::EditKey::End;
+    case Ui::InputKey::Backspace: return Ui::EditKey::Backspace;
+    case Ui::InputKey::Delete: return Ui::EditKey::Delete;
+    case Ui::InputKey::A: return Ui::EditKey::A;
+    case Ui::InputKey::C: return Ui::EditKey::C;
+    case Ui::InputKey::X: return Ui::EditKey::X;
+    case Ui::InputKey::V: return Ui::EditKey::V;
+    case Ui::InputKey::Z: return Ui::EditKey::Z;
+    case Ui::InputKey::Y: return Ui::EditKey::Y;
+    case Ui::InputKey::Enter: return Ui::EditKey::Enter;
+    case Ui::InputKey::Escape: return Ui::EditKey::Escape;
+    default: return Ui::EditKey::None;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool UiEditBoxHost::append(Event&& event){
+    if(m_events.size() == Ui::s_InputMaxEvents || event.native.text.size() > Core::s_TextInputMaxQueuedTextBytes - m_queuedTextBytes){
+        reset();
+        return false;
+    }
+    m_queuedTextBytes += event.native.text.size();
+    m_events.push_back(Move(event));
+    return true;
+}
+
+void UiEditBoxHost::collectNative(){
+    for(usize index = 0u; m_session.token().valid() && index <= Core::s_TextInputMaxEvents; ++index){
+        Event event(m_arena);
+        const auto poll = m_session.pollOwned(event.native);
+        if(poll == Core::TextInputPollResult::Pending)
+            return;
+        if(poll != Core::TextInputPollResult::Event){
+            discard(m_session.owner());
+            if(!m_session.cancel())
+                TerminateInvariant();
+            return;
+        }
+        if(
+            index == Core::s_TextInputMaxEvents || event.native.token != m_session.token()
+            || event.native.sequence <= m_lastNativeSequence
+        ){
+            reset();
+            return;
+        }
+        m_lastNativeSequence = event.native.sequence;
+        event.owner = m_session.owner();
+        event.kind = UiEditBoxEventKind::Native;
+        event.surroundingRevision = m_session.surroundingRevision();
+        event.surroundingModelRevision = m_nativePublished.revision;
+        event.geometryExternalRevision = m_nativePublished.externalRevision;
+        event.surroundingAnchor = m_nativePublished.anchor;
+        event.surroundingCaret = m_nativePublished.caret;
+        if(!append(Move(event)))
+            return;
+    }
+}
+
+void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previousCapture){
+    if(input.type == Ui::InputEventType::FocusLost){
+        reset();
+        return;
+    }
+    if(input.type == Ui::InputEventType::PointerCaptureLost){
+        for(auto& entry : m_entries)
+            entry.dragging = false;
+        for(usize index = m_events.size(); index > 0u; --index){
+            if(m_events[index - 1u].kind == UiEditBoxEventKind::Selection)
+                m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
+        }
+        return;
+    }
+    if(input.type == Ui::InputEventType::KeyDown){
+        Entry* entry = find(m_context.input().focus());
+        if(!entry || !hasTextFocus())
+            return;
+        Event event(m_arena);
+        event.owner = entry->owner;
+        event.key = { __hidden_ui_edit_box_input::EditKey(input.key), input.control, input.shift, input.alt, input.repeat };
+        if(Ui::TranslateEditCommand(event.key).command == Ui::EditCommand::None)
+            return;
+        if(!append(Move(event)))
+            return;
+    }
+    else if(input.type <= Ui::InputEventType::PrimaryUp){
+        const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
+        Entry* entry = find(target);
+        usize byte = 0u;
+        if(!entry || !hit(*entry, input.position, byte))
+            return;
+        Event event(m_arena);
+        event.owner = entry->owner;
+        event.kind = UiEditBoxEventKind::Selection;
+        event.position = byte;
+        event.geometryRevision = entry->displayed.revision;
+        event.geometryExternalRevision = entry->displayed.externalRevision;
+        event.extend = input.shift;
+        event.dragging = input.type != Ui::InputEventType::PrimaryDown;
+        event.completed = input.type == Ui::InputEventType::PrimaryUp;
+        if(!append(Move(event)))
+            return;
+    }
+    synchronizeFocus();
+}
+
+bool UiEditBoxHost::character(const u32 unicode){
+    if(!hasTextFocus())
+        return false;
+    if(m_session.token().valid())
+        return true;
+    if(unicode < 32u || unicode == 127u || unicode > 0x10ffffu || (unicode >= 0xd800u && unicode <= 0xdfffu))
+        return true;
+    Entry* entry = find(m_context.input().focus());
+    Event event(m_arena);
+    event.kind = UiEditBoxEventKind::Character;
+    event.owner = entry->owner;
+    char bytes[4u] = {};
+    usize count = 0u;
+    if(unicode < 0x80u){
+        bytes[0u] = static_cast<char>(unicode);
+        count = 1u;
+    }
+    else if(unicode < 0x800u){
+        bytes[0u] = static_cast<char>(0xc0u | (unicode >> 6u));
+        bytes[1u] = static_cast<char>(0x80u | (unicode & 63u));
+        count = 2u;
+    }
+    else if(unicode < 0x10000u){
+        bytes[0u] = static_cast<char>(0xe0u | (unicode >> 12u));
+        bytes[1u] = static_cast<char>(0x80u | ((unicode >> 6u) & 63u));
+        bytes[2u] = static_cast<char>(0x80u | (unicode & 63u));
+        count = 3u;
+    }
+    else{
+        bytes[0u] = static_cast<char>(0xf0u | (unicode >> 18u));
+        bytes[1u] = static_cast<char>(0x80u | ((unicode >> 12u) & 63u));
+        bytes[2u] = static_cast<char>(0x80u | ((unicode >> 6u) & 63u));
+        bytes[3u] = static_cast<char>(0x80u | (unicode & 63u));
+        count = 4u;
+    }
+    event.native.text.assign(bytes, count);
+    if(!append(Move(event)))
+        return true;
+    return true;
+}
+
+bool UiEditBoxHost::pastePrimary(const Ui::Point position){
+    const Ui::WidgetId target = m_context.input().hitTest(position);
+    Entry* entry = find(target);
+    if(!entry || !hasTextFocus() || m_context.input().focus() != target)
+        return false;
+    Event event(m_arena);
+    event.owner = entry->owner;
+    event.kind = UiEditBoxEventKind::PastePrimary;
+    return append(Move(event));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

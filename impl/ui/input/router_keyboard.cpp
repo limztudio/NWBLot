@@ -15,11 +15,11 @@ NWB_IMPL_UI_BEGIN
 
 
 void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& result){
-    const u8 keyMask = static_cast<u8>(1u << (static_cast<u8>(event.key) - 1u));
+    const u32 keyMask = 1u << (static_cast<u8>(event.key) - 1u);
     if(event.type == InputEventType::KeyUp){
         result.keyboardConsumed |= (m_consumedKeys & keyMask) != 0u;
-        m_pressedKeys &= static_cast<u8>(~keyMask);
-        m_consumedKeys &= static_cast<u8>(~keyMask);
+        m_pressedKeys &= ~keyMask;
+        m_consumedKeys &= ~keyMask;
         return;
     }
     const bool alreadyPressed = (m_pressedKeys & keyMask) != 0u;
@@ -27,7 +27,7 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
     bool consumed = (m_consumedKeys & keyMask) != 0u;
     if(event.key == InputKey::Tab)
         consumed |= moveFocus(event.shift);
-    else if(event.key == InputKey::Escape){
+    else if(event.key == InputKey::Escape && !(findTarget(m_focus, m_focusDeclaration) && findTarget(m_focus, m_focusDeclaration)->textEditable)){
         consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
         m_focus = {};
         m_capture = {};
@@ -37,7 +37,10 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
     else{
         const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
         consumed |= focused != nullptr;
-        if(focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed)
+        if(
+            focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
+            && (event.key == InputKey::Enter || event.key == InputKey::Space)
+        )
             appendActivation(*focused, InputActionSource::Keyboard, result);
     }
     if(consumed){

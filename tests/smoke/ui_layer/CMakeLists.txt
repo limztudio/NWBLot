@@ -19,6 +19,8 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/window_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/window_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_scene.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/../framebuffer_capture.cpp"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES
@@ -87,7 +89,7 @@ foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu"
-        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0"
     )
 endforeach()
 
@@ -103,7 +105,7 @@ set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=1;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0"
 )
 
 add_test(NAME nwb_ui_layer_window_smoke
@@ -118,7 +120,7 @@ set_tests_properties(nwb_ui_layer_window_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input;window"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0"
 )
 
 add_test(NAME nwb_ui_layer_window_skin_smoke
@@ -134,7 +136,22 @@ set_tests_properties(nwb_ui_layer_window_skin_smoke PROPERTIES
     SKIP_RETURN_CODE 77
     TIMEOUT 150
     LABELS "ui;standalone_gpu;native_input;window;skin"
-    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=1;NWB_UI_LAYER_WINDOW_SKIN=1;NWB_UI_LAYER_EDIT=0"
+)
+
+add_test(NAME nwb_ui_layer_edit_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/edit_smoke.py"
+        --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+        --working-directory "${_nwb_ui_smoke_runtime_root}"
+        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_edit"
+        ${_nwb_ui_smoke_logserver_args}
+)
+set_tests_properties(nwb_ui_layer_edit_smoke PROPERTIES
+    RESOURCE_LOCK nwb_display
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150
+    LABELS "ui;standalone_gpu;native_input;edit"
+    ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=1"
 )
 
 unset(_nwb_ui_smoke_runtime_root)

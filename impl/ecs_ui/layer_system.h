@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "edit_box_host.h"
 
 #include <impl/ui/gpu/renderer.h>
 
@@ -116,6 +117,7 @@ private:
     Ui::PaintBuilder m_paint;
     Ui::TextService m_text;
     Ui::Context m_context;
+    UiEditBoxHost m_editHost;
     Ui::Builder m_ui;
     Ui::PaintVector<LiveRoot> m_liveRoots;
     Ui::PaintVector<Ui::WidgetRoot> m_rootIdentities;

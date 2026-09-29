@@ -65,7 +65,7 @@ storage until GPU completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
-font shaping (`text/`), owned Unicode edit state (`edit/`), and skinned windows, panels, labels, separators, buttons and checkboxes (`Builder`).
+font shaping (`text/`), owned Unicode edit state and commands (`edit/`), and skinned windows, panels, labels, separators, buttons, checkboxes and single-line edit boxes (`Builder`).
 `nwb_ui_gpu` owns GPU uploads, resource retention,
 and offscreen rendering in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
 `core/os/` owns clipboard/native selection and text-input/IME services, `impl/assets_ui_skin/` owns skin validation/cooking,
@@ -122,8 +122,8 @@ against the last committed geometry, producing lifetime-stamped action values; a
 when declaring the corresponding live/enabled control. These queues are bounded, as documented in `input/`.
 
 Resize, scale changes and device invalidation reset input publication. The ECS adapter additionally validates
-host-root lifetime before native input and frame builds. IME, OS pointer services, clipboard/selection,
-editable text, lists and popups remain subsequent toolkit work.
+host-root lifetime before native input and frame builds. It connects edit-box declarations to borrowed OS
+text-input and clipboard/selection services. Lists, popups and compound controls remain subsequent work.
 
 ## Windows and separators
 
@@ -135,4 +135,32 @@ The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard and native selection remain borrowed OS services. Edit models, popups/lists/combos and OS IME integration are later increments.
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Popups, lists, combo boxes and numeric/multiline editors are later increments.
+
+## Single-line edit boxes
+
+`Builder::editBox(key, EditModel&, EditBoxState&, EditBoxOptions)` declares a selectable single-line editor. The application owns the persistent model and state in its UI arena. Keep both alive through the matching `endPanel()` or `endWindow()`. `EditBoxOptions` supplies fixed/content/stretch sizing, `enabled`, and `readOnly`. `EditBoxResult` reports admission, committed-text or selection changes, submit/cancel intent, focus, and native preedit caret visibility. Enter reports submit intent; Escape cancels preedit first, then reports cancel intent and releases focus. Restoring an application value after cancellation belongs to the application.
+
+Construct the model and state once, then use them inside an existing panel/window callback:
+
+```cpp
+Ui::EditBoxOptions options;
+options.height = { Ui::LayoutSizePolicy::Fixed, 40.0f };
+const Ui::EditBoxResult result = ui.editBox("name", nameModel, nameState, options);
+if(!result.valid)
+    context.fail();
+if(result.submitted)
+    saveName(nameModel.text());
+```
+
+`EditModel` stores UTF8 bytes and grapheme selections. Each instance has a stable lifetime generation; accepted external `setText()` calls also advance an external revision, even when the bytes are unchanged. This fences queued input after replacement or an explicit reset. `EditBoxState` stores scroll, blink state and the newly prepared placement. Its `placement` becomes available after the matching container end; the ECS adapter keeps a separate displayed copy and admits it for pointer/IME geometry only after the exact matching presentation is accepted.
+
+The widget domain separates immutable text/cluster geometry (`edit_box_layout.cpp`), paint (`edit_box_paint.cpp`), builder declarations (`builder_edit_box.cpp`), and the `interface IEditBoxHost` contract (`edit_box_state.h`). `EditBoxView` owns copied display bytes, shaped text and retained font versions. It replaces the selected committed range with transient preedit for display, paints selection/caret/preedit underline, interpolates grapheme caret stops inside LTR ligatures, and scrolls horizontally to keep the caret visible. Ancestor, frame and content clips apply to paint and hit geometry. The default caret is one physical pixel wide; text, control dimensions and scroll remain logical units.
+
+`Builder::editStyle()` supplies semantic edit background names, padding and text/selection/caret/preedit colors. Padding and minimum size take the maximum across normal, hover, focused and disabled regions and combine with style padding, keeping text and layout stable when state changes. The default skin provides `edit.normal`, `edit.focused`, `edit.disabled` and `focus.overlay`; absent hover artwork falls back to the normal region. A 40-pixel field accommodates the default 16-pixel font and eight-pixel vertical skin padding. Fixed smaller fields deliberately clip their content.
+
+`impl/ecs_ui/` installs `UiEditBoxHost` and borrows Frame-owned OS services. A toolkit-only caller may install its own `IEditBoxHost`; the CPU widget itself has no native API or ECS dependency. The adapter preserves native commit/key/selection event order, applies events only while the corresponding live model is lent, and retains copied events and snapshots rather than model pointers. Focus, declaration/model generations and external revisions fence late native/cut/paste mutation. Copy publication owns immutable selected bytes and may complete after later edits, focus transfer or widget removal. Frozen paint and GPU tasks own their data and never access edit models.
+
+The editor supports click/drag selection, Shift extension, Tab/Shift+Tab focus, grapheme arrows and deletion, Home/End, Ctrl word navigation/deletion, Ctrl+A/C/X/V, Ctrl+Z/Y and Ctrl+Shift+Z. Read-only controls remain focusable/selectable and permit copy; disabled controls do not edit or take focus. Native preedit owns its editing keys and Enter until the IME completes or cancels it. Clipboard paste normalizes line breaks and tabs to spaces and validates the resulting byte limit before mutation; cut deletes only after a successful OS write. Native primary-selection publication and middle-button paste use backend capabilities. Middle-button paste targets only the already focused control and replaces its current selection; it does not move focus or reposition the caret to the pointer.
+
+This increment provides one line with LTR cluster geometry. Paragraph bidi, RTL editing, wrapping, numeric validation and multiline editing are separate work. Native preedit rendering and service borrowing are implemented; synthetic character/event tests do not establish live Korean IME or native Linux compositor qualification.

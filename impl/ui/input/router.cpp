@@ -70,7 +70,7 @@ bool InputRouter::queue(const InputEvent& event){
         return false;
     if(event.type <= InputEventType::PrimaryUp && (!IsFinite(event.position.x) || !IsFinite(event.position.y)))
         return false;
-    if((event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp) && (event.key == InputKey::None || event.key > InputKey::Escape))
+    if((event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp) && (event.key == InputKey::None || event.key > InputKey::Y))
         return false;
     m_events.push_back(event);
     return true;

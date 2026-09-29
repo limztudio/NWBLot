@@ -81,6 +81,7 @@ TestbedUiSkinPreview::TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena)
     , m_edit(arena)
     , m_caption(arena)
     , m_korean(arena)
+    , m_widgets(arena)
 {
     using namespace __hidden_ui_skin_preview;
     const bool configured = ConfigureLabel(m_normal, "Normal") && ConfigureLabel(m_hover, "Hover")

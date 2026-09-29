@@ -5,6 +5,8 @@
 #include "model.h"
 #include "grapheme.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,6 +27,18 @@ static constexpr usize s_MaxBytes = 1048576u;
 static constexpr usize s_MaxHistoryRecords = 256u;
 static constexpr usize s_MaxHistoryBytes = 16777216u;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 NextIdentity(){
+    static Atomic<u64> s_NextIdentity{ 1u };
+    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
+    if(identity == 0u || identity == Limit<u64>::s_Max)
+        TerminateInvariant();
+    return identity;
+}
+
 static EditLimits BoundedLimits(const EditLimits& limits){
     return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords),
         Min(limits.maxHistoryBytes, s_MaxHistoryBytes) };
@@ -42,6 +56,7 @@ static EditLimits BoundedLimits(const EditLimits& limits){
 
 EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits)
     : m_arena(arena)
+    , m_instanceGeneration(__hidden_ui_edit_model::NextIdentity())
     , m_limits(__hidden_ui_edit_model::BoundedLimits(limits))
     , m_text(arena)
     , m_boundaries(arena)
@@ -69,6 +84,9 @@ bool EditModel::setText(const AStringView value){
     cancelComposition();
     if(changed)
         advanceRevision();
+    if(m_externalRevision == Limit<u64>::s_Max)
+        TerminateInvariant();
+    ++m_externalRevision;
     return true;
 }
 

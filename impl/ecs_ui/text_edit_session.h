@@ -50,6 +50,12 @@ struct UiTextEditResult{
     bool textChanged = false;
 };
 
+// The host validates token, sequence and owner before lending a model to a copied event.
+// Surrounding deletion additionally requires the exact native publication that the event addressed.
+[[nodiscard]] UiTextEditStatus::Enum ApplyUiTextEditEvent(
+    Ui::EditModel& model, const Core::TextInputEvent& event, u64 expectedSurroundingRevision, bool matchesPublishedModel
+);
+
 // Owned OS events are applied only during a host call that lends the matching model. No model pointer is retained.
 // Drain before host edits. End before a local edit/selection change, then begin again to fence queued old-selection events.
 // End with the old owner/model before removal or replacement so its transient preedit is cleared as well.
@@ -68,17 +74,32 @@ public:
         const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret
     );
     [[nodiscard]] UiTextEditResult drain(const UiTextEditOwner& owner, Ui::EditModel& model);
+    // Collects an owned event without lending a model. The ordered host queue validates token and sequence.
+    [[nodiscard]] Core::TextInputPollResult::Enum pollOwned(Core::TextInputEvent& event);
+    // Explicitly trusts a synchronous local/ordered edit; refresh remains strict for ordinary callers.
+    [[nodiscard]] Core::TextInputAdmission::Enum adoptLocal(
+        const UiTextEditOwner& owner, const Ui::EditModel& model, Core::TextInputRect caret,
+        Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::Other
+    );
     [[nodiscard]] bool end(const UiTextEditOwner& owner, Ui::EditModel& model);
+    // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
+    [[nodiscard]] bool cancel();
     [[nodiscard]] Core::TextInputSessionToken token()const{ return m_token; }
     [[nodiscard]] const UiTextEditOwner& owner()const{ return m_owner; }
     [[nodiscard]] bool preeditCaretVisible()const{ return m_preeditCaretVisible; }
+    [[nodiscard]] u64 surroundingRevision()const{ return m_token.valid() ? m_surroundingRevision : 0u; }
+    [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const{
+        return m_token.valid() && m_owner == owner && matchesPublishedModel(model);
+    }
 
 
 private:
     [[nodiscard]] bool matchesModel(const Ui::EditModel& model)const;
     [[nodiscard]] bool matchesPublishedModel(const Ui::EditModel& model)const;
     void captureModel(const Ui::EditModel& model);
-    [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(const Ui::EditModel& model);
+    [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(
+        const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod
+    );
     [[nodiscard]] bool release();
     [[nodiscard]] UiTextEditStatus::Enum applyEvent(Ui::EditModel& model);
 
@@ -97,7 +118,9 @@ private:
     usize m_publishedAnchor = 0u;
     usize m_publishedCaret = 0u;
     u64 m_expectedRevision = 0u;
+    u64 m_expectedExternalRevision = 0u;
     u64 m_publishedModelRevision = 0u;
+    u64 m_publishedExternalRevision = 0u;
     u64 m_surroundingRevision = 0u;
     u64 m_lastSequence = 0u;
     bool m_preeditCaretVisible = true;

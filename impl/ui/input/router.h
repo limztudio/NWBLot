@@ -62,9 +62,9 @@ public:
     [[nodiscard]] bool wantsPointer()const{ return m_primaryDown ? m_pointerSequenceConsumed : m_hover.valid(); }
     [[nodiscard]] bool wantsKeyboard()const{ return m_focus.valid() || m_consumedKeys != 0u; }
     [[nodiscard]] bool ownsKey(InputKey::Enum key)const{
-        if(key == InputKey::None || key > InputKey::Escape)
+        if(key == InputKey::None || key > InputKey::Y)
             return false;
-        return (m_consumedKeys & static_cast<u8>(1u << (static_cast<u8>(key) - 1u))) != 0u;
+        return (m_consumedKeys & (1u << (static_cast<u8>(key) - 1u))) != 0u;
     }
 
 
@@ -105,8 +105,8 @@ private:
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;
-    u8 m_pressedKeys = 0u;
-    u8 m_consumedKeys = 0u;
+    u32 m_pressedKeys = 0u;
+    u32 m_consumedKeys = 0u;
 };
 
 

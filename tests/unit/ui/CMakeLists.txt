@@ -1,6 +1,9 @@
 nwb_declare_gtest_executable(nwb_ui_tests)
 target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/edit_model_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_command_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_single_line_text_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_box_layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_grapheme_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_history_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_composition_tests.cpp"

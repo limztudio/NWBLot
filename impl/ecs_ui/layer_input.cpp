@@ -39,6 +39,18 @@ Ui::InputKey::Enum TranslateKey(const i32 key){
     case Core::Key::KeypadEnter: return Ui::InputKey::Enter;
     case Core::Key::Space: return Ui::InputKey::Space;
     case Core::Key::Escape: return Ui::InputKey::Escape;
+    case Core::Key::Left: return Ui::InputKey::Left;
+    case Core::Key::Right: return Ui::InputKey::Right;
+    case Core::Key::Home: return Ui::InputKey::Home;
+    case Core::Key::End: return Ui::InputKey::End;
+    case Core::Key::Backspace: return Ui::InputKey::Backspace;
+    case Core::Key::Delete: return Ui::InputKey::Delete;
+    case Core::Key::A: return Ui::InputKey::A;
+    case Core::Key::C: return Ui::InputKey::C;
+    case Core::Key::X: return Ui::InputKey::X;
+    case Core::Key::V: return Ui::InputKey::V;
+    case Core::Key::Z: return Ui::InputKey::Z;
+    case Core::Key::Y: return Ui::InputKey::Y;
     default: return Ui::InputKey::None;
     }
 }
@@ -76,6 +88,8 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
         event.type = action == Core::InputAction::Release ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
         event.key = translated;
         event.shift = (mods & Core::InputModifier::Shift) != 0;
+        event.control = (mods & Core::InputModifier::Control) != 0;
+        event.alt = (mods & Core::InputModifier::Alt) != 0;
         event.repeat = action == Core::InputAction::Repeat || held;
         routeInput(event);
     }
@@ -89,8 +103,13 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
 }
 
 bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
-    static_cast<void>(mods);
     synchronizeNativeInput();
+    m_editHost.collectNative();
+    if(m_editHost.hasTextFocus()){
+        if((mods & Core::InputModifier::Control) != 0 && (mods & Core::InputModifier::Alt) == 0)
+            return true;
+        return m_editHost.character(unicode);
+    }
     if(m_blockNativeChars || m_context.input().focus().valid())
         return true;
     const auto& input = m_context.input();
@@ -124,7 +143,6 @@ bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
 }
 
 bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
-    static_cast<void>(mods);
     if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8)
         return false;
     synchronizeNativeInput();
@@ -142,7 +160,14 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         Ui::InputEvent event;
         event.type = action == Core::InputAction::Release ? Ui::InputEventType::PrimaryUp : Ui::InputEventType::PrimaryDown;
         event.position = m_pointer;
+        event.shift = (mods & Core::InputModifier::Shift) != 0;
         routeInput(event);
+    }
+    if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Middle && action != Core::InputAction::Release){
+        m_editHost.collectNative();
+        const bool pasted = m_editHost.pastePrimary(m_pointer);
+        if(!pasted)
+            m_editHost.synchronizeFocus();
     }
     if(action == Core::InputAction::Release){
         m_pressedButtons &= ~bit;
@@ -205,12 +230,17 @@ bool UiLayerSystem::wantsPointer()const{
 }
 
 void UiLayerSystem::routeInput(const Ui::InputEvent& event){
+    m_editHost.collectNative();
+    const Ui::WidgetId previousCapture = m_context.input().capture();
     if(!m_context.input().queue(event)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         m_context.resetInput();
+        m_editHost.reset();
         return;
     }
     const Ui::InputRoutingResult result = m_context.input().process();
+    m_editHost.input(event, previousCapture);
+    m_editHost.synchronizeFocus();
     if(result.activationOverflow)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
     if(result.gestureOverflow)

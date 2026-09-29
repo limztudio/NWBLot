@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "ui_edit_gallery.h"
+
 #include <impl/ecs_ui/components.h>
 
 
@@ -13,10 +15,15 @@
 
 class TestbedUiWidgetGallery final : NoCopy{
 public:
+    explicit TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena);
+
+
+public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
+    TestbedUiEditGallery m_edits;
     u32 m_count = 0u;
     bool m_enabled = true;
 };

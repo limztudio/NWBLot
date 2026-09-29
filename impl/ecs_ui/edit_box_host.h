@@ -1,0 +1,159 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "text_edit_session.h"
+#include "edit_clipboard_controller.h"
+#include "clipboard_publications.h"
+
+#include <impl/ui/context.h>
+#include <impl/ui/widgets/edit_box_state.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct UiEditModelSnapshot{
+    AString<Core::Alloc::GlobalArena> text;
+    AString<Core::Alloc::GlobalArena> preedit;
+    Ui::EditCompositionView composition;
+    usize anchor = 0u;
+    usize caret = 0u;
+    u64 revision = 0u;
+    u64 externalRevision = 0u;
+
+    explicit UiEditModelSnapshot(Core::Alloc::GlobalArena& arena) : text(arena), preedit(arena){}
+    void capture(const Ui::EditModel& model);
+    [[nodiscard]] bool matches(const Ui::EditModel& model)const;
+};
+
+struct UiEditBoxGeometry{
+    Ui::EditBoxPlacement placement;
+    Ui::PaintVector<Ui::EditBoxCaretStop> stops;
+    Ui::EditBoxOptions options;
+    u64 generation = 0u;
+    u64 revision = 0u;
+    u64 externalRevision = 0u;
+    u64 modelGeneration = 0u;
+
+    explicit UiEditBoxGeometry(Core::Alloc::GlobalArena& arena) : stops(arena){}
+};
+
+namespace UiEditBoxEventKind{
+    enum Enum : u8{ Key, Character, Native, Selection, PastePrimary };
+};
+
+// The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
+class UiEditBoxHost final : public Ui::IEditBoxHost{
+private:
+    struct Entry{
+        Ui::WidgetState widget;
+        UiTextEditOwner owner;
+        UiEditModelSnapshot expected;
+        UiEditBoxGeometry candidate;
+        UiEditBoxGeometry displayed;
+        u64 seen = 0u;
+        usize dragAnchor = 0u;
+        bool dragging = false;
+        bool preeditCaretVisible = true;
+        Core::TextInputSessionToken rejectedNative;
+
+        explicit Entry(Core::Alloc::GlobalArena& arena) : expected(arena), candidate(arena), displayed(arena){}
+    };
+
+    struct Event{
+        UiTextEditOwner owner;
+        Core::TextInputEvent native;
+        Ui::EditKeyStroke key;
+        usize position = 0u;
+        u64 geometryRevision = 0u;
+        u64 geometryExternalRevision = 0u;
+        u64 surroundingRevision = 0u;
+        u64 surroundingModelRevision = 0u;
+        usize surroundingAnchor = 0u;
+        usize surroundingCaret = 0u;
+        UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Key;
+        bool extend = false;
+        bool dragging = false;
+        bool completed = false;
+
+        explicit Event(Core::Alloc::GlobalArena& arena) : native(arena){}
+    };
+
+
+public:
+    UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context,
+        Core::ITextInputService& textInput, Core::IClipboardService& clipboard);
+    virtual ~UiEditBoxHost()override;
+
+
+public:
+    [[nodiscard]] virtual Ui::EditBoxResult edit(const Ui::WidgetState& widget, Ui::EditModel& model,
+        const Ui::EditBoxOptions& options)override;
+    [[nodiscard]] virtual bool publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
+        const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options)override;
+    void beginFrame(u64 generation, const Ui::DisplayMetrics& display);
+    void finishFrame();
+    void commitFrame(u64 generation);
+    void collectNative();
+    void input(const Ui::InputEvent& event, Ui::WidgetId previousCapture);
+    [[nodiscard]] bool character(u32 unicode);
+    [[nodiscard]] bool pastePrimary(Ui::Point position);
+    [[nodiscard]] bool hasTextFocus()const;
+    [[nodiscard]] bool takeClipboardFailure();
+    void synchronizeFocus();
+    void reset();
+
+
+private:
+    [[nodiscard]] Entry* find(Ui::WidgetId widget);
+    [[nodiscard]] const Entry* find(Ui::WidgetId widget)const;
+    [[nodiscard]] bool append(Event&& event);
+    void discard(const UiTextEditOwner& owner);
+    void apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, Event& event, Ui::EditBoxResult& result);
+    void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
+    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const;
+    [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const;
+    void cancelTransfers();
+    void drainPublications();
+
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
+    Ui::Context& m_context;
+    Core::ITextInputService& m_textInput;
+    Core::IClipboardService& m_clipboardService;
+    UiTextEditSession m_session;
+    UiEditClipboardController m_clipboard;
+    UiEditClipboardController m_primary;
+    UiClipboardPublications m_publications;
+    Ui::PaintVector<Entry> m_entries;
+    Ui::PaintVector<Event> m_events;
+    UiEditModelSnapshot m_nativePublished;
+    UiTextEditOwner m_clipboardOwner;
+    UiTextEditOwner m_primaryOwner;
+    Ui::DisplayMetrics m_display;
+    u64 m_generation = 0u;
+    u64 m_lastNativeSequence = 0u;
+    usize m_queuedTextBytes = 0u;
+    bool m_clipboardFailure = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -32,11 +32,15 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     NWB_FATAL_ASSERT(skin);
     if(!m_context.beginFrame(m_frameGeneration))
         TerminateInvariant();
+    m_editHost.beginFrame(m_frameGeneration, m_display);
+    if(m_editHost.takeClipboardFailure())
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(*skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinGeneration, m_skinRef, *skin);
     m_paint.reserve(256u);
     const f32 safeDelta = IsFinite(delta) && delta >= 0.0f ? delta : 0.0f;
+    m_ui.setDeltaSeconds(safeDelta);
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::ENTITY_ID_INVALID, safeDelta };
     for(const auto& root : m_liveRoots){
         UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
@@ -59,12 +63,15 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     if(!m_context.finishFrame()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         m_context.abandonFrame();
+        m_editHost.reset();
         m_ui.reset();
         return;
     }
+    m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         m_context.abandonFrame();
+        m_editHost.reset();
     }
 }
 
@@ -92,6 +99,7 @@ bool UiLayerSystem::collectRoots(){
 void UiLayerSystem::synchronizeInput(){
     if(!collectRoots()){
         m_context.resetInput();
+        m_editHost.reset();
         return;
     }
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
@@ -99,10 +107,14 @@ void UiLayerSystem::synchronizeInput(){
         if(status == Core::PresentationReceiptStatus::Accepted){
             const bool committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
             NWB_FATAL_ASSERT(committed);
+            m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
-        else if(status == Core::PresentationReceiptStatus::Rejected)
+        else if(status == Core::PresentationReceiptStatus::Rejected){
             m_context.abandonFrame();
+            m_editHost.reset();
+        }
     }
+    m_editHost.synchronizeFocus();
 }
 
 

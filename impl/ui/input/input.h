@@ -23,7 +23,7 @@ namespace InputEventType{
 };
 
 namespace InputKey{
-    enum Enum : u8{ None, Tab, Enter, Space, Escape };
+    enum Enum : u8{ None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y };
 };
 
 namespace InputActionSource{
@@ -40,6 +40,8 @@ struct InputEvent{
     InputKey::Enum key = InputKey::None;
     bool shift = false;
     bool repeat = false;
+    bool control = false;
+    bool alt = false;
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default Tab order.
@@ -53,6 +55,7 @@ struct HitTarget{
     bool focusable = false;
     bool activatable = false;
     bool pointerGesture = false;
+    bool textEditable = false;
     // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
     Rect gestureReference{};
 };

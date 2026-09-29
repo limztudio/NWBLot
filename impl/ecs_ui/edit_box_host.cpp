@@ -143,9 +143,10 @@ void UiEditBoxHost::commitFrame(const u64 generation){
 bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
     const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
     Entry* entry = find(widget.id);
-    if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || !view.ready())
+    if(!entry || entry->owner.declarationGeneration != widget.declarationGeneration || entry->popup != m_context.popupToken() || !view.ready())
         return false;
     UiEditBoxGeometry candidate(m_arena);
+    candidate.popup = entry->popup;
     candidate.placement = placement;
     candidate.stops.assign(view.caretStops().begin(), view.caretStops().end());
     candidate.options = options;
@@ -162,11 +163,12 @@ bool UiEditBoxHost::hasTextFocus()const{
     if(
         !entry || entry->displayed.generation == 0u || !entry->displayed.options.enabled
         || entry->displayed.modelGeneration != entry->owner.modelGeneration
+        || entry->displayed.popup != entry->popup
     )
         return false;
     for(const auto& target : m_context.input().targets()){
         if(target.id == entry->widget.id && target.declarationGeneration == entry->owner.declarationGeneration)
-            return target.enabled && target.textEditable;
+            return target.enabled && target.textEditable && target.popup == entry->popup;
     }
     return false;
 }
@@ -215,7 +217,10 @@ Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry
 }
 
 bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byte)const{
-    if(entry.displayed.generation == 0u || entry.displayed.stops.empty() || entry.displayed.modelGeneration != entry.owner.modelGeneration)
+    if(
+        entry.displayed.generation == 0u || entry.displayed.stops.empty() || entry.displayed.modelGeneration != entry.owner.modelGeneration
+        || entry.displayed.popup != entry.popup
+    )
         return false;
     const f32 x = position.x - entry.displayed.placement.textOrigin.x;
     if(!IsFinite(x))

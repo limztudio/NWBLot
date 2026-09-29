@@ -37,6 +37,7 @@ struct UiEditModelSnapshot{
 };
 
 struct UiEditBoxGeometry{
+    Ui::PopupToken popup;
     Ui::EditBoxPlacement placement;
     Ui::PaintVector<Ui::EditBoxCaretStop> stops;
     Ui::EditBoxOptions options;
@@ -58,6 +59,7 @@ private:
     struct Entry{
         Ui::WidgetState widget;
         UiTextEditOwner owner;
+        Ui::PopupToken popup;
         UiEditModelSnapshot expected;
         UiEditBoxGeometry candidate;
         UiEditBoxGeometry displayed;

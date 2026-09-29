@@ -32,7 +32,7 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
         entry->owner = owner;
         entry->expected.capture(model);
     }
-    else if(entry->owner != owner || !entry->expected.matches(model)){
+    else if(entry->owner != owner || entry->popup != m_context.popupToken() || !entry->expected.matches(model)){
         if(
             m_session.owner() == entry->owner || (m_clipboard.pending() && m_clipboardOwner == entry->owner)
             || (m_primary.pending() && m_primaryOwner == entry->owner)
@@ -45,6 +45,7 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
         entry->expected.capture(model);
     }
     entry->widget = widget;
+    entry->popup = m_context.popupToken();
     entry->seen = m_generation;
     const u64 beforeRevision = model.revision();
     const usize beforeAnchor = model.anchor();
@@ -105,7 +106,10 @@ void UiEditBoxHost::synchronizeSession(Entry& entry, Ui::EditModel& model, const
         model.cancelComposition();
         return;
     }
-    if(entry.displayed.generation == 0u || entry.displayed.modelGeneration != entry.owner.modelGeneration)
+    if(
+        entry.displayed.generation == 0u || entry.displayed.modelGeneration != entry.owner.modelGeneration
+        || entry.displayed.popup != entry.popup
+    )
         return;
     if(m_session.token().valid() && m_session.owner() != entry.owner && !m_session.cancel())
         TerminateInvariant();
@@ -142,8 +146,10 @@ void UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
         const auto command = Ui::ApplyEditCommand(model, Ui::TranslateEditCommand(event.key), options.readOnly);
         result.submitted |= command.submitted;
         result.cancelled |= command.cancelled;
-        if(command.cancelled)
-            m_context.input().clearFocus();
+        if(command.cancelled){
+            if(!m_context.input().dismissPopup(Ui::PopupDismissReason::Escape))
+                m_context.input().clearFocus();
+        }
         if(command.clipboard != Ui::EditClipboardAction::None){
             if(command.clipboard == Ui::EditClipboardAction::Copy){
                 if(!model.hasSelection())

@@ -6,6 +6,7 @@
 #include "edit_scene.h"
 #include "interactive_scene.h"
 #include "paint_scene.h"
+#include "popup_scene.h"
 #include "text_samples.h"
 #include "window_scene.h"
 
@@ -72,10 +73,14 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
             { __hidden_ui_layer_smoke_world::s_DefaultKorean, __hidden_ui_layer_smoke_world::s_DefaultKoreanAtlas } }, context.objectArena
     };
     const bool windowSmoke = IsUiLayerWindowSmokeEnabled();
-    const bool alternateSkin = windowSmoke && IsUiLayerWindowSkinSmokeEnabled();
+    const bool popupSmoke = IsUiLayerPopupSmokeEnabled();
+    const bool alternateSkin = (windowSmoke && IsUiLayerWindowSkinSmokeEnabled())
+        || (popupSmoke && IsUiLayerPopupSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
+    if(popupSmoke)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: skin={}"), alternateSkin ? NWB_TEXT("alternate") : NWB_TEXT("default"));
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
@@ -90,7 +95,21 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    if(IsUiLayerEditSmokeEnabled()){
+    if(popupSmoke){
+        const auto scene = CreateUiPopupSmokeScene(context.objectArena, context.input);
+        paint.paint = [scene](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: popup UI paint failed"));
+        };
+        auto laterEntity = world->createEntity();
+        auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
+        laterPaint.order = 100;
+        laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
+            if(!scene->paintLaterRoot(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: later popup root paint failed"));
+        };
+    }
+    else if(IsUiLayerEditSmokeEnabled()){
         paint.paint = [scene = CreateUiEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
                 NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: edit UI paint failed"));

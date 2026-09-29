@@ -20,7 +20,13 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 HitTarget Target(const u64 value, const Rect& rectangle = { 10.0f, 10.0f, 20.0f, 20.0f }){
-    return { { value }, rectangle, { 0.0f, 0.0f, 100.0f, 100.0f }, 1u, 0u, true, true, true };
+    HitTarget target;
+    target.id = { value };
+    target.rectangle = rectangle;
+    target.clip = { 0.0f, 0.0f, 100.0f, 100.0f };
+    target.focusable = true;
+    target.activatable = true;
+    return target;
 }
 
 InputEvent PointerEvent(const InputEventType::Enum type, const Point& position = { 15.0f, 15.0f }){

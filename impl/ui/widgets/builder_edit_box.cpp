@@ -25,6 +25,11 @@ EditBoxResult Builder::editBox(
         m_context.fail();
         return {};
     }
+    if(!synchronizePopup()){
+        EditBoxResult result;
+        result.valid = true;
+        return result;
+    }
     WidgetState* widget = m_context.declare(stableKey, WidgetKind::EditBox);
     if(!widget)
         return {};

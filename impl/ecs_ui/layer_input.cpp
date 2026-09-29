@@ -93,7 +93,7 @@ bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 
         event.repeat = action == Core::InputAction::Repeat || held;
         routeInput(event);
     }
-    const u8 owner = held ? previousOwner : m_context.input().focus().valid() || m_context.input().ownsKey(translated)
+    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(translated)
         ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
     if(slot < m_nativeKeyOwners.size())
         m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
@@ -110,7 +110,7 @@ bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
             return true;
         return m_editHost.character(unicode);
     }
-    if(m_blockNativeChars || m_context.input().focus().valid())
+    if(m_blockNativeChars || m_context.input().hasPopup() || m_context.input().focus().valid())
         return true;
     const auto& input = m_context.input();
     if(
@@ -192,10 +192,10 @@ bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
 }
 
 void UiLayerSystem::windowFocusUpdate(const bool focused){
+    Ui::InputEvent event;
+    event.type = focused ? Ui::InputEventType::FocusGained : Ui::InputEventType::FocusLost;
+    routeInput(event);
     if(!focused){
-        Ui::InputEvent event;
-        event.type = Ui::InputEventType::FocusLost;
-        routeInput(event);
         m_pressedButtons = 0u;
         m_pointerOwner = __hidden_layer_input::s_Scene;
         m_blockNativeChars = false;

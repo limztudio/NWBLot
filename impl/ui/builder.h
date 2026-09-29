@@ -11,6 +11,8 @@
 #include "widgets/style.h"
 #include "widgets/window.h"
 #include "widgets/edit_box_state.h"
+#include "widgets/popup.h"
+#include "widgets/popup_style.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +77,9 @@ public:
     // The borrowed WindowState must remain alive through that matching endWindow().
     [[nodiscard]] bool beginWindow(AStringView stableKey, StringView title, WindowState& state, const WindowOptions& options = {});
     [[nodiscard]] bool endWindow();
+    // Popups begin after the preceding panel/window is balanced. Only a visible begin requires endPopup().
+    [[nodiscard]] bool beginPopup(AStringView stableKey, PopupState& state, const PopupOptions& options = {});
+    [[nodiscard]] bool endPopup();
     [[nodiscard]] bool beginRow(AStringView stableKey, const ContainerOptions& options = {});
     [[nodiscard]] bool beginColumn(AStringView stableKey, const ContainerOptions& options = {});
     [[nodiscard]] bool endContainer();
@@ -84,11 +89,12 @@ public:
     [[nodiscard]] bool checkbox(AStringView stableKey, StringView text, bool& checked, const WidgetOptions& options = {});
     [[nodiscard]] bool separator(AStringView stableKey, const SeparatorOptions& options = {});
     [[nodiscard]] EditBoxResult editBox(AStringView stableKey, EditModel& model, EditBoxState& state, const EditBoxOptions& options = {});
-    [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive; }
+    [[nodiscard]] bool balanced()const{ return !m_panelActive && !m_windowActive && !m_popupState; }
     void reset();
     void setSkin(const UiSkin& skin){ m_skin = &skin; }
     [[nodiscard]] WidgetStyle& style(){ return m_style; }
     [[nodiscard]] EditBoxStyle& editStyle(){ return m_editStyle; }
+    [[nodiscard]] PopupStyle& popupStyle(){ return m_popupStyle; }
     void setEditHost(IEditBoxHost* host){ m_editHost = host; }
     void setDeltaSeconds(f32 delta){ m_deltaSeconds = delta; }
     // Valid while a window scope is open, including a collapsed window.
@@ -107,6 +113,8 @@ private:
     [[nodiscard]] bool paintItems();
     [[nodiscard]] bool paintItem(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box);
+    [[nodiscard]] bool paintPopup();
+    [[nodiscard]] bool synchronizePopup();
     [[nodiscard]] Rect visibleClip(const Rect& clip)const;
 
 
@@ -118,6 +126,10 @@ private:
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
     EditBoxStyle m_editStyle;
+    PopupStyle m_popupStyle;
+    PopupState* m_popupState = nullptr;
+    PopupOptions m_popupOptions;
+    PopupPlacement m_popupPlacement;
     IEditBoxHost* m_editHost = nullptr;
     f32 m_deltaSeconds = 0.0f;
     LayoutTree m_layout;

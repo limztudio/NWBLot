@@ -30,6 +30,14 @@ private:
         u32 index = 0u;
     };
 
+    struct PopupRecord{
+        PopupScope scope;
+        WidgetId restoreFocus;
+        u64 restoreDeclaration = 0u;
+        PopupToken restorePopup;
+        bool closing = false;
+    };
+
 
 public:
     explicit InputRouter(Core::Alloc::GlobalArena& arena);
@@ -40,7 +48,17 @@ public:
     // Drain events exactly once against the current committed layout; pending actions survive subsequent process calls.
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
-    [[nodiscard]] bool commitTargets(const HitTarget* targets, usize count, u64 layoutGeneration);
+    // Context passes the focus-loss generation captured at preparation to fence delayed popup acceptance.
+    [[nodiscard]] bool commitTargets(
+        const HitTarget* targets, usize count, u64 layoutGeneration,
+        const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max
+    );
+    [[nodiscard]] bool consumePopupDismissal(const PopupToken& token, PopupDismissReason::Enum& reason);
+    [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
+    void closePopup(const PopupToken& token);
+    void fencePopup(const PopupToken& token);
+    [[nodiscard]] bool hasPopup()const{ return !m_popups.empty(); }
+    [[nodiscard]] u64 focusLossGeneration()const{ return m_focusLossGeneration; }
     // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
     void invalidateTarget(WidgetId id);
     // Transfer keyboard focus to another input owner without cancelling already accepted UI actions.
@@ -59,8 +77,8 @@ public:
     [[nodiscard]] WidgetId focus()const{ return m_focus; }
     [[nodiscard]] WidgetId capture()const{ return m_capture; }
     [[nodiscard]] bool primaryDown()const{ return m_primaryDown; }
-    [[nodiscard]] bool wantsPointer()const{ return m_primaryDown ? m_pointerSequenceConsumed : m_hover.valid(); }
-    [[nodiscard]] bool wantsKeyboard()const{ return m_focus.valid() || m_consumedKeys != 0u; }
+    [[nodiscard]] bool wantsPointer()const{ return m_primaryDown ? m_pointerSequenceConsumed : hasPopup() || m_hover.valid(); }
+    [[nodiscard]] bool wantsKeyboard()const{ return hasPopup() || m_focus.valid() || m_consumedKeys != 0u; }
     [[nodiscard]] bool ownsKey(InputKey::Enum key)const{
         if(key == InputKey::None || key > InputKey::Y)
             return false;
@@ -72,6 +90,12 @@ private:
     [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
+    [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
+    [[nodiscard]] bool stagePopups(const PopupScope* scopes, usize count);
+    [[nodiscard]] bool validPopupTarget(const HitTarget& target)const;
+    void installPopups(u64 expectedFocusLossGeneration);
+    void retirePopup(WidgetId id);
+    void cancelPopupFocus();
     void reconcileTargets();
     void updateHover();
     void cancelPointerCapture();
@@ -93,18 +117,24 @@ private:
     InputVector<InputEvent> m_events;
     InputVector<InputAction> m_actions;
     InputVector<PointerGestureRecord> m_pointerGestures;
+    InputVector<PopupRecord> m_popups;
+    InputVector<PopupRecord> m_stagedPopups;
+    InputVector<PopupDismissal> m_popupDismissals;
     u64 m_layoutGeneration = 0u;
+    u64 m_focusLossGeneration = 0u;
     u64 m_nextActionSequence = 1u;
     u64 m_activeGestureSequence = 0u;
     WidgetId m_hover;
     WidgetId m_focus;
     WidgetId m_capture;
+    PopupToken m_capturePopup;
     u64 m_focusDeclaration = 0u;
     u64 m_captureDeclaration = 0u;
     Point m_pointer;
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;
+    bool m_windowFocused = true;
     u32 m_pressedKeys = 0u;
     u32 m_consumedKeys = 0u;
 };

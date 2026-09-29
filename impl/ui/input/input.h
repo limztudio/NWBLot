@@ -7,6 +7,7 @@
 
 #include "../id.h"
 #include "../paint.h"
+#include "popup.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace InputEventType{
-    enum Enum : u8{ PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost };
+    enum Enum : u8{ PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained };
 };
 
 namespace InputKey{
@@ -58,6 +59,8 @@ struct HitTarget{
     bool textEditable = false;
     // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
     Rect gestureReference{};
+    PopupToken popup;
+    u32 layer = 0u;
 };
 
 // Actions retain values, never callbacks or declaration pointers; target lifetime must still match when consumed.
@@ -75,6 +78,7 @@ struct InputActionId{
 struct InputAction{
     InputActionId id;
     InputActionSource::Enum source = InputActionSource::Pointer;
+    PopupToken popup;
 };
 
 // One coalesced update per press retains the committed geometry; cancellation removes the gesture without delivery.
@@ -85,6 +89,7 @@ struct PointerGesture{
     Rect targetRectangle;
     Rect referenceRectangle;
     PointerGestureState::Enum state = PointerGestureState::Active;
+    PopupToken popup;
 };
 
 struct InputRoutingResult{

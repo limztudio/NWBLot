@@ -27,11 +27,15 @@ Context::Context(Core::Alloc::GlobalArena& arena)
     , m_states(arena)
     , m_scopes(arena)
     , m_targets(arena)
+    , m_popups(arena)
     , m_commitTargets(arena)
+    , m_commitPopups(arena)
 {
     m_scopes.reserve(64u);
     m_targets.reserve(s_InputMaxTargets);
     m_commitTargets.reserve(s_InputMaxTargets);
+    m_popups.reserve(s_InputMaxPopups);
+    m_commitPopups.reserve(s_InputMaxPopups);
 }
 
 bool Context::beginFrame(const u64 generation){
@@ -39,8 +43,10 @@ bool Context::beginFrame(const u64 generation){
         return false;
     m_lastFrameGeneration = generation;
     m_frameGeneration = generation;
+    m_focusLossGeneration = m_input.focusLossGeneration();
     m_failed = false;
     m_targets.clear();
+    m_popups.clear();
     return true;
 }
 
@@ -57,7 +63,7 @@ bool Context::beginRoot(const WidgetRoot& root){
 }
 
 bool Context::endRoot(){
-    const bool valid = m_rootActive && m_scopes.size() == 1u;
+    const bool valid = m_rootActive && m_scopes.size() == 1u && !m_currentPopup.valid();
     m_rootActive = false;
     m_scopes.clear();
     if(!valid)
@@ -115,6 +121,8 @@ bool Context::addTarget(const WidgetState& state, HitTarget target){
     target.id = state.id;
     target.declarationGeneration = state.declarationGeneration;
     target.paintOrder = static_cast<u32>(m_targets.size());
+    target.popup = m_currentPopup;
+    target.layer = m_popupLayer;
     m_targets.push_back({ target, state.root });
     return true;
 }
@@ -126,6 +134,10 @@ bool Context::takeActivation(const WidgetState& state, const bool enabled){
         m_input.invalidateTarget(state.id);
         return false;
     }
+    for(const auto& target : m_input.targets()){
+        if(target.id == state.id && target.popup != m_currentPopup)
+            return false;
+    }
     return !m_failed && m_input.consumeActivation(state.id);
 }
 
@@ -136,11 +148,15 @@ bool Context::takePointerGesture(const WidgetState& state, const bool enabled, P
         m_input.invalidateTarget(state.id);
         return false;
     }
+    for(const auto& target : m_input.targets()){
+        if(target.id == state.id && target.popup != m_currentPopup)
+            return false;
+    }
     return m_input.consumePointerGesture(state.id, state.declarationGeneration, gesture);
 }
 
 bool Context::finishFrame(){
-    if(m_failed || m_frameGeneration == 0u || m_rootActive){
+    if(m_failed || m_frameGeneration == 0u || m_rootActive || m_currentPopup.valid()){
         fail();
         return false;
     }
@@ -162,9 +178,15 @@ bool Context::commitFrame(const u64 generation){
     m_commitTargets.clear();
     for(const auto& owned : m_targets)
         m_commitTargets.push_back(owned.target);
-    if(!m_input.commitTargets(m_commitTargets.data(), m_commitTargets.size(), generation))
+    m_commitPopups.clear();
+    for(const auto& owned : m_popups)
+        m_commitPopups.push_back(owned.scope);
+    if(!m_input.commitTargets(
+        m_commitTargets.data(), m_commitTargets.size(), generation, m_commitPopups.data(), m_commitPopups.size(), m_focusLossGeneration
+    ))
         return false;
     m_targets.clear();
+    m_popups.clear();
     m_readyGeneration = 0u;
     return true;
 }
@@ -180,6 +202,9 @@ void Context::abandonFrame(){
 void Context::resetInput(){
     m_input.reset();
     m_targets.clear();
+    m_popups.clear();
+    m_currentPopup = {};
+    m_popupLayer = 0u;
     m_readyGeneration = 0u;
 }
 
@@ -196,6 +221,10 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
     for(usize index = m_targets.size(); index > 0u; --index){
         if(!ContainsRoot(roots, count, m_targets[index - 1u].root))
             m_targets.erase(m_targets.begin() + index - 1u);
+    }
+    for(usize index = m_popups.size(); index > 0u; --index){
+        if(!ContainsRoot(roots, count, m_popups[index - 1u].root))
+            m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
 }
 

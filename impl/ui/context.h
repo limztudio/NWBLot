@@ -26,6 +26,11 @@ private:
         WidgetRoot root;
     };
 
+    struct OwnedPopup{
+        PopupScope scope;
+        WidgetRoot root;
+    };
+
     [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
 
 
@@ -43,6 +48,10 @@ public:
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
     [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
     [[nodiscard]] bool takePointerGesture(const WidgetState& state, bool enabled, PointerGesture& gesture);
+    [[nodiscard]] bool beginPopupScope(const WidgetState& state, PopupScope scope);
+    [[nodiscard]] bool endPopupScope(bool visible);
+    [[nodiscard]] PopupToken popupToken()const{ return m_currentPopup; }
+    [[nodiscard]] u32 popupLayer()const{ return m_popupLayer; }
     [[nodiscard]] bool finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [[nodiscard]] bool commitFrame(u64 generation);
@@ -68,9 +77,14 @@ private:
     WidgetStateStore m_states;
     PaintVector<WidgetId> m_scopes;
     PaintVector<OwnedTarget> m_targets;
+    PaintVector<OwnedPopup> m_popups;
     InputVector<HitTarget> m_commitTargets;
+    InputVector<PopupScope> m_commitPopups;
+    PopupToken m_currentPopup;
+    u32 m_popupLayer = 0u;
     WidgetRoot m_root;
     u64 m_frameGeneration = 0u;
+    u64 m_focusLossGeneration = 0u;
     u64 m_lastFrameGeneration = 0u;
     u64 m_readyGeneration = 0u;
     bool m_rootActive = false;

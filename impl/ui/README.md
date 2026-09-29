@@ -56,7 +56,8 @@ premultiplied vertex contract.
 `freeze()` moves the geometry, indices, ordered commands, display metrics, frame generation, and
 skin binding into a move-only snapshot exposed through const views. Start a new frame with `begin()`
 before painting again. Reusing the builder or changing the original skin cannot alter a frozen
-snapshot. Only adjacent draws with identical material and clip merge; painter order is preserved.
+snapshot. Only adjacent draws with identical layer, material and clip merge; painter order is preserved
+within each layer, and `freeze()` orders command ranges by layer.
 
 The saved `AssetRef<UiSkin>` and `AssetRef<Texture>` identify assets. They do not retain loaded asset
 objects or resolved GPU resources. The explicit skin generation identifies the metadata revision;
@@ -65,7 +66,7 @@ storage until GPU completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
-font shaping (`text/`), owned Unicode edit state and commands (`edit/`), and skinned windows, panels, labels, separators, buttons, checkboxes and single-line edit boxes (`Builder`).
+font shaping (`text/`), owned Unicode edit state and commands (`edit/`), and skinned windows, panels, popups/modals, labels, separators, buttons, checkboxes and single-line edit boxes (`Builder`).
 `nwb_ui_gpu` owns GPU uploads, resource retention,
 and offscreen rendering in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
 `core/os/` owns clipboard/native selection and text-input/IME services, `impl/assets_ui_skin/` owns skin validation/cooking,
@@ -123,7 +124,7 @@ when declaring the corresponding live/enabled control. These queues are bounded,
 
 Resize, scale changes and device invalidation reset input publication. The ECS adapter additionally validates
 host-root lifetime before native input and frame builds. It connects edit-box declarations to borrowed OS
-text-input and clipboard/selection services. Lists, popups and compound controls remain subsequent work.
+text-input and clipboard/selection services. Lists and compound controls remain subsequent work.
 
 ## Windows and separators
 
@@ -135,11 +136,42 @@ The window domain separates behavior (`window_behavior.cpp`), metrics/geometry (
 
 `separator(key, SeparatorOptions)` participates in layout and draws a named skin part. It supports horizontal/vertical directions, fixed/content/stretch length and skin-derived or explicit logical thickness. Required parts come from the selected atlas (`window.normal`, `window.title`, `window.collapse`, and separator names); missing required parts reject the candidate. An optional `window.resize` sprite can replace the default grip, which uses the selected atlas's white sprite. `windowMetrics()` is available only inside an open window for callers needing the actual chrome geometry.
 
-ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Popups, lists, combo boxes and numeric/multiline editors are later increments.
+ImGui runtime, shader assets and vendor sources have been removed. Font shaping/rasterization remains in the independently owned FreeType/HarfBuzz text service; clipboard, native selection and IME remain borrowed OS services. Lists, combo boxes, tooltips/context menus and numeric/multiline editors are later increments.
+
+## Popups and modals
+
+`Builder::beginPopup(key, PopupState&, PopupOptions)` declares a popup after other panel/window scopes have ended. It returns whether popup content is visible. Call `endPopup()` only when begin returns `true`; a closed popup opens no scope. Keep the application-owned `PopupState` alive through that matching end. The state is noncopyable/nonmovable and retains open state, prepared placement, an instance lifetime and an open generation. Call `open()` from a live trigger action and `close()` from a content action or application policy. A new opening has a new token, so pending actions from an earlier opening cannot choose content in the new one.
+
+```cpp
+// menuState.open() comes from the trigger inside an earlier, already ended panel.
+Ui::PopupOptions options;
+options.anchor = triggerRectangle;
+options.size = { 220.0f, 160.0f };
+if(ui.beginPopup("menu", menuState, options)){
+    if(ui.button("first", "First choice")){
+        selectedChoice = 1u;
+        menuState.close();
+    }
+    if(!ui.endPopup())
+        context.fail();
+}
+```
+
+`PopupOptions` chooses Below/Above/Right/Left/Center placement in logical coordinates, a gap, desired size, modal mode, outside-click dismissal, Escape dismissal and autofocus. Anchored placement flips on its requested axis when the opposite side offers more room, clamps to the viewport, and shrinks dimensions that exceed the viewport. `placement()` exposes the newly prepared bounds, viewport and resolved side; input still uses the separately committed geometry. Oversized child content is clipped rather than automatically scrolled.
+
+`popupStyle()` supplies the background, fallback, padding and linear backdrop color. The default background is `popup.normal`, with `panel.normal` as a fallback in the selected skin. Atlas padding and style padding combine by taking their maximum on each edge. A modal paints its viewport backdrop before its own background and children; the default is black with alpha 0.4. Label, button, checkbox, row/column and edit-box declarations reuse the existing domains inside a popup. Closing or reopening during the body fences later child actions and model loans, and suppresses the old opening's buffered Builder paint and targets. Direct low-level paint already emitted into the overlay is not rolled back. One Builder scope is open at a time; popup scopes do not nest in this increment.
+
+The accepted top popup traps Tab/Shift+Tab within eligible children and owns pointer input. Autofocus chooses its first eligible child only when the matching layout is accepted. Explicit close/dismissal restores saved focus at accepted publication only when the saved declaration remains eligible. Declaration/root retirement removes its ownership immediately and may restore an eligible lower target then. Outside/Escape policies control dismissal, while the dismissing held sequence and release stay consumed by UI. An outside press cannot click through into an underlying control or the scene. Disabling outside dismissal keeps the popup open and still consumes that input. Native focus loss closes popups and cancels restoration into an unfocused window. Context captures the router's focus-loss generation at frame preparation: delayed popup acceptance across a loss remains closed even if native focus has since returned. Focus gain alone does not restore a closing popup; a fresh opening may autofocus.
+
+`PopupToken` combines widget identity, declaration lifetime, state instance and open generation. `Context` retains copied scopes and stamps popup targets/actions/capture with that token. Prepared scopes publish with the exact accepted paint/presentation generation, and a reopened/replaced state fences old scope actions. Popup state and child models are borrowed only during declaration; snapshots contain owned geometry and command layers.
+
+`PaintBuilder::beginOverlay(layer)` and `endOverlay()` support a balanced nonnested low-level overlay scope. Base commands use layer zero; a positive overlay layer uses the viewport clip and restores the prior clip when ended. Freezing orders command ranges by layer while preserving painter order within a layer and existing vertex/index/image ownership. Popup layers therefore render above later ordinary host roots. All layers still rasterize into the same independent GPU UI texture; popup layering adds no per-popup GPU target or task.
+
+Tooltips, context menus, nested popup layout, selectable/virtualized lists and combo boxes remain separate controls work. Native Windows captures and Linux target syntax checks have different qualification scope: syntax checks with Linux headers do not establish native Linux linking or compositor execution, and synthetic text events do not establish live IME behavior.
 
 ## Single-line edit boxes
 
-`Builder::editBox(key, EditModel&, EditBoxState&, EditBoxOptions)` declares a selectable single-line editor. The application owns the persistent model and state in its UI arena. Keep both alive through the matching `endPanel()` or `endWindow()`. `EditBoxOptions` supplies fixed/content/stretch sizing, `enabled`, and `readOnly`. `EditBoxResult` reports admission, committed-text or selection changes, submit/cancel intent, focus, and native preedit caret visibility. Enter reports submit intent; Escape cancels preedit first, then reports cancel intent and releases focus. Restoring an application value after cancellation belongs to the application.
+`Builder::editBox(key, EditModel&, EditBoxState&, EditBoxOptions)` declares a selectable single-line editor. The application owns the persistent model and state in its UI arena. Keep both alive through the matching `endPanel()`, `endWindow()` or `endPopup()`. `EditBoxOptions` supplies fixed/content/stretch sizing, `enabled`, and `readOnly`. `EditBoxResult` reports admission, committed-text or selection changes, submit/cancel intent, focus, and native preedit caret visibility. Enter reports submit intent. Escape cancels active preedit first while keeping the editor/popup open; a subsequent editor cancel asks the host to dismiss its accepted popup or releases ordinary editor focus. Restoring an application value after cancellation belongs to the application.
 
 Construct the model and state once, then use them inside an existing panel/window callback:
 

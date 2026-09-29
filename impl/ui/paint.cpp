@@ -103,6 +103,8 @@ void PaintBuilder::begin(
     m_regions.assign(skin.regions().begin(), skin.regions().end());
     m_clips.clear();
     m_clips.push_back({ 0.0f, 0.0f, metrics.logicalWidth, metrics.logicalHeight });
+    m_overlayClipDepth = 0u;
+    m_layer = 0u;
     m_recording = true;
 }
 
@@ -124,7 +126,7 @@ void PaintBuilder::pushClip(const Rect& clip){
 
 bool PaintBuilder::popClip(){
     NWB_ASSERT(m_recording);
-    if(m_clips.size() <= 1u)
+    if(m_clips.size() <= 1u || (m_overlayClipDepth != 0u && m_clips.size() <= m_overlayClipDepth + 1u))
         return false;
     m_clips.pop_back();
     return true;
@@ -155,7 +157,10 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
 }
 
 DrawSnapshot PaintBuilder::freeze(){
-    NWB_ASSERT(m_recording && m_clips.size() == 1u);
+    NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayClipDepth == 0u);
+    Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs){
+        return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
+    });
     m_recording = false;
     m_clips.clear();
     return Move(m_snapshot);
@@ -198,7 +203,7 @@ void PaintBuilder::emitQuad(
     if(!m_snapshot.m_commands.empty()){
         auto& previous = m_snapshot.m_commands.back();
         if(
-            previous.material == material && previous.glyphPageIndex == glyphPageIndex
+            previous.layer == m_layer && previous.material == material && previous.glyphPageIndex == glyphPageIndex
             && previous.sdfPageIndex == sdfPageIndex && previous.sdfChannel == sdfChannel
             && __hidden_ui_paint::EqualClip(previous.clip, clip)
         ){
@@ -206,7 +211,7 @@ void PaintBuilder::emitQuad(
             return;
         }
     }
-    m_snapshot.m_commands.push_back({ firstIndex, 6u, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel });
+    m_snapshot.m_commands.push_back({ firstIndex, 6u, clip, material, glyphPageIndex, sdfPageIndex, sdfChannel, m_layer });
 }
 
 void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint){

@@ -5,29 +5,23 @@
 #pragma once
 
 
-#include "ui_edit_gallery.h"
-#include "ui_popup_gallery.h"
-
 #include <impl/ecs_ui/components.h>
+#include <impl/ui/widgets/popup.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiWidgetGallery final : NoCopy{
+class TestbedUiPopupGallery final : NoCopy{
 public:
-    explicit TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena);
-
-
-public:
+    void trigger(NWB::Impl::Ui::Builder& ui);
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
-    TestbedUiEditGallery m_edits;
-    TestbedUiPopupGallery m_popups;
-    u32 m_count = 0u;
-    bool m_enabled = true;
+    NWB::Impl::Ui::PopupState m_popup;
+    u32 m_choice = 0u;
+    bool m_keepOpen = false;
 };
 
 

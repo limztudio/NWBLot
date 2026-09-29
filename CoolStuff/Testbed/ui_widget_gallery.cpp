@@ -34,6 +34,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     }
     if(ui.button("reset", "Reset"))
         m_count = 0u;
+    m_popups.trigger(ui);
     valid = ui.endContainer() && valid;
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/widget_caption"));
     const auto caption = StringFormat(scratchArena, "Count: {}", m_count);
@@ -43,6 +44,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI widget declaration failed"));
     m_edits.paint(context, x, y + 192.0f);
+    m_popups.paint(context, x, y);
 }
 
 

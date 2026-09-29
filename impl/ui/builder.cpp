@@ -64,7 +64,7 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
 }
 
 bool Builder::endPanel(){
-    if(!m_panelActive || m_windowActive || m_stack.size() != 1u || m_context.failed() || !m_layout.arrange(m_bounds)){
+    if(!m_panelActive || m_windowActive || m_popupState || m_stack.size() != 1u || m_context.failed() || !m_layout.arrange(m_bounds)){
         m_context.fail();
         return false;
     }
@@ -100,14 +100,14 @@ bool Builder::label(const AStringView stableKey, const StringView text, const Wi
 
 bool Builder::button(const AStringView stableKey, const StringView text, const WidgetOptions& options){
     const Item* item = addItem(stableKey, text, WidgetKind::Button, options);
-    return item && m_context.takeActivation(item->state, options.enabled);
+    return item && m_context.takeActivation(item->state, item->enabled);
 }
 
 bool Builder::checkbox(const AStringView stableKey, const StringView text, bool& checked, const WidgetOptions& options){
     Item* item = addItem(stableKey, text, WidgetKind::Checkbox, options);
     if(!item)
         return false;
-    const bool changed = m_context.takeActivation(item->state, options.enabled);
+    const bool changed = m_context.takeActivation(item->state, item->enabled);
     if(changed)
         checked = !checked;
     item->checked = checked;
@@ -120,6 +120,7 @@ void Builder::reset(){
     m_panelActive = false;
     m_windowActive = false;
     m_window.state = nullptr;
+    m_popupState = nullptr;
     m_items.clear();
     m_stack.clear();
     m_layout.reset();
@@ -163,7 +164,7 @@ Builder::Item* Builder::addItem(
         return nullptr;
     Item item(m_arena);
     item.state = *state;
-    item.enabled = options.enabled;
+    item.enabled = options.enabled && synchronizePopup();
     ShapeRequest request{ text, m_style.fontSize };
     if(m_text.layout(request, item.text) != TextLayoutStatus::Success){
         m_context.fail();

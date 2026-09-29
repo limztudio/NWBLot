@@ -25,18 +25,27 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
     const bool alreadyPressed = (m_pressedKeys & keyMask) != 0u;
     m_pressedKeys |= keyMask;
     bool consumed = (m_consumedKeys & keyMask) != 0u;
+    const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
     if(event.key == InputKey::Tab)
-        consumed |= moveFocus(event.shift);
-    else if(event.key == InputKey::Escape && !(findTarget(m_focus, m_focusDeclaration) && findTarget(m_focus, m_focusDeclaration)->textEditable)){
-        consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
-        m_focus = {};
-        m_capture = {};
-        m_focusDeclaration = 0u;
-        m_captureDeclaration = 0u;
+        consumed |= moveFocus(event.shift) || hasPopup();
+    else if(event.key == InputKey::Escape && !(focused && focused->textEditable)){
+        if(hasPopup()){
+            const bool dismissed = !event.repeat && !alreadyPressed && dismissPopup(PopupDismissReason::Escape);
+            if(dismissed)
+                updateHover();
+            consumed = true;
+        }
+        else{
+            consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
+            m_focus = {};
+            m_capture = {};
+            m_capturePopup = {};
+            m_focusDeclaration = 0u;
+            m_captureDeclaration = 0u;
+        }
     }
     else{
-        const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
-        consumed |= focused != nullptr;
+        consumed |= hasPopup() || focused != nullptr;
         if(
             focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed
             && (event.key == InputKey::Enter || event.key == InputKey::Space)

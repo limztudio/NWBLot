@@ -9,6 +9,8 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ui_widget_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_edit_gallery.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_edit_gallery.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_popup_gallery.h"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_popup_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/project.h"
 )
 set_target_properties(testbed PROPERTIES

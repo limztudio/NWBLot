@@ -56,6 +56,8 @@ UiLayerSystem::UiLayerSystem(
     m_liveRoots.reserve(Ui::s_InputMaxTargets);
     m_rootIdentities.reserve(Ui::s_InputMaxTargets);
     m_input.addHandlerToBack(*this);
+    if(!m_input.windowFocused())
+        windowFocusUpdate(false);
     if(m_presentation == UiLayerPresentation::Scene)
         m_graphics.setTaskGraphOutputLayerContributor(&m_renderer);
 }

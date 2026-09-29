@@ -73,6 +73,8 @@ struct DrawCommand{
     u32 glyphPageIndex = Limit<u32>::s_Max;
     u32 sdfPageIndex = Limit<u32>::s_Max;
     u32 sdfChannel = 0u;
+    // Base paint is layer zero; higher layers render later without changing owned index or image bindings.
+    u32 layer = 0u;
 };
 
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
@@ -153,6 +155,9 @@ public:
     void reserve(usize quadCount, usize clipDepth = 8u);
     void pushClip(const Rect& clip);
     [[nodiscard]] bool popClip();
+    // Overlay scopes cannot nest. Their viewport clip escapes parent clipping until the balanced endOverlay().
+    [[nodiscard]] bool beginOverlay(u32 layer);
+    [[nodiscard]] bool endOverlay();
     void fillRect(const Rect& rectangle, const Color& color = {});
     [[nodiscard]] bool drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
@@ -182,6 +187,8 @@ private:
     DrawSnapshot m_snapshot;
     PaintVector<UiSkinRegion> m_regions;
     PaintVector<Rect> m_clips;
+    usize m_overlayClipDepth = 0u;
+    u32 m_layer = 0u;
     bool m_recording = false;
 };
 

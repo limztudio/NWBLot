@@ -317,6 +317,9 @@ def run(args):
     environment["NWB_UI_LAYER_INTERACTIVE"] = "1"
     environment["NWB_UI_LAYER_WINDOW"] = "0"
     environment["NWB_UI_LAYER_WINDOW_SKIN"] = "0"
+    environment["NWB_UI_LAYER_EDIT"] = "0"
+    environment["NWB_UI_LAYER_POPUP"] = "0"
+    environment["NWB_UI_LAYER_POPUP_SKIN"] = "0"
     if platform.system() == "Linux":
         environment["NWB_LINUX_BACKEND"] = "x11"
     for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",

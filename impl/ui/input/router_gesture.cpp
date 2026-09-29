@@ -22,7 +22,7 @@ bool InputRouter::consumePointerGesture(const WidgetId id, const u64 declaration
         auto& record = m_pointerGestures[index];
         if(
             record.gesture.id.target != id || record.gesture.id.declarationGeneration != declarationGeneration
-            || !record.pendingUpdate
+            || !record.pendingUpdate || record.gesture.popup != target->popup
         )
             continue;
         gesture = record.gesture;
@@ -47,6 +47,7 @@ void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResu
     gesture.position = m_pointer;
     gesture.targetRectangle = target.rectangle;
     gesture.referenceRectangle = target.gestureReference.width > 0.0f ? target.gestureReference : target.rectangle;
+    gesture.popup = target.popup;
     m_pointerGestures.push_back({ gesture, true });
     m_activeGestureSequence = m_nextActionSequence;
     ++m_nextActionSequence;
@@ -73,7 +74,7 @@ void InputRouter::reconcilePointerGestures(){
     for(usize index = 0u; index < m_pointerGestures.size();){
         const auto& gesture = m_pointerGestures[index].gesture;
         const HitTarget* target = findTarget(gesture.id.target, gesture.id.declarationGeneration);
-        if(target == nullptr || !isInteractive(*target) || !target->pointerGesture){
+        if(target == nullptr || !isInteractive(*target) || !target->pointerGesture || gesture.popup != target->popup){
             if(gesture.id.sequence == m_activeGestureSequence)
                 m_activeGestureSequence = 0u;
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));

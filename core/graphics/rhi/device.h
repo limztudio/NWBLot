@@ -67,7 +67,6 @@ struct QueueSubmissionNativeSignal{
 // Runs just before one validated submission reaches its queue. Returns a binary signal attached directly to that
 // submission, never to a queue-global pending list. False is an expected atomic rejection; an exception unwinds to
 // the application boundary, so preparation must also leave owner state unchanged.
-// retained past resolution or their owner's lifecycle.
 using QueueSubmissionPreSubmitCallback = bool(*) (
     void* context,
     u64 identity,

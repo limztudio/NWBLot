@@ -57,14 +57,14 @@ TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
     const AStringView resolve(resolveSource.data(), resolveSource.size());
     const AStringView upsample(upsampleSource.data(), upsampleSource.size());
 
-    EXPECT_TRUE(ContainsText(gbuffer, "return normalize(packedNormal * 2.0 - 1.0);"));
+    EXPECT_TRUE(ContainsText(gbuffer, "return normalize(packedNormal * half(2.0h) - half(1.0h));"));
     EXPECT_TRUE(ContainsText(spawn, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
     EXPECT_TRUE(ContainsText(resolve, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
     EXPECT_TRUE(ContainsText(upsample, s_INCLUDE_SURFEL_GBUFFER_SLANGI));
-    EXPECT_TRUE(ContainsText(spawn, "const float3 worldNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
-    EXPECT_TRUE(ContainsText(resolve, "const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
-    EXPECT_TRUE(ContainsText(upsample, "const float3 centerNormal = nwbSurfelDecodeGbufferNormal(rawNormal);"));
-    EXPECT_TRUE(ContainsText(upsample, "const float3 tapNormal = nwbSurfelDecodeGbufferNormal(tapRawNormal);"));
+    EXPECT_TRUE(ContainsText(spawn, "const float3 worldNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));"));
+    EXPECT_TRUE(ContainsText(resolve, "const float3 normal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));"));
+    EXPECT_TRUE(ContainsText(upsample, "const float3 centerNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));"));
+    EXPECT_TRUE(ContainsText(upsample, "const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));"));
     EXPECT_FALSE(ContainsText(spawn, "normalize(rawNormal);"));
     EXPECT_FALSE(ContainsText(spawn, s_NORMALIZE_RAWNORMAL_2_0_1_0));
     EXPECT_FALSE(ContainsText(resolve, s_NORMALIZE_RAWNORMAL_2_0_1_0));

@@ -62,8 +62,7 @@ struct RendererAvboitTaskGraphStageState{
     [[nodiscard]] RendererTaskGraphTransparencyStage transparencyStage()const noexcept;
 };
 
-// Host sees only this immutable result; AVBOIT keeps its task topology.
-// queue checks, and packet-order invariants inside its own domain implementation.
+// Host sees only this immutable result; AVBOIT keeps its task topology, queue checks, and packet-order invariants inside its own domain implementation.
 struct RendererAvboitTaskGraphValidation{
     RendererTaskGraphTransparencyStage m_stage;
     bool m_valid = false;

@@ -41,12 +41,18 @@ bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle,
         || uv.x + uv.width > 1.0f || uv.y + uv.height > 1.0f
     )
         return false;
-    if(!prepareGlyphPages(&page, 1u))
-        return false;
     u32 index = 0u;
     for(; index < m_snapshot.m_glyphPages.size(); ++index){
-        if(__hidden_ui_glyph_paint::SamePage(m_snapshot.m_glyphPages[index]->binding(), page->binding()))
+        if(m_snapshot.m_glyphPages[index].get() == page.get())
             break;
+    }
+    if(index == m_snapshot.m_glyphPages.size()){
+        if(!prepareGlyphPages(&page, 1u))
+            return false;
+        for(index = 0u; index < m_snapshot.m_glyphPages.size(); ++index){
+            if(__hidden_ui_glyph_paint::SamePage(m_snapshot.m_glyphPages[index]->binding(), page->binding()))
+                break;
+        }
     }
     NWB_ASSERT(index < m_snapshot.m_glyphPages.size());
     emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);

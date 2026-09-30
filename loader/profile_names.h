@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <global/namespace.h>
+#include <core/global.h>
 #include <global/name.h>
 
 

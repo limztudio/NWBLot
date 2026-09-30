@@ -5,8 +5,6 @@
 #pragma once
 
 
-#include "namespace.h"
-
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

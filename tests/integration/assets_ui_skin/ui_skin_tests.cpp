@@ -140,6 +140,17 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     return metadata;
 }
 
+[[nodiscard]] static TestAString TypographyMetadata(const AStringView typography = "{\"default_font_size\": 21.5}"){
+    TestAString metadata = PaletteMetadata();
+    metadata.append("asset.schema_version = 3;\r\n");
+    if(!typography.empty()){
+        metadata.append("asset.typography = ");
+        metadata.append(typography);
+        metadata.append(";\r\n");
+    }
+    return metadata;
+}
+
 [[nodiscard]] static Core::Assets::AssetBytes MakePaletteBinary(
     SkinTestArena& testArena,
     const UiSkinBinaryPayload::ColorBinary& color){
@@ -148,6 +159,21 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
     Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
     for(u32 index = 0u; index < UiSkinColorRole::Count; ++index)
         AppendPOD(binary, color);
+    return binary;
+}
+
+[[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(
+    SkinTestArena& testArena,
+    const UiSkinBinaryPayload::ColorBinary& color,
+    const f32 defaultFontSize){
+    UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
+    header.version = UiSkinBinaryPayload::s_UiSkinTypographyVersion;
+    Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
+    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index)
+        AppendPOD(binary, color);
+    UiSkinBinaryPayload::TypographyBinary typography;
+    typography.defaultFontSize = defaultFontSize;
+    AppendPOD(binary, typography);
     return binary;
 }
 
@@ -165,6 +191,8 @@ TEST(AssetsUiSkin, CookAndCodecRoundTripPreservesAtlasAndMetrics){
     UiSkin skin(testArena.arena);
     ASSERT_TRUE(BuildUiSkinAsset(entry, skin));
     EXPECT_FALSE(skin.hasPalette());
+    EXPECT_FALSE(skin.hasTypography());
+    EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
 
     UiSkinAssetCodec codec;
     Core::Assets::AssetBytes binary(testArena.arena);
@@ -179,6 +207,8 @@ TEST(AssetsUiSkin, CookAndCodecRoundTripPreservesAtlasAndMetrics){
     const UiSkin* loaded = Core::Assets::CastAsset<UiSkin>(loadedAsset.get());
     ASSERT_NE(loaded, nullptr);
     EXPECT_FALSE(loaded->hasPalette());
+    EXPECT_FALSE(loaded->hasTypography());
+    EXPECT_FLOAT_EQ(loaded->typography().defaultFontSize, 16.0f);
     EXPECT_EQ(loaded->texture().name(), Name("project/ui/texture"));
     EXPECT_EQ(loaded->atlasWidth(), 64u);
     EXPECT_EQ(loaded->atlasHeight(), 32u);
@@ -221,6 +251,8 @@ TEST(AssetsUiSkin, PaletteVersionTwoCooksAndRoundTripsAllRoles){
     UiSkin skin(testArena.arena);
     ASSERT_TRUE(BuildUiSkinAsset(entry, skin));
     ASSERT_TRUE(skin.hasPalette());
+    EXPECT_FALSE(skin.hasTypography());
+    EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
 
     UiSkinAssetCodec codec;
     Core::Assets::AssetBytes binary(testArena.arena);
@@ -235,6 +267,8 @@ TEST(AssetsUiSkin, PaletteVersionTwoCooksAndRoundTripsAllRoles){
     UiSkin loaded(testArena.arena, skin.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
     ASSERT_TRUE(loaded.hasPalette());
+    EXPECT_FALSE(loaded.hasTypography());
+    EXPECT_FLOAT_EQ(loaded.typography().defaultFontSize, 16.0f);
     ASSERT_EQ(loaded.regions().size(), 2u);
     for(usize index = 0u; index < UiSkinColorRole::Count; ++index){
         const UiSkinColor& color = loaded.palette().colors[index];
@@ -251,6 +285,48 @@ TEST(AssetsUiSkin, PaletteVersionTwoCooksAndRoundTripsAllRoles){
     ASSERT_TRUE(ReadPOD(binary, cursor, header));
     EXPECT_EQ(header.version, UiSkinBinaryPayload::s_UiSkinVersion);
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsUiSkin, TypographyVersionThreeRejectsMalformedFooterWithoutReplacingSkin){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    const UiSkinBinaryPayload::ColorBinary color{ 0.25f, 0.5f, 0.75f, 1.0f };
+    UiSkin skin(testArena.arena, Name("project/ui/atlas"));
+    ASSERT_TRUE(skin.loadBinary(MakeTypographyBinary(testArena, color, 21.5f)));
+
+    for(u32 variant = 0u; variant < 5u; ++variant){
+        const f32 fontSize = variant == 2u ? 0.0f : variant == 3u ? 2049.0f
+            : variant == 4u ? Limit<f32>::s_QuietNaN : 21.5f;
+        Core::Assets::AssetBytes binary = MakeTypographyBinary(testArena, color, fontSize);
+        if(variant == 0u)
+            binary.pop_back();
+        if(variant == 1u)
+            binary.push_back(0u);
+        EXPECT_FALSE(skin.loadBinary(binary)) << variant;
+        EXPECT_TRUE(skin.hasTypography());
+        EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 21.5f);
+    }
+}
+
+TEST(AssetsUiSkin, TypographyMetadataRequiresValidRoleAndSchemaThree){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    UiSkinCookEntry entry(testArena.arena);
+    ASSERT_TRUE(ParseMetadata(testArena, TypographyMetadata(), entry));
+    const AStringView malformed[]{ "", "{}", "{\"default_font_size\": 0.0}",
+        "{\"default_font_size\": 2049.0}", "{\"default_font_size\": \"large\"}",
+        "{\"default_font_size\": 16.0, \"body\": 18.0}" };
+    for(u32 index = 0u; index < LengthOf(malformed); ++index){
+        EXPECT_FALSE(ParseMetadata(testArena, TypographyMetadata(malformed[index]), entry)) << index;
+        EXPECT_TRUE(entry.hasTypography);
+        EXPECT_FLOAT_EQ(entry.typography.defaultFontSize, 21.5f);
+    }
+    TestAString legacyWithTypography = PaletteMetadata();
+    legacyWithTypography.append("asset.typography = {\"default_font_size\": 16.0};\r\n");
+    EXPECT_FALSE(ParseMetadata(testArena, legacyWithTypography, entry));
+    EXPECT_TRUE(entry.hasTypography);
 }
 
 TEST(AssetsUiSkin, PaletteVersionTwoRejectsMalformedFooterWithoutReplacingSkin){
@@ -366,6 +442,8 @@ TEST(AssetsUiSkin, EngineDefaultAtlasAndTextureCookAndLoadTogether){
     ASSERT_TRUE(loadedSkin.loadBinary(skinBinary));
     ASSERT_TRUE(loadedTexture.loadBinary(textureBinary));
     ASSERT_TRUE(loadedSkin.validateTexture(loadedTexture));
+    ASSERT_TRUE(loadedSkin.hasTypography());
+    EXPECT_FLOAT_EQ(loadedSkin.typography().defaultFontSize, 16.0f);
     EXPECT_EQ(loadedSkin.virtualPath(), Name("engine/ui/skins/default/atlas"));
     EXPECT_EQ(loadedSkin.texture().name(), Name("engine/ui/skins/default/texture"));
     EXPECT_EQ(loadedSkin.atlasWidth(), 256u);

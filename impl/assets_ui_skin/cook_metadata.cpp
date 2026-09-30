@@ -221,6 +221,32 @@ template<usize Count>
     return true;
 }
 
+[[nodiscard]] static bool ParseTypography(const Path& path, const Value& asset, UiSkinTypography& outTypography){
+    const Value* typography = FindField(asset, "typography");
+    if(!typography){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': version-3 skins require typography.default_font_size")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(path)
+        );
+        return false;
+    }
+    if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_DiagnosticPrefix)
+        || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { "default_font_size" }))
+        return false;
+    if(!Core::Assets::ReadMetadataFiniteF32Field(
+        path, *typography, s_DiagnosticPrefix, "default_font_size", true, outTypography.defaultFontSize
+    ))
+        return false;
+    if(outTypography.defaultFontSize < 1.0f / 64.0f || outTypography.defaultFontSize > 2048.0f){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(path)
+        );
+        return false;
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -248,19 +274,22 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions", "colors" }
+        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions", "colors", "typography" }
     ))
         return false;
 
     const Value* schema = FindField(asset, "schema_version");
     u32 schemaVersion = 0u;
     if(!schema || !ReadU32Value(nwbFilePath, *schema, "schema_version", schemaVersion)
-        || (schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion && schemaVersion != UiSkinBinaryPayload::s_UiSkinPaletteVersion)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {} or {}")
+        || (schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion
+            && schemaVersion != UiSkinBinaryPayload::s_UiSkinPaletteVersion
+            && schemaVersion != UiSkinBinaryPayload::s_UiSkinTypographyVersion)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}, {}, or {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , UiSkinBinaryPayload::s_UiSkinVersion
             , UiSkinBinaryPayload::s_UiSkinPaletteVersion
+            , UiSkinBinaryPayload::s_UiSkinTypographyVersion
         );
         return false;
     }
@@ -271,10 +300,23 @@ bool ParseUiSkinCookMetadata(
         );
         return false;
     }
-    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinPaletteVersion){
+    if(schemaVersion < UiSkinBinaryPayload::s_UiSkinTypographyVersion && FindField(asset, "typography")){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography requires schema version {}")
+            , StringConvert(s_DiagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , UiSkinBinaryPayload::s_UiSkinTypographyVersion
+        );
+        return false;
+    }
+    if(schemaVersion >= UiSkinBinaryPayload::s_UiSkinPaletteVersion){
         if(!ParsePalette(nwbFilePath, asset, parsed.palette))
             return false;
         parsed.hasPalette = true;
+    }
+    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinTypographyVersion){
+        if(!ParseTypography(nwbFilePath, asset, parsed.typography))
+            return false;
+        parsed.hasTypography = true;
     }
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena))
         return false;
@@ -343,6 +385,8 @@ bool ParseUiSkinCookMetadata(
     outEntry.completeToolkitSkin = parsed.completeToolkitSkin;
     outEntry.palette = parsed.palette;
     outEntry.hasPalette = parsed.hasPalette;
+    outEntry.typography = parsed.typography;
+    outEntry.hasTypography = parsed.hasTypography;
     return true;
 }
 

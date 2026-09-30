@@ -2,6 +2,7 @@
 
 `atlas.nwb` is the `ui_skin` asset at `engine/ui/skins/default/atlas`. It names regions in one texture asset,
 `engine/ui/skins/default/texture`, described by `texture.nwb` and its UASTC `texture.tex` payload.
+Its schema-3 typography role sets the default widget font size to 16 logical UI units; font glyph data stays in separate font bundles.
 The generator can recreate `source.png` artwork as straight-alpha sRGB color; that image is not checked in or required at runtime.
 
 Atlas rectangles use top-left pixel coordinates. The reference density is one artwork pixel per logical UI unit.

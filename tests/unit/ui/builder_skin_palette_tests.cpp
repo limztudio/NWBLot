@@ -74,6 +74,29 @@ TEST_F(UiBuilderSkinPaletteTests, SkinRebindReplacesOnlyColorsAndLegacySkinResto
     EXPECT_FLOAT_EQ(m_builder.style().fontSize, 21.0f);
 }
 
+TEST_F(UiBuilderSkinPaletteTests, SkinTypographySetsDefaultAndPreservesExplicitStyleSize){
+    m_builder.style().fontSize = WidgetStyle{}.fontSize;
+    m_skin.setPalette(MakePalette(0.1f));
+    m_skin.setTypography({ 20.0f });
+    m_builder.setSkin(m_skin);
+    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 20.0f);
+
+    m_skin.setTypography({ 22.0f });
+    m_builder.setSkin(m_skin);
+    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 22.0f);
+
+    m_builder.style().fontSize = 19.0f;
+    m_skin.setTypography({ 24.0f });
+    m_builder.setSkin(m_skin);
+    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
+
+    UiSkin legacy(m_arena, Name("tests/ui/legacy_skin"));
+    UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
+    legacy.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    m_builder.setSkin(legacy);
+    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

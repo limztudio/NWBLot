@@ -8,6 +8,8 @@
 #include "../id.h"
 #include "../paint.h"
 
+#include <global/containers.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,19 +37,32 @@ struct WidgetState{
 
 // Retain identity and typed lifetime; application values stay in the host model and are never copied into draw snapshots.
 class WidgetStateStore final : NoCopy{
+private:
+    using StateIndex = HashMap<u64, usize, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena>;
+
+
 public:
     explicit WidgetStateStore(Core::Alloc::GlobalArena& arena);
 
 
 public:
     [[nodiscard]] WidgetState* touch(WidgetId id, const WidgetRoot& root, WidgetKind::Enum kind, u64 frameGeneration);
+    [[nodiscard]] WidgetState* find(WidgetId id);
+    [[nodiscard]] const WidgetState* find(WidgetId id)const;
     [[nodiscard]] const PaintVector<WidgetState>& entries()const{ return m_entries; }
     void erase(usize index);
 
 
 private:
+    [[nodiscard]] usize findIndex(WidgetId id)const;
+    void rebuildIndex()const;
+
+
+private:
     PaintVector<WidgetState> m_entries;
+    mutable StateIndex m_index;
     u64 m_nextDeclarationGeneration = 1u;
+    mutable bool m_indexDirty = false;
 };
 
 

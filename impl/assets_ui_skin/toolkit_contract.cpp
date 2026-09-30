@@ -24,7 +24,7 @@ namespace __hidden_ui_skin_toolkit_contract{
 
 struct RequiredRegion{
     Name name;
-    const char* text;
+    StringView text;
 };
 
 static constexpr RequiredRegion s_RequiredRegions[] = {

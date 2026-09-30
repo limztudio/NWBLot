@@ -247,13 +247,7 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
 }
 
 WidgetState* Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
-    const WidgetState* previous = nullptr;
-    for(const auto& entry : m_states.entries()){
-        if(entry.id == id){
-            previous = &entry;
-            break;
-        }
-    }
+    const WidgetState* previous = m_states.find(id);
     if(previous && previous->kind != kind)
         m_input.invalidateTarget(id);
     WidgetState* state = m_states.touch(id, m_root, kind, m_frameGeneration);
@@ -265,14 +259,11 @@ WidgetState* Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
 bool Context::currentDeclaration(const WidgetState& state)const{
     if(!m_rootActive || !(state.root == m_root) || state.lastSeenFrame != m_frameGeneration)
         return false;
-    for(const auto& current : m_states.entries()){
-        if(current.id == state.id)
-            return
-                current.root == state.root && current.declarationGeneration == state.declarationGeneration
-                && current.lastSeenFrame == state.lastSeenFrame && current.kind == state.kind
-            ;
-    }
-    return false;
+    const WidgetState* current = m_states.find(state.id);
+    return
+        current && current->root == state.root && current->declarationGeneration == state.declarationGeneration
+        && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind
+    ;
 }
 
 

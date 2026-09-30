@@ -46,6 +46,7 @@ bool Context::beginFrame(const u64 generation){
     m_frameGeneration = generation;
     m_focusLossGeneration = m_input.focusLossGeneration();
     m_failed = false;
+    m_declarationCount = 0u;
     m_targets.clear();
     m_popups.clear();
     m_stateClaims.clear();
@@ -176,13 +177,7 @@ bool Context::finishFrame(){
         fail();
         return false;
     }
-    for(usize index = m_states.entries().size(); index > 0u; --index){
-        const auto& state = m_states.entries()[index - 1u];
-        if(state.lastSeenFrame != m_frameGeneration){
-            m_input.invalidateTarget(state.id);
-            m_states.erase(index - 1u);
-        }
-    }
+    retireUnseenStates();
     m_readyGeneration = m_frameGeneration;
     m_frameGeneration = 0u;
     return true;
@@ -209,6 +204,7 @@ bool Context::commitFrame(const u64 generation){
 
 void Context::abandonFrame(){
     resetInput();
+    retireUnseenStates();
     m_rootActive = false;
     m_scopes.clear();
     m_frameGeneration = 0u;
@@ -247,12 +243,18 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
 }
 
 WidgetState* Context::declareId(const WidgetId id, const WidgetKind::Enum kind){
+    if(m_declarationCount >= s_WidgetMaxStates){
+        fail();
+        return nullptr;
+    }
     const WidgetState* previous = m_states.find(id);
     if(previous && previous->kind != kind)
         m_input.invalidateTarget(id);
     WidgetState* state = m_states.touch(id, m_root, kind, m_frameGeneration);
     if(!state)
         fail();
+    else
+        ++m_declarationCount;
     return state;
 }
 
@@ -264,6 +266,19 @@ bool Context::currentDeclaration(const WidgetState& state)const{
         current && current->root == state.root && current->declarationGeneration == state.declarationGeneration
         && current->lastSeenFrame == state.lastSeenFrame && current->kind == state.kind
     ;
+}
+
+
+void Context::retireUnseenStates(){
+    if(m_frameGeneration == 0u)
+        return;
+    for(usize index = m_states.entries().size(); index > 0u; --index){
+        const auto& state = m_states.entries()[index - 1u];
+        if(state.lastSeenFrame != m_frameGeneration){
+            m_input.invalidateTarget(state.id);
+            m_states.erase(index - 1u);
+        }
+    }
 }
 
 

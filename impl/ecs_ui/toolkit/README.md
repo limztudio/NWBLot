@@ -109,6 +109,12 @@ panels/scopes reject the build. Removed or hidden roots retire their retained id
 Recreating a widget with the same key gets a new declaration lifetime, so old input cannot activate it.
 Checkbox values remain references to host model values; frozen paint contains their resulting appearance.
 
+A context admits at most 4,096 widget declarations per frame. The state store reserves room for both
+the prior frame and the candidate, so replacing IDs at capacity preserves surviving lifetimes and
+keeps declaration pointers stable until frame retirement. Finishing a frame retires omitted declarations.
+Abandoning an unfinished frame also retires declarations it did not reach, while preserving the lifetimes
+it did touch and resetting input publication. This bounds retained state across repeated rejected builds.
+
 Panel and control dimensions are logical units. Container dimensions use fixed, content or weighted
 stretch policies; intrinsic dimensions come from shaped text and skin metadata. Button metrics take
 maximum padding/minimum sizes across normal, hover, pressed and disabled regions to avoid state-dependent

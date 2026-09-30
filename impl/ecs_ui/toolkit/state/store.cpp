@@ -20,8 +20,9 @@ WidgetStateStore::WidgetStateStore(Core::Alloc::GlobalArena& arena)
     : m_entries(arena)
     , m_index(arena)
 {
-    m_entries.reserve(4096u);
-    m_index.reserve(4096u);
+    // Keep both the prior frame and candidate declarations stable until frame retirement.
+    m_entries.reserve(s_RetainedCapacity);
+    m_index.reserve(s_RetainedCapacity);
 }
 
 WidgetState* WidgetStateStore::touch(
@@ -43,7 +44,7 @@ WidgetState* WidgetStateStore::touch(
         entry.lastSeenFrame = frameGeneration;
         return &entry;
     }
-    if(m_entries.size() >= 4096u)
+    if(m_entries.size() >= s_RetainedCapacity)
         return nullptr;
     if(m_nextDeclarationGeneration == Limit<u64>::s_Max)
         TerminateInvariant();

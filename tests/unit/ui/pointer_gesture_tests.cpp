@@ -369,6 +369,32 @@ TEST_F(UiPointerGestureTests, FocusLossCancelsActiveAndCompletedGesturesWithoutR
     EXPECT_GT(afterReset.id.sequence, gesture.id.sequence);
 }
 
+TEST_F(UiPointerGestureTests, EscapeCancelsOnlyTheActiveGestureAndRetainsHeldReleaseOwnership){
+    HitTarget target = GestureTarget();
+    target.focusable = true;
+    target.activatable = true;
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
+    complete({ 40.0f, 40.0f });
+    EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
+    const InputRoutingResult escaped = send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Escape });
+    EXPECT_TRUE(escaped.keyboardConsumed);
+    EXPECT_FALSE(escaped.capture.valid());
+    EXPECT_FALSE(escaped.focus.valid());
+    EXPECT_TRUE(m_router.primaryDown());
+    PointerGesture gesture;
+    ASSERT_TRUE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_EQ(gesture.state, PointerGestureState::Completed);
+    EXPECT_FLOAT_EQ(gesture.position.x, 40.0f);
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 180.0f, 180.0f })).pointerConsumed);
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Escape }).keyboardConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
 TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActionsAndKeyboardOwnership){
     HitTarget target = GestureTarget();
     target.focusable = true;

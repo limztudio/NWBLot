@@ -318,7 +318,7 @@ TEST_F(EditBoxLayoutTests, FontPaintingUsesLogicalCaretGeometryAndCurrentDisplay
     const f32 caretX = m_placement.caret.x;
     UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
     UiSkin::RegionVector regions(m_arena);
-    regions.push_back({ Name("button.normal"), { 0u, 0u, 4u, 4u } });
+    regions.push_back({ Name("button.normal"), { 0u, 0u, 4u, 4u }, {}, {} });
     skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/edit_box/texture"), 4u, 4u, 1.0f, Move(regions));
     PaintBuilder paint(m_arena);
     EditBoxPaintFlags flags;

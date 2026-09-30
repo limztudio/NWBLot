@@ -2,7 +2,6 @@
 """Capture a blank startup frame or a resized UI framebuffer without desktop composition."""
 from pathlib import Path
 import sys
-import time
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -22,19 +21,6 @@ def _resize_request(argv):
     if any(value < 1 or value > 16384 for value in target):
         raise window_capture_smoke.SmokeFailure("resize dimensions must be between 1 and 16384")
     return target, argv[:index] + argv[index + 3:]
-
-
-def _wait_for_resize(backend, handle, process, log_directory, baseline, pattern, target, timeout):
-    marker = f"GraphicsRuntime: Back buffer resized to {target[0]}x{target[1]}"
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        window_capture_smoke.ensure_process_running(process, "while waiting for the framebuffer resize")
-        size_matches = backend.client_size(handle) == target
-        log_text = window_capture_smoke.collect_log_delta(log_directory, baseline, pattern)
-        if size_matches and marker in log_text:
-            return
-        time.sleep(0.05)
-    raise window_capture_smoke.SmokeFailure(f"resize did not produce client extent {target} and marker '{marker}'")
 
 
 def _capture_after_resize(args, target):
@@ -58,8 +44,6 @@ def _capture_after_resize(args, target):
         if backend.client_size(handle) == target:
             raise smoke.SmokeFailure(f"window already has target client extent {target}")
         backend.resize_client(handle, *target)
-        _wait_for_resize(backend, handle, application, log_directory, baseline, pattern,
-            target, min(args.timeout, 30.0))
         smoke.wait_for_application_capture_exit(application, args.output, args.timeout)
         exit_code, tail = smoke.terminate_process(application, "UI resize fixture", handle)
         application = None

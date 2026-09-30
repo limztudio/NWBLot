@@ -63,6 +63,7 @@ bool GpuRasterTask::record(
         return false;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
+    bool heapBound = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
         const f32 minX = Max(0.0f, Floor(draw.clip.x * display.pixelScaleX));
         const f32 minY = Max(0.0f, Floor(draw.clip.y * display.pixelScaleY));
@@ -83,7 +84,10 @@ bool GpuRasterTask::record(
             .setIndexBuffer(Core::IndexBufferBinding().setBuffer(frame->m_indices.get()).setFormat(Core::Format::R32_UINT))
         ;
         commands.setGraphicsState(state);
-        heap.bindGraphics(commands, *frame->m_resources->m_pipeline);
+        if(!heapBound){
+            heap.bindGraphics(commands, *frame->m_resources->m_pipeline);
+            heapBound = true;
+        }
         push.material = static_cast<u32>(draw.material);
         push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
         if(draw.material == PaintMaterial::Skin)

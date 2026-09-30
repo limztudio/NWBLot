@@ -301,10 +301,15 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
     }
     if(m_preparedFrameCount < m_captureFrameCount)
         return true;
+    const Core::TextureDesc& description = frame.backBuffer.texture->getCreationDescription();
+    if(
+        (m_options.requiredWidth != 0u && description.width != m_options.requiredWidth)
+        || (m_options.requiredHeight != 0u && description.height != m_options.requiredHeight)
+    )
+        return true;
     if(m_options.shouldCapture && !m_options.shouldCapture(m_options.predicateContext, graphicsFrame))
         return true;
 
-    const Core::TextureDesc& description = frame.backBuffer.texture->getCreationDescription();
     if(!prepareReadback(description))
         return true;
 

@@ -37,7 +37,12 @@ UiLayerSmokeProject::~UiLayerSmokeProject(){
 bool UiLayerSmokeProject::onStartup(){
     if(!CreateUiLayerSmokeWorld(m_context, m_world))
         return false;
-    if(!ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, m_framebufferCapture))
+    FramebufferCaptureOptions captureOptions;
+    if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_CAPTURE")){
+        captureOptions.requiredWidth = 800u;
+        captureOptions.requiredHeight = 600u;
+    }
+    if(!ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, m_framebufferCapture, captureOptions))
         return false;
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2"));

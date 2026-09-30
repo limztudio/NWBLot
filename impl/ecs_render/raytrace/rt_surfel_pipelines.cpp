@@ -270,6 +270,25 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         m_rayTracingState.m_surfelResourcesNeedClear = true;
     }
 
+    // Four float4 guide lanes per surfel; this live-only buffer is never needed by bounce gathers.
+    if(!m_rayTracingState.m_surfelGuidePoolBuffer){
+        Core::BufferDesc desc;
+        desc
+            .setByteSize(static_cast<u64>(NWB_SURFEL_GUIDE_FLOAT4_STRIDE) * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL * poolCapacity)
+            .setStructStride(NWB_SURFEL_GUIDE_FLOAT4_STRIDE)
+            .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+            .setDebugName(Name("surfel_guide_pool"))
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        m_rayTracingState.m_surfelGuidePoolBuffer = m_graphics.createBuffer(desc);
+        if(!m_rayTracingState.m_surfelGuidePoolBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel guide pool buffer"));
+            return false;
+        }
+        m_rayTracingState.m_surfelResourcesNeedClear = true;
+    }
+
     // Hash heads use 0xFFFFFFFF as the empty sentinel.
     if(!m_rayTracingState.m_surfelCellHeadBuffer){
         Core::BufferDesc desc;
@@ -420,6 +439,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     if(
         !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, m_rayTracingState.m_surfelConstantsHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_surfelPoolHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelGuidePoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_surfelGuidePoolHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_surfelCellHeadHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_surfelCounterHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle)

@@ -144,6 +144,7 @@ RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSur
     return RayTracingSurfelPersistentResourceSnapshot{
         .constantsBuffer = m_rayTracingState.m_surfelConstants,
         .poolBuffer = m_rayTracingState.m_surfelPoolBuffer,
+        .guidePoolBuffer = m_rayTracingState.m_surfelGuidePoolBuffer,
         .cellHeadBuffer = m_rayTracingState.m_surfelCellHeadBuffer,
         .counterBuffer = m_rayTracingState.m_surfelCounterBuffer,
         .traceIndirectArgsBuffer = m_rayTracingState.m_surfelTraceIndirectArgsBuffer,

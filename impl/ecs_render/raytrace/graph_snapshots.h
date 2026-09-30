@@ -122,6 +122,7 @@ struct RayTracingDeferredGraphResourceSnapshot{
 struct RayTracingSurfelPersistentResourceSnapshot{
     Core::BufferHandle constantsBuffer;
     Core::BufferHandle poolBuffer;
+    Core::BufferHandle guidePoolBuffer;
     Core::BufferHandle cellHeadBuffer;
     Core::BufferHandle counterBuffer;
     Core::BufferHandle traceIndirectArgsBuffer;

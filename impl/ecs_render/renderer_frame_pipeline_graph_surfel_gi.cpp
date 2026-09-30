@@ -154,12 +154,12 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
-    constexpr usize s_SurfelResourceUseCapacity = 28u;
-    constexpr usize s_SurfelTraceResourceUseCapacity = 16u;
+    constexpr usize s_SurfelResourceUseCapacity = 29u;
+    constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
     resourceUses.reserve(s_SurfelResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
-    spawnResourceUses.reserve(7u);
+    spawnResourceUses.reserve(8u);
     traceBuildArgsResourceUses.reserve(3u);
     traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     resolveResourceUses.reserve(6u);
@@ -214,6 +214,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId shadowInstances;
     Core::GpuGraphResourceId surfelConstants;
     Core::GpuGraphResourceId surfelPool;
+    Core::GpuGraphResourceId surfelGuidePool;
     Core::GpuGraphResourceId surfelCellHead;
     Core::GpuGraphResourceId surfelCounter;
     Core::GpuGraphResourceId surfelTraceIndirectArgs;
@@ -258,6 +259,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             "Surfel Pool",
             Core::ResourceStates::UnorderedAccess,
             &surfelPool
+        )
+        && appendOptionalWriteBuffer(
+            rayTracingSurfelResources.guidePoolBuffer,
+            Name("render.surfel_gi.guide_pool"),
+            "Surfel Guide Pool",
+            Core::ResourceStates::UnorderedAccess,
+            &surfelGuidePool
         )
         && appendOptionalWriteBuffer(
             rayTracingSurfelResources.cellHeadBuffer,
@@ -351,6 +359,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         && materialContextSlots.valid()
         && surfelConstants.valid()
         && surfelPool.valid()
+        && surfelGuidePool.valid()
         && surfelCellHead.valid()
         && surfelCounter.valid()
         && surfelTraceIndirectArgs.valid()
@@ -384,6 +393,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
+        traceResourceUses.push_back(ReadWriteUse(surfelGuidePool, Core::ResourceStates::UnorderedAccess));
         traceResourceUses.push_back(ReadUse(surfelPoolSnapshot, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelTraceIndirectArgs, Core::ResourceStates::IndirectArgument));
@@ -567,6 +577,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         spawnResourceUses.push_back(ReadUse(normal));
         spawnResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         spawnResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
+        spawnResourceUses.push_back(ReadWriteUse(surfelGuidePool, Core::ResourceStates::UnorderedAccess));
         spawnResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
         spawnResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
         spawnResourceUses.push_back(ReadWriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));

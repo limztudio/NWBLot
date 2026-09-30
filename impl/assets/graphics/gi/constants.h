@@ -18,9 +18,7 @@
 #define NWB_GI_SW_MESH_STACK_SIZE 32
 #define NWB_GI_SW_SCENE_STACK_SIZE 64
 
-// Sampling and trace-distance policy shared by the GI shader paths. Macro-only so SW/HW trace variants and the surfel producer share one sequence and ray span.
-#define NWB_GI_FIBONACCI_GOLDEN_ANGLE 2.39996323f
-#define NWB_GI_FRAME_ROTATION_SEQUENCE_FRACTION 0.61803398875f
+// Hemisphere measure and trace-distance policy shared by the GI shader paths.
 #define NWB_GI_FULL_TURN_RADIANS 6.28318530718f
 #define NWB_GI_TRACE_RAY_MIN_DISTANCE 0.001f
 #define NWB_GI_TRACE_RAY_MAX_DISTANCE 10000.0f

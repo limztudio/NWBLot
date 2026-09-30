@@ -40,6 +40,7 @@ struct NwbSurfelHeapPushConstants{
     uint normalSlot;
     uint outputStorageHeapSlot;
     uint halfIrradianceSlot;
+    uint guidePoolHeapSlot;
 };
 
 [[vk::push_constant]]
@@ -58,6 +59,8 @@ ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapSurfe
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWStructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelWritablePools[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<float4, Std430DataLayout> g_NwbHeapSurfelWritableGuidePools[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelReadOnlyPools[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

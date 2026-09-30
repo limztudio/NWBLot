@@ -9,7 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Single-writer visible-surface surfel with 2-band RGB SH; must match the 96-byte C++ stride.
+// Single-writer visible-surface surfel with 2-band RGB SH. The live and snapshot core pools use a 96-byte stride.
+// Four float4 guide entries live in a separate buffer at surfelIndex * 4 + guideLane.
 struct NwbSurfel{
     float3 position;
     float radius;

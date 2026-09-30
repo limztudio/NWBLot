@@ -287,6 +287,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         || !deferredLightingResources.valid()
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelGuidePoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -311,6 +312,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     SurfelHeapPushConstants surfelPush;
     surfelPush.constantsHeapSlot = m_rayTracingState.m_surfelConstantsHeapHandle.slot();
     surfelPush.poolHeapSlot = m_rayTracingState.m_surfelPoolHeapHandle.slot();
+    surfelPush.guidePoolHeapSlot = m_rayTracingState.m_surfelGuidePoolHeapHandle.slot();
     surfelPush.cellHeadHeapSlot = m_rayTracingState.m_surfelCellHeadHeapHandle.slot();
     surfelPush.counterHeapSlot = m_rayTracingState.m_surfelCounterHeapHandle.slot();
     surfelPush.freeListHeapSlot = m_rayTracingState.m_surfelFreeListHeapHandle.slot();
@@ -322,6 +324,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Order every in-place field update, including prior-frame spawn writes.
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelPoolBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelGuidePoolBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelCellHeadBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelCounterBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelFreeListBuffer.get(), true);
@@ -384,6 +387,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(m_rayTracingState.m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_surfelGuidePoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
         }
         if(!graphOwnsHashBuild)
             commandList.setBufferState(m_rayTracingState.m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -455,6 +459,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         if(!graphEntryStatesOwned){
             commandList.setBufferState(m_rayTracingState.m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(m_rayTracingState.m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_surfelGuidePoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);

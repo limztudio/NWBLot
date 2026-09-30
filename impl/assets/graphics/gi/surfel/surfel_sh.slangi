@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// 2-band SH surfel irradiance; trace weight 2*pi/N, clamped-cosine reconstruct (A_0 = pi, A_1 = 2*pi/3), clamp >= 0.
+// 2-band SH surfel irradiance; trace projects with inverse direction PDF, then clamped-cosine reconstructs.
 // Coefficient-only: works over SRV + UAV pools.
 
 #include "../constants.h"
@@ -32,13 +32,6 @@ half4 nwbSurfelShBasis(const float3 dir){
         half(NWB_SURFEL_SH_Y1_SCALE) * half(dir.z),  // Y_10  = sqrt(3 / (4 pi)) * z
         half(NWB_SURFEL_SH_Y1_SCALE) * half(dir.x)   // Y_11  = sqrt(3 / (4 pi)) * x
     );
-}
-
-// Per-ray projection weight: the upper hemisphere is sampled with pdf 1/(2*pi), so the summed radiance*basis products
-// over N rays are scaled by 2*pi/N to estimate the SH projection integral. N >= 1 keeps this in (0, 2*pi];
-// half math is sufficient here (widened at the float SH-coefficient scale in the trace).
-half nwbSurfelShProjectionScale(const uint rayCount){
-    return half(NWB_GI_FULL_TURN_RADIANS) / half(float(max(rayCount, 1u)));   // 2 * pi / N
 }
 
 // Reconstruct one colour channel's cosine-weighted mean radiance for a query normal from its 4 SH coefficients:

@@ -157,6 +157,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     surfel.lastSeenFrame = frameIndex;
     surfel.alive = 1u;
     surfel.pad0 = 0u;
+    // A recycled slot must forget its old directions. Initialize its guide before publishing the new core slot.
+    [unroll]
+    for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane)
+        g_NwbSurfelGuidePool[slot * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + guideLane] = float4(NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
     g_NwbSurfelPool[slot] = surfel;
     g_NwbSurfelCellHead[bucket] = slot;   // publish the real slot (replaces the PENDING sentinel), linking it into the cell
 }

@@ -51,6 +51,8 @@
 
 // Must match the shader ABI.
 #define NWB_SURFEL_RECORD_SIZE 96u
+#define NWB_SURFEL_GUIDE_FLOAT4_STRIDE 16u
+#define NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL 4u
 
 #define NWB_SURFEL_CELL_INVALID 0xFFFFFFFFu
 
@@ -60,7 +62,7 @@
 // Collision walk safety bound.
 #define NWB_SURFEL_MAX_WALK 16u
 
-#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (the snapshot mirrors it)
+#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * (96B core + four 16B guide entries); only core is snapshotted
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
 #define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing
 #define NWB_SURFEL_DEFAULT_RADIUS 0.9f         // world units -- gather falloff radius (~1.5x cell for neighbour overlap)
@@ -68,10 +70,19 @@
 #define NWB_SURFEL_GATHER_CELL_EXTENT 2
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
 #define NWB_SURFEL_LINEAR_GROUP_SIZE 64u
-#define NWB_SURFEL_RAYS_PER_SURFEL 64u         // 64 threads per surfel.
+#define NWB_SURFEL_RAYS_PER_SURFEL 64u         // 64 threads per surfel and initial trace.
 // Converged surfels reuse history.
 #define NWB_SURFEL_CONVERGED_SAMPLE_COUNT 8u
-#define NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL 32u
+#define NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL 12u
+#define NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL 4u
+#define NWB_SURFEL_GUIDE_AZIMUTH_BINS 4u
+#define NWB_SURFEL_GUIDE_HEIGHT_BINS 4u
+#define NWB_SURFEL_GUIDE_BIN_COUNT (NWB_SURFEL_GUIDE_AZIMUTH_BINS * NWB_SURFEL_GUIDE_HEIGHT_BINS)
+#define NWB_SURFEL_GUIDE_INITIAL_WEIGHT 0.1f
+#define NWB_SURFEL_GUIDE_OBSERVED_BLEND 0.35f
+#define NWB_SURFEL_GUIDE_UNOBSERVED_DECAY 0.125f
+#define NWB_SURFEL_GUIDE_LUMINANCE_CLAMP 64.0f
+#define NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL 4u // Retrain each mature guide once per four surfel visits.
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth per frame
 // Bounded running mean.
 #define NWB_SURFEL_MAX_ACCUM 64u

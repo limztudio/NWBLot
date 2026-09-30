@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include <namespace.h>
+
 #include <core/global.h>
 
 

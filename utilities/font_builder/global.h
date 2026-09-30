@@ -5,8 +5,11 @@
 #pragma once
 
 
+#include <namespace.h>
+
 #include <core/alloc/module.h>
 #include <core/assets/module.h>
+
 #include <global/algorithm.h>
 #include <global/filesystem.h>
 #include <global/text_utils.h>

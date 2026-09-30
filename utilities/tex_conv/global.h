@@ -5,14 +5,16 @@
 #pragma once
 
 
+#include <namespace.h>
+
+#include <core/alloc/module.h>
+
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/limit.h>
 #include <global/text_utils.h>
 #include <global/type.h>
-
-#include <core/alloc/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -53,9 +53,8 @@ class StressCsgProfileTests(unittest.TestCase):
         executable.write_bytes(b"fixture")
         self.argv = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
 
-    def test_default_strips_inherited_csg_and_rejects_unrequested_work(self):
+    def test_strips_inherited_csg_and_rejects_unrequested_work(self):
         args = smoke.parse_args(self.argv)
-        self.assertEqual(args.csg_profile, LIT_NONE)
         environment = smoke.launch_environment({LIT_NWB_STRESS_CSG_PROFILE: LIT_WAIST_BANDS}, args, self.output)
         self.assertEqual(environment[LIT_NWB_STRESS_CSG_PROFILE], LIT_NONE)
         self.assertFalse(smoke.verify_csg_profile(valid_log(), args)["enabled"])

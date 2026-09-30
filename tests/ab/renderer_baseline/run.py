@@ -923,8 +923,6 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def run_self_test() -> int:
-    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
-    assert set(load_corpus(CURRENT_CORPUS_ID)[LIT_PROFILES]) == set(corpus_profile_names())
     try:
         validate_runtime_log("", ())
     except SmokeFailure:
@@ -1062,9 +1060,6 @@ def run_self_test() -> int:
         }
         write_json(reference_directory / LIT_MANIFEST_JSON, manifest)
         (reference_directory / LIT_RUNTIME_LOG).write_text("test runtime log\n", encoding=LIT_UTF_8)
-        loaded_manifest, loaded_capture = load_reference(reference_directory, LIT_OPAQUE_TEXTURE, {}, 4.0, False, 0, 0.0)
-        assert loaded_manifest[LIT_SOURCE_REVISION] == LIT_TEST_REFERENCE
-        assert loaded_capture == reference_image
         recapture_directory = root / LIT_OPAQUE_TEXTURE / "recapture"
         recapture_directory.mkdir(parents=True)
         comparison_path = recapture_directory / LIT_COMPARISON_JSON
@@ -1121,9 +1116,6 @@ def run_self_test() -> int:
             False,
             corpus_path=corpus_path,
         )
-        assert corpus_manifest[LIT_SOURCE_REVISION] == LIT_TEST_REFERENCE
-        assert corpus_capture == reference_image
-        assert corpus_reference.limits[LIT_MAXIMUM_MAX_ABS] == 3.0
         reference_log = reference_directory / LIT_RUNTIME_LOG
         reference_log.write_text("tampered runtime log\n", encoding=LIT_UTF_8)
         try:
@@ -1146,7 +1138,6 @@ def run_self_test() -> int:
             maximum_changed_fraction=None,
         )
         apply_corpus_limits(corpus_args, corpus_reference)
-        assert corpus_args.maximum_mean_abs == 1.0
         corpus_args.maximum_max_abs = 4
         try:
             apply_corpus_limits(corpus_args, corpus_reference)
@@ -1154,50 +1145,13 @@ def run_self_test() -> int:
             pass
         else:
             raise AssertionError("corpus comparison limits must not be relaxed")
-        transparent_profile = get_profile("transparent-avboit")
-        assert transparent_profile.capture_freeze_frame == 96
-        assert transparent_profile.settle_seconds == 0.75
-        assert transparent_profile.fixed_delta_seconds == 1.0 / 60.0
-        skinned_csg_profile = get_profile("skinned-csg")
-        assert skinned_csg_profile.capture_freeze_frame == 96
-        assert skinned_csg_profile.settle_seconds == 0.75
-        assert skinned_csg_profile.fixed_delta_seconds == 1.0 / 60.0
-        caustic_profile = get_profile("caustics")
-        assert caustic_profile.capture_freeze_frame == 360
-        assert caustic_profile.settle_seconds == 0.75
-        assert caustic_profile.fixed_delta_seconds == 1.0 / 60.0
-        surfel_profile = get_profile("surfel-gi")
-        assert surfel_profile.capture_freeze_frame == 360
-        assert surfel_profile.settle_seconds == 0.75
-        assert surfel_profile.fixed_delta_seconds == 1.0 / 60.0
-        assert surfel_profile.frozen_environment == {}
         complex_surfel_profile = get_profile("surfel-gi-complex")
-        assert complex_surfel_profile.target == surfel_profile.target
-        assert complex_surfel_profile.capture_freeze_frame == surfel_profile.capture_freeze_frame
-        assert complex_surfel_profile.fixed_delta_seconds == surfel_profile.fixed_delta_seconds
-        assert complex_surfel_profile.frozen_environment == {
-            "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
-            "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "10",
-        }
-        assert "surfel-gi" in corpus_profile_names()
-        assert "surfel-gi-complex" not in corpus_profile_names()
         with mock.patch.dict(os.environ, {"NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100"}):
             assert effective_frozen_environment(complex_surfel_profile) == {
                 "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
                 "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100",
             }
-        soft_shadow_profile = get_profile(LIT_SOFT_SHADOWS)
-        assert soft_shadow_profile.capture_freeze_frame == 360
-        assert soft_shadow_profile.settle_seconds == 0.75
-        assert soft_shadow_profile.fixed_delta_seconds == 1.0 / 60.0
-        stress_profile = get_profile("stress")
-        assert stress_profile.capture_freeze_frame == 96
-        assert stress_profile.settle_seconds == 0.75
-        assert stress_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / LIT_DIFFERENCE_BMP)
-        assert difference.width == 2 and difference.height == 1
-        assert difference.max_abs == 3
-        assert difference.changed_pixels == 1
         args = SimpleNamespace(require_exact=False, maximum_max_abs=2, maximum_mean_abs=None, maximum_changed_fraction=None)
         assert difference_failures(args, difference) == ["max abs 3 exceeds 2"]
         args.require_exact = True

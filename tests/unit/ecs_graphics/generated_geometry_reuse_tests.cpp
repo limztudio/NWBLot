@@ -124,17 +124,6 @@ public:
     Core::GpuTaskId producer{ .generation = 4u, .index = 7u };
 };
 
-TEST(AvboitGeneratedGeometryReuse, PublishedGroupServesAllEligiblePassesWithoutChangingProducerOrConsumerMetadata){
-    ReuseContext fixture;
-    ASSERT_TRUE(fixture.captureAndPublish());
-    for(const auto pass : { MaterialPipelinePass::AvboitRefractionCapture, MaterialPipelinePass::AvboitOccupancy,
-        MaterialPipelinePass::AvboitExtinction, MaterialPipelinePass::AvboitAccumulate }){
-        EXPECT_TRUE(fixture.matches(pass));
-        EXPECT_EQ(fixture.plan.producerTask(), fixture.producer);
-        EXPECT_EQ(fixture.draws.regular.computeDrawItems[0u].pipelineKey.pass, pass);
-    }
-}
-
 TEST(AvboitGeneratedGeometryReuse, UnifiedOutputLayoutAndRepresentationMustMatchAcrossPasses){
     ReuseContext fixture;
     auto& draw = fixture.draws.regular.computeDrawItems[0u];

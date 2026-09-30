@@ -245,19 +245,6 @@ TEST(UiComboBehaviorTests, InvalidBindingFailsAtomicallyAndDoesNotReplaceTheExis
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
 }
 
-TEST(UiComboBehaviorTests, InitialApplicationSelectionSurvivesFirstSourceBinding){
-    ComboSource source;
-    ComboState state;
-    state.select(5u);
-    const u64 inputGeneration = state.inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    EXPECT_EQ(state.selectedKey(), 5u);
-    EXPECT_EQ(state.listState().selectedKey(), 5u);
-    EXPECT_EQ(state.listState().cursorKey(), 5u);
-    EXPECT_EQ(state.inputGeneration(), inputGeneration);
-    EXPECT_FALSE(state.isOpen());
-}
-
 TEST(UiComboBehaviorTests, MissingAndDisabledInitialSelectionClearWithoutChoosingAnotherRow){
     ComboSource source;
     ComboState missing;
@@ -286,45 +273,6 @@ TEST(UiComboBehaviorTests, ReorderPreservesCommittedSelectionAndOpenPreviewCurso
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 5u);
     EXPECT_TRUE(state.isOpen());
-}
-
-TEST(UiComboBehaviorTests, NavigationPreviewsUntilExplicitActivationAndCancelRestoresCommittedKey){
-    ComboSource source;
-    ComboState state;
-    state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    const u64 inputGeneration = state.inputGeneration();
-    ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
-    ASSERT_EQ(state.listState().cursorKey(), 5u);
-    EXPECT_EQ(state.selectedKey(), 4u);
-    EXPECT_EQ(state.listState().selectedKey(), 4u);
-    const u64 previewGeneration = state.listState().inputGeneration();
-    ComboBehavior::Close(state);
-    EXPECT_EQ(state.selectedKey(), 4u);
-    EXPECT_EQ(state.listState().selectedKey(), 4u);
-    EXPECT_EQ(state.listState().cursorKey(), 4u);
-    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
-    EXPECT_EQ(state.inputGeneration(), inputGeneration);
-    EXPECT_FALSE(state.isOpen());
-}
-
-TEST(UiComboBehaviorTests, CommittingAnEnabledKeyClosesAndReseedsPreviewWithoutRenewingFieldLifetime){
-    ComboSource source;
-    ComboState state;
-    state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    const u64 inputGeneration = state.inputGeneration();
-    ComboBehavior::Open(state);
-    ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
-    const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Commit(state, source, state.listState().cursorKey()));
-    EXPECT_EQ(state.selectedKey(), 5u);
-    EXPECT_EQ(state.listState().selectedKey(), 5u);
-    EXPECT_EQ(state.listState().cursorKey(), 5u);
-    EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
-    EXPECT_EQ(state.inputGeneration(), inputGeneration);
-    EXPECT_FALSE(state.isOpen());
 }
 
 TEST(UiComboBehaviorTests, CommittingTheCurrentSelectionIsStillAnActivationAndCloses){

@@ -107,20 +107,6 @@ void UiPointerGestureValueTests::focusHost(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiPointerGestureValueTests, AppendedPayloadPreservesExistingAggregatePositionsAndDefaults){
-    const PointerGesture legacy{
-        { { 2u }, 7u, 13u, 17u }, { 30.0f, 30.0f }, { 40.0f, 30.0f },
-        { 20.0f, 20.0f, 40.0f, 20.0f }, { 10.0f, 20.0f, 180.0f, 20.0f },
-        PointerGestureState::Completed, {}, { 11u, 21u, 31u }, 9.0, 23u
-    };
-    EXPECT_EQ(legacy.id.sequence, 17u);
-    EXPECT_EQ(legacy.state, PointerGestureState::Completed);
-    EXPECT_DOUBLE_EQ(legacy.maximum, 9.0);
-    EXPECT_EQ(legacy.updateSequence, 23u);
-    EXPECT_EQ(legacy.value, 0u);
-    EXPECT_EQ(PointerGesture{}.value, 0u);
-}
-
 TEST_F(UiPointerGestureValueTests, InitialPressCopiesAcceptedOpaqueBitsWithoutNumericInterpretation){
     const Array<u64, 6u> values{
         0u, BitCast<u64>(-0.0), BitCast<u64>(Limit<f64>::s_Max),

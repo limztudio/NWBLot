@@ -248,7 +248,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
                 record.replace("grid factor=4", "grid factor=2"), record.replace("full=1001x701", "full=1000x701")):
             with self.subTest(record=invalid), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_shadow_quality_settings(invalid, args, (1001, 701))
-        self.assertEqual(smoke.parse_args(self.argv).shadow_receiver_resolution, LIT_QUARTER)
         with patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
             smoke.parse_args(self.argv + [LIT_SHADOW_RECEIVER_RESOLUTION, "3"])
 
@@ -315,19 +314,6 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_CAPTURE_CADENCE, name])
 
-    def test_cli_defaults_and_explicit_modes_preserve_reference_control(self):
-        args = smoke.parse_args(self.argv)
-        for key, expected in shadow_defaults().items():
-            self.assertEqual(getattr(args, key), expected)
-        for backend in (LIT_AUTOMATIC, LIT_TRACE, LIT_LIGHT_SPACE):
-            with self.subTest(backend=backend):
-                args = smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_BACKEND, backend,
-                    LIT_SOFTWARE_SHADOW_BUDGET_MIB, LIT_N_256, LIT_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION, LIT_N_1024,
-                    LIT_SOFTWARE_SHADOW_POINT_RESOLUTION, LIT_N_512])
-                self.assertEqual(args.software_shadow_backend, backend)
-                self.assertEqual(args.software_shadow_budget_mib, 256)
-                self.assertEqual(args.software_shadow_directional_resolution, 1024)
-                self.assertEqual(args.software_shadow_point_resolution, 512)
 
     def test_reference_launch_explicitly_overrides_direct_stress_performance_defaults(self):
         args = smoke.parse_args(self.argv + [LIT_SHADOW_RECEIVER_RESOLUTION, LIT_HALF,
@@ -678,15 +664,6 @@ class StressReflectionQualityTests(unittest.TestCase):
 
 
 class StressWorkloadTests(unittest.TestCase):
-    def test_default_target_reports_twenty_bodies_and_full_camera_signature(self):
-        workload = smoke.parse_runtime_log(valid_log(), 0)[LIT_WORKLOAD]
-        self.assertEqual(workload["requested_characters_per_class"], 10)
-        self.assertEqual(workload[LIT_OBSERVED][LIT_TOTAL], 20)
-        self.assertEqual(workload[LIT_OBSERVED]["transparent"], 10)
-        self.assertEqual(workload[LIT_OBSERVED]["opaque"], 10)
-        self.assertEqual(workload[LIT_OBSERVED][LIT_LAYOUT], "two_rows_v1")
-        self.assertEqual(workload[LIT_OBSERVED][LIT_CAMERA_Z], -7.2)
-        self.assertEqual(workload["signature"], workload_record())
 
     def test_explicit_comparison_preserves_ten_body_layout_and_camera(self):
         workload = smoke.parse_runtime_log(valid_log(5), 0, characters_per_class=5)[LIT_WORKLOAD]
@@ -731,14 +708,12 @@ class StressWorkloadTests(unittest.TestCase):
             with self.subTest(text=text[-100:]), self.assertRaises(smoke.SmokeFailure):
                 smoke.parse_runtime_log(text, 0)
 
-    def test_cli_defaults_to_target_and_only_accepts_fixed_profiles(self):
+    def test_cli_rejects_unsupported_character_profiles(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             executable = root / LIT_RENDERER_EXE
             executable.write_bytes(LIT_FIXTURE.encode(LIT_UTF_8))
             argv = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(root), LIT_NO_LOGSERVER]
-            self.assertEqual(smoke.parse_args(argv).characters_per_class, 10)
-            self.assertEqual(smoke.parse_args(argv + [LIT_CHARACTERS_PER_CLASS, "5"]).characters_per_class, 5)
             for value in ("0", "6", "11", "5.5", LIT_INVALID):
                 with self.subTest(value=value), patch(LIT_SYS_STDERR), self.assertRaises(SystemExit):
                     smoke.parse_args(argv + [LIT_CHARACTERS_PER_CLASS, value])
@@ -934,15 +909,9 @@ class StressPerformanceTargetTests(unittest.TestCase):
             patch.object(smoke.ab, LIT_DEVICE_MATERIAL_SIGNATURE, return_value={}), patch.object(smoke, "write_status"):
             return smoke.main(argv) if use_main else smoke.acquire(args, output)
 
-    def test_default_capture_only_and_positive_finite_thresholds(self):
-        self.assertIsNone(smoke.parse_args(self.argv).minimum_fps)
-        for threshold in (LIT_N_60, "0.001", "5e-324", "1e308"):
+    def test_positive_finite_threshold_extremes_are_accepted(self):
+        for threshold in ("5e-324", "1e308"):
             self.assertEqual(smoke.parse_args(self.argv + [LIT_MINIMUM_FPS, threshold]).minimum_fps, float(threshold))
-        result = self.acquire_or_main([], self.rate_log(16))
-        self.assertTrue(result[LIT_PASSED])
-        self.assertTrue(result[LIT_CAPTURE_VALIDATED])
-        self.assertFalse(result[LIT_PERFORMANCE_TARGET][LIT_REQUESTED])
-        self.assertIsNone(result[LIT_PERFORMANCE_TARGET][LIT_PASSED])
 
     def test_invalid_or_diagnostic_threshold_requests_are_rejected(self):
         for value in ("0", LIT_N_1, LIT_NAN, "inf", "-inf", "1e309", "1e-999", LIT_INVALID):

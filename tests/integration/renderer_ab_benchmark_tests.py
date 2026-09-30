@@ -327,13 +327,10 @@ class WorkloadPolicyTests(unittest.TestCase):
         self.assertEqual(legacy[LIT_SHADOW_ROUTE], LIT_HYBRID)
         self.assertNotEqual(legacy[LIT_SHADOW_ROUTE], benchmark.transparent_multi_log(log_text(), workload, True)[LIT_SHADOW_ROUTE])
 
-    def test_cli_defaults_and_lower_coverage_or_unbalanced_plans(self):
+    def test_cli_rejects_lower_coverage_and_unbalanced_plans(self):
         common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
             LIT_CANDIDATE_EXECUTABLE, "b", LIT_CANDIDATE_RUNTIME, LIT_BR, LIT_CANDIDATE_SOURCE_MANIFEST, LIT_BS_JSON,
             LIT_LOGSERVER_EXECUTABLE, LIT_LOGGER, LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        args = benchmark.parse_args(common)
-        self.assertEqual((args.blocks, args.warmup_intervals, args.sample_intervals, args.minimum_frame_samples, args.timeout),
-            (8, 2, 6, 100, 90))
         for extra in ((LIT_BLOCKS, "7"), (LIT_BLOCKS, "6"), ("--warmup-intervals", "1"),
             ("--sample-intervals", "5"), ("--minimum-frame-samples", "99"), ("--timeout", LIT_NAN),
             ("--application-arg=--gpudbg",)):

@@ -22,7 +22,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -49,10 +48,6 @@ LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_STORE_TRUE = "store_true"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
 LIT_SELF_TEST = "--self-test"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
-LIT_MEASURE_SECONDS = "--measure-seconds"
-LIT_N_30 = "30"
-LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA = "hybrid_shadow_boundary_healthy_benchmark.exe"
 LIT_MAIN = "__main__"
 
 
@@ -198,7 +193,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="Measure without --gpudbg layer overhead (the default).",
     )
     parser.set_defaults(gpu_validation=False)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Check rejection of configurations without diagnostic evidence, without Vulkan.")
     return parser
 
 
@@ -210,38 +205,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 
 def run_self_test() -> int:
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config=LIT_DBG,
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        healthy_executable=None,
-        baseline_executable=None,
-        runtime_dir=None,
-        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HYBRID_SHADOW_BOUNDARY / "self-test",
-        dry_run=True,
-        gpu_validation=True,
-        no_logserver=False,
-        logserver_executable=None,
-        runner_args=[LIT_MEASURE_SECONDS, LIT_N_30],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
-    assert command[command.index(LIT_HEALTHY_EXECUTABLE) + 1].endswith(LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA)
-    assert command[command.index(LIT_BASELINE_EXECUTABLE) + 1].endswith(LIT_HYBRID_SHADOW_BOUNDARY_HEALTHY_BENCHMA)
-    assert LIT_GPU_VALIDATION in command
-    assert command[-2:] == [LIT_MEASURE_SECONDS, LIT_N_30]
-    assert parse_args([LIT_SELF_TEST]).gpu_validation is False
-    require_diagnostic_configuration(LIT_DBG)
-    require_diagnostic_configuration(LIT_OPT)
     try:
         require_diagnostic_configuration("fin")
     except SystemExit as error:

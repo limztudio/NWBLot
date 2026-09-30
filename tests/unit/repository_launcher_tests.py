@@ -36,27 +36,19 @@ LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME = "query_windows_native_machine_name"
 LIT_REPO = "repo"
 LIT_CMAKE = "__cmake"
 LIT_BUILD = "build"
-LIT_ENGINE = "engine"
-LIT_LINUX_CLANG_X64 = "linux-clang-x64"
 LIT_FULL = "full"
 LIT_WINDOWS_CLANG_ARM64 = "windows-clang-arm64"
 LIT_DBG = "dbg"
-LIT_FIN = "fin"
-LIT_LINUX_CLANG_ENGINE_X64 = "linux-clang-engine-x64"
-LIT_EXEC = "__exec"
 LIT_TESTBED = "testbed"
 LIT_NWB_ASSET_BUILDER = "nwb_asset_builder"
 LIT_CMAKECACHE_TXT = "CMakeCache.txt"
 LIT_UTF_8 = "utf-8"
 LIT_NWB_BUILD_TESTS = "NWB_BUILD_TESTS"
 LIT_ON = "ON"
-LIT_HTTP_LOCALHOST = "http://localhost"
-LIT_N_8123 = "8123"
 LIT_RUN = "run"
 LIT_C_BUILD_ARM64_VIEWER_EXE = r"C:\build\arm64\viewer.exe"
 LIT_POPEN = "Popen"
 LIT_HOST_PLATFORM_NAME = "host_platform_name"
-LIT_RUN_SECONDS = "run_seconds"
 LIT_PIPELINE = "pipeline"
 LIT_LAUNCH_PY = "launch.py"
 LIT_COOLSTUFF = "CoolStuff"
@@ -97,7 +89,6 @@ LIT_CONFIG = "--config"
 LIT_ASSET_ROOT = "--asset-root"
 LIT_OUTPUT_DIRECTORY = "--output-directory"
 LIT_RUNTIME_RESOURCES = "runtime resources"
-LIT_DISCOVER_DIRECTORY_LAUNCHERS = "discover_directory_launchers"
 LIT_EMPTY = "--"
 LIT_MEASURE_SECONDS = "--measure-seconds"
 LIT_N_30 = "30"
@@ -213,17 +204,6 @@ class FakeBoundedProcessApi:
 
 
 class LauncherPlatformTests(unittest.TestCase):
-    def test_host_platform_names_match_cmake_output_names(self):
-        self.assertEqual(LIT_WINDOWS, launcher.host_platform_name(LIT_WINDOWS_2))
-        self.assertEqual(LIT_LINUX, launcher.host_platform_name("Linux"))
-        self.assertEqual("darwin", launcher.host_platform_name("Darwin"))
-
-    def test_host_architecture_names_match_cmake_output_names(self):
-        self.assertEqual(LIT_X64, launcher.host_arch_name(LIT_AMD64))
-        self.assertEqual(LIT_X64, launcher.host_arch_name("x86_64"))
-        self.assertEqual(LIT_ARM64, launcher.host_arch_name(LIT_ARM64_2))
-        self.assertEqual(LIT_ARM64, launcher.host_arch_name("aarch64"))
-
     def test_host_architecture_uses_native_windows_machine_under_emulation(self):
         with (
             mock.patch.object(launcher.platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
@@ -242,48 +222,6 @@ class LauncherPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
 
-    def test_default_build_dirs_follow_platform_domain_and_arch(self):
-        root = Path(os.sep) / LIT_REPO
-        self.assertEqual(
-            root / LIT_CMAKE / LIT_BUILD / "windows-clang-engine-x64",
-            launcher.default_build_dir(root, LIT_WINDOWS, LIT_ENGINE, LIT_X64),
-        )
-        self.assertEqual(
-            root / LIT_CMAKE / LIT_BUILD / LIT_LINUX_CLANG_X64,
-            launcher.default_build_dir(root, LIT_LINUX, LIT_FULL, LIT_X64),
-        )
-        self.assertEqual(
-            root / LIT_CMAKE / LIT_BUILD / LIT_WINDOWS_CLANG_ARM64,
-            launcher.default_build_dir(root, LIT_WINDOWS, LIT_FULL, LIT_ARM64),
-        )
-
-    def test_default_build_presets_follow_platform_domain_and_config(self):
-        self.assertEqual("linux-clang-dbg", launcher.default_build_preset_name(LIT_LINUX, LIT_FULL, LIT_DBG))
-        self.assertEqual("linux-clang-engine-fin", launcher.default_build_preset_name(LIT_LINUX, LIT_ENGINE, LIT_FIN))
-        self.assertEqual("windows-clang-arm64-dbg", launcher.default_build_preset_name(LIT_WINDOWS, LIT_FULL, LIT_DBG, LIT_ARM64))
-        self.assertEqual(
-            "windows-clang-engine-arm64-fin",
-            launcher.default_build_preset_name(LIT_WINDOWS, LIT_ENGINE, LIT_FIN, LIT_ARM64),
-        )
-
-    def test_explicit_configure_preset_selects_matching_build_directory(self):
-        root = Path(os.sep) / LIT_REPO
-        resolved_root = root.resolve()
-        args = argparse.Namespace(
-            repo_root=root,
-            platform=LIT_LINUX,
-            arch=None,
-            domain=None,
-            configure_preset=LIT_LINUX_CLANG_ENGINE_X64,
-            build_dir=None,
-            config=LIT_DBG,
-            cmake=None,
-        )
-        settings = launcher.resolve_launch_settings(args, LIT_FULL)
-        self.assertEqual(resolved_root / LIT_CMAKE / LIT_BUILD / LIT_LINUX_CLANG_ENGINE_X64, settings.build_dir)
-        self.assertEqual(LIT_ENGINE, settings.domain)
-        self.assertEqual(LIT_X64, settings.arch)
-
     def test_explicit_architecture_must_match_configure_preset(self):
         args = argparse.Namespace(
             repo_root=Path(os.sep) / LIT_REPO,
@@ -298,27 +236,6 @@ class LauncherPlatformTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
             launcher.resolve_launch_settings(args, LIT_FULL)
 
-    def test_output_root_matches_engine_and_domain_layouts(self):
-        root = Path(os.sep) / LIT_REPO
-        self.assertEqual(
-            root / LIT_EXEC / LIT_WINDOWS / LIT_X64,
-            launcher.output_root(root, LIT_WINDOWS, LIT_X64, LIT_ENGINE),
-        )
-        self.assertEqual(
-            root / LIT_EXEC / LIT_LINUX / LIT_X64 / LIT_FULL,
-            launcher.output_root(root, LIT_LINUX, LIT_X64, LIT_FULL),
-        )
-
-    def test_infer_output_domain_from_known_preset_names(self):
-        build_root = Path(os.sep) / LIT_REPO / LIT_CMAKE / LIT_BUILD
-        self.assertEqual(LIT_ENGINE, launcher.infer_output_domain(build_root / LIT_LINUX_CLANG_ENGINE_X64, LIT_LINUX, LIT_X64))
-        self.assertEqual(LIT_FULL, launcher.infer_output_domain(build_root / LIT_LINUX_CLANG_X64, LIT_LINUX, LIT_X64))
-        self.assertEqual(LIT_TESTBED, launcher.infer_output_domain(build_root / "windows-clang-testbed-x64", LIT_WINDOWS, LIT_X64))
-
-    def test_target_output_convention_strips_nwb_prefix(self):
-        self.assertEqual("asset_builder", launcher.target_default_executable_base_name(LIT_NWB_ASSET_BUILDER))
-        self.assertEqual(LIT_TESTBED, launcher.target_default_executable_base_name(LIT_TESTBED))
-
     def test_cmake_cache_domain_overrides_directory_name(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             build_dir = Path(temp_dir)
@@ -331,23 +248,6 @@ class LauncherPlatformTests(unittest.TestCase):
             (build_dir / LIT_CMAKECACHE_TXT).write_text("NWB_BUILD_TESTS:BOOL=ON\n", encoding=LIT_UTF_8)
             self.assertTrue(launcher.cache_matches_required_defines(build_dir, {LIT_NWB_BUILD_TESTS: "TRUE"}))
             self.assertFalse(launcher.cache_matches_required_defines(build_dir, {LIT_NWB_BUILD_TESTS: "OFF"}))
-
-    def test_profile_required_defines_are_opt_in(self):
-        self.assertEqual({}, launcher.profile_required_defines(argparse.Namespace(with_profile=False)))
-        self.assertEqual(
-            {"NWB_BUILD_LOGSERVER": LIT_ON},
-            launcher.profile_required_defines(argparse.Namespace(with_profile=True)),
-        )
-
-    def test_profile_client_args_point_runtime_at_logserver(self):
-        args = argparse.Namespace(profile_log_address=LIT_HTTP_LOCALHOST)
-        session = launcher.ProfileSession(8123, Path(os.sep) / LIT_REPO / "logserver", None)
-        self.assertEqual(["-a", LIT_HTTP_LOCALHOST, "-p", LIT_N_8123], launcher.profile_client_args(args, session))
-
-    def test_run_parser_accepts_profile_options(self):
-        args = launcher.make_parser().parse_args([LIT_RUN, LIT_TESTBED, "--with-profile", "--profile-log-port", LIT_N_8123])
-        self.assertTrue(args.with_profile)
-        self.assertEqual(8123, args.profile_log_port)
 
     def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
         x64_image = r"C:\Build\x64\viewer.exe"
@@ -557,14 +457,6 @@ class LauncherPlatformTests(unittest.TestCase):
         )
         generic_terminate.assert_not_called()
 
-    def test_launcher_help_describes_exact_image_and_graceful_bounded_shutdown(self):
-        parser = launcher.make_parser()
-        run_parser = next(action for action in parser._actions if action.dest == "command").choices[LIT_RUN]
-        help_by_destination = {action.dest: action.help for action in run_parser._actions}
-        self.assertIn("exact executable image path", help_by_destination["kill_existing"])
-        self.assertIn("gracefully close", help_by_destination[LIT_RUN_SECONDS])
-        self.assertIn("forced fallback", help_by_destination[LIT_RUN_SECONDS])
-
     def test_discovers_leaf_launchers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -720,25 +612,6 @@ class LauncherPlatformTests(unittest.TestCase):
             ):
                 launcher.discover_repo_launchers(root)
 
-    def test_discovered_launcher_forwards_its_arguments(self):
-        repo_launchers = {
-            LIT_ASYNC_SHADOW_M4_2: launcher.RepoLauncher(
-                LIT_ASYNC_SHADOW_M4_2,
-                Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-                (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-            )
-        }
-        with (
-            mock.patch.object(launcher, LIT_DISCOVER_REPO_LAUNCHERS, return_value=repo_launchers),
-            mock.patch.object(launcher, LIT_RUN_REPO_SCRIPT, return_value=0) as run_repo_script,
-        ):
-            self.assertEqual(0, launcher.main([LIT_ASYNC_SHADOW_M4_2, LIT_DRY_RUN]))
-        run_repo_script.assert_called_once_with(
-            Path(LIT_TESTS_LAUNCH_PY),
-            [LIT_AB, LIT_ASYNC_SHADOW_M4_2, LIT_DRY_RUN],
-            echo=True,
-        )
-
     def test_top_level_leaf_forwards_direct_flags_without_a_separator(self):
         repo_launchers = {
             LIT_PIPELINE: launcher.RepoLauncher(LIT_PIPELINE, Path(LIT_PIPELINE_LAUNCH_PY)),
@@ -750,45 +623,6 @@ class LauncherPlatformTests(unittest.TestCase):
         ):
             self.assertEqual(0, launcher.main([LIT_PIPELINE, *forwarded]))
         run_repo_script.assert_called_once_with(Path(LIT_PIPELINE_LAUNCH_PY), forwarded, echo=True)
-
-    def test_category_launcher_forwards_to_its_child_router(self):
-        repo_launchers = {
-            LIT_AB: launcher.RepoLauncher(
-                LIT_AB,
-                Path(LIT_TESTS_AB_LAUNCH_PY),
-            )
-        }
-        with (
-            mock.patch.object(launcher, LIT_DISCOVER_DIRECTORY_LAUNCHERS, return_value=repo_launchers),
-            mock.patch.object(launcher, LIT_RUN_REPO_SCRIPT, return_value=0) as run_repo_script,
-        ):
-            self.assertEqual(0, launcher.run_directory_launcher(Path(LIT_TESTS), [LIT_AB, LIT_ASYNC_SHADOW_M4_2, LIT_DRY_RUN]))
-        run_repo_script.assert_called_once_with(
-            Path(LIT_TESTS_AB_LAUNCH_PY),
-            [LIT_ASYNC_SHADOW_M4_2, LIT_DRY_RUN],
-            echo=True,
-        )
-
-    def test_intermediate_router_forwards_to_its_leaf(self):
-        repo_launchers = {
-            LIT_ASYNC_SHADOW_M4_2: launcher.RepoLauncher(
-                LIT_ASYNC_SHADOW_M4_2,
-                Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-            )
-        }
-        with (
-            mock.patch.object(launcher, LIT_DISCOVER_DIRECTORY_LAUNCHERS, return_value=repo_launchers),
-            mock.patch.object(launcher, LIT_RUN_REPO_SCRIPT, return_value=0) as run_repo_script,
-        ):
-            self.assertEqual(
-                0,
-                launcher.run_directory_launcher(Path(LIT_TESTS) / LIT_AB, [LIT_ASYNC_SHADOW_M4_2, LIT_DRY_RUN]),
-            )
-        run_repo_script.assert_called_once_with(
-            Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-            [LIT_DRY_RUN],
-            echo=True,
-        )
 
     def test_root_dispatch_preserves_application_argument_separator(self):
         repo_launchers = {

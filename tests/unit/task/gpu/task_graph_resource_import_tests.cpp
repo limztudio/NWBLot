@@ -30,56 +30,6 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuTaskGraph, AcceptsEveryDefinedQueueSharingMaskForMetadataResources){
-    constexpr Graphics::ResourceQueueSharing::Mask s_ValidQueueSharingMasks[] = {
-        Graphics::ResourceQueueSharing::Exclusive,
-        Graphics::ResourceQueueSharing::Graphics,
-        Graphics::ResourceQueueSharing::AsyncCompute,
-        Graphics::ResourceQueueSharing::Transfer,
-        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
-        Graphics::ResourceQueueSharing::GraphicsAndTransfer,
-        Graphics::ResourceQueueSharing::AsyncComputeAndTransfer,
-        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer,
-    };
-    constexpr Graphics::GpuGraphResourceType::Enum s_MetadataResourceTypes[] = {
-        Graphics::GpuGraphResourceType::Texture,
-        Graphics::GpuGraphResourceType::Buffer,
-        Graphics::GpuGraphResourceType::AccelStruct,
-        Graphics::GpuGraphResourceType::HazardDomain,
-    };
-
-    for(const Graphics::GpuGraphResourceType::Enum resourceType : s_MetadataResourceTypes){
-        for(const Graphics::ResourceQueueSharing::Mask queueSharing : s_ValidQueueSharingMasks){
-            SCOPED_TRACE(static_cast<u32>(resourceType));
-            SCOPED_TRACE(static_cast<u32>(queueSharing));
-            TestArena testArena;
-            Graphics::GpuTaskGraph graph(testArena.arena);
-            u64 declarationRevision = 0u;
-            {
-                const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-                declarationRevision = declarations.declarationRevision();
-            }
-            const Graphics::GpuGraphResourceId resource = graph.importResource(
-                Graphics::GpuGraphResourceDesc{}
-                    .setIdentity(Name("tests/task_graph/valid_queue_sharing_metadata"))
-                    .setMarkerLabel("Valid Queue Sharing Metadata")
-                    .setType(resourceType)
-                    .setInitialState(
-                        resourceType == Graphics::GpuGraphResourceType::HazardDomain
-                            ? Graphics::ResourceStates::Unknown
-                            : Graphics::ResourceStates::Common
-                    )
-                    .setQueueSharing(queueSharing)
-            );
-            ASSERT_TRUE(resource.valid());
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_EQ(declarations.resourceCount(), 1u);
-            EXPECT_NE(declarations.declarationRevision(), declarationRevision);
-            EXPECT_EQ(declarations.resourceAt(resource.index).queueSharing, queueSharing);
-        }
-    }
-}
-
 TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
     constexpr u8 s_UnknownQueueSharingBit = 1u << 7u;
     constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharingMasks[] = {

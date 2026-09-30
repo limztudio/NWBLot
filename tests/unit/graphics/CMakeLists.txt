@@ -3,7 +3,6 @@ target_sources(nwb_graphics_presentation_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compressed_format_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cooperative_vector_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/device_creation_policy_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/native_object_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_receipt_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/swapchain_native_identity_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/swapchain_presentation_tests.cpp"

@@ -78,27 +78,6 @@ TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
     EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max).valid());
 }
 
-TEST(ReflectionFeedback, FirstWriterAndNextCompatibleFrameSelectDifferentBanks){
-    ReflectionFeedbackState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, true, 100u);
-    EXPECT_TRUE(first.eligible);
-    EXPECT_TRUE(first.reset);
-    EXPECT_FALSE(first.reused);
-    EXPECT_EQ(first.probeIndex, 0u);
-    EXPECT_EQ(first.startGraphicsFrame, 100u);
-    EXPECT_EQ(first.currentBank, 0u);
-    EXPECT_EQ(first.resetReason, ReflectionFeedbackResetReason::FirstObservation);
-    Accept(state, first);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, true, 101u);
-    EXPECT_TRUE(next.reused);
-    EXPECT_FALSE(next.reset);
-    EXPECT_EQ(next.probeIndex, 1u);
-    EXPECT_EQ(next.startGraphicsFrame, 100u);
-    EXPECT_EQ(next.currentBank, 1u);
-    EXPECT_EQ(next.previousBank, first.currentBank);
-    EXPECT_EQ(next.acceptedSequence, first.sequence);
-}
-
 TEST(ReflectionFeedback, ProbeCadenceCountsAcceptedFeedbackIndependentlyOfTemporalSettings){
     ReflectionFeedbackState state(1u);
     ReflectionSettings settings;

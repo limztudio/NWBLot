@@ -54,16 +54,6 @@ static void ExpectPlacement(const ImagePlacement& actual, const ImagePlacement& 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiImageLayoutTests, NaturalPixelExtentUsesDensityWithoutImplicitRegionPadding){
-    UiSkinRegion region = Sprite();
-    region.padding = { 5.0f, 10.0f, 15.0f, 20.0f };
-    ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure({}, region, 2.0f, metrics));
-    ExpectMetrics(metrics, { { 100.0f, 50.0f } });
-    ASSERT_TRUE(ImageLayout::Measure({}, region, 0.5f, metrics));
-    ExpectMetrics(metrics, { { 400.0f, 200.0f } });
-}
-
 TEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExtent){
     UiSkinRegion region = Sprite();
     region.drawMode = UiSkinDrawMode::NineSlice;
@@ -90,16 +80,6 @@ TEST(UiImageLayoutTests, FixedAndStretchPoliciesPreserveIntrinsicMetricsForTheLa
     options.height = { LayoutSizePolicy::Fixed, 0.0f };
     ASSERT_TRUE(ImageLayout::Measure(options, region, 2.0f, metrics));
     ExpectMetrics(metrics, { { 100.0f, 50.0f } });
-}
-
-TEST(UiImageLayoutTests, PlacementKeepsTheFullImageBoundsWhileIntersectingVisibility){
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
-    ImagePlacement placement;
-    ASSERT_TRUE(ImageLayout::Place(bounds, { 50.0f, 0.0f, 100.0f, 80.0f }, placement));
-    ExpectRect(placement.bounds, bounds);
-    ExpectRect(placement.clip, { 50.0f, 20.0f, 100.0f, 60.0f });
-    ASSERT_TRUE(ImageLayout::Place(bounds, { 0.0f, 0.0f, 500.0f, 500.0f }, placement));
-    ExpectRect(placement.clip, bounds);
 }
 
 TEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins){

@@ -321,6 +321,9 @@ bool CommandList::validateGraphicsDrawArguments(
         return true;
 
     for(const VkVertexInputBindingDescription& requiredBinding : inputLayout->m_bindings){
+        const bool instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
+        if(indexed && !instanceRate)
+            continue;
         const VertexBufferBinding* boundBuffer = nullptr;
         for(const VertexBufferBinding& binding : m_currentGraphicsState.vertexBuffers){
             if(binding.slot == requiredBinding.binding){
@@ -339,9 +342,6 @@ bool CommandList::validateGraphicsDrawArguments(
             requiredElementBytes = Max(requiredElementBytes, static_cast<u32>(attributeEnd));
         }
 
-        const bool instanceRate = requiredBinding.inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
-        if(indexed && !instanceRate)
-            continue;
         const u32 firstElement = instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
         const u32 elementCount = instanceRate ? arguments.instanceCount : arguments.vertexCount;
         if(!VulkanDetail::IsStridedBufferRangeValid(

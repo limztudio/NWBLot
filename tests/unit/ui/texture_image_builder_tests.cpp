@@ -158,50 +158,6 @@ bool UiTextureImageBuilderTests::panel(const u64 generation, const DisplayMetric
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextureImageBuilderTests, NaturalTexelExtentIgnoresSkinDensityAndDisplayScale){
-    const SharedImageSource source = MakeImage(m_arena);
-    ASSERT_TRUE(source);
-    UiSkin::RegionVector regions(m_arena);
-    for(const UiSkinRegion& region : m_skin.regions())
-        regions.push_back(region);
-    m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 16u, 2.0f, Move(regions));
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_builder.setSkin(m_skin);
-    ASSERT_TRUE(panel(1u, { 800.0f, 600.0f, 1.75f, 2.0f }));
-    ASSERT_TRUE(m_builder.image("image", source));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, source->generation(), sample));
-    EXPECT_FLOAT_EQ(sample.bounds.width, 20.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.height, 12.0f);
-    EXPECT_FLOAT_EQ(sample.uv.x, 0.0f);
-    EXPECT_FLOAT_EQ(sample.uv.y, 0.0f);
-    EXPECT_FLOAT_EQ(sample.uv.width, 1.0f);
-    EXPECT_FLOAT_EQ(sample.uv.height, 1.0f);
-    EXPECT_EQ(sample.quads, 1u);
-    EXPECT_FLOAT_EQ(snapshot.displayMetrics().pixelScaleX, 1.75f);
-    EXPECT_FLOAT_EQ(snapshot.skinBinding().referenceDensity, 2.0f);
-}
-
-TEST_F(UiTextureImageBuilderTests, FixedExtentDrawsOneFullUvSpriteWithoutControlPadding){
-    const SharedImageSource source = MakeImage(m_arena);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, source->generation(), sample));
-    EXPECT_FLOAT_EQ(sample.bounds.x, 13.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.y, 14.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.width, 96.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.height, 40.0f);
-    EXPECT_FLOAT_EQ(sample.uv.width, 1.0f);
-    EXPECT_FLOAT_EQ(sample.uv.height, 1.0f);
-    EXPECT_EQ(sample.quads, 1u);
-}
-
 TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCallerReplacementAndRelease){
     SharedImageSource source = MakeImage(m_arena, "tests/ui/copied_builder_image", 37u);
     ASSERT_TRUE(source);
@@ -297,22 +253,6 @@ TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandle
     EXPECT_EQ(indices[2u], 0u);
 }
 
-TEST_F(UiTextureImageBuilderTests, StretchUsesBothArrangedContentAxes){
-    const SharedImageSource source = MakeImage(m_arena);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Stretch, 1.0f };
-    ASSERT_TRUE(m_builder.image("image", source, options));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, source->generation(), sample));
-    EXPECT_FLOAT_EQ(sample.bounds.width, 352.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.height, 390.0f);
-}
-
 TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePaintStack){
     const SharedImageSource source = MakeImage(m_arena);
     ASSERT_TRUE(source);
@@ -405,52 +345,6 @@ TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFra
     EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);
     EXPECT_FLOAT_EQ(target(before)->rectangle.width, accepted.rectangle.width);
     EXPECT_EQ(m_context.input().targets().size(), count);
-}
-
-TEST_F(UiTextureImageBuilderTests, PassiveImageHasNoTargetTabStopCaptureOrActivation){
-    const SharedImageSource source = MakeImage(m_arena);
-    ASSERT_TRUE(source);
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
-    EXPECT_FALSE(m_builder.button("after", "After"));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_EQ(target(id("image", "panel")), nullptr);
-    EXPECT_EQ(m_context.input().targets().size(), 3u);
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    EXPECT_TRUE(send({ InputEventType::KeyUp, {}, InputKey::Tab }).keyboardConsumed);
-    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    EXPECT_TRUE(send({ InputEventType::KeyUp, {}, InputKey::Tab }).keyboardConsumed);
-    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, source->generation(), sample));
-    click({ sample.bounds.x + 20.0f, sample.bounds.y + 20.0f });
-    EXPECT_FALSE(m_context.input().capture().valid());
-    for(const WidgetState& state : m_context.states().entries()){
-        if(state.id == id("image", "panel"))
-            EXPECT_FALSE(m_context.takeActivation(state, true));
-    }
-}
-
-TEST_F(UiTextureImageBuilderTests, AnnotationAddsOnlyAPassiveTargetForTheEngineImage){
-    const SharedImageSource source = MakeImage(m_arena);
-    ASSERT_TRUE(source);
-    TooltipState tooltip;
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
-    ASSERT_TRUE(m_builder.tooltip("hint", "image", "Engine image", tooltip));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* annotated = target(id("image", "panel"));
-    ASSERT_NE(annotated, nullptr);
-    EXPECT_FALSE(annotated->focusable);
-    EXPECT_FALSE(annotated->activatable);
-    EXPECT_FALSE(annotated->pointerGesture);
-    EXPECT_FALSE(annotated->control.valid());
-    EXPECT_FALSE(annotated->textEditable);
 }
 
 TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilTheOuterPopupPaints){

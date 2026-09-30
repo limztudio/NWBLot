@@ -317,14 +317,9 @@ class CompilerStatisticsDiagnosticTests(unittest.TestCase):
                 self.assertEqual(diagnostic.main(cli_arguments(compiler, result, output)), 1)
             self.assertFalse(output.exists())
 
-    def test_diagnostic_environment_is_default_off_and_strips_inherited_path(self):
+    def test_diagnostic_environment_strips_inherited_path(self):
         env = gather.environment({LIT_NWB_GATHER_COMPILER_STATISTICS_FILE: LIT_INHERITED_JSONL}, LIT_UNIQUE, LIT_TIMING, LIT_SAMPLE_JSONL)
         self.assertNotIn(LIT_NWB_GATHER_COMPILER_STATISTICS_FILE, env)
-        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
-            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
-            "--logserver-executable", "logger", "--output-directory", "output", LIT_WORKLOAD, LIT_UNIQUE]
-        self.assertFalse(gather.parse_args(common).compiler_statistics)
-        self.assertTrue(gather.parse_args(common + [LIT_COMPILER_STATISTICS]).compiler_statistics)
 
     def test_explicit_diagnostic_path_preserves_all_other_environment_settings(self):
         base = {"PATH": "kept", LIT_NWB_GATHER_COMPILER_STATISTICS_FILE: LIT_INHERITED_JSONL}

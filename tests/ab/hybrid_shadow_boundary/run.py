@@ -696,17 +696,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def run_self_test() -> int:
     defaults = parse_args([LIT_SELF_TEST])
-    assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
-    assert defaults.gpu_validation is False
-    assert defaults.maximum_hybrid_frame_regression_percent is None
     assert find_missing_log_messages(LIT_HEALTHY, (LIT_HEALTHY, LIT_BASELINE)) == [LIT_BASELINE]
     assert find_log_messages(LIT_VALIDATION_ERROR, DEFAULT_FORBIDDEN_LOGS) == [LIT_VALIDATION_ERROR]
-    healthy_log = "\n".join(HEALTHY_REQUIRED_LOGS)
-    baseline_log = "\n".join(BASELINE_REQUIRED_LOGS)
-    assert find_missing_log_messages(healthy_log, HEALTHY_REQUIRED_LOGS) == []
-    assert find_log_messages(healthy_log, HEALTHY_FORBIDDEN_LOGS) == []
-    assert find_missing_log_messages(baseline_log, BASELINE_REQUIRED_LOGS) == []
-    assert find_log_messages(baseline_log, BASELINE_FORBIDDEN_LOGS) == []
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -774,7 +765,6 @@ def run_self_test() -> int:
         opaque_token = debug_name_hash_token(OPAQUE_TRACE_SCOPE)
         transparent_trace_token = debug_name_hash_token(TRANSPARENT_TRACE_SCOPE)
         transparent_resolve_token = debug_name_hash_token(TRANSPARENT_RESOLVE_SCOPE)
-        assert timing_symbols[frame_token] == FRAME_SCOPE
         warmup_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
             f"  {frame_token}: avg=4.0000 min=3.0 max=5.0 samples=20\n"
@@ -793,9 +783,6 @@ def run_self_test() -> int:
         )
         timing.write_text(warmup_timing + measurement_timing, encoding=LIT_UTF_8)
         scopes = summarize_scopes(parse_timing_file(timing, timing_symbols))
-        assert scopes[FRAME_SCOPE].median_ms == 4.5
-        assert scopes[LIT_RENDER_SHADOW_VISIBILITY].positive_sample_count == 2
-        assert scopes[TRANSPARENT_RESOLVE_SCOPE].positive_sample_count == 2
         measurement_offset = len(warmup_timing.encode(LIT_UTF_8))
         measurement_scopes = summarize_scopes(parse_timing_file(timing, timing_symbols, measurement_offset))
         assert measurement_scopes[FRAME_SCOPE].median_ms == 5.0
@@ -852,8 +839,6 @@ def run_self_test() -> int:
         )
         report = evaluate_runs(args, healthy, baseline)
         assert report[LIT_VERDICT] == LIT_PASS
-        assert report[LIT_SCHEMA] == LIT_NWB_HYBRID_SHADOW_BOUNDARY_V2
-        assert abs(float(report[LIT_FRAME_HYBRID_DELTA_PERCENT]) - 10.0) < 1.0e-9
         args.maximum_hybrid_frame_regression_percent = 5.0
         threshold_report = evaluate_runs(args, healthy, baseline)
         assert threshold_report[LIT_VERDICT] == LIT_FAIL

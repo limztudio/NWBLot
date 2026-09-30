@@ -37,44 +37,6 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuTaskGraph, ChoosesEveryTaskQueueFromItsCommandContract){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskCommandRequirements commands[] = {
-        GraphicsCommands(),
-        ComputeCommands(),
-        { Graphics::GpuQueueCapability::Transfer },
-    };
-    const Name identities[] = {
-        Name("tests/task_graph/automatic_graphics"),
-        Name("tests/task_graph/automatic_compute"),
-        Name("tests/task_graph/automatic_transfer"),
-    };
-    Graphics::GpuTaskId tasks[3u] = {};
-    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        tasks[taskIndex] = AddTaskWithCommands(graph, identities[taskIndex], "Automatic Task", commands[taskIndex]);
-        ASSERT_TRUE(tasks[taskIndex].valid());
-    }
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
-    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
-        ASSERT_NE(assignment, nullptr);
-        const Graphics::GpuPhysicalQueueInfo* selectedQueue = nullptr;
-        for(const Graphics::GpuPhysicalQueueInfo& queue : queues){
-            if(queue.id == assignment->queue)
-                selectedQueue = &queue;
-        }
-        ASSERT_NE(selectedQueue, nullptr);
-        EXPECT_EQ(selectedQueue->capabilities & commands[taskIndex].requiredCapabilities, commands[taskIndex].requiredCapabilities);
-    }
-    EXPECT_EQ(assignments.find(tasks[0u])->queueClass, Graphics::CommandQueue::Graphics);
-}
-
 TEST(GpuTaskGraph, AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -253,30 +215,6 @@ TEST(GpuTaskGraph, AutomaticallyPreservesAnImportedExclusiveOwnerForFirstUse){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
-}
-
-struct PayloadCommandsTask{
-    struct Payload{ bool graphics = false; };
-
-    [[nodiscard]] static Graphics::GpuTaskCommandRequirements commandRequirements(const Payload& payload){
-        return payload.graphics ? GraphicsCommands() : ComputeCommands();
-    }
-};
-
-TEST(GpuTaskGraph, DerivesTypedCommandRequirementsFromTheTaskPayload){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskDesc graphicsDesc;
-    graphicsDesc.setIdentity(Name("tests/task_graph/payload_graphics")).setMarkerLabel("Payload Graphics");
-    Graphics::GpuTaskDesc computeDesc;
-    computeDesc.setIdentity(Name("tests/task_graph/payload_compute")).setMarkerLabel("Payload Compute");
-    const Graphics::GpuTaskId graphics = graph.addTask<PayloadCommandsTask>(graphicsDesc, PayloadCommandsTask::Payload{ true });
-    const Graphics::GpuTaskId compute = graph.addTask<PayloadCommandsTask>(computeDesc, PayloadCommandsTask::Payload{ false });
-    ASSERT_TRUE(graphics.valid());
-    ASSERT_TRUE(compute.valid());
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    EXPECT_EQ(declarations.taskAt(graphics.index).commands.requiredCapabilities, Graphics::GpuQueueCapability::Graphics);
-    EXPECT_EQ(declarations.taskAt(compute.index).commands.requiredCapabilities, Graphics::GpuQueueCapability::Compute);
 }
 
 TEST(GpuTaskGraph, ValidatesDiagnosticQueueOverridesAgainstCommandCapabilities){

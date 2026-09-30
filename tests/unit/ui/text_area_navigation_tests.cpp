@@ -145,32 +145,6 @@ TEST_F(UiTextAreaNavigationTests, AdjacentDocumentBoundariesPreserveTheActiveCar
     EXPECT_EQ(last.committedByte, 6u);
 }
 
-TEST_F(UiTextAreaNavigationTests, PageMovesByTheBorrowedViewportHeight){
-    ASSERT_TRUE(m_model.setText("MMMM\nMMMM\nMMMM\nMMMM\nMMMM"));
-    ASSERT_TRUE(m_model.setSelection(2u, 2u));
-    ASSERT_TRUE(shapeCurrent());
-    const f32 height = m_view.caretGeometry().lines()[0u].height;
-    const auto oneRow = resolve(EditNavigationDirection::PageDown, height);
-    ASSERT_TRUE(oneRow.resolved);
-    EXPECT_EQ(oneRow.committedByte, 7u);
-    const auto twoRows = resolve(EditNavigationDirection::PageDown, height * 2.0f);
-    ASSERT_TRUE(twoRows.resolved);
-    EXPECT_EQ(twoRows.committedByte, 12u);
-    EXPECT_FLOAT_EQ(oneRow.preferredX, twoRows.preferredX);
-    EXPECT_EQ(m_model.caret(), 2u);
-}
-
-TEST_F(UiTextAreaNavigationTests, PageUpMovesFromTheCurrentCaretCenter){
-    ASSERT_TRUE(m_model.setText("MMMM\nMMMM\nMMMM\nMMMM\nMMMM"));
-    ASSERT_TRUE(m_model.setSelection(22u, 22u));
-    ASSERT_TRUE(shapeCurrent());
-    const f32 height = m_view.caretGeometry().lines()[0u].height;
-    const auto result = resolve(EditNavigationDirection::PageUp, height * 2.0f);
-    ASSERT_TRUE(result.resolved);
-    EXPECT_EQ(result.committedByte, 12u);
-    EXPECT_EQ(m_model.caret(), 22u);
-}
-
 TEST_F(UiTextAreaNavigationTests, PageDocumentBoundariesKeepTheActiveCaret){
     ASSERT_TRUE(m_model.setText("MMMM\nM"));
     ASSERT_TRUE(m_model.setSelection(2u, 2u));

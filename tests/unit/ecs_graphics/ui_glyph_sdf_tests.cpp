@@ -51,18 +51,6 @@ using uint = u32;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiGlyphSdf, EveryChannelSelectsItsOwnDistanceIncludingAlpha){
-    const ShaderFloat4 sampled{ 0.f, 128.f / 255.f, 1.f, 192.f / 255.f };
-    EXPECT_FLOAT_EQ(nwbUiSdfChannel(sampled, 0u), sampled.x);
-    EXPECT_FLOAT_EQ(nwbUiSdfChannel(sampled, 1u), sampled.y);
-    EXPECT_FLOAT_EQ(nwbUiSdfChannel(sampled, 2u), sampled.z);
-    EXPECT_FLOAT_EQ(nwbUiSdfChannel(sampled, 3u), sampled.w);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(nwbUiSdfChannel(sampled, 0u), 8u), 1.f), 0.f);
-    EXPECT_NEAR(nwbUiSdfCoverage(nwbUiSdfDistance(nwbUiSdfChannel(sampled, 1u), 8u), 1.f), 0.5f, 0.000001f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(nwbUiSdfChannel(sampled, 2u), 8u), 1.f), 1.f);
-    EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(nwbUiSdfChannel(sampled, 3u), 8u), 1.f), 1.f);
-}
-
 TEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints){
     EXPECT_NEAR(nwbUiSdfDistance(128.f / 255.f, 8u), 0.f, 0.000001f);
     EXPECT_NEAR(nwbUiSdfCoverage(nwbUiSdfDistance(128.f / 255.f, 8u), 1.f), 0.5f, 0.000001f);

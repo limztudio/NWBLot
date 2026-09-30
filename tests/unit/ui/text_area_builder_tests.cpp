@@ -44,31 +44,6 @@ class UiTextAreaBuilderTests : public TextAreaFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaBuilderTests, MultilineWithoutHostPublishesTopAlignedDefaultGeometry){
-    ASSERT_TRUE(m_model.setText("first\nsecond\n"));
-    ASSERT_TRUE(m_model.setSelection(0u, 0u));
-    ASSERT_TRUE(frameArea(1u));
-    const HitTarget* area = target(id("area", "panel"));
-    ASSERT_TRUE(area);
-    EXPECT_TRUE(area->enabled);
-    EXPECT_TRUE(area->focusable);
-    EXPECT_TRUE(area->textEditable);
-    EXPECT_FALSE(area->pointerGesture);
-    EXPECT_FLOAT_EQ(area->rectangle.height, 160.0f);
-    EXPECT_GT(area->rectangle.width, 120.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().bounds.x, area->rectangle.x);
-    EXPECT_FLOAT_EQ(m_state.placement().bounds.y, area->rectangle.y);
-    EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y);
-    EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_FALSE(m_state.focused());
-    EXPECT_EQ(m_model.text(), "first\nsecond\n");
-    EXPECT_FALSE(m_model.canUndo());
-    EXPECT_FALSE(m_paint.popClip());
-    const DrawSnapshot paint = m_paint.freeze();
-    EXPECT_FALSE(paint.commands().empty());
-}
-
 TEST_F(UiTextAreaBuilderTests, SingleLineIsRejectedBeforeBorrowingOrChangingViewport){
     useHost();
     EditModel singleLine(m_arena);

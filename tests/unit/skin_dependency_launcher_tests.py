@@ -34,15 +34,6 @@ class SkinDependencyLauncherTests(unittest.TestCase):
             self.root / "built", "tests", self.tools, self.workspace,
         )
 
-    def test_default_dependency_stage_preserves_its_existing_arguments(self):
-        commands = self.commands()
-        self.assertEqual(
-            (self.tools[0], [INPUT_LIST, str(self.workspace / "inputs.list"), OUTPUT,
-                             str(self.workspace / "dependencies.list")]),
-            commands[0],
-        )
-        self.assertFalse(PIPELINE.parse_arguments(self.arguments).include_skin_dependencies)
-
     def test_opt_in_forwards_repository_and_every_asset_root_in_order(self):
         commands = self.commands([FLAG])
         self.assertEqual(

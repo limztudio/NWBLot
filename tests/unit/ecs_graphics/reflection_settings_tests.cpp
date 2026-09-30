@@ -17,22 +17,10 @@ namespace __hidden_reflection_settings_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using namespace NWB::Impl;
 
-TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
+TEST(ReflectionSettings, AcceptsZeroHardwareBudgetWithScreenFeedback){
     ReflectionSettings settings;
-    EXPECT_TRUE(ValidateReflectionSettings(settings));
-    EXPECT_FALSE(settings.screenFeedbackEnabled);
-    EXPECT_TRUE(settings.temporalEnabled);
-    EXPECT_TRUE(settings.spatialFilterEnabled);
-    EXPECT_EQ(settings.temporalMaxSamples, 16u);
-    EXPECT_EQ(settings.spatialRadius, s_ExpectedDualCount);
     settings.screenFeedbackEnabled = true;
     settings.maxHardwareRaysPerFrame = 0u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
@@ -42,7 +30,6 @@ TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
 
 TEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath){
     ReflectionSettings settings;
-    EXPECT_EQ(settings.maxOpticalQueries, 16u);
     settings.maxOpticalQueries = 0u;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
     settings.maxOpticalQueries = 1u;

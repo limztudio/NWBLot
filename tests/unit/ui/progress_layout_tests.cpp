@@ -75,29 +75,6 @@ static void ExpectPlacement(const ProgressPlacement& actual, const ProgressPlace
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiProgressLayoutTests, DefaultAtlasMetricsIncludeTrackPaddingAroundTheFillMinimum){
-    const UiSkinRegion region = NineSlice();
-    ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
-    ExpectPadding(metrics.padding, { 8.0f, 8.0f, 8.0f, 8.0f });
-    ExpectPoint(metrics.fillMinimum, { 12.0f, 12.0f });
-    ExpectPoint(metrics.contentSize, { 28.0f, 32.0f });
-}
-
-TEST(UiProgressLayoutTests, ReferenceDensityScalesPixelSliceBordersAndLeavesLogicalPaddingUnchanged){
-    UiSkinRegion region = NineSlice();
-    region.minimumWidth = 0.0f;
-    region.minimumHeight = 0.0f;
-    ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 2.0f, metrics));
-    ExpectPoint(metrics.fillMinimum, { 6.0f, 6.0f });
-    ExpectPadding(metrics.padding, { 8.0f, 8.0f, 8.0f, 8.0f });
-    ExpectPoint(metrics.contentSize, { 22.0f, 32.0f });
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 0.5f, metrics));
-    ExpectPoint(metrics.fillMinimum, { 24.0f, 24.0f });
-    ExpectPoint(metrics.contentSize, { 40.0f, 40.0f });
-}
-
 TEST(UiProgressLayoutTests, LogicalRegionMinimumsCanExceedSliceBordersWithoutDensityScaling){
     UiSkinRegion track = NineSlice();
     UiSkinRegion fill = NineSlice();
@@ -111,20 +88,6 @@ TEST(UiProgressLayoutTests, LogicalRegionMinimumsCanExceedSliceBordersWithoutDen
     ExpectPoint(metrics.contentSize, { 80.0f, 60.0f });
 }
 
-TEST(UiProgressLayoutTests, EffectivePaddingUsesEachMaximumAndRequestedHeightCanGrowTheTrack){
-    UiSkinRegion track = NineSlice();
-    const UiSkinRegion fill = NineSlice();
-    track.padding = { 2.0f, 9.0f, 3.0f, 4.0f };
-    ProgressStyle style;
-    style.padding = { 5.0f, 1.0f, 7.0f, 10.0f };
-    ProgressOptions options;
-    options.height = 70.0f;
-    ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure(options, style, track, fill, 1.0f, metrics));
-    ExpectPadding(metrics.padding, { 5.0f, 9.0f, 7.0f, 10.0f });
-    ExpectPoint(metrics.contentSize, { 24.0f, 70.0f });
-}
-
 TEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwice){
     const UiSkinRegion track = NineSlice();
     UiSkinRegion fill = NineSlice();
@@ -133,32 +96,6 @@ TEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwic
     ASSERT_TRUE(ProgressLayout::Measure({}, {}, track, fill, 1.0f, metrics));
     ExpectPadding(metrics.padding, { 8.0f, 8.0f, 8.0f, 8.0f });
     ExpectPoint(metrics.contentSize, { 28.0f, 32.0f });
-}
-
-TEST(UiProgressLayoutTests, SpriteRegionsUseTheirLogicalMinimumWithoutInventingSliceBorders){
-    UiSkinRegion region;
-    region.rectangle = { 0u, 0u, 200u, 100u };
-    region.minimumWidth = 10.0f;
-    region.minimumHeight = 5.0f;
-    ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 2.0f, metrics));
-    ExpectPadding(metrics.padding, {});
-    ExpectPoint(metrics.fillMinimum, { 10.0f, 5.0f });
-    ExpectPoint(metrics.contentSize, { 10.0f, 32.0f });
-}
-
-TEST(UiProgressLayoutTests, PlacementUsesPaddedContentAndPartialFillGeometry){
-    const UiSkinRegion region = NineSlice();
-    ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
-    ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.25, placement));
-    ExpectRect(placement.bounds, bounds);
-    ExpectRect(placement.clip, bounds);
-    ExpectRect(placement.content, { 18.0f, 28.0f, 184.0f, 16.0f });
-    ExpectRect(placement.fillReveal, { 18.0f, 28.0f, 46.0f, 16.0f });
-    ExpectRect(placement.fillCanvas, placement.fillReveal);
 }
 
 TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){

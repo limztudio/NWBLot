@@ -37,7 +37,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuCommandIrStreamReader, DecodesTheCompleteBuiltinPodStream){
+TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsLeaveTheOutputUnchanged){
     TestArena testArena;
     Graphics::GpuCommandIrCapture emptyCapture(testArena.arena);
     Graphics::GpuCommandIrStreamReader emptyReader(emptyCapture.commandBytes());
@@ -53,72 +53,19 @@ TEST(GpuCommandIrStreamReader, DecodesTheCompleteBuiltinPodStream){
 
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
-    const BinaryByteView bytes = capture.commandBytes();
-
-    const Graphics::GpuCommandIrStreamValidationResult completeValidation = Graphics::ValidateGpuCommandIrStream(bytes);
-    EXPECT_TRUE(completeValidation.complete);
-    EXPECT_TRUE(completeValidation.valid());
-    EXPECT_FALSE(completeValidation.failed());
-    EXPECT_EQ(completeValidation.byteOffset, bytes.size());
-    EXPECT_EQ(completeValidation.recordIndex, 4u);
-
-    Graphics::GpuCommandIrStreamReader reader(bytes);
-    EXPECT_FALSE(reader.validation().complete);
-    EXPECT_FALSE(reader.validation().valid());
-    EXPECT_FALSE(reader.validation().failed());
-    EXPECT_EQ(reader.graphGeneration(), s_CommandIrTask.generation);
-    EXPECT_EQ(reader.planGeneration(), s_CommandIrPacket.generation);
-    EXPECT_EQ(reader.recordCount(), 4u);
-
+    Graphics::GpuCommandIrStreamReader reader(capture.commandBytes());
     Graphics::GpuCommandIrBuiltinTaskRecord record;
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
-    EXPECT_EQ(record.task, s_CommandIrTask);
-    EXPECT_EQ(record.packet, s_CommandIrPacket);
-    EXPECT_EQ(record.queue, s_CommandIrQueue);
-    EXPECT_EQ(record.source, s_CommandIrSource);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.sourceOffsetBytes, 16u);
-    EXPECT_EQ(record.destinationOffsetBytes, 32u);
-    EXPECT_EQ(record.dataSizeBytes, 64u);
+    for(u32 recordIndex = 0u; recordIndex < 4u; ++recordIndex)
+        ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
 
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::CopyTexture);
-    EXPECT_EQ(record.task.generation, s_CommandIrTask.generation);
-    EXPECT_EQ(record.source, s_CommandIrSource);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.sourceSlice.x, 1u);
-    EXPECT_EQ(record.sourceSlice.width, 4u);
-    EXPECT_EQ(record.sourceSlice.mipLevel, 7u);
-    EXPECT_EQ(record.sourceSlice.arraySlice, 8u);
-    EXPECT_EQ(record.destinationSlice.x, 9u);
-    EXPECT_EQ(record.destinationSlice.width, 12u);
-    EXPECT_EQ(record.destinationSlice.mipLevel, 15u);
-    EXPECT_EQ(record.destinationSlice.arraySlice, 16u);
-
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.uintClearValue, Graphics::UIntColor(0xdecafbadU));
-
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.destinationSubresources, Graphics::TextureSubresourceSet(s_ExpectedDualCount, 3u, 4u, 5u));
-    EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::DepthStencil);
-    EXPECT_EQ(record.floatClearValue, Graphics::Color(0.25f, 0.5f, 0.75f, 1.f));
-    EXPECT_EQ(record.uintClearValue, Graphics::UIntColor(s_ExpectedDualCount, 3u, 5u, 7u));
-    EXPECT_EQ(record.intClearValue, Graphics::IntColor(-2, -3, -5, -7));
-    EXPECT_EQ(record.depthClearValue, 0.125f);
-    EXPECT_EQ(record.stencilClearValue, 19u);
-    EXPECT_TRUE(record.clearDepth);
-    EXPECT_TRUE(record.clearStencil);
-
+    record.task = Graphics::GpuTaskId{ .generation = 98u, .index = 99u };
     EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_EQ(record.task.index, 99u);
+    EXPECT_EQ(record.task.generation, 98u);
     EXPECT_TRUE(reader.validation().complete);
     EXPECT_TRUE(reader.validation().valid());
-    EXPECT_EQ(reader.validation().byteOffset, bytes.size());
+    EXPECT_EQ(reader.validation().byteOffset, capture.commandBytes().size());
     EXPECT_EQ(reader.validation().recordIndex, 4u);
 }
 

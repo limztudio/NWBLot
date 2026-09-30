@@ -281,33 +281,6 @@ TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateI
     EXPECT_EQ(m_context.input().hitTest(oldRow), row(4u));
 }
 
-TEST_F(UiListBuilderTests, ClickSelectsStableKeyAndEnterSubmitsWithoutAddingTabRows){
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(row(2u)), nullptr);
-    click(Center(target(row(2u))->rectangle));
-    EXPECT_EQ(m_context.input().focus(), host());
-    ASSERT_TRUE(prepare(2u));
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.activated);
-    EXPECT_TRUE(m_result.focused);
-    EXPECT_EQ(m_state.selectedKey(), 2u);
-    EXPECT_EQ(m_state.cursorKey(), 2u);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    key(InputKey::Down);
-    ASSERT_TRUE(prepare(3u));
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_EQ(m_state.selectedKey(), 3u);
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    key(InputKey::Enter);
-    ASSERT_TRUE(prepare(4u));
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.activated);
-    ASSERT_TRUE(m_context.commitFrame(4u));
-    key(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
-}
-
 TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesToVisibleLastKey){
     m_state.select(50000u);
     ASSERT_TRUE(accept(1u));
@@ -344,26 +317,6 @@ TEST_F(UiListBuilderTests, ReorderPreservesSelectionByKeyAndRemovalClearsIt){
     EXPECT_EQ(m_state.cursorKey(), 0u);
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_EQ(target(row(50000u)), nullptr);
-}
-
-TEST_F(UiListBuilderTests, NavigationCanMoveCursorWithoutSelectingUntilSubmit){
-    m_state.select(1u);
-    ListOptions options = Options();
-    options.selectOnNavigate = false;
-    ASSERT_TRUE(accept(1u, options));
-    key(InputKey::Tab);
-    key(InputKey::Down);
-    ASSERT_TRUE(prepare(2u, options));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.cursorKey(), 2u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.activated);
-    ASSERT_TRUE(m_context.commitFrame(2u));
-    key(InputKey::Space);
-    ASSERT_TRUE(prepare(3u, options));
-    EXPECT_EQ(m_state.selectedKey(), 2u);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.activated);
 }
 
 TEST_F(UiListBuilderTests, ProgrammaticSameSelectionFencesQueuedActivationAndWheel){

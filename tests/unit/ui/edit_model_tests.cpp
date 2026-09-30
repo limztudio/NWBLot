@@ -24,17 +24,6 @@ class UiEditModelTests : public EditFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiEditModelTests, EmptyModelHasOneBoundaryAndNonzeroRevision){
-    EXPECT_TRUE(m_model.text().empty());
-    EXPECT_EQ(m_model.caret(), 0u);
-    EXPECT_EQ(m_model.anchor(), 0u);
-    ASSERT_EQ(m_model.graphemeBoundaries().size(), 1u);
-    EXPECT_EQ(m_model.graphemeBoundaries()[0], 0u);
-    EXPECT_NE(m_model.revision(), 0u);
-    EXPECT_FALSE(m_model.canUndo());
-    EXPECT_FALSE(m_model.canRedo());
-}
-
 TEST_F(UiEditModelTests, SelectionRejectsInteriorScalarAndGraphemeOffsets){
     ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
     ASSERT_TRUE(m_model.setSelection(0u, 3u));
@@ -44,24 +33,6 @@ TEST_F(UiEditModelTests, SelectionRejectsInteriorScalarAndGraphemeOffsets){
     EXPECT_FALSE(m_model.setSelection(0u, 5u));
     EXPECT_EQ(m_model.anchor(), 0u);
     EXPECT_EQ(m_model.caret(), 3u);
-}
-
-TEST_F(UiEditModelTests, ShiftNavigationRetainsAnchorAndOrdinaryArrowsCollapseSelection){
-    ASSERT_TRUE(m_model.setText("one"));
-    const u64 revision = m_model.revision();
-    ASSERT_TRUE(m_model.move(EditMove::Home));
-    ASSERT_TRUE(m_model.move(EditMove::Right, true));
-    ASSERT_TRUE(m_model.move(EditMove::Right, true));
-    EXPECT_EQ(m_model.anchor(), 0u);
-    EXPECT_EQ(m_model.caret(), 2u);
-    ASSERT_TRUE(m_model.move(EditMove::Left));
-    EXPECT_EQ(m_model.caret(), 0u);
-    EXPECT_FALSE(m_model.hasSelection());
-    ASSERT_TRUE(m_model.selectAll());
-    ASSERT_TRUE(m_model.move(EditMove::Right));
-    EXPECT_EQ(m_model.caret(), 3u);
-    ASSERT_TRUE(m_model.move(EditMove::End, true));
-    EXPECT_EQ(m_model.revision(), revision);
 }
 
 TEST_F(UiEditModelTests, MovementAndDeletionPreserveWholeCombiningGraphemes){

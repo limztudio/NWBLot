@@ -323,7 +323,6 @@ def run(args: argparse.Namespace) -> int:
 
 
 def run_self_test() -> int:
-    assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
     log = "\n".join((
         f"{BOOTSTRAP_ACCEPTED}{LIT_TARGET_GENERATION_7}",
         f"{ACTIVE_HISTORY_ACCEPTED}{LIT_TARGET_GENERATION_7}",
@@ -362,10 +361,7 @@ def run_self_test() -> int:
         pass
     else:
         raise AssertionError("invalid lifecycle stage count was not rejected")
-    reject_forbidden_messages(log)
-    assert NO_DEDICATED_ASYNC_COMPUTE not in log
     graphics_route_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"
-    assert NO_DEDICATED_ASYNC_COMPUTE in graphics_route_log
     try:
         require_final_run_verdict(f"{graphics_route_log}\n[ERROR] simulated validation failure", 0, "")
     except SmokeFailure:

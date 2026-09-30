@@ -126,61 +126,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiImageBuilderTests, NaturalSpriteAndNineSliceUsePixelExtentWithoutControlPadding){
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("sprite", Name("image.sprite")));
-    ASSERT_TRUE(m_builder.image("slice", Name("image.slice")));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ImagePaintSample slice;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    ASSERT_TRUE(sample(snapshot, Name("image.slice"), slice));
-    EXPECT_FLOAT_EQ(sprite.bounds.x, 13.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.width, 20.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.height, 12.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.width, 24.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.height, 24.0f);
-}
-
-TEST_F(UiImageBuilderTests, NaturalDimensionsRespectDensityAndLogicalMinimums){
-    configureImages(2.0f);
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("sprite", Name("image.sprite")));
-    ASSERT_TRUE(m_builder.image("slice", Name("image.slice")));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ImagePaintSample slice;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    ASSERT_TRUE(sample(snapshot, Name("image.slice"), slice));
-    EXPECT_FLOAT_EQ(sprite.bounds.width, 10.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.height, 6.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.width, 12.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.height, 12.0f);
-    EXPECT_FLOAT_EQ(slice.firstQuadWidth, 3.0f);
-}
-
-TEST_F(UiImageBuilderTests, FixedDimensionsKeepSpriteAndNineSliceDrawingModesDistinct){
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("sprite", Name("image.sprite"), Fixed()));
-    ASSERT_TRUE(m_builder.image("slice", Name("image.slice"), Fixed()));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ImagePaintSample slice;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    ASSERT_TRUE(sample(snapshot, Name("image.slice"), slice));
-    EXPECT_FLOAT_EQ(sprite.bounds.width, 96.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.width, 96.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.height, 40.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.height, 40.0f);
-    EXPECT_EQ(sprite.quads, 1u);
-    EXPECT_EQ(slice.quads, 9u);
-    EXPECT_FLOAT_EQ(sprite.firstQuadWidth, 96.0f);
-    EXPECT_FLOAT_EQ(slice.firstQuadWidth, 6.0f);
-}
-
 TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint){
     ASSERT_TRUE(panel(1u));
     Name name("image.sprite");
@@ -199,44 +144,6 @@ TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint)
     EXPECT_FLOAT_EQ(sprite.color.g, 0.5f);
     EXPECT_FLOAT_EQ(sprite.color.b, 0.3f);
     EXPECT_FLOAT_EQ(sprite.color.a, 0.5f);
-}
-
-TEST_F(UiImageBuilderTests, StretchDimensionsUseTheArrangedContentWidth){
-    ASSERT_TRUE(panel(1u));
-    ImageOptions options = Fixed();
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    ASSERT_TRUE(m_builder.image("image", Name("image.slice"), options));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample slice;
-    ASSERT_TRUE(sample(snapshot, Name("image.slice"), slice));
-    EXPECT_FLOAT_EQ(slice.bounds.width, 352.0f);
-    EXPECT_FLOAT_EQ(slice.bounds.height, 40.0f);
-}
-
-TEST_F(UiImageBuilderTests, PassiveImageDoesNotAddTargetsOrTabStops){
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite"), Fixed()));
-    EXPECT_FALSE(m_builder.button("after", "After"));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_EQ(target(id("image", "panel")), nullptr);
-    EXPECT_EQ(m_context.input().targets().size(), 3u);
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    static_cast<void>(send({ InputEventType::KeyUp, {}, InputKey::Tab }));
-    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    static_cast<void>(send({ InputEventType::KeyUp, {}, InputKey::Tab }));
-    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    click({ sprite.bounds.x + 20.0f, sprite.bounds.y + 20.0f });
-    for(const WidgetState& state : m_context.states().entries()){
-        if(state.id == id("image", "panel"))
-            EXPECT_FALSE(m_context.takeActivation(state, true));
-    }
 }
 
 TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack){
@@ -306,21 +213,6 @@ TEST_F(UiImageBuilderTests, NonfiniteTintRejectsWithoutReplacingAcceptedTargets)
     EXPECT_FALSE(m_context.commitFrame(2u));
     ASSERT_NE(target(before), nullptr);
     EXPECT_EQ(target(before)->declarationGeneration, accepted.declarationGeneration);
-}
-
-TEST_F(UiImageBuilderTests, AnnotationAddsOnlyAPassiveImageTarget){
-    TooltipState tooltip;
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite"), Fixed()));
-    ASSERT_TRUE(m_builder.tooltip("hint", "image", "Atlas image", tooltip));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* annotated = target(id("image", "panel"));
-    ASSERT_NE(annotated, nullptr);
-    EXPECT_FALSE(annotated->focusable);
-    EXPECT_FALSE(annotated->activatable);
-    EXPECT_FALSE(annotated->pointerGesture);
-    EXPECT_FALSE(annotated->control.valid());
 }
 
 

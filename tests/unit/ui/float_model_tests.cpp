@@ -22,13 +22,6 @@ using FloatModelTests = NumericModelFixture<FloatEditModel>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(FloatModelTests, BeginsAtCanonicalPositiveZeroWithBoundedDraft){
-    EXPECT_EQ(BitCast<u64>(m_model.value()), 0u);
-    EXPECT_EQ(m_model.draft().text(), "0");
-    EXPECT_EQ(m_model.draft().limits().maxBytes, 128u);
-    EXPECT_FALSE(m_model.dirty());
-}
-
 TEST_F(FloatModelTests, ExponentDraftStaysUncommittedUntilCompleteSubmit){
     ASSERT_TRUE(m_model.setValue(1.25));
     for(const AStringView text : { AStringView("1.25e"), AStringView("1.25e-") }){

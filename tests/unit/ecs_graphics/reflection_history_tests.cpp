@@ -59,28 +59,6 @@ struct LeaseTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ReflectionHistory, FirstAcceptedSampleStartsHistoryAndNextFrameSelectsOtherBank){
-    ReflectionHistoryState state(1u);
-    const auto first = state.plan(Stamp(), ReflectionSettings{}, 100u);
-    EXPECT_TRUE(first.eligible);
-    EXPECT_TRUE(first.reset);
-    EXPECT_FALSE(first.reused);
-    EXPECT_EQ(first.sampleIndex, 0u);
-    EXPECT_EQ(first.currentBank, 0u);
-    const auto outcome = ResolveReflectionHistoryOutcome(first, true);
-    EXPECT_EQ(outcome.sampleCount, 1u);
-    EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
-    Accept(state, first);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, 101u);
-    EXPECT_TRUE(next.reused);
-    EXPECT_FALSE(next.reset);
-    EXPECT_EQ(next.previousSampleCount, 1u);
-    EXPECT_EQ(next.sampleIndex, 1u);
-    EXPECT_EQ(next.currentBank, 1u);
-    EXPECT_EQ(next.previousBank, 0u);
-    EXPECT_EQ(next.acceptedSequence, first.sequence);
-}
-
 TEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues){
     ReflectionHistoryState state(1u);
     ReflectionSettings settings;

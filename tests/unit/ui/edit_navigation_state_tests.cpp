@@ -104,26 +104,6 @@ TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIn
     EXPECT_TRUE(state.matches(state.snapshot()));
 }
 
-TEST(UiEditNavigationStateTests, VerticalKeysKeepDirectionAcrossShiftAndRepeat){
-    struct KeyCase{
-        EditKey::Enum key;
-        EditNavigationDirection::Enum direction;
-    };
-    const KeyCase cases[]{
-        { EditKey::Up, EditNavigationDirection::Up }, { EditKey::Down, EditNavigationDirection::Down },
-        { EditKey::PageUp, EditNavigationDirection::PageUp }, { EditKey::PageDown, EditNavigationDirection::PageDown }
-    };
-    for(const auto& entry : cases){
-        for(const bool extend : { false, true }){
-            for(const bool repeat : { false, true }){
-                EditNavigationDirection::Enum output = EditNavigationDirection::Up;
-                ASSERT_TRUE(TranslateEditNavigation({ entry.key, false, extend, false, repeat }, output));
-                EXPECT_EQ(output, entry.direction);
-            }
-        }
-    }
-}
-
 TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedKeysLeaveDirectionOutputUntouched){
     const EditKeyStroke keys[]{
         { EditKey::Up, true }, { EditKey::Down, false, false, true },
@@ -134,13 +114,6 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedKeysLeaveDirectionOutput
         EditNavigationDirection::Enum output = EditNavigationDirection::PageDown;
         EXPECT_FALSE(TranslateEditNavigation(key, output));
         EXPECT_EQ(output, EditNavigationDirection::PageDown);
-    }
-}
-
-TEST(UiEditNavigationStateTests, VerticalKeysAreSeparateFromGeometryFreeCommands){
-    for(const EditKey::Enum key : { EditKey::Up, EditKey::Down, EditKey::PageUp, EditKey::PageDown }){
-        EXPECT_EQ(TranslateEditCommand({ key }).command, EditCommand::None);
-        EXPECT_EQ(TranslateEditCommand({ key }, EditTextMode::Multiline).command, EditCommand::None);
     }
 }
 

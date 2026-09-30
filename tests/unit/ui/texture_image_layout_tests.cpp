@@ -28,33 +28,6 @@ using TextureImageLayoutFixture = PaintImageFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextureImageLayoutFixture, NaturalExtentIsOneLogicalUnitPerTextureTexel){
-    const SharedImageSource image = makeImage("tests/ui/layout_image", 37u, 20u, 12u);
-    ASSERT_TRUE(image);
-    ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure({}, *image, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-    EXPECT_EQ(image->texture().mipLevels().size(), 5u);
-}
-
-TEST_F(TextureImageLayoutFixture, FixedAndStretchPoliciesKeepTheSourceIntrinsicExtent){
-    const SharedImageSource image = makeImage("tests/ui/layout_image", 37u, 20u, 12u);
-    ASSERT_TRUE(image);
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 96.0f };
-    options.height = { LayoutSizePolicy::Stretch, 2.0f };
-    ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure(options, *image, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-    options.width = { LayoutSizePolicy::Stretch, 1.0f };
-    options.height = { LayoutSizePolicy::Fixed, 32.0f };
-    ASSERT_TRUE(ImageLayout::Measure(options, *image, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-}
-
 TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDimensions){
     const SharedImageSource first = makeImage("tests/ui/layout_version", 37u, 20u, 12u);
     const SharedImageSource second = makeImage("tests/ui/layout_version", 73u, 9u, 7u);

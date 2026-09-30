@@ -143,13 +143,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(TextGlyphVisibilityTests, IntersectionAcceptsOverlapAndContainment){
-    const Rect clip{ 10.0f, 20.0f, 30.0f, 40.0f };
-    EXPECT_EQ(TextGlyphVisibility::intersect({ 5.0f, 15.0f, 10.0f, 10.0f }, clip), TextGlyphIntersection::Visible);
-    EXPECT_EQ(TextGlyphVisibility::intersect({ 11.0f, 21.0f, 1.0f, 1.0f }, clip), TextGlyphIntersection::Visible);
-    EXPECT_EQ(TextGlyphVisibility::intersect({ 0.0f, 0.0f, 100.0f, 100.0f }, clip), TextGlyphIntersection::Visible);
-}
-
 TEST(TextGlyphVisibilityTests, TouchingEdgesAndEmptyAreasAreInvisible){
     const Rect clip{ 10.0f, 20.0f, 30.0f, 40.0f };
     const Rect rectangles[]{

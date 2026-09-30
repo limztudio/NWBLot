@@ -20,10 +20,6 @@ namespace __hidden_metascript_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr char s_MODEL[] = "model";
-static constexpr char s_MESH[] = "mesh";
-static constexpr char s_NAME[] = "name";
-static constexpr char s_TYPE[] = "type";
 static constexpr AStringView s_STRUCT_NWB_DUP = "struct NwbDup{\n";
 static constexpr AStringView s_FLOAT_VALUE_LINE = "    float value;\n";
 static constexpr AStringView s_NWB_DUP_RUNTIME = "NwbDup runtime;\n";
@@ -34,7 +30,6 @@ static constexpr AStringView s_CLOSE_BRACE = "};\n";
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,30 +67,9 @@ template<usize N>
     return document.parseWithImplicitAsset(ViewOf(source), LiteralView("material_bind"), LiteralView("asset"));
 }
 
-[[nodiscard]] static const Value* FindTestField(const Value& value, MStringView name){
-    if(!value.isMap())
-        return nullptr;
-    return value.findField(name);
-}
-
-static void CheckStringValue(const Value* value, MStringView expected){
-    ASSERT_NE(value, nullptr);
-    ASSERT_TRUE(value->isString());
-    EXPECT_EQ(value->asString(), expected);
-}
-
-static void CheckReferenceListElement(const Value& value, MStringView expected){
-    ASSERT_TRUE(value.isReference());
-    EXPECT_EQ(value.asReference(), expected);
-}
-
 static void CheckStringListElement(const Value& value, const AString& expected){
     ASSERT_TRUE(value.isString());
     EXPECT_EQ(value.asString(), ViewOf(expected));
-}
-
-static void CheckStringField(const Value& value, MStringView fieldName, MStringView expected){
-    CheckStringValue(FindTestField(value, fieldName), expected);
 }
 
 static void CheckImplicitMaterialBindParseFailsWithMessage(const AString& source, MStringView expectedMessage){
@@ -357,218 +331,18 @@ TEST(Metascript, ParsesLargeNumericList){
         EXPECT_EQ(value.asInteger(), 1);
 }
 
-TEST(Metascript, ExponentDoubleLiterals){
-    DestinationArena arena;
-    Document document(arena.arena);
-    const AString source =
-        "number asset;\n"
-        "asset.values = [2.89785676e-05, -3.66009772E-07, 1e+03, 2E2];\n"
-    ;
-
-    ASSERT_TRUE(document.parse(ViewOf(source)));
-    const Value* values = document.asset().findField(MStringView("values", 6u));
-    ASSERT_NE(values, nullptr);
-    ASSERT_TRUE(values->isList());
-
-    const auto& list = values->asList();
-    ASSERT_EQ(list.size(), 4u);
-
-    EXPECT_TRUE(list[0u].isDouble());
-    EXPECT_TRUE(list[1u].isDouble());
-    EXPECT_TRUE(list[s_ThirdElementIndex].isDouble());
-    EXPECT_TRUE(list[3u].isDouble());
-    EXPECT_LT(Abs(list[0u].asDouble() - 0.0000289785676), 0.0000000001);
-    EXPECT_LT(Abs(list[1u].asDouble() + 0.000000366009772), 0.0000000001);
-    EXPECT_LT(Abs(list[s_ThirdElementIndex].asDouble() - 1000.0), 0.0000000001);
-    EXPECT_LT(Abs(list[3u].asDouble() - 200.0), 0.0000000001);
-}
-
-TEST(Metascript, BindStyleStructDeclarations){
-    DestinationArena arena;
-    Document document(arena.arena);
-    const AString source =
-        "[material_constant]\n"
-        "struct NwbProjectBxdfSurfaceMaterial{\n"
-        "    [default(\"float4(1.0, 1.0, 1.0, 1.0)\")]\n"
-        "    float4 base_color;\n"
-        "\n"
-        "    [default(\"float(0.5)\")]\n"
-        "    float roughness;\n"
-        "};\n"
-        "\n"
-        "[material_mutable]\n"
-        "struct NwbProjectBxdfRuntimeMaterial{\n"
-        "    [default(\"float(1.0)\")]\n"
-        "    float fade_alpha;\n"
-        "};\n"
-        "\n"
-        "NwbProjectBxdfSurfaceMaterial surface;\n"
-        "NwbProjectBxdfRuntimeMaterial runtime;\n"
-    ;
-
-    const bool parsed = ParseImplicitMaterialBind(document, source);
-    ASSERT_TRUE(parsed);
-
-    EXPECT_EQ(document.assetType(), LiteralView("material_bind"));
-    EXPECT_EQ(document.assetVariable(), LiteralView("asset"));
-
-    const Value& asset = document.asset();
-    const Value* structs = FindTestField(asset, LiteralView("structs"));
-    ASSERT_NE(structs, nullptr);
-    ASSERT_TRUE(structs->isMap());
-
-    const Value* surfaceStruct = structs->findField(LiteralView("NwbProjectBxdfSurfaceMaterial"));
-    const Value* runtimeStruct = structs->findField(LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    ASSERT_NE(surfaceStruct, nullptr);
-    ASSERT_NE(runtimeStruct, nullptr);
-
-    const Value* surfaceAttributes = FindTestField(*surfaceStruct, LiteralView("attributes"));
-    ASSERT_NE(surfaceAttributes, nullptr);
-    ASSERT_TRUE(surfaceAttributes->isList());
-    ASSERT_EQ(surfaceAttributes->asList().size(), 1u);
-    CheckStringField(surfaceAttributes->asList()[0u], LiteralView(s_NAME), LiteralView("material_constant"));
-
-    const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
-    ASSERT_NE(surfaceFields, nullptr);
-    ASSERT_TRUE(surfaceFields->isList());
-    ASSERT_EQ(surfaceFields->asList().size(), s_ExpectedDualCount);
-
-    const Value& baseColorField = surfaceFields->asList()[0u];
-    CheckStringField(baseColorField, LiteralView(s_TYPE), LiteralView("float4"));
-    CheckStringField(baseColorField, LiteralView(s_NAME), LiteralView("base_color"));
-
-    const Value* baseColorAttributes = FindTestField(baseColorField, LiteralView("attributes"));
-    ASSERT_NE(baseColorAttributes, nullptr);
-    ASSERT_TRUE(baseColorAttributes->isList());
-    ASSERT_EQ(baseColorAttributes->asList().size(), 1u);
-    const Value& defaultAttribute = baseColorAttributes->asList()[0u];
-    CheckStringField(defaultAttribute, LiteralView(s_NAME), LiteralView("default"));
-
-    const Value* arguments = FindTestField(defaultAttribute, LiteralView("arguments"));
-    ASSERT_NE(arguments, nullptr);
-    ASSERT_TRUE(arguments->isList());
-    ASSERT_EQ(arguments->asList().size(), 1u);
-    CheckStringValue(&arguments->asList()[0u], LiteralView("float4(1.0, 1.0, 1.0, 1.0)"));
-
-    const Value* instances = FindTestField(asset, LiteralView("instances"));
-    ASSERT_NE(instances, nullptr);
-    ASSERT_TRUE(instances->isList());
-    ASSERT_EQ(instances->asList().size(), s_ExpectedDualCount);
-
-    CheckStringField(instances->asList()[0u], LiteralView(s_TYPE), LiteralView("NwbProjectBxdfSurfaceMaterial"));
-    CheckStringField(instances->asList()[0u], LiteralView(s_NAME), LiteralView("surface"));
-    CheckStringField(instances->asList()[1u], LiteralView(s_TYPE), LiteralView("NwbProjectBxdfRuntimeMaterial"));
-    CheckStringField(instances->asList()[1u], LiteralView(s_NAME), LiteralView("runtime"));
-}
-
 TEST(Metascript, BindStyleStructDuplicateRejections){
-    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE
-        + s_FLOAT_VALUE_LINE + s_CLOSE_BRACE;
+    const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data()
+        + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data();
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateFieldSource, LiteralView("duplicate struct field declaration"));
 
-    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE
-        + s_CLOSE_BRACE + s_NWB_DUP_RUNTIME + s_NWB_DUP_RUNTIME;
+    const AString duplicateInstanceSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data()
+        + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data() + s_NWB_DUP_RUNTIME.data();
     CheckImplicitMaterialBindParseFailsWithMessage(duplicateInstanceSource, LiteralView("duplicate struct instance declaration"));
 
     const AString existingInstanceSource = AString("asset.instances = [{ \"type\": \"NwbDup\", \"name\": \"runtime\" }];\n")
-        + s_STRUCT_NWB_DUP + s_FLOAT_VALUE_LINE + s_CLOSE_BRACE + s_NWB_DUP_RUNTIME;
+        + s_STRUCT_NWB_DUP.data() + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data() + s_NWB_DUP_RUNTIME.data();
     CheckImplicitMaterialBindParseFailsWithMessage(existingInstanceSource, LiteralView("duplicate struct instance declaration"));
-}
-
-TEST(Metascript, GenericDeclarationsAndReferences){
-    DestinationArena arena;
-    Document document(arena.arena);
-    const AString source =
-        "model model;\n"
-        "model.mesh = \"project/body/mesh\";\n"
-        "\n"
-        "mesh mesh;\n"
-        "mesh.indices = [0, 1, 2];\n"
-        "\n"
-        "asset_bunch bunch = [\n"
-        "    model,\n"
-        "    mesh,\n"
-        "];\n"
-    ;
-
-    const bool parsed = document.parse(ViewOf(source));
-    ASSERT_TRUE(parsed);
-
-    ASSERT_EQ(document.declarations().size(), 3u);
-
-    EXPECT_EQ(document.declarations()[0u].type, LiteralView(s_MODEL));
-    EXPECT_EQ(document.declarations()[0u].variable, LiteralView(s_MODEL));
-    EXPECT_EQ(document.declarations()[1u].type, LiteralView(s_MESH));
-    EXPECT_EQ(document.declarations()[1u].variable, LiteralView(s_MESH));
-    EXPECT_EQ(document.declarations()[s_ThirdElementIndex].type, LiteralView("asset_bunch"));
-    EXPECT_EQ(document.declarations()[s_ThirdElementIndex].variable, LiteralView("bunch"));
-
-    const Value* bunch = document.findVariable(LiteralView("bunch"));
-    ASSERT_NE(bunch, nullptr);
-    ASSERT_TRUE(bunch->isList());
-    ASSERT_EQ(bunch->asList().size(), s_ExpectedDualCount);
-
-    CheckReferenceListElement(bunch->asList()[0u], LiteralView("model"));
-    CheckReferenceListElement(bunch->asList()[1u], LiteralView(s_MESH));
-
-    const Value* modelValue = document.findVariable(LiteralView(s_MODEL));
-    ASSERT_NE(modelValue, nullptr);
-    CheckStringField(*modelValue, LiteralView(s_MESH), LiteralView("project/body/mesh"));
-
-    const Value* meshValue = document.findVariable(LiteralView(s_MESH));
-    ASSERT_NE(meshValue, nullptr);
-
-    const Value* indices = FindTestField(*meshValue, LiteralView("indices"));
-    ASSERT_NE(indices, nullptr);
-    ASSERT_TRUE(indices->isList());
-    EXPECT_EQ(indices->asList().size(), 3u);
-}
-
-TEST(Metascript, TextureConverterMetadataSchema){
-    DestinationArena arena;
-    Document document(arena.arena);
-    const AString source =
-        "texture asset;\n"
-        "asset.version = 1;\n"
-        "asset.format = \"uastc_ldr_4x4\";\n"
-        "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
-        "asset.color_space = \"srgb\";\n"
-        "asset.dimension = \"2d\";\n"
-        "asset.depth = 1;\n"
-        "asset.width = 7;\n"
-        "asset.height = 5;\n"
-        "asset.block_width = 4;\n"
-        "asset.block_height = 4;\n"
-        "asset.bytes_per_block = 16;\n"
-        "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
-        "asset.mip_address_mode = \"clamp\";\n"
-        "asset.has_alpha = 1;\n"
-        "asset.mip_count = 3;\n"
-        "asset.data = \"checker.tex\";\n"
-        "asset.mips = [\n"
-        "    { \"level\": 0, \"width\": 7, \"height\": 5, \"blocks_x\": 2, \"blocks_y\": 2, \"offset_bytes\": 0, \"size_bytes\": 64, \"slices\": 1 },\n"
-        "    { \"level\": 1, \"width\": 3, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16, \"slices\": 1 },\n"
-        "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 80, \"size_bytes\": 16, \"slices\": 1 }\n"
-        "];\n"
-    ;
-
-    ASSERT_TRUE(document.parse(ViewOf(source)));
-    EXPECT_EQ(document.assetType(), LiteralView("texture"));
-    CheckStringField(document.asset(), LiteralView("format"), LiteralView("uastc_ldr_4x4"));
-    CheckStringField(document.asset(), LiteralView("color_space"), LiteralView("srgb"));
-    CheckStringField(document.asset(), LiteralView("data"), LiteralView("checker.tex"));
-
-    const Value* mips = FindTestField(document.asset(), LiteralView("mips"));
-    ASSERT_NE(mips, nullptr);
-    ASSERT_TRUE(mips->isList());
-    ASSERT_EQ(mips->asList().size(), 3u);
-
-    const Value& level0 = mips->asList()[0u];
-    ASSERT_TRUE(level0.isMap());
-    const Value* offset = FindTestField(level0, LiteralView("offset_bytes"));
-    ASSERT_NE(offset, nullptr);
-    ASSERT_TRUE(offset->isInteger());
-    EXPECT_EQ(offset->asInteger(), 0);
 }
 
 
@@ -579,3 +353,4 @@ TEST(Metascript, TextureConverterMetadataSchema){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

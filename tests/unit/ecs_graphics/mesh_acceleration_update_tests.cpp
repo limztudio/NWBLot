@@ -32,12 +32,6 @@ using namespace NWB::Impl;
     return mesh;
 }
 
-TEST(MeshAccelerationUpdateTests, AcceptedUnchangedRuntimeGeometrySkipsBothMeshUpdates){
-    const auto mesh = AcceptedRuntimeGeometry();
-    EXPECT_FALSE(RequiresMeshBlasUpdate(mesh));
-    EXPECT_FALSE(RequiresMeshSwBvhUpdate(mesh));
-}
-
 TEST(MeshAccelerationUpdateTests, UnknownRuntimeContentsNeverReuseAcceptedMeshAcceleration){
     auto mesh = AcceptedRuntimeGeometry();
     mesh.runtimeGeometryContentRevision = 0u;

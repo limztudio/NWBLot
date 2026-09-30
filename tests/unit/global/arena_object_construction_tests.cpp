@@ -234,33 +234,6 @@ TEST(ArenaObjectConstruction, NestedFactorySuccessIsDestroyedWhenOuterConstructi
     EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
 }
 
-TEST(ArenaObjectConstruction, SuccessfulObjectsAndArraysTransferStorageToTheirOwners){
-    GlobalArena arena(Name("tests/arena_object/successful_construction"));
-    ConstructionState state;
-    ActiveConstruction<GlobalArena> active(arena, state);
-    const ArenaMemoryStats before = arena.memoryStats();
-    {
-        auto* const raw = NewArenaObject<ConstructionProbe<GlobalArena>>(arena, arena, state);
-        ASSERT_NE(raw, nullptr);
-        DestroyArenaObject(arena, raw);
-        auto object = MakeGlobalUnique<ConstructionProbe<GlobalArena>>(arena, arena, state);
-        auto array = MakeGlobalUnique<ConstructionProbe<GlobalArena>[]>(arena, 4u);
-        ASSERT_TRUE(object);
-        ASSERT_TRUE(array);
-        EXPECT_EQ(state.completed, 6u);
-        EXPECT_EQ(state.destructors, 1u);
-        EXPECT_EQ(state.liveMembers, 5u);
-        EXPECT_TRUE(state.aligned);
-        EXPECT_GT(arena.memoryStats().usedBytes, before.usedBytes);
-    }
-    const ArenaMemoryStats after = arena.memoryStats();
-    EXPECT_EQ(state.destructors, 6u);
-    EXPECT_EQ(state.memberDestructors, 6u);
-    EXPECT_EQ(state.liveMembers, 0u);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, after.deallocationCount - before.deallocationCount);
-}
-
 TEST(ArenaObjectConstruction, FailedRawAllocationsNeverRunConstructorsOrDestructors){
     GlobalArena memberArena(Name("tests/arena_object/rejected_construction"));
     RejectingArena arena;

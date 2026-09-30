@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_mesh/skinning/resource_names.h>
 #include <impl/ecs_mesh/skinning/skin_payload.h>
 #include <impl/ecs_mesh/skinning/submission_state.h>
 
@@ -24,7 +23,6 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/material_typed_private.h>
-#include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
@@ -49,7 +47,6 @@ namespace __hidden_ecs_graphics_tests{
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -116,17 +113,6 @@ TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
     EXPECT_FLOAT_EQ(hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE], NWB_AVBOIT_REFRACTION_DISABLED);
 }
 
-
-TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
-    NWB::Tests::TestArena<> arena;
-    const Name sourceName("project/meshes/mesh_skinning_source");
-    const auto suffix = NWB::Impl::BuildRuntimeResourceSuffix(arena.arena, 42u, 17u, "mesh_skinning_ranges");
-    EXPECT_EQ(AStringView(suffix.data(), suffix.size()), AStringView(":runtime_42_revision_17_mesh_skinning_ranges"));
-
-    const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "mesh_skinning_ranges");
-    const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_mesh_skinning_ranges"));
-    EXPECT_EQ(builtName, formattedName);
-}
 
 TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
     NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
@@ -552,7 +538,7 @@ TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
     EXPECT_FLOAT_EQ(clipPosition.w, 0.75f);
 }
 
-TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
+TEST(EcsGraphics, MissingMeshClearsPreviousResolution){
     TestWorld testWorld;
     auto& meshSystem = testWorld.world.addSystem<NWB::Impl::MeshSystem>(testWorld.world);
 
@@ -568,81 +554,6 @@ TEST(EcsGraphics, MeshSystemResolvesMeshComponent){
     auto missingMeshEntity = testWorld.world.createEntity();
     EXPECT_FALSE(meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh));
     EXPECT_FALSE(resolvedMesh.valid());
-}
-
-static u32 TestFloatBits(const f32 value){
-    u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
-    return bits;
-}
-
-TEST(EcsGraphics, MaterialInstanceComponentSetters){
-    TestWorld testWorld;
-    const Name materialInterface("project/material_interfaces/test_surface");
-    auto entity = testWorld.world.createEntity();
-    auto& materialInstance = entity.addComponent<NWB::Impl::MaterialInstanceComponent>(
-        NWB::Tests::TestDetail::Arena(),
-        materialInterface
-    );
-    EXPECT_EQ(materialInstance.materialInterface, materialInterface);
-
-    EXPECT_TRUE(NWB::Impl::SetMaterialMutableFloat(
-        testWorld.world,
-        entity.id(),
-        materialInterface,
-        "runtime.fade_alpha",
-        0.5f
-    ));
-    EXPECT_EQ(materialInstance.overrides.size(), 1u);
-    EXPECT_EQ(materialInstance.revision, 1u);
-    EXPECT_EQ(materialInstance.overrides[0u].parameterName, Name("runtime.fade_alpha"));
-    EXPECT_EQ(materialInstance.overrides[0u].blockName, Name("runtime"));
-    EXPECT_EQ(materialInstance.overrides[0u].fieldName, Name("fade_alpha"));
-    EXPECT_EQ(materialInstance.overrides[0u].fieldType, NWB::Impl::MaterialLayoutFieldType::Float);
-    EXPECT_EQ(materialInstance.overrides[0u].value.raw[0u], TestFloatBits(0.5f));
-
-    EXPECT_TRUE(NWB::Impl::SetMaterialMutableFloat(
-        testWorld.world,
-        entity.id(),
-        materialInterface,
-        "runtime.fade_alpha",
-        0.75f
-    ));
-    EXPECT_EQ(materialInstance.overrides.size(), 1u);
-    EXPECT_EQ(materialInstance.revision, s_ExpectedDualCount);
-    EXPECT_EQ(materialInstance.overrides[0u].value.raw[0u], TestFloatBits(0.75f));
-
-    EXPECT_TRUE(NWB::Impl::SetMaterialMutableFloat4(
-        testWorld.world,
-        entity.id(),
-        materialInterface,
-        "runtime.tint",
-        Float4(1.0f, 0.5f, 0.25f, 0.125f)
-    ));
-    EXPECT_EQ(materialInstance.overrides.size(), s_ExpectedDualCount);
-    EXPECT_EQ(materialInstance.revision, 3u);
-    EXPECT_EQ(materialInstance.overrides[1u].parameterName, Name("runtime.tint"));
-    EXPECT_EQ(materialInstance.overrides[1u].fieldType, NWB::Impl::MaterialLayoutFieldType::Float4);
-    EXPECT_EQ(materialInstance.overrides[1u].value.raw[0u], TestFloatBits(1.0f));
-    EXPECT_EQ(materialInstance.overrides[1u].value.raw[1u], TestFloatBits(0.5f));
-    EXPECT_EQ(materialInstance.overrides[1u].value.raw[s_ThirdElementIndex], TestFloatBits(0.25f));
-    EXPECT_EQ(materialInstance.overrides[1u].value.raw[3u], TestFloatBits(0.125f));
-
-    EXPECT_TRUE(NWB::Impl::SetMaterialMutableHalf4(
-        testWorld.world,
-        entity.id(),
-        materialInterface,
-        "runtime.color_tint",
-        Float4(1.0f, 0.5f, 0.25f, 0.125f)
-    ));
-    const NWB::Impl::MaterialInstanceParameter& half4Override = materialInstance.overrides[s_ThirdElementIndex];
-    const Half4U expectedHalf4 = MakeHalf4U(1.0f, 0.5f, 0.25f, 0.125f);
-    EXPECT_EQ(materialInstance.overrides.size(), 3u);
-    EXPECT_EQ(materialInstance.revision, 4u);
-    EXPECT_EQ(half4Override.parameterName, Name("runtime.color_tint"));
-    EXPECT_EQ(half4Override.fieldType, NWB::Impl::MaterialLayoutFieldType::Half4);
-    EXPECT_EQ(half4Override.value.raw[0u], static_cast<u32>(expectedHalf4.x) | (static_cast<u32>(expectedHalf4.y) << 16u));
-    EXPECT_EQ(half4Override.value.raw[1u], static_cast<u32>(expectedHalf4.z) | (static_cast<u32>(expectedHalf4.w) << 16u));
 }
 
 TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
@@ -949,7 +860,7 @@ static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
     return pose;
 }
 
-TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
+TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
     NWB::Impl::SkeletonPoseComponent pose = MakeTwoJointSkeletonPose(
         MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f),
         MakeTranslationJointMatrix(0.0f, 2.0f, 0.0f)

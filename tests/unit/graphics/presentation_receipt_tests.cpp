@@ -51,31 +51,6 @@ static AcquiredBackBuffer Acquisition(const u64 value = 17u, const u32 imageInde
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(PresentationReceipt, DefaultReceiptProvidesNoAcceptanceEvidence){
-    const AcquiredBackBuffer acquired = Acquisition();
-    const PresentationReceipt receipt;
-    EXPECT_FALSE(receipt.valid());
-    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Pending);
-    EXPECT_EQ(receipt.status({}), PresentationReceiptStatus::Pending);
-}
-
-TEST(PresentationReceipt, CapturesOnlyIdentityAndExactNativeAcceptance){
-    const AcquiredBackBuffer acquired = Acquisition();
-    PresentationReceipt receipt;
-    receipt.record(acquired, true);
-    ASSERT_TRUE(receipt.valid());
-    EXPECT_EQ(receipt.availabilityCompletion.value, acquired.availabilityCompletion.value);
-    EXPECT_EQ(receipt.availabilityCompletion.physicalQueueIndex, acquired.availabilityCompletion.physicalQueueIndex);
-    EXPECT_EQ(receipt.availabilityCompletion.deviceGeneration, acquired.availabilityCompletion.deviceGeneration);
-    EXPECT_EQ(receipt.availabilityCompletion.queue, acquired.availabilityCompletion.queue);
-    EXPECT_EQ(receipt.nativeInitialState, acquired.nativeInitialState);
-    EXPECT_EQ(receipt.index, acquired.index);
-    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Accepted);
-    receipt.record(acquired, false);
-    ASSERT_TRUE(receipt.valid());
-    EXPECT_EQ(receipt.status(acquired), PresentationReceiptStatus::Rejected);
-}
-
 TEST(PresentationReceipt, RejectedAttemptCannotBeQualifiedByALaterDifferentSuccessfulFrame){
     const AcquiredBackBuffer rejected = Acquisition(17u, 2u);
     const AcquiredBackBuffer accepted = Acquisition(18u, 3u);

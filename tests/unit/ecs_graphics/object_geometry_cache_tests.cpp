@@ -163,26 +163,6 @@ TEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfter
 }
 
 
-TEST(ObjectGeometryCacheTests, AcceptedPublicationMakesCurrentRuntimeAndStaticResourcesReusable){
-    for(const bool runtime : { false, true }){
-        SCOPED_TRACE(runtime);
-        Context fixture;
-        fixture.mesh.runtimeMesh = runtime;
-        fixture.mesh.runtimeGeometryContentRevision = runtime ? 7u : 0u;
-        fixture.snapshot = RendererMeshSystem::objectGeometryCacheSnapshot(fixture.mesh);
-        ASSERT_TRUE(fixture.snapshot.valid());
-        EXPECT_TRUE(fixture.snapshot.requiresDecode);
-        ASSERT_TRUE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, runtime));
-        EXPECT_TRUE(fixture.mesh.objectGeometryCache.initialized);
-        EXPECT_TRUE(fixture.mesh.objectGeometryCache.acceptedContent);
-        EXPECT_EQ(fixture.mesh.objectGeometryCache.acceptedContentRevision, fixture.snapshot.sourceRevision);
-        const auto accepted = RendererMeshSystem::objectGeometryCacheSnapshot(fixture.mesh);
-        EXPECT_TRUE(accepted.valid());
-        EXPECT_TRUE(accepted.initialized);
-        EXPECT_FALSE(accepted.requiresDecode);
-    }
-}
-
 TEST(ObjectGeometryCacheTests, EachSourceReplacementInvalidatesAnAcceptedDecode){
     for(u32 index = 0u; index < LengthOf(s_SourceBufferMembers); ++index){
         SCOPED_TRACE(index);

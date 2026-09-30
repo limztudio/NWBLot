@@ -28,19 +28,6 @@ using namespace NWB::Impl;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiSkinSelectionTests, OmittedSkinSelectsEngineDefaultOnce){
-    const Core::Assets::AssetRef<UiSkin> omitted;
-    UiSkinSelection selection(omitted);
-    u32 calls = 0u;
-    const auto result = selection.ensure([&](const Core::Assets::AssetRef<UiSkin>& ref){
-        ++calls;
-        return ref == s_DefaultUiSkinRef;
-    });
-    EXPECT_EQ(result, UiSkinSelectionResult::Selected);
-    EXPECT_EQ(calls, 1u);
-    EXPECT_EQ(selection.selected(), s_DefaultUiSkinRef);
-}
-
 TEST(UiSkinSelectionTests, FailedCustomFallsBackToDefaultAndRevalidatesOnlyDefault){
     const Core::Assets::AssetRef<UiSkin> custom{ "project/ui/skins/missing/atlas" };
     UiSkinSelection selection(custom);

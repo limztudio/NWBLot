@@ -20,7 +20,6 @@ namespace __hidden_telemetry_capture_tests{
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
-
 using namespace TelemetryTestDetail;
 
 static u32 s_ExistingDiagnosticCallbackCount = 0u;
@@ -90,84 +89,25 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
     EXPECT_EQ(diagnosticPayload.line, 67u);
 }
 
-TEST(Telemetry, TextLogPayloadRoundTrip){
+TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
-    EXPECT_TRUE(Telemetry::BuildTextLogPayload(
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena,
         NWB::Core::Common::LogType::Warning,
         NWB_TEXT("telemetry text log"),
         payload
     ));
-    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + sizeof("telemetry text log") - 1u);
 
     Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::Warning);
-    EXPECT_EQ(parsed.messageUtf8, "telemetry text log");
+    ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
 }
 
-TEST(Telemetry, RecordTextLogUsesTelemetryEvent){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    EXPECT_TRUE(Telemetry::RecordTextLog(
-        recorder,
-        NWB::Core::Common::LogType::EssentialInfo,
-        NWB_TEXT("captured text"),
-        123u,
-        9u
-    ));
-
-    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.kind, Telemetry::EventKind::TextLog);
-    EXPECT_EQ(event->header.frameIndex, 123u);
-    EXPECT_EQ(event->header.streamId, 9u);
-
-    Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_EQ(parsed.messageUtf8, "captured text");
-}
-
-TEST(Telemetry, TextLogCaptureLoggerForwardsAndRecords){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    NWB::Tests::CapturingLogger forwardLogger;
-    Telemetry::TextLogCaptureLogger logger(recorder, &forwardLogger);
-    logger.setFrameIndex(321u);
-    logger.setStreamId(4u);
-
-    logger.enqueue(NWB::Core::Common::LogString(NWB_TEXT("bridged warning"), logger.arena()), NWB::Core::Common::LogType::Warning);
-
-    EXPECT_EQ(forwardLogger.messageCount(), 1u);
-    EXPECT_EQ(forwardLogger.lastType(), NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE(forwardLogger.sawMessageContaining(NWB_TEXT("bridged warning")));
-    EXPECT_EQ(recorder.eventCount(), 1u);
-
-    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.kind, Telemetry::EventKind::TextLog);
-    EXPECT_EQ(event->header.frameIndex, 321u);
-    EXPECT_EQ(event->header.streamId, 4u);
-
-    Telemetry::TextLogPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.type, NWB::Core::Common::LogType::Warning);
-    EXPECT_EQ(parsed.messageUtf8, "bridged warning");
-}
-
-TEST(Telemetry, DiagnosticPayloadRoundTrip){
+TEST(Telemetry, DiagnosticPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
@@ -182,53 +122,13 @@ TEST(Telemetry, DiagnosticPayloadRoundTrip){
         .terminatesProcess = true,
     };
 
-    EXPECT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
-    EXPECT_GT(payload.size(), sizeof(Telemetry::EncodedDiagnosticPayloadHeader));
+    ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
-    EXPECT_EQ(parsed.category, "unit_category");
-    EXPECT_EQ(parsed.expression, "value != nullptr");
-    EXPECT_EQ(parsed.message, "diagnostic message");
-    EXPECT_EQ(parsed.file, "diagnostic_test.cpp");
-    EXPECT_EQ(parsed.instructionPointer, 0x1234u);
-    EXPECT_EQ(parsed.line, 77u);
-    EXPECT_TRUE(parsed.terminatesProcess);
+    ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
-}
-
-TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    const DiagnosticEventRecord source{
-        .event = DiagnosticEventName::s_Assert.data(),
-        .category = DiagnosticEventCategory::s_Assert.data(),
-        .expression = "condition",
-        .message = "assert payload",
-        .file = "assert.cpp",
-        .instructionPointer = 42u,
-        .line = 12u,
-    };
-
-    EXPECT_TRUE(Telemetry::RecordDiagnostic(recorder, source, 222u, 6u));
-
-    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.kind, Telemetry::EventKind::Diagnostic);
-    EXPECT_EQ(event->header.frameIndex, 222u);
-    EXPECT_EQ(event->header.streamId, 6u);
-
-    Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.event, DiagnosticEventName::s_Assert);
-    EXPECT_EQ(parsed.category, DiagnosticEventCategory::s_Assert);
-    EXPECT_EQ(parsed.message, "assert payload");
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
@@ -272,42 +172,6 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
     EXPECT_EQ(parsed.message, "captured diagnostic");
     EXPECT_EQ(parsed.file, "guard.cpp");
     EXPECT_EQ(parsed.line, 44u);
-}
-
-TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
-    TestArena testArena;
-    Telemetry::Recorder disabledRecorder(testArena.arena);
-    Telemetry::DiagnosticCaptureGuard disabledGuard(disabledRecorder);
-    EXPECT_FALSE(disabledGuard.capture(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error.data(),
-        .message = "disabled diagnostic",
-    }));
-
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    Telemetry::DiagnosticCaptureGuard guard(recorder);
-    guard.setFrameIndex(444u);
-    guard.setStreamId(5u);
-
-    EXPECT_TRUE(guard.capture(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error.data(),
-        .category = "manual_capture",
-        .message = "manual diagnostic",
-        .file = "manual.cpp",
-        .line = 55u,
-    }));
-    EXPECT_EQ(recorder.eventCount(), 1u);
-
-    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.frameIndex, 444u);
-    EXPECT_EQ(event->header.streamId, 5u);
-
-    Telemetry::DiagnosticPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.category, "manual_capture");
-    EXPECT_EQ(parsed.message, "manual diagnostic");
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){

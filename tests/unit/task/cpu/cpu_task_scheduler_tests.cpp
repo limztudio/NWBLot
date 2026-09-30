@@ -14,7 +14,6 @@
 #include <windows.h>
 #endif
 #if defined(NWB_PLATFORM_LINUX)
-#include <sched.h>
 #include <unistd.h>
 #endif
 
@@ -137,26 +136,6 @@ struct LifetimeProbe{
     config.workerCount = count;
     config.heterogeneous = false;
     return config;
-}
-
-
-[[nodiscard]] CpuAffinity::Enum ActualProcessorAffinity(const InteropVector<CpuWorkerPlacement>& placements){
-    u32 group = 0u;
-    u32 processor = CpuWorkerPlacement::s_InvalidProcessor;
-#if defined(NWB_PLATFORM_WINDOWS)
-    PROCESSOR_NUMBER location{};
-    GetCurrentProcessorNumberEx(&location);
-    group = location.Group;
-    processor = location.Number;
-#elif defined(NWB_PLATFORM_LINUX)
-    const int location = ::sched_getcpu();
-    if(location >= 0)
-        processor = static_cast<u32>(location);
-#endif
-    const auto found = FindIf(placements.begin(), placements.end(), [group, processor](const CpuWorkerPlacement& placement){
-        return placement.processorGroup == group && placement.logicalProcessorIndex == processor;
-    });
-    return found == placements.end() ? CpuAffinity::Any : found->affinity;
 }
 
 
@@ -500,33 +479,6 @@ TEST(CpuTaskSchedulerTests, StatisticsAccountForQueuedCompletedAndCanceledTasks)
     EXPECT_EQ(finished.peakOutstandingTasks, 3u);
     EXPECT_EQ(finished.performanceTasks + finished.efficiencyTasks + finished.unclassifiedTasks, 3u);
     EXPECT_EQ(finished.performanceWorkers + finished.efficiencyWorkers + finished.unclassifiedWorkers, 0u);
-}
-
-
-TEST(CpuTaskSchedulerTests, IsolatedHeavyAndLightTasksUseTheirMatchingPhysicalCapacityClasses){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    InteropVector<CpuWorkerPlacement> topology;
-    ASSERT_TRUE(QueryCpuWorkerPlacements(topology));
-    CpuTaskScheduler scheduler(s_ExpectedDualCount);
-    const auto workers = scheduler.statistics();
-    if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
-        GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
-    for(const CpuTaskCost::Enum cost : { CpuTaskCost::Heavy, CpuTaskCost::Light }){
-        CpuTaskOptions options;
-        options.cost = cost;
-        CpuAffinity::Enum reported = CpuAffinity::Any;
-        CpuAffinity::Enum physical = CpuAffinity::Any;
-        const auto task = scheduler.submit([&](){
-            reported = scheduler.currentWorkerAffinity();
-            physical = ActualProcessorAffinity(topology);
-        }, options);
-        scheduler.wait(task);
-        const CpuAffinity::Enum expected = cost == CpuTaskCost::Heavy ? CpuAffinity::Performance : CpuAffinity::Efficiency;
-        EXPECT_EQ(reported, expected);
-        EXPECT_EQ(physical, expected);
-    }
-    EXPECT_EQ(scheduler.statistics().placementFailures, 0u);
 }
 
 

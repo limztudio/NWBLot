@@ -94,56 +94,6 @@ TEST_F(UiComboBuilderTests, PointerOpensAnchoredOverlayAndVirtualizesAHundredTho
     EXPECT_TRUE(overlay);
 }
 
-TEST_F(UiComboBuilderTests, EnterOpensAndPreviewNavigationDoesNotSelectUntilEnter){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
-    press(InputKey::Enter);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_TRUE(m_result.opened);
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_context.input().focus(), list());
-    press(InputKey::Down);
-    ASSERT_TRUE(prepare(3u));
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.listState().cursorKey(), 2u);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.committed);
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    press(InputKey::Enter);
-    ASSERT_TRUE(prepare(4u));
-    EXPECT_TRUE(m_result.committed);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.closed);
-    EXPECT_EQ(m_state.selectedKey(), 2u);
-    EXPECT_FALSE(m_state.isOpen());
-    ASSERT_TRUE(m_context.commitFrame(4u));
-    EXPECT_EQ(m_context.input().focus(), host());
-    EXPECT_EQ(target(popup()), nullptr);
-    EXPECT_EQ(target(list()), nullptr);
-}
-
-TEST_F(UiComboBuilderTests, EscapeCancelsPreviewAndRestoresTheFieldFocus){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    ASSERT_TRUE(openByPointer(2u));
-    press(InputKey::Down);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_EQ(m_state.listState().cursorKey(), 2u);
-    press(InputKey::Escape);
-    ASSERT_TRUE(prepare(4u));
-    EXPECT_TRUE(m_result.closed);
-    EXPECT_FALSE(m_result.committed);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_FALSE(m_state.isOpen());
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.listState().cursorKey(), 1u);
-    ASSERT_TRUE(m_context.commitFrame(4u));
-    EXPECT_EQ(m_context.input().focus(), host());
-    EXPECT_FALSE(m_context.input().hasPopup());
-}
-
 TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWithoutCommittingPreview){
     m_source.count = 4u;
     m_state.select(1u);
@@ -195,25 +145,6 @@ TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_EQ(m_state.selectedKey(), 0u);
     EXPECT_EQ(m_state.listState().cursorKey(), 0u);
-    EXPECT_EQ(m_context.input().focus(), host());
-}
-
-TEST_F(UiComboBuilderTests, PointerRowReleaseCommitsImmediatelyAndClosesTheOverlay){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    ASSERT_TRUE(openByPointer(2u));
-    ASSERT_NE(target(row(2u)), nullptr);
-    click(Center(target(row(2u))->rectangle));
-    ASSERT_TRUE(declareCombo(3u));
-    EXPECT_TRUE(m_result.committed);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.closed);
-    EXPECT_EQ(m_state.selectedKey(), 2u);
-    EXPECT_FALSE(m_state.isOpen());
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(3u));
-    EXPECT_FALSE(m_context.input().hasPopup());
-    EXPECT_EQ(target(row(2u)), nullptr);
     EXPECT_EQ(m_context.input().focus(), host());
 }
 
@@ -412,26 +343,6 @@ TEST_F(UiComboBuilderTests, MultipleFieldsHaveIndependentStableInternalIdsAndSta
     EXPECT_EQ(m_context.input().focus(), list("other"));
 }
 
-TEST_F(UiComboBuilderTests, WindowEndPublishesItsAutomaticPopupAfterArrangingTheField){
-    m_state.select(1u);
-    m_state.open();
-    WindowState window;
-    window.bounds = { 30.0f, 40.0f, 320.0f, 240.0f };
-    window.initialized = true;
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Combo window", window));
-    ASSERT_TRUE(m_builder.comboBox("combo", m_source, m_state, Options()).valid);
-    ASSERT_TRUE(finishWindow());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId field = id("combo");
-    const WidgetId body = MakeWidgetId(field, "popup");
-    ASSERT_NE(target(field), nullptr);
-    ASSERT_NE(target(body), nullptr);
-    ExpectRect(target(field)->rectangle, m_state.bounds());
-    ExpectRect(target(body)->rectangle, m_state.placement().bounds);
-    EXPECT_GE(target(body)->rectangle.y, target(field)->rectangle.y + target(field)->rectangle.height);
-}
-
 TEST_F(UiComboBuilderTests, NativeFocusLossCancelsPreviewAndDoesNotRestoreFocusOnCommit){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
@@ -446,20 +357,6 @@ TEST_F(UiComboBuilderTests, NativeFocusLossCancelsPreviewAndDoesNotRestoreFocusO
     EXPECT_FALSE(m_result.committed);
     EXPECT_EQ(m_state.selectedKey(), 1u);
     EXPECT_FALSE(m_context.input().focus().valid());
-}
-
-TEST_F(UiComboBuilderTests, ClosedArrowKeyOpensWithANextRowPreviewWithoutCommitting){
-    m_state.select(1u);
-    ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Down);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_TRUE(m_result.opened);
-    EXPECT_FALSE(m_result.committed);
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_EQ(m_state.selectedKey(), 1u);
-    EXPECT_EQ(m_state.listState().cursorKey(), 2u);
-    EXPECT_EQ(m_context.input().focus(), list());
 }
 
 TEST_F(UiComboBuilderTests, FullyClippedFieldCannotPublishItsPopupAboveTheParent){

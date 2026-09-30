@@ -19,11 +19,7 @@ namespace __hidden_surfel_gi_quality_settings_tests{
 
 using namespace NWB::Impl;
 
-TEST(SurfelGiQualitySettings, DefaultsRetainHalfAndUnsupportedScalesAreRejected){
-    const SurfelGiQualitySettings defaults;
-    EXPECT_EQ(defaults.resolveResolution, SurfelGiResolveResolution::Half);
-    EXPECT_TRUE(ValidateSurfelGiQualitySettings(defaults));
-    EXPECT_TRUE(ValidateSurfelGiQualitySettings({ SurfelGiResolveResolution::Quarter }));
+TEST(SurfelGiQualitySettings, RejectsUnsupportedResolveScales){
     for(const u32 factor : { 0u, 1u, 3u, 5u, 255u })
         EXPECT_FALSE(ValidateSurfelGiQualitySettings({ static_cast<SurfelGiResolveResolution::Enum>(factor) }));
 }

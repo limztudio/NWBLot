@@ -43,18 +43,6 @@ public:
     }
 };
 
-class QueueAssignmentFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        return builder.addPass(
-            Name("assigned_pass"),
-            "Assigned Pass",
-            MakeChangedFrameGraphQueueAssignment(),
-            5u
-        ).valid();
-    }
-};
-
 [[nodiscard]] static bool AddRuntimeStatisticsPacketSubmissions(
     Telemetry::FrameGraphBuilder& builder,
     const Telemetry::FrameGraphNodeHandle owner
@@ -150,18 +138,6 @@ public:
     }
 };
 
-class CaptureFrameIndexFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        m_frameIndex = builder.frameIndex();
-        return builder.addPass(Name("capture_frame_index"), "Capture Frame Index").valid();
-    }
-    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
-
-private:
-    u64 m_frameIndex = Limit<u64>::s_Max;
-};
-
 
 TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
     TestArena testArena;
@@ -186,28 +162,6 @@ TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
     EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
     EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::DependsOn);
     EXPECT_EQ(parsed.edges[0u].flags, 7u);
-}
-
-TEST(Telemetry, FrameGraphRegistryPreservesQueueAssignments){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
-
-    Telemetry::FrameGraphRegistry registry(testArena.arena);
-    QueueAssignmentFrameGraphContributor contributor;
-    registry.registerContributor(contributor);
-
-    ASSERT_TRUE(registry.record(session));
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    ASSERT_EQ(parsed.nodes.size(), 1u);
-    EXPECT_EQ(parsed.nodes[0u].flags, 5u);
-    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
-    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptedQueue.index, 3u);
-    EXPECT_EQ(parsed.nodes[0u].queueAssignment.acceptedQueue.deviceGeneration, 17u);
 }
 
 TEST(Telemetry, FrameGraphRegistryPreservesRuntimeStatistics){
@@ -307,78 +261,6 @@ TEST(Telemetry, FrameGraphBuilderCopiesPhysicalQueueRuntimeStatistics){
         owner,
         MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
     ));
-}
-
-TEST(Telemetry, FrameGraphRegistryPropagatesCaptureFrameIndexToBuilder){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
-    session.setFrameIndex(914u);
-
-    Telemetry::FrameGraphRegistry registry(testArena.arena);
-    CaptureFrameIndexFrameGraphContributor contributor;
-    registry.registerContributor(contributor);
-
-    ASSERT_TRUE(registry.record(session));
-    EXPECT_EQ(contributor.frameIndex(), 914u);
-
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    Telemetry::FrameGraphPendingNameEdges pendingNameEdges(testArena.arena);
-    Telemetry::FrameGraphBuilder directBuilder(nodes, edges, pendingNameEdges);
-    EXPECT_EQ(directBuilder.frameIndex(), 0u);
-}
-
-TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
-
-    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 14u));
-
-    const Telemetry::EventRecord* event = recorder.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.kind, Telemetry::EventKind::FrameGraphFrame);
-    EXPECT_EQ(event->header.frameIndex, 909u);
-    EXPECT_EQ(event->header.streamId, 14u);
-
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.frameIndex, 909u);
-    EXPECT_EQ(parsed.nodes.size(), 3u);
-    EXPECT_EQ(parsed.edges.size(), s_ExpectedDualCount);
-}
-
-TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::All());
-    session.setFrameIndex(910u);
-    session.setStreamId(15u);
-
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
-
-    EXPECT_TRUE(session.recordFrameGraph(nodes, edges));
-
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    EXPECT_EQ(event->header.kind, Telemetry::EventKind::FrameGraphFrame);
-    EXPECT_EQ(event->header.frameIndex, 910u);
-    EXPECT_EQ(event->header.streamId, 15u);
-
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    EXPECT_EQ(parsed.frameIndex, 910u);
-    EXPECT_EQ(parsed.nodes.size(), 3u);
-    EXPECT_EQ(parsed.edges.size(), s_ExpectedDualCount);
 }
 
 

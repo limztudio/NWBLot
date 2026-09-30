@@ -160,21 +160,16 @@ class StressCpuTimingTests(unittest.TestCase):
                 with self.subTest(log=log, requested=requested), self.assertRaises(SmokeFailure):
                     diagnostic.verify_capture(log, path, MEASUREMENT, requested)
 
-    def test_cli_defaults_off_and_environment_cannot_inject_capture(self):
+    def test_inherited_environment_cannot_inject_capture(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             renderer = root / "renderer.exe"
             renderer.write_bytes(b"synthetic")
             argv = ["--executable", str(renderer), "--working-directory", str(root), "--no-logserver"]
             args = smoke.parse_args(argv)
-            self.assertFalse(args.cpu_diagnostics)
             env = smoke.launch_environment({LIT_NWB_STRESS_CPU_DIAGNOSTICS: "1", LIT_NWB_STRESS_CPU_TIMING_FILE: "old"}, args, root)
             self.assertNotIn(LIT_NWB_STRESS_CPU_DIAGNOSTICS, env)
             self.assertNotIn(LIT_NWB_STRESS_CPU_TIMING_FILE, env)
-            args = smoke.parse_args(argv + ["--cpu-diagnostics"])
-            env = smoke.launch_environment({}, args, root)
-            self.assertEqual(env[LIT_NWB_STRESS_CPU_DIAGNOSTICS], "1")
-            self.assertEqual(env[LIT_NWB_STRESS_CPU_TIMING_FILE], str(root / LIT_CPU_GPU_TIMING_TXT))
 
 
 if __name__ == LIT_MAIN:

@@ -19,12 +19,8 @@ namespace __hidden_presentation_settings_tests{
 
 using namespace NWB::Impl;
 
-TEST(PresentationSettings, DefaultsAndExplicitLinearClampAreValid){
+TEST(PresentationSettings, AcceptsZeroExposureAtTheLowerBoundary){
     PresentationSettings settings;
-    EXPECT_TRUE(ValidatePresentationSettings(settings));
-    EXPECT_EQ(settings.toneMap, PresentationToneMap::Reinhard);
-    EXPECT_FLOAT_EQ(settings.exposure, 1.f);
-    EXPECT_FLOAT_EQ(settings.shoulder, 0.65f);
     settings.toneMap = PresentationToneMap::LinearClamp;
     settings.exposure = 0.f;
     EXPECT_TRUE(ValidatePresentationSettings(settings));

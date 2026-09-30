@@ -60,7 +60,7 @@ inline constexpr usize s_TextureByteCount = 96u;
 }
 
 
-TEST(GpuCommandIrUploadStream, DecodesBufferAndPitchedTextureWithOwnedBlobBytes){
+TEST(GpuCommandIrUploadStream, PreservesBufferAndPitchedTextureBlobsAfterCallerMutation){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     u8 bufferBytes[]{ 11u, 12u, 13u, 14u, 15u };

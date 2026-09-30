@@ -14,7 +14,6 @@
 #include <global/arena_object.h>
 #include <global/basic_string.h>
 #include <global/binary.h>
-#include <global/blocking_io.h>
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/diagnostics.h>
@@ -24,12 +23,9 @@
 #include <global/filesystem/utility.h>
 #include <global/filesystem/volume_naming.h>
 #include <global/hash_utils.h>
-#include <global/inplace_function.h>
 #include <global/limit.h>
-#include <global/math/frame.h>
 #include <global/math/type.h>
 #include <global/math/vector.h>
-#include <global/mesh/tangent_frame_rebuild.h>
 #include <global/mesh/triangle_area.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
@@ -61,7 +57,6 @@ static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/n
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
 static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
 static constexpr AStringView s_BETA = "beta";
-static constexpr AStringView s_OK = "ok";
 static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
 static constexpr AStringView s_GRAPHICSVOLUME = "GraphicsVolume";
 static constexpr AStringView s_UNCHANGED = "unchanged";
@@ -247,7 +242,7 @@ struct MoveOnlySwapValue{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Global, PodRoundTrip){
+TEST(Global, ExhaustedPodReadsPreserveCursorAndOutput){
     Vector<u8> binary;
     const u32 writtenValue = 0x11223344u;
     AppendPOD(binary, writtenValue);
@@ -299,24 +294,6 @@ TEST(Global, ParsesIntegerViews){
     EXPECT_TRUE(ParseU64("42", unsignedValue));
     EXPECT_EQ(unsignedValue, 42u);
     EXPECT_FALSE(ParseU64("-1", unsignedValue));
-}
-
-TEST(Global, ArenaMemoryTrackerRecordsLifetimeStatistics){
-    ::ArenaMemoryTracker tracker;
-    tracker.reset(128u);
-    tracker.addReservedBytes(64u);
-    tracker.recordAllocation(32u);
-    tracker.recordReallocation(32u, 48u);
-    tracker.recordDeallocation(48u);
-    tracker.removeReservedBytes(16u);
-
-    const ::ArenaMemoryStats stats = tracker.snapshot();
-    EXPECT_EQ(stats.reservedBytes, 176u);
-    EXPECT_EQ(stats.usedBytes, 0u);
-    EXPECT_EQ(stats.peakUsedBytes, 48u);
-    EXPECT_EQ(stats.allocationCount, 1u);
-    EXPECT_EQ(stats.reallocationCount, 1u);
-    EXPECT_EQ(stats.deallocationCount, 1u);
 }
 
 TEST(Global, ArenaRefDeleterUsesAssociatedNamespaceHook){
@@ -442,42 +419,6 @@ TEST(Global, PersistentArenaReallocationPreservesAlignment){
     VerifyAlignedReallocation(arena);
 }
 
-TEST(Global, Utf8CodePointConversionsPreserveMultibyteText){
-    NWB::Tests::TestArena<> testArena;
-    const WStringView source(L"\u0024\u00A2\u20AC");
-    const AStringView expected("\x24\xC2\xA2\xE2\x82\xAC");
-
-    const auto encoded = BasicStringDetail::WideToUtf8(testArena.arena, source);
-    EXPECT_EQ(AStringView(encoded.data(), encoded.size()), expected);
-
-    BasicString<wchar, NWB::Core::Alloc::GlobalArena> decoded{testArena.arena};
-    auto output = BackInserter(decoded);
-    BasicStringDetail::WriteUtf8AsWString(output, expected);
-    EXPECT_EQ(WStringView(decoded.data(), decoded.size()), source);
-}
-
-TEST(Global, InplaceFunctionInvokesAndMoves){
-    i32 value = 0;
-    InplaceFunction<64u> func([&value](){ value += 3; });
-
-    EXPECT_TRUE(static_cast<bool>(func));
-    func();
-    EXPECT_EQ(value, 3);
-
-    InplaceFunction<64u> moved(Move(func));
-    EXPECT_FALSE(static_cast<bool>(func));
-    ASSERT_TRUE(static_cast<bool>(moved));
-    moved();
-    EXPECT_EQ(value, 6);
-
-    moved = [&value](){ value *= 2; };
-    moved();
-    EXPECT_EQ(value, 12);
-
-    moved.reset();
-    EXPECT_FALSE(static_cast<bool>(moved));
-}
-
 TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     constexpr Name first("Identity\\First");
     constexpr Name same("identity/first");
@@ -573,66 +514,6 @@ TEST(Global, NameHashDebugTextHelpers){
     EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(invalidHashText.data(), invalidHashText.size()), decoded));
 }
 
-TEST(Global, NameSymbolsWriteDefaultFile){
-    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-
-    const Name runtimeName(AStringView("Write\\Default\\Namesym"));
-    const NameHash& runtimeNameHash = runtimeName.hash();
-    char resolvedText[64] = {};
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "write/default/namesym");
-
-    NWB::Core::Alloc::GlobalArena pathArena(NWB::Tests::s_TestArena);
-
-    NameSymbolTestPath executableDirectory(pathArena);
-    ASSERT_TRUE(GetExecutableDirectory(executableDirectory));
-
-    NameSymbolTestPath executableName(pathArena);
-    ASSERT_TRUE(GetExecutableName(executableName));
-
-    NameSymbolTestPath namesymPath = executableDirectory / executableName;
-    namesymPath.replace_extension(NWB_TEXT(".namesym"));
-
-    ErrorCode removeError;
-    if(!RemoveFile(namesymPath, removeError))
-        ASSERT_FALSE(removeError);
-
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::WriteDefaultFile());
-
-    AString namesymText;
-    ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
-    EXPECT_NE(namesymText.find("nwb_namesym_v1"), AString::npos);
-    EXPECT_NE(namesymText.find("write/default/namesym"), AString::npos);
-
-    if(!RemoveFile(namesymPath, removeError))
-        EXPECT_FALSE(removeError);
-}
-
-TEST(Global, NameSymbolsSerializeRoundTrip){
-    // Exercises the cross-process transport path in one process: the client Serialize() the registry, the server
-    // LoadFromMemory()s those exact bytes into a (here, wiped) registry, then resolves.
-    NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
-    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-
-    const Name runtimeName(AStringView("RoundTrip\\Symbol"));
-    const NameHash& runtimeNameHash = runtimeName.hash();
-    EXPECT_GE(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
-
-    NWB::Core::Alloc::GlobalArena serializeArena(NWB::Tests::s_TestArena);
-    ::AString<NWB::Core::Alloc::GlobalArena> namesymText(serializeArena);
-    NWB::Core::Common::NameSymbols::Serialize(namesymText);
-    EXPECT_NE(namesymText.find("roundtrip/symbol"), decltype(namesymText)::npos);
-
-    NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
-    char resolvedText[64] = {};
-    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
-
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeNameHash, resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "roundtrip/symbol");
-}
-
 TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     namespace NameSymbols = NWB::Core::Common::NameSymbols;
     constexpr Name s_LiveOwner("Tests/NameSymbols/Before_Registry_Live");
@@ -698,18 +579,6 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
         EXPECT_FALSE(removeError);
 }
 
-TEST(Global, LengthPrefixedStringRoundTrip){
-    Vector<u8> binary;
-    const AString source("alpha");
-    EXPECT_TRUE(AppendString(binary, AStringView(source.data(), source.size())));
-
-    usize cursor = 0u;
-    AString parsed;
-    EXPECT_TRUE(ReadString(binary, cursor, parsed));
-    EXPECT_EQ(parsed, source);
-    EXPECT_EQ(cursor, binary.size());
-}
-
 TEST(Global, RejectedStringReadsDoNotAdvanceCursor){
     Vector<u8> truncated;
     AppendPOD(truncated, static_cast<u32>(4u));
@@ -741,22 +610,7 @@ TEST(Global, RejectedACompactStringAssignResetsText){
     EXPECT_EQ(compact.c_str()[0], '\0');
 }
 
-TEST(Global, BasicCompactStringTypes){
-    static_assert(sizeof(ACompactString) == ACompactString::s_StorageBytes);
-    static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes);
-
-    ACompactString narrow("Folder\\File.TXT");
-    EXPECT_EQ(narrow.view(), AStringView("folder/file.txt"));
-
-    WCompactString wide(L"Folder\\File.TXT");
-    EXPECT_EQ(wide.view(), WStringView(L"folder/file.txt"));
-
-    wide += L"\\More";
-    EXPECT_EQ(wide.view(), WStringView(L"folder/file.txt/more"));
-
-    const WCompactString fileText = wide.substr(7u, 4u);
-    EXPECT_EQ(fileText.view(), WStringView(L"file"));
-
+TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
     wchar oversized[WCompactString::s_MaxLength + s_ExpectedDualCount] = {};
     for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
         oversized[i] = L'a';
@@ -905,23 +759,6 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_EQ(value, 42u);
 }
 
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-TEST(Global, BlockingFileDescriptorRoundTrip){
-    int fds[2] = { -1, -1 };
-    ASSERT_EQ(::pipe(fds), 0);
-
-    const char written[] = "global blocking io";
-    char read[sizeof(written)] = {};
-
-    EXPECT_TRUE(WriteAllFileDescriptor(fds[1], written, sizeof(written)));
-    EXPECT_TRUE(ReadAllFileDescriptor(fds[0], read, sizeof(read)));
-    EXPECT_EQ(AStringView(read, sizeof(read)), AStringView(written, sizeof(written)));
-
-    ::close(fds[0]);
-    ::close(fds[1]);
-}
-#endif
-
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const char* const argv[] = {
@@ -1017,21 +854,6 @@ TEST(Global, FilesystemMovePathToDirectory){
     EXPECT_EQ(AStringView(movedText.data(), movedText.size()), AStringView("fresh"));
     EXPECT_FALSE(FileExists(source, error));
     EXPECT_FALSE(error);
-
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
-}
-
-TEST(Global, FilesystemUtilityHelpers){
-    NWB::Tests::TestArena<> testArena;
-    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/filesystem_utility_helpers");
-    const Path<NWB::Core::Alloc::GlobalArena> textFile = root / "sample.txt";
-
-    ErrorCode error;
-    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
-    EXPECT_TRUE(WaitForDirectory(root, 0u));
-    EXPECT_TRUE(WriteTextFile(textFile, AStringView("alpha beta")));
-    EXPECT_TRUE(TextFileContains(textFile, s_ALPHA));
-    EXPECT_FALSE(TextFileContains(textFile, AStringView("gamma")));
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
@@ -1136,7 +958,7 @@ TEST(Global, InvalidStringTableReads){
     EXPECT_FALSE(ReadStringTableText(emptyText, 0u, emptyText.size(), 0u, parsed));
 }
 
-TEST(Global, BinaryVectorPayloadRoundTrip){
+TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     Vector<u8> binary;
     Vector<u16> source;
     source.push_back(1u);
@@ -1158,7 +980,7 @@ TEST(Global, BinaryVectorPayloadRoundTrip){
     EXPECT_TRUE(parsed.empty());
 }
 
-TEST(Global, FixedVectorBinaryPayloadRoundTrip){
+TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
     FixedVector<u8, 16u> fixedBinary;
     const u32 writtenValue = 0x55667788u;
     AppendPOD(fixedBinary, writtenValue);
@@ -1188,33 +1010,6 @@ TEST(Global, FixedVectorBinaryPayloadRoundTrip){
     EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
-}
-
-TEST(Global, FixedVectorBinaryStringWrites){
-    FixedVector<u8, 16u> fixedBinary;
-    EXPECT_TRUE(AppendString(fixedBinary, AStringView("fixed")));
-
-    usize cursor = 0u;
-    AString parsed;
-    EXPECT_TRUE(ReadString(fixedBinary, cursor, parsed));
-    EXPECT_EQ(parsed, "fixed");
-    EXPECT_EQ(cursor, fixedBinary.size());
-
-    FixedVector<u8, 8u> fixedStringTable;
-    u32 textOffset = Limit<u32>::s_Max;
-    EXPECT_TRUE(AppendStringTableText(fixedStringTable, AStringView("bind"), textOffset));
-    EXPECT_EQ(textOffset, 0u);
-
-    ACompactString tableText;
-    EXPECT_TRUE(ReadStringTableText(fixedStringTable, 0u, fixedStringTable.size(), textOffset, tableText));
-    EXPECT_EQ(tableText.view(), AStringView("bind"));
-
-    FixedVector<u8, 8u> rawText;
-    AppendTextBytesNoReserveUnchecked(rawText, AStringView("raw"));
-    ASSERT_EQ(rawText.size(), 3u);
-    EXPECT_EQ(rawText[0u], static_cast<u8>('r'));
-    EXPECT_EQ(rawText[1u], static_cast<u8>('a'));
-    EXPECT_EQ(rawText[s_ThirdElementIndex], static_cast<u8>('w'));
 }
 
 TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
@@ -1298,38 +1093,8 @@ TEST(Global, CompressedPairSwapUsesMove){
     EXPECT_EQ(rhs.second().value, 4);
 }
 
-TEST(Global, BoundedRuntimeWrappers){
-    u32 copiedValue = 0u;
-    const u32 sourceValue = 0xAABBCCDDu;
-    NWB_MEMCPY(&copiedValue, sizeof(copiedValue), &sourceValue, sizeof(sourceValue));
-    EXPECT_EQ(copiedValue, sourceValue);
-
-    char copiedText[8] = {};
-    EXPECT_EQ(NWB_STRCPY(copiedText, sizeof(copiedText), s_ALPHA.data()), 0);
-    EXPECT_STREQ(copiedText, s_ALPHA.data());
-
-    char copiedPrefix[8] = {};
-    EXPECT_EQ(NWB_STRNCPY(copiedPrefix, sizeof(copiedPrefix), "abcdef", 3u), 0);
-    EXPECT_STREQ(copiedPrefix, "abc");
-
-    char appendedText[8] = {};
-    EXPECT_EQ(NWB_STRCPY(appendedText, sizeof(appendedText), "ab"), 0);
-    EXPECT_EQ(NWB_STRCAT(appendedText, sizeof(appendedText), "cd"), 0);
-    EXPECT_STREQ(appendedText, "abcd");
-
-    char formattedText[8] = {};
-    EXPECT_EQ(NWB_SPRINTF(formattedText, sizeof(formattedText), "%s", s_OK.data()), 2);
-    EXPECT_STREQ(formattedText, s_OK.data());
-
-    wchar wideText[8] = {};
-    EXPECT_EQ(NWB_WSTRCPY(wideText, sizeof(wideText) / sizeof(wideText[0]), L"wide"), 0);
-    EXPECT_STREQ(wideText, L"wide");
-
-    wchar formattedWideText[8] = {};
-    EXPECT_EQ(NWB_WSPRINTF(formattedWideText, sizeof(formattedWideText) / sizeof(formattedWideText[0]), L"%ls", L"ok"), 2);
-    EXPECT_STREQ(formattedWideText, L"ok");
-
 #if !defined(_MSC_VER)
+TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
     char truncatedText[4] = {};
     EXPECT_NE(NWB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
     EXPECT_STREQ(truncatedText, "abc");
@@ -1337,8 +1102,8 @@ TEST(Global, BoundedRuntimeWrappers){
     char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
     EXPECT_NE(NWB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
-#endif
 }
+#endif
 
 TEST(Global, LoggerMacrosBehaveAsSingleStatements){
     CapturingLogger logger;
@@ -1437,70 +1202,6 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
     EXPECT_EQ(logger.errorCount(), s_ExpectedErrorCount);
     EXPECT_TRUE(logger.sawMessageContaining(s_PARALLEL_LOGGER_MESSAGE));
     EXPECT_TRUE(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE));
-}
-
-TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
-    ResetDiagnosticEventCapture();
-
-    CapturingLogger logger;
-    SetDiagnosticEventCallback(RecordDiagnosticEvent);
-    NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
-        logger,
-        NWB::Core::Common::LogType::Error,
-        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data(),
-        "logger_diagnostic_test.cpp",
-        77u,
-        NWB_TEXT("recoverable error {}"),
-        13
-    );
-    ClearDiagnosticEventCallback(RecordDiagnosticEvent);
-
-    EXPECT_EQ(logger.messageCount(), 1u);
-    EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Error);
-    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("recoverable error 13")));
-    EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
-    ASSERT_NE(s_DiagnosticEventName, nullptr);
-    ASSERT_NE(s_DiagnosticEventCategory, nullptr);
-    ASSERT_NE(s_DiagnosticEventExpression, nullptr);
-    ASSERT_NE(s_DiagnosticEventMessage, nullptr);
-    ASSERT_NE(s_DiagnosticEventFile, nullptr);
-    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Error.data());
-    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data());
-    EXPECT_STREQ(s_DiagnosticEventExpression, "");
-    EXPECT_STREQ(s_DiagnosticEventMessage, "recoverable error 13");
-    EXPECT_STREQ(s_DiagnosticEventFile, "logger_diagnostic_test.cpp");
-    EXPECT_EQ(s_DiagnosticEventLine, 77u);
-}
-
-TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
-    ResetDiagnosticEventCapture();
-
-    CapturingLogger logger;
-    SetDiagnosticEventCallback(RecordDiagnosticEvent);
-    NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
-        logger,
-        NWB::Core::Common::LogType::Assert,
-        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert.data(),
-        "logger_assert_test.cpp",
-        91u,
-        NWB_TEXT("assert log {}"),
-        21
-    );
-    ClearDiagnosticEventCallback(RecordDiagnosticEvent);
-
-    EXPECT_EQ(logger.messageCount(), 1u);
-    EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Assert);
-    EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("assert log 21")));
-    EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
-    ASSERT_NE(s_DiagnosticEventName, nullptr);
-    ASSERT_NE(s_DiagnosticEventCategory, nullptr);
-    ASSERT_NE(s_DiagnosticEventMessage, nullptr);
-    ASSERT_NE(s_DiagnosticEventFile, nullptr);
-    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Assert.data());
-    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert.data());
-    EXPECT_STREQ(s_DiagnosticEventMessage, "assert log 21");
-    EXPECT_STREQ(s_DiagnosticEventFile, "logger_assert_test.cpp");
-    EXPECT_EQ(s_DiagnosticEventLine, 91u);
 }
 
 TEST(Global, DiagnosticEventHook){

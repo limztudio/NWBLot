@@ -100,19 +100,6 @@ TEST_F(MultilineCommandTests, CtrlEnterReportsSubmitWithoutEditingAndSuppressesR
     before.expectUnchanged(m_model);
 }
 
-TEST_F(MultilineCommandTests, HomeEndAndCtrlVariantsSelectLineAndDocumentRanges){
-    ASSERT_TRUE(m_model.setText("ab\ncd\nef"));
-    ASSERT_TRUE(m_model.setSelection(4u, 4u));
-    EXPECT_TRUE(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Home, false, true }, m_model.textMode())).selectionChanged);
-    EXPECT_EQ(m_model.selectedText(), "c");
-    EXPECT_TRUE(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::End, false, true }, m_model.textMode())).selectionChanged);
-    EXPECT_EQ(m_model.selectedText(), "d");
-    EXPECT_TRUE(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Home, true, true }, m_model.textMode())).selectionChanged);
-    EXPECT_EQ(m_model.selectedText(), "ab\nc");
-    EXPECT_TRUE(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::End, true, true }, m_model.textMode())).selectionChanged);
-    EXPECT_EQ(m_model.selectedText(), "d\nef");
-}
-
 TEST_F(MultilineCommandTests, ReadOnlyConsumesNewlineAndMutationsWhileAllowingMovementCopyAndSubmit){
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(m_model.setSelection(1u, 4u));

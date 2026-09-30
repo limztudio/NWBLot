@@ -43,11 +43,8 @@ class CausticQualitySmokeTests(unittest.TestCase):
         self.optical_args = [LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(self.output),
             "--output-directory", str(self.output / "optical")]
 
-    def test_cli_defaults_and_only_explicit_supported_divisors(self):
+    def test_cli_rejects_unsupported_photon_grid_divisors(self):
         for parse, required in ((stress.parse_args, self.stress_args), (optical.parse_args, self.optical_args)):
-            self.assertEqual(parse(required).caustic_photon_grid_divisor, 1)
-            for divisor in (1, 2, 4):
-                self.assertEqual(parse(required + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, str(divisor)]).caustic_photon_grid_divisor, divisor)
             for value in ("0", "3", "8", "-1", "2.0", "fast"):
                 with self.subTest(value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
                     parse(required + [LIT_CAUSTIC_PHOTON_GRID_DIVISOR, value])

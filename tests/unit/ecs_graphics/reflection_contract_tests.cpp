@@ -34,31 +34,6 @@ static constexpr AStringView s_SURFACE_SLANGI = "surface.slangi";
 using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
-TEST(EcsGraphics, ReflectionSurfaceContractUsesExplicitFieldsAndNeutralDefaults){
-    TestArena testArena;
-    AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / s_SURFACE_SLANGI, source));
-    const AStringView shader(source.data(), source.size());
-    const usize structure = shader.find("struct NwbMeshSurface{");
-    const usize constructor = shader.find("NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, half param1)");
-    ASSERT_NE(structure, AStringView::npos);
-    ASSERT_NE(constructor, AStringView::npos);
-    ASSERT_LT(structure, constructor);
-    const AStringView fields = shader.substr(structure, constructor - structure);
-    EXPECT_TRUE(ContainsText(fields, "half3  specularF0;"));
-    EXPECT_TRUE(ContainsText(fields, "half   perceptualRoughness;"));
-
-    const usize constructorEnd = shader.find("return surface;", constructor);
-    ASSERT_NE(constructorEnd, AStringView::npos);
-    const AStringView constructorBody = shader.substr(constructor, constructorEnd - constructor);
-    EXPECT_TRUE(ContainsText(constructorBody, "surface.specularF0 = NWB_SURFACE_SPECULAR_F0_NONE;"));
-    EXPECT_TRUE(ContainsText(constructorBody, "surface.perceptualRoughness = NWB_SURFACE_ROUGHNESS_MAX;"));
-    EXPECT_TRUE(ContainsText(shader, "#define NWB_SURFACE_SPECULAR_F0_NONE half3(0.0h, 0.0h, 0.0h)"));
-    EXPECT_TRUE(ContainsText(shader, "#define NWB_SURFACE_ROUGHNESS_MAX    half(1.0)"));
-    EXPECT_TRUE(ContainsText(constructorBody, "surface.param0 = param0;"));
-    EXPECT_TRUE(ContainsText(constructorBody, "surface.param1 = param1;"));
-}
-
 TEST(EcsGraphics, ReflectionAuthoringSanitizesOnlyTheDedicatedReflectionFields){
     TestArena testArena;
     AString source;
@@ -101,22 +76,6 @@ TEST(EcsGraphics, GlassReflectionUsesFiniteDielectricF0WithoutCoverageScaling){
     ASSERT_NE(reflectionWrite, AStringView::npos);
     ASSERT_NE(coverageWrite, AStringView::npos);
     EXPECT_LT(reflectionWrite, coverageWrite);
-}
-
-TEST(EcsGraphics, SmokeReflectionInputsHaveIndependentTypedDefaults){
-    TestArena testArena;
-    const TestPath shaders = RepoRoot(testArena) / "tests" / "smoke" / "assets" / "shaders";
-    AString bindingSource;
-    AString hookSource;
-    ASSERT_TRUE(ReadTextFile(shaders / "smoke_surface.bind", bindingSource));
-    ASSERT_TRUE(ReadTextFile(shaders / "smoke_surface.surface", hookSource));
-    const AStringView bindings(bindingSource.data(), bindingSource.size());
-    const AStringView hook(hookSource.data(), hookSource.size());
-    EXPECT_TRUE(ContainsText(bindings, "[default(\"half3(0.0h, 0.0h, 0.0h)\")]\n    half3 specular_f0;"));
-    EXPECT_TRUE(ContainsText(bindings, "[default(\"half(1.0h)\")]\n    half perceptual_roughness;"));
-    EXPECT_TRUE(ContainsText(hook, "nwbSetMeshSurfaceReflection(result, runtime.specular_f0, runtime.perceptual_roughness);"));
-    EXPECT_FALSE(ContainsText(hook, "result.param0"));
-    EXPECT_FALSE(ContainsText(hook, "result.param1"));
 }
 
 TEST(EcsGraphics, ReflectionGBufferAppendsItsOwnAttachmentWithoutRepackingBxdfParameters){

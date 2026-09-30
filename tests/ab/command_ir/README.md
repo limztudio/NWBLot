@@ -54,9 +54,8 @@ dispatches, textures, or clears.
 Re-evaluate templates only after a representative workload shows an end-to-end benefit and the implementation has a
 safe invalidation contract for graph generation, resource IDs, pipeline IDs, descriptor state, and packet barriers.
 
-Run either layer's no-Vulkan verification with:
+Run the harness's no-Vulkan verification with:
 
 ```bash
-python -m launcher command-ir --self-test
 python tests/ab/command_ir/run.py --self-test
 ```

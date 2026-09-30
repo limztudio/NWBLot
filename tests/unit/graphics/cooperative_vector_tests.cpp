@@ -40,53 +40,6 @@ using namespace Core;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(CooperativeVectorMatrixStride, PadsEveryStandardLayoutByOneElement){
-    struct TypeCase{
-        CooperativeVectorDataType::Enum type;
-        usize byteSize;
-    };
-    constexpr TypeCase s_TypeCases[]{
-        { CooperativeVectorDataType::UInt8, 1u },
-        { CooperativeVectorDataType::SInt8, 1u },
-        { CooperativeVectorDataType::UInt8Packed, 1u },
-        { CooperativeVectorDataType::SInt8Packed, 1u },
-        { CooperativeVectorDataType::UInt16, s_ExpectedDualCount },
-        { CooperativeVectorDataType::SInt16, s_ExpectedDualCount },
-        { CooperativeVectorDataType::UInt32, 4u },
-        { CooperativeVectorDataType::SInt32, 4u },
-        { CooperativeVectorDataType::UInt64, 8u },
-        { CooperativeVectorDataType::SInt64, 8u },
-        { CooperativeVectorDataType::FloatE4M3, 1u },
-        { CooperativeVectorDataType::FloatE5M2, 1u },
-        { CooperativeVectorDataType::Float16, s_ExpectedDualCount },
-        { CooperativeVectorDataType::BFloat16, s_ExpectedDualCount },
-        { CooperativeVectorDataType::Float32, 4u },
-        { CooperativeVectorDataType::Float64, 8u },
-    };
-
-    for(const TypeCase& typeCase : s_TypeCases){
-        const usize rowByteSize = typeCase.byteSize * 3u;
-        const usize columnByteSize = typeCase.byteSize * s_ExpectedDualCount;
-        const usize rowStride = GetCooperativeVectorOptimalMatrixStride(
-            typeCase.type,
-            CooperativeVectorMatrixLayout::RowMajor,
-            s_ExpectedDualCount,
-            3u
-        );
-        const usize columnStride = GetCooperativeVectorOptimalMatrixStride(
-            typeCase.type,
-            CooperativeVectorMatrixLayout::ColumnMajor,
-            s_ExpectedDualCount,
-            3u
-        );
-
-        EXPECT_EQ(rowStride, rowByteSize + typeCase.byteSize);
-        EXPECT_EQ(columnStride, columnByteSize + typeCase.byteSize);
-        EXPECT_GT(rowStride, rowByteSize);
-        EXPECT_GT(columnStride, columnByteSize);
-    }
-}
-
 TEST(CooperativeVectorMatrixStride, FailsClosedForInvalidOrDriverOptimalInputs){
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,

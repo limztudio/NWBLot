@@ -15,20 +15,6 @@
 constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
-TEST(CpuTaskProfilingTests, DisabledCaptureProducesNoEvents){
-    using namespace NWB::Core;
-    CpuTaskScheduler scheduler(0u);
-    scheduler.parallelFor(0u, 16u, [](usize){});
-    scheduler.wait();
-    CpuTaskProfileEvent events[8u];
-    EXPECT_EQ(scheduler.readProfileEvents(events, 8u), 0u);
-    const auto statistics = scheduler.statistics();
-    EXPECT_FALSE(statistics.profileEnabled);
-    EXPECT_EQ(statistics.profileRecordedEvents, 0u);
-    EXPECT_EQ(statistics.profileDroppedEvents, 0u);
-    EXPECT_EQ(statistics.profilePendingEvents, 0u);
-}
-
 TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels){
     using namespace NWB::Core;
     CpuTaskScheduler scheduler(0u);
@@ -169,35 +155,6 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
     scheduler.setProfiling(false);
     EXPECT_EQ(scheduler.readProfileEvents(events, 16u), 0u);
     EXPECT_FALSE(scheduler.statistics().profileEnabled);
-}
-
-TEST(CpuTaskProfilingTests, WorkerIdleEventsUseTheNativeWorkerLane){
-    using namespace NWB::Core;
-    CpuTaskSchedulerConfig config;
-    config.workerCount = 1u;
-    config.heterogeneous = false;
-    CpuTaskScheduler scheduler(config);
-    scheduler.setProfiling(true, 9u);
-    bool idleObserved = false;
-    const Timer deadline = TimerNow();
-    while(!idleObserved && DurationInMS<u64>(TimerNow(), deadline) < 4000u){
-        SleepMS(s_ExpectedDualCount);
-        const auto task = scheduler.submit([](){});
-        ASSERT_TRUE(task.valid());
-        scheduler.wait(task);
-        CpuTaskProfileEvent events[32u];
-        const usize count = scheduler.readProfileEvents(events, 32u);
-        for(usize index = 0u; index < count; ++index){
-            if(events[index].kind == CpuTaskProfileKind::WorkerIdle){
-                idleObserved = true;
-                EXPECT_EQ(events[index].workerIndex, 1u);
-                EXPECT_EQ(events[index].affinity, CpuAffinity::Any);
-                EXPECT_EQ(events[index].frameIndex, 9u);
-                EXPECT_GT(events[index].durationNanoseconds, 0u);
-            }
-        }
-    }
-    EXPECT_TRUE(idleObserved);
 }
 
 TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){

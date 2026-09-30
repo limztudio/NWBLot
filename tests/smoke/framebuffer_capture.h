@@ -36,6 +36,8 @@ struct FramebufferCaptureOptions{
     // Optional borrowed predicate context must remain alive until stop() completes.
     bool (*shouldCapture)(void*, u64) = nullptr;
     void* predicateContext = nullptr;
+    u32 requiredWidth = 0u;
+    u32 requiredHeight = 0u;
     bool quitWhenReady = true;
 };
 

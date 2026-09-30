@@ -29,7 +29,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
-from profiles import BaselineProfile, get_profile, profile_names  # noqa: E402
+from profiles import BaselineProfile, corpus_profile_names, get_profile, profile_names  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     STRICT_LOG_FAILURE_MESSAGES,
@@ -730,7 +730,7 @@ def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
     corpus = load_corpus(corpus_id)
     profiles = corpus.get(LIT_PROFILES)
     assert isinstance(profiles, dict)
-    expected_profiles = set(profile_names())
+    expected_profiles = set(corpus_profile_names())
     actual_profiles = set(profiles)
     if actual_profiles != expected_profiles:
         missing = sorted(expected_profiles - actual_profiles)
@@ -846,7 +846,7 @@ def run(args: argparse.Namespace) -> int:
 
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(LIT_PROFILE_2, choices=profile_names(), help="Pinned renderer scene to capture.")
+    parser.add_argument(LIT_PROFILE_2, choices=profile_names(), help="Renderer scene to capture.")
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Selected smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Selected cooked smoke runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="New, empty artifact directory.")
@@ -924,6 +924,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 def run_self_test() -> int:
     assert FORBIDDEN_LOG_MESSAGES[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
+    assert set(load_corpus(CURRENT_CORPUS_ID)[LIT_PROFILES]) == set(corpus_profile_names())
     try:
         validate_runtime_log("", ())
     except SmokeFailure:
@@ -1169,6 +1170,22 @@ def run_self_test() -> int:
         assert surfel_profile.capture_freeze_frame == 360
         assert surfel_profile.settle_seconds == 0.75
         assert surfel_profile.fixed_delta_seconds == 1.0 / 60.0
+        assert surfel_profile.frozen_environment == {}
+        complex_surfel_profile = get_profile("surfel-gi-complex")
+        assert complex_surfel_profile.target == surfel_profile.target
+        assert complex_surfel_profile.capture_freeze_frame == surfel_profile.capture_freeze_frame
+        assert complex_surfel_profile.fixed_delta_seconds == surfel_profile.fixed_delta_seconds
+        assert complex_surfel_profile.frozen_environment == {
+            "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
+            "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "10",
+        }
+        assert "surfel-gi" in corpus_profile_names()
+        assert "surfel-gi-complex" not in corpus_profile_names()
+        with mock.patch.dict(os.environ, {"NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100"}):
+            assert effective_frozen_environment(complex_surfel_profile) == {
+                "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
+                "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100",
+            }
         soft_shadow_profile = get_profile(LIT_SOFT_SHADOWS)
         assert soft_shadow_profile.capture_freeze_frame == 360
         assert soft_shadow_profile.settle_seconds == 0.75

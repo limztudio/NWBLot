@@ -251,6 +251,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceHwPipeline.reset();
     m_surfelUseHwTrace = false;
     m_surfelPoolBuffer.reset();
+    m_surfelGuidePoolBuffer.reset();
     m_surfelCellHeadBuffer.reset();
     m_surfelCounterBuffer.reset();
     m_surfelTraceIndirectArgsBuffer.reset();
@@ -261,6 +262,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelConstants.reset();
     m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();

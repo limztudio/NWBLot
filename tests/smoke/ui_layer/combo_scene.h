@@ -8,7 +8,7 @@
 #include "combo_source.h"
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/combo.h>
+#include <impl/ecs_ui/toolkit/widgets/combo.h>
 
 #include <core/alloc/general.h>
 #include <core/input/module.h>

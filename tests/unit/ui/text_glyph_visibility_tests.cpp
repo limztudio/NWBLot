@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ui/text/atlas.h>
-#include <impl/ui/text/glyph_visibility.h>
+#include <impl/ecs_ui/toolkit/text/atlas.h>
+#include <impl/ecs_ui/toolkit/text/glyph_visibility.h>
 
 #include <tests/common/font_fixture.h>
 

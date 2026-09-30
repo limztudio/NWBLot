@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+// Diagnostic catcher for the closed GI scene: display irradiance from surfel GI without direct sun.
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+    const half3 bounceColor = max(surface.baseColor * surface.indirectIrradiance, half3(0.0h));
+    return nwbBxdfRequiresLinearOutput()
+        ? bounceColor
+        : bounceColor / (bounceColor + half3(0.65h))
+    ;
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

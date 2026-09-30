@@ -348,6 +348,7 @@ struct RtSurfelGiState{
     Core::ComputePipelineHandle m_surfelTraceHwPipeline;
     // Device-lifetime pool, hash heads, and counters; initialized once.
     Core::BufferHandle m_surfelPoolBuffer;
+    Core::BufferHandle m_surfelGuidePoolBuffer;
     Core::BufferHandle m_surfelCellHeadBuffer;
     Core::BufferHandle m_surfelCounterBuffer;
     Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
@@ -362,6 +363,7 @@ struct RtSurfelGiState{
     // Descriptor generations retire before their backing buffers.
     Core::GpuDescriptorHandle m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();

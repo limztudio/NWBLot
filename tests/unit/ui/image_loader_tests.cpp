@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ui/images/image_loader.h>
+#include <impl/ecs_ui/toolkit/images/image_loader.h>
 #include <impl/assets_texture/binary_payload.h>
 #include <impl/assets_ui_skin/asset.h>
 

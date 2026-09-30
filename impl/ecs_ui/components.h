@@ -6,9 +6,9 @@
 
 
 #include <impl/global.h>
-#include <impl/ui/paint.h>
-#include <impl/ui/builder.h>
-#include <impl/ui/text/service.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/builder.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <core/ecs/entity_id.h>
 #include <core/os/clipboard.h>

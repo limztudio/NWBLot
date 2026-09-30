@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ui/widgets/edit_box.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box.h>
 
 #include <tests/common/font_fixture.h>
 

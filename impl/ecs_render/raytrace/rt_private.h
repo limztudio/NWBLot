@@ -401,10 +401,15 @@ struct SurfelHeapPushConstants{
     u32 normalSlot = 0u;
     u32 outputStorageHeapSlot = 0u;
     u32 halfIrradianceSlot = 0u;
+    u32 guidePoolHeapSlot = 0u;
 };
-static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 14u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
+static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 15u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
 static_assert(NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL <= NWB_SURFEL_RAYS_PER_SURFEL);
+static_assert(NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL <= NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
 static_assert(NWB_SURFEL_CONVERGED_SAMPLE_COUNT >= 1u && NWB_SURFEL_CONVERGED_SAMPLE_COUNT <= NWB_SURFEL_MAX_ACCUM);
+static_assert(NWB_SURFEL_GUIDE_BIN_COUNT == 16u && NWB_SURFEL_RECORD_SIZE == 96u);
+static_assert(sizeof(Float4) == NWB_SURFEL_GUIDE_FLOAT4_STRIDE);
+static_assert(NWB_SURFEL_RAYS_PER_SURFEL >= NWB_SURFEL_GUIDE_BIN_COUNT);
 
 // Shader-mirrored caustic resolve stages.
 namespace CausticResolveStage{

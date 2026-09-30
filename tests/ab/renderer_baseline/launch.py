@@ -118,7 +118,7 @@ def runner_command(args: argparse.Namespace, paths: BaselinePaths) -> List[objec
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("profile", nargs="?", choices=profile_names(), help="Pinned renderer scene to capture.")
+    parser.add_argument("profile", nargs="?", choices=profile_names(), help="Renderer scene to capture.")
     parser.add_argument(LIT_EXECUTABLE, type=Path, help="Override the selected smoke executable.")
     parser.add_argument(LIT_RUNTIME_DIR, type=Path, help="Override the selected cooked smoke runtime directory.")
     parser.add_argument(LIT_OUTPUT_DIR, type=Path, help="Directory for the immutable capture and manifest.")
@@ -176,6 +176,7 @@ def run_self_test() -> int:
     assert LIT_GPU_VALIDATION in command
     assert command[-2:] == [LIT_REFERENCE_DIR, LIT_REFERENCE]
     assert parse_args([LIT_SELF_TEST]).gpu_validation is True
+    assert parse_args([LIT_SELF_TEST, "surfel-gi-complex"]).profile == "surfel-gi-complex"
     print("renderer-baseline launcher self-test passed")
     return 0
 

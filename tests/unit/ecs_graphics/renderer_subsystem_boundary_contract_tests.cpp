@@ -554,10 +554,13 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "f32m_causticTemporalDecay=ECSRenderDetail::s_DefaultCausticTemporalDecay;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelPoolCapacity=NWB_SURFEL_POOL_CAPACITY;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelHashCellCount=NWB_SURFEL_HASH_CELL_COUNT;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::BufferHandlem_surfelGuidePoolBuffer;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "Core::GpuDescriptorHandlem_surfelGuidePoolHeapHandle=Core::GpuDescriptorHandle::invalid();"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 101u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 102u);
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelGuidePoolBuffer.reset();"));
     EXPECT_EQ(CountText(compactStateSystem, "m_softwareTransparentSampling=SoftwareTransparentSamplingState{};"), 1u);
     // Accepted transparent history belongs to the shadow feature and clears both generations on resource invalidation.
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/shadow/transparent_sampling_history.h>"));
@@ -580,7 +583,8 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_refractionHardwareTracingEnabled="));
     EXPECT_EQ(CountText(compactStateSystem, ".clear();"), 16u);
     // Shadow and caustic aliases now share one descriptor owned by the ray scene; invalidation retires it once.
-    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 23u);
+    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 24u);
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_surfelGuidePoolHeapHandle=Core::GpuDescriptorHandle::invalid();"));
     EXPECT_EQ(CountText(compactStateHeader, "Core::GpuDescriptorHandlem_rayTraceMaterialContextSlotsHeapHandle="), 1u);
     EXPECT_EQ(CountText(compactStateSystem, "m_rayTraceMaterialContextSlotsHeapHandle=Core::GpuDescriptorHandle::invalid();"), 1u);
     EXPECT_FALSE(ContainsText(compactStateHeader, "m_shadowMaterialContextSlotsHeapHandle"));

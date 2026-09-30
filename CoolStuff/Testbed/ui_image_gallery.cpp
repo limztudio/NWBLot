@@ -4,7 +4,7 @@
 
 #include "ui_image_gallery.h"
 
-#include <impl/ui/images/image_loader.h>
+#include <impl/ecs_ui/toolkit/images/image_loader.h>
 
 #include <core/common/log.h>
 

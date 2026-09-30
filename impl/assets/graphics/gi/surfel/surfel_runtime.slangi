@@ -23,6 +23,7 @@
 // maintenance and trace kernels readable while expanding to global heap accesses.
 #define g_NwbSurfelConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define g_NwbSurfelPool g_NwbHeapSurfelWritablePools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
+#define g_NwbSurfelGuidePool g_NwbHeapSurfelWritableGuidePools[g_NwbSurfelHeapPushConstants.guidePoolHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

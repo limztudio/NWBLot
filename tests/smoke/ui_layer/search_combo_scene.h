@@ -8,7 +8,7 @@
 #include "search_combo_source.h"
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/search_combo.h>
+#include <impl/ecs_ui/toolkit/widgets/search_combo.h>
 
 #include <core/alloc/general.h>
 #include <core/input/module.h>

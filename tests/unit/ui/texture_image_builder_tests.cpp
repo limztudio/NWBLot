@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ui/images/image_source.h>
+#include <impl/ecs_ui/toolkit/images/image_source.h>
 
 #include <global/simplemath.h>
 

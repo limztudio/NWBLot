@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ui/text/atlas.h>
-#include <impl/ui/text/service.h>
+#include <impl/ecs_ui/toolkit/text/atlas.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <tests/common/font_fixture.h>
 
@@ -208,6 +208,54 @@ TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
     EXPECT_TRUE(snapshot.glyphPages().empty());
 }
 
+TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset){
+    ASSERT_EQ(m_service.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    ASSERT_EQ(m_layout.glyphs().size(), 1u);
+    const SharedFontFace face = m_layout.glyphs()[0].face;
+    const u32 glyphId = m_layout.glyphs()[0].glyphId;
+    const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u };
+    const SharedFontFace otherFace = MakeFontFace(m_arena, source);
+    ASSERT_TRUE(otherFace && otherFace->valid());
+    ASSERT_NE(face.get(), otherFace.get());
+    GlyphAtlas atlas(m_arena);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    const AtlasGlyph* first = atlas.find(face, glyphId, 24u);
+    ASSERT_NE(first, nullptr);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 1u);
+    EXPECT_EQ(atlas.find(face, glyphId, 24u), first);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 32u));
+    ASSERT_TRUE(atlas.prepare(otherFace, glyphId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 3u);
+    EXPECT_NE(atlas.find(face, glyphId, 32u), first);
+    EXPECT_NE(atlas.find(otherFace, glyphId, 24u), first);
+
+    ASSERT_EQ(m_service.layout({ " " }, m_layout), TextLayoutStatus::Success);
+    ASSERT_EQ(m_layout.glyphs().size(), 1u);
+    const u32 spaceId = m_layout.glyphs()[0].glyphId;
+    GlyphBitmap bitmap(m_arena);
+    ASSERT_TRUE(face->rasterize(spaceId, 24u, bitmap));
+    ASSERT_TRUE(bitmap.width == 0u || bitmap.height == 0u);
+    ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
+    const AtlasGlyph* space = atlas.find(face, spaceId, 24u);
+    ASSERT_NE(space, nullptr);
+    EXPECT_EQ(space->pageIndex, s_GlyphAtlasNoPage);
+    ASSERT_TRUE(atlas.prepare(face, spaceId, 24u));
+    EXPECT_EQ(atlas.glyphCount(), 4u);
+
+    const SharedGlyphPage oldPage = atlas.page(0u);
+    ASSERT_TRUE(oldPage);
+    atlas.reset();
+    EXPECT_EQ(atlas.glyphCount(), 0u);
+    EXPECT_EQ(atlas.pageCount(), 0u);
+    EXPECT_EQ(atlas.find(face, glyphId, 24u), nullptr);
+    EXPECT_EQ(atlas.find(face, spaceId, 24u), nullptr);
+    ASSERT_TRUE(atlas.prepare(face, glyphId, 24u));
+    const SharedGlyphPage newPage = atlas.page(0u);
+    ASSERT_TRUE(newPage);
+    EXPECT_NE(newPage->binding().atlasIdentity, oldPage->binding().atlasIdentity);
+}
+
 TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
     ASSERT_EQ(m_service.layout({ "W" }, m_layout), TextLayoutStatus::Success);
     const PlacedGlyph& glyph = m_layout.glyphs()[0];
@@ -222,6 +270,9 @@ TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
         ASSERT_TRUE(atlas.page(index));
     }
     EXPECT_FALSE(atlas.prepare(glyph.face, glyph.glyphId, 476u));
+    EXPECT_EQ(atlas.find(glyph.face, glyph.glyphId, 476u), nullptr);
+    EXPECT_TRUE(atlas.prepare(glyph.face, glyph.glyphId, 460u));
+    EXPECT_EQ(atlas.glyphCount(), s_GlyphAtlasMaxPages);
     EXPECT_EQ(atlas.pageCount(), s_GlyphAtlasMaxPages);
 }
 

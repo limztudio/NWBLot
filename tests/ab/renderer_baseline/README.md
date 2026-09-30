@@ -32,6 +32,21 @@ Without thresholds the comparison is report-only; `--require-exact` is suitable 
 reference with a different profile, frozen environment, or GPU-validation mode is rejected rather than silently
 compared.
 
+For surfel-GI A/B work, `surfel-gi-complex` selects the closed black room with a small skylight and twenty seeded
+bodies. It waits for at least 360 successful presentations and 10 seconds of elapsed time before holding the capture
+frame. To let GI settle for 100 seconds, set the profile's environment override and increase the ready-marker timeout:
+
+```powershell
+$env:NWB_GI_SMOKE_MIN_SETTLE_SECONDS = "100"
+python -m launcher renderer-baseline surfel-gi-complex --no-gpu-validation -- --startup-timeout 300
+```
+
+Run this from a clean source revision to create an immutable reference, then repeat with `--reference-dir` pointing
+at that reference. Keep the settle override and GPU-validation choice identical for both runs. The formal
+`current-renderer-v1` corpus retains the original open-box `surfel-gi` profile; the complex A/B profile is separate.
+Older complex-scene artifacts labeled `surfel-gi` cannot be used as references for `surfel-gi-complex` because the
+profile identity is part of each capture manifest.
+
 ## Formal current-renderer corpus
 
 The checked-in [`current_renderer_corpus.json`](current_renderer_corpus.json) pins the eight approved reference

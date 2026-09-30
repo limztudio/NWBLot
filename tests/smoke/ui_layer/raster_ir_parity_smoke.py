@@ -106,8 +106,10 @@ def capture_environment(args, scene, mode):
 
 
 def launch_capture(args, scene, mode, path, log_path=None, *, resize=False):
+    environment = capture_environment(args, scene, mode)
+    environment["NWB_UI_LAYER_RESIZE_CAPTURE"] = "1" if resize else "0"
     result = subprocess.run(capture_command(args, scene, mode, path, log_path, resize=resize),
-        env=capture_environment(args, scene, mode), check=False, timeout=args.timeout + 45.0)
+        env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return False
     if result.returncode:

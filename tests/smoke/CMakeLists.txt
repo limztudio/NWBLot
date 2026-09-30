@@ -1358,12 +1358,13 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             ENVIRONMENT "NWB_SOFT_SHADOW_TEST_SPIN_ANGLE=0.6"
         )
 
-        # Dedicated surfel-GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
-        # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the surfel-GI pass signal.
-        # Reuses the benchmark's cooked assets (ground material).
+        # The default surfel-GI smoke preserves the open-top box used by the pinned renderer baseline. A closed,
+        # 20-body skylight scene is available to opt-in A/B captures through NWB_GI_SMOKE_COMPLEX_SCENE.
         nwb_declare_executable(nwb_gi_test_smoke)
         target_sources(nwb_gi_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         nwb_configure_runtime_smoke_target(
             nwb_gi_test_smoke

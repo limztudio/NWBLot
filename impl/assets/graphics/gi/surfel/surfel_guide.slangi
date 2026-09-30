@@ -1,0 +1,100 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_GUIDE_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_GUIDE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell
+// the same solid angle. The mixed PDF is evaluated for BOTH uniform and guided rays when projecting radiance to SH.
+
+
+#include "../constants.h"
+#include "surfel_binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Four float4 entries per surfel live in a separate guide buffer; this local value is used by active trace rays.
+struct NwbSurfelGuide{
+    float4 weights[NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL];
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbSurfelGuideHash(uint value){
+    value ^= value >> 16u;
+    value *= 0x7feb352du;
+    value ^= value >> 15u;
+    value *= 0x846ca68bu;
+    value ^= value >> 16u;
+    return value;
+}
+
+float nwbSurfelGuideRandom(uint seed){
+    // A 22-bit midpoint is exactly representable in float32 and stays strictly inside (0, 1).
+    // Using 24 bits could round the upper endpoint to one, outside the last CDF stratum.
+    return (float(nwbSurfelGuideHash(seed) >> 10u) + 0.5) * (1.0 / 4194304.0);
+}
+
+float nwbSurfelGuideWeight(const NwbSurfelGuide guide, const uint bin){
+    return max(guide.weights[bin >> 2u][bin & 3u], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
+}
+
+float nwbSurfelGuideTotal(const NwbSurfelGuide guide){
+    float total = 0.0;
+    [unroll]
+    for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin)
+        total += nwbSurfelGuideWeight(guide, bin);
+    return total;
+}
+
+uint nwbSurfelGuideSelectBin(const NwbSurfelGuide guide, const float target){
+    float cumulative = 0.0;
+    [loop]
+    for(uint bin = 0u; bin < NWB_SURFEL_GUIDE_BIN_COUNT; ++bin){
+        cumulative += nwbSurfelGuideWeight(guide, bin);
+        if(target < cumulative)
+            return bin;
+    }
+    return NWB_SURFEL_GUIDE_BIN_COUNT - 1u;
+}
+
+float3 nwbSurfelGuideDirection(const uint bin, const float2 withinBin){
+    const float azimuth = (float(bin % NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.x)
+        * (NWB_GI_FULL_TURN_RADIANS / float(NWB_SURFEL_GUIDE_AZIMUTH_BINS));
+    const float z = (float(bin / NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.y)
+        / float(NWB_SURFEL_GUIDE_HEIGHT_BINS);
+    const float radius = sqrt(max(1.0 - z * z, 0.0));
+    return float3(cos(azimuth) * radius, sin(azimuth) * radius, z);
+}
+
+float nwbSurfelGuideInversePdf(const NwbSurfelGuide guide, const uint bin, const uint uniformRayCount, const uint rayCount, const float guideTotal){
+    const uint guidedRayCount = rayCount - uniformRayCount;
+    if(guidedRayCount == 0u)
+        return NWB_GI_FULL_TURN_RADIANS;
+
+    // Both ray classes use the same mixture PDF. Multiply its numerator and denominator by
+    // rayCount * binCount * guideTotal to avoid the three intermediate divisions.
+    const float binWeight = nwbSurfelGuideWeight(guide, bin);
+    const float denominator = float(uniformRayCount) * guideTotal
+        + float(guidedRayCount * NWB_SURFEL_GUIDE_BIN_COUNT) * binWeight;
+    return NWB_GI_FULL_TURN_RADIANS * float(rayCount) * guideTotal / denominator;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

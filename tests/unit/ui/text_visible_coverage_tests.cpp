@@ -4,7 +4,7 @@
 
 #include "text_visible_fixture.h"
 
-#include <impl/ui/text/atlas.h>
+#include <impl/ecs_ui/toolkit/text/atlas.h>
 
 #include <global/algorithm.h>
 #include <global/simplemath.h>

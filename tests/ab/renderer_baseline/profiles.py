@@ -27,6 +27,7 @@ class BaselineProfile:
     capture_freeze_frame: int = 0
     capture_ready_log: str = ""
     fixed_delta_seconds: float = 0.0
+    formal_corpus: bool = True
 
 
 PROFILES: Mapping[str, BaselineProfile] = {
@@ -95,11 +96,27 @@ PROFILES: Mapping[str, BaselineProfile] = {
         runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME,
         window_title="NWB GI Test",
         settle_seconds=0.75,
+        # current-renderer-v1 pins the original open-box scene; the complex scene has its own profile.
         frozen_environment={},
         description="Surfel-GI trace and resolve baseline.",
         capture_freeze_frame=360,
         capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after",
         fixed_delta_seconds=1.0 / 60.0,
+    ),
+    "surfel-gi-complex": BaselineProfile(
+        target="nwb_gi_test_smoke",
+        runtime_directory=Path(LIT_TESTING) / LIT_SKINNING_CULLING_BENCHMARK_RUNTIME,
+        window_title="NWB GI Test",
+        settle_seconds=0.75,
+        frozen_environment={
+            "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
+            "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "10",
+        },
+        description="Closed, 20-body skylight scene for surfel-GI A/B captures.",
+        capture_freeze_frame=360,
+        capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
+        formal_corpus=False,
     ),
     "stress": BaselineProfile(
         target="nwb_stress_test_smoke",
@@ -117,6 +134,10 @@ PROFILES: Mapping[str, BaselineProfile] = {
 
 def profile_names() -> tuple[str, ...]:
     return tuple(sorted(PROFILES))
+
+
+def corpus_profile_names() -> tuple[str, ...]:
+    return tuple(sorted(name for name, profile in PROFILES.items() if profile.formal_corpus))
 
 
 def get_profile(name: str) -> BaselineProfile:

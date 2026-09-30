@@ -67,6 +67,7 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     if(heap.isInitialized()){
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelConstantsHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelGuidePoolHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCounterHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle);
@@ -79,6 +80,7 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
 
     m_rayTracingState.m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();

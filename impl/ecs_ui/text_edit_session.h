@@ -6,8 +6,8 @@
 
 
 #include <impl/global.h>
-#include <impl/ui/id.h>
-#include <impl/ui/edit/model.h>
+#include <impl/ecs_ui/toolkit/id.h>
+#include <impl/ecs_ui/toolkit/edit/model.h>
 
 #include <core/os/text_input.h>
 

@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ui/context.h>
+#include <impl/ecs_ui/toolkit/context.h>
+
+#include <charconv>
 
 #include <gtest/gtest.h>
 
@@ -443,6 +445,71 @@ TEST_F(UiContextTests, TargetAdmissionRejectsForeignRootPriorFrameAndReplacedLif
     EXPECT_FALSE(m_context.commitFrame(4u));
 }
 
+
+TEST_F(UiContextTests, DenseReorderedDeclarationsKeepLifetimesAcrossRetirement){
+    constexpr u32 s_Count = 2048u;
+    const WidgetRoot root{ 151u, 1u };
+    const auto declareIndex = [&](const u32 index){
+        char key[16];
+        const auto converted = std::to_chars(key, key + sizeof(key), index);
+        if(converted.ec != std::errc{})
+            return static_cast<WidgetState*>(nullptr);
+        return m_context.declare(AStringView(key, static_cast<usize>(converted.ptr - key)), WidgetKind::Button);
+    };
+
+    ASSERT_TRUE(m_context.beginFrame(1u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    u64 retainedGeneration = 0u;
+    u64 removedGeneration = 0u;
+    for(u32 index = 0u; index < s_Count; ++index){
+        WidgetState* state = declareIndex(index);
+        ASSERT_NE(state, nullptr);
+        ASSERT_TRUE(m_context.addTarget(*state, ButtonTarget()));
+        EXPECT_FALSE(m_context.takeActivation(*state, true));
+        if(index == 0u)
+            retainedGeneration = state->declarationGeneration;
+        if(index == 1u)
+            removedGeneration = state->declarationGeneration;
+    }
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+
+    ASSERT_TRUE(m_context.beginFrame(2u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    for(u32 remaining = s_Count; remaining > 0u; --remaining){
+        const u32 index = remaining - 1u;
+        if((index & 1u) != 0u)
+            continue;
+        WidgetState* state = declareIndex(index);
+        ASSERT_NE(state, nullptr);
+        ASSERT_TRUE(m_context.addTarget(*state, ButtonTarget()));
+        EXPECT_FALSE(m_context.takeActivation(*state, true));
+        if(index == 0u)
+            EXPECT_EQ(state->declarationGeneration, retainedGeneration);
+    }
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    ASSERT_EQ(m_context.states().entries().size(), s_Count / 2u);
+
+    ASSERT_TRUE(m_context.beginFrame(3u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    for(u32 index = 0u; index < s_Count; ++index){
+        WidgetState* state = declareIndex(index);
+        ASSERT_NE(state, nullptr);
+        ASSERT_TRUE(m_context.addTarget(*state, ButtonTarget()));
+        EXPECT_FALSE(m_context.takeActivation(*state, true));
+        if(index == 0u)
+            EXPECT_EQ(state->declarationGeneration, retainedGeneration);
+        if(index == 1u)
+            EXPECT_GT(state->declarationGeneration, removedGeneration);
+    }
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

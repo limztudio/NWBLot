@@ -22,21 +22,42 @@ namespace __hidden_ui_skin_toolkit_contract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr Name s_RequiredRegions[] = {
-    Name("panel.normal"),
-    Name("window.normal"), Name("window.title"), Name("window.collapse"),
-    Name("separator"), Name("button.normal"), Name("checkbox.normal"), Name("checkbox.mark"),
-    Name("edit.normal"),
-    Name("list.background"), Name("list.row.normal"), Name("list.row.hover"),
-    Name("list.row.selected"), Name("list.row.disabled"),
-    Name("scroll.track"), Name("scroll.thumb"),
-    Name("scrollbar.track"), Name("scrollbar.thumb.normal"),
-    Name("popup.normal"), Name("tooltip.normal"),
-    Name("combo.normal"), Name("combo.arrow"),
-    Name("radio.normal"), Name("radio.checked"), Name("radio.mark"),
-    Name("slider.track"), Name("slider.thumb.normal"),
-    Name("progress.track"), Name("progress.fill"),
-    Name("focus.overlay"),
+struct RequiredRegion{
+    Name name;
+    StringView text;
+};
+
+static constexpr RequiredRegion s_RequiredRegions[] = {
+    { Name("panel.normal"), "panel.normal" },
+    { Name("window.normal"), "window.normal" },
+    { Name("window.title"), "window.title" },
+    { Name("window.collapse"), "window.collapse" },
+    { Name("separator"), "separator" },
+    { Name("button.normal"), "button.normal" },
+    { Name("checkbox.normal"), "checkbox.normal" },
+    { Name("checkbox.mark"), "checkbox.mark" },
+    { Name("edit.normal"), "edit.normal" },
+    { Name("list.background"), "list.background" },
+    { Name("list.row.normal"), "list.row.normal" },
+    { Name("list.row.hover"), "list.row.hover" },
+    { Name("list.row.selected"), "list.row.selected" },
+    { Name("list.row.disabled"), "list.row.disabled" },
+    { Name("scroll.track"), "scroll.track" },
+    { Name("scroll.thumb"), "scroll.thumb" },
+    { Name("scrollbar.track"), "scrollbar.track" },
+    { Name("scrollbar.thumb.normal"), "scrollbar.thumb.normal" },
+    { Name("popup.normal"), "popup.normal" },
+    { Name("tooltip.normal"), "tooltip.normal" },
+    { Name("combo.normal"), "combo.normal" },
+    { Name("combo.arrow"), "combo.arrow" },
+    { Name("radio.normal"), "radio.normal" },
+    { Name("radio.checked"), "radio.checked" },
+    { Name("radio.mark"), "radio.mark" },
+    { Name("slider.track"), "slider.track" },
+    { Name("slider.thumb.normal"), "slider.thumb.normal" },
+    { Name("progress.track"), "progress.track" },
+    { Name("progress.fill"), "progress.fill" },
+    { Name("focus.overlay"), "focus.overlay" },
 };
 
 
@@ -52,10 +73,10 @@ static constexpr Name s_RequiredRegions[] = {
 bool ValidateUiSkinToolkitContract(const UiSkin& skin){
     if(!skin.validatePayload())
         return false;
-    for(const Name& name : __hidden_ui_skin_toolkit_contract::s_RequiredRegions){
-        if(!skin.findRegion(name)){
+    for(const auto& required : __hidden_ui_skin_toolkit_contract::s_RequiredRegions){
+        if(!skin.findRegion(required.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets_v1' failed: missing required region '{}'")
-                , StringConvert(name.c_str())
+                , StringConvert(required.text)
             );
             return false;
         }

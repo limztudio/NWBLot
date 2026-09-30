@@ -63,6 +63,7 @@ bool GpuRasterTask::record(
         return false;
     Core::GpuDescriptorHeap& heap = frame->m_resources->m_graphics.getDevice().getDescriptorHeap();
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
+    Core::Rect boundScissor;
     bool heapBound = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
         const f32 minX = Max(0.0f, Floor(draw.clip.x * display.pixelScaleX));
@@ -71,22 +72,28 @@ bool GpuRasterTask::record(
         const f32 maxY = Min(static_cast<f32>(target.height), Ceil((draw.clip.y + draw.clip.height) * display.pixelScaleY));
         if(maxX <= minX || maxY <= minY)
             continue;
-        Core::ViewportState view;
-        view.addViewport(viewport).addScissorRect(Core::Rect(
+        const Core::Rect scissor(
             static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY)
-        ));
-        Core::GraphicsState state;
-        state
-            .setPipeline(frame->m_resources->m_pipeline.get())
-            .setFramebuffer(frame->m_target->m_framebuffer.get())
-            .setViewport(view)
-            .addVertexBuffer(Core::VertexBufferBinding().setBuffer(frame->m_vertices.get()).setSlot(NWB_UI_VERTEX_BUFFER_INDEX))
-            .setIndexBuffer(Core::IndexBufferBinding().setBuffer(frame->m_indices.get()).setFormat(Core::Format::R32_UINT))
-        ;
-        commands.setGraphicsState(state);
-        if(!heapBound){
-            heap.bindGraphics(commands, *frame->m_resources->m_pipeline);
-            heapBound = true;
+        );
+        if(!heapBound || scissor != boundScissor){
+            Core::ViewportState view;
+            view.addViewport(viewport).addScissorRect(scissor);
+            Core::GraphicsState state;
+            state
+                .setPipeline(frame->m_resources->m_pipeline.get())
+                .setFramebuffer(frame->m_target->m_framebuffer.get())
+                .setViewport(view)
+                .addVertexBuffer(
+                    Core::VertexBufferBinding().setBuffer(frame->m_vertices.get()).setSlot(NWB_UI_VERTEX_BUFFER_INDEX)
+                )
+                .setIndexBuffer(Core::IndexBufferBinding().setBuffer(frame->m_indices.get()).setFormat(Core::Format::R32_UINT))
+            ;
+            commands.setGraphicsState(state);
+            if(!heapBound){
+                heap.bindGraphics(commands, *frame->m_resources->m_pipeline);
+                heapBound = true;
+            }
+            boundScissor = scissor;
         }
         push.material = static_cast<u32>(draw.material);
         push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;

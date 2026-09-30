@@ -140,6 +140,8 @@ bool RecordRasterCommandIr(
     if(!IsFinite(push.scale.x) || !IsFinite(push.scale.y))
         return false;
     const Core::Viewport viewport(0.0f, static_cast<f32>(target.width), 0.0f, static_cast<f32>(target.height), 0.0f, 1.0f);
+    Core::Rect boundScissor;
+    bool hasRasterState = false;
     bool hasDraw = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
         const f32 minX = Max(0.0f, Floor(draw.clip.x * display.pixelScaleX));
@@ -151,8 +153,14 @@ bool RecordRasterCommandIr(
         const Core::Rect scissor(
             static_cast<i32>(minX), static_cast<i32>(maxX), static_cast<i32>(minY), static_cast<i32>(maxY)
         );
-        if(!__hidden_ui_gpu_command_ir::CaptureRasterState(payload, context, capture, heap, descriptorOwner, viewport, scissor))
-            return false;
+        if(!hasRasterState || scissor != boundScissor){
+            if(!__hidden_ui_gpu_command_ir::CaptureRasterState(
+                payload, context, capture, heap, descriptorOwner, viewport, scissor
+            ))
+                return false;
+            boundScissor = scissor;
+            hasRasterState = true;
+        }
         push.material = static_cast<u32>(draw.material);
         push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
         if(draw.material == PaintMaterial::Skin)

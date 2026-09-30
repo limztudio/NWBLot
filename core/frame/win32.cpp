@@ -377,6 +377,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
             return lifecycleResult;
 
         if(auto* textInput = frame->tryTextInput()){
+            isize forwardedLParam = lParam;
+            if(ResolveWin32TextInputContextMessage(*textInput, uMsg, wParam, lParam, forwardedLParam))
+                return DefWindowProc(hwnd, uMsg, wParam, static_cast<LPARAM>(forwardedLParam));
             if(DispatchWin32TextInputMessage(*textInput, uMsg, wParam, lParam))
                 return 0;
         }

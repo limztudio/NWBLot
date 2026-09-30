@@ -38,6 +38,19 @@ public:
         }
         auto* const fixture = reinterpret_cast<Win32TextInputFixture*>(GetWindowLongPtrW(window, GWLP_USERDATA));
         if(fixture && fixture->m_service){
+            isize forwardedLParam = lParam;
+            if(ResolveWin32TextInputContextMessage(*fixture->m_service, message, wParam, lParam, forwardedLParam)){
+                ++fixture->m_contextForwardCount;
+                fixture->m_lastContextForwardedFlags = forwardedLParam;
+                if(fixture->m_cancelOnNextContextForward){
+                    fixture->m_cancelOnNextContextForward = false;
+                    fixture->m_cancelledDuringContextToken = fixture->m_service->activeSession();
+                    fixture->m_contextFocusLossSucceeded = fixture->m_service->setFocused(false);
+                    fixture->m_contextFocusRestoreSucceeded = fixture->m_service->setFocused(true);
+                }
+                fixture->m_lastContextDefaultResult = DefWindowProcW(window, message, wParam, static_cast<LPARAM>(forwardedLParam));
+                return fixture->m_lastContextDefaultResult;
+            }
             if(message == WM_UNICHAR && wParam == UNICODE_NOCHAR)
                 return TRUE;
             if(DispatchWin32TextInputMessage(*fixture->m_service, message, wParam, lParam))
@@ -100,6 +113,13 @@ protected:
     TextInputSessionToken m_token;
     usize m_sceneCharacterCount = 0u;
     u32 m_sceneCodePoint = 0u;
+    usize m_contextForwardCount = 0u;
+    isize m_lastContextForwardedFlags = 0;
+    LRESULT m_lastContextDefaultResult = 0;
+    TextInputSessionToken m_cancelledDuringContextToken;
+    bool m_cancelOnNextContextForward = false;
+    bool m_contextFocusLossSucceeded = false;
+    bool m_contextFocusRestoreSucceeded = false;
 };
 
 
@@ -291,8 +311,89 @@ TEST_F(Win32TextInputFixture, BridgeRejectsUnsupportedForeignServiceBeforeDownca
     const GlobalUniquePtr<ITextInputService> unsupported = CreateTextInputService(m_arena.arena, nullptr);
     EXPECT_FALSE(DispatchWin32TextInputMessage(*unsupported, WM_CHAR, 'x', 0));
     EXPECT_FALSE(DispatchWin32TextInputMessage(*m_service, WM_MOUSEMOVE, 0u, 0));
+    isize forwardedLParam = 123;
+    EXPECT_FALSE(ResolveWin32TextInputContextMessage(*unsupported, WM_IME_SETCONTEXT, TRUE, 456, forwardedLParam));
+    EXPECT_EQ(forwardedLParam, 123);
+    EXPECT_FALSE(ResolveWin32TextInputContextMessage(*m_service, WM_MOUSEMOVE, 0u, 456, forwardedLParam));
+    EXPECT_EQ(forwardedLParam, 123);
     TextInputEvent event(m_arena.arena);
     EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::Pending);
+}
+
+TEST_F(Win32TextInputFixture, ImeContextVisibilityTracksSessionAfterActivationAndPreservesOtherFlags){
+    ASSERT_TRUE(m_service->end(m_token));
+    const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW
+        | (ISC_SHOWUICANDIDATEWINDOW << 2u) | (1u << 20u));
+    const usize before = m_contextForwardCount;
+    const LRESULT inactiveResult = SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
+    EXPECT_EQ(m_contextForwardCount, before + 1u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags);
+    EXPECT_EQ(inactiveResult, m_lastContextDefaultResult);
+
+    const TextInputBeginResult begun = m_service->begin({});
+    ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
+    m_token = begun.token;
+    EXPECT_EQ(m_contextForwardCount, before + 2u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags & ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW));
+    const LRESULT activeResult = SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
+    EXPECT_EQ(m_contextForwardCount, before + 3u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags & ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW));
+    EXPECT_EQ(activeResult, m_lastContextDefaultResult);
+    ASSERT_TRUE(m_service->end(m_token));
+    EXPECT_EQ(m_contextForwardCount, before + 4u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags);
+
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'Z', 0), 0);
+    EXPECT_EQ(m_sceneCharacterCount, 1u);
+    EXPECT_EQ(m_sceneCodePoint, static_cast<u32>('Z'));
+}
+
+TEST_F(Win32TextInputFixture, ImeContextReplayNeverReactivatesAfterFocusLossOrNativeDeactivation){
+    ASSERT_TRUE(m_service->end(m_token));
+    const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
+    SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
+    const TextInputBeginResult begun = m_service->begin({});
+    ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
+    m_token = begun.token;
+    const usize beforeFocusLoss = m_contextForwardCount;
+    ASSERT_TRUE(m_service->setFocused(false));
+    EXPECT_EQ(m_contextForwardCount, beforeFocusLoss);
+    const LRESULT deactivationResult = SendMessageW(m_window, WM_IME_SETCONTEXT, FALSE, static_cast<LPARAM>(flags));
+    EXPECT_EQ(m_contextForwardCount, beforeFocusLoss + 1u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags);
+    EXPECT_EQ(deactivationResult, m_lastContextDefaultResult);
+
+    ASSERT_TRUE(m_service->setFocused(true));
+    const TextInputBeginResult second = m_service->begin({});
+    ASSERT_EQ(second.admission, TextInputAdmission::Accepted);
+    m_token = second.token;
+    EXPECT_EQ(m_contextForwardCount, beforeFocusLoss + 1u);
+    ASSERT_TRUE(m_service->end(m_token));
+    EXPECT_EQ(m_contextForwardCount, beforeFocusLoss + 1u);
+}
+
+TEST_F(Win32TextInputFixture, ReentrantFocusCancellationRestoresNativeImeVisibilityAndKeepsCancelEvent){
+    ASSERT_TRUE(m_service->end(m_token));
+    const isize flags = static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW | ISC_SHOWUICANDIDATEWINDOW | (1u << 20u));
+    SendMessageW(m_window, WM_IME_SETCONTEXT, TRUE, static_cast<LPARAM>(flags));
+    const usize before = m_contextForwardCount;
+    m_cancelOnNextContextForward = true;
+    const TextInputBeginResult begun = m_service->begin({});
+    EXPECT_EQ(begun.admission, TextInputAdmission::Unavailable);
+    EXPECT_FALSE(begun.token.valid());
+    EXPECT_FALSE(m_cancelOnNextContextForward);
+    EXPECT_TRUE(m_contextFocusLossSucceeded);
+    EXPECT_TRUE(m_contextFocusRestoreSucceeded);
+    EXPECT_TRUE(m_cancelledDuringContextToken.valid());
+    EXPECT_EQ(m_contextForwardCount, before + 2u);
+    EXPECT_EQ(m_lastContextForwardedFlags, flags);
+
+    TextInputEvent event(m_arena.arena);
+    ASSERT_EQ(m_service->poll(m_cancelledDuringContextToken, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(event.cancelReason, TextInputCancelReason::FocusLost);
+    EXPECT_EQ(m_service->poll(m_cancelledDuringContextToken, event), TextInputPollResult::InvalidSession);
+    EXPECT_EQ(m_sceneCharacterCount, 0u);
 }
 
 TEST_F(Win32TextInputFixture, SceneFallbackCannotJoinSurrogatesAcrossSessionOwnership){

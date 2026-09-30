@@ -27,6 +27,7 @@ public:
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
     [[nodiscard]] bool handleMessage(u32 message, usize wParam, isize lParam);
+    [[nodiscard]] bool resolveContextMessage(u32 message, usize wParam, isize lParam, isize& forwardedLParam);
     [[nodiscard]] bool decodeFallbackCharInput(u32 unit, u32& codePoint);
     [[nodiscard]] bool resetFallbackCharInput();
 
@@ -51,6 +52,7 @@ private:
     );
     void clearCompositionPreedit();
     void rejectNativeInput(TextInputSessionToken token, TextInputAdmission::Enum admission);
+    void replayContextVisibility();
 
 
 private:
@@ -64,6 +66,10 @@ private:
     usize m_preeditCaretByte = 0u;
     bool m_pendingPreeditMoveCaret = true;
     bool m_imeAvailable = false;
+    isize m_nativeContextFlags = 0;
+    bool m_nativeContextKnown = false;
+    bool m_nativeContextActive = false;
+    bool m_replayingContext = false;
 };
 
 

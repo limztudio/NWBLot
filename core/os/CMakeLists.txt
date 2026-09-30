@@ -32,6 +32,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_service.h"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_service.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_messages.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_context_messages.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_fallback.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_composition.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_preedit.cpp"

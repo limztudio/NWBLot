@@ -64,7 +64,10 @@ TextInputAdmission::Enum Win32TextInputService::startNativeSession(
     m_pendingHighSurrogate = 0u;
     m_compositionToken = {};
     clearCompositionPreedit();
-    return updateNativeCaret(desc.caret);
+    const TextInputAdmission::Enum admission = updateNativeCaret(desc.caret);
+    if(admission == TextInputAdmission::Accepted)
+        replayContextVisibility();
+    return admission;
 }
 
 void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
@@ -74,17 +77,18 @@ void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
     clearCompositionPreedit();
     m_wideText.clear();
     m_utf8Text.clear();
-    if(!composing)
-        return;
-    const HWND window = static_cast<HWND>(m_nativeWindowHandle.get());
-    if(!IsWindow(window))
-        return;
-    const HIMC context = ImmGetContext(window);
-    if(context){
-        Win32TextInputContextGuard release(window, context);
-        if(!ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0u))
-            NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 composition cancellation unavailable"));
+    if(composing){
+        const HWND window = static_cast<HWND>(m_nativeWindowHandle.get());
+        if(IsWindow(window)){
+            const HIMC context = ImmGetContext(window);
+            if(context){
+                Win32TextInputContextGuard release(window, context);
+                if(!ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0u))
+                    NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 composition cancellation unavailable"));
+            }
+        }
     }
+    replayContextVisibility();
 }
 
 TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInputRect caret){

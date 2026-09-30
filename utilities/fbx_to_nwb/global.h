@@ -5,6 +5,11 @@
 #pragma once
 
 
+#include <namespace.h>
+
+#include <core/alloc/module.h>
+#include <core/task/cpu/scheduler.h>
+
 #include <global/compile.h>
 #include <global/assert.h>
 #include <global/containers.h>
@@ -16,9 +21,6 @@
 #include <global/simplemath.h>
 #include <global/text_utils.h>
 #include <global/type.h>
-
-#include <core/alloc/module.h>
-#include <core/task/cpu/scheduler.h>
 
 #include <ufbx.h>
 

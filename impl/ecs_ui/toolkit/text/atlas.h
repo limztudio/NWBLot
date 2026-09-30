@@ -8,6 +8,9 @@
 #include "font.h"
 #include "glyph_page.h"
 
+#include <global/containers.h>
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,6 +58,32 @@ struct AtlasPage{
 
 // Only unused padded rectangles are written; page publication copies after a batch of mutations.
 class GlyphAtlas final : NoCopy{
+private:
+    struct GlyphKey{
+        SharedFontFace::pointer face = nullptr;
+        u32 glyphId = 0u;
+        u32 pixelSize = 0u;
+    };
+
+    struct GlyphKeyHasher{
+        [[nodiscard]] usize operator()(const GlyphKey& key)const noexcept{
+            usize seed = 0u;
+            ::HashCombine(seed, key.face);
+            ::HashCombine(seed, key.glyphId);
+            ::HashCombine(seed, key.pixelSize);
+            return seed;
+        }
+    };
+
+    struct GlyphKeyEqualTo{
+        [[nodiscard]] bool operator()(const GlyphKey& lhs, const GlyphKey& rhs)const noexcept{
+            return lhs.face == rhs.face && lhs.glyphId == rhs.glyphId && lhs.pixelSize == rhs.pixelSize;
+        }
+    };
+
+    using GlyphIndex = HashMap<GlyphKey, usize, GlyphKeyHasher, GlyphKeyEqualTo, Core::Alloc::GlobalArena>;
+
+
 public:
     explicit GlyphAtlas(Core::Alloc::GlobalArena& arena);
 
@@ -69,8 +98,13 @@ public:
 
 
 private:
+    void appendGlyph(AtlasGlyph&& record);
+
+
+private:
     Core::Alloc::GlobalArena& m_arena;
     PaintVector<AtlasGlyph> m_glyphs;
+    GlyphIndex m_index;
     PaintVector<AtlasPage> m_pages;
     GlyphBitmap m_bitmap;
     u64 m_identity = 0u;

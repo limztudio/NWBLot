@@ -4,6 +4,8 @@
 
 #include "atlas.h"
 
+#include <global/termination.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -60,6 +62,7 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
 GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_glyphs(arena)
+    , m_index(arena)
     , m_pages(arena)
     , m_bitmap(arena)
     , m_identity(__hidden_ui_text_atlas::NewIdentity())
@@ -69,6 +72,7 @@ GlyphAtlas::GlyphAtlas(Core::Alloc::GlobalArena& arena)
 }
 
 void GlyphAtlas::reset(){
+    m_index.clear();
     m_glyphs.clear();
     m_pages.clear();
     m_identity = __hidden_ui_text_atlas::NewIdentity();
@@ -88,7 +92,7 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
     record.bearingX = m_bitmap.bearingX;
     record.bearingY = m_bitmap.bearingY;
     if(m_bitmap.width == 0u || m_bitmap.height == 0u){
-        m_glyphs.push_back(Move(record));
+        appendGlyph(Move(record));
         return true;
     }
     if(m_bitmap.width > s_GlyphAtlasPageExtent - 2u || m_bitmap.height > s_GlyphAtlasPageExtent - 2u)
@@ -130,16 +134,21 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
     page.cursorY = y;
     page.rowHeight = rowHeight;
     page.dirty = true;
-    m_glyphs.push_back(Move(record));
+    appendGlyph(Move(record));
     return true;
 }
 
 const AtlasGlyph* GlyphAtlas::find(const SharedFontFace& face, u32 glyphId, u32 pixelSize)const{
-    for(const AtlasGlyph& glyph : m_glyphs){
-        if(glyph.face.get() == face.get() && glyph.glyphId == glyphId && glyph.pixelSize == pixelSize)
-            return &glyph;
-    }
-    return nullptr;
+    const auto found = m_index.find(GlyphKey{ face.get(), glyphId, pixelSize });
+    return found == m_index.end() ? nullptr : &m_glyphs[found.value()];
+}
+
+void GlyphAtlas::appendGlyph(AtlasGlyph&& record){
+    const GlyphKey key{ record.face.get(), record.glyphId, record.pixelSize };
+    const usize index = m_glyphs.size();
+    m_glyphs.push_back(Move(record));
+    if(!m_index.emplace(key, index).second)
+        TerminateInvariant();
 }
 
 SharedGlyphPage GlyphAtlas::page(u32 index){

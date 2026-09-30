@@ -134,6 +134,58 @@ TEST_F(Win32TextInputFixture, SurrogatePairRemainsPerServiceUntilComplete){
     EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::Pending);
 }
 
+TEST_F(Win32TextInputFixture, AggregateCharacterCountsIgnoreHighFlagsAndKeepScalarBoundaries){
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'A', 0x40000003), 0);
+    EXPECT_EQ(SendMessageW(m_window, WM_SYSCHAR, 0xd55cu, 0x20000002), 0);
+    EXPECT_EQ(SendMessageW(m_window, WM_UNICHAR, 0x1f600u, 2), 0);
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xd83du, 2), 0);
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xde00u, 2), 0);
+    TextInputEvent event(m_arena.arena);
+    ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.text, "AAA");
+    ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.text, "\xED\x95\x9C\xED\x95\x9C");
+    for(usize index = 0u; index < 2u; ++index){
+        ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+        EXPECT_EQ(event.text, "\xF0\x9F\x98\x80\xF0\x9F\x98\x80");
+    }
+    EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::Pending);
+}
+
+TEST_F(Win32TextInputFixture, MaximumAggregateSupplementaryCommitBatchesWithoutEventOverflow){
+    EXPECT_EQ(SendMessageW(m_window, WM_UNICHAR, 0x1f600u, 0xffff), 0);
+    ASSERT_EQ(m_service->activeSession(), m_token);
+    TextInputEvent event(m_arena.arena);
+    usize totalBytes = 0u;
+    u64 sequence = 0u;
+    while(totalBytes < 0xffffu * 4u){
+        ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+        ASSERT_EQ(event.kind, TextInputEventKind::Commit);
+        ASSERT_FALSE(event.text.empty());
+        EXPECT_LE(event.text.size(), s_TextInputMaxEventTextBytes);
+        ASSERT_EQ(event.text.size() % 4u, 0u);
+        EXPECT_GT(event.sequence, sequence);
+        sequence = event.sequence;
+        for(usize offset = 0u; offset < event.text.size(); offset += 4u)
+            ASSERT_EQ(AStringView(event.text.data() + offset, 4u), "\xF0\x9F\x98\x80");
+        totalBytes += event.text.size();
+    }
+    EXPECT_EQ(totalBytes, 0xffffu * 4u);
+    EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::Pending);
+}
+
+TEST_F(Win32TextInputFixture, AggregateCommitOverflowDiscardsAlreadyQueuedPrefix){
+    EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 'x', 5), 0);
+    EXPECT_EQ(SendMessageW(m_window, WM_UNICHAR, 0x1f600u, 0xffff), 0);
+    EXPECT_FALSE(m_service->activeSession().valid());
+    TextInputEvent event(m_arena.arena);
+    ASSERT_EQ(m_service->poll(m_token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
+    EXPECT_EQ(event.cancelReason, TextInputCancelReason::Overflow);
+    EXPECT_TRUE(event.text.empty());
+    EXPECT_EQ(m_service->poll(m_token, event), TextInputPollResult::InvalidSession);
+}
+
 TEST_F(Win32TextInputFixture, IsolatedLowSurrogateCancelsWithExplicitFailure){
     EXPECT_EQ(SendMessageW(m_window, WM_CHAR, 0xde00u, 0), 0);
     EXPECT_FALSE(m_service->activeSession().valid());

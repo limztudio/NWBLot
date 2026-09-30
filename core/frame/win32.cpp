@@ -23,6 +23,7 @@
 
 #include <core/common/log.h>
 #include <core/os/win32/text_input.h>
+#include <core/os/win32/input_message.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -321,18 +322,23 @@ static void DispatchScreenMousePosition(HWND hwnd, Frame& frame, LPARAM lParam){
 static void DispatchKeyEvent(Frame& frame, WPARAM wParam, LPARAM lParam, i32 action){
     const i32 key = TranslateKey(wParam, lParam);
     const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers());
-    frame.input().keyboardUpdate(key, TranslateScancode(lParam), action, mods);
+    const u32 count = action == InputAction::Release ? 1u : Win32MessageRepeatCount(lParam);
+    for(u32 index = 0u; index < count; ++index)
+        frame.input().keyboardUpdate(key, TranslateScancode(lParam), index == 0u ? action : InputAction::Repeat, mods);
 }
 
-static void DispatchCharInput(Frame& frame, WPARAM wParam){
+static void DispatchCharInput(Frame& frame, WPARAM wParam, LPARAM lParam){
 #if defined(NWB_UNICODE)
     if(auto* textInput = frame.tryTextInput()){
         u32 unicode = 0u;
-        if(DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam), unicode))
-            DispatchUnicodeInput(frame, unicode);
+        if(DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam), unicode)){
+            for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
+                DispatchUnicodeInput(frame, unicode);
+        }
     }
 #else
-    DispatchUnicodeInput(frame, static_cast<u32>(wParam & s_AnsiCharMask));
+    for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
+        DispatchUnicodeInput(frame, static_cast<u32>(wParam & s_AnsiCharMask));
 #endif
 }
 
@@ -418,12 +424,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
         case WM_CHAR: {
-            DispatchCharInput(*frame, wParam);
+            DispatchCharInput(*frame, wParam, lParam);
         }
         return 0;
 
         case WM_SYSCHAR: {
-            DispatchCharInput(*frame, wParam);
+            DispatchCharInput(*frame, wParam, lParam);
         }
         return DefWindowProc(hwnd, uMsg, wParam, lParam);
 
@@ -436,7 +442,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 if(!ResetWin32FallbackCharInput(*textInput))
                     NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
             }
-            DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
+            for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
+                DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
         }
         return 0;
 

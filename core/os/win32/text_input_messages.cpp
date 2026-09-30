@@ -3,6 +3,7 @@
 
 
 #include "text_input_service.h"
+#include "input_message.h"
 
 #include <core/os/text_input_text.h>
 #include <core/common/log.h>
@@ -32,16 +33,21 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
     if(!token.valid())
         return false;
     TextInputAdmission::Enum admission = TextInputAdmission::Accepted;
+    const u32 repeatCount = Win32MessageRepeatCount(lParam);
     switch(message){
     case WM_CHAR:
     case WM_SYSCHAR:
-        admission = wParam <= 0xffffu ? acceptUtf16Unit(token, static_cast<u32>(wParam)) : TextInputAdmission::InvalidText;
+        admission = wParam <= 0xffffu
+            ? acceptUtf16Unit(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText
+        ;
         break;
     case WM_UNICHAR:
         if(wParam == UNICODE_NOCHAR)
             return false;
         m_pendingHighSurrogate = 0u;
-        admission = wParam <= 0x10ffffu ? acceptCodePoint(token, static_cast<u32>(wParam)) : TextInputAdmission::InvalidText;
+        admission = wParam <= 0x10ffffu
+            ? acceptCodePoint(token, static_cast<u32>(wParam), repeatCount) : TextInputAdmission::InvalidText
+        ;
         break;
     case WM_IME_STARTCOMPOSITION:
         m_pendingHighSurrogate = 0u;
@@ -74,17 +80,40 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(const TextInputSessionToken token, const u32 codePoint){
+TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(
+    const TextInputSessionToken token,
+    const u32 codePoint,
+    const u32 repeatCount){
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
     if(codePoint < 0x20u || codePoint == 0x7fu)
         return TextInputAdmission::Accepted;
     char bytes[4] = {};
     usize length = 0u;
     const TextInputAdmission::Enum encoded = EncodeTextInputCodePoint(codePoint, bytes, length);
-    return encoded == TextInputAdmission::Accepted ? emitCommit(token, AStringView(bytes, length)) : encoded;
+    if(encoded != TextInputAdmission::Accepted)
+        return encoded;
+    if(repeatCount == 1u)
+        return emitCommit(token, AStringView(bytes, length));
+    const usize batchCount = Min<usize>(repeatCount, s_TextInputMaxEventTextBytes / length);
+    m_utf8Text.clear();
+    m_utf8Text.reserve(batchCount * length);
+    for(usize index = 0u; index < batchCount; ++index)
+        m_utf8Text.append(bytes, length);
+    usize remaining = repeatCount;
+    while(remaining != 0u){
+        const usize count = Min(remaining, batchCount);
+        const TextInputAdmission::Enum status = emitCommit(token, AStringView(m_utf8Text.data(), count * length));
+        if(status != TextInputAdmission::Accepted)
+            return status;
+        remaining -= count;
+    }
+    return TextInputAdmission::Accepted;
 }
 
-TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(const TextInputSessionToken token, const u32 unit){
+TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(
+    const TextInputSessionToken token,
+    const u32 unit,
+    const u32 repeatCount){
     if(unit > 0xffffu){
         m_pendingHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
@@ -99,13 +128,13 @@ TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(const TextInputS
             return TextInputAdmission::InvalidText;
         const u32 codePoint = 0x10000u + ((m_pendingHighSurrogate - 0xd800u) << 10u) + (unit - 0xdc00u);
         m_pendingHighSurrogate = 0u;
-        return acceptCodePoint(token, codePoint);
+        return acceptCodePoint(token, codePoint, repeatCount);
     }
     if(m_pendingHighSurrogate != 0u){
         m_pendingHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;
     }
-    return acceptCodePoint(token, unit);
+    return acceptCodePoint(token, unit, repeatCount);
 }
 
 

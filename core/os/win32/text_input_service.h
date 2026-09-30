@@ -40,8 +40,8 @@ protected:
 
 
 private:
-    [[nodiscard]] TextInputAdmission::Enum acceptCodePoint(TextInputSessionToken token, u32 codePoint);
-    [[nodiscard]] TextInputAdmission::Enum acceptUtf16Unit(TextInputSessionToken token, u32 unit);
+    [[nodiscard]] TextInputAdmission::Enum acceptCodePoint(TextInputSessionToken token, u32 codePoint, u32 repeatCount);
+    [[nodiscard]] TextInputAdmission::Enum acceptUtf16Unit(TextInputSessionToken token, u32 unit, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum readCompositionText(NotNull<void*> nativeContext, u32 index);
     [[nodiscard]] TextInputAdmission::Enum compositionCursor(NotNull<void*> nativeContext, usize& byteOffset);
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);

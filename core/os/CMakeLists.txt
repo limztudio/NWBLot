@@ -26,6 +26,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/win32/clipboard_service.cpp"
     )
     target_sources(nwb_os PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/win32/input_message.h"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input.h"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_context.h"
         "${CMAKE_CURRENT_LIST_DIR}/win32/text_input_service.h"

@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_ui/edit_box_host.h>
-#include <impl/ui/widgets/popup.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <core/os/clipboard_service.h>
 #include <core/os/text_input_service.h>

@@ -4,7 +4,7 @@
 
 #include "widget_fixture.h"
 
-#include <impl/ui/widgets/text_area_navigation.h>
+#include <impl/ecs_ui/toolkit/widgets/text_area_navigation.h>
 
 #include <global/simplemath.h>
 

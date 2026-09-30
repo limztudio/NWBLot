@@ -8,7 +8,7 @@
 #include "nested_popup_source.h"
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/context_menu.h>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.h>
 
 #include <core/alloc/general.h>
 #include <core/input/module.h>

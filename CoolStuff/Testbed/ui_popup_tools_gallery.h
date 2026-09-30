@@ -8,8 +8,8 @@
 #include "ui_popup_tools_source.h"
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/context_menu.h>
-#include <impl/ui/widgets/tooltip.h>
+#include <impl/ecs_ui/toolkit/widgets/context_menu.h>
+#include <impl/ecs_ui/toolkit/widgets/tooltip.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

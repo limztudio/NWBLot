@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include <impl/ui/paint.h>
-#include <impl/ui/images/image_source.h>
+#include <impl/ecs_ui/toolkit/paint.h>
+#include <impl/ecs_ui/toolkit/images/image_source.h>
 
 #include <gtest/gtest.h>
 

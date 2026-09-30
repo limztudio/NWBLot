@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/edit_box_state.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
 
 #include <core/alloc/general.h>
 #include <core/input/module.h>

@@ -22,7 +22,7 @@ Default limits allow 4096 committed bytes, 64 copied history records, and 131072
 
 `NormalizeSingleLineText` in `single_line_text.*` is the clipboard insertion policy. CRLF becomes one space; individual line breaks, Unicode NEXT LINE/LINE SEPARATOR/PARAGRAPH SEPARATOR and tabs become spaces. NUL, other ASCII controls, malformed UTF8 and an excessive normalized byte count are rejected before allocation/mutation. Other scalars remain unchanged. This utility is separate from the raw model's strict single-line validation and does not normalize Unicode composition.
 
-Rendering stays in `impl/ui/widgets/edit_box*`: an owned `EditBoxView` maps model bytes, grapheme boundaries, shaped LTR clusters and transient preedit to clipped text, selection and caret geometry. The application lends its model during a live declaration; frozen paint retains owned text/font resources. The edit domain remains independent of OS, ECS, font and GPU implementations. Paragraph bidi and the visual multiline editor remain separate later domains.
+Rendering stays in `impl/ecs_ui/toolkit/widgets/edit_box*`: an owned `EditBoxView` maps model bytes, grapheme boundaries, shaped LTR clusters and transient preedit to clipped text, selection and caret geometry. The application lends its model during a live declaration; frozen paint retains owned text/font resources. The edit domain remains independent of OS, ECS, font and GPU implementations. Paragraph bidi and the visual multiline editor remain separate later domains.
 
 ## Ordered component actions
 

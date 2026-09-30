@@ -9,8 +9,8 @@
 #include "edit_clipboard_controller.h"
 #include "clipboard_publications.h"
 
-#include <impl/ui/context.h>
-#include <impl/ui/widgets/edit_box_state.h>
+#include <impl/ecs_ui/toolkit/context.h>
+#include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

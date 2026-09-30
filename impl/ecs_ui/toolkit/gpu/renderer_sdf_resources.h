@@ -5,10 +5,9 @@
 #pragma once
 
 
-#include <impl/ui/global.h>
+#include <impl/ecs_ui/toolkit/text/sdf_page.h>
 
-#include <core/graphics/gpu_timing.h>
-#include <core/task/gpu/task_graph.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,24 +19,17 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuRendererTimingScope{
-    inline constexpr Core::GpuTimingScopeDefinition s_Frame("render.frame");
-};
+// Owns one exact RGBA distance image and its accepted physical upload until every frame consumer releases it.
+struct GpuSdfAtlasVersion : NoCopy{
+    Core::GraphicsRuntime& m_graphics;
+    SharedSdfAtlasPage m_page;
+    Core::TextureHandle m_texture;
+    Core::GpuDescriptorHandle m_sampledImage;
+    Core::QueueSubmissionToken m_readinessToken;
 
 
-// Closes the standalone presentation scope after output and any presentation contributor.
-struct GpuFrameTimingEndTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements{ Core::GpuQueueCapability::None, true };
-
-    struct Payload{
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
+    GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page);
+    ~GpuSdfAtlasVersion()noexcept;
 };
 
 

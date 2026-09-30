@@ -7,9 +7,9 @@
 
 #include "scrollbar.h"
 
-#include <impl/ui/edit/model.h>
-#include <impl/ui/input/input.h>
-#include <impl/ui/state/store.h>
+#include <impl/ecs_ui/toolkit/edit/model.h>
+#include <impl/ecs_ui/toolkit/input/input.h>
+#include <impl/ecs_ui/toolkit/state/store.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

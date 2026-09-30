@@ -8,9 +8,9 @@
 #include "style.h"
 #include "edit_caret_geometry.h"
 
-#include <impl/ui/edit/model.h>
-#include <impl/ui/edit/grapheme.h>
-#include <impl/ui/text/service.h>
+#include <impl/ecs_ui/toolkit/edit/model.h>
+#include <impl/ecs_ui/toolkit/edit/grapheme.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

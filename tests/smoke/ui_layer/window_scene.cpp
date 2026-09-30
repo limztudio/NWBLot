@@ -6,7 +6,7 @@
 
 #include "../smoke_environment.h"
 
-#include <impl/ui/builder.h>
+#include <impl/ecs_ui/toolkit/builder.h>
 
 #include <core/common/log.h>
 

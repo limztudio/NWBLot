@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from urllib.request import urlopen
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
 
@@ -130,7 +130,7 @@ def generate_cases(data):
         content = "\n".join(cases[start:start + 500])
         write_cpp(ROOT / "tests/unit/ui" / f"edit_grapheme_cases_{index}.inc",
                   f"// limztudio@gmail.com\n{SEP}\n\n\n"
-                  f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ui/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
+                  f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
     return len(cases)
 
 

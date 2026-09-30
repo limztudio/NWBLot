@@ -43,7 +43,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     const u32 pixelSize = static_cast<u32>(rasterPpem);
     const f32 rasterScale = rasterPpem / layout.fontSize();
     const Point deviceScale{ metrics.pixelScaleX, metrics.pixelScaleY };
-    Core::Alloc::ScratchArena scratchArena(Name("impl/ui/text/paint_candidates"));
+    Core::Alloc::ScratchArena scratchArena(Name("impl/ecs_ui/toolkit/text/paint_candidates"));
     Vector<usize, Core::Alloc::ScratchArena> candidates(scratchArena);
     candidates.reserve(layout.glyphs().size());
     // Validate every conservative candidate before raster preparation mutates the coverage cache.

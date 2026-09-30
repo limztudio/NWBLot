@@ -7,7 +7,7 @@
 
 #include "text_edit_session.h"
 
-#include <impl/ui/edit/commands.h>
+#include <impl/ecs_ui/toolkit/edit/commands.h>
 
 #include <core/os/clipboard.h>
 

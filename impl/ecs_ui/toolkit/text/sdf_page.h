@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ui/global.h>
+#include <impl/ecs_ui/toolkit/global.h>
 #include <impl/assets_font_atlas/asset.h>
 
 #include <global/refcount_ptr.h>

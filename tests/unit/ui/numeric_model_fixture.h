@@ -5,8 +5,8 @@
 #pragma once
 
 
-#include <impl/ui/edit/float_model.h>
-#include <impl/ui/edit/integer_model.h>
+#include <impl/ecs_ui/toolkit/edit/float_model.h>
+#include <impl/ecs_ui/toolkit/edit/integer_model.h>
 
 #include <global/bit.h>
 

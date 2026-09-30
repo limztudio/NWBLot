@@ -4,7 +4,7 @@
 
 #include "edit_caret_geometry.h"
 
-#include <impl/ui/edit/multiline_text.h>
+#include <impl/ecs_ui/toolkit/edit/multiline_text.h>
 
 #include <global/simplemath.h>
 

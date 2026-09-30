@@ -5,9 +5,8 @@
 #pragma once
 
 
-#include <impl/ui/text/sdf_page.h>
-
-#include <core/graphics/runtime/runtime.h>
+#include <impl/ecs_ui/toolkit/images/image_source.h>
+#include <impl/assets_texture/loader.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,17 +18,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns one exact RGBA distance image and its accepted physical upload until every frame consumer releases it.
-struct GpuSdfAtlasVersion : NoCopy{
+// Retains one immutable CPU source and its sampled texture through accepted upload and every frame consumer.
+struct GpuTextureImageVersion : NoCopy{
     Core::GraphicsRuntime& m_graphics;
-    SharedSdfAtlasPage m_page;
-    Core::TextureHandle m_texture;
-    Core::GpuDescriptorHandle m_sampledImage;
-    Core::QueueSubmissionToken m_readinessToken;
+    SharedImageSource m_source;
+    TextureGpuResource m_texture;
 
 
-    GpuSdfAtlasVersion(Core::GraphicsRuntime& graphics, SharedSdfAtlasPage page);
-    ~GpuSdfAtlasVersion()noexcept;
+    GpuTextureImageVersion(Core::GraphicsRuntime& graphics, SharedImageSource source);
+    ~GpuTextureImageVersion()noexcept;
 };
 
 

@@ -3,7 +3,7 @@
 
 
 #include <impl/assets_font_atlas/asset.h>
-#include <impl/ui/text/service.h>
+#include <impl/ecs_ui/toolkit/text/service.h>
 
 #include <tests/common/font_fixture.h>
 

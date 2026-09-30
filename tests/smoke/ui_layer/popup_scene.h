@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/popup.h>
+#include <impl/ecs_ui/toolkit/widgets/popup.h>
 
 #include <core/alloc/general.h>
 #include <core/input/module.h>

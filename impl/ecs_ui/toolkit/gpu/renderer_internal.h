@@ -12,7 +12,7 @@
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
 #include <impl/assets_texture/loader.h>
-#include <impl/ui/text/glyph_page.h>
+#include <impl/ecs_ui/toolkit/text/glyph_page.h>
 
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/presentation_contributor.h>

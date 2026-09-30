@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/ui/paint.h>
+#include <impl/ecs_ui/toolkit/paint.h>
 
 #include <core/assets/manager.h>
 #include <core/graphics/runtime/runtime.h>

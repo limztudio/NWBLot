@@ -5,9 +5,9 @@
 #pragma once
 
 
-#include <impl/ui/edit/model.h>
-#include <impl/ui/edit/grapheme.h>
-#include <impl/ui/text/layout.h>
+#include <impl/ecs_ui/toolkit/edit/model.h>
+#include <impl/ecs_ui/toolkit/edit/grapheme.h>
+#include <impl/ecs_ui/toolkit/text/layout.h>
 
 #include <global/not_null.h>
 

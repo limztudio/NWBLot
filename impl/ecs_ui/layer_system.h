@@ -10,7 +10,7 @@
 #include "frame_delta.h"
 #include "skin_selection.h"
 
-#include <impl/ui/gpu/renderer.h>
+#include <impl/ecs_ui/toolkit/gpu/renderer.h>
 
 #include <core/ecs/system.h>
 #include <core/input/module.h>

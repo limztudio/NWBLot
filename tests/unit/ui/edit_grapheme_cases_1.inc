@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ui/edit/unicode/LICENSE.txt.
+// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.
     { "\xEA\xB0\x80\xE0\xA5\x8D", "0,6", 6u },
     { "\xEA\xB0\x80\xCC\x88\xE0\xA5\x8D", "0,8", 8u },
     { "\xEA\xB0\x80\xCC\x80", "0,5", 5u },

@@ -6,7 +6,7 @@
 
 
 #include <impl/ecs_ui/components.h>
-#include <impl/ui/widgets/window.h>
+#include <impl/ecs_ui/toolkit/widgets/window.h>
 
 #include <core/alloc/general.h>
 

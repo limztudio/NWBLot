@@ -7,7 +7,7 @@
 
 #include "combo_fixture.h"
 
-#include <impl/ui/widgets/slider.h>
+#include <impl/ecs_ui/toolkit/widgets/slider.h>
 
 #include <global/bit.h>
 

@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 
 #include <global/simplemath.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,6 +169,8 @@ bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const 
         event.type = action == Core::InputAction::Release ? Ui::InputEventType::PrimaryUp : Ui::InputEventType::PrimaryDown;
         event.position = m_pointer;
         event.shift = (mods & Core::InputModifier::Shift) != 0;
+        if(event.type == Ui::InputEventType::PrimaryDown)
+            event.timestampMs = Max<u64>(1u, DurationInMS<u64>(TimerNow()));
         routeInput(event);
     }
     if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Right){

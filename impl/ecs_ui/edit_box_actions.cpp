@@ -99,13 +99,43 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
         entry.preeditCaretVisible = event.native.kind != Core::TextInputEventKind::Preedit || event.native.caretVisible;
     }
     else if(event.kind == UiEditBoxEventKind::Selection){
-        if(model.revision() != event.geometryRevision || model.externalRevision() != event.geometryExternalRevision)
+        if(model.revision() != event.geometryRevision || model.externalRevision() != event.geometryExternalRevision){
+            if(event.completed){
+                entry.dragging = false;
+                entry.wordDragging = false;
+            }
             return true;
-        const usize anchor = event.dragging && entry.dragging ? entry.dragAnchor : event.extend ? model.anchor() : event.position;
-        if(!model.setSelection(anchor, event.position))
-            return true;
-        entry.dragAnchor = anchor;
+        }
+        if(event.wordSelect){
+            usize begin = 0u;
+            usize end = 0u;
+            if(!model.wordRangeAt(event.wordPosition, begin, end) || !model.setSelection(begin, end))
+                return true;
+            entry.wordDragStart = begin;
+            entry.wordDragEnd = end;
+            entry.wordDragging = true;
+        }
+        else if(event.dragging && entry.dragging && entry.wordDragging){
+            usize begin = 0u;
+            usize end = 0u;
+            if(!model.wordRangeAt(event.wordPosition, begin, end))
+                return true;
+            const usize anchor = event.wordPosition < entry.wordDragStart ? entry.wordDragEnd : entry.wordDragStart;
+            const usize caret = event.wordPosition < entry.wordDragStart ? begin
+                : event.wordPosition >= entry.wordDragEnd ? end : entry.wordDragEnd;
+            if(!model.setSelection(anchor, caret))
+                return true;
+        }
+        else{
+            const usize anchor = event.dragging && entry.dragging ? entry.dragAnchor : event.extend ? model.anchor() : event.position;
+            if(!model.setSelection(anchor, event.position))
+                return true;
+            entry.dragAnchor = anchor;
+            entry.wordDragging = false;
+        }
         entry.dragging = !event.completed;
+        if(event.completed)
+            entry.wordDragging = false;
         if(model.hasSelection() && m_clipboardService.capabilities(Core::ClipboardChannel::PrimarySelection).writeText){
             const auto request = m_primary.request(entry.owner, model, Ui::EditClipboardAction::PublishSelection,
                 Core::ClipboardChannel::PrimarySelection, options.readOnly

@@ -74,7 +74,7 @@ class EditRun:
 
     def write_report(self, passed):
         report = {"passed": passed, "platform": platform.system(), "stages": self.stages,
-            "input_path": "Win32 posted WM_CHAR/key/pointer messages with native Control/Shift modifiers"
+            "input_path": "Win32 posted WM_CHAR/key/pointer messages, native Control/Shift modifiers and real cursor placement for double-click"
                 if self.native.windows else "X11 XSendEvent ASCII keys and XSetInputFocus",
             "runtime_limit": "Synthetic commits bypass live IME composition. No native Wayland or physical pointer-grab qualification.",
             "queued_focus_limit": "A posted batch may straddle frames. Old-owner text may commit before focus moves; it must never enter the new owner."}
@@ -175,6 +175,38 @@ class EditRun:
         self.checkpoint("horizontal_scroll_home", model(primary, 0, 0, True), model(secondary), extent=(800, 600))
         if self.snapshot["fields"]["primary"]["scroll"] != 0.0:
             raise SmokeFailure("Home did not restore the edit box's left text edge")
+        if self.native.windows:
+            self.native.tap("F7")
+            primary, secondary = "Hello 한글", "Target"
+            self.native.tap("End")
+            self.checkpoint("aggregate_repeat_baseline", model(primary, focused=True), model(secondary), extent=(800, 600))
+            self.native.aggregate_tap("BackSpace", 3)
+            primary = "Hello"
+            self.checkpoint("aggregate_backspace_press_repeat", model(primary, focused=True), model(secondary), extent=(800, 600))
+            self.native.aggregate_text("Q", 3)
+            primary += "QQQ"
+            self.checkpoint("aggregate_wm_char_commit", model(primary, focused=True), model(secondary), extent=(800, 600))
+            self.native.aggregate_tap("Left", 2)
+            self.checkpoint("aggregate_left_press_repeat", model(primary, 6, 6, True), model(secondary), extent=(800, 600))
+            self.native.aggregate_tap("F5", 2)
+            self.checkpoint("aggregate_press_once", model(primary, 6, 6, True), model(secondary),
+                readonly=True, extent=(800, 600))
+            self.native.aggregate_tap("F5", 2, repeat=True)
+            self.checkpoint("aggregate_repeat_without_press", model(primary, 6, 6, True), model(secondary),
+                readonly=True, extent=(800, 600))
+            self.native.tap("F5")
+            self.native.tap("F7")
+            primary, secondary = "Hello 한글", "Target"
+            self.native.tap("End")
+            self.checkpoint("double_click_baseline", model(primary, focused=True), model(secondary), extent=(800, 600))
+            content_x, content_y, _, content_height = self.snapshot["fields"]["primary"]["content"]
+            first_word = self.point(content_x + 12.0, content_y + content_height / 2.0)
+            with self.native.positioned_cursor(*first_word):
+                # Both releases precede the next press; the two clicks stay inside the 500 ms window.
+                self.native.click(*first_word)
+                self.native.click(*first_word)
+                self.checkpoint("native_double_click_first_word", model(primary, 0, 5, True), model(secondary),
+                    selection=True, extent=(800, 600))
 
 
 def run(args):

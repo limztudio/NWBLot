@@ -1,6 +1,20 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation is on `custom_ui`, with `main` merged through `3ecd39e8d` in `dfd7d514f`. M3 window/separator parity and complete ImGui retirement are pushed in `87f2879a8`. The M4 foundation includes an owned Unicode edit model, OS text-input/IME and clipboard services for Win32 and Linux, a borrowed ECS edit-session adapter, and same-stem `.nwb`/`.font`/`.atlas` font bundles. M5 now includes skinned single-line edit boxes, popup/modal scopes, keyed virtualized lists, ordinary/searchable combo boxes, delayed tooltips, stable-key context menus and nested user-popup composition. Independent UI GPU preparation and final framebuffer composition remain shared by these controls. Numeric editors preserve exact i64/finite f64 values independently of editable drafts. Text areas provide hard-line editing, navigation and two-axis scrolling; bounded keyed radio groups provide one-host keyboard and pointer selection. Continuous sliders preserve finite values and accepted pointer baselines across repaint; passive progress bars freeze their fractions and skin styles at declaration. Atlas image widgets retain copied sizing, tint and Sprite/NineSlice behavior. Engine-source image widgets retain copied declarations, while immutable texture sources and GPU bindings retain concrete versions through final consumption. Native Linux compositor/live IME qualification remains outstanding. Remaining work proceeds as separate committed and pushed increments, stopping before M6 measurement and tuning.
+Status: the custom UI is merged into `main`, and the `custom_ui` branch is retired. CPU toolkit, GPU rendering and ECS integration live under `impl/ecs_ui/`, with reusable OS services under `core/os/` and typed skin/font assets in their own asset domains. ImGui has been removed. The requested edit boxes, lists, combo boxes, windows, popups, text areas, numeric editors, radio groups, sliders, progress bars, tooltips, context menus and image controls are implemented. The font builder produces same-stem `.nwb`/`.font`/`.atlas` bundles; the atlas keeps the qualified lossless transport because the UASTC quality gate failed. Separate UI raster preparation and final scene/standalone composition are implemented.
+
+Performance measurement and the measured CPU optimizations have also proceeded on `main`, including repeated raster-state suppression, indexed-draw preparation and glyph-page reuse. Earlier statements below about stopping before M6 describe the scope at those historical increments. Native Linux linking/compositor execution, live language IME and HDR display qualification still require their respective native environments; syntax checks and deterministic tests do not establish those results.
+
+The increment notes below are a historical implementation and validation record. The latest status above and the current domain READMEs take precedence over an earlier increment's then-outstanding work.
+
+The October 2026 completion audit found and implemented three concrete omissions:
+
+- Schema-3 skins author `typography.default_font_size`; cook/runtime validation and binary serialization preserve the role, while schema-1/2 assets retain the legacy 16-unit default. Builder applies skin defaults without replacing a distinct application-set font size.
+- Text editors support double-click word selection and whole-run dragging through the shared Win32/X11/Wayland ingress. A separate click tracker fences owner, popup, text revision, timing and movement; word hits resolve accepted grapheme intervals instead of the nearest insertion caret. Uncaptured pointer-position updates between clicks preserve the sequence. Read-only selection and native primary-selection publication retain their existing policies.
+- Win32 character and key messages honor aggregate repeat counts. Text commits batch complete UTF-8 scalars within existing queue limits, including supplementary characters, and overflow still cancels atomically. Keydown distinguishes initial Press from subsequent Repeat actions; keyup remains a single Release.
+
+The audit confirmed the requested controls, same-stem font pipeline, native service boundaries, independent raster/final composition, resource retention, and complete ImGui retirement are implemented. Larger controls and text-layout capabilities explicitly deferred by the design remain future scope; native host qualification is not replaced by this source audit.
+
+Validation after merging the concurrent namespace cleanup from `main`: Windows ARM64 / Clang `opt` builds pass for Testbed, the standalone UI executable and affected libraries/tests. All 1,344 toolkit, 200 ECS UI, 100 OS and 17 skin asset tests pass. Framebuffer, replacement-skin text-area and direct/command-IR parity smokes pass; the editor smoke passes 34 displayed/native gates, including aggregate text/key repeats and double-click selection. The latter positions and restores the real cursor so native leave tracking agrees with posted pointer messages; its final selection capture was visually inspected. Genuine Linux x86_64 syntax/type checks pass for 28 translation-unit/configuration combinations across 21 sources, covering Wayland with/without primary selection and X11-only configurations. The final source/header hashes remain stable during that matrix. All 44 authored files pass encoding/CRLF and relevant source-format/Python syntax checks; modified C++ files remain below 800 lines. Native Linux execution, live language IME and HDR display qualification remain outstanding.
 
 Implemented in the first increment:
 
@@ -329,18 +343,18 @@ core/
     linux/wayland/            native Wayland implementations
   frame/                      native window/event-loop owner; hosts OS services
 impl/
-  ui/                         nwb_ui: CPU toolkit, no ECS or GPU dependency
-    context.{h,cpp}            identity, state, frame lifecycle, actions
-    layout/                   measure/arrange, containers, scrolling
-    input/                    hit testing, focus, capture, navigation
-    text/                     fonts, shaping, text layout
-    edit/                     Unicode model, commands, navigation, history, composition
-    paint/                    primitives and immutable paint output
-    widgets/                  controls composed from the above services
-    style/                    skin region resolution, metrics, control states
-    gpu/                      nwb_ui_gpu: uploads, atlases, raster, resources
-  assets_ui_skin/              typed skin/atlas asset, schema, cook, runtime load
   ecs_ui/                     nwb_ecs_ui: world callbacks and runtime adapter
+    toolkit/                  nwb_ui: CPU toolkit, no ECS or GPU dependency
+      context.{h,cpp}          identity, state, frame lifecycle, actions
+      layout/                 measure/arrange, containers, scrolling
+      input/                  hit testing, focus, capture, navigation
+      text/                   fonts, shaping, text layout
+      edit/                   Unicode model, commands, navigation, history, composition
+      paint/                  primitives and immutable paint output
+      widgets/                controls composed from the above services
+      style/                  skin region resolution, metrics, control states
+      gpu/                    nwb_ui_gpu: uploads, atlases, raster, resources
+  assets_ui_skin/              typed skin/atlas asset, schema, cook, runtime load
   assets/graphics/ui/          raster shaders and .nwb metadata
   assets/ui/skins/default/     one default skin texture and atlas .nwb
 tests/

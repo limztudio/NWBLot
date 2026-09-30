@@ -17,6 +17,8 @@ target_sources(nwb_ecs_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard_publication_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_box_host_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_word_selection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_box_host_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/edit_action_host_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/edit_action_order_tests.cpp"

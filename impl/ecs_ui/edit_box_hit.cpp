@@ -38,6 +38,37 @@ bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byt
     return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local, byte);
 }
 
+bool UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position, usize& byte)const{
+    if(!hit(entry, position, byte))
+        return false;
+    const UiEditBoxGeometry& geometry = entry.displayed;
+    const Ui::Point local{ position.x - geometry.placement.textOrigin.x, position.y - geometry.placement.textOrigin.y };
+    u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
+    for(u32 index = 0u; index < geometry.lines.size(); ++index){
+        if(local.y < geometry.lines[index].top + geometry.lines[index].height){
+            lineIndex = index;
+            break;
+        }
+    }
+    const Ui::EditCaretLine& line = geometry.lines[lineIndex];
+    if(line.stopCount < 2u)
+        return true;
+    const usize first = line.firstStop;
+    const usize end = first + line.stopCount;
+    usize selected = first;
+    for(usize index = first + 1u; index < end; ++index){
+        if(geometry.stops[index].lineIndex != lineIndex || geometry.stops[index].x < geometry.stops[index - 1u].x)
+            return false;
+        if(local.x < geometry.stops[index].x)
+            break;
+        selected = index;
+    }
+    if(selected + 1u == end)
+        --selected;
+    byte = geometry.stops[selected].committedByte;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

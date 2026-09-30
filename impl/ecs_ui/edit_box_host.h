@@ -8,6 +8,7 @@
 #include "text_edit_session.h"
 #include "edit_clipboard_controller.h"
 #include "clipboard_publications.h"
+#include "edit_click_tracker.h"
 
 #include <impl/ecs_ui/toolkit/context.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
@@ -78,7 +79,10 @@ private:
         u64 retiredFocusGeneration = 0u;
         u64 navigationInstanceGeneration = 0u;
         usize dragAnchor = 0u;
+        usize wordDragStart = 0u;
+        usize wordDragEnd = 0u;
         bool dragging = false;
+        bool wordDragging = false;
         bool preeditCaretVisible = true;
         bool actionCapable = false;
         bool focused = false;
@@ -95,6 +99,7 @@ private:
         Core::TextInputEvent native;
         Ui::EditKeyStroke key;
         usize position = 0u;
+        usize wordPosition = 0u;
         u64 geometryRevision = 0u;
         u64 focusGeneration = 0u;
         u64 geometryExternalRevision = 0u;
@@ -108,6 +113,7 @@ private:
         bool extend = false;
         bool dragging = false;
         bool completed = false;
+        bool wordSelect = false;
 
         explicit Event(Core::Alloc::GlobalArena& arena) : native(arena){}
     };
@@ -164,6 +170,7 @@ private:
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const;
     [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const;
+    [[nodiscard]] bool hitWord(const Entry& entry, Ui::Point position, usize& byte)const;
     void cancelTransfers();
     void drainPublications();
 
@@ -177,6 +184,7 @@ private:
     UiEditClipboardController m_clipboard;
     UiEditClipboardController m_primary;
     UiClipboardPublications m_publications;
+    UiEditClickTracker m_clickTracker;
     Ui::PaintVector<Entry> m_entries;
     Ui::PaintVector<Event> m_events;
     UiEditModelSnapshot m_nativePublished;

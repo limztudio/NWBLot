@@ -84,6 +84,8 @@ Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui:
             discard(entry->owner);
             entry->owner = owner;
             entry->dragging = false;
+            entry->wordDragging = false;
+            m_clickTracker.cancel();
             model.cancelComposition();
             entry->expected.capture(model);
             if(rebound || policyChanged){

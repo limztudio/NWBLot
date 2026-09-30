@@ -84,6 +84,8 @@ public:
     // Home/End address the current hard line in Multiline mode; document movement always addresses the complete text.
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false);
+    // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
+    [[nodiscard]] bool wordRangeAt(usize position, usize& begin, usize& end)const;
     [[nodiscard]] bool replaceSelection(AStringView text);
     [[nodiscard]] bool backspace();
     [[nodiscard]] bool eraseForward();

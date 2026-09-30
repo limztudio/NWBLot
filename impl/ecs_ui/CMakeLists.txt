@@ -7,6 +7,8 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_edit_session.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_edit_session_local.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_edit_event.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_click_tracker.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.h"
     "${CMAKE_CURRENT_LIST_DIR}/edit_clipboard_controller.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard_publications.h"

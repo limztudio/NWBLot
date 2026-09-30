@@ -171,6 +171,7 @@ void UiEditBoxHost::synchronizeFocus(){
         return;
     const Entry* entry = find(m_context.input().focus());
     const bool focused = hasTextFocus() && entry;
+    m_clickTracker.retainFocus(focused ? &entry->owner : nullptr);
     for(auto& candidate : m_entries){
         const bool active = focused && candidate.owner == entry->owner;
         if(candidate.actionCapable){
@@ -201,6 +202,7 @@ void UiEditBoxHost::synchronizeFocus(){
         if(!candidate.actionCapable)
             discard(candidate.owner);
         candidate.dragging = false;
+        candidate.wordDragging = false;
     }
     if(
         (m_session.token().valid() && (!focused || entry->owner != m_session.owner()))
@@ -214,6 +216,7 @@ void UiEditBoxHost::reset(){
     if(rejectBorrowedMutation())
         return;
     cancelTransfers();
+    m_clickTracker.cancel();
     m_entries.clear();
     m_events.clear();
     m_queuedTextBytes = 0u;

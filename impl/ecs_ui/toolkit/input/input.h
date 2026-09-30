@@ -54,6 +54,8 @@ struct InputEvent{
     bool alt = false;
     f64 scrollX = 0.0;
     f64 scrollY = 0.0;
+    // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
+    u64 timestampMs = 0u;
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default Tab order.

@@ -22,7 +22,7 @@ namespace __hidden_ui_edit_navigation{
 
 
 namespace RunClass{
-    enum Enum : u8{ Whitespace, Punctuation, Text };
+    enum Enum : u8{ Whitespace, Punctuation, Text, LineBreak };
 };
 
 static bool IsWhitespace(const u32 scalar){
@@ -133,6 +133,31 @@ usize EditModel::wordBoundary(usize position, const bool forward)const{
     while(position != 0u && Classify(text(), previousBoundary(position)) == category)
         position = previousBoundary(position);
     return position;
+}
+
+bool EditModel::wordRangeAt(const usize position, usize& begin, usize& end)const{
+    using namespace __hidden_ui_edit_navigation;
+    if(!isBoundary(position))
+        return false;
+    if(m_text.empty()){
+        begin = 0u;
+        end = 0u;
+        return true;
+    }
+    const usize origin = position == m_text.size() ? previousBoundary(position) : position;
+    const auto category = [this](const usize byte){
+        return m_text[byte] == '\n' ? RunClass::LineBreak : Classify(text(), byte);
+    };
+    const RunClass::Enum run = category(origin);
+    usize first = origin;
+    usize last = nextBoundary(origin);
+    while(first != 0u && category(previousBoundary(first)) == run)
+        first = previousBoundary(first);
+    while(last < m_text.size() && category(last) == run)
+        last = nextBoundary(last);
+    begin = first;
+    end = last;
+    return true;
 }
 
 

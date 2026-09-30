@@ -78,6 +78,7 @@ void UiEditBoxHost::collectNative(){
             return;
         }
         m_lastNativeSequence = event.native.sequence;
+        m_clickTracker.cancel();
         event.owner = m_session.owner();
         const Entry* entry = find(event.owner.widget);
         event.focusGeneration = entry && entry->owner == event.owner ? entry->focusGeneration : 0u;
@@ -101,9 +102,14 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         return;
     }
     synchronizeFocus();
+    if(input.type == Ui::InputEventType::PointerMove)
+        m_clickTracker.move(input.position);
     if(input.type == Ui::InputEventType::PointerCaptureLost){
+        m_clickTracker.cancel();
         for(auto& entry : m_entries)
             entry.dragging = false;
+        for(auto& entry : m_entries)
+            entry.wordDragging = false;
         for(usize index = m_events.size(); index > 0u; --index){
             if(m_events[index - 1u].kind == UiEditBoxEventKind::Selection)
                 m_events.erase(m_events.begin() + static_cast<isize>(index - 1u));
@@ -111,6 +117,7 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         return;
     }
     if(input.type == Ui::InputEventType::KeyDown){
+        m_clickTracker.cancel();
         Entry* entry = find(m_context.input().focus());
         if(!entry || !hasTextFocus())
             return;
@@ -130,27 +137,44 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         if(!append(Move(event)))
             return;
     }
-    else if(input.type <= Ui::InputEventType::PrimaryUp){
+    else if(
+        input.type <= Ui::InputEventType::PrimaryUp
+        && (input.type != Ui::InputEventType::PointerMove || previousCapture.valid())
+    ){
         const Ui::WidgetId target = input.type == Ui::InputEventType::PrimaryDown ? m_context.input().focus() : previousCapture;
-        if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target)
+        if(input.type == Ui::InputEventType::PrimaryDown && m_context.input().capture() != target){
+            m_clickTracker.cancel();
             return;
+        }
         Entry* entry = find(target);
         usize byte = 0u;
-        if(!entry || !hit(*entry, input.position, byte))
+        usize wordByte = 0u;
+        if(!entry || !hit(*entry, input.position, byte) || !hitWord(*entry, input.position, wordByte)){
+            m_clickTracker.cancel();
             return;
+        }
         Event event(m_arena);
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
         event.kind = UiEditBoxEventKind::Selection;
         event.position = byte;
+        event.wordPosition = wordByte;
         event.geometryRevision = entry->displayed.revision;
         event.geometryExternalRevision = entry->displayed.externalRevision;
         event.extend = input.shift;
         event.dragging = input.type != Ui::InputEventType::PrimaryDown;
         event.completed = input.type == Ui::InputEventType::PrimaryUp;
+        if(input.type == Ui::InputEventType::PrimaryDown){
+            event.wordSelect = m_clickTracker.press(entry->owner, entry->popup, entry->displayed.revision,
+                entry->displayed.externalRevision, input.position, input.timestampMs, input.shift) == UiEditClickKind::Word;
+        }
+        else if(input.type == Ui::InputEventType::PrimaryUp)
+            m_clickTracker.release(entry->owner);
         if(!append(Move(event)))
             return;
     }
+    else if(input.type == Ui::InputEventType::PointerLeave || input.type == Ui::InputEventType::SecondaryDown)
+        m_clickTracker.cancel();
     synchronizeFocus();
 }
 
@@ -194,6 +218,7 @@ bool UiEditBoxHost::character(const u32 unicode){
         count = 4u;
     }
     event.native.text.assign(bytes, count);
+    m_clickTracker.cancel();
     if(!append(Move(event)))
         return true;
     return true;
@@ -207,6 +232,7 @@ bool UiEditBoxHost::pastePrimary(const Ui::Point position){
     Entry* entry = find(target);
     if(!entry || !hasTextFocus() || m_context.input().focus() != target)
         return false;
+    m_clickTracker.cancel();
     Event event(m_arena);
     event.owner = entry->owner;
     event.focusGeneration = entry->focusGeneration;

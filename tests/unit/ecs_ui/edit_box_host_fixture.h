@@ -61,7 +61,8 @@ public:
 
 public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(ClipboardChannel::Enum channel)const noexcept override{
-        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
+        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true }
+            : primaryWritable ? ClipboardCapabilities{ false, true } : ClipboardCapabilities{};
     }
 
     [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
@@ -89,6 +90,7 @@ protected:
         const ClipboardChannel::Enum channel, const AStringView text)override{
         startedToken = token;
         startedOperation = operation;
+        startedChannel = channel;
         startedText.assign(text.data(), text.size());
         if(!delayed)
             QueuedClipboardService::startNativeRequest(token, operation, channel, text);
@@ -100,7 +102,9 @@ public:
     AString<Alloc::GlobalArena> startedText;
     ClipboardRequestToken startedToken;
     ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
+    ClipboardChannel::Enum startedChannel = ClipboardChannel::Clipboard;
     bool delayed = false;
+    bool primaryWritable = false;
 };
 
 class FixtureShaper final : public Ui::ITextShaper{

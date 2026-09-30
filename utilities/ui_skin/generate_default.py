@@ -178,7 +178,7 @@ def generate(directory: Path) -> None:
             alias.update(padding=[8.0, 6.0, 8.0, 6.0], minimum_size=[12.0, 12.0])
         regions.append(alias)
     lines = [
-        "ui_skin asset;", "", "asset.schema_version = 2;",
+        "ui_skin asset;", "", "asset.schema_version = 3;",
         'asset.texture = "engine/ui/skins/default/texture";',
         f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];",
         "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = [",
@@ -186,7 +186,7 @@ def generate(directory: Path) -> None:
     lines.extend("    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions)
     lines.extend(["];", "asset.colors = ["])
     lines.extend("    " + json.dumps(color, separators=(", ", ": ")) + "," for color in COLOR_ROLES)
-    lines.extend(["];", ""])
+    lines.extend(["];", 'asset.typography = {"default_font_size": 16.0};', ""])
     (directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))
 
 

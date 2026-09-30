@@ -224,6 +224,7 @@ private:
     usize m_popupFrameCount = 0u;
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
+    f32 m_skinDefaultFontSize = 16.0f;
     EditBoxStyle m_editStyle;
     ScrollbarStyle m_scrollbarStyle;
     PopupStyle m_popupStyle;

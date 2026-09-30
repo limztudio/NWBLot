@@ -43,6 +43,10 @@ void Builder::setSkin(const UiSkin& skin){
         return;
     }
     m_skin = &skin;
+    const f32 nextDefaultFontSize = skin.typography().defaultFontSize;
+    if(m_style.fontSize == m_skinDefaultFontSize)
+        m_style.fontSize = nextDefaultFontSize;
+    m_skinDefaultFontSize = nextDefaultFontSize;
     using namespace UiSkinColorRole;
     const WidgetStyle widget;
     const EditBoxStyle edit;

@@ -97,6 +97,10 @@ struct UiSkinPalette{
     Array<UiSkinColor, UiSkinColorRole::Count> colors{};
 };
 
+struct UiSkinTypography{
+    f32 defaultFontSize = 16.0f;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,6 +131,7 @@ public:
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
     void setPalette(const UiSkinPalette& palette){ m_palette = palette; m_hasPalette = true; }
+    void setTypography(const UiSkinTypography& typography){ m_typography = typography; m_hasTypography = true; }
 
 
 public:
@@ -137,6 +142,8 @@ public:
     [[nodiscard]] const RegionVector& regions()const{ return m_regions; }
     [[nodiscard]] bool hasPalette()const{ return m_hasPalette; }
     [[nodiscard]] const UiSkinPalette& palette()const{ return m_palette; }
+    [[nodiscard]] bool hasTypography()const{ return m_hasTypography; }
+    [[nodiscard]] const UiSkinTypography& typography()const{ return m_typography; }
     [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const;
 
 
@@ -148,6 +155,8 @@ private:
     f32 m_referenceDensity = 1.0f;
     UiSkinPalette m_palette;
     bool m_hasPalette = false;
+    UiSkinTypography m_typography;
+    bool m_hasTypography = false;
 };
 
 

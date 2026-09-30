@@ -44,9 +44,16 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
         return false;
     }
+    if(skin.hasTypography() && !AddBinaryRepeatedReserveBytes(
+        reserveBytes, 1u, sizeof(UiSkinBinaryPayload::TypographyBinary)
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
+        return false;
+    }
 
     UiSkinBinaryPayload::HeaderBinary header;
-    header.version = skin.hasPalette() ? UiSkinBinaryPayload::s_UiSkinPaletteVersion : UiSkinBinaryPayload::s_UiSkinVersion;
+    header.version = skin.hasTypography() ? UiSkinBinaryPayload::s_UiSkinTypographyVersion
+        : skin.hasPalette() ? UiSkinBinaryPayload::s_UiSkinPaletteVersion : UiSkinBinaryPayload::s_UiSkinVersion;
     header.textureNameHash = skin.texture().name().hash();
     header.atlasWidth = skin.atlasWidth();
     header.atlasHeight = skin.atlasHeight();
@@ -86,6 +93,11 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
             AppendPOD(outBinary, packed);
         }
     }
+    if(skin.hasTypography()){
+        UiSkinBinaryPayload::TypographyBinary packed;
+        packed.defaultFontSize = skin.typography().defaultFontSize;
+        AppendPOD(outBinary, packed);
+    }
     return true;
 }
 
@@ -103,6 +115,8 @@ bool BuildUiSkinAsset(const UiSkinCookEntry& entry, UiSkin& outSkin){
     candidate.setAtlas(entry.texture, entry.atlasWidth, entry.atlasHeight, entry.referenceDensity, Move(regions));
     if(entry.hasPalette)
         candidate.setPalette(entry.palette);
+    if(entry.hasTypography)
+        candidate.setTypography(entry.typography);
     if(!candidate.validatePayload() || (entry.completeToolkitSkin && !ValidateUiSkinToolkitContract(candidate)))
         return false;
     outSkin = Move(candidate);

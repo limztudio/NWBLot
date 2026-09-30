@@ -101,10 +101,10 @@ void nwbCausticSplat(const float3 worldPos, const half3 flux){
 
     for(uint channel = 0u; channel < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++channel){
         const half fluxChannel = flux[channel];
-        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
-        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
-        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
-        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
+        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w00)));
+        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w10)));
+        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w01)));
+        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w11)));
     }
 }
 

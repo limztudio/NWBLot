@@ -9,6 +9,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Precision-only scale: keep smallest deposits nonzero and total R32_UINT accumulation below wrap; resolve divides it out.
 #define NWB_CAUSTIC_FIXED_POINT_SCALE 1048576.0
 #define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
@@ -17,13 +23,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Converts finite positive flux to a saturating fixed-point deposit. Flux and bilinear weights are (0, +inf)
-// and (0, 1) bounded respectively, so half math suffices; widen only at the saturating fixed-point conversion.
-uint nwbCausticFluxToFixedPoint(half fluxChannel){
-    if(!isfinite(fluxChannel) || fluxChannel <= half(0.0h))
+// Converts finite positive flux to a saturating fixed-point deposit. The fixed-point scale (2^20)
+// overflows the half finite range (max 65504), so the scale multiply must stay in float: a half
+// multiply saturates (or goes inf, driver-dependent) and truncates the small per-photon fluxes of the
+// full 512-side grid to zero deposits, which removes the visible caustic on opt/fin while the 16x
+// brighter dbg photons still survive. Widen first, then scale and clamp in float.
+uint nwbCausticFluxToFixedPoint(float fluxChannel){
+    if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
         return 0u;
-    const half scaled = fluxChannel * half(NWB_CAUSTIC_FIXED_POINT_SCALE);
-    return (uint)min(float(scaled), (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
+    const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
+    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
 }
 
 

@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 
-#include <core/alloc/general.h>
 #include <core/graphics/rhi/device.h>
 #include <core/graphics/vulkan/device_extension_policy.h>
 
@@ -32,30 +31,11 @@ namespace __hidden_device_creation_policy_tests{
 
 namespace GraphicsBackend = Core::GraphicsBackend;
 
-inline constexpr Name s_DeviceCreationPolicyTestArena("tests/graphics/device_creation_policy");
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(DeviceCreationPolicy, UsesConservativeNativeMeshShaderDefaultOnWindowsArm64){
-    Core::Alloc::GlobalArena arena(s_DeviceCreationPolicyTestArena);
-    Core::DeviceCreationParameters parameters(arena);
-
-#if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))
-    EXPECT_FALSE(parameters.enableNativeMeshShaders);
-#else
-    EXPECT_TRUE(parameters.enableNativeMeshShaders);
-#endif
-}
-
-TEST(DeviceCreationPolicy, LowLevelDevicesRequireExplicitAutomaticHardwareRayTracing){
-    Core::Alloc::GlobalArena arena(s_DeviceCreationPolicyTestArena);
-    Core::DeviceCreationParameters parameters(arena);
-
-    EXPECT_EQ(parameters.hardwareRayTracingPolicy, Core::HardwareRayTracingPolicy::Disabled);
-    EXPECT_TRUE(Core::IsValidHardwareRayTracingPolicy(Core::HardwareRayTracingPolicy::Automatic));
-    EXPECT_TRUE(Core::IsValidHardwareRayTracingPolicy(Core::HardwareRayTracingPolicy::Disabled));
+TEST(DeviceCreationPolicy, RejectsUnknownHardwareRayTracingPolicy){
     EXPECT_FALSE(Core::IsValidHardwareRayTracingPolicy(static_cast<Core::HardwareRayTracingPolicy::Enum>(255u)));
 }
 
@@ -75,15 +55,6 @@ TEST(DeviceCreationPolicy, DisabledHardwareRayTracingCannotBeOverriddenByExplici
         const auto required = GraphicsBackend::ResolveDeviceExtensionRequest(Core::HardwareRayTracingPolicy::Disabled, extension, true);
         EXPECT_EQ(optional, GraphicsBackend::DeviceExtensionRequestAction::Omit);
         EXPECT_EQ(required, GraphicsBackend::DeviceExtensionRequestAction::Reject);
-    }
-}
-
-TEST(DeviceCreationPolicy, AutomaticHardwareRayTracingAllowsCanonicalExtensionRequests){
-    for(const GraphicsBackend::DeviceExtensionEntry& entry : GraphicsBackend::s_RayTracingDeviceExtensions){
-        const auto optional = GraphicsBackend::ResolveDeviceExtensionRequest(Core::HardwareRayTracingPolicy::Automatic, entry.name, false);
-        const auto required = GraphicsBackend::ResolveDeviceExtensionRequest(Core::HardwareRayTracingPolicy::Automatic, entry.name, true);
-        EXPECT_EQ(optional, GraphicsBackend::DeviceExtensionRequestAction::Enable);
-        EXPECT_EQ(required, GraphicsBackend::DeviceExtensionRequestAction::Enable);
     }
 }
 

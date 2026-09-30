@@ -12,4 +12,4 @@ The launcher configures the required test targets, builds the smoke executable a
 
 The application starts with lagged lighting enabled. The runner accepts only GPU-submission transitions in this order: bootstrap, active history use, normal current-frame path after F1, then a second bootstrap and active-history use after F1 re-enables the option. It also rejects Vulkan validation, renderer recovery, and history-capture errors.
 
-`--self-test` exercises the launcher command composition without Vulkan; the lifecycle runner's parser/state checks are separately registered with CTest.
+Run `python tests/ab/frame_lagged_async_lighting/run.py --self-test` to check lifecycle ordering, missing evidence, and failure cleanup without Vulkan. These checks are also registered with CTest.

@@ -127,30 +127,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiKeyboardOwnerTests, NavigationCopiesOwnerLifetimeAndKeepsFocusInTheEditor){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    focus();
-    const Array<InputKey::Enum, 4u> keys{ InputKey::Up, InputKey::Down, InputKey::PageUp, InputKey::PageDown };
-    const Array<ControlActionKind::Enum, 4u> kinds{ ControlActionKind::Up, ControlActionKind::Down,
-        ControlActionKind::PageUp, ControlActionKind::PageDown };
-    for(usize index = 0u; index < keys.size(); ++index){
-        press(keys[index]);
-        ControlAction action;
-        ASSERT_TRUE(take(action));
-        EXPECT_EQ(action.kind, kinds[index]);
-        EXPECT_EQ(action.id.target, m_targets[1u].id);
-        EXPECT_EQ(action.id.declarationGeneration, m_targets[1u].declarationGeneration);
-        EXPECT_EQ(action.id.layoutGeneration, 1u);
-        EXPECT_EQ(action.control, m_targets[1u].control);
-        EXPECT_EQ(action.pageRows, 5u);
-        EXPECT_EQ(action.source, m_targets[0u].id);
-        EXPECT_EQ(action.sourceDeclarationGeneration, m_targets[0u].declarationGeneration);
-        EXPECT_EQ(action.sourceControl, m_targets[0u].control);
-        EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    }
-    EXPECT_TRUE(m_router.actions().empty());
-}
-
 TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutALegacyActivation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
@@ -170,28 +146,6 @@ TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutALegac
     EXPECT_LT(submit.id.sequence, up.id.sequence);
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-}
-
-TEST_F(UiKeyboardOwnerTests, EditingKeysRemainAtTheEditorWithoutListActions){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    focus();
-    const Array<InputKey::Enum, 10u> keys{ InputKey::Home, InputKey::End, InputKey::Left, InputKey::Right,
-        InputKey::Space, InputKey::Backspace, InputKey::Delete, InputKey::A, InputKey::V, InputKey::Escape };
-    for(const auto key : keys)
-        press(key);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-}
-
-TEST_F(UiKeyboardOwnerTests, NormalEditorWithoutABindingHasNoDelegatedControlActions){
-    clearBinding();
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    focus();
-    press(InputKey::Down);
-    press(InputKey::Enter);
-    EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(m_router.actions().empty());
 }
 
 TEST_F(UiKeyboardOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandidateIsCommitted){

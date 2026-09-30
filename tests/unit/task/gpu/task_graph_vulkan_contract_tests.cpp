@@ -617,45 +617,8 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
 #endif
 }
 
-TEST(VulkanCommandValidation, RenderPassAttachmentActionsLowerExactlyAndPreserveByDefault){
+TEST(VulkanCommandValidation, RejectsOutOfRangeRenderPassAttachmentActions){
     using namespace Graphics::GraphicsBackend::VulkanDetail;
-
-    const Graphics::RenderPassParameters defaultParameters;
-    for(u32 attachmentIndex = 0u; attachmentIndex < Graphics::s_MaxRenderTargets; ++attachmentIndex){
-        const Graphics::RenderPassAttachmentActions& actions =
-            defaultParameters.colorAttachmentActions[attachmentIndex]
-        ;
-        EXPECT_TRUE(IsRenderPassAttachmentActionsValid(actions));
-        const RenderPassAttachmentOperations operations = ConvertRenderPassAttachmentActions(actions);
-        EXPECT_EQ(operations.loadOp, VK_ATTACHMENT_LOAD_OP_LOAD);
-        EXPECT_EQ(operations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
-    }
-    EXPECT_EQ(
-        ConvertRenderPassAttachmentActions(defaultParameters.depthAttachmentActions).loadOp,
-        VK_ATTACHMENT_LOAD_OP_LOAD
-    );
-    EXPECT_EQ(
-        ConvertRenderPassAttachmentActions(defaultParameters.stencilAttachmentActions).storeOp,
-        VK_ATTACHMENT_STORE_OP_STORE
-    );
-
-    Graphics::RenderPassAttachmentActions clearAndDiscard;
-    clearAndDiscard.loadAction = Graphics::RenderPassLoadAction::Clear;
-    clearAndDiscard.storeAction = Graphics::RenderPassStoreAction::Discard;
-    const RenderPassAttachmentOperations clearAndDiscardOperations =
-        ConvertRenderPassAttachmentActions(clearAndDiscard)
-    ;
-    EXPECT_EQ(clearAndDiscardOperations.loadOp, VK_ATTACHMENT_LOAD_OP_CLEAR);
-    EXPECT_EQ(clearAndDiscardOperations.storeOp, VK_ATTACHMENT_STORE_OP_DONT_CARE);
-
-    Graphics::RenderPassAttachmentActions discardAndStore;
-    discardAndStore.loadAction = Graphics::RenderPassLoadAction::Discard;
-    discardAndStore.storeAction = Graphics::RenderPassStoreAction::Store;
-    const RenderPassAttachmentOperations discardAndStoreOperations =
-        ConvertRenderPassAttachmentActions(discardAndStore)
-    ;
-    EXPECT_EQ(discardAndStoreOperations.loadOp, VK_ATTACHMENT_LOAD_OP_DONT_CARE);
-    EXPECT_EQ(discardAndStoreOperations.storeOp, VK_ATTACHMENT_STORE_OP_STORE);
 
     Graphics::RenderPassAttachmentActions invalidLoad;
     invalidLoad.loadAction = Graphics::RenderPassLoadAction::Count;

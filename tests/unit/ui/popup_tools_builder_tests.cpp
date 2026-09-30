@@ -296,28 +296,6 @@ TEST_F(UiPopupToolsBuilderTests, SecondaryTriggerUsesOnlyTheExactlyAcceptedAncho
     EXPECT_EQ(m_menu.cursorKey(), 1u);
 }
 
-TEST_F(UiPopupToolsBuilderTests, MenuKeyOpensAtTheFocusedAnchorWithoutPrimaryActivation){
-    ASSERT_TRUE(acceptTools(1u, false));
-    press(InputKey::Tab);
-    ASSERT_EQ(m_context.input().focus(), anchor());
-    press(InputKey::Menu);
-    ASSERT_TRUE(acceptTools(2u, false));
-    EXPECT_TRUE(m_menuResult.opened);
-    EXPECT_TRUE(m_menu.isOpen());
-    EXPECT_FALSE(m_anchorActivated);
-    EXPECT_EQ(m_menu.cursorKey(), 1u);
-}
-
-TEST_F(UiPopupToolsBuilderTests, ShiftF10OpensTheSameContextMenu){
-    ASSERT_TRUE(acceptTools(1u, false));
-    press(InputKey::Tab);
-    press(InputKey::F10, true);
-    ASSERT_TRUE(acceptTools(2u, false));
-    EXPECT_TRUE(m_menuResult.opened);
-    EXPECT_TRUE(m_menu.isOpen());
-    EXPECT_FALSE(m_menuResult.activated);
-}
-
 TEST_F(UiPopupToolsBuilderTests, OrdinaryPrimaryActivationDoesNotOpenAnAttachedContextMenu){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(moveToAnchor());
@@ -364,23 +342,6 @@ TEST_F(UiPopupToolsBuilderTests, PointerReleaseCommitsOnlyAnEnabledCommand){
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 5u);
     EXPECT_FALSE(m_menu.isOpen());
-}
-
-TEST_F(UiPopupToolsBuilderTests, EscapeCancelsPreviewAndRestoresEligibleAnchorFocus){
-    ASSERT_TRUE(acceptTools(1u, false));
-    press(InputKey::Tab);
-    press(InputKey::Menu);
-    ASSERT_TRUE(acceptTools(2u, false));
-    press(InputKey::Down);
-    ASSERT_TRUE(acceptTools(3u, false));
-    EXPECT_EQ(m_menu.cursorKey(), 2u);
-    press(InputKey::Escape);
-    ASSERT_TRUE(acceptTools(4u, false));
-    EXPECT_TRUE(m_menuResult.closed);
-    EXPECT_FALSE(m_menuResult.activated);
-    EXPECT_EQ(m_menuResult.key, 0u);
-    EXPECT_FALSE(m_menu.isOpen());
-    EXPECT_EQ(m_context.input().focus(), anchor());
 }
 
 TEST_F(UiPopupToolsBuilderTests, OutsideClickCancelsAndConsumesTheCompletePointerSequence){

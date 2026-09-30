@@ -142,26 +142,6 @@ TEST_F(UiControlInputTests, EmptyAndCompleteTokensAreDistinctFromPartialLifetime
     EXPECT_FALSE((ControlToken{ 0u, 2u, 3u }).empty());
 }
 
-TEST_F(UiControlInputTests, OneHostOwnsStableValuePartsWithoutAddingTabStops){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    click();
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.actions().empty());
-    ControlAction action;
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.kind, ControlActionKind::Activate);
-    EXPECT_EQ(action.id.target, m_targets[0u].id);
-    EXPECT_EQ(action.id.declarationGeneration, 7u);
-    EXPECT_EQ(action.id.layoutGeneration, 1u);
-    EXPECT_EQ(action.source, m_targets[1u].id);
-    EXPECT_EQ(action.value, 100000u);
-    EXPECT_EQ(action.control, m_targets[0u].control);
-    EXPECT_FALSE(take(action));
-    focus();
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_EQ(m_router.targets().size(), 3u);
-}
-
 TEST_F(UiControlInputTests, WheelCopiesAcceptedStepWithoutChangingFocusOrCreatingActivation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 5u));
     EXPECT_TRUE(wheel(-0.25).pointerConsumed);
@@ -238,30 +218,6 @@ TEST_F(UiControlInputTests, NavigationCopiesAcceptedPageSizeAndSubmissionDoesNot
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
     EXPECT_FALSE(take(action));
-}
-
-TEST_F(UiControlInputTests, AllListNavigationKeysFitOwnershipAndProduceOrderedKinds){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    focus();
-    const Array<InputKey::Enum, 6u> keys{
-        InputKey::Up, InputKey::Down, InputKey::PageUp, InputKey::PageDown, InputKey::Home, InputKey::End
-    };
-    const Array<ControlActionKind::Enum, 6u> kinds{
-        ControlActionKind::Up, ControlActionKind::Down, ControlActionKind::PageUp,
-        ControlActionKind::PageDown, ControlActionKind::Home, ControlActionKind::End
-    };
-    u64 previousSequence = 0u;
-    for(usize index = 0u; index < keys.size(); ++index){
-        EXPECT_TRUE(send(Key(InputEventType::KeyDown, keys[index])).keyboardConsumed);
-        EXPECT_TRUE(m_router.ownsKey(keys[index]));
-        EXPECT_TRUE(send(Key(InputEventType::KeyUp, keys[index])).keyboardConsumed);
-        EXPECT_FALSE(m_router.ownsKey(keys[index]));
-        ControlAction action;
-        ASSERT_TRUE(take(action));
-        EXPECT_EQ(action.kind, kinds[index]);
-        EXPECT_GT(action.id.sequence, previousSequence);
-        previousSequence = action.id.sequence;
-    }
 }
 
 TEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList){

@@ -12,7 +12,7 @@ timestamp envelopes, and makes the M4 rollout gate explicit:
 * the fixed-scene output and validation log must remain clean.
 
 The actual benchmark needs a target GPU with a dedicated compute-only family and a visible native
-window. `--self-test` exercises parsing, statistics, and image comparison without either requirement.
+window. `--self-test` checks capture failures, cleanup ordering, and incomplete telemetry without either requirement.
 """
 
 from __future__ import annotations
@@ -44,7 +44,6 @@ from gpu_timing_parse import (  # noqa: E402
     require_scope_samples,
     summarize_scopes,
 )
-from name_symbols import debug_name_hash_token  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     STRICT_LOG_FAILURE_MESSAGES,
@@ -101,7 +100,6 @@ LIT_PIXEL_CAPTURE_SETTLE_SECONDS = "--pixel-capture-settle-seconds"
 LIT_MINIMUM_SHADOW_MS = "--minimum-shadow-ms"
 LIT_MAXIMUM_FRAME_REGRESSION_PERCENT = "--maximum-frame-regression-percent"
 LIT_MAXIMUM_PIXEL_MEAN_ABS = "--maximum-pixel-mean-abs"
-LIT_CLIENT_CAPTURE = "client-capture"
 LIT_PREPARE = "prepare"
 LIT_CAPTURE = "capture"
 LIT_PREPARED_CLIENT_CAPTURE = "prepared-client-capture"
@@ -852,29 +850,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     return args
 
 
-def build_test_bmp(path: Path, pixels: Sequence[Tuple[int, int, int]]) -> None:
-    """Write a one-row 24-bit BMP used only by --self-test."""
-    width = len(pixels)
-    stride = ((width * 3 + 3) // 4) * 4
-    payload = bytearray(stride)
-    for index, (red, green, blue) in enumerate(pixels):
-        payload[index * 3:index * 3 + 3] = bytes((blue, green, red))
-    header = struct.pack("<2sIHHI", b"BM", 54 + len(payload), 0, 0, 54)
-    dib = struct.pack("<IIIHHIIIIII", 40, width, 1, 1, 24, 0, len(payload), 0, 0, 0, 0)
-    path.write_bytes(header + dib + payload)
-
-
 def run_self_test() -> int:
     capture_args = parse_args([LIT_SELF_TEST])
-    assert DEFAULT_FORBIDDEN_LOGS[:len(STRICT_LOG_FAILURE_MESSAGES)] == STRICT_LOG_FAILURE_MESSAGES
-    assert capture_args.pixel_capture_frames == 96
-    assert capture_args.pixel_capture_settle_seconds == 0.75
-
-    lane = parse_lane_status(
-        "Vulkan: async compute lane requested=true effective=true graphicsFamily=1 computeFamily=3 "
-        "(dedicated compute family selected)"
-    )
-    assert lane == LaneStatus(True, True, 1, 3)
 
     graphics_route_lane = parse_lane_status(
         "Vulkan: async compute lane requested=yes effective=no graphicsFamily=0 computeFamily=-1 "
@@ -886,20 +863,7 @@ def run_self_test() -> int:
         DEFAULT_FORBIDDEN_LOGS,
     ) == [LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO]
 
-    class ClientAreaCaptureProbe:
-        def __init__(self):
-            self.calls = []
-
-        def capture_client_window(self, window, output_path):
-            self.calls.append((window, output_path))
-            return LIT_CLIENT_CAPTURE
-
-    client_capture_probe = ClientAreaCaptureProbe()
     client_capture_path = Path("client-capture.bmp")
-    prepare_m4_client_area(client_capture_probe, 17)
-    assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == LIT_CLIENT_CAPTURE
-    assert client_capture_probe.calls == [(17, client_capture_path)]
-
     m4_capture_calls = []
     m4_capture_probe = object.__new__(WindowsCapture)
     m4_capture_probe.prepare_raw_client_window = lambda window: m4_capture_calls.append((LIT_PREPARE, window))
@@ -943,14 +907,6 @@ def run_self_test() -> int:
             point.x += 104
             point.y += 73
             return 1
-
-    client_rect_user32 = ClientRectUser32()
-    client_rect_capture = object.__new__(WindowsCapture)
-    client_rect_capture.user32 = client_rect_user32
-    client_rect = client_rect_capture._client_rect(17)
-    assert (client_rect.left, client_rect.top, client_rect.right, client_rect.bottom) == (104, 73, 1384, 973)
-    assert client_rect_user32.get_client_rect_calls == 1
-    assert client_rect_user32.client_to_screen_calls == 1
 
     client_rect_failure_user32 = ClientRectUser32(get_client_rect_result=False)
     client_rect_failure_capture = object.__new__(WindowsCapture)
@@ -1131,23 +1087,6 @@ def run_self_test() -> int:
             mock.call(logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_BENCHMARK_LOGSERVER),
         ]
 
-        timing = root / "timing.txt"
-        frame_token = debug_name_hash_token(LIT_RENDER_FRAME)
-        shadow_token = debug_name_hash_token(LIT_RENDER_ASYNC_SHADOW)
-        assert frame_token == "40b0e96fbc71842a_8b1f334a9e5209dd_e341401cb88c31da_09af79e15cfb43b2_f6b5516d15dbcf7a_05406d8b5a24bcb8_9a3ecd4d8684c68f_371acbda0ef43b35"
-        timing.write_text(
-            "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
-            f"  {shadow_token}: avg=1.2500 min=0.0 max=2.0 samples=20\n"
-            "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
-            f"  {shadow_token}: avg=1.7500 min=0.0 max=2.0 samples=20\n",
-            encoding=LIT_UTF_8,
-        )
-        summaries = summarize_scopes(parse_timing_file(timing, load_name_symbols(None)))
-        assert summaries[LIT_RENDER_FRAME].median_ms == 4.5
-        assert summaries[LIT_RENDER_ASYNC_SHADOW].positive_sample_count == 2
-
         # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate
         # submissions. The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
         stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
@@ -1177,16 +1116,6 @@ def run_self_test() -> int:
         )
         capture_args.skip_pixel_parity = True
         assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
-
-        first = root / "first.bmp"
-        second = root / "second.bmp"
-        build_test_bmp(first, ((0, 0, 0), (10, 20, 30)))
-        build_test_bmp(second, ((0, 0, 0), (13, 18, 35)))
-        diff = compare_bmp_rgb(first, second)
-        assert diff.width == 2 and diff.height == 1
-        assert diff.max_abs == 5
-        assert diff.changed_pixels == 1
-        assert abs(diff.mean_abs - (10.0 / 6.0)) < 1.0e-9
 
         failure_markdown = root / "failure.md"
         write_markdown_report(

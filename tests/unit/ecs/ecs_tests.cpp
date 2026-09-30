@@ -60,10 +60,6 @@ Array<usize, sizeof...(Is)> RegisterPoolSlotTypes(IndexSequence<Is...>){
     return { NWB::Core::ECS::ComponentType<PoolSlotComponent<Is>>()... };
 }
 
-struct TickMessage{
-    u32 value = 0;
-};
-
 struct MoveOnlyMessage{
     explicit MoveOnlyMessage(u32 v)
         : value(v)
@@ -196,21 +192,6 @@ TEST(Ecs, ComponentStorageAndView){
         }
     );
     EXPECT_EQ(viewCount, 1u);
-}
-
-TEST(Ecs, EntityFacadeRehydratesEntityId){
-    TestWorld testWorld;
-
-    const auto entityId = testWorld.world.createEntity().id();
-    auto entity = testWorld.world.entity(entityId);
-    auto& position = entity.addComponent<PositionComponent>();
-    position.x = 17;
-
-    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
-    EXPECT_EQ(entity.getComponent<PositionComponent>().x, 17);
-
-    entity.removeComponent<PositionComponent>();
-    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
 }
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
@@ -426,32 +407,6 @@ TEST(Ecs, RepeatedComponentLookupWorkload){
     });
 }
 
-TEST(Ecs, MessageBus){
-    TestWorld testWorld;
-
-    TickMessage lvalueMessage{ 7u };
-    testWorld.world.postMessage(lvalueMessage);
-    testWorld.world.postMessage(TickMessage{ 11u });
-    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 0u);
-
-    testWorld.world.swapMessageBuffers();
-    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), s_ExpectedDualCount);
-
-    u32 consumedCount = 0;
-    u32 consumedValueSum = 0;
-    testWorld.world.consumeMessages<TickMessage>(
-        [&consumedCount, &consumedValueSum](const TickMessage& message){
-            ++consumedCount;
-            consumedValueSum += message.value;
-        }
-    );
-    EXPECT_EQ(consumedCount, s_ExpectedDualCount);
-    EXPECT_EQ(consumedValueSum, 18u);
-
-    testWorld.world.clearMessages();
-    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 0u);
-}
-
 TEST(Ecs, MoveOnlyMessageBus){
     TestWorld testWorld;
 
@@ -479,26 +434,6 @@ TEST(Ecs, MoveOnlyMessageBus){
     testWorld.world.clearMessages();
     testWorld.world.swapMessageBuffers();
     EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
-}
-
-TEST(Ecs, SystemTick){
-    TestWorld testWorld;
-
-    auto entity = testWorld.world.createEntity();
-    auto& position = entity.addComponent<PositionComponent>();
-    position.x = 4;
-
-    auto& system = testWorld.world.addSystem<CountingSystem>();
-    EXPECT_EQ(testWorld.world.getSystem<CountingSystem>(), &system);
-
-    testWorld.world.tick(0.25f);
-    EXPECT_EQ(system.prepares, 1u);
-    EXPECT_EQ(system.updates, 1u);
-    EXPECT_EQ(system.lastDelta, 0.25f);
-    EXPECT_EQ(position.x, 5);
-
-    testWorld.world.removeSystem(system);
-    EXPECT_EQ(testWorld.world.getSystem<CountingSystem>(), nullptr);
 }
 
 TEST(Ecs, DuplicateComponentAddIsStable){

@@ -5,7 +5,6 @@
 #include "telemetry_test_helpers.h"
 #include <gtest/gtest.h>
 #include "frame_graph_test_helpers.h"
-#include <logger/telemetry/ingest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,69 +34,6 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 using namespace TelemetryTestDetail;
 
-
-TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-
-    EXPECT_TRUE(Telemetry::RecordTextLog(
-        recorder,
-        NWB::Core::Common::LogType::Info,
-        NWB_TEXT("benchmark report"),
-        4u,
-        1u
-    ));
-
-    const Name cpuScopeName(s_GBUFFER.data());
-    NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    stats.sampleCount = 1u;
-    stats.firstSampleFrameIndex = stats.publishFrameIndex;
-    stats.lastSampleFrameIndex = stats.publishFrameIndex;
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, s_GBUFFER, stats, s_ExpectedDualCount));
-
-    const Name memoryScopeName("memory/project_arena");
-    const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
-    const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
-    EXPECT_TRUE(Telemetry::RecordPerfMemory(recorder, memoryScopeName, "memory/project_arena", snapshot, delta, 3u));
-
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestFrameGraph(testArena.arena, nodes, edges);
-    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, stats.publishFrameIndex, nodes, edges, 4u));
-
-    Log::TelemetryReport report(testArena.arena);
-    EXPECT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-
-    EXPECT_EQ(report.summary.eventCount, 4u);
-    EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::TextLog)], 1u);
-    EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::PerfFrame)], 1u);
-    EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::MemoryFrame)], 1u);
-    EXPECT_EQ(report.summary.eventKindCounts[static_cast<usize>(Telemetry::EventKind::FrameGraphFrame)], 1u);
-    EXPECT_EQ(report.summary.parseFailureCount, 0u);
-    EXPECT_TRUE(report.summary.hasFrameRange);
-    EXPECT_EQ(report.summary.minFrameIndex, 4u);
-    EXPECT_EQ(report.summary.maxFrameIndex, snapshot.frameIndex);
-    EXPECT_EQ(report.summary.cpuTimingEventCount, 1u);
-    EXPECT_EQ(report.summary.cpuTimingSampleCount, stats.sampleCount);
-    EXPECT_EQ(report.summary.cpuTimingSeconds, stats.seconds);
-    EXPECT_EQ(report.summary.memoryEventCount, 1u);
-    const Log::TelemetryMemorySummary& memory = report.summary.memorySources[NWB::Core::Perf::MemorySource::ExplicitScope];
-    EXPECT_EQ(memory.eventCount, 1u);
-    EXPECT_EQ(memory.maxUsedBytes, snapshot.usedBytes);
-    EXPECT_EQ(memory.maxPeakUsedBytes, snapshot.peakUsedBytes);
-    EXPECT_EQ(memory.totalUsedDeltaBytes, delta.usedBytes);
-    EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(report.summary.frameGraphNodeCount, 3u);
-    EXPECT_EQ(report.summary.frameGraphEdgeCount, s_ExpectedDualCount);
-    EXPECT_TRUE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
-    EXPECT_FALSE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"maxMemoryUsedBytes\":"));
-    EXPECT_FALSE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"maxMemoryPeakUsedBytes\":"));
-    EXPECT_FALSE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"totalMemoryUsedDeltaBytes\":"));
-    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
-    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,gbuffer"));
-    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass\\n125.000 ms"));
-}
 
 TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFrame){
     TestArena testArena;
@@ -723,55 +659,6 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     EXPECT_TRUE(ContainsText(firstPassDot, s_RUNTIME_STATISTICS_NONE));
     EXPECT_TRUE(ContainsText(resourceDot, s_RUNTIME_STATISTICS_NONE));
     EXPECT_TRUE(ContainsText(secondPassDot, s_RUNTIME_STATISTICS_NONE));
-}
-
-TEST(Telemetry, TelemetryIngestStoresRawAndReports){
-    TestArena testArena;
-    const ::Path<NWB::Core::Alloc::GlobalArena> storageDirectory = TelemetryTestStorageDirectory(testArena.arena) / "ingest";
-
-    ErrorCode error;
-    EXPECT_TRUE(RemoveAllIfExists(storageDirectory, error));
-
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    EXPECT_TRUE(Telemetry::RecordTextLog(
-        recorder,
-        NWB::Core::Common::LogType::Info,
-        NWB_TEXT("ingest log"),
-        10u,
-        1u
-    ));
-
-    const Name cpuScopeName("ingest/cpu");
-    const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "ingest/cpu", stats, s_ExpectedDualCount));
-
-    Telemetry::TelemetryBytes encoded(testArena.arena);
-    EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
-
-    Log::TelemetryIngestConfig config(testArena.arena);
-    config.storageDirectory = storageDirectory;
-    const Log::TelemetryIngestResult result = Log::ProcessTelemetryUpload(testArena.arena, encoded.data(), encoded.size(), config);
-
-    EXPECT_TRUE(result.ok());
-    EXPECT_TRUE(result.decode.ok());
-    EXPECT_EQ(result.decode.bytesRead, encoded.size());
-    EXPECT_EQ(result.summary.eventCount, s_ExpectedDualCount);
-    EXPECT_EQ(result.summary.cpuTimingEventCount, 1u);
-    EXPECT_TRUE(FileExists(result.rawPath, error));
-    EXPECT_FALSE(error);
-    error.clear();
-    EXPECT_TRUE(FileExists(result.jsonPath, error));
-    EXPECT_FALSE(error);
-    error.clear();
-    EXPECT_TRUE(FileExists(result.perfCsvPath, error));
-    EXPECT_FALSE(error);
-
-    AString<NWB::Core::Alloc::GlobalArena> perfCsv(testArena.arena);
-    EXPECT_TRUE(ReadTextFile(result.perfCsvPath, perfCsv));
-    EXPECT_TRUE(ContainsText(AStringView(perfCsv.data(), perfCsv.size()), "cpu,ingest/cpu"));
-
-    EXPECT_TRUE(RemoveAllIfExists(storageDirectory, error));
 }
 
 

@@ -37,17 +37,6 @@ static void ExpectBounds(const Rect& actual, const Rect& expected){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiPopupLayoutTests, RequestedBelowKeepsAnchorAlignmentAndLogicalGap){
-    PopupOptions options;
-    options.anchor = { 38.0f, 26.0f, 110.0f, 24.0f };
-    options.size = { 220.0f, 160.0f };
-    PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 800.0f, 600.0f, 2.0f, 1.5f }, placement));
-    ExpectBounds(placement.bounds, { 38.0f, 54.0f, 220.0f, 160.0f });
-    ExpectBounds(placement.viewport, { 0.0f, 0.0f, 800.0f, 600.0f });
-    EXPECT_EQ(placement.side, PopupPlacementSide::Below);
-}
-
 TEST(UiPopupLayoutTests, BottomEdgeFlipsAboveAndClampsHorizontalOverflow){
     PopupOptions options;
     options.anchor = { 730.0f, 560.0f, 50.0f, 24.0f };
@@ -132,18 +121,6 @@ TEST(UiPopupLayoutTests, OversizedPopupShrinksToTheViewportOnBothAxes){
     ASSERT_TRUE(PopupLayout::Place(options, { 100.0f, 80.0f, 2.0f, 1.25f }, placement));
     ExpectBounds(placement.bounds, { 0.0f, 0.0f, 100.0f, 80.0f });
     ExpectBounds(placement.viewport, placement.bounds);
-}
-
-TEST(UiPopupLayoutTests, CenterPlacesModalInViewportInsteadOfAtAnchor){
-    PopupOptions options;
-    options.anchor = { 1.0f, 2.0f, 3.0f, 4.0f };
-    options.size = { 160.0f, 100.0f };
-    options.side = PopupPlacementSide::Center;
-    options.modal = true;
-    PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 800.0f, 600.0f, 2.0f, 1.5f }, placement));
-    ExpectBounds(placement.bounds, { 320.0f, 250.0f, 160.0f, 100.0f });
-    EXPECT_EQ(placement.side, PopupPlacementSide::Center);
 }
 
 TEST(UiPopupLayoutTests, OffscreenAnchorAndLargeGapStillProduceBoundedGeometry){

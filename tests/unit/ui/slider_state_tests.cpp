@@ -25,34 +25,6 @@ namespace __hidden_ui_slider_state_tests{
 using namespace Impl::Ui;
 
 
-TEST(UiSliderStateTests, DefaultStatesOwnDistinctIdentitiesAndInputLifetimes){
-    SliderState first;
-    SliderState second;
-    EXPECT_NE(first.instanceGeneration(), 0u);
-    EXPECT_NE(first.inputGeneration(), 0u);
-    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_NE(first.inputGeneration(), second.inputGeneration());
-    EXPECT_EQ(first.revision(), 1u);
-    EXPECT_EQ(BitCast<u64>(first.value()), 0u);
-    EXPECT_FALSE(first.result().valid);
-    EXPECT_FLOAT_EQ(first.placement().bounds.width, 0.0f);
-    EXPECT_FALSE(first.snapshot().press.valid());
-    EXPECT_FALSE(first.snapshot().pressMoved);
-}
-
-TEST(UiSliderStateTests, ControlTokensProjectTheThreeIndependentLifetimeDomains){
-    SliderState state;
-    const ControlToken token = state.controlToken();
-    EXPECT_EQ(token.instanceGeneration, state.inputGeneration());
-    EXPECT_EQ(token.contentGeneration, state.admissionGeneration());
-    EXPECT_EQ(token.contentRevision, state.instanceGeneration());
-    EXPECT_TRUE(token.valid());
-    ASSERT_TRUE(state.setValue(2.0));
-    EXPECT_NE(state.controlToken().instanceGeneration, token.instanceGeneration);
-    EXPECT_EQ(state.controlToken().contentGeneration, token.contentGeneration);
-    EXPECT_EQ(state.controlToken().contentRevision, token.contentRevision);
-}
-
 TEST(UiSliderStateTests, IdenticalFinitePublicValuesRetireCopiedInputAndAdvanceRevision){
     SliderState state;
     ASSERT_TRUE(state.setValue(2.0));

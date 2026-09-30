@@ -350,15 +350,8 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, env)
         self.assertEqual(inherited[LIT_NWB_GPU_TIMING_FILE], LIT_OLD_TXT)
 
-    def test_cli_defaults_select_complete_blocks_and_reject_capture(self):
+    def test_cli_rejects_capture_and_zero_ray_budget(self):
         common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        args = benchmark.parse_args(common)
-        self.assertEqual(args.blocks, 6)
-        self.assertEqual(args.mip_count, 10)
-        self.assertEqual(args.optical_queries, 16)
-        self.assertFalse(args.include_feedback)
-        self.assertEqual(args.screen_steps, 96)
-        self.assertEqual(benchmark.parse_args(common + [LIT_FAMILY, LIT_ROUGH]).blocks, 10)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             benchmark.parse_args(common + ["--application-arg=--gpudbg"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

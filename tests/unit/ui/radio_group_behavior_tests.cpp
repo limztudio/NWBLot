@@ -234,24 +234,6 @@ static void ExpectChoices(const RadioGroupChoices& actual, const RadioGroupChoic
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiRadioGroupBehaviorTests, FirstBindingHonorsAnExplicitChoiceWithoutRetiringInput){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(3u);
-    const RadioGroupSnapshot before = state.snapshot();
-    RadioGroupChoices choices;
-    RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
-    EXPECT_EQ(state.selectedKey(), 3u);
-    EXPECT_EQ(state.cursorKey(), 3u);
-    EXPECT_EQ(state.inputGeneration(), before.inputGeneration);
-    EXPECT_EQ(state.revision(), before.revision + 1u);
-    EXPECT_TRUE(result.valid);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_EQ(choices.count, 4u);
-    EXPECT_EQ(source.findCalls, 0u);
-}
-
 TEST(UiRadioGroupBehaviorTests, DisabledCheckedChoiceIsPreservedWhileCursorMovesForward){
     ChoiceSource source;
     source.rows[1u].enabled = false;

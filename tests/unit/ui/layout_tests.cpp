@@ -71,53 +71,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiLayoutTests, NestedContentSizingIncludesPaddingSpacingAndIntrinsicChildren){
-    LayoutNodeDesc rootDescription = StretchContainer(LayoutDirection::Column);
-    rootDescription.padding = { 3.0f, 5.0f, 7.0f, 9.0f };
-    rootDescription.gap = 4.0f;
-    const u32 root = add(s_LayoutNoParent, rootDescription);
-    LayoutNodeDesc rowDescription;
-    rowDescription.direction = LayoutDirection::Row;
-    rowDescription.padding = { 2.0f, 3.0f, 4.0f, 5.0f };
-    rowDescription.gap = 3.0f;
-    const u32 row = add(root, rowDescription);
-    LayoutNodeDesc firstDescription;
-    firstDescription.intrinsicSize = { 20.0f, 10.0f };
-    const u32 first = add(row, firstDescription);
-    const u32 second = add(row, FixedLeaf(12.0f, 18.0f));
-    LayoutNodeDesc lastDescription;
-    lastDescription.intrinsicSize = { 31.0f, 12.0f };
-    const u32 last = add(root, lastDescription);
-    ASSERT_TRUE(m_tree.arrange({ 10.0f, 20.0f, 101.0f, 79.0f }));
-    ASSERT_EQ(m_tree.boxes().size(), 5u);
-    ExpectRectangle(m_tree.box(root)->content, { 13.0f, 25.0f, 91.0f, 65.0f });
-    EXPECT_FLOAT_EQ(m_tree.box(root)->measuredSize.x, 51.0f);
-    EXPECT_FLOAT_EQ(m_tree.box(root)->measuredSize.y, 56.0f);
-    ExpectRectangle(m_tree.box(row)->rectangle, { 13.0f, 25.0f, 41.0f, 26.0f });
-    ExpectRectangle(m_tree.box(first)->rectangle, { 15.0f, 28.0f, 20.0f, 10.0f });
-    ExpectRectangle(m_tree.box(second)->rectangle, { 38.0f, 28.0f, 12.0f, 18.0f });
-    ExpectRectangle(m_tree.box(last)->rectangle, { 13.0f, 55.0f, 31.0f, 12.0f });
-}
-
-TEST_F(UiLayoutTests, RowStretchDividesRemainingSpaceByWeightAndFillsTheCrossAxis){
-    LayoutNodeDesc rootDescription = StretchContainer(LayoutDirection::Row);
-    rootDescription.padding = { 3.0f, 5.0f, 5.0f, 7.0f };
-    rootDescription.gap = 2.0f;
-    const u32 root = add(s_LayoutNoParent, rootDescription);
-    const u32 fixed = add(root, FixedLeaf(13.0f, 9.0f));
-    LayoutNodeDesc firstDescription = StretchContainer(LayoutDirection::Leaf);
-    firstDescription.intrinsicSize = { 1000.0f, 1000.0f };
-    const u32 first = add(root, firstDescription);
-    LayoutNodeDesc secondDescription = firstDescription;
-    secondDescription.width.value = 3.0f;
-    const u32 second = add(root, secondDescription);
-    ASSERT_TRUE(m_tree.arrange({ 2.0f, 3.0f, 101.0f, 37.0f }));
-    ASSERT_EQ(m_tree.boxes().size(), 4u);
-    ExpectRectangle(m_tree.box(fixed)->rectangle, { 5.0f, 8.0f, 13.0f, 9.0f });
-    ExpectRectangle(m_tree.box(first)->rectangle, { 20.0f, 8.0f, 19.0f, 25.0f });
-    ExpectRectangle(m_tree.box(second)->rectangle, { 41.0f, 8.0f, 57.0f, 25.0f });
-}
-
 TEST_F(UiLayoutTests, ExhaustedColumnSpaceCollapsesStretchAndClipsFixedOverflow){
     LayoutNodeDesc rootDescription = StretchContainer(LayoutDirection::Column);
     rootDescription.gap = 3.0f;

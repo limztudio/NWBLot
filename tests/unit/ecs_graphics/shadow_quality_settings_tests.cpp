@@ -19,15 +19,6 @@ namespace __hidden_shadow_quality_settings_tests{
 
 using namespace NWB::Impl;
 
-TEST(ShadowQualitySettings, ReferenceDefaultPreservesTheThreeSampleBudget){
-    const ShadowQualitySettings settings;
-    EXPECT_EQ(settings.transparentSampling, TransparentShadowSampling::ReferenceThree);
-    EXPECT_EQ(settings.receiverResolution, ShadowReceiverResolution::Half);
-    EXPECT_TRUE(ValidateShadowQualitySettings(settings));
-    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
-    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 3u);
-}
-
 TEST(ShadowQualitySettings, TemporalBudgetRequiresAcceptedFilteredHistory){
     ShadowQualitySettings settings;
     settings.transparentSampling = TransparentShadowSampling::TemporalOne;

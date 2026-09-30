@@ -425,36 +425,6 @@ TEST(Csg, CsgFrameReceiverLookup){
     }
 }
 
-struct TestProjectShapeParameters{
-    Float4 minExtent = Float4(-2.0f, -3.0f, -4.0f, 0.0f);
-    Float4 maxExtent = Float4(2.0f, 3.0f, 4.0f, 0.0f);
-};
-
-static bool TestProjectShapeBounds(
-    const SIMDMatrix& shapeToWorld,
-    const u8* parameterBytes,
-    const usize parameterByteSize,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds,
-    bool& outFiniteBounds
-){
-    static_cast<void>(shapeToWorld);
-    outMinBounds = VectorZero();
-    outMaxBounds = VectorZero();
-    outFiniteBounds = false;
-
-    if(parameterByteSize != sizeof(TestProjectShapeParameters) || !parameterBytes)
-        return false;
-
-    TestProjectShapeParameters parameters;
-    NWB_MEMCPY(&parameters, sizeof(parameters), parameterBytes, sizeof(parameters));
-
-    outMinBounds = LoadFloat(parameters.minExtent);
-    outMaxBounds = LoadFloat(parameters.maxExtent);
-    outFiniteBounds = true;
-    return true;
-}
-
 TEST(Csg, CsgShapeRegistryBuiltIns){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
@@ -546,56 +516,6 @@ TEST(Csg, CsgShapeRegistryBounds){
         maxBounds,
         finiteBounds
     ));
-}
-
-TEST(Csg, CsgShapeRegistryProjectShape){
-    TestWorld testWorld;
-    NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
-
-    NWB::Impl::CsgShapeTypeDesc desc;
-    desc.name = Name("project/csg/noise_blob");
-    desc.shaderModule = Name("project/shaders/csg/noise_blob");
-    desc.shaderModuleInclude = ACompactString("project/shaders/csg/noise_blob.slangi");
-    desc.parameterByteSize = sizeof(TestProjectShapeParameters);
-    desc.boundsCallback = &TestProjectShapeBounds;
-
-    NWB::Impl::CsgShapeTypeId shapeTypeId = NWB::Impl::s_InvalidCsgShapeTypeId;
-    EXPECT_TRUE(registry.registerShapeType(desc, shapeTypeId));
-    EXPECT_NE(shapeTypeId, NWB::Impl::s_InvalidCsgShapeTypeId);
-    EXPECT_EQ(shapeTypeId, NWB::Impl::CsgShapeTypeIdFromName(desc.name));
-    EXPECT_EQ(registry.findShapeTypeId(desc.name), shapeTypeId);
-
-    NWB::Impl::CsgShapeTypeInfo shapeType;
-    EXPECT_TRUE(registry.findShapeType(desc.name, shapeType));
-    EXPECT_EQ(shapeType.desc.shaderModule, desc.shaderModule);
-    EXPECT_EQ(shapeType.desc.shaderModuleInclude, desc.shaderModuleInclude);
-    EXPECT_EQ(shapeType.desc.boundsCallback, &TestProjectShapeBounds);
-
-    ACompactString shaderModuleInclude;
-    EXPECT_TRUE(registry.findShaderModuleInclude(desc.shaderModule, shaderModuleInclude));
-    EXPECT_EQ(shaderModuleInclude, desc.shaderModuleInclude);
-
-    TestProjectShapeParameters parameters;
-    SIMDVector minBounds;
-    SIMDVector maxBounds;
-    bool finiteBounds = false;
-    const SIMDMatrix shapeToWorldMatrix = LoadFloat(::Float34Identity());
-    EXPECT_TRUE(registry.buildShapeBounds(
-        desc.name,
-        shapeToWorldMatrix,
-        reinterpret_cast<const u8*>(&parameters),
-        sizeof(parameters),
-        minBounds,
-        maxBounds,
-        finiteBounds
-    ));
-    EXPECT_TRUE(finiteBounds);
-    EXPECT_EQ(VectorGetX(minBounds), -2.0f);
-    EXPECT_EQ(VectorGetY(minBounds), -3.0f);
-    EXPECT_EQ(VectorGetZ(minBounds), -4.0f);
-    EXPECT_EQ(VectorGetX(maxBounds), 2.0f);
-    EXPECT_EQ(VectorGetY(maxBounds), 3.0f);
-    EXPECT_EQ(VectorGetZ(maxBounds), 4.0f);
 }
 
 

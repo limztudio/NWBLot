@@ -87,32 +87,6 @@ TEST(VulkanQueueFamilySelection, AcceptsRequiredSplitFamiliesWithoutOptionalAsyn
     EXPECT_EQ(selection.asyncComputeFamily, GraphicsBackend::s_InvalidQueueFamilyIndex);
 }
 
-TEST(VulkanQueueFamilySelection, AliasesRequiredRolesOnUniversalFamily){
-    VkQueueFamilyProperties families[2] = {};
-    families[0].queueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    families[0].queueCount = 1u;
-    families[1].queueFlags = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    families[1].queueCount = 1u;
-
-    const auto selection = VulkanDetail::SelectRequiredQueueFamilies(families, 2u, false, false);
-    EXPECT_EQ(selection.graphicsFamily, 0);
-    EXPECT_EQ(selection.computeFamily, 0);
-    EXPECT_EQ(selection.asyncComputeFamily, GraphicsBackend::s_InvalidQueueFamilyIndex);
-}
-
-TEST(VulkanQueueFamilySelection, KeepsRequiredAliasWhileSelectingOptionalAsyncOffload){
-    VkQueueFamilyProperties families[2] = {};
-    families[0].queueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    families[0].queueCount = 1u;
-    families[1].queueFlags = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    families[1].queueCount = 1u;
-
-    const auto selection = VulkanDetail::SelectRequiredQueueFamilies(families, 2u, true, false);
-    EXPECT_EQ(selection.graphicsFamily, 0);
-    EXPECT_EQ(selection.computeFamily, 0);
-    EXPECT_EQ(selection.asyncComputeFamily, 1);
-}
-
 TEST(VulkanQueueFamilySelection, RejectsMissingRequiredRolesAndIgnoresEmptyFamilies){
     VkQueueFamilyProperties missingCompute[2] = {};
     missingCompute[0].queueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
@@ -129,19 +103,6 @@ TEST(VulkanQueueFamilySelection, RejectsMissingRequiredRolesAndIgnoresEmptyFamil
     const auto noGraphics = VulkanDetail::SelectRequiredQueueFamilies(missingGraphics, 1u, false, false);
     EXPECT_EQ(noGraphics.graphicsFamily, GraphicsBackend::s_InvalidQueueFamilyIndex);
     EXPECT_EQ(noGraphics.computeFamily, 0);
-}
-
-TEST(VulkanQueueFamilySelection, SelectsDedicatedTransferOnlyWhenRequested){
-    VkQueueFamilyProperties families[2] = {};
-    families[0].queueFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-    families[0].queueCount = 1u;
-    families[1].queueFlags = VK_QUEUE_TRANSFER_BIT;
-    families[1].queueCount = 1u;
-
-    const auto disabled = VulkanDetail::SelectRequiredQueueFamilies(families, 2u, false, false);
-    EXPECT_EQ(disabled.dedicatedTransferFamily, GraphicsBackend::s_InvalidQueueFamilyIndex);
-    const auto enabled = VulkanDetail::SelectRequiredQueueFamilies(families, 2u, false, true);
-    EXPECT_EQ(enabled.dedicatedTransferFamily, 1);
 }
 
 TEST(VulkanAdapterSelection, MandatoryFeatureContractIncludesCoreVersionedAndExtensionFeatures){

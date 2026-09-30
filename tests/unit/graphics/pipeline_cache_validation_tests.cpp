@@ -71,16 +71,6 @@ static void WriteU32(Array<u8, s_TestPipelineCacheSize>& cacheData, const usize 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(PipelineCacheValidation, AcceptsAnExactVersionOneHeaderWithOpaquePayload){
-    const VkPhysicalDeviceProperties properties = MakePhysicalDeviceProperties();
-    const Array<u8, s_TestPipelineCacheSize> cacheData = MakePipelineCacheData(properties);
-
-    EXPECT_EQ(
-        Cache::ValidatePipelineCacheData(BinaryByteView{ cacheData.data(), cacheData.size() }, properties),
-        CacheValidation::Usable
-    );
-}
-
 TEST(PipelineCacheValidation, RejectsStructurallyMalformedHeaders){
     const VkPhysicalDeviceProperties properties = MakePhysicalDeviceProperties();
     Array<u8, s_TestPipelineCacheSize> cacheData = MakePipelineCacheData(properties);

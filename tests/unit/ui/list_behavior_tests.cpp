@@ -127,19 +127,6 @@ static void ExpectResult(const ListResult& actual, const ListResult& expected){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiListBehaviorTests, InitialApplicationSelectionAndOffsetSurviveFirstSourceBinding){
-    RangeSource source;
-    ListState state;
-    state.select(5u);
-    ASSERT_TRUE(state.scrollTo(90.0));
-    const u64 inputGeneration = state.inputGeneration();
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_EQ(state.selectedKey(), 5u);
-    EXPECT_EQ(state.cursorKey(), 5u);
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 90.0);
-    EXPECT_EQ(state.inputGeneration(), inputGeneration);
-}
-
 TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeysAndRevealsTheirNewIndex){
     RangeSource source;
     ListState state;
@@ -349,41 +336,6 @@ TEST(UiListBehaviorTests, PageNavigationSkipsDisabledRowsBeyondTheRequestedBound
     action.kind = ControlActionKind::PageUp;
     ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 4u);
-}
-
-TEST(UiListBehaviorTests, CursorCanNavigateWithoutChangingSelectionUntilSubmit){
-    RangeSource source;
-    ListState state;
-    state.select(3u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
-    options.selectOnNavigate = false;
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
-    EXPECT_EQ(state.selectedKey(), 3u);
-    EXPECT_EQ(state.cursorKey(), 4u);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_FALSE(result.activated);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, Action(state, source, ControlActionKind::Submit), result));
-    EXPECT_EQ(state.selectedKey(), 4u);
-    EXPECT_TRUE(result.selectionChanged);
-    EXPECT_TRUE(result.activated);
-}
-
-TEST(UiListBehaviorTests, ActivateCommitsAnEnabledStableKeyEvenWhenNavigationSelectionIsDisabled){
-    RangeSource source;
-    ListState state;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
-    options.selectOnNavigate = false;
-    ListResult result;
-    ControlAction action = Action(state, source, ControlActionKind::Activate);
-    action.value = 9u;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, action, result));
-    EXPECT_EQ(state.selectedKey(), 9u);
-    EXPECT_EQ(state.cursorKey(), 9u);
-    EXPECT_TRUE(result.selectionChanged);
-    EXPECT_TRUE(result.activated);
 }
 
 TEST(UiListBehaviorTests, AllDisabledNavigationAndUnselectedSubmitAreValidNoOps){

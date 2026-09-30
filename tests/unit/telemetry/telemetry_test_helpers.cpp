@@ -14,14 +14,6 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-::Path<NWB::Core::Alloc::GlobalArena> TelemetryTestStorageDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    ::Path<NWB::Core::Alloc::GlobalArena> executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / "telemetry_test_storage";
-
-    return ::Path<NWB::Core::Alloc::GlobalArena>(arena, "telemetry_test_storage");
-}
-
 NWB::Core::Perf::TimingStats MakeTestTimingStats(){
     NWB::Core::Perf::TimingStats stats;
     stats.seconds = 0.125;
@@ -57,58 +49,6 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount){
     delta.deallocationCount = deallocationCount;
     delta.hasSamples = true;
     return delta;
-}
-
-::ArenaMemoryStats MakeTestArenaStats(
-    const u64 reservedBytes,
-    const u64 usedBytes,
-    const u64 peakUsedBytes,
-    const u64 allocationCount,
-    const u64 reallocationCount,
-    const u64 deallocationCount
-){
-    ::ArenaMemoryStats stats;
-    stats.reservedBytes = reservedBytes;
-    stats.usedBytes = usedBytes;
-    stats.peakUsedBytes = peakUsedBytes;
-    stats.allocationCount = allocationCount;
-    stats.reallocationCount = reallocationCount;
-    stats.deallocationCount = deallocationCount;
-    return stats;
-}
-
-void BuildTestPerfReport(
-    NWB::Core::Perf::TimingRecorder& cpuTiming,
-    NWB::Core::Perf::TimingRecorder& gpuTiming,
-    NWB::Core::Perf::MemoryRecorder& memory,
-    NWB::Core::Perf::SessionReport& report
-){
-    cpuTiming.setEnabled(true);
-    gpuTiming.setEnabled(true);
-    memory.setEnabled(true);
-
-    const Name cpuScopeName("perf/cpu/update");
-    const Name gpuScopeName("perf/gpu/frame");
-    const Name memoryScopeName("perf/memory/project");
-    const NWB::Core::Perf::TimingScopeId cpuScope = cpuTiming.registerScope(cpuScopeName);
-    const NWB::Core::Perf::TimingScopeId gpuScope = gpuTiming.registerScope(gpuScopeName);
-    const NWB::Core::Perf::MemoryScopeId memoryScope = memory.registerScope(memoryScopeName);
-
-    cpuTiming.recordSample(cpuScope, 0.010, 100u);
-    cpuTiming.recordSample(cpuScope, 0.015, 101u);
-    cpuTiming.publishFrame(102u);
-
-    gpuTiming.recordSample(gpuScope, 0.020, 100u);
-    gpuTiming.publishFrame(102u);
-
-    memory.recordSnapshot(memoryScope, MakeTestArenaStats(4096u, 1024u, 1536u, 4u, 1u, 0u), 101u);
-    memory.recordSnapshot(memoryScope, MakeTestArenaStats(8192u, 2048u, 3072u, 7u, 2u, 1u), 102u);
-
-    report.capture = NWB::Core::Perf::CaptureOptions::All();
-    report.frameIndex = 102u;
-    report.cpuTiming = NWB::Core::Perf::TimingView(cpuTiming);
-    report.gpuTiming = NWB::Core::Perf::TimingView(gpuTiming);
-    report.memory = NWB::Core::Perf::MemoryView(memory);
 }
 
 bool ContainsText(const AStringView text, const AStringView needle){

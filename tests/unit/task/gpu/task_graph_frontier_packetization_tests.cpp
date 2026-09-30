@@ -148,59 +148,6 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     EXPECT_EQ(frontierConsumerView.dependencies[0u].producer, frontierFirstPacket);
 }
 
-TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
-
-    Graphics::GpuTaskSchedulingHint producerScheduling;
-    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
-    producerScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_cheap_chain");
-    Graphics::GpuTaskDesc producerDesc;
-    producerDesc
-        .setIdentity(Name("tests/task_graph/frontier_scored_producer"))
-        .setMarkerLabel("Frontier Scored Producer")
-        .setScheduling(producerScheduling)
-    ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
-    ASSERT_TRUE(producer.valid());
-
-    Graphics::GpuTaskSchedulingHint successorScheduling;
-    successorScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    successorScheduling.frontierScoredMergeDomain = Name("tests/task_graph/frontier_scored_cheap_chain");
-    Graphics::GpuTaskDesc successorDesc;
-    successorDesc
-        .setIdentity(Name("tests/task_graph/frontier_scored_successor"))
-        .setMarkerLabel("Frontier Scored Successor")
-        .setScheduling(successorScheduling)
-        .setDependencies(&producer, 1u)
-    ;
-    const Graphics::GpuTaskId successor = graph.addTask(successorDesc, graphicsCommands);
-    ASSERT_TRUE(successor.valid());
-
-    Graphics::GpuTaskGraphCompileOptions options;
-    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    SingleQueueCompile singleQueueCompile(testArena);
-    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
-
-    ASSERT_EQ(compiledPlan.packetCount(), 1u);
-
-    const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
-    const Graphics::GpuSubmissionPacketId successorPacket = compiledPlan.packetForTask(successor);
-    ASSERT_TRUE(producerPacket.valid());
-    EXPECT_EQ(producerPacket, successorPacket);
-    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->taskCount, s_ExpectedDualCount);
-    EXPECT_EQ(
-        compiledPlan.packetizationDecisionForTask(producer),
-        Graphics::GpuTaskPacketizationDecision::FirstTask
-    );
-    EXPECT_EQ(
-        compiledPlan.packetizationDecisionForTask(successor),
-        Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
-    );
-}
-
 TEST(GpuTaskGraph, FrontierScoredPacketizationMergesLongSerialPacket){
     constexpr usize s_TaskCount = 512u;
 

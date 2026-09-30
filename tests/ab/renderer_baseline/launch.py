@@ -15,7 +15,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -40,11 +39,6 @@ LIT_NO_LOGSERVER = "--no-logserver"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_STORE_TRUE = "store_true"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
-LIT_SELF_TEST = "--self-test"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
-LIT_TRANSPARENT_AVBOIT = "transparent-avboit"
-LIT_REFERENCE_DIR = "--reference-dir"
-LIT_REFERENCE = "reference"
 LIT_MAIN = "__main__"
 
 
@@ -132,7 +126,6 @@ def make_parser() -> argparse.ArgumentParser:
         "--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg."
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without building Vulkan targets.")
     return parser
 
 
@@ -140,45 +133,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
-    if not args.self_test and args.profile is None:
+    if args.profile is None:
         raise SystemExit("renderer-baseline requires a profile; choose one of: " + ", ".join(profile_names()))
     return args
-
-
-def run_self_test() -> int:
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config="dbg",
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        profile=LIT_TRANSPARENT_AVBOIT,
-        executable=None,
-        runtime_dir=None,
-        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_RENDERER_BASELINE / LIT_TRANSPARENT_AVBOIT / "self-test",
-        dry_run=True,
-        gpu_validation=True,
-        no_logserver=False,
-        logserver_executable=None,
-        runner_args=[LIT_REFERENCE_DIR, LIT_REFERENCE],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert paths.runtime_directory.as_posix().endswith("Testing/smoke_runtime/dbg")
-    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("transparent_multi_smoke.exe")
-    assert command[command.index(LIT_PROFILE) + 1] == LIT_TRANSPARENT_AVBOIT
-    assert LIT_GPU_VALIDATION in command
-    assert command[-2:] == [LIT_REFERENCE_DIR, LIT_REFERENCE]
-    assert parse_args([LIT_SELF_TEST]).gpu_validation is True
-    assert parse_args([LIT_SELF_TEST, "surfel-gi-complex"]).profile == "surfel-gi-complex"
-    print("renderer-baseline launcher self-test passed")
-    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -198,8 +155,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

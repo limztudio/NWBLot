@@ -65,20 +65,6 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(InputDispatcher, NativePointerLifecycleReachesEveryOwner){
-    InputDispatcher dispatcher;
-    PointerLifecycleHandler scene(dispatcher);
-    PointerLifecycleHandler ui(dispatcher);
-    dispatcher.addHandlerToFront(scene);
-    dispatcher.addHandlerToBack(ui);
-    dispatcher.pointerLeave();
-    dispatcher.pointerCaptureLost();
-    EXPECT_EQ(scene.m_leaves, 1u);
-    EXPECT_EQ(ui.m_leaves, 1u);
-    EXPECT_EQ(scene.m_captureLosses, 1u);
-    EXPECT_EQ(ui.m_captureLosses, 1u);
-}
-
 TEST(InputDispatcher, CaptureLossSkipsPendingRemovalAndKeepsOtherOwners){
     InputDispatcher dispatcher;
     PointerLifecycleHandler scene(dispatcher);

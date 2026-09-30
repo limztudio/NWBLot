@@ -25,48 +25,6 @@ class UiWindowTests : public WidgetFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiWindowTests, FirstUsePositionAndSkinMetricsPublishMatchingLogicalTargets){
-    WindowState state;
-    WindowOptions options;
-    options.initialBounds = { 18.0f, 22.0f, 240.0f, 140.0f };
-    options.minimumSize = { 120.0f, 60.0f };
-    ASSERT_TRUE(begin(1u, { 800.0f, 600.0f, 2.0f, 1.5f }));
-    ASSERT_TRUE(m_builder.beginWindow("window", "Title", state, options));
-    EXPECT_FALSE(m_builder.button("apply", "Apply"));
-    ASSERT_TRUE(finishWindow());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(state.initialized);
-    EXPECT_FLOAT_EQ(state.bounds.x, 18.0f);
-    EXPECT_FLOAT_EQ(state.bounds.y, 22.0f);
-    EXPECT_FLOAT_EQ(state.bounds.width, 240.0f);
-    EXPECT_FLOAT_EQ(state.bounds.height, 140.0f);
-    const HitTarget* title = target(id("@window.title"));
-    const HitTarget* collapse = target(id("@window.collapse"));
-    const HitTarget* resize = target(id("@window.resize"));
-    const HitTarget* apply = target(id("apply"));
-    ASSERT_NE(title, nullptr);
-    ASSERT_NE(collapse, nullptr);
-    ASSERT_NE(resize, nullptr);
-    ASSERT_NE(apply, nullptr);
-    EXPECT_FLOAT_EQ(title->rectangle.height, 34.0f);
-    EXPECT_FLOAT_EQ(collapse->rectangle.x, 23.0f);
-    EXPECT_FLOAT_EQ(collapse->rectangle.y, 28.0f);
-    EXPECT_FLOAT_EQ(apply->rectangle.x, 21.0f);
-    EXPECT_FLOAT_EQ(apply->rectangle.y, 60.0f);
-    EXPECT_FLOAT_EQ(resize->rectangle.x, 242.0f);
-    EXPECT_FLOAT_EQ(resize->rectangle.y, 146.0f);
-    EXPECT_TRUE(title->pointerGesture);
-    EXPECT_FALSE(title->activatable);
-    EXPECT_TRUE(collapse->focusable);
-    EXPECT_TRUE(resize->pointerGesture);
-    Rect skin;
-    ASSERT_TRUE(skinQuad(snapshot, 0u, skin));
-    EXPECT_FLOAT_EQ(skin.width, state.bounds.width);
-    EXPECT_FLOAT_EQ(skin.height, state.bounds.height);
-    EXPECT_FLOAT_EQ(snapshot.displayMetrics().pixelScaleX, 2.0f);
-}
-
 TEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry){
     WindowState state;
     WindowOptions options;

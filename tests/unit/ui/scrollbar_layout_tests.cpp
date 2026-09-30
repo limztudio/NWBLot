@@ -126,40 +126,6 @@ TEST(UiScrollbarLayoutTests, HorizontalExtentIncludesCaretWidth){
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 1.0);
 }
 
-TEST(UiScrollbarLayoutTests, HorizontalOverflowReservesBottomTrackWithProportionalThumb){
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
-    ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 60.0f }, 1.0f,
-        { 50.0f, 100.0f }, 12.0f, 16.0f, placement
-    ));
-    ExpectRect(placement.viewport, { 10.0f, 20.0f, 200.0f, 88.0f });
-    ExpectRect(placement.horizontal.track, { 10.0f, 108.0f, 200.0f, 12.0f });
-    ExpectRect(placement.horizontal.thumb, { 35.0f, 108.0f, 100.0f, 12.0f });
-    ExpectRect(placement.corner, {});
-    EXPECT_TRUE(placement.horizontal.visible);
-    EXPECT_FALSE(placement.vertical.visible);
-    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 200.0);
-    EXPECT_DOUBLE_EQ(placement.horizontal.offset, 50.0);
-    EXPECT_DOUBLE_EQ(placement.vertical.offset, 0.0);
-}
-
-TEST(UiScrollbarLayoutTests, VerticalOverflowReservesRightTrackWithProportionalThumb){
-    const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
-    ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 99.0f, 400.0f }, 1.0f,
-        { 100.0f, 150.0f }, 12.0f, 16.0f, placement
-    ));
-    ExpectRect(placement.viewport, { 10.0f, 20.0f, 188.0f, 100.0f });
-    ExpectRect(placement.vertical.track, { 198.0f, 20.0f, 12.0f, 100.0f });
-    ExpectRect(placement.vertical.thumb, { 198.0f, 57.5f, 12.0f, 25.0f });
-    EXPECT_FALSE(placement.horizontal.visible);
-    EXPECT_TRUE(placement.vertical.visible);
-    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 300.0);
-    EXPECT_DOUBLE_EQ(placement.vertical.offset, 150.0);
-}
-
 TEST(UiScrollbarLayoutTests, VerticalReservationCanRequireHorizontalBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;

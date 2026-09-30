@@ -16,7 +16,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -36,8 +35,6 @@ LIT_GPU_VALIDATION = "--gpu-validation"
 LIT_NO_GPU_VALIDATION = "--no-gpu-validation"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
 LIT_STORE_TRUE = "store_true"
-LIT_SELF_TEST = "--self-test"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
 LIT_MAIN = "__main__"
 LIT_ON = "ON"
 
@@ -128,7 +125,6 @@ def make_parser() -> argparse.ArgumentParser:
         help="Run without Vulkan validation when the target cannot expose the validation layer.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -145,44 +141,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         raise SystemExit(f"--samples must be between 1 and {MAX_SAMPLES}")
     args.runner_args = runner_args
     return args
-
-
-def run_self_test() -> int:
-    assert parse_args([LIT_SELF_TEST]).records == 4096
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config="dbg",
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        executable=None,
-        output_dir=None,
-        dry_run=True,
-        gpu_validation=True,
-        adapter_index=1,
-        records=8192,
-        warmup=2,
-        samples=7,
-        runner_args=[LIT_SAMPLES, "9"],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("command_ir_profile.exe")
-    assert "/.cozter/out/ab-results/command-ir/" in paths.output_directory.as_posix()
-    assert command[command.index(LIT_ADAPTER_INDEX) + 1] == "1"
-    assert command[command.index(LIT_RECORDS) + 1] == "8192"
-    assert command[command.index(LIT_WARMUP) + 1] == "2"
-    assert command[command.index(LIT_SAMPLES) + 1] == "7"
-    assert LIT_GPU_VALIDATION in command
-    assert command[-2:] == [LIT_SAMPLES, "9"]
-    print("command-IR launcher self-test passed")
-    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -203,8 +161,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

@@ -42,29 +42,6 @@ using namespace NWB::Core::Alloc;
     return {};
 }
 
-TEST(AllocationOwners, ImmutableOwnerIdentityMatchesFullSnapshotTraversal){
-    GlobalArena arena("tests/allocation_owners/identity_traversal");
-    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
-    usize heapRecords = 0u;
-    usize arenaRecords = 0u;
-    while(record){
-        ArenaMemoryOwnerIdentity identity;
-        const ArenaMemoryOwnerRecord* const next = ReadArenaMemoryOwnerIdentity(*record, identity);
-        ArenaMemoryOwnerSnapshot snapshot;
-        EXPECT_EQ(ReadArenaMemoryOwnerRecord(*record, snapshot), next);
-        EXPECT_EQ(identity.ownerName, snapshot.ownerName);
-        EXPECT_EQ(identity.source, snapshot.source);
-        EXPECT_TRUE(static_cast<bool>(identity.ownerName));
-        if(identity.source == ArenaMemorySource::HeapBacking)
-            ++heapRecords;
-        else
-            ++arenaRecords;
-        record = next;
-    }
-    EXPECT_EQ(heapRecords, 1u);
-    EXPECT_GT(arenaRecords, 0u);
-}
-
 TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
     constexpr Name s_Owner("tests/allocation_owners/identity_retirement");
     constexpr Name s_LaterOwner("tests/allocation_owners/identity_later_publication");

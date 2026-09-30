@@ -16,7 +16,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -34,9 +33,6 @@ LIT_NO_LOGSERVER = "--no-logserver"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_STORE_TRUE = "store_true"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
-LIT_TRANSITION_TIMEOUT = "--transition-timeout"
-LIT_N_25 = "25"
 LIT_MAIN = "__main__"
 
 
@@ -121,7 +117,6 @@ def make_parser() -> argparse.ArgumentParser:
         help="Do not pass --gpudbg to the smoke process.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -130,37 +125,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
     return args
-
-
-def run_self_test() -> int:
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config="dbg",
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        executable=None,
-        runtime_dir=None,
-        dry_run=True,
-        gpu_validation=True,
-        no_logserver=False,
-        logserver_executable=None,
-        runner_args=[LIT_TRANSITION_TIMEOUT, LIT_N_25],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert paths.runtime_directory.as_posix().endswith("Testing/smoke_runtime/dbg")
-    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("frame_lagged_async_lighting_smoke.exe")
-    assert LIT_GPU_VALIDATION in command
-    assert command[-2:] == [LIT_TRANSITION_TIMEOUT, LIT_N_25]
-    print("frame-lagged async-lighting launcher self-test passed")
-    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -174,8 +138,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

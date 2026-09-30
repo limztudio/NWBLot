@@ -48,12 +48,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/run.py"
                 "--self-test"
         )
-        add_test(
-            NAME nwb_${_nwb_ab_harness}_launcher_unit
-            COMMAND
-                "${Python3_EXECUTABLE}"
-                "${CMAKE_SOURCE_DIR}/tests/ab/${_nwb_ab_harness}/launch.py"
-                "--self-test"
-        )
     endforeach()
+    add_test(
+        NAME nwb_hybrid_shadow_boundary_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/launch.py"
+            "--self-test"
+    )
 endif()

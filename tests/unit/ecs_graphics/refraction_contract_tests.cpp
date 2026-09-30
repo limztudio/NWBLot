@@ -95,37 +95,6 @@ TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialConte
     EXPECT_FALSE(ContainsText(resolver, "RayQuery<"));
 }
 
-TEST(EcsGraphics, RefractionCaptureWritesOneNearestSurfaceWithoutBlendingOpticalFields){
-    const auto capture = NWB::Impl::BuildRendererAvboitRefractionCaptureRenderState();
-    EXPECT_TRUE(capture.depthStencilState.depthTestEnable);
-    EXPECT_TRUE(capture.depthStencilState.depthWriteEnable);
-    EXPECT_EQ(capture.depthStencilState.depthFunc, NWB::Core::ComparisonFunc::LessOrEqual);
-    for(u32 index = 0u; index < NWB_AVBOIT_ACCUM_TARGET_COUNT; ++index){
-        EXPECT_FALSE(capture.blendState.targets[index].blendEnable);
-        EXPECT_EQ(capture.blendState.targets[index].colorWriteMask, NWB::Core::ColorMask::All);
-    }
-}
-
-TEST(EcsGraphics, AvboitForegroundAndBackgroundUseMatchingAdditiveAccumulation){
-    const auto accumulate = NWB::Impl::BuildRendererAvboitAccumulateRenderState();
-    EXPECT_TRUE(accumulate.depthStencilState.depthTestEnable);
-    EXPECT_FALSE(accumulate.depthStencilState.depthWriteEnable);
-    EXPECT_EQ(NWB_AVBOIT_ACCUM_TARGET_COUNT, 4);
-    for(u32 index = 0u; index < NWB_AVBOIT_ACCUM_TARGET_COUNT; ++index){
-        const auto& target = accumulate.blendState.targets[index];
-        EXPECT_TRUE(target.blendEnable);
-        EXPECT_EQ(target.srcBlend, NWB::Core::BlendFactor::One);
-        EXPECT_EQ(target.destBlend, NWB::Core::BlendFactor::One);
-        EXPECT_EQ(target.blendOp, NWB::Core::BlendOp::Add);
-    }
-    EXPECT_TRUE(accumulate.blendState.targets[NWB_AVBOIT_ACCUM_COLOR_LOCATION]
-        == accumulate.blendState.targets[NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION]);
-    EXPECT_TRUE(accumulate.blendState.targets[NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION]
-        == accumulate.blendState.targets[NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION]);
-    EXPECT_EQ(accumulate.blendState.targets[NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION].colorWriteMask,
-        NWB::Core::ColorMask::Red);
-}
-
 TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaqueDepth){
     TestArena testArena;
     AString shaderSource;

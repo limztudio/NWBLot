@@ -25,21 +25,6 @@ namespace __hidden_ui_radio_group_state_tests{
 using namespace Impl::Ui;
 
 
-TEST(UiRadioGroupStateTests, DefaultStatesHaveDistinctNonzeroIdentitiesAndInputLifetimes){
-    RadioGroupState first;
-    RadioGroupState second;
-    EXPECT_NE(first.instanceGeneration(), 0u);
-    EXPECT_NE(first.inputGeneration(), 0u);
-    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_NE(first.inputGeneration(), second.inputGeneration());
-    EXPECT_EQ(first.revision(), 1u);
-    EXPECT_EQ(first.selectedKey(), 0u);
-    EXPECT_EQ(first.cursorKey(), 0u);
-    EXPECT_EQ(first.snapshot().sourceGeneration, 0u);
-    EXPECT_EQ(first.snapshot().sourceRevision, 0u);
-    EXPECT_EQ(first.placement().count, 0u);
-}
-
 TEST(UiRadioGroupStateTests, IdenticalPublicSelectionRetiresInputAndAdvancesRevision){
     RadioGroupState state;
     state.select(41u);

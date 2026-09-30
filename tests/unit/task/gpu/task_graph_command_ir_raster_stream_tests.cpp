@@ -54,7 +54,7 @@ Graphics::GpuCommandIrRasterStateDesc RasterState(){
     return state;
 }
 
-TEST(GpuCommandIrRasterStream, V5RoundTripsStatePushIndexedDrawAndPassEnd){
+TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcrossRasterRecords){
     TaskGraphTestUtils::TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     Graphics::GpuCommandIrOwnedStream owned(testArena.arena);

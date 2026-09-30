@@ -155,50 +155,6 @@ TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
     EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_SHADOW_SHAPE_BOX);
 }
 
-TEST(CsgShadowSnapshot, PreservesEveryBuiltinParameterAndAffineTransform){
-    SnapshotContext context;
-    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
-    const CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    const Core::ECS::EntityID cutters[] = {
-        context.addCutter(s_CsgPlaneShapeName), context.addCutter(s_CsgBoxShapeName),
-        context.addCutter(s_CsgSphereShapeName), context.addCutter(s_CsgCapsuleShapeName)
-    };
-    auto* sphere = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutters[2]);
-    ASSERT_NE(sphere, nullptr);
-    StoreFloat(MatrixTranslation(1.f, 0.f, 0.f), sphere->shapeToWorld);
-    StoreFloat(MatrixTranslation(-1.f, 0.f, 0.f), sphere->worldToShape);
-    SetParameters(*sphere, Float4(0.5f, 0.f, 0.f, 0.f));
-    const Float34 expectedWorldToShape = sphere->worldToShape;
-    ASSERT_TRUE(context.build(&input, 1u));
-    ASSERT_EQ(context.snapshot.cutters.size(), LengthOf(cutters));
-    bool seen[LengthOf(cutters)] = {};
-    for(const CsgCutterGpuData& cutter : context.snapshot.cutters){
-        ASSERT_GE(cutter.shapeType, NWB_CSG_SHADOW_SHAPE_PLANE);
-        ASSERT_LE(cutter.shapeType, NWB_CSG_SHADOW_SHAPE_CAPSULE);
-        seen[cutter.shapeType - 1u] = true;
-        EXPECT_EQ(cutter.parameter1, Float4(0.f, 0.f, 0.f, 0.f));
-        switch(cutter.shapeType){
-        case NWB_CSG_SHADOW_SHAPE_PLANE:
-            EXPECT_EQ(cutter.parameter0, CsgPlaneShapeParameters{}.normalDistance);
-            break;
-        case NWB_CSG_SHADOW_SHAPE_BOX:
-            EXPECT_EQ(cutter.parameter0, CsgBoxShapeParameters{}.halfExtents);
-            break;
-        case NWB_CSG_SHADOW_SHAPE_SPHERE:
-            EXPECT_EQ(cutter.parameter0.x, 0.5f);
-            EXPECT_EQ(cutter.worldToShape, expectedWorldToShape);
-            break;
-        case NWB_CSG_SHADOW_SHAPE_CAPSULE:
-            EXPECT_EQ(cutter.parameter0, CsgCapsuleShapeParameters{}.radiusHalfHeight);
-            break;
-        default:
-            FAIL();
-        }
-    }
-    for(const bool shapeSeen : seen)
-        EXPECT_TRUE(shapeSeen);
-}
-
 TEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds){
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));

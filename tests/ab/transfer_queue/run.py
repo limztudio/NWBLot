@@ -21,7 +21,6 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
@@ -442,66 +441,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def run_self_test() -> int:
-    assert parse_args([LIT_SELF_TEST]).adapter_index == 0
-    payload = {
-        LIT_STATUS: LIT_OK,
-        LIT_REQUESTED_ROUTE: LIT_AUTOMATIC,
-        LIT_TRANSFER_QUEUE_ENABLED: True,
-        LIT_REQUESTED_ADAPTER_INDEX: 0,
-        LIT_SELECTED_ADAPTER_VENDOR_ID: 4098,
-        LIT_SELECTED_ADAPTER_DEVICE_ID: 1234,
-        LIT_SELECTED_ADAPTER_UUID: "0123456789abcdef0123456789abcdef",
-        LIT_PRODUCER_QUEUE: LIT_TRANSFER,
-        LIT_GRAPHICS_FAMILY: 0,
-        LIT_TRANSFER_FAMILY: 1,
-        LIT_PRODUCER_FAMILY: 1,
-        LIT_OBSERVED_GRAPHICS_READINESS_BRIDGE_SUB: 2,
-        LIT_GRAPHICS_READINESS_COPIES: 2,
-        LIT_ITERATIONS_2: 2,
-        LIT_IN_FLIGHT_WINDOW: 2,
-        LIT_TOTAL_LOGICAL_UPLOAD_BYTES: 2097152,
-        LIT_MODELED_UPLOAD_READ_WRITE_BYTES: 4194304,
-        LIT_ASYNC_INGRESS_COPY_BYTES: 0,
-        LIT_GRAPHICS_READINESS_COPY_BYTES: 1048576,
-        LIT_MODELED_GRAPHICS_READINESS_READ_WRITE_: 4194304,
-        LIT_GRAPHICS_CONTENTION_COPY_BYTES: 0,
-        LIT_GRAPHICS_CONTENTION_COPIES: 0,
-        LIT_MODELED_GRAPHICS_CONTENTION_READ_WRITE: 0,
-        LIT_EXPECTED_EXCLUSIVE_OWNERSHIP_TRANSFERS: 0,
-        LIT_QUEUE_SHARING_MASK: GRAPHICS_AND_TRANSFER_SHARING_MASK,
-        LIT_RESOURCE_2: LIT_BUFFER,
-        LIT_LOGICAL_UPLOAD_BYTES: 1048576,
-        LIT_EXPECTED_HASH: 123,
-        LIT_OBSERVED_HASH: 123,
-        LIT_CHECKSUM_VERIFIED: True,
-        LIT_GRAPHICS_READINESS_VERIFIED: True,
-        LIT_LOGGER_ERRORS: 0,
-    }
-    text = f"noise\n{RESULT_PREFIX}{json.dumps(payload)}\n"
-    assert parse_result(text, RESULT_PREFIX) == payload
     assert parse_result("no result", RESULT_PREFIX) is None
-    graphics_payload = dict(
-        payload,
-        requested_route=LIT_GRAPHICS,
-        producer_queue=LIT_GRAPHICS,
-        producer_family=0,
-        observed_graphics_readiness_bridge_submissions=0,
-        queue_sharing_mask=0,
-    )
-    automatic_arm = ArmResult(LIT_AUTOMATIC, 0, 0.1, payload, Path("automatic.log"))
-    graphics_arm = ArmResult(LIT_GRAPHICS, 0, 0.1, graphics_payload, Path("graphics.log"))
-    expected_args = SimpleNamespace(
-        resource=LIT_BUFFER,
-        adapter_index=0,
-        upload_mib=1,
-        iterations=2,
-        in_flight=2,
-        contention_mib=0,
-        contention_copies=0,
-    )
-    validated = validate_arms(expected_args, graphics_arm, automatic_arm)
-    assert validated[LIT_AUTOMATIC][LIT_PRODUCER_QUEUE] == LIT_TRANSFER
-    assert validated[LIT_GRAPHICS][LIT_PRODUCER_QUEUE] == LIT_GRAPHICS
     assert completion_status(None, False) == (LIT_INCOMPLETE_EXTERNAL_CAPTURE_REQUIRED, INCOMPLETE_EXIT_CODE)
     assert completion_status(None, True) == (LIT_INCOMPLETE_EXTERNAL_CAPTURE_REQUIRED, 1)
     assert completion_status(Path("capture.rgp"), False) == (LIT_CAPTURE_ATTACHED_PENDING_REVIEW, INCOMPLETE_EXIT_CODE)

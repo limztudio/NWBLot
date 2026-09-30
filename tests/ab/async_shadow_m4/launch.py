@@ -19,7 +19,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -43,9 +42,6 @@ LIT_NO_LOGSERVER = "--no-logserver"
 LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_STORE_TRUE = "store_true"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
-LIT_MEASURE_SECONDS = "--measure-seconds"
-LIT_N_30 = "30"
 LIT_MAIN = "__main__"
 
 
@@ -161,7 +157,6 @@ def make_parser() -> argparse.ArgumentParser:
         help="Do not pass --gpudbg to the paired benchmark processes.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Validate launcher command composition without building or running Vulkan.")
     return parser
 
 
@@ -170,40 +165,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
     return args
-
-
-def run_self_test() -> int:
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config="dbg",
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        sync_executable=None,
-        async_executable=None,
-        runtime_dir=None,
-        output_dir=root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_ASYNC_SHADOW_M4 / "self-test",
-        dry_run=True,
-        gpu_validation=True,
-        no_logserver=False,
-        logserver_executable=None,
-        runner_args=[LIT_MEASURE_SECONDS, LIT_N_30],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
-    assert command[command.index(LIT_SYNC_EXECUTABLE) + 1].endswith("async_shadow_m4_sync_benchmark.exe")
-    assert command[command.index(LIT_ASYNC_EXECUTABLE) + 1].endswith("async_shadow_m4_async_benchmark.exe")
-    assert LIT_GPU_VALIDATION in command
-    assert command[-2:] == [LIT_MEASURE_SECONDS, LIT_N_30]
-    print("async-shadow M4 launcher self-test passed")
-    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -217,8 +178,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

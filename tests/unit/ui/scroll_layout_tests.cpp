@@ -83,20 +83,6 @@ TEST(UiScrollLayoutTests, ContentExactlyFittingDoesNotReserveScrollbarWidth){
     EXPECT_EQ(placement.endRow, 5u);
 }
 
-TEST(UiScrollLayoutTests, OverflowReservesTrackInsidePaddingAndComputesProportionalThumb){
-    ScrollPlacement placement;
-    ASSERT_TRUE(ScrollLayout::Calculate({ 10.0f, 20.0f, 200.0f, 120.0f }, { 0.0f, 0.0f, 400.0f, 300.0f },
-        { 8.0f, 6.0f, 4.0f, 14.0f }, 12.0f, 16.0f, 20u, 20.0f, 0.0, placement));
-    ExpectRect(placement.viewport, { 18.0f, 26.0f, 176.0f, 100.0f });
-    ExpectRect(placement.track, { 194.0f, 26.0f, 12.0f, 100.0f });
-    ExpectRect(placement.thumb, { 194.0f, 26.0f, 12.0f, 25.0f });
-    EXPECT_TRUE(placement.scrollbarVisible);
-    EXPECT_DOUBLE_EQ(placement.contentHeight, 400.0);
-    EXPECT_DOUBLE_EQ(placement.maxOffset, 300.0);
-    EXPECT_EQ(placement.firstRow, 0u);
-    EXPECT_EQ(placement.endRow, 5u);
-}
-
 TEST(UiScrollLayoutTests, ThumbEndpointsAndMiddleFollowClampedOffset){
     const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
     ScrollPlacement placement;

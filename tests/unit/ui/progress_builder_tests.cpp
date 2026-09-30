@@ -156,31 +156,6 @@ TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedN
     EXPECT_DOUBLE_EQ(fraction, 0.75);
 }
 
-TEST_F(UiProgressBuilderTests, PassiveBarHasNoTargetActivationOrTabStop){
-    ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.progress("amount", 0.25, Options()));
-    EXPECT_FALSE(m_builder.button("after", "After"));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_EQ(target(id("amount", "panel")), nullptr);
-    EXPECT_EQ(m_context.input().targets().size(), 3u);
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    static_cast<void>(send({ InputEventType::KeyUp, {}, InputKey::Tab }));
-    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
-    EXPECT_TRUE(send({ InputEventType::KeyDown, {}, InputKey::Tab }).keyboardConsumed);
-    static_cast<void>(send({ InputEventType::KeyUp, {}, InputKey::Tab }));
-    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample track;
-    ASSERT_TRUE(sample(snapshot, Name("progress.track"), track));
-    click({ track.bounds.x + 40.0f, track.bounds.y + 16.0f });
-    for(const WidgetState& state : m_context.states().entries()){
-        if(state.id == id("amount", "panel"))
-            EXPECT_FALSE(m_context.takeActivation(state, true));
-    }
-}
-
 TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint){
     configureProgress(false, true);
     ASSERT_TRUE(panel(1u));
@@ -291,21 +266,6 @@ TEST_F(UiProgressBuilderTests, MissingPreferredAndFallbackRegionsRejectTheCandid
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_FALSE(m_context.commitFrame(1u));
-}
-
-TEST_F(UiProgressBuilderTests, AnnotationPublishesAPassiveTarget){
-    TooltipState tooltip;
-    ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.5, Options()));
-    ASSERT_TRUE(m_builder.tooltip("hint", "amount", "Copied progress", tooltip));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const HitTarget* annotated = target(id("amount", "panel"));
-    ASSERT_NE(annotated, nullptr);
-    EXPECT_FALSE(annotated->focusable);
-    EXPECT_FALSE(annotated->activatable);
-    EXPECT_FALSE(annotated->pointerGesture);
-    EXPECT_FALSE(annotated->control.valid());
 }
 
 

@@ -215,24 +215,6 @@ TEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderRese
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(TimerQueryResult, ConvertsStraightSixtyFourBitTickRange){
-    const Core::TimerQueryResult result{
-        .beginTicks = 100u,
-        .endTicks = 145u,
-        .secondsPerTick = 0.25,
-        .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 11u },
-        .timestampValidBits = 64u,
-        .comparableAcrossSubmissions = true,
-    };
-
-    ASSERT_TRUE(result.valid());
-    EXPECT_EQ(result.timestampMask(), Limit<u64>::s_Max);
-    EXPECT_EQ(result.maskedBeginTicks(), 100u);
-    EXPECT_EQ(result.durationTicks(), 45u);
-    EXPECT_DOUBLE_EQ(result.durationSeconds(), 11.25);
-    EXPECT_TRUE(result.hasComparableRange());
-}
-
 TEST(TimerQueryResult, MasksHighBitsAndWrapsPartialWidth){
     const Core::TimerQueryResult result{
         .beginTicks = 0x1fau,

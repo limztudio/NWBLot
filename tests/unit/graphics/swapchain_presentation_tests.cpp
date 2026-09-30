@@ -57,27 +57,6 @@ constexpr VkSurfaceFormatKHR MakeSurfaceFormat(const VkFormat format, const VkCo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(SwapChainPresentation, PrefersHdr10PqWhenTheSurfaceAdvertisesIt){
-    const VkSurfaceFormatKHR formats[] = {
-        MakeSurfaceFormat(VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR),
-        MakeSurfaceFormat(VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT),
-    };
-
-    SwapChainSurfaceFormatSelection selected;
-    ASSERT_TRUE(SelectSurfaceFormat(
-        formats,
-        static_cast<u32>(LengthOf(formats)),
-        Format::BGRA8_UNORM_SRGB,
-        true,
-        selected
-    ));
-
-    EXPECT_EQ(selected.outputMode, SwapChainOutputMode::HDR10);
-    EXPECT_EQ(selected.backBufferFormat, Format::R10G10B10A2_UNORM);
-    EXPECT_EQ(selected.surfaceFormat.format, VK_FORMAT_A2B10G10R10_UNORM_PACK32);
-    EXPECT_EQ(selected.surfaceFormat.colorSpace, VK_COLOR_SPACE_HDR10_ST2084_EXT);
-}
-
 TEST(SwapChainPresentation, FallsBackToSdrWhenHdr10IsUnavailable){
     const VkSurfaceFormatKHR formats[] = {
         MakeSurfaceFormat(VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR),

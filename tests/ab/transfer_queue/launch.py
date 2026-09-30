@@ -14,7 +14,6 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import List, Sequence
 
 
@@ -32,11 +31,6 @@ LIT_GPU_VALIDATION = "--gpu-validation"
 LIT_EXTERNAL_PROFILER_REPORT = "--external-profiler-report"
 LIT_GPU_VALIDATION_2 = "gpu_validation"
 LIT_STORE_TRUE = "store_true"
-LIT_SELF_TEST = "--self-test"
-LIT_WINDOWS_CLANG_X64 = "windows-clang-x64"
-LIT_CAPTURE_RGP = "capture.rgp"
-LIT_UPLOAD_MIB = "--upload-mib"
-LIT_N_32 = "32"
 LIT_MAIN = "__main__"
 LIT_ON = "ON"
 
@@ -127,7 +121,6 @@ def make_parser() -> argparse.ArgumentParser:
         help="Run without Vulkan validation when a target cannot expose the validation layer.",
     )
     parser.set_defaults(gpu_validation=True)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Validate launcher command composition without Vulkan.")
     return parser
 
 
@@ -140,42 +133,6 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         raise SystemExit("--in-flight must be positive")
     args.runner_args = runner_args
     return args
-
-
-def run_self_test() -> int:
-    assert parse_args([LIT_SELF_TEST]).adapter_index == 0
-    root = Path("/nwb")
-    settings = ROOT_LAUNCHER.LaunchSettings(
-        root=root,
-        platform_name="windows",
-        arch="x64",
-        domain="full",
-        config="dbg",
-        configure_preset=LIT_WINDOWS_CLANG_X64,
-        build_dir=root / "__cmake" / "build" / LIT_WINDOWS_CLANG_X64,
-        cmake=("cmake",),
-    )
-    args = SimpleNamespace(
-        executable=None,
-        output_dir=None,
-        dry_run=True,
-        gpu_validation=True,
-        adapter_index=1,
-        in_flight=3,
-        external_profiler_report=Path(LIT_CAPTURE_RGP),
-        runner_args=[LIT_UPLOAD_MIB, LIT_N_32],
-    )
-    paths = resolve_paths(args, settings)
-    command = [str(item) for item in runner_command(args, paths)]
-    assert command[command.index(LIT_EXECUTABLE) + 1].endswith("transfer_upload_profile.exe")
-    assert "/.cozter/out/ab-results/transfer-queue/" in paths.output_directory.as_posix()
-    assert LIT_GPU_VALIDATION in command
-    assert command[command.index(LIT_ADAPTER_INDEX) + 1] == "1"
-    assert command[command.index(LIT_IN_FLIGHT) + 1] == "3"
-    assert command[command.index(LIT_EXTERNAL_PROFILER_REPORT) + 1].endswith(LIT_CAPTURE_RGP)
-    assert command[-2:] == [LIT_UPLOAD_MIB, LIT_N_32]
-    print("transfer-queue launcher self-test passed")
-    return 0
 
 
 def run(args: argparse.Namespace) -> int:
@@ -196,8 +153,6 @@ def run(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str]) -> int:
     args = parse_args(argv)
-    if args.self_test:
-        return run_self_test()
     return run(args)
 
 

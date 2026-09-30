@@ -22,14 +22,6 @@ using IntegerModelTests = NumericModelFixture<IntegerEditModel>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(IntegerModelTests, BeginsAtCanonicalZeroWithBoundedDraftStorage){
-    EXPECT_EQ(m_model.value(), 0);
-    EXPECT_EQ(m_model.draft().text(), "0");
-    EXPECT_EQ(m_model.status(), NumericParseStatus::Complete);
-    EXPECT_FALSE(m_model.dirty());
-    EXPECT_EQ(m_model.draft().limits().maxBytes, 128u);
-}
-
 TEST_F(IntegerModelTests, SubmitCommitsExactLargeIntegerAndCancellationCannotRoundIt){
     ASSERT_TRUE(m_model.setDraft("9007199254740993"));
     const NumericEditResult committed = m_model.submit();

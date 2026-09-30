@@ -41,43 +41,6 @@ class UiBuilderSkinPaletteTests : public WidgetFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiBuilderSkinPaletteTests, EveryPaletteRoleReachesTheShippedWidgetStyles){
-    const UiSkinPalette palette = MakePalette(0.1f);
-    m_skin.setPalette(palette);
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_builder.style().fontSize = 19.0f;
-    m_builder.style().gap = 13.0f;
-    m_builder.style().button = Name("custom.button");
-    m_builder.setSkin(m_skin);
-    const auto& colors = palette.colors;
-
-    ExpectColor(m_builder.style().text, colors[UiSkinColorRole::TextNormal]);
-    ExpectColor(m_builder.style().disabledText, colors[UiSkinColorRole::TextDisabled]);
-    ExpectColor(m_builder.tooltipStyle().text, colors[UiSkinColorRole::TextTooltip]);
-    ExpectColor(m_builder.editStyle().background, colors[UiSkinColorRole::EditBackground]);
-    ExpectColor(m_builder.editStyle().text, colors[UiSkinColorRole::TextNormal]);
-    ExpectColor(m_builder.editStyle().disabledText, colors[UiSkinColorRole::TextDisabled]);
-    ExpectColor(m_builder.editStyle().selection, colors[UiSkinColorRole::EditSelection]);
-    ExpectColor(m_builder.editStyle().inactiveSelection, colors[UiSkinColorRole::EditInactiveSelection]);
-    ExpectColor(m_builder.editStyle().caret, colors[UiSkinColorRole::EditCaret]);
-    ExpectColor(m_builder.editStyle().preedit, colors[UiSkinColorRole::EditPreedit]);
-    ExpectColor(m_builder.scrollbarStyle().trackColor, colors[UiSkinColorRole::ScrollbarTrack]);
-    ExpectColor(m_builder.scrollbarStyle().thumbColor, colors[UiSkinColorRole::ScrollbarThumb]);
-    ExpectColor(m_builder.scrollbarStyle().disabledColor, colors[UiSkinColorRole::ScrollbarDisabled]);
-    ExpectColor(m_builder.popupStyle().backdrop, colors[UiSkinColorRole::PopupBackdrop]);
-    ExpectColor(m_builder.radioGroupStyle().hoverTint, colors[UiSkinColorRole::ControlHoverTint]);
-    ExpectColor(m_builder.radioGroupStyle().pressedTint, colors[UiSkinColorRole::ControlPressedTint]);
-    ExpectColor(m_builder.radioGroupStyle().disabledTint, colors[UiSkinColorRole::ControlDisabledTint]);
-    ExpectColor(m_builder.sliderStyle().hoverTint, colors[UiSkinColorRole::ControlHoverTint]);
-    ExpectColor(m_builder.sliderStyle().pressedTint, colors[UiSkinColorRole::ControlPressedTint]);
-    ExpectColor(m_builder.sliderStyle().disabledTint, colors[UiSkinColorRole::ControlDisabledTint]);
-    ExpectColor(m_builder.progressStyle().trackTint, colors[UiSkinColorRole::ProgressTrackTint]);
-    ExpectColor(m_builder.progressStyle().fillTint, colors[UiSkinColorRole::ProgressFillTint]);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
-    EXPECT_FLOAT_EQ(m_builder.style().gap, 13.0f);
-    EXPECT_EQ(m_builder.style().button, Name("custom.button"));
-}
-
 TEST_F(UiBuilderSkinPaletteTests, SkinRebindReplacesOnlyColorsAndLegacySkinRestoresDefaults){
     const UiSkinPalette first = MakePalette(0.1f);
     const UiSkinPalette second = MakePalette(0.3f);

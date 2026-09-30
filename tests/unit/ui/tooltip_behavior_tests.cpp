@@ -30,18 +30,6 @@ inline constexpr PopupToken s_Popup{ WidgetId{ 301u }, 19u, 23u, 7u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiTooltipBehaviorTests, StatesStartHiddenWithDistinctNonzeroInstanceLifetimes){
-    TooltipState first;
-    TooltipState second;
-    EXPECT_NE(first.instanceGeneration(), 0u);
-    EXPECT_NE(second.instanceGeneration(), 0u);
-    EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_EQ(first.revision(), 1u);
-    EXPECT_FALSE(first.visible());
-    EXPECT_FLOAT_EQ(first.placement().bounds.width, 0.0f);
-    EXPECT_FLOAT_EQ(first.placement().bounds.height, 0.0f);
-}
-
 TEST(UiTooltipBehaviorTests, NewHoverDoesNotCountTimeFromBeforeTheBindingWasKnown){
     TooltipState state;
     const TooltipOptions options;

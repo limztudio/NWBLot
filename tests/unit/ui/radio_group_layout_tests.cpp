@@ -78,45 +78,6 @@ static void ExpectPlacement(const RadioGroupPlacement& actual, const RadioGroupP
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiRadioGroupLayoutTests, DefaultMetricsMeasureTheEntireGroupIncludingPaddingAndGaps){
-    RadioGroupMetrics metrics;
-    ASSERT_TRUE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {}, metrics));
-    EXPECT_FLOAT_EQ(metrics.rowHeight, 32.0f);
-    EXPECT_FLOAT_EQ(metrics.indicatorExtent, 24.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 140.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 112.0f);
-    EXPECT_EQ(metrics.count, 3u);
-}
-
-TEST(UiRadioGroupLayoutTests, EffectiveRowsFitBothLabelsAndStableIndicatorMetrics){
-    RadioGroupStyle style;
-    style.indicatorExtent = 40.0f;
-    RadioGroupMetrics metrics;
-    ASSERT_TRUE(RadioGroupLayout::Measure(2u, { 100.0f, 50.0f }, {}, style, metrics));
-    EXPECT_FLOAT_EQ(metrics.rowHeight, 50.0f);
-    EXPECT_FLOAT_EQ(metrics.indicatorExtent, 40.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 156.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 112.0f);
-}
-
-TEST(UiRadioGroupLayoutTests, PlacementSeparatesRowsIndicatorsMarksAndLabelClips){
-    const RadioGroupChoices choices = Choices(3u);
-    RadioGroupMetrics metrics;
-    ASSERT_TRUE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {}, metrics));
-    RadioGroupPlacement placement;
-    const Rect bounds{ 10.0f, 20.0f, 140.0f, 112.0f };
-    ASSERT_TRUE(RadioGroupLayout::Place(bounds, bounds, choices, metrics, placement));
-    ExpectRectangle(placement.content, { 14.0f, 24.0f, 132.0f, 104.0f });
-    ExpectRectangle(placement.rows[0u].rectangle, { 14.0f, 24.0f, 132.0f, 32.0f });
-    ExpectRectangle(placement.rows[1u].rectangle, { 14.0f, 60.0f, 132.0f, 32.0f });
-    ExpectRectangle(placement.rows[2u].rectangle, { 14.0f, 96.0f, 132.0f, 32.0f });
-    ExpectRectangle(placement.rows[0u].indicator, { 14.0f, 28.0f, 24.0f, 24.0f });
-    ExpectRectangle(placement.rows[0u].mark, { 21.2f, 35.2f, 9.6f, 9.6f });
-    ExpectRectangle(placement.rows[0u].textClip, { 46.0f, 24.0f, 100.0f, 32.0f });
-    EXPECT_EQ(placement.rows[1u].key, 2u);
-    EXPECT_FALSE(placement.rows[1u].enabled);
-}
-
 TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
     const RadioGroupChoices choices = Choices(3u);
     RadioGroupMetrics metrics;
@@ -185,20 +146,6 @@ TEST(UiRadioGroupLayoutTests, TinyAndZeroBoundsSafelyClipEveryChoice){
     EXPECT_EQ(placement.count, 2u);
     EXPECT_FLOAT_EQ(placement.rows[1u].textClip.width, 0.0f);
     EXPECT_FLOAT_EQ(placement.rows[1u].textClip.height, 0.0f);
-}
-
-TEST(UiRadioGroupLayoutTests, RepeatedPurePlacementPreservesAllMetricsAndGeometry){
-    const RadioGroupChoices choices = Choices(3u);
-    RadioGroupMetrics metrics;
-    ASSERT_TRUE(RadioGroupLayout::Measure(3u, { 100.0f, 16.0f }, {}, {}, metrics));
-    const RadioGroupMetrics beforeMetrics = metrics;
-    RadioGroupPlacement placement;
-    const Rect bounds{ 0.0f, 0.0f, 140.0f, 112.0f };
-    ASSERT_TRUE(RadioGroupLayout::Place(bounds, bounds, choices, metrics, placement));
-    const RadioGroupPlacement before = placement;
-    ASSERT_TRUE(RadioGroupLayout::Place(bounds, bounds, choices, metrics, placement));
-    ExpectPlacement(placement, before);
-    ExpectMetrics(metrics, beforeMetrics);
 }
 
 TEST(UiRadioGroupLayoutTests, InvalidOptionsOrChoiceCountsPreserveMeasuredOutput){

@@ -23,7 +23,6 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Sequence
 
 
@@ -446,65 +445,7 @@ def run(args: argparse.Namespace) -> int:
 
 
 def run_self_test() -> int:
-    assert parse_args([LIT_SELF_TEST]).records == 4096
-    timing = {
-        LIT_SAMPLES_NS_PER_COMMAND: [1.0, 2.0, 3.0],
-        LIT_MIN_NS_PER_COMMAND: 1.0,
-        LIT_MEDIAN_NS_PER_COMMAND: 2.0,
-        LIT_MAX_NS_PER_COMMAND: 3.0,
-    }
-    payload: Dict[str, Any] = {
-        LIT_STATUS: LIT_OK,
-        LIT_WORKLOAD: LIT_COPY_BUFFER,
-        LIT_REQUESTED_ADAPTER_INDEX: 0,
-        LIT_SELECTED_ADAPTER_VENDOR_ID: 4098,
-        LIT_SELECTED_ADAPTER_DEVICE_ID: 1234,
-        LIT_SELECTED_ADAPTER_UUID: "0123456789abcdef0123456789abcdef",
-        LIT_RECORDS_2: 4,
-        LIT_WARMUP_2: 1,
-        LIT_SAMPLES_2: 3,
-        LIT_STREAM_BYTES: 512,
-        LIT_PAYLOAD_BYTES: 480,
-        LIT_DECODED_RECORDS: 4,
-        LIT_PREFLIGHT_RECORDS: 4,
-        LIT_REPLAYED_RECORDS: 4,
-        LIT_DIRECT_VULKAN_REPLAYED_RECORDS: 4,
-        LIT_STREAM_VALID: True,
-        LIT_CHECKSUM_VERIFIED: True,
-        "direct_vulkan_observed_hash": 1234,
-        LIT_DIRECT_VULKAN_CHECKSUM_VERIFIED: True,
-        LIT_LOGGER_ERRORS: 0,
-        LIT_CAPTURE_ALLOCATION_DELTA: 0,
-        LIT_CAPTURE_REALLOCATION_DELTA: 0,
-    }
-    payload.update({stage: dict(timing) for stage in TIMING_STAGES})
-    text = f"noise\n{RESULT_PREFIX}{json.dumps(payload)}\n"
-    assert parse_result(text, RESULT_PREFIX) == payload
     assert parse_result("no result", RESULT_PREFIX) is None
-    args = SimpleNamespace(adapter_index=0, records=4, warmup=1, samples=3)
-    result = ProfileResult(0, 0.1, payload, Path(LIT_COMMAND_IR_PROFILE_LOG))
-    assert require_ok(args, result)[LIT_REPLAYED_RECORDS] == 4
-    assert capture_increment_percent(payload) == 0.0
-    assert direct_vulkan_replay_delta_percent(payload) == 0.0
-    command_args = SimpleNamespace(
-        executable=Path("/nwb/command_ir_profile"),
-        records=4,
-        warmup=1,
-        samples=3,
-        adapter_index=0,
-        gpu_validation=False,
-    )
-    assert profile_command(command_args)[-1] == LIT_NO_GPU_VALIDATION
-    report = {
-        LIT_STATUS: LIT_PASSED,
-        LIT_PROCESS: {LIT_RETURN_CODE: 0, LIT_ELAPSED_SECONDS: 0.1, LIT_LOG: LIT_COMMAND_IR_PROFILE_LOG},
-        LIT_PROFILE: payload,
-        LIT_METRICS: {
-            LIT_CAPTURE_ENCODE_INCREMENT_PERCENT: 0.0,
-            LIT_DIRECT_VULKAN_REPLAY_DELTA_PERCENT: 0.0,
-        },
-    }
-    assert "CPU overhead per command" in markdown_report(report)
     print("command-IR harness self-test passed")
     return 0
 

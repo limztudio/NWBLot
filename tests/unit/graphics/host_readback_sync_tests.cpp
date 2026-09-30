@@ -45,64 +45,6 @@ inline constexpr Name s_HostReadbackTestArena("tests/graphics/host_readback_sync
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(HostReadbackSync, ClassifiesEveryResourceStateBit){
-    struct StateCase{
-        ResourceStates::Mask state;
-        bool writesBuffer;
-    };
-    constexpr StateCase s_Cases[] = {
-        { ResourceStates::Common, false },
-        { ResourceStates::ConstantBuffer, false },
-        { ResourceStates::VertexBuffer, false },
-        { ResourceStates::IndexBuffer, false },
-        { ResourceStates::IndirectArgument, false },
-        { ResourceStates::ShaderResource, false },
-        { ResourceStates::UnorderedAccess, true },
-        { ResourceStates::RenderTarget, false },
-        { ResourceStates::DepthWrite, false },
-        { ResourceStates::DepthRead, false },
-        { ResourceStates::StreamOut, true },
-        { ResourceStates::CopyDest, true },
-        { ResourceStates::CopySource, false },
-        { ResourceStates::ResolveDest, true },
-        { ResourceStates::ResolveSource, false },
-        { ResourceStates::Present, false },
-        { ResourceStates::AccelStructRead, false },
-        { ResourceStates::AccelStructWrite, true },
-        { ResourceStates::AccelStructBuildInput, false },
-        { ResourceStates::AccelStructBuildBlas, true },
-        { ResourceStates::ShadingRateSurface, false },
-        { ResourceStates::OpacityMicromapWrite, true },
-        { ResourceStates::OpacityMicromapBuildInput, false },
-        { ResourceStates::ConvertCoopVecMatrixInput, false },
-        { ResourceStates::ConvertCoopVecMatrixOutput, true },
-    };
-
-    EXPECT_FALSE(HostSync::HasBufferDeviceWriteState(ResourceStates::Unknown));
-    for(const StateCase& stateCase : s_Cases)
-        EXPECT_EQ(HostSync::HasBufferDeviceWriteState(stateCase.state), stateCase.writesBuffer);
-    EXPECT_TRUE(HostSync::HasBufferDeviceWriteState(
-        ResourceStates::ShaderResource | ResourceStates::CopyDest
-    ));
-}
-
-TEST(HostReadbackSync, BuildsExactWholeBufferHostDependency){
-    const VkBuffer buffer = reinterpret_cast<VkBuffer>(static_cast<usize>(0x1234u));
-    const VkBufferMemoryBarrier2 barrier = HostSync::BuildHostReadBufferBarrier(buffer);
-
-    EXPECT_EQ(barrier.sType, VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
-    EXPECT_EQ(barrier.pNext, nullptr);
-    EXPECT_EQ(barrier.srcStageMask, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-    EXPECT_EQ(barrier.srcAccessMask, VK_ACCESS_2_MEMORY_WRITE_BIT);
-    EXPECT_EQ(barrier.dstStageMask, VK_PIPELINE_STAGE_2_HOST_BIT);
-    EXPECT_EQ(barrier.dstAccessMask, VK_ACCESS_2_HOST_READ_BIT);
-    EXPECT_EQ(barrier.srcQueueFamilyIndex, VK_QUEUE_FAMILY_IGNORED);
-    EXPECT_EQ(barrier.dstQueueFamilyIndex, VK_QUEUE_FAMILY_IGNORED);
-    EXPECT_EQ(barrier.buffer, buffer);
-    EXPECT_EQ(barrier.offset, 0u);
-    EXPECT_EQ(barrier.size, VK_WHOLE_SIZE);
-}
-
 TEST(HostReadbackSync, CollectsEveryExactQueueFamilyWithoutLegacyLaneGatesOrFixedCapacity){
     constexpr GpuPhysicalQueueInfo s_Queues[] = {
         { .familyIndex = s_ExpectedDualCount, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },

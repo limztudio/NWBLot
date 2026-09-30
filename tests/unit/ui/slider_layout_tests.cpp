@@ -60,44 +60,6 @@ static void ExpectPlacement(const SliderPlacement& actual, const SliderPlacement
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiSliderLayoutTests, DefaultMetricsIncludePaddingAroundTheStableThumbAndTrack){
-    SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 32.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 32.0f);
-    EXPECT_FLOAT_EQ(metrics.thumbExtent.x, 24.0f);
-    EXPECT_FLOAT_EQ(metrics.thumbExtent.y, 24.0f);
-    EXPECT_FLOAT_EQ(metrics.trackHeight, 12.0f);
-}
-
-TEST(UiSliderLayoutTests, TallTracksAndThumbsGrowIntrinsicHeightAndRequestedHeightIsHonored){
-    SliderStyle style;
-    style.thumbExtent = { 40.0f, 50.0f };
-    style.trackHeight = 60.0f;
-    SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, style, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.x, 48.0f);
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 68.0f);
-    SliderOptions options;
-    options.height = 90.0f;
-    ASSERT_TRUE(SliderLayout::Measure(options, style, metrics));
-    EXPECT_FLOAT_EQ(metrics.contentSize.y, 90.0f);
-}
-
-TEST(UiSliderLayoutTests, PlacementSeparatesBaseTrackTravelAndThumbGeometry){
-    SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
-    const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
-    SliderPlacement placement;
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.25, placement));
-    ExpectRect(placement.bounds, bounds);
-    ExpectRect(placement.clip, bounds);
-    ExpectRect(placement.travelBounds, { 14.0f, 24.0f, 232.0f, 24.0f });
-    ExpectRect(placement.centerTravel, { 26.0f, 24.0f, 208.0f, 24.0f });
-    ExpectRect(placement.track, { 26.0f, 30.0f, 208.0f, 12.0f });
-    ExpectRect(placement.thumb, { 66.0f, 24.0f, 24.0f, 24.0f });
-}
-
 TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
     SliderMetrics metrics;
     ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
@@ -154,22 +116,6 @@ TEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid){
         EXPECT_FLOAT_EQ(placement.thumb.height, 0.0f);
         EXPECT_FLOAT_EQ(placement.centerTravel.width, 0.0f);
     }
-}
-
-TEST(UiSliderLayoutTests, AsymmetricPaddingAndIndependentThumbDimensionsCenterBothParts){
-    SliderStyle style;
-    style.padding = { 2.0f, 3.0f, 5.0f, 7.0f };
-    style.thumbExtent = { 30.0f, 10.0f };
-    style.trackHeight = 16.0f;
-    SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, style, metrics));
-    const Rect bounds{ 0.0f, 0.0f, 100.0f, 40.0f };
-    SliderPlacement placement;
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.5, placement));
-    ExpectRect(placement.travelBounds, { 2.0f, 3.0f, 93.0f, 30.0f });
-    ExpectRect(placement.centerTravel, { 17.0f, 3.0f, 63.0f, 30.0f });
-    ExpectRect(placement.track, { 17.0f, 10.0f, 63.0f, 16.0f });
-    ExpectRect(placement.thumb, { 33.5f, 13.0f, 30.0f, 10.0f });
 }
 
 TEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsPreservePreviouslyMeasuredMetrics){

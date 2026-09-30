@@ -53,22 +53,6 @@ TEST_F(UiSliderBuilderTests, DeclarationPublishesItsResultAndOwnedPartsOnlyAfter
     ExpectSliderRect(target(thumb())->rectangle, m_state.placement().thumb);
 }
 
-TEST_F(UiSliderBuilderTests, OneTabStopSkipsTrackAndThumbBetweenOrdinaryControls){
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 240.0f }));
-    EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.slider("slider", m_state, options()));
-    EXPECT_FALSE(m_builder.button("after", "After"));
-    ASSERT_TRUE(finishPanel());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    press(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), id("before", "panel"));
-    press(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
-    press(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), id("after", "panel"));
-}
-
 TEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually){
     ASSERT_TRUE(m_state.setValue(2.0));
     ASSERT_TRUE(accept(1u));

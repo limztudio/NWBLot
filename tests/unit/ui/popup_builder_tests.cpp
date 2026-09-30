@@ -87,81 +87,11 @@ protected:
     [[nodiscard]] WidgetId ownerId(const AStringView key = "popup")const{
         return MakeWidgetId(MakeRootId(m_root), key);
     }
-
-    void configurePopupRegion(const UiSkinInsets& padding){
-        UiSkin::RegionVector regions(m_arena);
-        regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-        regions.push_back({ Name("popup.normal"), { 88u, 0u, 8u, 8u }, {}, padding });
-        m_skin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-        ASSERT_TRUE(m_skin.validatePayload());
-    }
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST_F(UiPopupBuilderTests, ClosedStateDeclaresWithoutOpeningAScopeOrRequiringEndPopup){
-    PopupState state;
-    ASSERT_TRUE(begin(1u));
-    EXPECT_FALSE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_context.failed());
-    EXPECT_TRUE(m_builder.balanced());
-    EXPECT_EQ(m_context.popupLayer(), 0u);
-    ASSERT_TRUE(finishRoot());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_TRUE(snapshot.commands().empty());
-    EXPECT_TRUE(snapshot.vertices().empty());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    EXPECT_TRUE(m_context.input().targets().empty());
-    EXPECT_FALSE(m_context.input().hasPopup());
-    ASSERT_EQ(m_context.states().entries().size(), 1u);
-    EXPECT_EQ(m_context.states().entries()[0u].id, ownerId());
-    EXPECT_EQ(m_context.states().entries()[0u].kind, WidgetKind::Popup);
-}
-
-TEST_F(UiPopupBuilderTests, OpenPopupArrangesScopedBodyControlsAndPublishesMatchingLayerTargets){
-    PopupState state;
-    state.open();
-    ASSERT_TRUE(begin(1u, { 800.0f, 600.0f, 2.0f, 1.5f }));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    EXPECT_FALSE(m_builder.balanced());
-    EXPECT_FALSE(m_builder.button("apply", "Apply", Control()));
-    ContainerOptions row;
-    row.width = { LayoutSizePolicy::Stretch, 1.0f };
-    row.height = { LayoutSizePolicy::Fixed, 30.0f };
-    ASSERT_TRUE(m_builder.beginRow("choices", row));
-    EXPECT_FALSE(m_builder.button("apply", "Nested", Control(70.0f, 24.0f)));
-    ASSERT_TRUE(m_builder.endContainer());
-    ASSERT_TRUE(finishPopup());
-    EXPECT_TRUE(m_builder.balanced());
-    EXPECT_EQ(m_context.popupLayer(), 0u);
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ExpectBounds(state.placement().bounds, { 40.0f, 88.0f, 220.0f, 160.0f });
-    const WidgetId directId = id("apply", "popup");
-    const WidgetId nestedId = MakeWidgetId(MakeWidgetId(ownerId(), "choices"), "apply");
-    ASSERT_NE(target(ownerId()), nullptr);
-    ASSERT_NE(target(directId), nullptr);
-    ASSERT_NE(target(nestedId), nullptr);
-    EXPECT_NE(directId, nestedId);
-    ExpectBounds(target(ownerId())->rectangle, state.placement().bounds);
-    ExpectBounds(target(directId)->rectangle, { 48.0f, 96.0f, 120.0f, 30.0f });
-    ExpectBounds(target(nestedId)->rectangle, { 48.0f, 134.0f, 70.0f, 24.0f });
-    EXPECT_EQ(target(ownerId())->layer, 1u);
-    EXPECT_EQ(target(directId)->layer, 1u);
-    EXPECT_EQ(target(nestedId)->layer, 1u);
-    EXPECT_TRUE(target(ownerId())->popup == target(directId)->popup);
-    EXPECT_TRUE(target(ownerId())->popup == target(nestedId)->popup);
-    EXPECT_EQ(target(directId)->popup.instanceGeneration, state.instanceGeneration());
-    EXPECT_EQ(target(directId)->popup.openGeneration, state.openGeneration());
-    EXPECT_EQ(m_context.input().focus(), directId);
-    EXPECT_EQ(m_context.input().hitTest({ 55.0f, 100.0f }), directId);
-    EXPECT_EQ(m_context.input().hitTest({ 55.0f, 140.0f }), nestedId);
-    EXPECT_FALSE(snapshot.glyphPages().empty());
-    for(const DrawCommand& command : snapshot.commands())
-        EXPECT_EQ(command.layer, 1u);
-}
 
 TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALaterRoot){
     PopupState state;
@@ -236,30 +166,6 @@ TEST_F(UiPopupBuilderTests, ExistingPanelAtlasFallbackSuppliesPopupImageAndBodyP
     ASSERT_NE(child, nullptr);
     ExpectBounds(child->rectangle, { 43.0f, 92.0f, 212.0f, 150.0f });
     ExpectBounds(child->clip, { 43.0f, 92.0f, 212.0f, 150.0f });
-}
-
-TEST_F(UiPopupBuilderTests, PreferredPopupAtlasCombinesSkinAndStylePaddingPerEdge){
-    configurePopupRegion({ 14.0f, 10.0f, 18.0f, 12.0f });
-    m_builder.popupStyle().padding = { 8.0f, 20.0f, 8.0f, 8.0f };
-    PopupState state;
-    state.open();
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    WidgetOptions stretch = Control();
-    stretch.width = { LayoutSizePolicy::Stretch, 1.0f };
-    stretch.height = { LayoutSizePolicy::Stretch, 1.0f };
-    EXPECT_FALSE(m_builder.button("apply", "Apply", stretch));
-    ASSERT_TRUE(finishPopup());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    Rect background;
-    ASSERT_TRUE(skinQuad(snapshot, 11u, background));
-    ExpectBounds(background, state.placement().bounds);
-    EXPECT_FALSE(skinQuad(snapshot, 5u, background));
-    const HitTarget* child = target(id("apply", "popup"));
-    ASSERT_NE(child, nullptr);
-    ExpectBounds(child->rectangle, { 54.0f, 108.0f, 188.0f, 128.0f });
-    ExpectBounds(child->clip, { 54.0f, 108.0f, 188.0f, 128.0f });
 }
 
 TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidateTargets){

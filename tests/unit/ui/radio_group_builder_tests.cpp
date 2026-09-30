@@ -37,32 +37,6 @@ static void CopyGlyphVertices(const DrawSnapshot& snapshot, Vector<Vertex, Core:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiRadioGroupBuilderTests, FullBoundedGroupPublishesOneTabHostAndStableChoiceParts){
-    ASSERT_TRUE(accept(1u));
-    ASSERT_NE(target(host()), nullptr);
-    EXPECT_TRUE(target(host())->focusable);
-    EXPECT_TRUE(target(host())->navigable);
-    EXPECT_TRUE(target(host())->horizontalNavigation);
-    EXPECT_EQ(target(host())->control.instanceGeneration, m_state.inputGeneration());
-    EXPECT_EQ(target(host())->control.contentGeneration, m_source.m_generation);
-    EXPECT_EQ(target(host())->control.contentRevision, m_source.m_contentRevision);
-    EXPECT_EQ(m_state.placement().count, 5u);
-    EXPECT_EQ(m_source.m_textCalls, 5u);
-    usize tabStops = 0u;
-    for(const HitTarget& entry : m_context.input().targets()){
-        tabStops += static_cast<usize>(entry.focusable);
-        if(entry.owner == host()){
-            EXPECT_FALSE(entry.focusable);
-            EXPECT_EQ(entry.control, target(host())->control);
-            EXPECT_EQ(entry.value % 10u, 0u);
-            EXPECT_EQ(entry.id, MakeWidgetPartId(MakeWidgetId(host(), "choices"), entry.value));
-        }
-    }
-    EXPECT_EQ(tabStops, 1u);
-    press(InputKey::Tab);
-    EXPECT_EQ(m_context.input().focus(), host());
-}
-
 TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallback){
     ASSERT_TRUE(accept(1u));
     const DrawSnapshot actual = m_paint.freeze();

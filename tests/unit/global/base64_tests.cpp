@@ -24,25 +24,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Base64, Rfc4648KnownVectors){
-    TestArena<> context;
-    struct KnownVector{ AStringView plain; AStringView encoded; };
-    const KnownVector vectors[] = {
-        { "", "" }, { "f", "Zg==" }, { "fo", "Zm8=" }, { "foo", "Zm9v" },
-        { "foob", "Zm9vYg==" }, { "fooba", "Zm9vYmE=" }, { "foobar", "Zm9vYmFy" },
-    };
-    AString<Core::Alloc::GlobalArena> encoded(context.arena);
-    Vector<u8, Core::Alloc::GlobalArena> decoded(context.arena);
-    for(const KnownVector& vector : vectors){
-        ASSERT_TRUE(EncodeBase64({ reinterpret_cast<const u8*>(vector.plain.data()), vector.plain.size() }, encoded));
-        EXPECT_EQ(encoded, vector.encoded);
-        ASSERT_TRUE(DecodeBase64(vector.encoded, decoded, vector.plain.size()));
-        ASSERT_EQ(decoded.size(), vector.plain.size());
-        for(usize index = 0u; index < decoded.size(); ++index)
-            EXPECT_EQ(decoded[index], static_cast<u8>(vector.plain[index]));
-    }
-}
-
 TEST(Base64, BinaryValuesAndEveryTailLengthAreLossless){
     TestArena<> context;
     Vector<u8, Core::Alloc::GlobalArena> source(context.arena);

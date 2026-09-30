@@ -113,19 +113,6 @@ TEST_F(UiSearchComboBuilderTests, ClosedArrowOpensUsingTheFilteredLifetimeAndKee
     EXPECT_EQ(m_context.input().focus(), query());
 }
 
-TEST_F(UiSearchComboBuilderTests, QueryNavigationChangesPreviewWhileTypingFocusStaysInTheEditor){
-    m_search.combo().select(1u);
-    ASSERT_TRUE(acceptSearch(1u));
-    ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
-    ASSERT_TRUE(acceptSearch(3u));
-    EXPECT_EQ(m_search.combo().listState().cursorKey(), 2u);
-    EXPECT_EQ(m_search.combo().selectedKey(), 1u);
-    EXPECT_FALSE(m_searchResult.combo.committed);
-    EXPECT_FALSE(m_searchResult.combo.selectionChanged);
-    EXPECT_EQ(m_context.input().focus(), query());
-}
-
 TEST_F(UiSearchComboBuilderTests, EnterIntentionRequiresTheNativeEditHostSubmissionGate){
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));

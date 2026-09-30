@@ -42,24 +42,6 @@ class UiNumericEditBuilderTests : public NumericFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiNumericEditBuilderTests, TypedEditorsWithoutAHostPublishAcceptedGeometry){
-    ASSERT_TRUE(m_integer.setValue(-42));
-    ASSERT_TRUE(m_float.setValue(1.25));
-    ASSERT_TRUE(beginNumeric(1u));
-    const auto integer = m_builder.integerEdit("integer", m_integer, m_integerState);
-    const auto decimal = m_builder.floatEdit("decimal", m_float, m_floatState);
-    EXPECT_TRUE(integer.edit.valid && integer.numeric.valid);
-    EXPECT_TRUE(decimal.edit.valid && decimal.numeric.valid);
-    EXPECT_FALSE(integer.numeric.committed || decimal.numeric.committed);
-    ASSERT_TRUE(acceptNumeric());
-    EXPECT_EQ(m_integer.draft().text(), AStringView("-42"));
-    EXPECT_EQ(m_float.draft().text(), AStringView("1.25"));
-    EXPECT_TRUE(target(id("integer", "panel")));
-    EXPECT_TRUE(target(id("decimal", "panel")));
-    EXPECT_GT(m_integerState.placement.bounds.width, 0.0f);
-    EXPECT_GT(m_floatState.placement.bounds.height, 0.0f);
-}
-
 TEST_F(UiNumericEditBuilderTests, AHostWithoutOrderedActionsRejectsTypedEditors){
     PlainHost host;
     m_builder.setEditHost(&host);

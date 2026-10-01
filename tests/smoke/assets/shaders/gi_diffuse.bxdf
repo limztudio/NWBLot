@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 // GI comparison material: diffuse only, so black occluders stay black and white receivers reveal colored bounce.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normalVector = nwbSafeNormalize(surface.normal, float3(0.0, 1.0, 0.0));
@@ -26,7 +25,5 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

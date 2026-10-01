@@ -40,7 +40,7 @@ void TestbedUiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
     texture.width = { LayoutSizePolicy::Stretch, 1.0f };
     texture.height = { LayoutSizePolicy::Fixed, 48.0f };
     valid = ui.image("engine_texture", m_source, texture) && valid;
-    valid = ui.label("hint", "Owned texture, sprite and nine-slice") && valid;
+    valid = ui.label("hint", "Texture, sprite and nine-slice") && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom image declaration failed"));

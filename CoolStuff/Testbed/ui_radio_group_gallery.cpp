@@ -50,7 +50,7 @@ void TestbedUiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const
         return;
     bool valid = ui.label("title", "Radio choices");
     const RadioGroupResult result = ui.radioGroup("quality", m_source, m_state);
-    valid = ui.label("hint", "Arrows select; Enter / Space activate") && result.valid && valid;
+    valid = ui.label("hint", "Arrows select; Enter / Space sets") && result.valid && valid;
     valid = ui.endPanel() && valid;
     if(result.activated)
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom radio choice key={}"), m_state.selectedKey());

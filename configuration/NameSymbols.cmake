@@ -51,7 +51,7 @@ function(nwb_add_name_symbol_target)
     # GUI captures must exit gracefully to write sidecars; --expect-sidecar reports missing output.
     add_custom_target(nwb_namesym
         COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_COMMAND=${CMAKE_COMMAND}"
-            "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
+            "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/launcher/generate_name_symbols.py"
             --source-dir "${PROJECT_SOURCE_DIR}"
             --configure-preset "${_namesym_configure_preset}"
             --build-preset "${_namesym_build_preset}"

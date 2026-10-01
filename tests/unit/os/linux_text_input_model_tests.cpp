@@ -4,6 +4,7 @@
 
 #include <core/os/linux/x11/text_input_preedit.h>
 #include <core/os/linux/x11/text_input_dispatch.h>
+#include <core/os/linux/x11/text_input_key_history.h>
 #include <core/os/linux/wayland/text_input_state.h>
 #include <core/os/text_input_text.h>
 #include <tests/common/test_context.h>
@@ -47,6 +48,88 @@ TEST(X11TextInputDispatchFence, RetirementWithoutNativeStackCanReleaseImmediatel
     fence.released();
     fence.enter();
     EXPECT_FALSE(fence.leave());
+}
+
+TEST(X11FilteredKeyHistory, ForwardedPressAndReleaseCannotReplayAfterThePhysicalRelease){
+    X11FilteredKeyHistory history;
+    history.recordFiltered(23u, false, 100u, 50u, 1000u);
+    history.recordFiltered(23u, true, 120u, 55u, 1020u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1030u));
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, true, 120u, 55u, false, 1030u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 140u, 60u, false, 1040u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, true, 150u, 65u, false, 1050u));
+}
+
+TEST(X11FilteredKeyHistory, NewRepeatsAdvanceWithoutRevivingOlderForwardedPresses){
+    X11FilteredKeyHistory history;
+    history.recordFiltered(23u, false, 100u, 50u, 1000u);
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 110u, 50u, false, 1010u));
+    history.recordFiltered(23u, false, 110u, 50u, 1010u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1020u));
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 110u, 50u, false, 1020u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 110u, 51u, false, 1020u));
+    EXPECT_FALSE(history.isForwardedDuplicate(24u, false, 110u, 50u, false, 1020u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, true, 110u, 50u, false, 1020u));
+}
+
+TEST(X11FilteredKeyHistory, CoalescedAutorepeatReleaseCannotClearTheLaterRepeatedPress){
+    X11FilteredKeyHistory history;
+    history.recordFiltered(23u, false, 100u, 50u, 1000u);
+    // Legacy X11 autorepeat coalesces this release with the adjacent press without releasing the held key.
+    history.recordFiltered(23u, true, 120u, 55u, 1020u);
+    history.recordFiltered(23u, false, 120u, 55u, 1020u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, true, 120u, 55u, false, 1030u));
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 120u, 55u, false, 1030u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, true, 140u, 60u, false, 1040u));
+}
+
+TEST(X11FilteredKeyHistory, ZeroTimeSyntheticCyclesStayDistinctFromTheirForwardedCopies){
+    X11FilteredKeyHistory history;
+    for(u32 cycle = 0u; cycle < 3u; ++cycle){
+        EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 0u, 50u, true, 1000u + cycle));
+        history.recordFiltered(23u, false, 0u, 50u, 1000u + cycle);
+        EXPECT_FALSE(history.isForwardedDuplicate(23u, true, 0u, 50u, true, 1000u + cycle));
+        history.recordFiltered(23u, true, 0u, 50u, 1000u + cycle);
+        EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 0u, 50u, false, 1000u + cycle));
+        EXPECT_TRUE(history.isForwardedDuplicate(23u, true, 0u, 50u, false, 1000u + cycle));
+    }
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 0u, 51u, false, 1010u));
+}
+
+TEST(X11FilteredKeyHistory, TimedAndZeroTimeKeysDoNotOverwriteEachOthersHistory){
+    X11FilteredKeyHistory history;
+    history.recordFiltered(23u, false, 400u, 50u, 1000u);
+    history.recordFiltered(23u, false, 0u, 60u, 1010u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 400u, 50u, false, 1020u));
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 0u, 60u, false, 1020u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 401u, 50u, false, 1020u));
+    history.recordFiltered(0u, false, 0u, 60u, 1010u);
+    history.recordFiltered(256u, false, 0u, 60u, 1010u);
+    EXPECT_FALSE(history.isForwardedDuplicate(0u, false, 0u, 60u, false, 1020u));
+    EXPECT_FALSE(history.isForwardedDuplicate(256u, false, 0u, 60u, false, 1020u));
+}
+
+TEST(X11FilteredKeyHistory, TimestampAndSerialWrapAdmitNewInputAndRejectOldCopies){
+    X11FilteredKeyHistory history;
+    history.recordFiltered(23u, false, 0xfffffff0u, 50u, 1000u);
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 5u, 50u, false, 1020u));
+    history.recordFiltered(23u, false, 5u, 50u, 1020u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 0xfffffff0u, 50u, false, 1030u));
+    history.recordFiltered(23u, true, 0u, 0xfffffff0u, 1000u);
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, true, 0u, 5u, false, 1020u));
+    history.recordFiltered(23u, true, 0u, 5u, 1020u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, true, 0u, 0xfffffff0u, false, 1030u));
+}
+
+TEST(X11FilteredKeyHistory, LongInactivityAndWindowResetCannotFenceFreshKeys){
+    X11FilteredKeyHistory history;
+    constexpr u64 s_HalfRange = 1ull << 31u;
+    history.recordFiltered(23u, false, 100u, 50u, 1000u);
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1000u + s_HalfRange));
+    history.recordFiltered(23u, false, 50u, 25u, 1000u + s_HalfRange);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 50u, 25u, false, 1001u + s_HalfRange));
+    history.reset();
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 50u, 25u, false, 1002u + s_HalfRange));
 }
 
 TEST(X11PreeditBuffer, CharacterReplacementProducesUtf8ByteCaret){

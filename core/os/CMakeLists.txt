@@ -14,6 +14,8 @@ target_sources(nwb_os PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_input_text.h"
     "${CMAKE_CURRENT_LIST_DIR}/text_input_text.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_dispatch.h"
+    "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_key_history.h"
+    "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_key_history.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_preedit.h"
     "${CMAKE_CURRENT_LIST_DIR}/linux/x11/text_input_preedit_buffer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/linux/wayland/text_input_state.h"

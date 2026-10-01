@@ -135,7 +135,7 @@ private:
 
     struct ScopeWait{
         CpuTaskScope& m_scope;
-        u64 m_identity = 0u;
+        u64 m_scopeIdentity = 0u;
         u64 m_publicationGeneration = 0u;
         TaskHandle m_unrelatedAnchors[s_QueueCount]{};
     };
@@ -288,8 +288,8 @@ private:
     u32 m_busyPerformance = 0u;
     u32 m_busyEfficiency = 0u;
     u64 m_searchGeneration = 0u;
-    u64 m_nextScopeWaitIdentity = 0u;
-    u64 m_scopeSearchWaitIdentity = 0u;
+    u64 m_nextScopeIdentity = 0u;
+    u64 m_scopeSearchIdentity = 0u;
     u64 m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
     u64 m_scopePublicationGeneration = 1u;
     u64 m_dispatchCount = 0u;
@@ -299,6 +299,7 @@ private:
     usize m_outstanding = 0u;
     bool m_aborting = false;
     u32 m_joinWaiters = 0u;
+    u32 m_handleJoinWaiters = 0u;
     CpuTaskSchedulerStatistics m_statistics;
     Atomic<bool> m_profileEnabled{ false };
     u64 m_profileEpoch = 0u;
@@ -382,6 +383,8 @@ private:
     CpuTaskScheduler& m_scheduler;
     const CpuTaskProfileLabel m_profileLabel;
     Atomic<usize> m_pending{ 0u };
+    // Assigned under the scheduler mutex; simultaneous joins share contribution proofs.
+    u64 m_searchIdentity = 0u;
     bool m_canceled = false;
     bool m_allowCallerWork = false;
 };

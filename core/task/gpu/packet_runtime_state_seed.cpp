@@ -309,10 +309,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         return false;
     scratch.stateMergeScratch.reset();
 
-    const auto appendInitialStateSubset = [&](const bool allowEmpty){
-        if(scratch.stateSubsetScratch.empty())
-            return allowEmpty;
-
+    const auto appendInitialStateSubset = [&]{
         if(!scratch.initialStateSeed.valid())
             return scratch.initialStateSeed.copyFrom(scratch.stateSubsetScratch);
 
@@ -327,50 +324,101 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         return scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch);
     };
 
+    const auto buildSeedSubset = [&](
+        const GpuPacketStateSeed& seed,
+        const CommandListResourceStateHandoff& sourceStates,
+        CommandListResourceStateHandoff& subset){
+        subset.reset();
+        if(Texture* const texture = declarationAccess.textureForResource(seed.resource)){
+            if(!subset.buildTextureRangeSubset(sourceStates, texture, seed.range.textureSubresources))
+                return false;
+        }
+        else if(Buffer* const buffer = declarationAccess.bufferForResource(seed.resource)){
+            if(!subset.buildBufferRangeSubset(sourceStates, buffer, seed.range.bufferRange))
+                return false;
+        }
+        else if(RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(seed.resource)){
+            Buffer* const backingBuffer = accelStruct->getBackingBuffer();
+            if(!backingBuffer)
+                return false;
+            Buffer* const buffers[] = { backingBuffer };
+            if(!subset.buildResourceSubset(sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
+                return false;
+        }
+        else
+            return false;
+        // A missing declared producer state must not fall back to the resource creation state.
+        return !subset.empty();
+    };
+
+    // Consecutive subsets from one immutable source agree on overlapping state. Preserve source order between batches.
+    // The scratch vector owns temporary snapshots; fan-in copies their contents before this local storage is released.
+    constexpr usize s_MaxSeedSubsetBatch = 8u;
+    Vector<CommandListResourceStateHandoff, Alloc::ScratchArena> seedSubsetBatch(stateFanInScratchArena);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
         if(!compiledTaskView.valid())
             return false;
         const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
         const GpuPacketStateSeed* const stateSeeds = compiledTaskView.prologueStateSeeds;
-
-        for(u32 seedIndex = 0u; seedIndex < compiledTask.prologueStateSeedCount; ++seedIndex){
-            const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
-            const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(
-                seed.sourcePacket,
-                artifactAccess
-            );
+        for(u32 seedIndex = 0u; seedIndex < compiledTask.prologueStateSeedCount;){
+            const GpuPacketStateSeed& firstSeed = stateSeeds[seedIndex];
+            const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(firstSeed.sourcePacket, artifactAccess);
             if(!sourceStates || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration()))
                 return false;
+            usize batchCount = 1u;
+            while(
+                batchCount < s_MaxSeedSubsetBatch
+                && batchCount < compiledTask.prologueStateSeedCount - seedIndex
+                && stateSeeds[seedIndex + batchCount].sourcePacket == firstSeed.sourcePacket
+            )
+                ++batchCount;
 
-            // An empty subset means the producer thunk never tracked a resource it declared as a state source.  Do
-            // not silently fall back to the descriptor's creation state: that would reintroduce the stale-state bug
-            // this graph-owned seed is meant to eliminate.
-            scratch.stateSubsetScratch.reset();
-            if(Texture* const texture = declarationAccess.textureForResource(seed.resource)){
-                if(!scratch.stateSubsetScratch.buildTextureRangeSubset(
-                    *sourceStates,
-                    texture,
-                    seed.range.textureSubresources
-                ))
-                    return false;
+            // Preserve prefix failures when a partial merge would split an existing pending buffer release.
+            if(
+                batchCount == 1u
+                || scratch.initialStateSeed.hasPendingBufferReleases()
+                || sourceStates->hasPendingBufferReleases()
+            ){
+                for(usize offset = 0u; offset < batchCount; ++offset){
+                    if(
+                        !buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, scratch.stateSubsetScratch)
+                        || !appendInitialStateSubset()
+                    )
+                        return false;
+                }
+                seedIndex += static_cast<u32>(batchCount);
+                continue;
             }
-            else if(Buffer* const buffer = declarationAccess.bufferForResource(seed.resource)){
-                if(!scratch.stateSubsetScratch.buildBufferRangeSubset(*sourceStates, buffer, seed.range.bufferRange))
+
+            if(seedSubsetBatch.capacity() == 0u)
+                seedSubsetBatch.reserve(s_MaxSeedSubsetBatch);
+            while(seedSubsetBatch.size() < batchCount)
+                seedSubsetBatch.emplace_back(m_arena);
+            Array<const CommandListResourceStateHandoff*, s_MaxSeedSubsetBatch> branches = {};
+            for(usize offset = 0u; offset < batchCount; ++offset){
+                CommandListResourceStateHandoff& subset = seedSubsetBatch[offset];
+                // Every original range still passes its own exact selection and nonempty validation.
+                if(!buildSeedSubset(stateSeeds[seedIndex + offset], *sourceStates, subset))
                     return false;
+                branches[offset] = &subset;
             }
-            else if(RayTracingAccelStruct* const accelStruct = declarationAccess.accelStructForResource(seed.resource)){
-                Buffer* const backingBuffer = accelStruct->getBackingBuffer();
-                if(!backingBuffer)
+            usize firstBranch = 0u;
+            if(!scratch.initialStateSeed.valid()){
+                if(!scratch.initialStateSeed.copyFrom(*branches[0u]))
                     return false;
-                Buffer* const buffers[] = { backingBuffer };
-                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u, stateFanInScratchArena))
-                    return false;
+                firstBranch = 1u;
             }
-            else
+            if(!scratch.stateMergeScratch.buildFanIn(
+                scratch.initialStateSeed,
+                branches.data() + firstBranch,
+                batchCount - firstBranch,
+                stateFanInScratchArena
+            ))
                 return false;
-            if(!appendInitialStateSubset(false))
+            if(!scratch.initialStateSeed.copyFrom(scratch.stateMergeScratch))
                 return false;
+            seedIndex += static_cast<u32>(batchCount);
         }
     }
 

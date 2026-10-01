@@ -34,7 +34,11 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
             continue;
         UniqueLock lock(m_mutex);
         ++m_joinWaiters;
-        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+        ++m_handleJoinWaiters;
+        ScopeExit unregisterWaiter([this]()noexcept{
+            --m_handleJoinWaiters;
+            --m_joinWaiters;
+        });
 
         m_changed.wait(lock, [this, handle](){
             return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
@@ -120,9 +124,12 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
     ScopeWait wait{ scope };
     {
         ScopedLock lock(m_mutex);
-        wait.m_identity = ++m_nextScopeWaitIdentity;
-        if(wait.m_identity == 0u)
-            TerminateInvariant();
+        if(scope.m_searchIdentity == 0u){
+            scope.m_searchIdentity = ++m_nextScopeIdentity;
+            if(scope.m_searchIdentity == 0u)
+                TerminateInvariant();
+        }
+        wait.m_scopeIdentity = scope.m_searchIdentity;
         validateWaitLocked({}, &scope);
     }
     while(scope.m_pending.load(MemoryOrder::acquire) != 0u){

@@ -33,6 +33,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_import_index_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_import_scaling_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_ownership_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_state_seed_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_lifecycle_api_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_lifecycle_test_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_ownership_statistics_tests.cpp"

@@ -253,8 +253,18 @@ u64 GpuTaskQueueScoringData::independentQueueCost(
     const usize queueOffset = (queueIndex + 1u) * GpuTaskCostHint::kCount * m_costWordsPerGroup;
     for(usize wordIndex = firstWord; wordIndex < lastWord; ++wordIndex){
         u64 related = 0u;
-        for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex)
-            related |= reachability.m_words[members.get()[memberIndex].task.index * m_costWordsPerGroup + wordIndex];
+        if(reachability.m_rowOffsets.empty()){
+            for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex)
+                related |= reachability.m_words[members.get()[memberIndex].task.index * m_costWordsPerGroup + wordIndex];
+        }
+        else{
+            for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
+                const usize taskIndex = members.get()[memberIndex].task.index;
+                const auto& range = reachability.m_relatedWordRanges[taskIndex];
+                if(wordIndex >= range.m_begin && wordIndex < range.m_end)
+                    related |= reachability.m_words[reachability.m_rowOffsets[taskIndex] + wordIndex - range.m_begin];
+            }
+        }
         if(related == 0u)
             continue;
         for(usize costGroup = 0u; costGroup < GpuTaskCostHint::kCount; ++costGroup){

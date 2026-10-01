@@ -559,6 +559,18 @@ bool CommandListResourceStateHandoff::exchangeSnapshot(CommandListResourceStateH
     return true;
 }
 
+bool CommandListResourceStateHandoff::hasPendingBufferReleases()const noexcept{
+    for(const BufferState& state : m_bufferStates){
+        if(state.releaseDestinationQueue.valid())
+            return true;
+    }
+    for(const BufferState& state : m_permanentBufferStates){
+        if(state.releaseDestinationQueue.valid())
+            return true;
+    }
+    return false;
+}
+
 bool CommandListResourceStateHandoff::empty()const noexcept{
     return m_textureStates.empty()
         && m_bufferStates.empty()

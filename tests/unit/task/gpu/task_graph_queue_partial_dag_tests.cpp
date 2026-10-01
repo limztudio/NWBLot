@@ -36,32 +36,72 @@ namespace Shape{
     enum Enum : u8{
         OneEdge,
         DisjointPairs,
+        ReversedPairs,
+        Chains32,
+        InterleavedChains32,
         ConnectedBranches,
         DenseLayers,
+        TwoDenseComponents,
+        FanOut,
+        FanIn,
         MergedPairs,
+        Independent,
+        TotalOrder,
     };
 };
 
 
-void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Shape::Enum shape){
+void DeclareGraph(
+    Graphics::GpuTaskGraph& graph,
+    const usize taskCount,
+    const Shape::Enum shape,
+    Graphics::Alloc::ScratchArena& scratch){
+    constexpr usize s_LayerSize = 16u;
+    constexpr usize s_ChainSize = 32u;
+    const bool interleaved = shape == Shape::InterleavedChains32;
+    if(interleaved)
+        ASSERT_EQ(taskCount % s_ChainSize, 0u);
+    u64 generation = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        generation = view.generation();
+    }
+    Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> dependencies(scratch);
+    dependencies.reserve(taskCount);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-        Graphics::GpuTaskId dependencies[16u] = {};
-        usize dependencyCount = 0u;
+        const usize chainCount = taskCount / s_ChainSize;
+        const usize logicalIndex = interleaved ? taskIndex % chainCount * s_ChainSize + taskIndex / chainCount : taskIndex;
+        dependencies.clear();
         const auto addDependency = [&](const usize index){
-            const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
-            dependencies[dependencyCount++] = view.taskAt(index).id;
+            const usize declarationIndex = interleaved ? index % s_ChainSize * chainCount + index / s_ChainSize : index;
+            dependencies.push_back({ .generation = generation, .index = static_cast<u32>(declarationIndex) });
         };
-        if(
+        if(shape == Shape::ReversedPairs && taskIndex % 2u != 0u && taskIndex + 1u < taskCount)
+            addDependency(taskIndex + 1u);
+        else if(
             (shape == Shape::OneEdge && taskIndex == 1u)
             || ((shape == Shape::DisjointPairs || shape == Shape::MergedPairs) && taskIndex % 2u != 0u)
+            || (shape == Shape::TotalOrder && taskIndex != 0u)
         )
             addDependency(taskIndex - 1u);
+        else if((shape == Shape::Chains32 || interleaved) && logicalIndex % s_ChainSize != 0u)
+            addDependency(logicalIndex - 1u);
         else if(shape == Shape::ConnectedBranches && taskIndex != 0u)
             addDependency((taskIndex - 1u) / 2u);
-        else if(shape == Shape::DenseLayers && taskIndex >= LengthOf(dependencies)){
-            const usize previousLayer = (taskIndex / LengthOf(dependencies) - 1u) * LengthOf(dependencies);
-            for(usize offset = 0u; offset < LengthOf(dependencies); ++offset)
-                addDependency(previousLayer + offset);
+        else if(shape == Shape::FanOut && taskIndex != 0u)
+            addDependency(0u);
+        else if(shape == Shape::FanIn && taskIndex + 1u == taskCount){
+            for(usize source = 0u; source < taskIndex; ++source)
+                addDependency(source);
+        }
+        else if(shape == Shape::DenseLayers || shape == Shape::TwoDenseComponents){
+            const usize componentSize = shape == Shape::TwoDenseComponents ? taskCount / 2u : taskCount;
+            const usize local = taskIndex % componentSize;
+            if(local >= s_LayerSize){
+                const usize previousLayer = taskIndex - local + (local / s_LayerSize - 1u) * s_LayerSize;
+                for(usize offset = 0u; offset < s_LayerSize; ++offset)
+                    addDependency(previousLayer + offset);
+            }
         }
         Graphics::GpuTaskSchedulingHint scheduling;
         scheduling.cost = static_cast<Graphics::GpuTaskCostHint::Enum>(taskIndex % Graphics::GpuTaskCostHint::kCount);
@@ -75,20 +115,22 @@ void DeclareGraph(Graphics::GpuTaskGraph& graph, const usize taskCount, const Sh
             graphicsTask ? GraphicsCommands() : ComputeCommands(),
             scheduling,
             {},
-            dependencies,
-            dependencyCount
+            dependencies.data(),
+            dependencies.size()
         );
         ASSERT_TRUE(task.valid());
     }
 }
 
 
+template<usize taskCount = 130u>
 void CheckIndexedScores(const Shape::Enum shape){
-    constexpr usize s_TaskCount = 130u;
+    constexpr usize s_TaskCount = taskCount;
     SCOPED_TRACE(shape);
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    DeclareGraph(graph, s_TaskCount, shape);
+    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    DeclareGraph(graph, s_TaskCount, shape, declarationScratch);
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     Graphics::GpuPhysicalQueueInfo auxiliary = GraphicsQueue(311u);
@@ -114,7 +156,7 @@ void CheckIndexedScores(const Shape::Enum shape){
     ASSERT_TRUE(BuildQueuePlacementGroups(view, analysis, topology, {}, groups, diagnostic, scratch));
 
     // Scalar Floyd-Warshall is independent of packed rows, word bounds, and queue-cost membership.
-    bool reachable[s_TaskCount][s_TaskCount] = {};
+    Vector<Array<bool, s_TaskCount>, Graphics::Alloc::ScratchArena> reachable(s_TaskCount, scratch);
     for(const auto& edge : analysis.schedulingEdges())
         reachable[edge.producer.index][edge.consumer.index] = true;
     for(usize intermediate = 0u; intermediate < s_TaskCount; ++intermediate)
@@ -186,7 +228,7 @@ void CheckIndexedScores(const Shape::Enum shape){
         }
     };
     expectScores();
-    // Change all three queue masks incrementally, including tasks in each of the three bitset words.
+    // Change all three queue masks incrementally, including tasks across bitset words.
     for(usize row = 0u; row < assignments.size(); row += 5u){
         auto& assignment = assignments[row];
         const auto destination = queues[(row + 1u) % LengthOf(queues)].id;
@@ -215,7 +257,8 @@ void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
 void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    DeclareGraph(graph, taskCount, shape);
+    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    DeclareGraph(graph, taskCount, shape, declarationScratch);
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
@@ -259,10 +302,118 @@ TEST(GpuTaskQueueScoring, PartialDagMultiwordScoresPreserveIndependentCostsAfter
         CheckIndexedScores(shape);
 }
 
+TEST(GpuTaskQueueScoring, CompactedPartialDagScoresPreserveMixedCostsAcrossMovesAndRebuilds){
+    constexpr Shape::Enum s_Shapes[] = {
+        Shape::OneEdge, Shape::DisjointPairs, Shape::ReversedPairs, Shape::DenseLayers, Shape::MergedPairs,
+    };
+    for(const Shape::Enum shape : s_Shapes)
+        CheckIndexedScores<513u>(shape);
+}
+
+TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
+    struct StorageCase{
+        usize m_taskCount;
+        Shape::Enum m_shape;
+    };
+    constexpr StorageCase s_Cases[] = {
+        { 16u, Shape::DisjointPairs }, { 64u, Shape::DisjointPairs },
+        { 130u, Shape::DisjointPairs }, { 256u, Shape::DisjointPairs },
+        { 382u, Shape::FanOut }, { 382u, Shape::FanIn }, { 513u, Shape::ReversedPairs },
+        { 4032u, Shape::DenseLayers }, { 4033u, Shape::DenseLayers }, { 4097u, Shape::DenseLayers },
+    };
+    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
+    constexpr usize s_BoundsBudgetDivisor = 32u;
+    for(const auto& testCase : s_Cases){
+        SCOPED_TRACE(testCase.m_taskCount);
+        SCOPED_TRACE(testCase.m_shape);
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+        DeclareGraph(graph, testCase.m_taskCount, testCase.m_shape, declarationScratch);
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+        GpuTaskSchedulingReachability reachability(scratch);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
+        const usize wordsPerRow = (testCase.m_taskCount + s_BitsPerWord - 1u) / s_BitsPerWord;
+        const usize matrixBytes = testCase.m_taskCount * wordsPerRow * sizeof(u64);
+        const usize denseBytes = matrixBytes + testCase.m_taskCount * (sizeof(u32) + 2u * sizeof(usize));
+        if(testCase.m_shape == Shape::ReversedPairs){
+            // A partial last tile and backward cross-word edges must not allocate the full square matrix.
+            EXPECT_LT(scratch.memoryStats().peakUsedBytes, matrixBytes);
+            EXPECT_TRUE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
+            EXPECT_TRUE(reachability.reaches(view.taskAt(64u).id, view.taskAt(63u).id));
+            EXPECT_FALSE(reachability.reaches(view.taskAt(63u).id, view.taskAt(64u).id));
+        }
+        else{
+            const usize boundsBudget = wordsPerRow >= s_BitsPerWord ? matrixBytes / s_BoundsBudgetDivisor : 0u;
+            EXPECT_LE(scratch.memoryStats().peakUsedBytes, denseBytes + boundsBudget);
+        }
+    }
+}
+
+TEST(GpuTaskQueueScoring, RebuildingRelationsClearsCompactedDenseOrderedAndFailedState){
+    constexpr usize s_TaskCount = 513u;
+    constexpr usize s_LayerSize = 16u;
+    constexpr Shape::Enum s_Shapes[] = {
+        Shape::ReversedPairs, Shape::DenseLayers, Shape::OneEdge,
+        Shape::Independent, Shape::TotalOrder, Shape::ReversedPairs,
+    };
+    TestArena testArena;
+    Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
+    GpuTaskSchedulingReachability reachability(scratch);
+    Graphics::GpuTaskId previousTask;
+    for(const Shape::Enum shape : s_Shapes){
+        SCOPED_TRACE(shape);
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+        DeclareGraph(graph, s_TaskCount, shape, declarationScratch);
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
+        const auto expectedReach = [&](const usize source, const usize destination){
+            if(source == destination)
+                return false;
+            switch(shape){
+            case Shape::ReversedPairs: return source != 0u && source % 2u == 0u && destination + 1u == source;
+            case Shape::DenseLayers: return source / s_LayerSize < destination / s_LayerSize;
+            case Shape::OneEdge: return source == 0u && destination == 1u;
+            case Shape::TotalOrder: return source < destination;
+            default: return false;
+            }
+        };
+        for(usize source = 0u; source < s_TaskCount; ++source){
+            for(usize destination = 0u; destination < s_TaskCount; ++destination){
+                const auto from = view.taskAt(source).id;
+                const auto to = view.taskAt(destination).id;
+                EXPECT_EQ(reachability.reaches(from, to), expectedReach(source, destination));
+                EXPECT_EQ(
+                    reachability.transitivelyIndependent(from, to),
+                    source != destination && !expectedReach(source, destination) && !expectedReach(destination, source)
+                );
+            }
+        }
+        EXPECT_FALSE(reachability.reaches(previousTask, view.taskAt(0u).id));
+        EXPECT_FALSE(reachability.transitivelyIndependent(previousTask, view.taskAt(0u).id));
+        previousTask = view.taskAt(0u).id;
+    }
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    DeclareGraph(graph, s_TaskCount, Shape::ReversedPairs, declarationScratch);
+    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+    Graphics::GpuTaskGraphAnalysis invalidAnalysis(testArena.arena);
+    EXPECT_FALSE(BuildGpuTaskSchedulingReachability(view, invalidAnalysis, reachability));
+    EXPECT_FALSE(reachability.reaches(view.taskAt(512u).id, view.taskAt(511u).id));
+    EXPECT_FALSE(reachability.transitivelyIndependent(view.taskAt(0u).id, view.taskAt(1u).id));
+}
+
 TEST(GpuTaskQueueScoring, PartialAssignmentsExcludeRelatedTasksWithoutRequiringOwnAssignment){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    DeclareGraph(graph, 4u, Shape::OneEdge);
+    Graphics::Alloc::ScratchArena declarationScratch(s_TaskGraphScratchArena);
+    DeclareGraph(graph, 4u, Shape::OneEdge, declarationScratch);
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -437,6 +588,42 @@ TEST(GpuTaskQueueScoring, DISABLED_MergedPairsBenchmark4096Tasks){
     BenchmarkPartialDag(4096u, Shape::MergedPairs);
 }
 
+
+TEST(GpuTaskQueueScoring, DISABLED_DisjointPairsBenchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::DisjointPairs);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_ReversedPairsBenchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::ReversedPairs);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_Chains32Benchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::Chains32);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_InterleavedChains32Benchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::InterleavedChains32);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_TwoDenseComponentsBenchmark4096Tasks){
+    BenchmarkPartialDag(4096u, Shape::TwoDenseComponents);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_FanOutBenchmark1024Tasks){
+    BenchmarkPartialDag(1024u, Shape::FanOut);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_FanOutBenchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::FanOut);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_FanInBenchmark1024Tasks){
+    BenchmarkPartialDag(1024u, Shape::FanIn);
+}
+
+TEST(GpuTaskQueueScoring, DISABLED_FanInBenchmark16384Tasks){
+    BenchmarkPartialDag(16384u, Shape::FanIn);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

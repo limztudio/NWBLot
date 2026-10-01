@@ -55,8 +55,8 @@ void CpuTaskScheduler::invalidateScopeSearchLocked(const bool publication)noexce
 bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
     if(m_nodes[index].scope == &wait.m_scope)
         return true;
-    if(m_scopeSearchWaitIdentity != wait.m_identity){
-        m_scopeSearchWaitIdentity = wait.m_identity;
+    if(m_scopeSearchIdentity != wait.m_scopeIdentity){
+        m_scopeSearchIdentity = wait.m_scopeIdentity;
         invalidateScopeSearchLocked(false);
     }
     // Downstream completion still waits for this live prerequisite, so retirement cannot invalidate a proven path.
@@ -65,6 +65,11 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
         return true;
     if(m_scopeContributionVisits[index] == m_scopeSearchGeneration)
         return false;
+    const TaskNode& origin = m_nodes[index];
+    if(origin.dependents.empty() && !resolveLocked(origin.parent)){
+        m_scopeContributionVisits[index] = m_scopeSearchGeneration;
+        return false;
+    }
     beginLockedSearch();
     m_searchStack.push_back(index);
     m_searchVisits[index] = m_searchGeneration;

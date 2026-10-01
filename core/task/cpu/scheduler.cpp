@@ -558,14 +558,17 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
         {
             ScopedLock lock(m_mutex);
             node->canceled = node->canceled || m_aborting || (node->scope && node->scope->m_canceled);
+            bool madeReady = false;
             for(const TaskHandle dependentHandle : node->dependents){
                 TaskNode* dependent = resolveLocked(dependentHandle);
                 if(!dependent)
                     continue;
                 dependent->canceled = dependent->canceled || node->canceled;
                 NWB_ASSERT(dependent->dependencies > 0u);
-                if(--dependent->dependencies == 0u)
+                if(--dependent->dependencies == 0u){
                     enqueueLocked(dependentHandle.index);
+                    madeReady = true;
+                }
             }
             if(TaskNode* parent = resolveLocked(node->parent)){
                 parent->canceled = parent->canceled || node->canceled;
@@ -576,8 +579,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                     parentToRetire = parent;
                 }
             }
-            if(node->scope)
-                node->scope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel);
+            const bool scopeCompleted = node->scope && node->scope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel) == 1u;
             if(node->canceled){
                 // Generations retire in increasing order. Capacity was reserved before publishing this task.
                 if(node->latestCanceledGeneration != 0u)
@@ -599,7 +601,10 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                 m_freeNode = handle.index;
             }
             wakeMask = workerWakeMaskLocked();
-            wakeJoiners = m_joinWaiters != 0u;
+            // Ready prerequisites and completed joins can change a registered waiter's predicate.
+            wakeJoiners = m_joinWaiters != 0u
+                && (madeReady || scopeCompleted || m_outstanding == 0u || m_handleJoinWaiters != 0u)
+            ;
         }
         notifyProgress(wakeMask, wakeJoiners);
         handle = parentHandle;

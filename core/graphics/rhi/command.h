@@ -347,6 +347,7 @@ public:
     [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
     // Exchanges complete snapshot storage without allocating. Both snapshots must be backed by the same arena so each vector remains paired with the allocator that owns its storage after the exchange.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;
+    [[nodiscard]] bool hasPendingBufferReleases()const noexcept;
     [[nodiscard]] bool empty()const noexcept;
 
 

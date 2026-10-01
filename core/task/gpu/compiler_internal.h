@@ -200,6 +200,8 @@ private:
     Vector<u64, Alloc::ScratchArena> m_words;
     Vector<u32, Alloc::ScratchArena> m_topologicalRanks;
     Vector<WordRange, Alloc::ScratchArena> m_relatedWordRanges;
+    // Empty for dense rows; compact rows retain global bit positions within their exact word spans.
+    Vector<usize, Alloc::ScratchArena> m_rowOffsets;
     u64 m_graphGeneration = 0u;
     usize m_taskCount = 0u;
     usize m_wordsPerRow = 0u;

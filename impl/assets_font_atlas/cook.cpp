@@ -24,7 +24,10 @@ bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("FontAtlasAssetCodec::serialize"))))
         return false;
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
-    return atlas.validatePayload() && SerializeFontAtlasPayload(atlas.payload(), outBinary);
+    return
+        atlas.checkVirtualPath(MakeNotNull(NWB_TEXT("FontAtlas::validatePayload")))
+        && SerializeFontAtlasPayload(atlas.payload(), outBinary)
+    ;
 }
 
 

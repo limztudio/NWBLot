@@ -215,14 +215,12 @@ static void RestoreBackups(const Path* const outputs[3u], const Path* const back
 
 
 bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
-    if(!Impl::ValidateFontAtlasPayload(payload))
-        return false;
     Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
     Core::Assets::AssetBytes fontBinary(arena);
     Core::Assets::AssetBytes atlasBinary(arena);
     MetadataString metadata(arena);
-    if(!BuildPreparedFont(options, payload, fontBinary)
-        || !Impl::SerializeFontAtlasPayload(payload, atlasBinary)
+    if(!Impl::SerializeFontAtlasPayload(payload, atlasBinary)
+        || !BuildPreparedFont(options, payload, fontBinary)
         || !BuildFontBundleMetadata(metadata))
         return false;
 

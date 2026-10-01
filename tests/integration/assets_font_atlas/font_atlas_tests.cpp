@@ -191,6 +191,30 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     EXPECT_FALSE(atlas.loadBinary(trailing));
 }
 
+TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
+    using namespace __hidden_font_atlas_tests;
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    AtlasTestArena testArena;
+    FontAtlasAssetCodec codec;
+    Core::Assets::AssetBytes binary(testArena.arena);
+    binary.assign(3u, 42u);
+    const Core::Assets::AssetBytes expected(binary);
+    FontAtlas unnamed(testArena.arena);
+    unnamed.setPayload(MakePayload(testArena));
+    EXPECT_FALSE(codec.serialize(unnamed, binary));
+    EXPECT_EQ(binary, expected);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("FontAtlas::validatePayload failed: virtual path is empty")));
+
+    FontAtlas corrupt(testArena.arena, Name("project/fonts/body_atlas"));
+    FontAtlasPayload payload = MakePayload(testArena);
+    payload.groups[0u].pixels[0u] ^= 1u;
+    corrupt.setPayload(Move(payload));
+    EXPECT_FALSE(codec.serialize(corrupt, binary));
+    EXPECT_EQ(binary, expected);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("RGBA content hash mismatch")));
+}
+
 TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBeforeSerializationPublication){
     using namespace __hidden_font_atlas_tests;
     CapturingLogger logger;

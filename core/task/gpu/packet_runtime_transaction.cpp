@@ -62,10 +62,7 @@ GpuGraphSubmissionTransaction::SubmissionWriterReservation::~SubmissionWriterRes
 }
 
 
-bool GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(
-    const GpuGraphSubmissionTransaction& transaction,
-    const bool tryOnly
-)noexcept{
+bool GpuGraphSubmissionTransaction::SubmissionWriterReservation::acquire(const GpuGraphSubmissionTransaction& transaction, const bool tryOnly)noexcept{
     if(m_transaction)
         TerminateInvariant();
     if(tryOnly){
@@ -129,6 +126,9 @@ inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
@@ -326,7 +326,6 @@ public:
 private:
     void publish()noexcept{
         // Graph lifecycle completion deliberately precedes the transaction-token commit: the last transaction packet resolves its graph binding only after every graph task is terminal.
-        // Graph lifecycle is private
         m_graph.completePacketSubmissionAcceptance(m_compiledGraph, m_planAccess, m_packet, m_lease);
         m_transaction.commitAcceptedPacket(m_graph, m_compiledGraph, m_packet, m_token, m_nativeSubmissionInfo);
         m_active = false;
@@ -373,9 +372,7 @@ bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph::ReadV
 }
 
 
-bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(
-    const GpuCompiledGraph& compiledGraph
-)const noexcept{
+bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuCompiledGraph& compiledGraph)const noexcept{
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
         return false;
@@ -445,10 +442,7 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
     }
 
     static_assert(noexcept(m_packets = Move(nextPackets)), "packet reset publication must be non-throwing");
-    static_assert(
-        noexcept(m_latestAcceptedQueueTokens = Move(nextLatestAcceptedQueueTokens)),
-        "accepted queue-frontier reset publication must be non-throwing"
-    );
+    static_assert(noexcept(m_latestAcceptedQueueTokens = Move(nextLatestAcceptedQueueTokens)), "accepted queue-frontier reset publication must be non-throwing");
     static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
     static_assert(IsNothrowDestructible_V<PacketRuntime>);
 
@@ -495,10 +489,7 @@ bool GpuGraphSubmissionTransaction::allPacketsTerminalLocked()const noexcept{
 
 
 
-void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph
-)noexcept{
+void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept{
     if(
         !m_activeSubmissionBinding.valid()
         || m_submissionBindingResolved
@@ -585,7 +576,8 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const NativeSubmissionInfo& nativeSubmissionInfo,
     GpuTimingSubmissionTicket* const* const timingTickets,
     const usize timingTicketCount,
-    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks){
+    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
+){
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     const bool submissionValid =
@@ -775,10 +767,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
 }
 
-void GpuGraphSubmissionTransaction::abandonTimingTicketsWithoutCallbacks(
-    GpuTimingSubmissionTicket* const* const timingTickets,
-    const usize timingTicketCount
-)noexcept{
+void GpuGraphSubmissionTransaction::abandonTimingTicketsWithoutCallbacks(GpuTimingSubmissionTicket* const* const timingTickets, const usize timingTicketCount)noexcept{
     if(timingTicketCount != 0u && !timingTickets){
         NWB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires its timing ticket array");
         TerminateInvariant();

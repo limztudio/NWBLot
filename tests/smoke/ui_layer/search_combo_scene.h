@@ -42,13 +42,14 @@ public:
 
 private:
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    void observeState();
+    void observeState(Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
     [[nodiscard]] Array<u64, 22u> values()const;
     [[nodiscard]] Impl::Ui::Rect cursorRow()const;
 
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::InputDispatcher& m_input;
     UiSearchComboSmokeSource m_source;
     Impl::Ui::SearchComboState m_state;

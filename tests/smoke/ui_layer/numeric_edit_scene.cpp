@@ -25,7 +25,8 @@ namespace Tests::Smoke{
 
 
 UiNumericEditSmokeScene::UiNumericEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
-    : m_input(input)
+    : m_arena(arena)
+    , m_input(input)
     , m_integer(arena)
     , m_float(arena)
     , m_clipboard(arena)
@@ -81,7 +82,7 @@ bool UiNumericEditSmokeScene::paint(Impl::UiPaintContext& context){
         || !ui.endPanel()
     )
         return false;
-    observeState(context.display);
+    observeState(context.display, context.text);
     paintMarkers(context);
     return true;
 }

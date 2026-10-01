@@ -29,8 +29,6 @@ struct EditBoxPlacement{
     Rect clip;
     Point textOrigin;
     Rect caret;
-    Rect selection;
-    Rect preeditUnderline;
     f32 scroll = 0.0f;
     f32 scrollY = 0.0f;
 };
@@ -82,8 +80,6 @@ public:
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout);
-    [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-        f32 previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f)const;
     [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
         Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f, bool revealCaret = true)const;
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.

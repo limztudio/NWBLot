@@ -172,7 +172,7 @@ protected:
         Ui::TextLayout layout(m_arena);
         if(!view.snapshot(model) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
             return false;
-        if(!view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, 0.0f, m_placement))
+        if(!view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, m_placement))
             return false;
         if(!m_host.publish(m_widget, view, m_placement, options))
             return false;

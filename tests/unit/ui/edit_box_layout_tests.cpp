@@ -88,7 +88,15 @@ protected:
     }
 
     [[nodiscard]] bool place(f32 width = 100.0f, f32 scroll = 0.0f){
-        return m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, m_placement);
+        return m_view.arrange({ 10.0f, 20.0f, width, 20.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, { scroll, 0.0f }, m_placement);
+    }
+
+    [[nodiscard]] bool rangeRect(const EditBoxRange range, Rect& rect)const{
+        if(!m_view.caretGeometry().rangeOnLine(range, 0u, m_placement.caret.width, rect))
+            return false;
+        rect.x += m_placement.textOrigin.x;
+        rect.y += m_placement.textOrigin.y;
+        return true;
     }
 
 
@@ -117,8 +125,10 @@ TEST_F(EditBoxLayoutTests, LigaturesExposeEachGraphemeCaretAndPartialSelection){
     }
     ASSERT_TRUE(place());
     EXPECT_FLOAT_EQ(m_placement.caret.x, 30.0f);
-    EXPECT_FLOAT_EQ(m_placement.selection.x, 20.0f);
-    EXPECT_FLOAT_EQ(m_placement.selection.width, 10.0f);
+    Rect selection;
+    ASSERT_TRUE(rangeRect(m_view.selectionRange(), selection));
+    EXPECT_FLOAT_EQ(selection.x, 20.0f);
+    EXPECT_FLOAT_EQ(selection.width, 10.0f);
     usize hit = 999u;
     ASSERT_TRUE(m_view.hitTest({ 21.0f, 24.0f }, m_placement, hit));
     EXPECT_EQ(hit, 1u);
@@ -163,11 +173,15 @@ TEST_F(EditBoxLayoutTests, PreeditReplacesOnlyTheDisplayAndOwnsItsSelectionAndUn
     EXPECT_EQ(m_view.caretStops()[2].committedByte, 2u);
     EXPECT_EQ(m_view.caretStops()[2].displayByte, 7u);
     ASSERT_TRUE(place());
-    EXPECT_FLOAT_EQ(m_placement.selection.x, 20.0f);
-    EXPECT_FLOAT_EQ(m_placement.selection.width, 10.0f);
-    EXPECT_FLOAT_EQ(m_placement.preeditUnderline.x, 20.0f);
-    EXPECT_FLOAT_EQ(m_placement.preeditUnderline.width, 20.0f);
-    EXPECT_FLOAT_EQ(m_placement.preeditUnderline.height, 1.0f);
+    Rect selection;
+    Rect preedit;
+    ASSERT_TRUE(rangeRect(m_view.selectionRange(), selection));
+    ASSERT_TRUE(rangeRect(m_view.preeditRange(), preedit));
+    EXPECT_FLOAT_EQ(selection.x, 20.0f);
+    EXPECT_FLOAT_EQ(selection.width, 10.0f);
+    EXPECT_FLOAT_EQ(preedit.x, 20.0f);
+    EXPECT_FLOAT_EQ(preedit.width, 20.0f);
+    EXPECT_FLOAT_EQ(Min(m_placement.caret.width, preedit.height), 1.0f);
     usize hit = 999u;
     ASSERT_TRUE(m_view.hitTest({ 39.0f, 24.0f }, m_placement, hit));
     EXPECT_EQ(hit, 2u);
@@ -183,9 +197,13 @@ TEST_F(EditBoxLayoutTests, NativePreeditCaretCanAddressScalarEdgesInsideOneGraph
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
     EXPECT_FLOAT_EQ(m_placement.caret.x, 18.0f);
-    EXPECT_FLOAT_EQ(m_placement.selection.x, 14.0f);
-    EXPECT_FLOAT_EQ(m_placement.selection.width, 4.0f);
-    EXPECT_FLOAT_EQ(m_placement.preeditUnderline.width, 12.0f);
+    Rect selection;
+    Rect preedit;
+    ASSERT_TRUE(rangeRect(m_view.selectionRange(), selection));
+    ASSERT_TRUE(rangeRect(m_view.preeditRange(), preedit));
+    EXPECT_FLOAT_EQ(selection.x, 14.0f);
+    EXPECT_FLOAT_EQ(selection.width, 4.0f);
+    EXPECT_FLOAT_EQ(preedit.width, 12.0f);
     ASSERT_EQ(m_view.caretStops().size(), 2u);
     EXPECT_EQ(m_view.caretStops()[0].committedByte, 0u);
     EXPECT_EQ(m_view.caretStops()[1].committedByte, 0u);
@@ -195,7 +213,7 @@ TEST_F(EditBoxLayoutTests, HorizontalScrollFollowsCaretAndClampsWhenTextShrinks)
     ASSERT_TRUE(m_model.setText("abcdef"));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 26.0f, 20.0f }, { 3.0f, 0.0f, 3.0f, 0.0f },
-        { 0.0f, 0.0f, 500.0f, 500.0f }, 0.0f, m_placement));
+        { 0.0f, 0.0f, 500.0f, 500.0f }, {}, m_placement));
     EXPECT_FLOAT_EQ(m_placement.content.x, 13.0f);
     EXPECT_FLOAT_EQ(m_placement.content.width, 20.0f);
     EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
@@ -215,16 +233,16 @@ TEST_F(EditBoxLayoutTests, PlacementIntersectsFrameAndContentClipsAndRejectsInva
     ASSERT_TRUE(m_model.setText("abc"));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 100.0f, 30.0f }, { 8.0f, 4.0f, 8.0f, 4.0f },
-        { 30.0f, 22.0f, 20.0f, 40.0f }, 0.0f, m_placement));
+        { 30.0f, 22.0f, 20.0f, 40.0f }, {}, m_placement));
     EXPECT_FLOAT_EQ(m_placement.frameClip.x, 30.0f);
     EXPECT_FLOAT_EQ(m_placement.frameClip.y, 22.0f);
     EXPECT_FLOAT_EQ(m_placement.frameClip.height, 28.0f);
     EXPECT_FLOAT_EQ(m_placement.clip.y, 24.0f);
     EXPECT_FLOAT_EQ(m_placement.clip.height, 22.0f);
     const f32 oldCaret = m_placement.caret.x;
-    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, -1.0f, 20.0f }, {}, {}, 0.0f, m_placement));
-    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, 20.0f, 20.0f }, { -1.0f }, {}, 0.0f, m_placement));
-    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, 20.0f, 20.0f }, {}, {}, Limit<f32>::s_QuietNaN, m_placement));
+    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, -1.0f, 20.0f }, {}, {}, {}, m_placement));
+    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, 20.0f, 20.0f }, { -1.0f }, {}, {}, m_placement));
+    EXPECT_FALSE(m_view.arrange({ 0.0f, 0.0f, 20.0f, 20.0f }, {}, {}, { Limit<f32>::s_QuietNaN, 0.0f }, m_placement));
     EXPECT_FLOAT_EQ(m_placement.caret.x, oldCaret);
     usize hit = 123u;
     EXPECT_FALSE(m_view.hitTest({ Limit<f32>::s_QuietNaN, 0.0f }, m_placement, hit));
@@ -269,7 +287,7 @@ TEST_F(EditBoxLayoutTests, SnapshotOwnsModelBytesAndReshapingRejectsUnsupportedS
     EXPECT_FALSE(moved.ready());
     TextService service(m_arena);
     EXPECT_EQ(moved.shape(service), TextLayoutStatus::UnsupportedControl);
-    EXPECT_FALSE(moved.arrange({}, {}, {}, 0.0f, m_placement));
+    EXPECT_FALSE(moved.arrange({}, {}, {}, {}, m_placement));
 }
 
 TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSkinRegion){

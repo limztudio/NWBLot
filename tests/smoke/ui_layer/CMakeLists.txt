@@ -6,6 +6,8 @@ set(_nwb_ui_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/ui_layer_runtime/$<C
 
 nwb_declare_executable(nwb_ui_layer_smoke)
 target_sources(nwb_ui_layer_smoke PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/edit_selection_probe.h"
+    "${CMAKE_CURRENT_LIST_DIR}/edit_selection_probe.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_image_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/texture_image_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_image_snapshot.h"

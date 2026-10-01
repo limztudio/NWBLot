@@ -85,8 +85,6 @@ inline void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlaceme
     ExpectRect(actual.content, expected.content);
     ExpectRect(actual.clip, expected.clip);
     ExpectRect(actual.caret, expected.caret);
-    ExpectRect(actual.selection, expected.selection);
-    ExpectRect(actual.preeditUnderline, expected.preeditUnderline);
     EXPECT_FLOAT_EQ(actual.textOrigin.x, expected.textOrigin.x);
     EXPECT_FLOAT_EQ(actual.textOrigin.y, expected.textOrigin.y);
     EXPECT_FLOAT_EQ(actual.scroll, expected.scroll);

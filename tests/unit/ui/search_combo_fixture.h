@@ -202,6 +202,11 @@ public:
         return result;
     }
 
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
+        const PopupToken&, IEditActionSink&)override{ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
+        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view,
         const EditBoxPlacement&, const EditBoxOptions&)override{
         ++publications;

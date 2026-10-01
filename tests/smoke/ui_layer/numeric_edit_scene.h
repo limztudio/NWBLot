@@ -42,7 +42,7 @@ public:
 
 private:
     void resetModels();
-    void observeState(const Impl::Ui::DisplayMetrics& display);
+    void observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
     void count(const Impl::Ui::NumericEditResult& result);
     [[nodiscard]] Impl::Ui::FloatBounds floatBounds()const;
@@ -50,6 +50,7 @@ private:
 
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::InputDispatcher& m_input;
     Impl::Ui::IntegerEditModel m_integer;
     Impl::Ui::FloatEditModel m_float;

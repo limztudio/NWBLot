@@ -89,6 +89,9 @@ public:
         return result;
     }
 
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&,
+        const EditBoxOptions&, const PopupToken&)override{ return {}; }
+
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel& draft,
         const EditBoxOptions& options, const PopupToken& popup, IEditActionSink& sink)override{
         ++loans;
@@ -147,6 +150,9 @@ public:
         result.selectionChanged = anchor != draft.anchor() || caret != draft.caret();
         return result;
     }
+
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
+        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view,
         const EditBoxPlacement&, const EditBoxOptions&)override{

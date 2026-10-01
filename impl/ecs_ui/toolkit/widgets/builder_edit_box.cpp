@@ -167,7 +167,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
         return false;
     EditBoxPlacement placement;
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
-    if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), item.editState->scroll, placement, caretWidth))
+    if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), { item.editState->scroll, 0.0f }, placement, caretWidth))
         return false;
     if(!item.editView.paint(m_text, m_paint, *m_skin, placement, item.editStyle, item.editFlags))
         return false;

@@ -41,12 +41,13 @@ public:
 private:
     void resetModels();
     void observeDisplay(const Impl::Ui::DisplayMetrics& display);
-    void observeState();
+    void observeState(Impl::Ui::TextService& text);
     void paintMarkers(Impl::UiPaintContext& context)const;
     [[nodiscard]] Array<u32, 12u> values()const;
 
 
 private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::InputDispatcher& m_input;
     Impl::Ui::EditModel m_primary;
     Impl::Ui::EditModel m_secondary;
@@ -54,6 +55,8 @@ private:
     Impl::Ui::EditBoxState m_secondaryState;
     Impl::Ui::EditBoxPlacement m_lastPrimary;
     Impl::Ui::EditBoxPlacement m_lastSecondary;
+    Impl::Ui::Rect m_lastPrimarySelection;
+    Impl::Ui::Rect m_lastSecondarySelection;
     Impl::Ui::DisplayMetrics m_lastDisplay;
     Array<u32, 12u> m_lastValues{};
     u32 m_sequence = 0u;

@@ -111,6 +111,9 @@ public:
         return {};
     }
 
+    [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&,
+        const EditBoxOptions&, const PopupToken&)override{ return {}; }
+
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
         const PopupToken&, IEditActionSink&)override{
         ++actionLoans;

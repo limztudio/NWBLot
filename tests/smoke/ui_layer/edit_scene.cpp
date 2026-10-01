@@ -4,6 +4,8 @@
 
 #include "edit_scene.h"
 
+#include "edit_selection_probe.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -52,7 +54,7 @@ static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 340.0f, 276.0f };
 [[nodiscard]] bool SamePlacement(const Impl::Ui::EditBoxPlacement& left, const Impl::Ui::EditBoxPlacement& right){
     return
         SameRect(left.bounds, right.bounds) && SameRect(left.content, right.content)
-        && SameRect(left.caret, right.caret) && SameRect(left.selection, right.selection) && left.scroll == right.scroll
+        && SameRect(left.caret, right.caret) && left.scroll == right.scroll
     ;
 }
 
@@ -61,11 +63,11 @@ static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 340.0f, 276.0f };
         static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
 }
 
-void LogGeometry(const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement){
+void LogGeometry(const u32 sequence, const TStringView field, const Impl::Ui::EditBoxPlacement& placement,
+    const Impl::Ui::Rect& selection){
     const auto& bounds = placement.bounds;
     const auto& content = placement.content;
     const auto& caret = placement.caret;
-    const auto& selection = placement.selection;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}")
         , sequence, field, bounds.x, bounds.y, bounds.width, bounds.height
         , content.x, content.y, content.width, content.height
@@ -87,7 +89,8 @@ void LogGeometry(const u32 sequence, const TStringView field, const Impl::Ui::Ed
 
 
 UiEditSmokeScene::UiEditSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
-    : m_input(input)
+    : m_arena(arena)
+    , m_input(input)
     , m_primary(arena)
     , m_secondary(arena)
 {
@@ -137,7 +140,7 @@ bool UiEditSmokeScene::paint(Impl::UiPaintContext& context){
         || !ui.endPanel()
     )
         return false;
-    observeState();
+    observeState(context.text);
     paintMarkers(context);
     return true;
 }
@@ -185,27 +188,33 @@ Array<u32, 12u> UiEditSmokeScene::values()const{
         static_cast<u32>(m_readOnly), static_cast<u32>(m_visible) };
 }
 
-void UiEditSmokeScene::observeState(){
+void UiEditSmokeScene::observeState(Impl::Ui::TextService& text){
     const auto current = values();
     const Impl::Ui::EditBoxPlacement primary = m_visible ? m_primaryState.placement : Impl::Ui::EditBoxPlacement{};
     const auto& secondary = m_secondaryState.placement;
+    const auto primarySelection = CaptureEditSelection(m_arena, text, m_primary, primary, 16.0f);
+    const auto secondarySelection = CaptureEditSelection(m_arena, text, m_secondary, secondary, 16.0f);
     if(
         m_sequence != 0u && !m_displayChanged && current == m_lastValues
         && __hidden_ui_edit_smoke::SamePlacement(primary, m_lastPrimary)
         && __hidden_ui_edit_smoke::SamePlacement(secondary, m_lastSecondary)
+        && __hidden_ui_edit_smoke::SameRect(primarySelection, m_lastPrimarySelection)
+        && __hidden_ui_edit_smoke::SameRect(secondarySelection, m_lastSecondarySelection)
     )
         return;
     ++m_sequence;
     m_lastValues = current;
     m_lastPrimary = primary;
     m_lastSecondary = secondary;
+    m_lastPrimarySelection = primarySelection;
+    m_lastSecondarySelection = secondarySelection;
     m_displayChanged = false;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiEditSmoke: state sequence={} primary={},{},{},{},{} secondary={},{},{},{},{} readonly={} visible={}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4]
         , current[5], current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    __hidden_ui_edit_smoke::LogGeometry(m_sequence, NWB_TEXT("primary"), primary);
-    __hidden_ui_edit_smoke::LogGeometry(m_sequence, NWB_TEXT("secondary"), secondary);
+    __hidden_ui_edit_smoke::LogGeometry(m_sequence, NWB_TEXT("primary"), primary, primarySelection);
+    __hidden_ui_edit_smoke::LogGeometry(m_sequence, NWB_TEXT("secondary"), secondary, secondarySelection);
 }
 
 void UiEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

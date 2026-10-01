@@ -4,6 +4,8 @@
 
 #include "numeric_edit_scene.h"
 
+#include "edit_selection_probe.h"
+
 #include <core/common/log.h>
 
 #include <global/bit.h>
@@ -89,18 +91,19 @@ Array<u64, 30u> UiNumericEditSmokeScene::values()const{
             && Coherent(m_clipboard, m_states[2u])) };
 }
 
-void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& display){
+void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& display, Impl::Ui::TextService& text){
     using namespace Impl::Ui;
     using namespace __hidden_ui_numeric_snapshot;
     UiNumericEditSnapshot current;
     current.values = values();
     current.display = display;
+    const EditModel* const models[]{ &m_integer.draft(), &m_float.draft(), &m_clipboard };
     for(usize index = 0u; index < m_states.size(); ++index){
         const auto& placement = m_states[index].placement;
         current.rectangles[index * 4u] = placement.bounds;
         current.rectangles[index * 4u + 1u] = placement.content;
         current.rectangles[index * 4u + 2u] = placement.caret;
-        current.rectangles[index * 4u + 3u] = placement.selection;
+        current.rectangles[index * 4u + 3u] = CaptureEditSelection(m_arena, text, *models[index], placement, 16.0f);
     }
     bool changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)

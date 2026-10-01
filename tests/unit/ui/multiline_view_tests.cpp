@@ -349,13 +349,9 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesOnEachHardLineAndUsesNati
     EXPECT_TRUE(m_view.composing());
 }
 
-TEST_F(UiMultilineViewTests, LegacyHorizontalOverloadAndSingleLineCenteringRemainCompatible){
+TEST_F(UiMultilineViewTests, SingleLineCenteringIgnoresVerticalScroll){
     ASSERT_TRUE(m_model.setText("abc\ndef"));
     ASSERT_TRUE(shapeView());
-    ASSERT_TRUE(place(20.0f, 12.0f, { 15.0f, 0.0f }));
-    const EditBoxPlacement pointPlacement = m_placement;
-    ASSERT_TRUE(m_view.arrange(pointPlacement.bounds, {}, pointPlacement.frameClip, 15.0f, m_placement));
-    ExpectPlacement(m_placement, pointPlacement);
     EditModel single(m_arena);
     ASSERT_TRUE(single.setText("abc"));
     ASSERT_TRUE(m_view.snapshot(single));

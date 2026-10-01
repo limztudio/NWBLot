@@ -67,13 +67,13 @@ public:
     [[nodiscard]] virtual EditBoxResult edit(const WidgetState& widget, EditModel& model, const EditBoxOptions& options) = 0;
     // Deferred composite controls lend an explicit popup identity before its candidate geometry is emitted.
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model,
-        const EditBoxOptions& options, const PopupToken&){ return edit(widget, model, options); }
+        const EditBoxOptions& options, const PopupToken& popup) = 0;
     // Action-capable hosts invoke the borrowed sink in event order, before returning the draft for a paint snapshot.
-    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, IEditActionSink&){ return {}; }
+    [[nodiscard]] virtual EditBoxResult editActions(const WidgetState& widget, EditModel& model, const EditBoxOptions& options,
+        const PopupToken& popup, IEditActionSink& actions) = 0;
     // Navigation resolves the current model between copied events; application objects are lent only for this call.
-    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&){ return {}; }
+    [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, EditModel& model, const EditBoxOptions& options,
+        const PopupToken& popup, EditNavigationState& navigation, IEditNavigationResolver& resolver, IEditActionSink& actions) = 0;
     [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view,
         const EditBoxPlacement& placement, const EditBoxOptions& options) = 0;
 };

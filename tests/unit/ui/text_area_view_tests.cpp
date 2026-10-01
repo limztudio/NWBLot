@@ -71,15 +71,11 @@ TEST_F(UiTextAreaViewTests, ShrinkingContentClampsExplicitScrollWithoutCaretFoll
     ExpectRect(m_placement.caret, { 10.0f, 20.0f, 1.0f, 12.0f });
 }
 
-TEST_F(UiTextAreaViewTests, ExistingPointAndFloatOverloadsContinueToRevealTheCaret){
+TEST_F(UiTextAreaViewTests, PointArrangementRevealsTheCaret){
     ASSERT_TRUE(prepareDense());
     ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 20.0f, 12.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, Point{}, m_placement));
     EXPECT_FLOAT_EQ(m_placement.scroll, 41.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
-    const EditBoxPlacement expected = m_placement;
-    EditBoxPlacement oldOverload;
-    ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 20.0f, 12.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, 0.0f, oldOverload));
-    ExpectPlacement(oldOverload, expected);
 }
 
 TEST_F(UiTextAreaViewTests, ZeroViewportDoesNotForceManualScrollToTheCaret){

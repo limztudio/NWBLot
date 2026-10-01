@@ -49,11 +49,6 @@ namespace __hidden_ui_edit_box_layout{
 
 
 bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-    const f32 previousScroll, EditBoxPlacement& output, const f32 caretWidth)const{
-    return arrange(bounds, padding, clip, Point{ previousScroll, 0.0f }, output, caretWidth);
-}
-
-bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
     const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(clip)
@@ -114,25 +109,27 @@ bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, cons
     else
         placement.textOrigin = { left - placement.scroll, top + Max(0.0f, (placement.content.height - caret.height) * 0.5f) };
     placement.caret = { placement.textOrigin.x + caret.x, placement.textOrigin.y + caret.y, caretWidth, caret.height };
-    if(!m_geometry.rangeOnLine(m_selection, 0u, caretWidth, placement.selection))
+    Rect selection;
+    if(!m_geometry.rangeOnLine(m_selection, 0u, caretWidth, selection))
         return false;
-    if(placement.selection.width > 0.0f){
-        placement.selection.x += placement.textOrigin.x;
-        placement.selection.y += placement.textOrigin.y;
+    if(selection.width > 0.0f){
+        selection.x += placement.textOrigin.x;
+        selection.y += placement.textOrigin.y;
     }
+    Rect preeditUnderline;
     if(m_composing){
-        if(!m_geometry.rangeOnLine(m_preedit, 0u, caretWidth, placement.preeditUnderline))
+        if(!m_geometry.rangeOnLine(m_preedit, 0u, caretWidth, preeditUnderline))
             return false;
-        if(placement.preeditUnderline.width > 0.0f){
-            const f32 thickness = Min(caretWidth, placement.preeditUnderline.height);
-            placement.preeditUnderline.x += placement.textOrigin.x;
-            placement.preeditUnderline.y += placement.textOrigin.y + Max(0.0f, placement.preeditUnderline.height - thickness);
-            placement.preeditUnderline.height = thickness;
+        if(preeditUnderline.width > 0.0f){
+            const f32 thickness = Min(caretWidth, preeditUnderline.height);
+            preeditUnderline.x += placement.textOrigin.x;
+            preeditUnderline.y += placement.textOrigin.y + Max(0.0f, preeditUnderline.height - thickness);
+            preeditUnderline.height = thickness;
         }
     }
     if(
-        !__hidden_ui_edit_box_layout::ValidRect(placement.caret) || !__hidden_ui_edit_box_layout::ValidRect(placement.selection)
-        || !__hidden_ui_edit_box_layout::ValidRect(placement.preeditUnderline)
+        !__hidden_ui_edit_box_layout::ValidRect(placement.caret) || !__hidden_ui_edit_box_layout::ValidRect(selection)
+        || !__hidden_ui_edit_box_layout::ValidRect(preeditUnderline)
         || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y)
     )
         return false;

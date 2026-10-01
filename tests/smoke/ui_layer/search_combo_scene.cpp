@@ -4,6 +4,8 @@
 
 #include "search_combo_scene.h"
 
+#include "edit_selection_probe.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -64,7 +66,8 @@ void LogRect(const u32 sequence, const TStringView name, const Impl::Ui::Rect& r
 
 
 UiSearchComboSmokeScene::UiSearchComboSmokeScene(Core::Alloc::GlobalArena& arena, Core::InputDispatcher& input)
-    : m_input(input)
+    : m_arena(arena)
+    , m_input(input)
     , m_source(arena)
     , m_state(arena)
 {
@@ -110,7 +113,7 @@ bool UiSearchComboSmokeScene::paint(Impl::UiPaintContext& context){
         ++m_underlying;
     if(!ui.endPanel())
         return false;
-    observeState();
+    observeState(context.text);
     paintMarkers(context);
     return true;
 }
@@ -189,7 +192,7 @@ Impl::Ui::Rect UiSearchComboSmokeScene::cursorRow()const{
     return rectangle;
 }
 
-void UiSearchComboSmokeScene::observeState(){
+void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
     const auto current = values();
     const auto& placement = m_state.combo().listState().placement();
     const auto& popup = m_state.combo().placement();
@@ -228,7 +231,8 @@ void UiSearchComboSmokeScene::observeState(){
     __hidden_ui_search_combo_smoke::LogRect(m_sequence, NWB_TEXT("query"), editor.bounds);
     __hidden_ui_search_combo_smoke::LogRect(m_sequence, NWB_TEXT("query_content"), editor.content);
     __hidden_ui_search_combo_smoke::LogRect(m_sequence, NWB_TEXT("query_caret"), editor.caret);
-    __hidden_ui_search_combo_smoke::LogRect(m_sequence, NWB_TEXT("query_selection"), editor.selection);
+    __hidden_ui_search_combo_smoke::LogRect(m_sequence, NWB_TEXT("query_selection"),
+        CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
 }
 
 void UiSearchComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

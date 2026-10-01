@@ -158,7 +158,7 @@ protected:
         if(!result.valid || !view.snapshot(model) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
             return false;
         if(
-            !view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, m_viewport, 0.0f, placement)
+            !view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, m_viewport, {}, placement)
             || !m_host.publish(retained, view, placement, options)
         )
             return false;
@@ -240,7 +240,7 @@ protected:
             Ui::EditBoxPlacement placement;
             if(!view.snapshot(m_popupModel) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
                 return false;
-            if(!view.adoptLayout(Move(layout)) || !view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, 0.0f, placement))
+            if(!view.adoptLayout(Move(layout)) || !view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, {}, placement))
                 return false;
             Ui::PopupScope scope;
             scope.token = m_token;

@@ -139,7 +139,7 @@ private:
 
         // Optional file sink for bounded profiling A/B: the smoke app is a GUI process with no stdout, and its logger routes
         // to the logserver's WINDOW, so an automated harness cannot scrape these numbers. When NWB_GPU_TIMING_FILE is set,
-        // ALSO append each interval's per-pass averages there (Name::c_str() is the readable scope text in a dbg build).
+        // ALSO append each interval's per-pass averages there (Name::resolvedText() is the readable scope text in a dbg build).
         OutputFileStream timingFile;
         OpenTimingFile(timingFile);
         if(timingFile.is_open()){
@@ -158,7 +158,7 @@ private:
             const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * s_MillisecondsPerSecond;
             NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
-                , StringConvert(scopeName.c_str())
+                , StringConvert(scopeName.resolvedText())
                 , averageMs
                 , accum.minSeconds * s_MillisecondsPerSecond
                 , accum.maxSeconds * s_MillisecondsPerSecond
@@ -166,7 +166,7 @@ private:
             );
             if(timingFile.is_open()){
                 timingFile
-                    << "  " << scopeName.c_str()
+                    << "  " << scopeName.resolvedText()
                     << ": avg=" << averageMs
                     << " min=" << accum.minSeconds * s_MillisecondsPerSecond
                     << " max=" << accum.maxSeconds * s_MillisecondsPerSecond

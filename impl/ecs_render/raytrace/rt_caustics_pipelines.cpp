@@ -355,15 +355,15 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     pipelineDesc.addBindingLayout(heap.getSamplerLayout());
     pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
 
-    Core::RayTracingPipelineShaderDesc raygenDesc(m_arena);
+    Core::RayTracingPipelineShaderDesc raygenDesc;
     raygenDesc.setShader(raygenShader).setExportName(__hidden_caustics::s_HwRaygenExportName);
     pipelineDesc.addShader(raygenDesc);
 
-    Core::RayTracingPipelineShaderDesc missDesc(m_arena);
+    Core::RayTracingPipelineShaderDesc missDesc;
     missDesc.setShader(missShader).setExportName(__hidden_caustics::s_HwMissExportName);
     pipelineDesc.addShader(missDesc);
 
-    Core::RayTracingPipelineHitGroupDesc hitGroupDesc(m_arena);
+    Core::RayTracingPipelineHitGroupDesc hitGroupDesc;
     hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(__hidden_caustics::s_HwHitGroupExportName);
     pipelineDesc.addHitGroup(hitGroupDesc);
 

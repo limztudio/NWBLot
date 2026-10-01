@@ -52,7 +52,7 @@ inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
 {                                                                                        \
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
-        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.c_str());  \
+        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
         NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \

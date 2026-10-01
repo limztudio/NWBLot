@@ -652,7 +652,8 @@ private:
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
     Vector<u32, Alloc::GlobalArena> m_spirvWords;
-    GraphicsString m_entryPointName;
+    // Points into immutable m_spirvWords, including a validated null byte immediately after the view.
+    AStringView m_entryPointName;
 
     Vector<VkSpecializationMapEntry, Alloc::GlobalArena> m_specializationEntries;
     Vector<u32, Alloc::GlobalArena> m_specializationData;
@@ -668,15 +669,8 @@ private:
 
 
 struct ShaderLibraryKey{
-    explicit ShaderLibraryKey(GraphicsArena& arena)
-        : entryName(arena)
-    {}
-    ShaderLibraryKey(GraphicsArena& arena, const AStringView inEntryName, const ShaderType::Mask inShaderType)
-        : entryName(inEntryName, arena)
-        , shaderType(inShaderType)
-    {}
-
-    GraphicsString entryName;
+    // Stored keys borrow the resolved entry name from the Shader retained by the map value.
+    AStringView entryName;
     ShaderType::Mask shaderType = ShaderType::None;
 };
 
@@ -686,7 +680,7 @@ inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)
 
 struct ShaderLibraryKeyHasher{
     usize operator()(const ShaderLibraryKey& value)const noexcept{
-        usize seed = Hasher<GraphicsString>{}(value.entryName);
+        usize seed = Hasher<AStringView>{}(value.entryName);
         ::HashCombine(seed, static_cast<u32>(value.shaderType));
         return seed;
     }

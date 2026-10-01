@@ -44,7 +44,7 @@ static void BuildMaterialBindInterfaceLookup(
 ){
     outLookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries)
-        outLookup.emplace(Name(bindEntry.virtualPath.c_str()), &bindEntry);
+        outLookup.emplace(Name(AStringView(bindEntry.virtualPath)), &bindEntry);
 }
 
 
@@ -77,7 +77,7 @@ bool ValidateMaterialCookInterfaces(
 
         if(materialEntry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface")
-                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(AStringView(materialEntry.virtualPath))
             );
             return false;
         }
@@ -87,8 +87,8 @@ bool ValidateMaterialCookInterfaces(
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown material interface '{}'")
-                , StringConvert(materialEntry.virtualPath.c_str())
-                , StringConvert(materialEntry.materialInterface.c_str())
+                , StringConvert(AStringView(materialEntry.virtualPath))
+                , StringConvert(AStringView(materialEntry.materialInterface))
             );
             return false;
         }
@@ -105,8 +105,8 @@ bool ValidateMaterialCookInterfaces(
             return false;
         if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
-                , StringConvert(materialEntry.virtualPath.c_str())
-                , StringConvert(materialEntry.materialInterface.c_str())
+                , StringConvert(AStringView(materialEntry.virtualPath))
+                , StringConvert(AStringView(materialEntry.materialInterface))
             );
             return false;
         }
@@ -133,7 +133,7 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.resourceReferences
         )){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters")
-                , StringConvert(materialEntry.virtualPath.c_str())
+                , StringConvert(AStringView(materialEntry.virtualPath))
             );
             return false;
         }

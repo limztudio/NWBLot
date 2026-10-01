@@ -48,7 +48,7 @@ bool ResolveCookPaths(
         return false;
     }
 
-    outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), options.repoRoot.c_str());
+    outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), AStringView(options.repoRoot));
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
@@ -60,16 +60,15 @@ bool ResolveCookPaths(
         if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'")
                 , StringConvert(assetRoot.path)
-                , StringConvert(assetRoot.virtualRoot.c_str())
+                , StringConvert(assetRoot.virtualRoot.view())
             );
             outPaths.assetRoots.clear();
             return false;
         }
 
         Path resolvedAssetRoot(outPaths.repoRoot.arena());
-        const Assets::ScratchString assetRootText(assetRoot.path, scratchArena);
         errorCode.clear();
-        if(!ResolveAbsolutePath(outPaths.repoRoot, assetRootText, resolvedAssetRoot, errorCode)){
+        if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(assetRoot.path), resolvedAssetRoot, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
                     , StringConvert(assetRoot.path)
@@ -90,8 +89,7 @@ bool ResolveCookPaths(
 
     errorCode.clear();
     {
-        const Assets::ScratchString outputDirectoryText(options.outputDirectory, scratchArena);
-        if(!ResolveAbsolutePath(outPaths.repoRoot, outputDirectoryText, outPaths.outputDirectory, errorCode)){
+        if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(options.outputDirectory), outPaths.outputDirectory, errorCode)){
             if(errorCode){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
                     , StringConvert(options.outputDirectory)
@@ -111,9 +109,12 @@ bool ResolveCookPaths(
     const Assets::AssetString& requestedCacheDirectory = options.cacheDirectory;
     errorCode.clear();
     {
-        const Assets::ScratchString requestedCacheDirectoryText = requestedCacheDirectory.empty()
-            ? PathToString(scratchArena, defaultCacheDirectory)
-            : Assets::ScratchString(requestedCacheDirectory, scratchArena)
+        Assets::ScratchString defaultCacheDirectoryText(scratchArena);
+        if(requestedCacheDirectory.empty())
+            defaultCacheDirectoryText = PathToString(scratchArena, defaultCacheDirectory);
+        const AStringView requestedCacheDirectoryText = requestedCacheDirectory.empty()
+            ? AStringView(defaultCacheDirectoryText)
+            : AStringView(requestedCacheDirectory)
         ;
         if(!ResolveAbsolutePath(outPaths.repoRoot, requestedCacheDirectoryText, outPaths.cacheDirectory, errorCode)){
             if(errorCode){

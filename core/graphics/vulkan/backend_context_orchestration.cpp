@@ -54,7 +54,7 @@ bool BackendContext::createDevice(){
         m_maxFramesInFlight = 1;
     }
 
-    auto resolveDeviceExtensionFeature = [this](const GraphicsString& name)->DeviceExtensionFeature::Enum{
+    auto resolveDeviceExtensionFeature = [this](const AStringView name)->DeviceExtensionFeature::Enum{
         // Feature metadata remains canonical even when policy removes an extension from the default optional set.
         // A caller that names that extension explicitly must still receive coherent feature query/enable handling.
         for(const ExtEntry& entry : s_OptionalDeviceExts){

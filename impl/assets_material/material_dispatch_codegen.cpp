@@ -48,7 +48,7 @@ bool AssignMaterialShadingModelIdsImpl(
 ){
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
     }
@@ -69,7 +69,7 @@ bool AssignMaterialShadingModelIdsImpl(
         const AStringView source(entry.bxdfSource);
         const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
         if(sourceIt == uniqueSources.end() || *sourceIt != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
@@ -100,7 +100,7 @@ bool AssignMaterialShadingModelIdsImpl(
         const AStringView surface(entry.surfaceSource);
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
         if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
         entry.surfaceDispatchId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
@@ -114,11 +114,8 @@ bool AssignMaterialShadingModelIdsImpl(
 
 static Path BuildDeferredBxdfIncludeRoot(
     const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    return cacheDirectory / configurationName.c_str() / "deferred_modules";
+    const AStringView configurationSafeName){
+    return cacheDirectory / configurationSafeName / "deferred_modules";
 }
 
 
@@ -133,7 +130,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
     ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
-    outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
         return false;
 
@@ -248,11 +245,8 @@ static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/su
 
 static Path BuildShadowSurfaceIncludeRoot(
     const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    return cacheDirectory / configurationName.c_str() / "shadow_modules";
+    const AStringView configurationSafeName){
+    return cacheDirectory / configurationSafeName / "shadow_modules";
 }
 
 
@@ -491,7 +485,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
     ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
-    outIncludeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    outIncludeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow surface dispatch"))
         return false;
 

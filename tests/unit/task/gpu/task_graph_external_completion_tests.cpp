@@ -141,7 +141,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     };
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI))
             .setMarkerLabel("Owned External Completion")
             .setToken(token)
     );
@@ -170,7 +170,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId repeatedMetadataImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI))
             .setMarkerLabel("Compatible Metadata Reference")
     );
     EXPECT_EQ(repeatedMetadataImport, completion);
@@ -181,7 +181,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId repeatedTokenImport = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI))
             .setMarkerLabel("Compatible Token Reference")
             .setToken(token)
     );
@@ -196,7 +196,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     ++conflictingToken.value;
     EXPECT_FALSE(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_OWNED_EXTERNAL_COMPLETI))
             .setMarkerLabel("Conflicting Token Reference")
             .setToken(conflictingToken)
     ).valid());
@@ -227,7 +227,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
 
     const Graphics::GpuExternalCompletionId metadataCompletion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL))
             .setMarkerLabel("Metadata External Completion")
     );
     ASSERT_TRUE(metadataCompletion.valid());
@@ -319,7 +319,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     const Graphics::GpuExternalCompletionId upgradedCompletion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL))
             .setMarkerLabel("Late Token Upgrade")
             .setToken(token)
     );
@@ -352,12 +352,12 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     }
     EXPECT_EQ(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL))
             .setMarkerLabel("Upgraded Metadata Reference")
     ), metadataCompletion);
     EXPECT_EQ(graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL.data()))
+            .setIdentity(Name(s_TESTS_TASK_GRAPH_METADATA_EXTERNAL_COMPL))
             .setMarkerLabel("Upgraded Token Reference")
             .setToken(token)
     ), metadataCompletion);

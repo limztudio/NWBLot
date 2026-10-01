@@ -248,7 +248,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     const Name expectedMesh("project/characters/model_fixture/mesh");
     const Name expectedSkin("project/characters/model_fixture/skin");
     const Name expectedSkeleton("project/characters/model_fixture/skeleton");
-    EXPECT_EQ(model.skeletonObjects()[0].name, Name(s_RIG.data()));
+    EXPECT_EQ(model.skeletonObjects()[0].name, Name(s_RIG));
     EXPECT_EQ(model.skeletonObjects()[0].skeleton.name(), expectedSkeleton);
 
     const NWB::Impl::ModelSkinnedMeshObject* body = FindSkinnedModelObject(model, Name("body"));
@@ -258,12 +258,12 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     if(body){
         EXPECT_EQ(body->mesh.name(), expectedMesh);
         EXPECT_EQ(body->skin.name(), expectedSkin);
-        EXPECT_EQ(body->skeletonObject, Name(s_RIG.data()));
+        EXPECT_EQ(body->skeletonObject, Name(s_RIG));
     }
     if(detail){
         EXPECT_EQ(detail->mesh.name(), expectedMesh);
         EXPECT_EQ(detail->skin.name(), expectedSkin);
-        EXPECT_EQ(detail->skeletonObject, Name(s_RIG.data()));
+        EXPECT_EQ(detail->skeletonObject, Name(s_RIG));
     }
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -344,7 +344,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     if(tool){
         EXPECT_EQ(tool->mesh.name(), Name("project/characters/model_attachment_fixture/mesh"));
         EXPECT_FALSE(tool->material.valid());
-        EXPECT_EQ(tool->parentObject, Name(s_RIG.data()));
+        EXPECT_EQ(tool->parentObject, Name(s_RIG));
         EXPECT_EQ(tool->parentJoint, Name("hand"));
         EXPECT_EQ(tool->transform._14, 0.5f);
         EXPECT_EQ(tool->transform._24, 0.125f);

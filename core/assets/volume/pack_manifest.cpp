@@ -75,7 +75,7 @@ static bool ValidatePayloadIdentity(
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key")
-        , StringConvert(virtualPath.c_str())
+        , StringConvert(virtualPath.resolvedText())
     );
     return false;
 }
@@ -103,7 +103,7 @@ bool AppendObjectFilePayloadToManifest(
         return false;
     if(objectPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path")
-            , StringConvert(virtualPath.c_str())
+            , StringConvert(virtualPath.resolvedText())
         );
         return false;
     }
@@ -129,7 +129,7 @@ bool AppendPayloadBytesToManifest(
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes")
-            , StringConvert(virtualPath.c_str())
+            , StringConvert(virtualPath.resolvedText())
         );
         return false;
     }

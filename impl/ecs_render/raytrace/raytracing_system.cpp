@@ -369,7 +369,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         if(!m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName, mesh) || !matchesMesh(mesh, prepared)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.resolvedText()));
             return rejectPreparedTraversal();
         }
     }

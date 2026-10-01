@@ -230,7 +230,7 @@ bool BuildPerfTimingPayload(
     const Perf::TimingStats& stats,
     TelemetryBytes& outPayload
 ){
-    return BuildPerfTimingPayload(arena, source, scopeName, AStringView(scopeName.c_str()), stats, outPayload);
+    return BuildPerfTimingPayload(arena, source, scopeName, scopeName.resolvedText(), stats, outPayload);
 }
 
 bool ParsePerfTimingPayload(
@@ -285,7 +285,7 @@ bool RecordPerfTiming(
     const Perf::TimingStats& stats,
     const u32 streamId
 ){
-    return RecordPerfTiming(recorder, source, scopeName, AStringView(scopeName.c_str()), stats, streamId);
+    return RecordPerfTiming(recorder, source, scopeName, scopeName.resolvedText(), stats, streamId);
 }
 
 bool BuildPerfMemoryPayload(
@@ -334,7 +334,7 @@ bool BuildPerfMemoryPayload(
     const Perf::MemoryDelta& delta,
     TelemetryBytes& outPayload
 ){
-    return BuildPerfMemoryPayload(arena, scopeName, AStringView(scopeName.c_str()), snapshot, delta, outPayload);
+    return BuildPerfMemoryPayload(arena, scopeName, scopeName.resolvedText(), snapshot, delta, outPayload);
 }
 
 bool ParsePerfMemoryPayload(
@@ -402,7 +402,7 @@ bool RecordPerfMemory(
     const Perf::MemoryDelta& delta,
     const u32 streamId
 ){
-    return RecordPerfMemory(recorder, scopeName, AStringView(scopeName.c_str()), snapshot, delta, streamId);
+    return RecordPerfMemory(recorder, scopeName, scopeName.resolvedText(), snapshot, delta, streamId);
 }
 
 PerfSessionRecordResult RecordPerfSessionReport(

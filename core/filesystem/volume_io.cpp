@@ -54,11 +54,11 @@ static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& ou
 ACompactString LastErrnoMessage(){
     const i32 errorNumber = errno;
     if(errorNumber == 0)
-        return ACompactString(__hidden_filesystem_volume_io::s_NoMountLabel.data());
+        return ACompactString(__hidden_filesystem_volume_io::s_NoMountLabel);
 
     char errorText[s_ErrnoMessageBufferBytes] = {};
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
-        return ACompactString(__hidden_filesystem_volume_io::s_UnknownMountLabel.data());
+        return ACompactString(__hidden_filesystem_volume_io::s_UnknownMountLabel);
 
     ACompactString output(errorText);
     output += " (";
@@ -80,7 +80,7 @@ void LogFailureWithPath(AStringView volumeName, AStringView operation, const Pat
     NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': {}")
         , StringConvert(volumeName)
         , StringConvert(operation)
-        , StringConvert(path.string())
+        , StringConvert(path.native())
         , StringConvert(detail)
     );
 }
@@ -89,7 +89,7 @@ void LogFailureWithFsError(AStringView volumeName, AStringView operation, const 
     NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): {} failed on '{}': [{}] {}")
         , StringConvert(volumeName)
         , StringConvert(operation)
-        , StringConvert(path.string())
+        , StringConvert(path.native())
         , errorCode.value()
         , StringConvert(errorCode.message())
     );
@@ -276,7 +276,7 @@ static bool ReadSegmentBytes(
             if(stream.gcount() != streamChunkSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): readBytes failed on '{}': requested {} bytes, received {} bytes, errno {}")
                     , StringConvert(volumeName)
-                    , StringConvert(segmentPaths[segmentIndex].string())
+                    , StringConvert(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)
                     , static_cast<i64>(stream.gcount())
                     , StringConvert(LastErrnoMessage())
@@ -319,7 +319,7 @@ static bool WriteSegmentBytes(
             if(!stream.good()){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeBytes failed on '{}': attempted {} bytes, errno {}")
                     , StringConvert(volumeName)
-                    , StringConvert(segmentPaths[segmentIndex].string())
+                    , StringConvert(segmentPaths[segmentIndex].native())
                     , static_cast<i64>(streamChunkSize)
                     , StringConvert(LastErrnoMessage())
                 );

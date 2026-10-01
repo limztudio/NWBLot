@@ -116,7 +116,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName
                 , StringConvert(assetKindText)
-                , StringConvert(virtualPath.c_str())
+                , StringConvert(virtualPath.resolvedText())
             );
             return nullptr;
         }
@@ -124,7 +124,7 @@ public:
         if(!typedAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
                 , ownerName
-                , StringConvert(virtualPath.c_str())
+                , StringConvert(virtualPath.resolvedText())
                 , StringConvert(assetKindText)
             );
             return nullptr;

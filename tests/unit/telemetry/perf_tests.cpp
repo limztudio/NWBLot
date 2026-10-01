@@ -29,7 +29,7 @@ using namespace TelemetryTestDetail;
 
 TEST(Telemetry, PerfTimingPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
-    const Name scopeName(s_RENDERER_FRAME.data());
+    const Name scopeName{s_RENDERER_FRAME};
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
 
     Telemetry::TelemetryBytes payload(testArena.arena);
@@ -57,7 +57,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Unknown,
-        Name(s_RENDERER_FRAME.data()),
+        Name(s_RENDERER_FRAME),
         s_RENDERER_FRAME_TEXT,
         stats,
         payload
@@ -67,7 +67,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
     EXPECT_FALSE(Telemetry::BuildPerfTimingPayload(
         testArena.arena,
         Telemetry::PerfTimingSource::Cpu,
-        Name(s_RENDERER_FRAME.data()),
+        Name(s_RENDERER_FRAME),
         s_RENDERER_FRAME_TEXT,
         stats,
         payload
@@ -76,7 +76,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
 
 TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
     TestArena testArena;
-    const Name scopeName(s_MEMORY_PROJECT_ARENA.data());
+    const Name scopeName{s_MEMORY_PROJECT_ARENA};
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     const NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 
@@ -100,7 +100,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    const Name scopeName(s_MEMORY_PROJECT_ARENA.data());
+    const Name scopeName{s_MEMORY_PROJECT_ARENA};
     NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(scopeName);
     NWB::Core::Perf::MemoryDelta delta = MakeTestMemoryDelta();
 

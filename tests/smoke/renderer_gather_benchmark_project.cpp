@@ -54,7 +54,7 @@ public:
             // Hardware-only reflection has no depth pyramid, temporal pass or spatial filter.
             if(scope == "render.reflection_depth_pyramid")
                 continue;
-            if(!graphics.gpuTiming().prepareScopeQueries(Name(scope.data()), graphics.getDevice(), s_InFlightRanges))
+            if(!graphics.gpuTiming().prepareScopeQueries(Name(scope), graphics.getDevice(), s_InFlightRanges))
                 return false;
         }
         return true;
@@ -146,8 +146,8 @@ public:
             if(workload == "unique"){
                 const auto meshPath = StringFormat(m_context.objectArena, "project/smoke/gather_benchmark/meshes/mesh_{:02}", index);
                 const auto materialPath = StringFormat(m_context.objectArena, "project/smoke/gather_benchmark/materials/glass_{:02}", index);
-                mesh = SmokeMeshRef(meshPath.c_str());
-                material = SmokeMaterialRef(materialPath.c_str());
+                mesh = SmokeMeshRef(AStringView(meshPath));
+                material = SmokeMaterialRef(AStringView(materialPath));
             }
             auto entity = m_world->createEntity();
             auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();

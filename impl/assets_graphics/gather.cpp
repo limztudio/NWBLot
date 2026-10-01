@@ -99,9 +99,9 @@ bool MergeGatheredGraphicsAsset(
             || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum
             || previous.bytecodeChecksum != record.bytecodeChecksum){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting shader index record '{}' variant '{}' stage '{}'")
-                , StringConvert(record.shaderName.c_str())
+                , StringConvert(record.shaderName.resolvedText())
                 , StringConvert(record.variantName)
-                , StringConvert(record.stage.c_str())
+                , StringConvert(record.stage.resolvedText())
             );
             return false;
         }

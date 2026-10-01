@@ -23,6 +23,7 @@ bool EnsureEmptyStagedDirectory(const Path& directoryPath, AStringView operation
 
 class StagedDirectoryCleanupGuard : NoCopy{
 public:
+    // The operation and label backing text must outlive this guard.
     StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
     ~StagedDirectoryCleanupGuard();
 
@@ -32,8 +33,8 @@ public:
 
 private:
     Path m_directoryPath;
-    ACompactString m_operationName;
-    ACompactString m_label;
+    AStringView m_operationName;
+    AStringView m_label;
     bool m_active = true;
 };
 

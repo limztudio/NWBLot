@@ -294,7 +294,7 @@ static bool AppendShaderIndexToManifest(
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
-            StringConvert(shaderIndexVirtualPath.c_str())
+            StringConvert(shaderIndexVirtualPath.resolvedText())
         );
         return false;
     }
@@ -368,7 +368,7 @@ bool AppendPreparedShadersToManifest(
         if(!shaderName || !stageName || entry.entryPoint.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'")
                 , StringConvert(entry.name)
-                , StringConvert(entry.archiveStage.c_str())
+                , StringConvert(entry.archiveStage.view())
                 , StringConvert(entry.entryPoint)
             );
             return false;
@@ -418,7 +418,7 @@ bool AppendPreparedShadersToManifest(
             if(!virtualPath){
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
                     , StringConvert(entry.name)
-                    , StringConvert(entry.archiveStage.c_str())
+                    , StringConvert(entry.archiveStage.view())
                     , StringConvert(generatedVariantName)
                 );
                 return false;
@@ -427,7 +427,7 @@ bool AppendPreparedShadersToManifest(
             const NameHash virtualPathHash = virtualPath.hash();
             if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
                 NWB_LOGGER_ERROR(NWB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
-                    , StringConvert(virtualPath.c_str())
+                    , StringConvert(virtualPath.resolvedText())
                     , StringConvert(entry.name)
                     , StringConvert(generatedVariantName)
                 );
@@ -447,13 +447,13 @@ bool AppendPreparedShadersToManifest(
             );
             if(payloadFailure != ShaderBinaryPayload::AssetPayloadFailure::None){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})")
-                    , StringConvert(virtualPath.c_str())
+                    , StringConvert(virtualPath.resolvedText())
                     , static_cast<u32>(payloadFailure)
                 );
                 return false;
             }
             if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, shaderAssetPayload, cookKeyHash)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader payload '{}' to manifest"), StringConvert(virtualPath.c_str()));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader payload '{}' to manifest"), StringConvert(virtualPath.resolvedText()));
                 return false;
             }
 

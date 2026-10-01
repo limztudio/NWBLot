@@ -409,8 +409,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
 
     if(!object.parentObject && object.parentJoint){
         NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' uses parent_joint '{}' without parent_object")
-            , StringConvert(object.name.c_str())
-            , StringConvert(object.parentJoint.c_str())
+            , StringConvert(object.name.resolvedText())
+            , StringConvert(object.parentJoint.resolvedText())
         );
         return false;
     }
@@ -419,8 +419,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         attachment.parentEntity = findSpawnedObject(owner, object.parentObject);
         if(!attachment.parentEntity.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing parent object '{}'")
-                , StringConvert(object.name.c_str())
-                , StringConvert(object.parentObject.c_str())
+                , StringConvert(object.name.resolvedText())
+                , StringConvert(object.parentObject.resolvedText())
             );
             return false;
         }
@@ -428,8 +428,8 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         const ModelSkeletonComponent* skeletonComponent = m_world.tryGetComponent<ModelSkeletonComponent>(attachment.parentEntity);
         if(!skeletonComponent){
             NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' parent_object '{}' is not a skeleton object")
-                , StringConvert(object.name.c_str())
-                , StringConvert(object.parentObject.c_str())
+                , StringConvert(object.name.resolvedText())
+                , StringConvert(object.parentObject.resolvedText())
             );
             return false;
         }
@@ -443,9 +443,9 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
             attachment.parentJointIndex = skeleton->findJointIndex(object.parentJoint);
             if(attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
                 NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: static mesh object '{}' targets missing joint '{}' on skeleton object '{}'")
-                    , StringConvert(object.name.c_str())
-                    , StringConvert(object.parentJoint.c_str())
-                    , StringConvert(object.parentObject.c_str())
+                    , StringConvert(object.name.resolvedText())
+                    , StringConvert(object.parentJoint.resolvedText())
+                    , StringConvert(object.parentObject.resolvedText())
                 );
                 return false;
             }
@@ -459,7 +459,7 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     const Core::ECS::EntityID skeletonEntity = findSpawnedObject(owner, object.skeletonObject);
     if(!skeletonEntity.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: skinned mesh object '{}' targets missing skeleton object")
-            , StringConvert(object.name.c_str())
+            , StringConvert(object.name.resolvedText())
         );
         return false;
     }

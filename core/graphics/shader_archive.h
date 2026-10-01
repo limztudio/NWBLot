@@ -22,7 +22,7 @@ public:
     static constexpr StringView s_IndexVirtualPath = "shader/index.bin";
     static constexpr StringView s_DefaultVariant = "default";
     static constexpr StringView s_BindlessTlasVariant = "NWB_BINDLESS_TLAS=1";
-    inline static constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath.data());
+    inline static constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath);
 
 
 public:

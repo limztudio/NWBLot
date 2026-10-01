@@ -107,8 +107,7 @@ bool SelectBuildInputs(
     for(const Assets::AssetString& input : options.inputs){
         ErrorCode error;
         Path path(paths.repoRoot.arena());
-        const Assets::ScratchString inputText(input, scratchArena);
-        if(!ResolveAbsolutePath(paths.repoRoot, inputText, path, error)){
+        if(!ResolveAbsolutePath(paths.repoRoot, AStringView(input), path, error)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
             return false;
         }

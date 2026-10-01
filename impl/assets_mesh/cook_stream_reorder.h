@@ -132,7 +132,7 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
     if(index == s_MeshMissingStreamIndex){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing")
             , metaKind
-            , StringConvert(virtualPath.c_str())
+            , StringConvert(virtualPath.resolvedText())
             , streamName
         );
         return false;
@@ -142,7 +142,7 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
     if(static_cast<usize>(sourceIndex) >= source.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is out of range")
             , metaKind
-            , StringConvert(virtualPath.c_str())
+            , StringConvert(virtualPath.resolvedText())
             , streamName
         );
         return false;
@@ -153,7 +153,7 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
         if(reordered.size() >= static_cast<usize>(s_MeshMissingStreamIndex)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': reordered {} stream exceeds u32 index limits")
                 , metaKind
-                , StringConvert(virtualPath.c_str())
+                , StringConvert(virtualPath.resolvedText())
                 , streamName
             );
             return false;

@@ -527,7 +527,7 @@ bool GpuNativePacketRecorder::recordPacket(
             }
             else if(!recorded && recordThunkInvoked){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
-                    , StringConvert(taskView.identity.c_str())
+                    , StringConvert(taskView.identity.resolvedText())
                     , StringConvert(taskView.markerLabel)
                     , packetID.index
                     , packetID.generation

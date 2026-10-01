@@ -75,7 +75,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source mesh '{}' has no positions for runtime bounds")
-            , StringConvert(instance.sourceName.c_str())
+            , StringConvert(instance.sourceName.resolvedText())
         );
         return false;
     }
@@ -88,7 +88,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 
     if(!AabbTests::Valid(minBounds, maxBounds)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source mesh '{}' has invalid runtime bounds")
-            , StringConvert(instance.sourceName.c_str())
+            , StringConvert(instance.sourceName.resolvedText())
         );
         return false;
     }
@@ -243,7 +243,7 @@ template<typename MeshT, typename SkinStreamT>
     if(
         !BeginDerivedNameHash(meshName, derivedHash)
         || !UpdateDerivedNameHashText(derivedHash, AStringView(":skin:"))
-        || !UpdateDerivedNameHashText(derivedHash, AStringView(skinName.c_str()))
+        || !UpdateDerivedNameHashText(derivedHash, skinName.resolvedText())
     )
         return NAME_NONE;
 
@@ -386,8 +386,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Skin* loadedSkin = preloadedSkin;
     if(loadedSkin->mesh().name() != meshAsset.name()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skin '{}' targets a different mesh than '{}'")
-            , StringConvert(skinAsset.name().c_str())
-            , StringConvert(meshAsset.name().c_str())
+            , StringConvert(skinAsset.name().resolvedText())
+            , StringConvert(meshAsset.name().resolvedText())
         );
         return false;
     }

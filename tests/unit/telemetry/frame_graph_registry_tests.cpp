@@ -32,12 +32,12 @@ class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphCont
 public:
     virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
         const Telemetry::FrameGraphNodeHandle source = builder.addPass(Name("source"), "Source");
-        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_TARGET.data()), "Target");
-        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_TARGET.data()), "Duplicate Target");
+        const Telemetry::FrameGraphNodeHandle target = builder.addResource(Name(s_TARGET), "Target");
+        const Telemetry::FrameGraphNodeHandle duplicateTarget = builder.addResource(Name(s_TARGET), "Duplicate Target");
         if(!target.valid() || !duplicateTarget.valid())
             return false;
 
-        builder.dependsOnByName(source, Name(s_TARGET.data()), 7u);
+        builder.dependsOnByName(source, Name(s_TARGET), 7u);
         builder.dependsOnByName(source, Name("missing"), 9u);
         return true;
     }

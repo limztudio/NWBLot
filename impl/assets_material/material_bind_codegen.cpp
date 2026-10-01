@@ -59,14 +59,8 @@ static constexpr usize s_MaterialBindGeneratedInstanceReserveBytes = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildMaterialBindIncludeRoot(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    ScratchString includeDirectoryName(MaterialBindNames::GeneratedIncludeCacheDirectoryText(), scratchArena);
-    return cacheDirectory / configurationName.c_str() / includeDirectoryName.c_str();
+static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
+    return cacheDirectory / configurationSafeName / MaterialBindNames::GeneratedIncludeCacheDirectoryText();
 }
 
 
@@ -239,13 +233,13 @@ static CookString BuildMaterialBindFieldLookupFunctionName(
 
 static bool AppendMaterialBindConstantPrefix(
     const AStringView includePath,
-    const CookString& symbol,
+    const AStringView symbol,
     const AStringView type,
     ScratchHashSet<ScratchString>& inOutSymbols,
     ScratchArena& scratchArena,
     CookString& inOutSource
 ){
-    if(!RegisterGeneratedMaterialBindSymbol(includePath, AStringView(symbol), inOutSymbols, scratchArena))
+    if(!RegisterGeneratedMaterialBindSymbol(includePath, symbol, inOutSymbols, scratchArena))
         return false;
 
     inOutSource += "static const ";
@@ -262,7 +256,7 @@ static void AppendMaterialBindConstantSuffix(CookString& inOutSource){
 
 static bool AppendMaterialBindU32Constant(
     const AStringView includePath,
-    const CookString& symbol,
+    const AStringView symbol,
     const u32 value,
     ScratchHashSet<ScratchString>& inOutSymbols,
     ScratchArena& scratchArena,
@@ -278,7 +272,7 @@ static bool AppendMaterialBindU32Constant(
 
 static bool AppendMaterialBindU64Constant(
     const AStringView includePath,
-    const CookString& symbol,
+    const AStringView symbol,
     const u64 value,
     ScratchHashSet<ScratchString>& inOutSymbols,
     ScratchArena& scratchArena,
@@ -542,8 +536,8 @@ static bool AppendMaterialBindFieldConstants(
     const MaterialBindStruct& bindStruct,
     const MaterialBindInstance& instance,
     const MaterialBindField& field,
-    const CookString& keySymbol,
-    const CookString& defaultSymbol,
+    const AStringView keySymbol,
+    const AStringView defaultSymbol,
     ScratchHashSet<ScratchString>& inOutSymbols,
     ScratchArena& scratchArena,
     CookString& inOutSource
@@ -596,8 +590,8 @@ static bool AppendMaterialBindFieldConstants(
 
 static void AppendMaterialBindFieldAccessor(
     const MaterialBindField& field,
-    const CookString& byteOffsetSymbol,
-    const CookString& functionName,
+    const AStringView byteOffsetSymbol,
+    const AStringView functionName,
     const AStringView loadFunctionName,
     CookString& inOutSource
 ){
@@ -620,8 +614,8 @@ static bool AppendMaterialBindResourceFieldAccessor(
     const AStringView includePath,
     const MaterialLayoutFieldType::Enum fieldType,
     const MaterialBlockClass::Enum blockClass,
-    const CookString& byteOffsetSymbol,
-    const CookString& functionName,
+    const AStringView byteOffsetSymbol,
+    const AStringView functionName,
     CookString& inOutSource
 ){
     if(blockClass != MaterialBlockClass::MaterialConstant){
@@ -979,7 +973,7 @@ bool EmitMaterialBindIncludes(
     ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
-    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Material bind include generation"))
         return false;
     if(materialBindEntries.empty())
@@ -1001,7 +995,7 @@ bool EmitMaterialBindIncludes(
         if(!BuildMaterialBindIncludeSourceImpl(arena, bindEntry, generatedSource, scratchArena))
             return false;
 
-        const Path outputPath = outIncludeRoot / includePath.c_str();
+        const Path outputPath = outIncludeRoot / AStringView(includePath);
         ErrorCode errorCode;
         if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}")

@@ -110,8 +110,8 @@ struct MaterialInstanceValueTraits<Half4U>{
 
     NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
         , StringConvert(parameterNameText)
-        , StringConvert(materialInterface.c_str())
-        , StringConvert(component.materialInterface.c_str())
+        , StringConvert(materialInterface.resolvedText())
+        , StringConvert(component.materialInterface.resolvedText())
     );
     return false;
 }

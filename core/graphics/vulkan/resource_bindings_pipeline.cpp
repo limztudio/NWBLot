@@ -252,7 +252,7 @@ void Device::appendPipelineShaderStage(
     auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
     stageInfo.module = s->m_shaderModule;
-    stageInfo.pName = s->m_entryPointName.c_str();
+    stageInfo.pName = s->m_entryPointName.data();
 
     if(!s->m_specializationEntries.empty()){
         specializationInfos.push_back(s->makeSpecializationInfo());

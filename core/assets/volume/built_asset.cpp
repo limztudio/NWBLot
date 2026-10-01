@@ -94,7 +94,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             payloadSize = payload.size;
         }
         if(entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){

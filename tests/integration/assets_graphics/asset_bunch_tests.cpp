@@ -76,7 +76,7 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     ASSERT_EQ(output.size(), s_ExpectedDualCount);
     EXPECT_EQ(output[0u].assetType, Name("probe"));
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
-    EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST.data()));
+    EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
     const Value* const items = output[0u].value.findField("items");
     ASSERT_NE(items, nullptr);
     ASSERT_TRUE(items->isList());
@@ -377,7 +377,7 @@ asset_bunch bunch = [first, second];
                 fixture.assetRoot, s_PROJECT, fixture.filePath, fixture.document, output, fixture.scratchArena
             ));
             ASSERT_EQ(output.size(), 1u);
-            EXPECT_EQ(output[0u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST.data()));
+            EXPECT_EQ(output[0u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
             output.clear();
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         }
@@ -480,7 +480,7 @@ ASSET_BUNCH bunch = [second, first];
         ));
         ASSERT_EQ(output.size(), s_ExpectedDualCount);
         EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
-        EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST.data()));
+        EXPECT_EQ(output[1u].virtualPath, Name(s_PROJECT_FIXTURES_BUNDLE_FIRST));
         const Value* const firstValues = output[1u].value.findField("values");
         ASSERT_NE(firstValues, nullptr);
         ASSERT_TRUE(firstValues->isList());

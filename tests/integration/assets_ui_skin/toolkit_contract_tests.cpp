@@ -119,7 +119,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(testArena, source, removed, candidate);
         EXPECT_TRUE(candidate.validatePayload());
-        EXPECT_FALSE(ValidateUiSkinToolkitContract(candidate)) << removed.c_str();
+        EXPECT_FALSE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
     const Name optional[]{ Name("button.hover"), Name("checkbox.checked"), Name("edit.focused"),
@@ -127,7 +127,7 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     for(const Name& removed : optional){
         UiSkin candidate(testArena.arena, source.virtualPath());
         CopyWithoutRegion(testArena, source, removed, candidate);
-        EXPECT_TRUE(ValidateUiSkinToolkitContract(candidate)) << removed.c_str();
+        EXPECT_TRUE(ValidateUiSkinToolkitContract(candidate)) << removed.resolvedText();
     }
 
     UiSkin noResize(testArena.arena, source.virtualPath());

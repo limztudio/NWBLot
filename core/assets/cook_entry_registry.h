@@ -136,6 +136,15 @@ template<typename StringT>
     return ToName(virtualPath);
 }
 
+[[nodiscard]] inline AStringView ToCookEntryText(const Name& virtualPath){
+    return virtualPath.resolvedText();
+}
+template<typename StringT>
+    requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> ToCookEntryText(const StringT& virtualPath){
+    return BasicStringView<typename StringT::value_type>(virtualPath.data(), virtualPath.size());
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -153,7 +162,7 @@ template<typename StringT>
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
-        , StringConvert(virtualPath.c_str())
+        , StringConvert(virtualPath.resolvedText())
         , assetKind
     );
     return false;
@@ -175,7 +184,7 @@ template<typename StringT>
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'")
         , assetKind
-        , StringConvert(virtualPath.c_str())
+        , StringConvert(virtualPath.resolvedText())
     );
     return false;
 }
@@ -244,7 +253,7 @@ public:
     )override{
         if(!m_parseDocument){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
-                , StringConvert(m_assetType.c_str())
+                , StringConvert(m_assetType.resolvedText())
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
@@ -265,7 +274,7 @@ public:
     )override{
         if(!m_parseValue){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
-                , StringConvert(m_assetType.c_str())
+                , StringConvert(m_assetType.resolvedText())
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
@@ -295,7 +304,7 @@ public:
                 if(m_logBuildFailure){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
                         , m_assetKindText
-                        , StringConvert(entry.virtualPath.c_str())
+                        , StringConvert(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath))
                     );
                 }
                 return false;
@@ -365,7 +374,7 @@ public:
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
-                , StringConvert(assetType.c_str())
+                , StringConvert(assetType.resolvedText())
             );
             return false;
         }
@@ -391,7 +400,7 @@ public:
         }
         if(!buildAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function")
-                , StringConvert(assetType.c_str())
+                , StringConvert(assetType.resolvedText())
             );
             return false;
         }
@@ -408,7 +417,7 @@ public:
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
-                , StringConvert(assetType.c_str())
+                , StringConvert(assetType.resolvedText())
             );
             return false;
         }
@@ -445,7 +454,7 @@ public:
             return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
-            , StringConvert(assetType.c_str())
+            , StringConvert(assetType.resolvedText())
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -463,7 +472,7 @@ public:
             return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
         NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'")
-            , StringConvert(assetType.c_str())
+            , StringConvert(assetType.resolvedText())
             , PathToString<tchar>(nwbFilePath)
         );
         return false;

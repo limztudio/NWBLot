@@ -318,7 +318,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         if(hMem){
                             void* lockedMemory = GlobalLock(hMem);
                             if(lockedMemory){
-                                NWB_MEMCPY(lockedMemory, byteSize, combined.c_str(), byteSize);
+                                NWB_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
                                 GlobalUnlock(hMem);
 #if defined(UNICODE) || defined(_UNICODE)
                                 if(!SetClipboardData(CF_UNICODETEXT, hMem))

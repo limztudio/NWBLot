@@ -62,11 +62,6 @@ public:
         return *this;
     }
 
-    NwbTextOutputStream& operator<<(const AString& text){
-        writeText(AStringView(text.data(), text.size()));
-        return *this;
-    }
-
     template<typename T>
         requires(!IsConvertible_V<const T&, AStringView>)
     NwbTextOutputStream& operator<<(const T& value){
@@ -264,7 +259,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-bool NameUsed(const UtilityVector<AString>& names, const AString& name){
+bool NameUsed(const UtilityVector<AString>& names, const AStringView name){
     for(const AString& usedName : names){
         if(usedName == name)
             return true;
@@ -299,10 +294,8 @@ UtilityVector<AString> BuildUniqueJointNames(const UtilityVector<ufbx_node*>& jo
     return names;
 }
 
-AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
-    virtualRoot = TrimCopy(Move(virtualRoot));
-    if(virtualRoot.empty())
-        virtualRoot = AString(s_DefaultVirtualRootText);
+AString BuildVirtualBasePath(const Path& outputPath, const AStringView virtualRoot){
+    const AStringView trimmedVirtualRoot = TrimView(virtualRoot);
 
     Path noExtension = outputPath;
     noExtension.replace_extension();
@@ -322,7 +315,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     if(relativePath.empty())
         relativePath = noExtension.filename();
 
-    AString virtualPath = Move(virtualRoot);
+    AString virtualPath(trimmedVirtualRoot.empty() ? s_DefaultVirtualRootText : trimmedVirtualRoot);
     if(!virtualPath.empty() && virtualPath.back() != '/')
         virtualPath.push_back('/');
 
@@ -438,8 +431,8 @@ void WriteSkinAssetBody(
 
 bool WriteSkinAsset(
     const Path& outputPath,
-    const AString& meshName,
-    const AString& skeletonName,
+    const AStringView meshName,
+    const AStringView skeletonName,
     const UtilityVector<MeshSkinInfluence>& influences,
     const UtilityVector<JointMatrix>& inverseBindMatrices
 ){
@@ -473,8 +466,8 @@ void WriteModelAssetBody(
     Stream& file,
     const AStringView variableName,
     const AStringView meshName,
-    const AString* skinName,
-    const AString* skeletonName,
+    const Optional<AStringView> skinName,
+    const Optional<AStringView> skeletonName,
     const AStringView skinnedMeshSkeletonName = s_SkeletonAssetKindText,
     const bool quoteAssetReferences = true,
     const bool quoteSkinnedMeshSkeletonReference = true
@@ -515,9 +508,9 @@ void WriteModelAssetBody(
 
 bool WriteModelAsset(
     const Path& outputPath,
-    const AString& meshName,
-    const AString* skinName,
-    const AString* skeletonName
+    const AStringView meshName,
+    const Optional<AStringView> skinName,
+    const Optional<AStringView> skeletonName
 ){
     if(!EnsureOutputDirectory(outputPath, s_ModelAssetKindText))
         return false;
@@ -543,8 +536,8 @@ bool WriteModelAsset(
 bool WriteAssetBunch(
     const Path& outputPath,
     const SourceMeshStreams& mesh,
-    const AString* skinName,
-    const AString* skeletonName,
+    const Optional<AStringView> skinName,
+    const Optional<AStringView> skeletonName,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
     const UtilityVector<MeshSkinInfluence>* skinInfluences,
@@ -578,13 +571,19 @@ bool WriteAssetBunch(
     file << "\n\n";
     file << "model model;\n\n";
     if(skinnedBunch){
-        const AString localMeshName(s_MeshAssetKindText);
-        const AString localSkinName(s_SkinAssetKindText);
-        const AString localSkeletonName(s_SkeletonAssetKindText);
-        WriteModelAssetBody(file, s_ModelAssetKindText, localMeshName, &localSkinName, &localSkeletonName, s_SkeletonAssetKindText, false, true);
+        WriteModelAssetBody(
+            file,
+            s_ModelAssetKindText,
+            s_MeshAssetKindText,
+            s_SkinAssetKindText,
+            s_SkeletonAssetKindText,
+            s_SkeletonAssetKindText,
+            false,
+            true
+        );
     }
     else{
-        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, nullptr, nullptr, s_SkeletonAssetKindText, false, false);
+        WriteModelAssetBody(file, s_ModelAssetKindText, s_MeshAssetKindText, {}, {}, s_SkeletonAssetKindText, false, false);
     }
 
     file << "\n\n";
@@ -617,8 +616,8 @@ bool WriteAssetBunch(
 bool WriteNwbAsset(
     const Path& outputPath,
     const SourceMeshStreams& mesh,
-    const AString& assetTypeText,
-    const AString& virtualRoot,
+    const AStringView assetTypeText,
+    const AStringView virtualRoot,
     const bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
@@ -653,9 +652,9 @@ bool WriteNwbAsset(
         if(skinnedModel){
             const AString skeletonName = virtualBase + "/skeleton";
             const AString skinName = virtualBase + "/skin";
-            return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, &skinName, &skeletonName);
+            return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName));
         }
-        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, nullptr, nullptr);
+        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {});
     }
 
     if(!skinnedModel){
@@ -667,8 +666,8 @@ bool WriteNwbAsset(
             return __hidden_asset_writer::WriteAssetBunch(
                 outputPath,
                 mesh,
-                nullptr,
-                nullptr,
+                {},
+                {},
                 skeletonJoints,
                 skeletonBindPoseMatrices,
                 nullptr,
@@ -677,7 +676,7 @@ bool WriteNwbAsset(
 
         if(!__hidden_asset_writer::WriteMeshAsset(meshPath, mesh))
             return false;
-        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, nullptr, nullptr);
+        return __hidden_asset_writer::WriteModelAsset(outputPath, meshName, {}, {});
     }
 
     if(!AssetWriterSkeletonDetail::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
@@ -712,8 +711,8 @@ bool WriteNwbAsset(
         return __hidden_asset_writer::WriteAssetBunch(
             outputPath,
             splitMesh,
-            &skinName,
-            &skeletonName,
+            AStringView(skinName),
+            AStringView(skeletonName),
             skeletonOutput.joints,
             skeletonOutput.bindPoseMatrices,
             &positionSkin,
@@ -723,7 +722,7 @@ bool WriteNwbAsset(
     return __hidden_asset_writer::WriteMeshAsset(meshPath, splitMesh)
         && __hidden_asset_writer::WriteSkeletonAsset(skeletonPath, skeletonOutput.joints, skeletonOutput.bindPoseMatrices)
         && __hidden_asset_writer::WriteSkinAsset(skinPath, meshName, skeletonName, positionSkin, skeletonOutput.inverseBindMatrices)
-        && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, &skinName, &skeletonName)
+        && __hidden_asset_writer::WriteModelAsset(outputPath, meshName, AStringView(skinName), AStringView(skeletonName))
     ;
 }
 

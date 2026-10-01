@@ -129,7 +129,7 @@ bool GatherAssets(const AssetGatherOptions& options){
                     !options.mergePayloads
                     || !options.mergePayloads(virtualPath, existing.payloadBytes, bytes.data() + payloadOffset, payloadSize)
                 ){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.c_str()));
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting built asset identity '{}'"), StringConvert(virtualPath.resolvedText()));
                     return false;
                 }
                 existing.identity.payloadSize = existing.payloadBytes.size();

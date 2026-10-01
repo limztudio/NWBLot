@@ -139,7 +139,6 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_filesystemFactory(desc.filesystemFactory)
-    , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_nativeQueueStates(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
@@ -241,7 +240,7 @@ Device::Device(const DeviceDesc& desc)
 
     m_context.instanceDispatch.vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     m_context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
-    m_pipelineCacheVolumeName.assign(VulkanDetail::s_PipelineCacheVolumeName);
+    m_pipelineCacheVolumeName = VulkanDetail::s_PipelineCacheVolumeName;
 
     m_context.extensions.bufferDeviceAddress = desc.bufferDeviceAddressSupported;
     m_context.hostQueryResetFeatureEnabled = desc.hostQueryResetFeatureEnabled;

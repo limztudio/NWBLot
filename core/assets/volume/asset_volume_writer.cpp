@@ -97,7 +97,7 @@ static bool PushManifestObjectFilePayloadToVolume(
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: object cache identity mismatch '{}' for '{}'")
             , PathToString<tchar>(entry.objectPath)
-            , StringConvert(entry.virtualPath.c_str())
+            , StringConvert(entry.virtualPath.resolvedText())
         );
         return false;
     }
@@ -105,7 +105,7 @@ static bool PushManifestObjectFilePayloadToVolume(
     if(filesystem.writeFileDeferred(entry.virtualPath, payload.data, payload.size))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.resolvedText()));
     return false;
 }
 
@@ -120,13 +120,13 @@ static bool PushManifestEntryToVolume(
             entry.identity.payloadSize != static_cast<u64>(entry.payloadBytes.size())
             || entry.identity.payloadHash != ComputeFnv64Bytes(entry.payloadBytes.data(), entry.payloadBytes.size())
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest payload identity mismatch '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }
         if(filesystem.writeFileDeferred(entry.virtualPath, entry.payloadBytes))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push manifest payload '{}'"), StringConvert(entry.virtualPath.resolvedText()));
         return false;
     case AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload:
         return PushManifestObjectFilePayloadToVolume(entry, objectBytes, filesystem);
@@ -134,7 +134,7 @@ static bool PushManifestEntryToVolume(
         break;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: manifest entry '{}' has an unknown source"), StringConvert(entry.virtualPath.resolvedText()));
     return false;
 }
 

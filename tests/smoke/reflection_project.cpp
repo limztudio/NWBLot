@@ -106,7 +106,7 @@ public:
         // every native depth mip, to cover expected completion latency. The benchmark still checks sample coverage.
         for(const Name& scope : singleRangeScopes){
             if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.c_str()));
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.resolvedText()));
                 return false;
             }
         }

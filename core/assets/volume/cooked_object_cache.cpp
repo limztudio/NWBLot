@@ -242,7 +242,7 @@ public:
         if(!codec.serialize(asset, m_payloadBinary)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'")
                 , assetKind
-                , StringConvert(virtualPath.c_str())
+                , StringConvert(virtualPath.resolvedText())
             );
             return false;
         }
@@ -332,7 +332,7 @@ static bool RegisterMergedManifestVirtualPath(
     if(seenVirtualPathHashes.insert(virtualPath.hash()).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.c_str()));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate registry manifest virtual path '{}'"), StringConvert(virtualPath.resolvedText()));
     return false;
 }
 
@@ -431,7 +431,7 @@ bool ReadCookedObjectPayload(
     if(!__hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, objectBytes, header, payloadOffset)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'")
             , PathToString<tchar>(objectPath)
-            , StringConvert(expectedVirtualPath.c_str())
+            , StringConvert(expectedVirtualPath.resolvedText())
         );
         return false;
     }

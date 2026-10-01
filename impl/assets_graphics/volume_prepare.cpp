@@ -97,7 +97,7 @@ static bool AppendUniqueShaderEntry(
     if(!graphicsMetadata.seenShaderIdentityKeys.insert(shaderIdentityKey).second){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate shader identity '{}' for stage '{}' from meta '{}'")
             , StringConvert(shaderEntry.name)
-            , StringConvert(shaderEntry.archiveStage.c_str())
+            , StringConvert(shaderEntry.archiveStage.view())
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -263,8 +263,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             context.scratchArena
         )){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root")
-                , StringConvert(csgShapeEntry.shapeName.c_str())
-                , StringConvert(csgShapeEntry.evalInclude.c_str())
+                , StringConvert(csgShapeEntry.shapeName.resolvedText())
+                , StringConvert(AStringView(csgShapeEntry.evalInclude))
             );
             return false;
         }
@@ -303,7 +303,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root")
                 , StringConvert(materialName)
                 , StringConvert(label)
-                , StringConvert(virtualSource.c_str())
+                , StringConvert(AStringView(virtualSource))
             );
             return false;
         }
@@ -317,7 +317,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return true;
     };
     for(auto& materialEntry : materialEntries){
-        const AStringView materialName(materialEntry.virtualPath.c_str());
+        const AStringView materialName(materialEntry.virtualPath);
         if(!resolveMaterialVirtualSource(materialEntry.bxdfSource, AStringView("bxdf"), materialName))
             return false;
         if(!resolveMaterialVirtualSource(materialEntry.surfaceSource, AStringView("surface"), materialName))

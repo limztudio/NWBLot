@@ -88,13 +88,13 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
         return true;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
-            , StringConvert(meshName.c_str())
+            , StringConvert(meshName.resolvedText())
             , label
         );
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
-            , StringConvert(meshName.c_str())
+            , StringConvert(meshName.resolvedText())
             , label
         );
         return false;
@@ -103,7 +103,7 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     }
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
         , label
-        , StringConvert(meshName.c_str())
+        , StringConvert(meshName.resolvedText())
     );
     return false;
 }
@@ -113,7 +113,7 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
             , label
-            , StringConvert(meshName.c_str())
+            , StringConvert(meshName.resolvedText())
         );
     }
     return bufferName;
@@ -219,7 +219,7 @@ template<typename PayloadVector>
 ){
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer")
-            , StringConvert(meshName.c_str())
+            , StringConvert(meshName.resolvedText())
             , label
         );
         return false;
@@ -231,7 +231,7 @@ template<typename PayloadVector>
         || desc.byteSize < static_cast<u64>(logicalByteCount)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes")
-            , StringConvert(meshName.c_str())
+            , StringConvert(meshName.resolvedText())
             , label
             , logicalByteCount
         );
@@ -311,7 +311,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
     if(!__hidden_mesh::BuildPositionStreamBounds(mesh.positionStream(), createdMesh.csgLocalBounds)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
-            , StringConvert(meshPath.c_str())
+            , StringConvert(meshPath.resolvedText())
         );
         return false;
     }
@@ -429,7 +429,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         triangleIndices.reserve(indexCount);
         if(!BuildMeshletTriangleIndices(mesh, triangleIndices)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
@@ -437,7 +437,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         const Name indexBufferName = DeriveName(meshPath, AStringView(":rt_triangle_indices"));
         if(!indexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
@@ -457,13 +457,13 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         );
         if(indexFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
 
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})")
-            , StringConvert(meshPath.c_str())
+            , StringConvert(meshPath.resolvedText())
             , static_cast<u64>(triangleIndices.size())
             , static_cast<u64>(createdMesh.meshletPrimitiveIndexCount)
         );
@@ -483,7 +483,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         Vector<AttribGpu, Core::Alloc::ScratchArena> triangleAttributes{ scratchArena };
         if(!BuildMeshletTriangleAttributes(mesh, triangleAttributes)){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
@@ -491,7 +491,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         const Name attributeBufferName = DeriveName(meshPath, AStringView(":rt_triangle_attributes"));
         if(!attributeBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
@@ -509,7 +509,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         );
         if(attributeFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'")
-                , StringConvert(meshPath.c_str())
+                , StringConvert(meshPath.resolvedText())
             );
             return false;
         }
@@ -561,7 +561,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     if(foundMesh != m_meshState.m_meshes.end()){
         if(!foundMesh.value().runtimeMesh){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
-                , StringConvert(desc.meshKey.c_str())
+                , StringConvert(desc.meshKey.resolvedText())
             );
             return false;
         }
@@ -606,7 +606,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     __hidden_mesh::RefreshRuntimeMeshContent(createdMesh, desc);
     if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles")
-            , StringConvert(createdMesh.meshName.c_str())
+            , StringConvert(createdMesh.meshName.resolvedText())
             , createdMesh.meshletPrimitiveIndexCount
         );
         return false;

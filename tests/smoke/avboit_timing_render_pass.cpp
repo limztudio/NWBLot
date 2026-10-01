@@ -65,7 +65,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
     auto& device = graphics.getDevice();
     for(const Name& scope : scopes){
         if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
             return false;
         }
     }
@@ -76,7 +76,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
         };
         for(const Name& scope : causticScopes){
             if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.c_str()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
                 return false;
             }
         }

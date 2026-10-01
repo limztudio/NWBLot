@@ -27,7 +27,7 @@ BackendContext::BackendContext(
     , m_arena(m_allocator.getObjectArena())
     , m_enabledExtensions(m_arena)
     , m_optionalExtensions(m_arena)
-    , m_rayTracingExtensions(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), m_arena)
+    , m_rayTracingExtensions(0, ExtensionNameHasher(), ExtensionNameEqualTo(), m_arena)
     , m_rendererString(m_arena)
     , m_swapChainImages(m_arena)
     , m_nativeQueues(m_arena)

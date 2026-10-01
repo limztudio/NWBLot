@@ -23,10 +23,24 @@ NWB_VULKAN_BEGIN
 
 class BackendContext final{
 private:
-    using ExtensionStringSet = HashSet<GraphicsString, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
-    using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, Hasher<GraphicsString>, EqualTo<GraphicsString>, GraphicsArena>;
+    struct ExtensionNameHasher{
+        using is_transparent = void;
+
+
+        [[nodiscard]] usize operator()(const AStringView value)const noexcept{ return Hasher<AStringView>{}(value); }
+    };
+    struct ExtensionNameEqualTo{
+        using is_transparent = void;
+
+
+        [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{ return lhs == rhs; }
+    };
+
+    using ExtensionStringSet = HashSet<GraphicsString, ExtensionNameHasher, ExtensionNameEqualTo, GraphicsArena>;
+    using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, ExtensionNameHasher, ExtensionNameEqualTo, GraphicsArena>;
 
     using ExtEntry = DeviceExtensionEntry;
+
 
     struct VulkanExtensionSet{
         ExtensionStringSet instance;
@@ -34,9 +48,9 @@ private:
         DeviceExtensionMap device;
 
         explicit VulkanExtensionSet(Alloc::GlobalArena& arena)
-            : instance(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
-            , layers(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
-            , device(0, Hasher<GraphicsString>(), EqualTo<GraphicsString>(), arena)
+            : instance(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
+            , layers(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
+            , device(0, ExtensionNameHasher(), ExtensionNameEqualTo(), arena)
         {}
     };
 
@@ -134,16 +148,13 @@ public:
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
-        const GraphicsString lookup(extensionName, m_arena);
-        return m_enabledExtensions.instance.find(lookup) != m_enabledExtensions.instance.end();
+        return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
     }
     [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const{
-        const GraphicsString lookup(extensionName, m_arena);
-        return m_enabledExtensions.device.find(lookup) != m_enabledExtensions.device.end();
+        return m_enabledExtensions.device.find(extensionName) != m_enabledExtensions.device.end();
     }
     [[nodiscard]] bool isLayerEnabled(AStringView layerName)const{
-        const GraphicsString lookup(layerName, m_arena);
-        return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
+        return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
 
     Texture* getBackBuffer(u32 index)const;

@@ -191,13 +191,8 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     return true;
 }
 
-[[nodiscard]] static Path BuildCsgShapeIncludeRoot(
-    const Path& cacheDirectory,
-    const AStringView configurationSafeName,
-    ScratchArena& scratchArena
-){
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    return cacheDirectory / configurationName.c_str() / "csg_modules";
+[[nodiscard]] static Path BuildCsgShapeIncludeRoot(const Path& cacheDirectory, const AStringView configurationSafeName){
+    return cacheDirectory / configurationSafeName / "csg_modules";
 }
 
 [[nodiscard]] static bool SameModule(const CsgShapeCookEntry& entry, const Name shaderModule){
@@ -205,7 +200,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 }
 
 [[nodiscard]] static bool ShapeNameLess(const CsgShapeCookEntry& lhs, const CsgShapeCookEntry& rhs){
-    return AStringView(lhs.shapeName.c_str()) < AStringView(rhs.shapeName.c_str());
+    return lhs.shapeName.resolvedText() < rhs.shapeName.resolvedText();
 }
 
 [[nodiscard]] static bool MakeShapeIdDefineValue(
@@ -225,7 +220,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 [[nodiscard]] static bool WriteModuleInclude(
     const CsgShapeCookEntryVector& csgShapeEntries,
     const Name shaderModule,
-    const CookString& moduleInclude,
+    const AStringView moduleInclude,
     const Path& includeRoot,
     ScratchString& scratchSource
 ){
@@ -254,7 +249,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
         scratchSource += "\n\n";
     }
 
-    const Path outputPath = includeRoot / moduleInclude.c_str();
+    const Path outputPath = includeRoot / moduleInclude;
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
@@ -321,7 +316,7 @@ namespace AssetsCsgCook{
     if(!shaderModule)
         return false;
 
-    CookString safeModuleName = BuildCanonicalSafeCacheName(arena, AStringView(shaderModule.c_str()));
+    CookString safeModuleName = BuildCanonicalSafeCacheName(arena, shaderModule.resolvedText());
     if(safeModuleName.empty())
         return false;
 
@@ -371,7 +366,7 @@ bool ParseCsgShapeCookMetadata(
     if(outEntry.moduleInclude.empty() && !BuildDefaultCsgShapeModuleInclude(cookArena, outEntry.shaderModule, outEntry.moduleInclude)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'")
             , PathToString<tchar>(nwbFilePath)
-            , StringConvert(outEntry.shaderModule.c_str())
+            , StringConvert(outEntry.shaderModule.resolvedText())
         );
         return false;
     }
@@ -419,15 +414,15 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
         CsgShapeCookEntry& entry = csgShapeEntries[index];
         const CsgShapeTypeId shapeTypeId = CsgShapeTypeIdFromName(entry.shapeName);
         if(shapeTypeId == s_InvalidCsgShapeTypeId){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), StringConvert(entry.shapeName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), StringConvert(entry.shapeName.resolvedText()));
             return false;
         }
 
         const auto foundShapeId = shapeIdNames.find(shapeTypeId);
         if(foundShapeId != shapeIdNames.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}")
-                , StringConvert(foundShapeId.value().c_str())
-                , StringConvert(entry.shapeName.c_str())
+                , StringConvert(foundShapeId.value().resolvedText())
+                , StringConvert(entry.shapeName.resolvedText())
                 , shapeTypeId
             );
             return false;
@@ -450,7 +445,7 @@ bool EmitCsgShapeModuleIncludes(
     using namespace __hidden_assets_csg_cook;
 
     outIncludeRoot.clear();
-    outIncludeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    outIncludeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName);
     if(csgShapeEntries.empty()){
         if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
             return false;
@@ -466,7 +461,7 @@ bool EmitCsgShapeModuleIncludes(
     seenShapeNames.reserve(csgShapeEntries.size());
     for(const CsgShapeCookEntry& entry : csgShapeEntries){
         if(!seenShapeNames.insert(entry.shapeName.hash()).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: duplicate shape '{}'"), StringConvert(entry.shapeName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: duplicate shape '{}'"), StringConvert(entry.shapeName.resolvedText()));
             return false;
         }
     }
@@ -496,7 +491,7 @@ bool EmitCsgShapeModuleIncludes(
                 continue;
 
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: module '{}' uses multiple generated include paths ('{}' and '{}')")
-                , StringConvert(moduleEntry.shaderModule.c_str())
+                , StringConvert(moduleEntry.shaderModule.resolvedText())
                 , StringConvert(moduleEntry.moduleInclude)
                 , StringConvert(entry.moduleInclude)
             );
@@ -512,8 +507,8 @@ bool EmitCsgShapeModuleIncludes(
         if(!generatedIncludeOwner.second && generatedIncludeOwner.first.value() != moduleEntry.shaderModule){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'")
                 , StringConvert(moduleEntry.moduleInclude)
-                , StringConvert(generatedIncludeOwner.first.value().c_str())
-                , StringConvert(moduleEntry.shaderModule.c_str())
+                , StringConvert(generatedIncludeOwner.first.value().resolvedText())
+                , StringConvert(moduleEntry.shaderModule.resolvedText())
             );
             return false;
         }

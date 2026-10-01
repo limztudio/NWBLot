@@ -254,7 +254,7 @@ private:
         const SIMDMatrix ellipsoid = MatrixAffineTransformation(
             VectorSet(0.5f, 0.45f, 0.75f, 0.0f), VectorZero(), QuaternionIdentity(), VectorSet(0.0f, 1.0f, -6.0f, 0.0f)
         );
-        addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, ellipsoid);
+        addAnalyticCutter(1u, Name(s_ENGINE_CSG_SPHERE), sphere, ellipsoid);
 
         NWB::Impl::CsgCapsuleShapeParameters capsule;
         capsule.radiusHalfHeight = Float4(0.35f, 0.25f, 0.0f, 0.0f);
@@ -270,8 +270,8 @@ private:
         addAnalyticCutter(3u, Name("engine/csg/capsule"), capsule, alongLight);
 
         sphere.radius = Float4(0.55f, 0.0f, 0.0f, 0.0f);
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
-        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE.data()), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
+        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -6.25f));
+        addAnalyticCutter(4u, Name(s_ENGINE_CSG_SPHERE), sphere, MatrixTranslation(0.0f, -1.0f, -5.75f));
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
         addAnalyticCutter(5u, Name("engine/csg/plane"), plane, MatrixIdentity());

@@ -533,14 +533,14 @@ struct MeshletState{
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
     BindingLayoutHandle bindingLayout;
-    GraphicsString exportName;
+    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
+    AStringView exportName;
 
-    explicit RayTracingPipelineShaderDesc(GraphicsArena& arena);
     ~RayTracingPipelineShaderDesc();
 
     RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value);
     RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value);
-    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
+    RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName = value; return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
@@ -548,17 +548,17 @@ struct RayTracingPipelineHitGroupDesc{
     ShaderHandle anyHitShader;
     ShaderHandle intersectionShader;
     BindingLayoutHandle bindingLayout;
-    GraphicsString exportName;
+    // Borrowed until pipeline creation; retained descriptions refer to pipeline-owned group metadata.
+    AStringView exportName;
     bool isProceduralPrimitive = false;
 
-    explicit RayTracingPipelineHitGroupDesc(GraphicsArena& arena);
     ~RayTracingPipelineHitGroupDesc();
 
     RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value);
     RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value);
     RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value);
     RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value);
-    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
+    RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName = value; return *this; }
     constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
 

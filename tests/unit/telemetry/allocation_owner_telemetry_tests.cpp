@@ -368,7 +368,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, firstEvent->payload.data(), firstEvent->payload.size(), parsed));
     ExpectSnapshot(parsed.snapshot, first);
     EXPECT_FALSE(parsed.delta.hasSamples);
-    EXPECT_EQ(AStringView(parsed.scopeText.data(), parsed.scopeText.size()), AStringView(ownerName.c_str()));
+    EXPECT_EQ(AStringView(parsed.scopeText.data(), parsed.scopeText.size()), ownerName.resolvedText());
 
     void* const resized = owner.reallocate(allocation.pointer, 1u, 101u);
     ASSERT_NE(resized, nullptr);
@@ -418,7 +418,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     const AStringView json(report.json.data(), report.json.size());
     const AStringView ownerRecord = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
     ASSERT_FALSE(ownerRecord.empty());
-    EXPECT_NE(ownerRecord.find(ownerName.c_str()), AStringView::npos);
+    EXPECT_NE(ownerRecord.find(ownerName.resolvedText()), AStringView::npos);
     const usize deltaBegin = ownerRecord.find("\"delta\": {");
     ASSERT_NE(deltaBegin, AStringView::npos);
     const AStringView ownerFields = ownerRecord.substr(0u, deltaBegin);

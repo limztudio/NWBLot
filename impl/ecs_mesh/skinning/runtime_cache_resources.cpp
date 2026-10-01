@@ -41,7 +41,7 @@ static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
     if(instance.sourceName)
-        sourceText = StringConvert(arena, instance.sourceName.c_str());
+        sourceText = StringConvert(arena, instance.sourceName.resolvedText());
     else
         sourceText.assign(NWB_TEXT("<unnamed>"));
 

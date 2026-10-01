@@ -162,7 +162,7 @@ inline void EnqueuePreparedMessageAndCapture(
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventNameFromLogType(type),
         .category = diagnosticCategory,
-        .message = diagnosticMessage.c_str(),
+        .message = diagnosticMessage.view(),
         .file = file,
         .line = line,
     });
@@ -181,7 +181,7 @@ inline void EnqueuePreparedMessageAndCapture(
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventNameFromLogType(type),
         .category = diagnosticCategory,
-        .message = diagnosticMessage.c_str(),
+        .message = diagnosticMessage.view(),
         .file = file,
         .line = line,
     });
@@ -198,7 +198,7 @@ inline void CaptureMessageDiagnostic(
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .event = DiagnosticEventNameFromLogType(type),
         .category = diagnosticCategory,
-        .message = diagnosticMessage.c_str(),
+        .message = diagnosticMessage.view(),
         .file = file,
         .line = line,
     });

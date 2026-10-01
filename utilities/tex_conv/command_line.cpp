@@ -72,7 +72,7 @@ int Run(const int argc, char** argv){
         app.parse(argc, argv);
 
         {
-            const AString outputPathText(outputArgument.data(), outputArgument.size());
+            const AStringView outputPathText(outputArgument);
             TextureDimension::Enum dimension = TextureDimension::Texture2D;
             Vector<Path> inputPaths;
             AlphaSource alphaSource;
@@ -87,14 +87,14 @@ int Run(const int argc, char** argv){
             }
 
             if(!inputArgument.empty()){
-                const AString inputPathText(inputArgument.data(), inputArgument.size());
+                const AStringView inputPathText(inputArgument);
                 inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
             }
             else if(!cubeArguments.empty()){
                 dimension = TextureDimension::TextureCube;
                 inputPaths.reserve(cubeArguments.size());
                 for(const AInteropString& argument : cubeArguments){
-                    const AString inputPathText(argument.data(), argument.size());
+                    const AStringView inputPathText(argument);
                     inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
                 }
             }
@@ -102,14 +102,14 @@ int Run(const int argc, char** argv){
                 dimension = TextureDimension::Texture3D;
                 inputPaths.reserve(volumeArguments.size());
                 for(const AInteropString& argument : volumeArguments){
-                    const AString inputPathText(argument.data(), argument.size());
+                    const AStringView inputPathText(argument);
                     inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
                 }
             }
 
             if(alphaOption->count() > TexConvCliDetail::s_AlphaOptionPresentCount){
-                const AString alphaText(alphaArgument.data(), alphaArgument.size());
-                const AString alphaKeyword = ToAsciiLowerCopy(alphaText);
+                const AStringView alphaText(alphaArgument);
+                const AString alphaKeyword = ToAsciiLowerCopy(AString(alphaText));
                 if(alphaKeyword == s_AlphaWhiteKeyword){
                     alphaSource.mode = AlphaSourceMode::Constant;
                     alphaSource.constant = s_AlphaWhiteConstant;

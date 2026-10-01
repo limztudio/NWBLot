@@ -905,15 +905,15 @@ static bool RoundTripMaterialAssetCodec(
 
 static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> accumulatePixelShader;
-    accumulatePixelShader.virtualPath = Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data());
+    accumulatePixelShader.virtualPath = Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M);
     material.setAvboitAccumulatePixelShader(accumulatePixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> occupancyPixelShader;
-    occupancyPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data());
+    occupancyPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA);
     material.setAvboitOccupancyPixelShader(occupancyPixelShader);
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Shader> extinctionPixelShader;
-    extinctionPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data());
+    extinctionPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M);
     material.setAvboitExtinctionPixelShader(extinctionPixelShader);
 }
 
@@ -1101,7 +1101,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_FALSE(material.transparent());
     EXPECT_FALSE(material.twoSided());
     EXPECT_FALSE(material.refractive());
-    EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
+    EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE));
 
     NWB::Impl::Material twoSidedMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
@@ -1792,14 +1792,14 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
-        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE));
         EXPECT_EQ(imageReference.fieldName, Name(s_BASE_COLOR_MAP));
-        EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER.data()));
+        EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER));
         EXPECT_FALSE(imageReference.samplerAsset.valid());
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
         EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
         EXPECT_EQ(imageReference.constantByteOffset, 16u);
-        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE));
         EXPECT_EQ(samplerReference.fieldName, Name(s_BASE_COLOR_SAMPLER));
         EXPECT_FALSE(samplerReference.textureAsset.valid());
         EXPECT_EQ(samplerReference.samplerAsset.name(), Name(s_ENGINE_SAMPLERS_LINEAR_CLAMP));
@@ -1885,13 +1885,13 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
-        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(imageReference.blockName, Name(s_SURFACE));
         EXPECT_EQ(imageReference.fieldName, Name(s_BASE_COLOR_MAP));
         EXPECT_FALSE(imageReference.textureAsset.valid());
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
         EXPECT_EQ(imageReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8));
         EXPECT_EQ(imageReference.constantByteOffset, 0u);
-        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE.data()));
+        EXPECT_EQ(samplerReference.blockName, Name(s_SURFACE));
         EXPECT_EQ(samplerReference.fieldName, Name(s_BASE_COLOR_SAMPLER));
         EXPECT_FALSE(samplerReference.samplerAsset.valid());
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
@@ -1999,7 +1999,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     ASSERT_TRUE(built);
     ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
     const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
-    EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER.data()));
+    EXPECT_EQ(imageReference.textureAsset.name(), Name(s_PROJECT_TEXTURES_TEST_CHECKER));
     EXPECT_FALSE(imageReference.samplerAsset.valid());
     EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
     EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
@@ -2065,13 +2065,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedAsset
     ));
     if(loadedAsset){
         EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-        EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
+        EXPECT_EQ(material.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE));
         CheckMinimalMaterialTypedLayout(material);
         CheckMinimalMaterialTypedBlockBytes(material);
         CheckGeneratedMaterialBindBinaryConstants(
@@ -2105,13 +2105,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         halfOutputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedHalfAsset
     ));
     if(loadedHalfAsset){
         EXPECT_EQ(loadedHalfAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& halfMaterial = static_cast<const NWB::Impl::Material&>(*loadedHalfAsset);
-        EXPECT_EQ(halfMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
+        EXPECT_EQ(halfMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE));
         CheckHalfMaterialTypedLayoutAndBlockBytes(halfMaterial);
         CheckGeneratedMaterialBindBinaryConstants(halfGeneratedSourceView, halfMaterial);
     }
@@ -2141,13 +2141,13 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         compactOutputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedCompactAsset
     ));
     if(loadedCompactAsset){
         EXPECT_EQ(loadedCompactAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& compactMaterial = static_cast<const NWB::Impl::Material&>(*loadedCompactAsset);
-        EXPECT_EQ(compactMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE.data()));
+        EXPECT_EQ(compactMaterial.materialInterface(), Name(s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE));
         CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(compactMaterial);
         CheckGeneratedMaterialBindBinaryConstants(compactGeneratedSourceView, compactMaterial);
     }
@@ -2183,7 +2183,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         resourceOutputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedResourceAsset
     ));
     if(loadedResourceAsset){
@@ -2192,7 +2192,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         ASSERT_EQ(resourceMaterial.resourceReferences().size(), s_ExpectedDualCount);
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[0u].textureAsset.name(),
-            Name(s_PROJECT_TEXTURES_TEST_CHECKER.data())
+            Name(s_PROJECT_TEXTURES_TEST_CHECKER)
         );
         EXPECT_FALSE(resourceMaterial.resourceReferences()[0u].samplerAsset.valid());
         EXPECT_EQ(
@@ -2241,7 +2241,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         fixtureOutputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedFixtureAsset
     ));
     if(loadedFixtureAsset){
@@ -2455,7 +2455,7 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
             testArena,
             outputDirectory,
-            Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+            Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
             loadedAsset
         ));
         if(loadedAsset){
@@ -2463,15 +2463,15 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
             EXPECT_TRUE(material.transparent());
             EXPECT_EQ(
                 material.avboitAccumulatePixelShader().virtualPath,
-                Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data())
+                Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M)
             );
             EXPECT_EQ(
                 material.avboitOccupancyPixelShader().virtualPath,
-                Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data())
+                Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA)
             );
             EXPECT_EQ(
                 material.avboitExtinctionPixelShader().virtualPath,
-                Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data())
+                Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M)
             );
             EXPECT_TRUE(NWB::Impl::HasValidMaterialAvboitPixelShaderContract(
                 material.transparent(),
@@ -2483,11 +2483,11 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
 
         NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
         EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-        const Name pixelStageName(s_PS.data());
+        const Name pixelStageName(s_PS);
         const Name generatedPixelShaderName("generated/material_ps/project/materials/test_material");
-        const Name accumulatePixelShaderName(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M.data());
-        const Name occupancyPixelShaderName(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA.data());
-        const Name extinctionPixelShaderName(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M.data());
+        const Name accumulatePixelShaderName(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M);
+        const Name occupancyPixelShaderName(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA);
+        const Name extinctionPixelShaderName(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M);
         u64 sourceChecksum = 0u;
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, generatedPixelShaderName, pixelStageName, sourceChecksum));
         EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, accumulatePixelShaderName, pixelStageName, sourceChecksum));
@@ -2644,7 +2644,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedAsset
     ));
     if(!loadedAsset)
@@ -2662,7 +2662,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
         records,
         Name("project/shaders/material_ps"),
-        Name(s_PS.data()),
+        Name(s_PS),
         initialPixelSourceChecksum
     ));
 
@@ -2684,7 +2684,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
         testArena,
         outputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL.data()),
+        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
         loadedAsset
     ));
     if(loadedAsset){
@@ -2701,7 +2701,7 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
         records,
         Name("project/shaders/material_ps"),
-        Name(s_PS.data()),
+        Name(s_PS),
         updatedPixelSourceChecksum
     ));
     EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);

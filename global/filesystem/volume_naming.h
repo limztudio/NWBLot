@@ -55,7 +55,7 @@ template<typename ArenaT>
     const AStringView volumeName,
     const usize segmentIndex
 ){
-    return directory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+    return directory / MakeVolumeSegmentFileName(volumeName, segmentIndex).view();
 }
 
 template<typename ArenaT>

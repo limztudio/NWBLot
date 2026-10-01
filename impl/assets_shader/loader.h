@@ -72,18 +72,18 @@ template<typename ShaderPathResolver>
     if(!shaderPathResolver(shaderName, variantName, stageName, shaderVirtualPath)){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
             , ownerName
-            , StringConvert(shaderName.c_str())
+            , StringConvert(shaderName.resolvedText())
             , StringConvert(variantName)
-            , StringConvert(stageName.c_str())
+            , StringConvert(stageName.resolvedText())
         );
         return false;
     }
     if(!shaderVirtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
             , ownerName
-            , StringConvert(shaderName.c_str())
+            , StringConvert(shaderName.resolvedText())
             , StringConvert(variantName)
-            , StringConvert(stageName.c_str())
+            , StringConvert(stageName.resolvedText())
         );
         return false;
     }
@@ -103,7 +103,7 @@ template<typename ShaderPathResolver>
     // Shader::loadBinary already ran DecodeAssetPayload; keep a debug-only invariant here.
     NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
 
-    Core::ShaderDesc shaderDesc(shaderBinary.get_allocator().arena());
+    Core::ShaderDesc shaderDesc;
     shaderDesc.setShaderType(shaderType);
     shaderDesc.setDebugName(debugName);
     shaderDesc.setEntryName(AStringView(shaderAsset.entryPoint()));
@@ -113,8 +113,8 @@ template<typename ShaderPathResolver>
     if(!outShader){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'")
             , ownerName
-            , StringConvert(debugName.c_str())
-            , StringConvert(shaderVirtualPath.c_str())
+            , StringConvert(debugName.resolvedText())
+            , StringConvert(shaderVirtualPath.resolvedText())
         );
         return false;
     }

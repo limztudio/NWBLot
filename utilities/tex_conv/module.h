@@ -93,7 +93,7 @@ struct OutputPaths{
 
 bool IsSupportedInputPath(const Path& path);
 bool IsHdrInputPath(const Path& path);
-bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, OutputPaths& outOutputPaths);
+bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument, OutputPaths& outOutputPaths);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
 bool EncodeTexture(
     const Vector<Path>& inputPaths,

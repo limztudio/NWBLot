@@ -250,7 +250,7 @@ void Device::captureDeviceLoss(const AStringView context){
             ));
     }
 
-    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context), StringConvert(report.details));
 
     // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){

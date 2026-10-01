@@ -125,11 +125,11 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& ext : availableExtensions){
-        GraphicsString name(ext.extensionName, m_arena);
+        const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
         const bool enableOptionalExtension = m_optionalExtensions.instance.find(name) != m_optionalExtensions.instance.end();
         requiredExtensions.erase(name);
         if(enableOptionalExtension)
-            m_enabledExtensions.instance.insert(Move(name));
+            m_enabledExtensions.instance.emplace(name, m_arena);
     }
 
     if(!requiredExtensions.empty()){
@@ -165,11 +165,11 @@ bool BackendContext::createVulkanInstance(){
     }
 
     for(const auto& layer : availableLayers){
-        GraphicsString name(layer.layerName, m_arena);
+        const AStringView name(layer.layerName, NWB_STRNLEN(layer.layerName, VK_MAX_EXTENSION_NAME_SIZE));
         const bool enableOptionalLayer = m_optionalExtensions.layers.find(name) != m_optionalExtensions.layers.end();
         requiredLayers.erase(name);
         if(enableOptionalLayer)
-            m_enabledExtensions.layers.insert(Move(name));
+            m_enabledExtensions.layers.emplace(name, m_arena);
     }
 
     if(!requiredLayers.empty()){

@@ -66,7 +66,7 @@ inline constexpr u32 s_CliOptionPresentCount = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PromptString(const AString& label, const AString& defaultValue, AString& outValue, bool& prompted){
+bool PromptString(const AStringView label, const AStringView defaultValue, AString& outValue, bool& prompted){
     prompted = true;
     NWB_COUT << label;
     if(!defaultValue.empty())
@@ -80,11 +80,14 @@ bool PromptString(const AString& label, const AString& defaultValue, AString& ou
     }
 
     line = TrimCopy(Move(line));
-    outValue = line.empty() ? defaultValue : Move(line);
+    if(line.empty())
+        outValue = defaultValue;
+    else
+        outValue = Move(line);
     return !outValue.empty();
 }
 
-bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, bool& prompted){
+bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue, bool& prompted){
     prompted = true;
     for(;;){
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
@@ -107,7 +110,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
     }
 }
 
-bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, bool& prompted){
+bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue, bool& prompted){
     prompted = true;
     for(;;){
         NWB_COUT << label << " [" << defaultValue << "]: ";
@@ -164,7 +167,7 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
         }
 
         AString input;
-        if(!PromptString("Input FBX or NWB path", AString(), input, prompted)){
+        if(!PromptString("Input FBX or NWB path", {}, input, prompted)){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }

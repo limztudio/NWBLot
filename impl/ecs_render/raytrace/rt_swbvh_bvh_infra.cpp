@@ -779,7 +779,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(
 
     if(firstBuild){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")
-            , StringConvert(meshResources.meshName.c_str())
+            , StringConvert(meshResources.meshName.resolvedText())
             , meshResources.runtimeMesh
             , static_cast<u64>(primitiveCount)
         );

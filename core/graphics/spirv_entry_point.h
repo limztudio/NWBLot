@@ -31,12 +31,13 @@ namespace SpirvEntryPointLookupResult{
     usize wordCount
 );
 
+// The result borrows unchanged module words and excludes the validated terminating null.
 [[nodiscard]] SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const u32* words,
     usize wordCount,
     AStringView entryName,
     ShaderType::Mask shaderType,
-    GraphicsString& outEntryPointName
+    AStringView& outEntryPointName
 );
 
 

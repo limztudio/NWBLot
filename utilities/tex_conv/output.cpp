@@ -246,7 +246,7 @@ bool WriteTexturePayload(const Path& path, const TexturePayload& payload){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, OutputPaths& outOutputPaths){
+bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument, OutputPaths& outOutputPaths){
     if(outputArgument.empty()){
         outOutputPaths.metadata = inputPath;
         outOutputPaths.metadata.replace_extension(__hidden_output::s_NwbOutputExtension);

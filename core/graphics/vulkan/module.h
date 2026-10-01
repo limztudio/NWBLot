@@ -125,7 +125,8 @@ struct DeviceDesc{
     bool logBufferLifetime = false;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;
-    GraphicsString vulkanLibraryName;
+    // Borrowed for the synchronous CreateDevice call; the backing text must outlive that call.
+    AStringView vulkanLibraryName;
     Path pipelineCacheDirectory;
     Filesystem::FilesystemFactory filesystemFactory;
 
@@ -133,7 +134,6 @@ struct DeviceDesc{
     explicit DeviceDesc(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef)
         : allocator(allocatorRef)
         , cpuScheduler(cpuSchedulerRef)
-        , vulkanLibraryName(allocatorRef.getObjectArena())
         , pipelineCacheDirectory(allocatorRef.getObjectArena())
     {}
 };

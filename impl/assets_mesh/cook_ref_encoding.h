@@ -58,7 +58,7 @@ bool MeshCookRefEncoding::EncodeMeshletRefs(
         [&](const usize meshletIndex, const TStringView reason){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}")
                 , metaKind
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(entry.virtualPath.resolvedText())
                 , meshletIndex
                 , reason
             );

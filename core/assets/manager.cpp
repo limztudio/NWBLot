@@ -47,16 +47,16 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
     AssetBytes binary{m_arena};
     if(!m_binarySource.readAssetBinary(virtualPath, binary)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
-            , StringConvert(virtualPath.c_str())
-            , StringConvert(assetType.c_str())
+            , StringConvert(virtualPath.resolvedText())
+            , StringConvert(assetType.resolvedText())
         );
         return false;
     }
 
     if(!m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
-            , StringConvert(virtualPath.c_str())
-            , StringConvert(assetType.c_str())
+            , StringConvert(virtualPath.resolvedText())
+            , StringConvert(assetType.resolvedText())
         );
         return false;
     }

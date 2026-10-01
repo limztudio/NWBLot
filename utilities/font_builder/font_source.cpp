@@ -89,7 +89,7 @@ bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payloa
         return false;
     }
     const AString stem = PathToGenericString<AString>(options.output.stem());
-    payload.font = Core::Assets::AssetRef<Impl::Font>(stem.c_str());
+    payload.font = Core::Assets::AssetRef<Impl::Font>(AStringView(stem));
     payload.fontSha256 = ComputeSha256(BinaryByteView{ .bytes = m_bytes.data(), .byteCount = m_bytes.size() });
     payload.faceIndex = 0u;
     payload.unitsPerEm = m_face->units_per_EM;

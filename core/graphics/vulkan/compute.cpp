@@ -57,7 +57,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     auto shaderStage = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
     shaderStage.module = cs->m_shaderModule;
-    shaderStage.pName = cs->m_entryPointName.c_str();
+    shaderStage.pName = cs->m_entryPointName.data();
 
     VkSpecializationInfo specInfo{};
     if(!cs->m_specializationEntries.empty()){

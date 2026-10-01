@@ -59,11 +59,11 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
     }
@@ -92,7 +92,7 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
 
         PreparedMeshBlasBuild build;
         if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
             return false;
         }
@@ -116,7 +116,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
             || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
@@ -127,7 +127,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             meshBlasAccelStructStatesGraphOwned,
             meshBlasGeometryBuildInputStatesGraphOwned
         )){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
@@ -172,7 +172,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         if(build.firstBuild){
             ++m_blasLedgerFirstBuilds;
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
-                , StringConvert(build.meshName.c_str())
+                , StringConvert(build.meshName.resolvedText())
                 , build.runtimeMesh
                 , static_cast<u64>(build.vertexCount)
                 , static_cast<u64>(build.indexCount)

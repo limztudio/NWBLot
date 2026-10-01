@@ -253,7 +253,7 @@ private:
         const u32 jointCount = skeleton->jointCount();
         const u32 anchorIndex = skeleton->findJointIndex(s_CutterAnchorBoneName);
         if(anchorIndex == NWB::Impl::s_SkeletonInvalidJointIndex || anchorIndex >= jointCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), StringConvert(s_CutterAnchorBoneName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), StringConvert(s_CutterAnchorBoneName.resolvedText()));
             return fallback;
         }
 

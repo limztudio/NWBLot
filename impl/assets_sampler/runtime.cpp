@@ -42,7 +42,7 @@ bool Sampler::validatePayload()const{
         return false;
     if(!IsValidSamplerDescription(m_description)){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description")
-            , StringConvert(virtualPath().c_str())
+            , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }

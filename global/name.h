@@ -565,21 +565,28 @@ public:
         return m_hash;
     }
 
-    [[nodiscard]] const char* c_str()const{
+    // In opt/fin, the view remains valid until its rotating thread-local symbol buffer is reused.
+    [[nodiscard]] AStringView resolvedText()const{
 #if defined(NWB_BUILDMODE)
         recordBuildModeSymbolText();
 #endif
 #if defined(NWB_DEBUG)
-        return m_debugName;
+        const AStringView text(m_debugName, sizeof(m_debugName));
+        return text.substr(0u, text.find('\0'));
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
-        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength))
-            return buf;
+        if(NameDetail::ResolveNameSymbolText(m_hash, buf, NameDetail::s_SymbolTextBufferLength)){
+            buf[NameDetail::s_SymbolTextBufferLength - 1u] = '\0';
+            const AStringView text(buf, NameDetail::s_SymbolTextBufferLength);
+            return text.substr(0u, text.find('\0'));
+        }
 
         NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
-        return buf;
+        return AStringView(buf, NameDetail::s_DebugHashTextLength);
 #endif
     }
+
+    [[nodiscard]] const char* c_str()const{ return resolvedText().data(); }
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const{

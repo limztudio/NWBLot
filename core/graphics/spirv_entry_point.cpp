@@ -169,9 +169,9 @@ SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const usize wordCount,
     const AStringView entryName,
     const ShaderType::Mask shaderType,
-    GraphicsString& outEntryPointName
+    AStringView& outEntryPointName
 ){
-    outEntryPointName.clear();
+    outEntryPointName = {};
 
     if(entryName.empty() || shaderType == ShaderType::None)
         return SpirvEntryPointLookupResult::NotFound;
@@ -184,12 +184,12 @@ SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
             if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
                 return;
 
-            outEntryPointName.assign(entryPoint.name.data(), entryPoint.name.size());
+            outEntryPointName = entryPoint.name;
             found = true;
         }
     );
     if(!validModule){
-        outEntryPointName.clear();
+        outEntryPointName = {};
         return SpirvEntryPointLookupResult::InvalidSpirv;
     }
 

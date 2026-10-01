@@ -409,8 +409,8 @@ struct SkeletonNameResolution{
         if(resolution.ambiguousAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skinned mesh '{}' skeleton '{}' matches multiple skeleton objects")
                 , PathToString<tchar>(nwbFilePath)
-                , StringConvert(object.name.c_str())
-                , StringConvert(object.skeletonObject.c_str())
+                , StringConvert(object.name.resolvedText())
+                , StringConvert(object.skeletonObject.resolvedText())
             );
             return false;
         }

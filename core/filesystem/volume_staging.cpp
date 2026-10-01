@@ -77,8 +77,8 @@ StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
     if(m_active)
         CleanupStagedDirectoryBestEffort(
             m_directoryPath,
-            m_operationName.view(),
-            m_label.view()
+            m_operationName,
+            m_label
         );
 }
 

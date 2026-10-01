@@ -137,7 +137,7 @@ bool StressCpuTimingProbe::write(const PresentationFpsSample& presentation, cons
             const Scope& scope = m_scopes[domain][index];
             if(!scope.recorded)
                 continue;
-            output << "scope " << domain << ' ' << index << ' ' << scope.name.c_str() << '\n';
+            output << "scope " << domain << ' ' << index << ' ' << scope.name.resolvedText() << '\n';
             ++scopeCount;
         }
     }

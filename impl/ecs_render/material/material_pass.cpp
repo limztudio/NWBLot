@@ -505,7 +505,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(csgClipRequested && !materialInfo->csgCapSurfaceDispatchAvailable){
             if(!materialInfo->csgCapSurfaceDispatchUnavailableLogged){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract"), StringConvert(materialInfo->materialName.c_str()));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract"), StringConvert(materialInfo->materialName.resolvedText()));
                 materialInfo->csgCapSurfaceDispatchUnavailableLogged = true;
             }
         }

@@ -80,7 +80,7 @@ inline bool ResolveShaderEntryPoint(
     const AStringView entryName,
     const ShaderType::Mask shaderType,
     const AStringView errorContext,
-    GraphicsString& outEntryPointName
+    AStringView& outEntryPointName
 ){
     const SpirvEntryPointLookupResult::Enum lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
     switch(lookupResult){
@@ -135,9 +135,7 @@ Sampler::~Sampler(){
 
 Shader::Shader(const VulkanContext& context)
     : RefCounter<GraphicsResource>(context.cpuScheduler)
-    , m_desc(context.objectArena)
     , m_spirvWords(context.objectArena)
-    , m_entryPointName(context.objectArena)
     , m_specializationEntries(context.objectArena)
     , m_specializationData(context.objectArena)
     , m_context(context)
@@ -176,8 +174,7 @@ void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
 }
 
 ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::Mask shaderType){
-    const GraphicsString requestedEntryName(entryName, m_context.objectArena);
-    ShaderLibraryKey key(m_context.objectArena, requestedEntryName, shaderType);
+    ShaderLibraryKey key{ .entryName = entryName, .shaderType = shaderType };
 
     auto it = m_shaders.find(key);
     if(it != m_shaders.end())
@@ -185,11 +182,11 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
     Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc.shaderType = shaderType;
-    shader->m_desc.entryName = requestedEntryName;
+    shader->m_desc.entryName = entryName;
     NWB_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), AStringView(requestedEntryName), shaderType, "shader library", shader->m_entryPointName)){
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library", shader->m_entryPointName)){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -206,6 +203,8 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
         return nullptr;
     }
 
+    shader->m_desc.entryName = shader->m_entryPointName;
+    key.entryName = shader->m_entryPointName;
     m_shaders.emplace(
         Move(key),
         Handle<Shader>(shader, Handle<Shader>::deleter_type(&m_context.objectArena), AdoptRef)
@@ -230,6 +229,8 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
+
+    shader->m_desc.entryName = shader->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -260,7 +261,11 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
     shader->m_desc = base.m_desc;
     NWB_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
-    shader->m_entryPointName = base.m_entryPointName;
+    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), base.m_entryPointName, base.m_desc.shaderType, "shader specialization", shader->m_entryPointName)){
+        DestroyArenaObject(m_context.objectArena, shader);
+        return nullptr;
+    }
+    shader->m_desc.entryName = shader->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

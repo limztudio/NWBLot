@@ -224,7 +224,7 @@ public:
 
 
 private:
-    [[nodiscard]] usize internEvent(const GraphicsString& eventString);
+    [[nodiscard]] usize internEvent(AStringView eventString);
 
 
 private:

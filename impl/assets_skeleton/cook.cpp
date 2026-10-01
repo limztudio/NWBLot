@@ -149,9 +149,9 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
-        , StringConvert(skeletonEntry.virtualPath.c_str())
-        , StringConvert(skeletonEntry.joints[jointIndex].name.c_str())
-        , StringConvert(parent.c_str())
+        , StringConvert(skeletonEntry.virtualPath.resolvedText())
+        , StringConvert(skeletonEntry.joints[jointIndex].name.resolvedText())
+        , StringConvert(parent.resolvedText())
     );
     return false;
 }
@@ -178,8 +178,8 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
         }
         if(!outJointIndices.emplace(cookJoint.name, static_cast<u32>(outJoints.size())).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': duplicate joint name '{}'")
-                , StringConvert(skeletonEntry.virtualPath.c_str())
-                , StringConvert(cookJoint.name.c_str())
+                , StringConvert(skeletonEntry.virtualPath.resolvedText())
+                , StringConvert(cookJoint.name.resolvedText())
             );
             outJoints.clear();
             outJointIndices.clear();

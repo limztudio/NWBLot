@@ -96,7 +96,7 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
                     }
 
                     ErrorCode sizeError;
-                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(mountDesc.volumeName.view(), 0u).c_str();
+                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(mountDesc.volumeName.view(), 0u).view();
                     const u64 segmentFileSize = FileSize(segmentPath, sizeError);
                     EXPECT_FALSE(sizeError);
                     EXPECT_EQ(segmentFileSize, mountDesc.metadataSize + payload.size());

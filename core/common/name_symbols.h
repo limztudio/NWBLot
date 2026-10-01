@@ -31,7 +31,7 @@ namespace NameSymbols{
 
 inline constexpr usize s_MaxResolvedTextLength = 1024u;
 inline constexpr AStringView s_FileName = "namesym";
-inline constexpr AStringView s_FileExtension = ".namesym";
+inline constexpr TStringView s_FileExtension = NWB_TEXT(".namesym");
 inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 inline constexpr usize s_DebugHashTextLength = NameDetail::s_DebugHashTextLength;
 
@@ -106,8 +106,8 @@ template<typename ArenaT>
         if(!entry.is_regular_file(fileError) || fileError)
             continue;
 
-        const AString<ArenaT> extension = PathToString<char>(arena, entry.path().extension());
-        if(extension != AStringView(s_FileExtension))
+        const ::Path<ArenaT> extensionPath = entry.path().extension();
+        if(extensionPath.native() != s_FileExtension)
             continue;
 
         loadedAny = LoadFile(entry.path()) || loadedAny;

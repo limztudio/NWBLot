@@ -25,11 +25,9 @@ namespace __hidden_scene{
 static constexpr usize s_UfbxErrorBufferSize = 4096u;
 static constexpr f32 s_TargetUnitMeters = 1.0f;
 
-AString FromUfbxString(const ufbx_string value){
-    if(!value.data || value.length == 0u)
-        return {};
-    return AString(value.data, value.length);
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 AStringView UfbxStringView(const ufbx_string value){
     if(!value.data || value.length == 0u)
@@ -38,8 +36,8 @@ AStringView UfbxStringView(const ufbx_string value){
 }
 
 AString MeshDisplayName(const MeshInstance& instance){
-    AString nodeName = FromUfbxString(instance.node->name);
-    AString meshName = FromUfbxString(instance.mesh->name);
+    AStringView nodeName = UfbxStringView(instance.node->name);
+    AStringView meshName = UfbxStringView(instance.mesh->name);
     if(nodeName.empty())
         nodeName = "<unnamed node>";
     if(meshName.empty())
@@ -59,8 +57,8 @@ AString FormatUfbxError(const ufbx_error& error){
     return buffer;
 }
 
-bool ParseIndexSelector(const AString& text, usize& outIndex){
-    const AString trimmed = TrimCopy(text);
+bool ParseIndexSelector(const AStringView text, usize& outIndex){
+    const AStringView trimmed = TrimView(text);
     if(trimmed.empty())
         return false;
 
@@ -164,12 +162,12 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
 
 bool SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
-    const AString& selector,
+    const AStringView selector,
     UtilityVector<usize>& outSelection
 ){
     outSelection.clear();
 
-    const AString normalized = NormalizeOptionText(selector);
+    const AString normalized = NormalizeOptionText(AString(selector));
     if(normalized.empty() || normalized == s_DefaultMeshSelectorText){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)

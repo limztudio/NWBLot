@@ -499,7 +499,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                     m_frameGraphRendererLabel,
                     "\nLogical ownership transfer {}: resource identity={} route={} source physical queue index={} generation={} family={} destination physical queue index={} generation={} family={} declared sharing={} mask={} concurrent sharing could avoid={}",
                     transferIndex,
-                    transfer.resourceIdentity.c_str(),
+                    transfer.resourceIdentity.resolvedText(),
                     __hidden_frame_graph_export::OwnershipTransferRouteLabel(transfer.route),
                     transfer.sourceQueue.index,
                     transfer.sourceQueue.deviceGeneration,

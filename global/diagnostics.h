@@ -239,6 +239,18 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
     else if constexpr(requires{ WStringView(value); }){
         AppendEventText(outText, outCursor, WStringView(value));
     }
+    else if constexpr(requires{ AStringView(value.resolvedText()); }){
+        AppendEventText(outText, outCursor, AStringView(value.resolvedText()));
+    }
+    else if constexpr(requires{ WStringView(value.resolvedText()); }){
+        AppendEventText(outText, outCursor, WStringView(value.resolvedText()));
+    }
+    else if constexpr(requires{ AStringView(value.view()); }){
+        AppendEventText(outText, outCursor, AStringView(value.view()));
+    }
+    else if constexpr(requires{ WStringView(value.view()); }){
+        AppendEventText(outText, outCursor, WStringView(value.view()));
+    }
     else if constexpr(requires{ value.c_str(); }){
         AppendEventArgument(outText, outCursor, value.c_str());
     }
@@ -338,6 +350,13 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStr
 
 struct DiagnosticEventText{
     char value[DiagnosticDetail::s_MaxEventTextBytes] = {};
+
+    [[nodiscard]] AStringView view()const noexcept{
+        usize textSize = 0u;
+        while(textSize < sizeof(value) && value[textSize] != '\0')
+            ++textSize;
+        return AStringView(value, textSize);
+    }
 
     [[nodiscard]] const char* c_str()const noexcept{ return value; }
 };

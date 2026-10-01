@@ -43,7 +43,7 @@ bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& aren
 
 static bool ValidatePairedSourceExtension(
     const Path& bindFilePath,
-    const CookString& sourcePath,
+    const AStringView sourcePath,
     ScratchArena& scratchArena
 ){
     return Core::Assets::CheckPairedSourceExtension(

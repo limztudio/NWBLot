@@ -87,8 +87,7 @@ bool EmitMaterialPixelShadersImpl(
         return false;
     }
 
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / "material_pixel_shaders";
+    const Path generatedRoot = cacheDirectory / configurationSafeName / "generated" / "material_pixel_shaders";
     ErrorCode errorCode;
     if(!RemoveAllIfExists(generatedRoot, errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to clear generated directory '{}': {}")
@@ -104,7 +103,7 @@ bool EmitMaterialPixelShadersImpl(
         if(hasExplicitShaders){
             if(hasSurface){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares both 'surface' and 'shaders'; declare exactly one")
-                    , StringConvert(entry.virtualPath.c_str())
+                    , StringConvert(AStringView(entry.virtualPath))
                 );
                 return false;
             }
@@ -112,13 +111,13 @@ bool EmitMaterialPixelShadersImpl(
         }
         if(!hasSurface){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' declares neither 'surface' nor 'shaders'")
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
             );
             return false;
         }
         if(entry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' needs an interface to generate its pixel shader")
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
             );
             return false;
         }
@@ -133,7 +132,7 @@ bool EmitMaterialPixelShadersImpl(
         CookString relativeFile(arena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
-        const Path outputPath = generatedRoot / relativeFile.c_str();
+        const Path outputPath = generatedRoot / AStringView(relativeFile);
         errorCode.clear();
         if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}")
@@ -157,7 +156,7 @@ bool EmitMaterialPixelShadersImpl(
         const Name pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated pixel shader name is invalid for material '{}'")
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
             );
             return false;
         }
@@ -169,7 +168,7 @@ bool EmitMaterialPixelShadersImpl(
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second
             || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign generated stage shaders for material '{}'")
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
             );
             return false;
         }
@@ -200,8 +199,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
 ){
     outGenerated.clear();
 
-    ScratchString configurationName(configurationSafeName, scratchArena);
-    const Path generatedRoot = cacheDirectory / configurationName.c_str() / "generated" / ScratchString(generatedDirectoryLeaf, scratchArena).c_str();
+    const Path generatedRoot = cacheDirectory / configurationSafeName / "generated" / generatedDirectoryLeaf;
     ErrorCode errorCode;
     if(!RemoveAllIfExists(generatedRoot, errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to clear generated directory '{}': {}")
@@ -219,7 +217,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
             continue;
         if(entry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: transparent material '{}' needs an interface to generate its AVBOIT {} pixel shader")
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
                 , StringConvert(passLabel)
             );
             return false;
@@ -235,7 +233,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         CookString relativeFile(arena);
         relativeFile += entry.virtualPath;
         relativeFile += ".slang";
-        const Path outputPath = generatedRoot / relativeFile.c_str();
+        const Path outputPath = generatedRoot / AStringView(relativeFile);
         errorCode.clear();
         if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}")
@@ -262,7 +260,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         if(!pixelShaderName){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: generated AVBOIT {} pixel shader name is invalid for material '{}'")
                 , StringConvert(passLabel)
-                , StringConvert(entry.virtualPath.c_str())
+                , StringConvert(AStringView(entry.virtualPath))
             );
             return false;
         }

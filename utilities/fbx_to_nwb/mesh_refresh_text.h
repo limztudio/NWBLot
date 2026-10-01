@@ -35,12 +35,11 @@ struct TextReplacement{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AString ToAString(const Core::Metascript::MStringView text);
 [[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs);
-[[nodiscard]] const Core::Metascript::Value* FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName, AString& outSkinVariableName);
+[[nodiscard]] const Core::Metascript::Value* FindSkinForMesh(const Core::Metascript::Document& doc, const AStringView meshVariableName, AStringView& outSkinVariableName);
 [[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences);
-[[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AString& source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);
-[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AString& source, const AStringView variableName, const SourceMeshStreams& before, const SourceMeshStreams& after);
+[[nodiscard]] bool AddReplacement(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const AStringView fieldName, AString&& replacementText);
+[[nodiscard]] bool AppendMeshReplacements(UtilityVector<TextReplacement>& replacements, const AStringView source, const AStringView variableName, const SourceMeshStreams& before, const SourceMeshStreams& after);
 [[nodiscard]] bool ApplyTextReplacements(AString& inOutSource, UtilityVector<TextReplacement>& replacements);
 
 

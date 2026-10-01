@@ -74,7 +74,7 @@ bool BackendContext::createVulkanDevice(){
 
     const bool swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     for(const auto& ext : deviceExtensions){
-        GraphicsString name(ext.extensionName, m_arena);
+        const AStringView name(ext.extensionName, NWB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
         bool enableExtension = false;
         DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
 
@@ -101,7 +101,7 @@ bool BackendContext::createVulkanDevice(){
         }
 
         if(enableExtension){
-            auto [it, inserted] = m_enabledExtensions.device.emplace(Move(name), enabledFeature);
+            auto [it, inserted] = m_enabledExtensions.device.emplace(GraphicsString(name, m_arena), enabledFeature);
             if(!inserted && it.value() == DeviceExtensionFeature::None && enabledFeature != DeviceExtensionFeature::None)
                 it.value() = enabledFeature;
         }
@@ -213,26 +213,26 @@ bool BackendContext::createVulkanDevice(){
     }
 
     {
-        const GraphicsString samplerFilterMinmaxExtensionName(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME, m_arena);
-        const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(samplerFilterMinmaxExtensionName);
+        constexpr AStringView s_SamplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
+        const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(s_SamplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
-            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(samplerFilterMinmaxExtensionName));
-            m_enabledExtensions.device.erase(samplerFilterMinmaxExtensionName);
+            NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(s_SamplerFilterMinmaxExtensionName));
+            m_enabledExtensions.device.erase(s_SamplerFilterMinmaxExtensionName);
         }
     }
 
     {
-        const GraphicsString meshShaderExtensionName(VK_EXT_MESH_SHADER_EXTENSION_NAME, m_arena);
-        const auto meshShaderIt = m_enabledExtensions.device.find(meshShaderExtensionName);
+        constexpr AStringView s_MeshShaderExtensionName = VK_EXT_MESH_SHADER_EXTENSION_NAME;
+        const auto meshShaderIt = m_enabledExtensions.device.find(s_MeshShaderExtensionName);
         if(
             meshShaderIt != m_enabledExtensions.device.end()
             && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU
         ){
             NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
-                , StringConvert(meshShaderExtensionName)
+                , StringConvert(s_MeshShaderExtensionName)
                 , StringConvert(physicalDeviceProperties.deviceName)
             );
-            m_enabledExtensions.device.erase(meshShaderExtensionName);
+            m_enabledExtensions.device.erase(s_MeshShaderExtensionName);
         }
     }
 

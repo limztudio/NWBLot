@@ -151,7 +151,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             if(!isLastSegment && segmentFileSize != m_segmentSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
                     , StringConvert(m_volumeName)
-                    , StringConvert(segmentPath.string())
+                    , StringConvert(segmentPath.native())
                     , segmentFileSize
                     , m_segmentSize
                 );
@@ -161,7 +161,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             if(isLastSegment && segmentFileSize > m_segmentSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}")
                     , StringConvert(m_volumeName)
-                    , StringConvert(segmentPath.string())
+                    , StringConvert(segmentPath.native())
                     , segmentFileSize
                     , m_segmentSize
                 );

@@ -58,6 +58,7 @@ static bool ParseVariantField(
     }
 
     CookString rawVariant{arena};
+    AStringView rawVariantView;
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
@@ -79,10 +80,11 @@ static bool ParseVariantField(
             const Core::Metascript::MStringView variantText = list[i].asString();
             rawVariant.append(variantText.data(), variantText.size());
         }
+        rawVariantView = rawVariant;
     }
     else if(variantValue->isString()){
         const Core::Metascript::MStringView variantText = variantValue->asString();
-        rawVariant.assign(variantText.data(), variantText.size());
+        rawVariantView = variantText;
     }
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string or list of strings")
@@ -92,7 +94,7 @@ static bool ParseVariantField(
         return false;
     }
 
-    const AStringView rawVariantView = TrimView(rawVariant);
+    rawVariantView = TrimView(rawVariantView);
     if(rawVariantView.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
@@ -105,12 +107,11 @@ static bool ParseVariantField(
         return true;
     }
 
-    using ScratchString = AString<ScratchArena>;
-    using ScratchDefineCombo = HashMap<ScratchString, ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+    using ScratchDefineCombo = HashMap<AStringView, AStringView, Hasher<AStringView>, EqualTo<AStringView>, ScratchArena>;
     ScratchDefineCombo assignments(
         0,
-        Hasher<ScratchString>(),
-        EqualTo<ScratchString>(),
+        Hasher<AStringView>(),
+        EqualTo<AStringView>(),
         scratchArena
     );
     usize assignmentReserve = 1u;
@@ -143,11 +144,11 @@ static bool ParseVariantField(
         if(equalPos == AStringView::npos || equalPos == 0u || equalPos + 1u >= segment.size())
             return failInvalidVariant();
 
-        ScratchString defineName(TrimView(segment.substr(0u, equalPos)), scratchArena);
-        ScratchString defineValue(TrimView(segment.substr(equalPos + 1u)), scratchArena);
+        const AStringView defineName = TrimView(segment.substr(0u, equalPos));
+        const AStringView defineValue = TrimView(segment.substr(equalPos + 1u));
         if(defineName.empty() || defineValue.empty())
             return failInvalidVariant();
-        if(!assignments.emplace(Move(defineName), Move(defineValue)).second)
+        if(!assignments.emplace(defineName, defineValue).second)
             return failInvalidVariant();
 
         begin = segmentEnd + 1u;
@@ -163,8 +164,8 @@ static bool ParseVariantField(
     }
     else{
         struct AssignmentPtr{
-            const ScratchString* key = nullptr;
-            const ScratchString* value = nullptr;
+            const AStringView* key = nullptr;
+            const AStringView* value = nullptr;
         };
         Vector<AssignmentPtr, ScratchArena> sortedAssignments{scratchArena};
         sortedAssignments.reserve(assignments.size());
@@ -338,7 +339,7 @@ static bool ParseMaterialParameters(
         if(!outParameters.emplace(key, value).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
                 , PathToString<tchar>(nwbFilePath)
-                , StringConvert(key.c_str())
+                , StringConvert(key.view())
             );
             return false;
         }

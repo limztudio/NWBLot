@@ -34,10 +34,6 @@ using TextWrite::s_OutputFloatPrecision;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] AString ToAString(const Core::Metascript::MStringView text){
-    return AString(text.data(), text.size());
-}
-
 [[nodiscard]] bool IsSameText(const Core::Metascript::MStringView lhs, const AStringView rhs){
     if(lhs.size() != rhs.size())
         return false;
@@ -48,20 +44,20 @@ using TextWrite::s_OutputFloatPrecision;
     return true;
 }
 
-[[nodiscard]] usize SkipWhitespace(const AString& text, usize offset){
+[[nodiscard]] usize SkipWhitespace(const AStringView text, usize offset){
     while(offset < text.size() && IsAsciiSpace(text[offset]))
         ++offset;
     return offset;
 }
 
-[[nodiscard]] bool HasIdentifierBoundary(const AString& text, const usize begin, const usize end){
+[[nodiscard]] bool HasIdentifierBoundary(const AStringView text, const usize begin, const usize end){
     const bool leftOk = begin == 0u || !IsAsciiIdentifierChar(text[begin - 1u]);
     const bool rightOk = end >= text.size() || !IsAsciiIdentifierChar(text[end]);
     return leftOk && rightOk;
 }
 
 [[nodiscard]] bool FindListAssignmentRange(
-    const AString& source,
+    const AStringView source,
     const AStringView variableName,
     const AStringView fieldName,
     TextReplacement& outRange
@@ -75,7 +71,7 @@ using TextWrite::s_OutputFloatPrecision;
     usize offset = 0u;
     while(offset < source.size()){
         const usize found = source.find(pattern, offset);
-        if(found == AString::npos)
+        if(found == AStringView::npos)
             break;
 
         const usize patternEnd = found + pattern.size();
@@ -209,7 +205,7 @@ template<typename Value, typename WriteValue>
 
 [[nodiscard]] bool AddReplacement(
     UtilityVector<TextReplacement>& replacements,
-    const AString& source,
+    const AStringView source,
     const AStringView variableName,
     const AStringView fieldName,
     AString&& replacementText
@@ -230,7 +226,7 @@ template<typename Value, typename WriteValue>
 
 [[nodiscard]] bool AppendMeshReplacements(
     UtilityVector<TextReplacement>& replacements,
-    const AString& source,
+    const AStringView source,
     const AStringView variableName,
     const SourceMeshStreams& before,
     const SourceMeshStreams& after
@@ -294,10 +290,10 @@ template<typename Value, typename WriteValue>
 [[nodiscard]] const Core::Metascript::Value* FindSkinForMesh(
     const Core::Metascript::Document& doc,
     const AStringView meshVariableName,
-    AString& outSkinVariableName
+    AStringView& outSkinVariableName
 ){
     const Core::Metascript::Value* result = nullptr;
-    outSkinVariableName.clear();
+    outSkinVariableName = {};
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         if(!IsSameText(Core::Metascript::MStringView(declaration.type.data(), declaration.type.size()), s_SkinAssetTypeText))
@@ -318,7 +314,7 @@ template<typename Value, typename WriteValue>
         }
 
         result = skinAsset;
-        outSkinVariableName = ToAString(skinVariable);
+        outSkinVariableName = skinVariable;
     }
 
     return result;

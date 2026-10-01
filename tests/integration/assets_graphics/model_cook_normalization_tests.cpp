@@ -79,7 +79,7 @@ struct ModelMetadata{
             const auto expected = expectedSkeletons.find(object.name);
             ASSERT_NE(expected, expectedSkeletons.end());
             EXPECT_EQ(object.skeletonObject, expected->second);
-            EXPECT_EQ(object.mesh.name(), Name(s_TESTS_MODEL_COOK_NORMALIZATION_MESH.data()));
+            EXPECT_EQ(object.mesh.name(), Name(s_TESTS_MODEL_COOK_NORMALIZATION_MESH));
             EXPECT_EQ(object.skin.name(), Name("tests/model_cook_normalization/skin"));
         }
     }

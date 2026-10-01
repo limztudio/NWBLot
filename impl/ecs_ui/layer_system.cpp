@@ -112,7 +112,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default")
-            , StringConvert(m_skinSelection.requested().name().c_str())
+            , StringConvert(m_skinSelection.requested().name().resolvedText())
         );
     }
 

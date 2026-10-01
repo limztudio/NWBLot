@@ -108,7 +108,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
-                    , StringConvert(assetPath.c_str())
+                    , StringConvert(assetPath.resolvedText())
                 );
                 TextureAssetLoader::Release(outResource, graphics);
                 return false;
@@ -123,7 +123,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     const Name& texturePath = textureAsset.name();
     if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid")
-            , StringConvert(texturePath.c_str())
+            , StringConvert(texturePath.resolvedText())
         );
         return false;
     }
@@ -164,7 +164,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
         !samplerResource->valid()
         || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.resolvedText()));
         return false;
     }
 
@@ -231,7 +231,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 
         u32 heapSlot = 0u;
         if(resourceReference.resourceSource != MaterialResourceSource::Asset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid asset resource source"), StringConvert(materialInfo.materialName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid asset resource source"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -245,8 +245,8 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
-                    , StringConvert(materialInfo.materialName.c_str())
-                    , StringConvert(resourceReference.textureAsset.name().c_str())
+                    , StringConvert(materialInfo.materialName.resolvedText())
+                    , StringConvert(resourceReference.textureAsset.name().resolvedText())
                 );
                 return false;
             }
@@ -260,14 +260,14 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
-                    , StringConvert(materialInfo.materialName.c_str())
-                    , StringConvert(resourceReference.samplerAsset.name().c_str())
+                    , StringConvert(materialInfo.materialName.resolvedText())
+                    , StringConvert(resourceReference.samplerAsset.name().resolvedText())
                 );
                 return false;
             }
             break;
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -275,7 +275,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
             resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
             || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
         NWB_MEMCPY(
@@ -396,20 +396,20 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_CheckerRgba8)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampled-image fixture"), StringConvert(materialInfo.materialName.c_str()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampled-image fixture"), StringConvert(materialInfo.materialName.resolvedText()));
                 return false;
             }
             heapSlot = fixtures.checkerRgba8HeapHandle.slot();
             break;
         case MaterialResourceKind::Sampler:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_LinearClamp)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampler fixture"), StringConvert(materialInfo.materialName.c_str()));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampler fixture"), StringConvert(materialInfo.materialName.resolvedText()));
                 return false;
             }
             heapSlot = fixtures.linearClampHeapHandle.slot();
             break;
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -417,7 +417,7 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
             resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
             || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource fixture slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource fixture slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
         NWB_MEMCPY(
@@ -524,11 +524,11 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
     if(!hasMeshShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), StringConvert(materialPath.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), StringConvert(materialPath.resolvedText()));
         return false;
     }
     if(!hasPixelShader && !material.transparent()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), StringConvert(materialPath.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), StringConvert(materialPath.resolvedText()));
         return false;
     }
 

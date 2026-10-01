@@ -292,10 +292,10 @@ template<typename Value>
 
 [[nodiscard]] bool ParseMetascriptDocument(
     const Path& nwbFilePath,
-    const AString& text,
+    const AStringView text,
     Core::Metascript::Document& outDoc
 ){
-    if(outDoc.parse(AStringView(text)))
+    if(outDoc.parse(text))
         return true;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
@@ -408,7 +408,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
         sawMesh = true;
 
         const Core::Metascript::MStringView meshVariableView(declaration.variable.data(), declaration.variable.size());
-        const AString meshVariableName = MeshRefreshTextDetail::ToAString(meshVariableView);
+        const AStringView meshVariableName = meshVariableView;
         const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableView);
         if(!meshValue){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
@@ -422,7 +422,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
         SourceMeshStreams before = mesh;
         SourceMeshCanonicalizeReport itemReport;
 
-        AString skinVariableName;
+        AStringView skinVariableName;
         const Core::Metascript::Value* skinValue = MeshRefreshTextDetail::FindSkinForMesh(doc, meshVariableName, skinVariableName);
         if(!skinVariableName.empty()){
             UtilityVector<MeshSkinInfluence> skinInfluences;

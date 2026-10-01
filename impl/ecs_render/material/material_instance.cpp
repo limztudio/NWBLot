@@ -38,7 +38,7 @@ namespace __hidden_material_instance{
     const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
     if(fieldByteSize == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} has invalid field size")
-            , StringConvert(parameter.parameterName.c_str())
+            , StringConvert(parameter.parameterName.resolvedText())
             , entity.id
         );
         return false;
@@ -48,9 +48,9 @@ namespace __hidden_material_instance{
         || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'")
-            , StringConvert(parameter.parameterName.c_str())
+            , StringConvert(parameter.parameterName.resolvedText())
             , entity.id
-            , StringConvert(materialName.c_str())
+            , StringConvert(materialName.resolvedText())
         );
         return false;
     }
@@ -128,9 +128,9 @@ bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     }
 
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'")
-        , StringConvert(parameter.parameterName.c_str())
+        , StringConvert(parameter.parameterName.resolvedText())
         , entity.id
-        , StringConvert(materialInfo.materialName.c_str())
+        , StringConvert(materialInfo.materialName.resolvedText())
     );
     return false;
 }
@@ -150,9 +150,9 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
     if(materialInstance.materialInterface != materialInfo.materialInterface){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
             , entity.id
-            , StringConvert(materialInstance.materialInterface.c_str())
-            , StringConvert(materialInfo.materialName.c_str())
-            , StringConvert(materialInfo.materialInterface.c_str())
+            , StringConvert(materialInstance.materialInterface.resolvedText())
+            , StringConvert(materialInfo.materialName.resolvedText())
+            , StringConvert(materialInfo.materialInterface.resolvedText())
         );
         return false;
     }
@@ -172,23 +172,23 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
         const MaterialTypedLayoutField& field = *resolvedField.field;
         if(!resolvedField.mutableBlock){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage")
-                , StringConvert(parameter.parameterName.c_str())
+                , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
             );
             return false;
         }
         if(field.fieldType != parameter.fieldType){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
-                , StringConvert(parameter.parameterName.c_str())
+                , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
-                , StringConvert(materialInfo.materialName.c_str())
+                , StringConvert(materialInfo.materialName.resolvedText())
             );
             return false;
         }
 
         if(field.offset > Limit<u32>::s_Max - resolvedField.blockByteBegin){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} byte offset exceeds u32")
-                , StringConvert(parameter.parameterName.c_str())
+                , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
             );
             return false;

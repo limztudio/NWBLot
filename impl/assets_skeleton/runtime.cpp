@@ -121,7 +121,7 @@ bool Skeleton::validatePayload()const{
         }
         if(jointIndex >= m_joints.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}")
-                , StringConvert(jointName.c_str())
+                , StringConvert(jointName.resolvedText())
                 , jointIndex
             );
             return false;
@@ -228,7 +228,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     for(const SkeletonBinaryPayload::JointBinary& jointBinary : jointBinaries){
         const Name jointName(jointBinary.nameHash);
         if(!m_jointIndices.emplace(jointName, static_cast<u32>(m_joints.size())).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
             return false;
         }
 

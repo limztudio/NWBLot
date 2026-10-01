@@ -217,22 +217,22 @@ struct SceneHandle{
 
 AString OutputAssetTypeOptionsText();
 AString OutputAssetTypeErrorText();
-bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType);
+bool ParseAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType);
 bool ValidateAssetTypeText(AString& inOutValue);
 AString NormalModeOptionsText();
 AString NormalModeErrorText();
-bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
+bool ParseNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode);
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
-bool ParseColorText(const AString& text, Vec4& outColor);
-Path DefaultOutputPath(const AString& inputPath);
+bool ParseColorText(const AStringView text, Vec4& outColor);
+Path DefaultOutputPath(const AStringView inputPath);
 
 bool LoadScene(const ImportOptions& options, SceneHandle& outScene);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
 void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
 bool SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
-    const AString& selector,
+    const AStringView selector,
     UtilityVector<usize>& outSelection
 );
 bool BuildMesh(
@@ -258,8 +258,8 @@ bool BuildMesh(
 bool WriteNwbAsset(
     const Path& outputPath,
     const SourceMeshStreams& mesh,
-    const AString& assetTypeText,
-    const AString& virtualRoot,
+    const AStringView assetTypeText,
+    const AStringView virtualRoot,
     bool separateAssets,
     const UtilityVector<ufbx_node*>& skeletonJoints,
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,

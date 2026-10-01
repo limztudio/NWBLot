@@ -100,8 +100,8 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
@@ -117,7 +117,7 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
@@ -131,12 +131,12 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
@@ -156,23 +156,23 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto disabledReceiverEntity = testWorld.world.createEntity();
         auto& disabledReceiver = disabledReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        disabledReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        disabledReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         disabledReceiver.enabled = false;
 
         auto nonMatchingReceiverEntity = testWorld.world.createEntity();
         auto& nonMatchingReceiver = nonMatchingReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        nonMatchingReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_B.data());
+        nonMatchingReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_B);
 
         auto inactiveCutterEntity = testWorld.world.createEntity();
         auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        inactiveCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_B.data());
-        inactiveCutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        inactiveCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_B);
+        inactiveCutter.shapeType = Name(s_ENGINE_CSG_BOX);
         inactiveCutter.active = false;
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
@@ -188,12 +188,12 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         receiver.affectOpaquePass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         cutter.shapeType = Name("engine/csg/sphere");
 
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
@@ -212,16 +212,16 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto hiddenReceiverEntity = testWorld.world.createEntity();
         auto& hiddenReceiver = hiddenReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        hiddenReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        hiddenReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         auto visibleReceiverEntity = testWorld.world.createEntity();
         auto& visibleReceiver = visibleReceiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        visibleReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        visibleReceiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_CAPSULE.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_CAPSULE);
 
         TestCsgVisibilityFilter filter;
         filter.hiddenEntity = hiddenReceiverEntity.id();
@@ -244,13 +244,13 @@ TEST(Csg, CsgFrameStateKillSwitch){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         receiver.affectTransparentPass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         NWB::Impl::CsgFrameBuildDesc desc;
         desc.includeOpaquePass = false;
@@ -270,7 +270,7 @@ TEST(Csg, CsgFrameReceiverLookup){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         NWB::Impl::CsgReceiverDrawState drawState;
         EXPECT_FALSE(ResolveTestCsgReceiverDrawState(
@@ -288,32 +288,32 @@ TEST(Csg, CsgFrameReceiverLookup){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         auto boxCutterEntity = testWorld.world.createEntity();
         auto& boxCutter = boxCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        boxCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        boxCutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        boxCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        boxCutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         auto sphereCutterEntity = testWorld.world.createEntity();
         auto& sphereCutter = sphereCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        sphereCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        sphereCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         sphereCutter.shapeType = Name("engine/csg/sphere");
 
         auto inactiveCutterEntity = testWorld.world.createEntity();
         auto& inactiveCutter = inactiveCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        inactiveCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        inactiveCutter.shapeType = Name(s_ENGINE_CSG_CAPSULE.data());
+        inactiveCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        inactiveCutter.shapeType = Name(s_ENGINE_CSG_CAPSULE);
         inactiveCutter.active = false;
 
         auto untypedCutterEntity = testWorld.world.createEntity();
         auto& untypedCutter = untypedCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        untypedCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        untypedCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
 
         auto otherGroupCutterEntity = testWorld.world.createEntity();
         auto& otherGroupCutter = otherGroupCutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        otherGroupCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_B.data());
-        otherGroupCutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        otherGroupCutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_B);
+        otherGroupCutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         NWB::Impl::CsgReceiverDrawState opaqueDrawState;
         EXPECT_TRUE(ResolveTestCsgReceiverDrawState(
@@ -363,13 +363,13 @@ TEST(Csg, CsgFrameReceiverLookup){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         receiver.affectTransparentPass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
 
         NWB::Impl::CsgReceiverDrawState opaqueDrawState;
         EXPECT_TRUE(ResolveTestCsgReceiverDrawState(
@@ -395,13 +395,13 @@ TEST(Csg, CsgFrameReceiverLookup){
 
         auto receiverEntity = testWorld.world.createEntity();
         auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
+        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
         receiver.affectOpaquePass = false;
 
         auto cutterEntity = testWorld.world.createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A.data());
-        cutter.shapeType = Name(s_ENGINE_CSG_CAPSULE.data());
+        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
+        cutter.shapeType = Name(s_ENGINE_CSG_CAPSULE);
 
         NWB::Impl::CsgReceiverDrawState opaqueDrawState;
         EXPECT_FALSE(ResolveTestCsgReceiverDrawState(
@@ -435,20 +435,20 @@ TEST(Csg, CsgShapeRegistryBuiltIns){
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
     EXPECT_EQ(registry.revision(), 4u);
 
-    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX.data()));
+    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX));
     EXPECT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
-    EXPECT_EQ(boxId, NWB::Impl::CsgShapeTypeIdFromName(Name(s_ENGINE_CSG_BOX.data())));
+    EXPECT_EQ(boxId, NWB::Impl::CsgShapeTypeIdFromName(Name(s_ENGINE_CSG_BOX)));
 
     NWB::Impl::CsgShapeTypeInfo boxShape;
     EXPECT_TRUE(registry.findShapeType(boxId, boxShape));
-    EXPECT_EQ(boxShape.desc.name, Name(s_ENGINE_CSG_BOX.data()));
+    EXPECT_EQ(boxShape.desc.name, Name(s_ENGINE_CSG_BOX));
     EXPECT_FALSE(boxShape.desc.shaderModule);
     EXPECT_EQ(boxShape.desc.parameterByteSize, sizeof(NWB::Impl::CsgBoxShapeParameters));
 
     EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
     EXPECT_EQ(registry.revision(), 8u);
-    EXPECT_EQ(registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX.data())), boxId);
+    EXPECT_EQ(registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX)), boxId);
 }
 
 TEST(Csg, CsgShapeRegistryBounds){
@@ -465,7 +465,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     SIMDVector maxBounds;
     bool finiteBounds = false;
     EXPECT_TRUE(registry.buildShapeBounds(
-        Name(s_ENGINE_CSG_BOX.data()),
+        Name(s_ENGINE_CSG_BOX),
         shapeToWorldMatrix,
         reinterpret_cast<const u8*>(&boxParameters),
         sizeof(boxParameters),
@@ -481,7 +481,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     EXPECT_EQ(VectorGetY(maxBounds), -2.0f);
     EXPECT_EQ(VectorGetZ(maxBounds), 5.0f);
 
-    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX.data()));
+    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX));
     EXPECT_TRUE(registry.buildShapeBounds(
         boxId,
         shapeToWorldMatrix,
@@ -497,7 +497,7 @@ TEST(Csg, CsgShapeRegistryBounds){
 
     NWB::Impl::CsgPlaneShapeParameters planeParameters;
     EXPECT_TRUE(registry.buildShapeBounds(
-        Name(s_ENGINE_CSG_PLANE.data()),
+        Name(s_ENGINE_CSG_PLANE),
         shapeToWorldMatrix,
         reinterpret_cast<const u8*>(&planeParameters),
         sizeof(planeParameters),
@@ -508,7 +508,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     EXPECT_FALSE(finiteBounds);
 
     EXPECT_FALSE(registry.buildShapeBounds(
-        Name(s_ENGINE_CSG_BOX.data()),
+        Name(s_ENGINE_CSG_BOX),
         shapeToWorldMatrix,
         reinterpret_cast<const u8*>(&boxParameters),
         sizeof(boxParameters) - 1u,
@@ -560,11 +560,11 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     // Plane SDF keeps distance >= 0 with parameter0 = (normal, distance).
     NWB::Impl::CsgDeformCutDesc cuts[s_ThirdElementIndex];
     cuts[0u].active = true;
-    cuts[0u].shape.shapeType = Name(s_ENGINE_CSG_PLANE.data());
+    cuts[0u].shape.shapeType = Name(s_ENGINE_CSG_PLANE);
     cuts[0u].shape.worldToShape = ::Float34Identity();
     cuts[0u].shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.5f);
     cuts[1u].active = true;
-    cuts[1u].shape.shapeType = Name(s_ENGINE_CSG_PLANE.data());
+    cuts[1u].shape.shapeType = Name(s_ENGINE_CSG_PLANE);
     cuts[1u].shape.worldToShape = ::Float34Identity();
     cuts[1u].shape.parameter0 = Float4(0.0f, 1.0f, 0.0f, 0.5f);
 
@@ -668,7 +668,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     // half-space, so both preview and commit must agree on NoKeptGeometry failure.
     NWB::Impl::CsgDeformCutDesc cut;
     cut.active = true;
-    cut.shape.shapeType = Name(s_ENGINE_CSG_PLANE.data());
+    cut.shape.shapeType = Name(s_ENGINE_CSG_PLANE);
     cut.shape.worldToShape = ::Float34Identity();
     cut.shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
 

@@ -145,7 +145,8 @@ struct CustomSemantic{
 
 struct ShaderDesc{
     Name debugName;
-    GraphicsString entryName;
+    // Borrowed until shader creation completes; the created shader rebinds this to its own retained bytecode.
+    AStringView entryName = "main";
     CustomSemantic* pCustomSemantics = nullptr;
     u32* pCoordinateSwizzling = nullptr;
 
@@ -156,13 +157,10 @@ struct ShaderDesc{
     FastGeometryShaderFlags::Mask fastGSFlags = FastGeometryShaderFlags::None;
     bool useSpecificShaderExt = false;
 
-    explicit ShaderDesc(GraphicsArena& arena)
-        : entryName("main", arena)
-    {}
 
     constexpr ShaderDesc& setShaderType(ShaderType::Mask value){ shaderType = value; return *this; }
     constexpr ShaderDesc& setDebugName(const Name& value){ debugName = value; return *this; }
-    ShaderDesc& setEntryName(const AStringView value){ entryName.assign(value); return *this; }
+    constexpr ShaderDesc& setEntryName(const AStringView value){ entryName = value; return *this; }
     constexpr ShaderDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
     constexpr ShaderDesc& setUseSpecificShaderExt(bool value){ useSpecificShaderExt = value; return *this; }
     constexpr ShaderDesc& setCustomSemantics(u32 count, CustomSemantic* data){ numCustomSemantics = count; pCustomSemantics = data; return *this; }

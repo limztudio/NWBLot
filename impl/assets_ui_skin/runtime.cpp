@@ -190,7 +190,7 @@ bool UiSkin::validatePayload()const{
         if(!__hidden_ui_skin_runtime::IsValidRegion(region, m_atlasWidth, m_atlasHeight)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics")
                 , index
-                , StringConvert(region.name.c_str())
+                , StringConvert(region.name.resolvedText())
             );
             return false;
         }
@@ -198,7 +198,7 @@ bool UiSkin::validatePayload()const{
     for(usize index = 1u; index < m_regionIndex.size(); ++index){
         const Name& name = m_regions[m_regionIndex[index]].name;
         if(name == m_regions[m_regionIndex[index - 1u]].name){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.resolvedText()));
             return false;
         }
     }

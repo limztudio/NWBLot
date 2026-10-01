@@ -211,7 +211,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
         stageInfo.module = s->m_shaderModule;
-        stageInfo.pName = s->m_entryPointName.c_str();
+        stageInfo.pName = s->m_entryPointName.data();
 
         ShaderTableRecordKind::Enum recordKind = ShaderTableRecordKind::Invalid;
         switch(s->m_desc.shaderType){
@@ -242,10 +242,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         stages.push_back(stageInfo);
         groups.push_back(group);
 
-        const AStringView exportName = !shaderDesc.exportName.empty()
-            ? AStringView(shaderDesc.exportName)
-            : AStringView(s->m_entryPointName)
-        ;
+        const AStringView exportName = !shaderDesc.exportName.empty() ? shaderDesc.exportName : s->m_entryPointName;
         pso->m_shaderGroups.emplace_back(m_context.objectArena);
         ShaderTableGroupMetadata& metadata = pso->m_shaderGroups.back();
         metadata.exportName.assign(exportName);
@@ -266,7 +263,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.c_str();
+            stageInfo.pName = s->m_entryPointName.data();
             addShaderSpecialization(s, stageInfo);
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
@@ -276,7 +273,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.c_str();
+            stageInfo.pName = s->m_entryPointName.data();
             addShaderSpecialization(s, stageInfo);
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
@@ -286,7 +283,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
-            stageInfo.pName = s->m_entryPointName.c_str();
+            stageInfo.pName = s->m_entryPointName.data();
             addShaderSpecialization(s, stageInfo);
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
@@ -295,7 +292,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
         pso->m_shaderGroups.emplace_back(m_context.objectArena);
         ShaderTableGroupMetadata& metadata = pso->m_shaderGroups.back();
-        metadata.exportName.assign(AStringView(hitGroup.exportName));
+        metadata.exportName.assign(hitGroup.exportName);
         metadata.kind = ShaderTableRecordKind::HitGroup;
         metadata.groupIndex = static_cast<u32>(groups.size() - 1u);
     }
@@ -317,6 +314,17 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata order mismatch"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
+    }
+
+    // Group storage is final; retained descriptions borrow owned export text after all vector growth is complete.
+    for(usize shaderIndex = 0u; shaderIndex < pso->m_desc.shaders.size(); ++shaderIndex){
+        auto& shaderDesc = pso->m_desc.shaders[shaderIndex];
+        shaderDesc.exportName = shaderDesc.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[shaderIndex].exportName);
+    }
+    for(usize hitGroupIndex = 0u; hitGroupIndex < pso->m_desc.hitGroups.size(); ++hitGroupIndex){
+        auto& hitGroup = pso->m_desc.hitGroups[hitGroupIndex];
+        const usize groupIndex = pso->m_desc.shaders.size() + hitGroupIndex;
+        hitGroup.exportName = hitGroup.exportName.empty() ? AStringView{} : AStringView(pso->m_shaderGroups[groupIndex].exportName);
     }
 
     if(!configurePipelineBindingsOrDestroy(

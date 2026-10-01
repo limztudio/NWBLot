@@ -55,16 +55,10 @@ MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& val
 MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
-RayTracingPipelineShaderDesc::RayTracingPipelineShaderDesc(GraphicsArena& arena)
-    : exportName(arena)
-{}
 RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
 RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value){ shader = value; return *this; }
 RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
 
-RayTracingPipelineHitGroupDesc::RayTracingPipelineHitGroupDesc(GraphicsArena& arena)
-    : exportName(arena)
-{}
 RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc() = default;
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
@@ -664,8 +658,8 @@ ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
     return MakePair(false, s_NotFoundMarkerString);
 }
 
-usize GpuCrashTracker::internEvent(const GraphicsString& eventString){
-    usize markerHash = Hasher<GraphicsString>{}(eventString);
+usize GpuCrashTracker::internEvent(const AStringView eventString){
+    usize markerHash = Hasher<AStringView>{}(eventString);
     if(markerHash == 0u)
         markerHash = 1u;
 
@@ -676,7 +670,7 @@ usize GpuCrashTracker::internEvent(const GraphicsString& eventString){
                 return markerHash;
         }
         else{
-            GraphicsString storedEvent(eventString.data(), eventString.size(), m_arena);
+            GraphicsString storedEvent(eventString, m_arena);
             const auto inserted = m_eventStrings.emplace(markerHash, Move(storedEvent));
             if(inserted.second || inserted.first->second == eventString)
                 return markerHash;

@@ -198,8 +198,8 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
         return false;
     }
 
-    using ScratchStringSet = ScratchHashSet<ScratchString>;
-    ScratchStringSet seenDefines{0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena};
+    using ScratchStringSet = ScratchHashSet<AStringView>;
+    ScratchStringSet seenDefines{0, Hasher<AStringView>(), EqualTo<AStringView>(), scratchArena};
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
@@ -229,8 +229,8 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
             return false;
         }
 
-        ScratchString defineName(TrimView(segment.substr(0, equalPos)), scratchArena);
-        ScratchString defineValue(TrimView(segment.substr(equalPos + 1)), scratchArena);
+        const AStringView defineName = TrimView(segment.substr(0, equalPos));
+        const AStringView defineValue = TrimView(segment.substr(equalPos + 1));
         if(defineName.empty() || defineValue.empty()){
             logInvalidAssignment(segment);
             return false;
@@ -249,7 +249,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 
         bool valueFound = false;
         for(const CookString& allowedValue : defineIt.value().values){
-            if(AStringView(allowedValue) == AStringView(defineValue)){
+            if(AStringView(allowedValue) == defineValue){
                 valueFound = true;
                 break;
             }
@@ -264,7 +264,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
             return false;
         }
 
-        if(!seenDefines.insert(Move(defineName)).second){
+        if(!seenDefines.insert(defineName).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once")
                 , StringConvert(contextLabel)
                 , StringConvert(variantSignature)
@@ -304,7 +304,7 @@ static bool ParseMetascriptDocument(const Path& sourceFilePath, const AStringVie
 
 static bool ValidatePairedSourceExtension(
     const Path& nwbFilePath,
-    const CookString& sourcePath,
+    const AStringView sourcePath,
     const AStringView expectedExtension,
     const AStringView metaKind,
     Alloc::ScratchArena& scratchArena
@@ -473,7 +473,7 @@ bool ShaderCook::parseShaderMeta(
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported target_profile '{}'"),
             PathToString<tchar>(nwbFilePath),
-            StringConvert(outEntry.targetProfile.c_str())
+            StringConvert(outEntry.targetProfile.view())
         );
         return false;
     }

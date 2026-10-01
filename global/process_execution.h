@@ -38,6 +38,17 @@
 namespace ProcessExecutionDetail{
 
 
+[[nodiscard]] inline bool AreProcessArgumentsValid(const Span<const AStringView> arguments)noexcept{
+    if(arguments.empty() || arguments.front().empty())
+        return false;
+    for(const AStringView argument : arguments){
+        if(argument.find('\0') != AStringView::npos)
+            return false;
+    }
+    return true;
+}
+
+
 template<typename ArenaT>
 struct NativeProcessArguments{
     Vector<AString<ArenaT>, ArenaT> text;
@@ -51,12 +62,8 @@ struct NativeProcessArguments{
     {}
 
     [[nodiscard]] bool build(const Span<const AStringView> arguments){
-        if(arguments.empty() || arguments.front().empty())
+        if(!AreProcessArgumentsValid(arguments))
             return false;
-        for(const AStringView argument : arguments){
-            if(argument.find('\0') != AStringView::npos)
-                return false;
-        }
 
         text.reserve(arguments.size());
         argv.reserve(arguments.size() + 1u);
@@ -285,19 +292,14 @@ template<typename ArenaT>
         while(cursor < searchPath.size() && searchPath[cursor] != separator)
             ++cursor;
 
-        const AStringView directoryText(searchPath.data() + begin, cursor - begin);
+        const AStringView directoryText = searchPath.substr(begin, cursor - begin);
         Path<ArenaT> candidate(arena);
         if(directoryText.empty())
             candidate = ".";
-        else{
-            AString<ArenaT> directory(arena);
-            directory.assign(directoryText.data(), directoryText.size());
-            candidate = Path<ArenaT>(arena, AStringView(directory.data(), directory.size()));
-        }
+        else
+            candidate = Path<ArenaT>(arena, directoryText);
 
-        AString<ArenaT> executable(arena);
-        executable.assign(executableName.data(), executableName.size());
-        candidate /= executable.c_str();
+        candidate /= executableName;
 
 #if defined(NWB_PLATFORM_WINDOWS)
         if(PathIsRegularFile(candidate))
@@ -327,11 +329,17 @@ template<typename ArenaT>
         *outExitCodeQueryFailed = false;
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return -1;
+#if defined(NWB_PLATFORM_WINDOWS)
+    if(!ProcessExecutionDetail::AreProcessArgumentsValid(arguments))
+        return -1;
+    const AString<ArenaT> nativeExecutable(arguments.front(), arena);
+#else
     ProcessExecutionDetail::NativeProcessArguments<ArenaT> nativeArguments(arena);
     if(!nativeArguments.build(arguments))
         return -1;
-    const AString<ArenaT> nativeOutputPath(outputPath, arena);
     const auto& argv = nativeArguments.argv;
+#endif
+    const AString<ArenaT> nativeOutputPath(outputPath, arena);
 
 #if defined(NWB_PLATFORM_WINDOWS)
     SECURITY_ATTRIBUTES securityAttributes = {};
@@ -363,7 +371,7 @@ template<typename ArenaT>
 
     PROCESS_INFORMATION processInfo = {};
     const BOOL created = CreateProcessA(
-        argv[0],
+        nativeExecutable.c_str(),
         commandLine.data(),
         nullptr,
         nullptr,

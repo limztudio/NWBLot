@@ -96,8 +96,9 @@ static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetTyp
     );
 }
 
-bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType){
-    return ::ParseOptionText<OutputAssetType::Enum>(value, outAssetType, ParseNormalizedAssetTypeText);
+bool ParseAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+    const AString normalized = NormalizeOptionText(AString(value));
+    return ParseNormalizedAssetTypeText(AStringView(normalized), outAssetType);
 }
 
 bool ValidateAssetTypeText(AString& inOutValue){
@@ -140,8 +141,9 @@ static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::E
     );
 }
 
-bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode){
-    return ::ParseOptionText<NormalMode::Enum>(value, outNormalMode, ParseNormalizedNormalModeText);
+bool ParseNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
+    const AString normalized = NormalizeOptionText(AString(value));
+    return ParseNormalizedNormalModeText(AStringView(normalized), outNormalMode);
 }
 
 bool ValidateNormalModeText(AString& inOutValue){
@@ -161,8 +163,8 @@ AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
     }
 }
 
-bool ParseColorText(const AString& text, Vec4& outColor){
-    AString normalized = text;
+bool ParseColorText(const AStringView text, Vec4& outColor){
+    AString normalized(text);
     Replace(normalized.begin(), normalized.end(), ',', ' ');
     AStringStream in(normalized);
 
@@ -185,7 +187,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
     return true;
 }
 
-Path DefaultOutputPath(const AString& inputPath){
+Path DefaultOutputPath(const AStringView inputPath){
     Path outputPath(UtilityDetail::Arena(), inputPath);
     outputPath.replace_extension(s_NwbOutputExtension);
     return outputPath;

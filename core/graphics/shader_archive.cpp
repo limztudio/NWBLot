@@ -208,9 +208,9 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
 
         if(__hidden_shader_archive::SameShaderVariantStage(*sortedRecords[i - 1], record)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::serializeIndex failed: duplicate shader+variant+stage key detected (shader='{}', variant='{}', stage='{}')")
-                , StringConvert(record.shaderName.c_str())
+                , StringConvert(record.shaderName.resolvedText())
                 , StringConvert(AStringView(record.variantName))
-                , StringConvert(record.stage.c_str())
+                , StringConvert(record.stage.resolvedText())
             );
             return false;
         }

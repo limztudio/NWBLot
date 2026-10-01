@@ -55,22 +55,22 @@ struct ModelInputs{
 
     ModelInputs(){
         skeletonObjects.push_back(ModelSkeletonObject{
-            .name = Name(s_RIG.data()),
+            .name = Name(s_RIG),
             .skeleton = Core::Assets::AssetRef<Skeleton>("tests/model_payload/skeleton"),
         });
         staticMeshObjects.push_back(ModelStaticMeshObject{
-            .name = Name(s_PROP.data()),
+            .name = Name(s_PROP),
             .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .material = {},
-            .parentObject = Name(s_RIG.data()),
+            .parentObject = Name(s_RIG),
             .parentJoint = Name("hand"),
         });
         skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
-            .name = Name(s_BODY.data()),
+            .name = Name(s_BODY),
             .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
             .material = {},
-            .skeletonObject = Name(s_RIG.data()),
+            .skeletonObject = Name(s_RIG),
         });
         publish();
     }
@@ -204,12 +204,12 @@ TEST(ModelPayload, RejectsMissingOrWrongKindParents){
         ModelInputs inputs;
         switch(invalidCase){
         case 0u: inputs.staticMeshObjects.front().parentObject = Name("missing"); break;
-        case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_PROP.data()); break;
-        case s_ExpectedDualCount: inputs.staticMeshObjects.front().parentObject = Name(s_BODY.data()); break;
+        case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_PROP); break;
+        case s_ExpectedDualCount: inputs.staticMeshObjects.front().parentObject = Name(s_BODY); break;
         case 3u: inputs.staticMeshObjects.front().parentObject = NAME_NONE; break;
         case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name("missing"); break;
-        case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_PROP.data()); break;
-        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_BODY.data()); break;
+        case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_PROP); break;
+        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_BODY); break;
         }
         inputs.publish();
         EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
@@ -222,14 +222,14 @@ TEST(ModelPayload, RevalidatesReplacedObjectsAndRecoversAfterRejection){
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelInputs inputs;
     ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.skeletonObjects.front().name = Name(s_REPLACEMENT_RIG.data());
+    inputs.skeletonObjects.front().name = Name(s_REPLACEMENT_RIG);
     inputs.publish();
     EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.staticMeshObjects.front().parentObject = Name(s_REPLACEMENT_RIG.data());
-    inputs.skinnedMeshObjects.front().skeletonObject = Name(s_REPLACEMENT_RIG.data());
+    inputs.staticMeshObjects.front().parentObject = Name(s_REPLACEMENT_RIG);
+    inputs.skinnedMeshObjects.front().skeletonObject = Name(s_REPLACEMENT_RIG);
     inputs.publish();
     EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.skinnedMeshObjects.front().name = Name(s_PROP.data());
+    inputs.skinnedMeshObjects.front().name = Name(s_PROP);
     inputs.publish();
     EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
     inputs.skinnedMeshObjects.clear();
@@ -262,7 +262,7 @@ TEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejecti
     ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        inputs.skinnedMeshObjects.front().name = iteration % s_ExpectedDualCount == 0u ? Name(s_BODY.data()) : Name(s_PROP.data());
+        inputs.skinnedMeshObjects.front().name = iteration % s_ExpectedDualCount == 0u ? Name(s_BODY) : Name(s_PROP);
         inputs.publish();
         EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % s_ExpectedDualCount == 0u);
         const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
@@ -283,15 +283,15 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     ASSERT_EQ(loaded.skeletonObjects().size(), 1u);
     ASSERT_EQ(loaded.staticMeshObjects().size(), 1u);
     ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
-    EXPECT_EQ(loaded.staticMeshObjects().front().parentObject, Name(s_RIG.data()));
-    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_RIG.data()));
+    EXPECT_EQ(loaded.staticMeshObjects().front().parentObject, Name(s_RIG));
+    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_RIG));
 
     const usize staticOffset = sizeof(ModelBinaryPayload::ModelHeaderBinary) + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary);
     const usize skinnedOffset = staticOffset + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary);
     Core::Assets::AssetBytes malformed(binary);
     ModelBinaryPayload::ModelSkinnedMeshObjectBinary skinnedObject;
     NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
-    skinnedObject.nameHash = Name(s_PROP.data()).hash();
+    skinnedObject.nameHash = Name(s_PROP).hash();
     NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
@@ -299,12 +299,12 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     malformed = binary;
     ModelBinaryPayload::ModelStaticMeshObjectBinary staticObject;
     NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
-    staticObject.parentObjectNameHash = Name(s_BODY.data()).hash();
+    staticObject.parentObjectNameHash = Name(s_BODY).hash();
     NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
-    inputs.skinnedMeshObjects.front().name = Name(s_RIG.data());
+    inputs.skinnedMeshObjects.front().name = Name(s_RIG);
     inputs.publish();
     EXPECT_FALSE(codec.serialize(inputs.model, malformed));
     EXPECT_TRUE(loaded.validatePayload(inputs.scratchArena));

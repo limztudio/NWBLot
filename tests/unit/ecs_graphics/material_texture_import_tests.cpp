@@ -76,7 +76,7 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
     const auto existing = context.importExisting(second, Name("tests/texture_import/existing_alias"));
     ASSERT_TRUE(existing.valid());
     const Array<Core::TextureHandle, 5u> requested = { second, first, second, third, first };
-    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
+    Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
     ResourceVector resources(scratch);
     ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_NEW_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 5u);
@@ -98,7 +98,7 @@ TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntac
     const auto unnamed = context.makeTexture(NAME_NONE);
     const auto existing = context.importExisting(unnamed, Name("tests/texture_import/unnamed_alias"));
     ASSERT_TRUE(existing.valid());
-    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
+    Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
     ResourceVector resources(scratch);
     resources.push_back(existing);
     EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, nullptr, 0u, "Unused", resources), SampledTextureImportResult::Success);
@@ -160,7 +160,7 @@ TEST(MaterialTextureImport, MissingIdentityKeepsTheImportedPrefixAndDoesNotProce
             useNull ? Core::TextureHandle{} : context.makeTexture(NAME_NONE),
             context.makeTexture(Name("tests/texture_import/later")),
         };
-        Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
+        Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
         ResourceVector resources(scratch);
         EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::MissingIdentity);
         ASSERT_EQ(resources.size(), 1u);
@@ -181,7 +181,7 @@ TEST(MaterialTextureImport, IdentityConflictIsAnImportFailureAfterTheValidPrefix
         context.makeTexture(Name("tests/texture_import/prefix")), context.makeTexture(identity),
         context.makeTexture(Name("tests/texture_import/later")),
     };
-    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
+    Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
     ResourceVector resources(scratch);
     EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::ImportFailed);
     ASSERT_EQ(resources.size(), 1u);
@@ -196,7 +196,7 @@ TEST(MaterialTextureImport, NewCallAfterResetUsesCurrentGenerationAndReplacement
     TextureContext context;
     const Name identity("tests/texture_import/replacement");
     Core::TextureHandle texture = context.makeTexture(identity);
-    Core::Alloc::ScratchArena scratch(Name(s_TESTS_TEXTURE_IMPORT_SCRATCH.data()));
+    Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
     ResourceVector resources(scratch);
     ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, &texture, 1u, s_MATERIAL_TEXTURE, resources), SampledTextureImportResult::Success);
     const auto oldResource = resources[0u];

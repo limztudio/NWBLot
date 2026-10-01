@@ -50,10 +50,10 @@ struct SkeletonInputs{
     SkeletonInputs(){
         entry.virtualPath = skeleton.virtualPath();
         entry.joints.reserve(4u);
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_ROOT.data()) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_LEFT.data()), .parent = Name(s_ROOT.data()) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_RIGHT.data()), .parent = Name(s_ROOT.data()) });
-        entry.joints.push_back(SkeletonCookJoint{ .name = Name("hand"), .parent = Name(s_LEFT.data()) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_ROOT) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_LEFT), .parent = Name(s_ROOT) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name(s_RIGHT), .parent = Name(s_ROOT) });
+        entry.joints.push_back(SkeletonCookJoint{ .name = Name("hand"), .parent = Name(s_LEFT) });
         entry.joints[1u].localBindPose._14 = 2.0f;
         entry.joints[3u].localBindPose._24 = 3.0f;
     }
@@ -69,7 +69,7 @@ TEST(SkeletonPayload, ResolvesEarlierParentsAndBuildsExactChildRanges){
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
     ASSERT_EQ(inputs.skeleton.jointCount(), 4u);
     EXPECT_EQ(inputs.skeleton.rootJointCount(), 1u);
-    EXPECT_EQ(inputs.skeleton.findJointIndex(Name(s_ROOT.data())), 0u);
+    EXPECT_EQ(inputs.skeleton.findJointIndex(Name(s_ROOT)), 0u);
     EXPECT_EQ(inputs.skeleton.findJointIndex(Name("hand")), 3u);
     EXPECT_EQ(inputs.skeleton.findJointIndex(Name("missing")), s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
@@ -95,10 +95,10 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
         SkeletonInputs inputs;
         ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
         switch(invalidCase){
-        case 0u: inputs.entry.joints[0u].parent = Name(s_LEFT.data()); break;
-        case 1u: inputs.entry.joints[1u].parent = Name(s_LEFT.data()); break;
+        case 0u: inputs.entry.joints[0u].parent = Name(s_LEFT); break;
+        case 1u: inputs.entry.joints[1u].parent = Name(s_LEFT); break;
         case s_ExpectedDualCount: inputs.entry.joints[3u].parent = Name("missing"); break;
-        case 3u: inputs.entry.joints[1u].parent = Name(s_RIGHT.data()); break;
+        case 3u: inputs.entry.joints[1u].parent = Name(s_RIGHT); break;
         }
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.skeleton)) << invalidCase;
         EXPECT_TRUE(inputs.skeleton.joints().empty());
@@ -107,8 +107,8 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
         EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
         EXPECT_EQ(inputs.skeleton.virtualPath(), inputs.entry.virtualPath);
         inputs.entry.joints[0u].parent = NAME_NONE;
-        inputs.entry.joints[1u].parent = Name(s_ROOT.data());
-        inputs.entry.joints[3u].parent = Name(s_LEFT.data());
+        inputs.entry.joints[1u].parent = Name(s_ROOT);
+        inputs.entry.joints[3u].parent = Name(s_LEFT);
         EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
         EXPECT_EQ(inputs.skeleton.jointCount(), 4u);
     }
@@ -119,7 +119,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
 TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(const Name& duplicate : { Name(s_LEFT.data()), Name("ROOT") }){
+    for(const Name& duplicate : { Name(s_LEFT), Name("ROOT") }){
         SkeletonInputs inputs;
         ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
         inputs.entry.joints[3u].name = duplicate;
@@ -138,7 +138,7 @@ TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatri
     SkeletonInputs inputs;
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
     inputs.entry.joints[s_ThirdElementIndex].parent = NAME_NONE;
-    inputs.entry.joints[3u].parent = Name(s_RIGHT.data());
+    inputs.entry.joints[3u].parent = Name(s_RIGHT);
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
     EXPECT_EQ(inputs.skeleton.rootJointCount(), s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);

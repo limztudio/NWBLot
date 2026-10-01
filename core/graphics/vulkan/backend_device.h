@@ -612,7 +612,7 @@ private:
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
     Filesystem::FilesystemFactory m_filesystemFactory;
-    GraphicsString m_pipelineCacheVolumeName;
+    AStringView m_pipelineCacheVolumeName;
     GraphicsVector<NativeQueueState*> m_nativeQueueStates;
     GraphicsVector<Queue*> m_physicalQueues;
     GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;

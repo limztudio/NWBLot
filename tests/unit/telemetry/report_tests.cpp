@@ -40,7 +40,7 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
-    const Name gbufferScopeName(s_GBUFFER.data());
+    const Name gbufferScopeName{s_GBUFFER};
     NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
     firstTiming.seconds = 0.041;
     firstTiming.sampleCount = 1u;
@@ -113,7 +113,7 @@ TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFram
     EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 64"));
 
     char gbufferIdentityText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    NameDetail::HashToDebugString(Name(s_GBUFFER.data()).hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
+    NameDetail::HashToDebugString(Name(s_GBUFFER).hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
     constexpr AStringView identityPrefix = "\"identity\": \"";
     const usize identityOffset = json.find(identityPrefix);
     ASSERT_NE(identityOffset, AStringView::npos);
@@ -164,7 +164,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(Telemetry::RecordPerfTiming(
         recorder,
         Telemetry::PerfTimingSource::Gpu,
-        Name(s_GBUFFER.data()),
+        Name(s_GBUFFER),
         "gbuffer",
         aggregatedTiming,
         70u

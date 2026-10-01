@@ -93,6 +93,7 @@ public:
 private:
     [[nodiscard]] WidgetState* declareId(WidgetId id, WidgetKind::Enum kind);
     [[nodiscard]] bool currentDeclaration(const WidgetState& state)const;
+    void retireUnseenStates();
 
 
 private:
@@ -107,6 +108,7 @@ private:
     PopupToken m_currentPopup;
     Array<PopupToken, s_InputMaxPopups> m_popupStack{};
     usize m_popupDepth = 0u;
+    usize m_declarationCount = 0u;
     u32 m_popupLayer = 0u;
     WidgetRoot m_root;
     u64 m_frameGeneration = 0u;

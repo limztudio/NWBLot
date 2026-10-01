@@ -20,6 +20,9 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_WidgetMaxStates = 4096u;
+
+
 namespace WidgetKind{
     enum Enum : u8{
         Panel, Container, Label, Button, Checkbox, Window, Separator, EditBox, Popup, Selectable, VirtualList,
@@ -39,6 +42,10 @@ struct WidgetState{
 class WidgetStateStore final : NoCopy{
 private:
     using StateIndex = HashMap<u64, usize, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena>;
+
+
+private:
+    static constexpr usize s_RetainedCapacity = s_WidgetMaxStates * 2u;
 
 
 public:

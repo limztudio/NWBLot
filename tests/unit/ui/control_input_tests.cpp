@@ -276,6 +276,23 @@ TEST_F(UiControlInputTests, CommitOfNewEpochRejectsOldPressWithoutLeakingItsRele
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
+TEST_F(UiControlInputTests, ReplacedRowDeclarationRejectsItsQueuedClickWhileHostWheelSurvives){
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
+    click();
+    EXPECT_TRUE(wheel().pointerConsumed);
+    ++m_targets[1u].declarationGeneration;
+    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
+    ControlAction action;
+    ASSERT_TRUE(take(action));
+    EXPECT_EQ(action.kind, ControlActionKind::Wheel);
+    EXPECT_FALSE(take(action));
+    click();
+    ASSERT_TRUE(take(action));
+    EXPECT_EQ(action.kind, ControlActionKind::Activate);
+    EXPECT_EQ(action.sourceDeclarationGeneration, m_targets[1u].declarationGeneration);
+    EXPECT_FALSE(take(action));
+}
+
 TEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     click();

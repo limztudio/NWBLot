@@ -46,6 +46,13 @@ void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& res
         }
         else{
             consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
+            for(usize index = 0u; index < m_pointerGestures.size(); ++index){
+                if(m_pointerGestures[index].gesture.id.sequence == m_activeGestureSequence){
+                    m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
+                    break;
+                }
+            }
+            m_activeGestureSequence = 0u;
             m_focus = {};
             m_capture = {};
             m_capturePopup = {};

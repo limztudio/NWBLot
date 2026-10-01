@@ -96,7 +96,7 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
             && keyboardHost(*source) == host
         ;
     }
-    const HitTarget* source = findTarget(action.source);
+    const HitTarget* source = findTarget(action.source, action.sourceDeclarationGeneration);
     return
         source != nullptr && isInteractive(*source) && source->activatable
         && source->owner == host->id && source->ownerDeclarationGeneration == host->declarationGeneration

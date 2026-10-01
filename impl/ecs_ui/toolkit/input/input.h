@@ -46,7 +46,7 @@ namespace PointerGestureState{
 
 struct InputEvent{
     InputEventType::Enum type = InputEventType::PointerMove;
-    Point position;
+    Point position{};
     InputKey::Enum key = InputKey::None;
     bool shift = false;
     bool repeat = false;

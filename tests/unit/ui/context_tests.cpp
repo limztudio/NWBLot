@@ -4,7 +4,7 @@
 
 #include <impl/ecs_ui/toolkit/context.h>
 
-#include <charconv>
+#include <global/text_trim_parse.h>
 
 #include <gtest/gtest.h>
 
@@ -44,6 +44,12 @@ public:
 
 
 protected:
+    [[nodiscard]] WidgetState* declareIndex(const usize index){
+        char key[32u];
+        const AStringView formatted = FormatDecimal(index, key);
+        return formatted.empty() ? nullptr : m_context.declare(formatted, WidgetKind::Button);
+    }
+
     WidgetState prepare(const u64 generation, const WidgetRoot& root, const WidgetKind::Enum kind = WidgetKind::Button){
         EXPECT_TRUE(m_context.beginFrame(generation));
         EXPECT_TRUE(m_context.beginRoot(root));
@@ -449,13 +455,6 @@ TEST_F(UiContextTests, TargetAdmissionRejectsForeignRootPriorFrameAndReplacedLif
 TEST_F(UiContextTests, DenseReorderedDeclarationsKeepLifetimesAcrossRetirement){
     constexpr u32 s_Count = 2048u;
     const WidgetRoot root{ 151u, 1u };
-    const auto declareIndex = [&](const u32 index){
-        char key[16];
-        const auto converted = std::to_chars(key, key + sizeof(key), index);
-        if(converted.ec != std::errc{})
-            return static_cast<WidgetState*>(nullptr);
-        return m_context.declare(AStringView(key, static_cast<usize>(converted.ptr - key)), WidgetKind::Button);
-    };
 
     ASSERT_TRUE(m_context.beginFrame(1u));
     ASSERT_TRUE(m_context.beginRoot(root));
@@ -510,6 +509,101 @@ TEST_F(UiContextTests, DenseReorderedDeclarationsKeepLifetimesAcrossRetirement){
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_EQ(m_context.states().entries().size(), s_Count);
 }
+
+TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarationPointers){
+    constexpr usize s_Count = s_WidgetMaxStates;
+    const WidgetRoot root{ 161u, 1u };
+    ASSERT_TRUE(m_context.beginFrame(1u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    WidgetState survivor;
+    WidgetState omitted;
+    for(usize index = 0u; index < s_Count; ++index){
+        const WidgetState* state = declareIndex(index);
+        ASSERT_NE(state, nullptr);
+        if(index == 0u)
+            survivor = *state;
+        else if(index == 1u)
+            omitted = *state;
+    }
+    ASSERT_TRUE(m_context.addTarget(survivor, ButtonTarget()));
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_TRUE(click().pointerConsumed);
+
+    ASSERT_TRUE(m_context.beginFrame(2u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    const WidgetState* first = declareIndex(s_Count);
+    ASSERT_NE(first, nullptr);
+    const WidgetState firstCopy = *first;
+    for(usize index = 1u; index < s_Count - 1u; ++index)
+        ASSERT_NE(declareIndex(s_Count + index), nullptr);
+    // The surviving declaration may arrive after every new ID, even when the prior frame filled the store.
+    const WidgetState* current = declareIndex(0u);
+    ASSERT_NE(current, nullptr);
+    EXPECT_EQ(current->declarationGeneration, survivor.declarationGeneration);
+    EXPECT_TRUE(m_context.takeActivation(*current, true));
+    ASSERT_TRUE(m_context.addTarget(*current, ButtonTarget()));
+    ASSERT_EQ(m_context.states().find(firstCopy.id), first);
+    EXPECT_EQ(first->declarationGeneration, firstCopy.declarationGeneration);
+    EXPECT_EQ(m_context.states().entries().size(), s_Count * 2u - 1u);
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+    EXPECT_EQ(m_context.states().find(omitted.id), nullptr);
+    ASSERT_NE(m_context.states().find(survivor.id), nullptr);
+    EXPECT_EQ(m_context.states().find(survivor.id)->declarationGeneration, survivor.declarationGeneration);
+
+    // A subsequent entirely disjoint frame needs the complete old/new union before retirement.
+    ASSERT_TRUE(m_context.beginFrame(3u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    for(usize index = 0u; index < s_Count; ++index)
+        ASSERT_NE(declareIndex(s_Count * 2u + index), nullptr);
+    EXPECT_EQ(m_context.states().entries().size(), s_Count * 2u);
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(3u));
+    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+    EXPECT_EQ(m_context.states().find(survivor.id), nullptr);
+}
+
+TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry){
+    constexpr usize s_Count = s_WidgetMaxStates;
+    const WidgetRoot root{ 171u, 1u };
+    WidgetState retained;
+    for(usize attempt = 0u; attempt < 3u; ++attempt){
+        ASSERT_TRUE(m_context.beginFrame(attempt + 1u));
+        ASSERT_TRUE(m_context.beginRoot(root));
+        const WidgetState* first = declareIndex(0u);
+        ASSERT_NE(first, nullptr);
+        if(attempt != 0u)
+            EXPECT_EQ(first->declarationGeneration, retained.declarationGeneration);
+        retained = *first;
+        for(usize index = 1u; index < s_Count; ++index)
+            ASSERT_NE(declareIndex(attempt * s_Count + index), nullptr);
+        EXPECT_EQ(declareIndex((attempt + 1u) * s_Count), nullptr);
+        EXPECT_TRUE(m_context.failed());
+        EXPECT_FALSE(m_context.endRoot());
+        EXPECT_FALSE(m_context.finishFrame());
+        m_context.abandonFrame();
+        EXPECT_EQ(m_context.states().entries().size(), s_Count);
+        ASSERT_NE(m_context.states().find(retained.id), nullptr);
+        EXPECT_EQ(m_context.states().find(retained.id)->declarationGeneration, retained.declarationGeneration);
+    }
+    ASSERT_TRUE(m_context.beginFrame(4u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    const WidgetState* first = declareIndex(0u);
+    ASSERT_NE(first, nullptr);
+    EXPECT_EQ(first->declarationGeneration, retained.declarationGeneration);
+    for(usize index = 1u; index < s_Count; ++index)
+        ASSERT_NE(declareIndex(s_Count * 3u + index), nullptr);
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(4u));
+    EXPECT_EQ(m_context.states().entries().size(), s_Count);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

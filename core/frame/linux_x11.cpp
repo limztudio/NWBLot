@@ -26,6 +26,7 @@
 #include <core/common/log.h>
 #include <core/os/linux/x11/clipboard.h>
 #include <core/os/linux/x11/text_input.h>
+#include <core/os/linux/x11/text_input_key_history.h>
 
 #include <global/thread.h>
 
@@ -71,6 +72,7 @@ static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
 static bool s_DetectableAutoRepeat = false;
 static bool s_KeyStates[s_KeyStateCount] = {};
+static X11FilteredKeyHistory s_FilteredKeyHistory;
 
 
 static ::Display* GetX11Display(const Common::LinuxFrame& frameData){
@@ -187,13 +189,14 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
     }
 }
 
-static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText){
+static void DispatchKeyEvent(
+    Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true){
     XKeyEvent translatedEvent = keyEvent;
     const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
     const i32 key = TranslateKey(keySym);
     const i32 mods = AdjustModifiersForKey(key, action, TranslateModifiers(keyEvent.state));
 
-    if(keyEvent.keycode)
+    if(dispatchPhysical && keyEvent.keycode)
         frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
     if(dispatchText && action != InputAction::Release){
         ITextInputService* const textInput = frame.tryTextInput();
@@ -204,7 +207,21 @@ static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action
 
 static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dispatchText){
     const u32 keycode = static_cast<u32>(event.keycode);
+    const u32 timestamp = static_cast<u32>(event.time);
+    const u32 serial = static_cast<u32>(event.serial);
+    const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
+    const bool released = event.type == KeyRelease;
+    if(dispatchText && s_FilteredKeyHistory.isForwardedDuplicate(
+        keycode, released, timestamp, serial, event.send_event != False, receivedAtMs
+    )){
+        // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
+        if(!released)
+            DispatchKeyEvent(frame, event, InputAction::Press, true, false);
+        return;
+    }
     if(event.type == KeyPress){
+        if(!dispatchText)
+            s_FilteredKeyHistory.recordFiltered(keycode, false, timestamp, serial, receivedAtMs);
         i32 action = InputAction::Press;
         if(keycode > 0u && keycode < s_KeyStateCount){
             action = s_KeyStates[keycode] ? InputAction::Repeat : InputAction::Press;
@@ -213,6 +230,9 @@ static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dis
         DispatchKeyEvent(frame, event, action, dispatchText);
         return;
     }
+    // A coalesced autorepeat release must not return later as a real XIM-forwarded release.
+    if(!dispatchText)
+        s_FilteredKeyHistory.recordFiltered(keycode, true, timestamp, serial, receivedAtMs);
     const auto& frameData = frame.data<Common::LinuxFrame>();
     if(!s_DetectableAutoRepeat && XEventsQueued(GetX11Display(frameData), QueuedAfterReading) > 0){
         XEvent nextEvent{};
@@ -358,6 +378,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData){
     SetDeleteWindowMessage(frameData, None);
     s_DetectableAutoRepeat = false;
     ResetKeyStates();
+    s_FilteredKeyHistory.reset();
 }
 
 
@@ -586,6 +607,7 @@ void CleanupX11Frame(Frame& frame)noexcept{
     SetDeleteWindowMessage(frameData, None);
     s_DetectableAutoRepeat = false;
     ResetKeyStates();
+    s_FilteredKeyHistory.reset();
 }
 
 

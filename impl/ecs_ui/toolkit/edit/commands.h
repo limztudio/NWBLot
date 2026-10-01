@@ -18,17 +18,65 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace EditKey{
-    enum Enum : u8{ None, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Enter, Insert, Escape,
-        Up, Down, PageUp, PageDown };
+    enum Enum : u8{
+        None,
+        Left,
+        Right,
+        Home,
+        End,
+        Backspace,
+        Delete,
+        A,
+        C,
+        X,
+        V,
+        Z,
+        Y,
+        Enter,
+        Insert,
+        Escape,
+        Up,
+        Down,
+        PageUp,
+        PageDown,
+    };
 };
 
 namespace EditCommand{
-    enum Enum : u8{ None, Left, Right, Home, End, WordLeft, WordRight, Backspace, Delete, WordBackspace, WordDelete,
-        SelectAll, Copy, Cut, Paste, Undo, Redo, Submit, Cancel, DocumentHome, DocumentEnd, Newline };
+    enum Enum : u8{
+        None,
+        Left,
+        Right,
+        Home,
+        End,
+        WordLeft,
+        WordRight,
+        Backspace,
+        Delete,
+        WordBackspace,
+        WordDelete,
+        SelectAll,
+        Copy,
+        Cut,
+        Paste,
+        Undo,
+        Redo,
+        Submit,
+        Cancel,
+        DocumentHome,
+        DocumentEnd,
+        Newline,
+    };
 };
 
 namespace EditClipboardAction{
-    enum Enum : u8{ None, Copy, Cut, Paste, PublishSelection };
+    enum Enum : u8{
+        None,
+        Copy,
+        Cut,
+        Paste,
+        PublishSelection,
+    };
 };
 
 struct EditKeyStroke{

@@ -135,10 +135,12 @@ public:
 public:
     explicit UiSkin(Core::Assets::AssetArena& arena)
         : m_regions(arena)
+        , m_regionIndex(arena)
     {}
     UiSkin(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<UiSkin>(virtualPath)
         , m_regions(arena)
+        , m_regionIndex(arena)
     {}
 
 
@@ -164,7 +166,12 @@ public:
 
 
 private:
+    void rebuildRegionIndex();
+
+
+private:
     RegionVector m_regions;
+    Core::Assets::AssetVector<u32> m_regionIndex;
     Core::Assets::AssetRef<Texture> m_texture;
     u32 m_atlasWidth = 0u;
     u32 m_atlasHeight = 0u;

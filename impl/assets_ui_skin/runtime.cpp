@@ -159,6 +159,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     candidate.setTypography({ typography.defaultFontSize });
     if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("UiSkin::loadBinary"))))
         return false;
+    candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
         return false;
 
@@ -193,11 +194,12 @@ bool UiSkin::validatePayload()const{
             );
             return false;
         }
-        for(usize previous = 0u; previous < index; ++previous){
-            if(m_regions[previous].name == region.name){
-                NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(region.name.c_str()));
-                return false;
-            }
+    }
+    for(usize index = 1u; index < m_regionIndex.size(); ++index){
+        const Name& name = m_regions[m_regionIndex[index]].name;
+        if(name == m_regions[m_regionIndex[index - 1u]].name){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.c_str()));
+            return false;
         }
     }
     for(usize index = 0u; index < m_palette.colors.size(); ++index){
@@ -232,29 +234,6 @@ bool UiSkin::validateTexture(const Texture& texture)const{
         return false;
     }
     return true;
-}
-
-void UiSkin::setAtlas(
-    Core::Assets::AssetRef<Texture> texture,
-    const u32 width,
-    const u32 height,
-    const f32 referenceDensity,
-    RegionVector&& regions){
-    m_texture = texture;
-    m_atlasWidth = width;
-    m_atlasHeight = height;
-    m_referenceDensity = referenceDensity;
-    m_regions = Move(regions);
-    m_palette = {};
-    m_typography = {};
-}
-
-const UiSkinRegion* UiSkin::findRegion(const Name& name)const{
-    for(const UiSkinRegion& region : m_regions){
-        if(region.name == name)
-            return &region;
-    }
-    return nullptr;
 }
 
 

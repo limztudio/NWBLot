@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_assets_ui_skin)
 target_sources(nwb_assets_ui_skin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/region_index.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
@@ -12,6 +13,7 @@ if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_ui_skin_cook)
     target_sources(nwb_assets_ui_skin_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/region_index.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"

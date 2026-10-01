@@ -94,7 +94,25 @@ struct UiSkinColor{
 };
 
 struct UiSkinPalette{
-    Array<UiSkinColor, UiSkinColorRole::Count> colors{};
+    Array<UiSkinColor, UiSkinColorRole::Count> colors{{
+        { 0.92f, 0.94f, 0.98f, 1.0f }, // TextNormal
+        { 0.48f, 0.5f, 0.55f, 1.0f }, // TextDisabled
+        { 1.0f, 1.0f, 1.0f, 1.0f }, // TextTooltip
+        { 0.08f, 0.1f, 0.14f, 1.0f }, // EditBackground
+        { 0.2f, 0.4f, 0.78f, 0.75f }, // EditSelection
+        { 0.28f, 0.31f, 0.38f, 0.55f }, // EditInactiveSelection
+        { 0.95f, 0.97f, 1.0f, 1.0f }, // EditCaret
+        { 0.5f, 0.72f, 1.0f, 1.0f }, // EditPreedit
+        { 0.08f, 0.1f, 0.14f, 1.0f }, // ScrollbarTrack
+        { 0.35f, 0.4f, 0.48f, 1.0f }, // ScrollbarThumb
+        { 0.25f, 0.28f, 0.32f, 1.0f }, // ScrollbarDisabled
+        { 0.0f, 0.0f, 0.0f, 0.4f }, // PopupBackdrop
+        { 1.08f, 1.08f, 1.08f, 1.0f }, // ControlHoverTint
+        { 0.85f, 0.85f, 0.85f, 1.0f }, // ControlPressedTint
+        { 0.55f, 0.55f, 0.55f, 0.6f }, // ControlDisabledTint
+        { 1.0f, 1.0f, 1.0f, 1.0f }, // ProgressTrackTint
+        { 1.0f, 1.0f, 1.0f, 1.0f }, // ProgressFillTint
+    }};
 };
 
 struct UiSkinTypography{
@@ -130,8 +148,8 @@ public:
     [[nodiscard]] bool validateTexture(const Texture& texture)const;
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
-    void setPalette(const UiSkinPalette& palette){ m_palette = palette; m_hasPalette = true; }
-    void setTypography(const UiSkinTypography& typography){ m_typography = typography; m_hasTypography = true; }
+    void setPalette(const UiSkinPalette& palette){ m_palette = palette; }
+    void setTypography(const UiSkinTypography& typography){ m_typography = typography; }
 
 
 public:
@@ -140,9 +158,7 @@ public:
     [[nodiscard]] u32 atlasHeight()const{ return m_atlasHeight; }
     [[nodiscard]] f32 referenceDensity()const{ return m_referenceDensity; }
     [[nodiscard]] const RegionVector& regions()const{ return m_regions; }
-    [[nodiscard]] bool hasPalette()const{ return m_hasPalette; }
     [[nodiscard]] const UiSkinPalette& palette()const{ return m_palette; }
-    [[nodiscard]] bool hasTypography()const{ return m_hasTypography; }
     [[nodiscard]] const UiSkinTypography& typography()const{ return m_typography; }
     [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const;
 
@@ -154,9 +170,7 @@ private:
     u32 m_atlasHeight = 0u;
     f32 m_referenceDensity = 1.0f;
     UiSkinPalette m_palette;
-    bool m_hasPalette = false;
     UiSkinTypography m_typography;
-    bool m_hasTypography = false;
 };
 
 

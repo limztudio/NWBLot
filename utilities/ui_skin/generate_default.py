@@ -66,7 +66,7 @@ ICONS = [
     ("white", "white"),
 ]
 
-# Linear RGB and straight alpha, in UiSkinColorRole order. Default values preserve the legacy widget styles.
+# Linear RGB and straight alpha, in UiSkinColorRole order. These are the current engine palette defaults.
 COLOR_ROLES = [
     {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
     {"name": "text.disabled", "rgba": [0.48, 0.50, 0.55, 1.0]},

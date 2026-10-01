@@ -41,7 +41,7 @@ class UiBuilderSkinPaletteTests : public WidgetFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiBuilderSkinPaletteTests, SkinRebindReplacesOnlyColorsAndLegacySkinRestoresDefaults){
+TEST_F(UiBuilderSkinPaletteTests, SkinRebindAppliesCompletePaletteAndPreservesExplicitSize){
     const UiSkinPalette first = MakePalette(0.1f);
     const UiSkinPalette second = MakePalette(0.3f);
     m_skin.setPalette(first);
@@ -56,21 +56,17 @@ TEST_F(UiBuilderSkinPaletteTests, SkinRebindReplacesOnlyColorsAndLegacySkinResto
     ExpectColor(m_builder.tooltipStyle().text, second.colors[UiSkinColorRole::TextTooltip]);
     EXPECT_FLOAT_EQ(m_builder.style().fontSize, 21.0f);
 
-    UiSkin legacy(m_arena, Name("tests/ui/legacy_skin"));
+    UiSkin defaultSkin(m_arena, Name("tests/ui/default_skin"));
     UiSkin::RegionVector regions(m_arena);
     for(const UiSkinRegion& region : m_skin.regions())
         regions.push_back(region);
-    legacy.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-    ASSERT_TRUE(legacy.validatePayload());
-    m_builder.setSkin(legacy);
-    const WidgetStyle widgetDefault;
-    const EditBoxStyle editDefault;
-    const TooltipStyle tooltipDefault;
-    ExpectColor(m_builder.style().text, { widgetDefault.text.r, widgetDefault.text.g, widgetDefault.text.b, widgetDefault.text.a });
-    ExpectColor(m_builder.editStyle().selection,
-        { editDefault.selection.r, editDefault.selection.g, editDefault.selection.b, editDefault.selection.a });
-    ExpectColor(m_builder.tooltipStyle().text,
-        { tooltipDefault.text.r, tooltipDefault.text.g, tooltipDefault.text.b, tooltipDefault.text.a });
+    defaultSkin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    ASSERT_TRUE(defaultSkin.validatePayload());
+    m_builder.setSkin(defaultSkin);
+    const UiSkinPalette paletteDefault;
+    ExpectColor(m_builder.style().text, paletteDefault.colors[UiSkinColorRole::TextNormal]);
+    ExpectColor(m_builder.editStyle().selection, paletteDefault.colors[UiSkinColorRole::EditSelection]);
+    ExpectColor(m_builder.tooltipStyle().text, paletteDefault.colors[UiSkinColorRole::TextTooltip]);
     EXPECT_FLOAT_EQ(m_builder.style().fontSize, 21.0f);
 }
 
@@ -90,10 +86,10 @@ TEST_F(UiBuilderSkinPaletteTests, SkinTypographySetsDefaultAndPreservesExplicitS
     m_builder.setSkin(m_skin);
     EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
 
-    UiSkin legacy(m_arena, Name("tests/ui/legacy_skin"));
+    UiSkin defaultSkin(m_arena, Name("tests/ui/default_skin"));
     UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
-    legacy.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-    m_builder.setSkin(legacy);
+    defaultSkin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
+    m_builder.setSkin(defaultSkin);
     EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
 }
 

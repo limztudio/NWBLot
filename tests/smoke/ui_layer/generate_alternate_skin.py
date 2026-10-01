@@ -51,14 +51,14 @@ def generate(work_directory, output_directory, converter):
     for color in colors:
         if color["name"] == "text.tooltip":
             color["rgba"] = [1.0, 0.58, 0.26, 1.0]
-    lines = ["ui_skin asset;", "", "asset.schema_version = 2;",
+    lines = ["ui_skin asset;", "", "asset.schema_version = 3;",
         'asset.texture = "project/ui/skins/alternate/texture";',
         "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;",
         "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = ["]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
     lines += ["];", "asset.colors = ["]
     lines += ["    " + json.dumps(color, separators=(", ", ": ")) + "," for color in colors]
-    lines += ["];", ""]
+    lines += ["];", 'asset.typography = {"default_font_size": 16.0};', ""]
     output_directory.mkdir(parents=True, exist_ok=True)
     (output_directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))
     subprocess.run([str(converter.resolve()), str(work_directory / "source.png"),

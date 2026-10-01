@@ -1,6 +1,6 @@
 ui_skin asset;
 
-asset.schema_version = 2;
+asset.schema_version = 3;
 asset.texture = "project/ui/skins/alternate/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
@@ -77,3 +77,4 @@ asset.colors = [
     {"name": "progress.track_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
     {"name": "progress.fill_tint", "rgba": [1.0, 1.0, 1.0, 1.0]},
 ];
+asset.typography = {"default_font_size": 16.0};

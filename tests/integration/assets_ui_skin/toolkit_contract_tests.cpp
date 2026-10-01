@@ -145,27 +145,22 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     EXPECT_TRUE(ValidateUiSkinToolkitContract(explicitResize));
 }
 
-TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGenericV1RemainsValid){
+TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGenericSkinRemainsValid){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ToolkitSkinArena testArena;
     const Path assetRoot(testArena.arena, "C:/ui_skin_contract_tests/assets");
     const Path atlasPath = assetRoot / "ui" / "atlas.nwb";
-    const AStringView genericMetadata =
-        "ui_skin asset;\n"
-        "asset.schema_version = 1;\n"
-        "asset.texture = \"project/ui/texture\";\n"
-        "asset.atlas_extent = [32, 32];\n"
-        "asset.reference_density = 1.0;\n"
-        "asset.regions = [{ \"name\": \"panel.normal\", \"rect\": [0, 0, 16, 16] }];\n";
-    const AStringView completeMetadata =
-        "ui_skin asset;\n"
-        "asset.schema_version = 1;\n"
-        "asset.texture = \"project/ui/texture\";\n"
-        "asset.atlas_extent = [32, 32];\n"
-        "asset.reference_density = 1.0;\n"
-        "asset.toolkit_contract = \"widgets_v1\";\n"
-        "asset.regions = [{ \"name\": \"panel.normal\", \"rect\": [0, 0, 16, 16] }];\n";
+    const Path defaultAtlasPath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "skins" / "default" / "atlas.nwb";
+    TestAString genericMetadata;
+    ASSERT_TRUE(ReadTextFile(defaultAtlasPath, genericMetadata));
+    const AStringView contractField = "asset.toolkit_contract = \"widgets_v1\";";
+    const usize contractOffset = genericMetadata.find(contractField);
+    ASSERT_NE(contractOffset, TestAString::npos);
+    genericMetadata.erase(contractOffset, contractField.size());
+    genericMetadata.append("asset.regions = [{ \"name\": \"panel.normal\", \"rect\": [0, 0, 16, 16] }];\r\n");
+    TestAString completeMetadata(genericMetadata);
+    completeMetadata.append(contractField);
 
     Core::Metascript::Document genericDocument(testArena.arena);
     ASSERT_TRUE(genericDocument.parse(genericMetadata));

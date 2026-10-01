@@ -24,9 +24,7 @@ namespace UiSkinBinaryPayload{
 
 
 inline constexpr u32 s_UiSkinMagic = 0x55495331u; // UIS1
-inline constexpr u32 s_UiSkinVersion = 1u;
-inline constexpr u32 s_UiSkinPaletteVersion = 2u;
-inline constexpr u32 s_UiSkinTypographyVersion = 3u;
+inline constexpr u32 s_UiSkinVersion = 3u;
 inline constexpr u32 s_UiSkinPaletteColorCount = 17u;
 
 #pragma pack(push, 1)

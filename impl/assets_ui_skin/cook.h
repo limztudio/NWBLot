@@ -36,9 +36,7 @@ struct UiSkinCookEntry{
     f32 referenceDensity = 1.0f;
     bool completeToolkitSkin = false;
     UiSkinPalette palette;
-    bool hasPalette = false;
     UiSkinTypography typography;
-    bool hasTypography = false;
 
 
     explicit UiSkinCookEntry(Core::Assets::AssetArena& memoryArena)

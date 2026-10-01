@@ -281,43 +281,16 @@ bool ParseUiSkinCookMetadata(
     const Value* schema = FindField(asset, "schema_version");
     u32 schemaVersion = 0u;
     if(!schema || !ReadU32Value(nwbFilePath, *schema, "schema_version", schemaVersion)
-        || (schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion
-            && schemaVersion != UiSkinBinaryPayload::s_UiSkinPaletteVersion
-            && schemaVersion != UiSkinBinaryPayload::s_UiSkinTypographyVersion)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}, {}, or {}")
+        || schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , UiSkinBinaryPayload::s_UiSkinVersion
-            , UiSkinBinaryPayload::s_UiSkinPaletteVersion
-            , UiSkinBinaryPayload::s_UiSkinTypographyVersion
         );
         return false;
     }
-    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinVersion && FindField(asset, "colors")){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': version-1 skins cannot contain colors")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-        );
+    if(!ParsePalette(nwbFilePath, asset, parsed.palette) || !ParseTypography(nwbFilePath, asset, parsed.typography))
         return false;
-    }
-    if(schemaVersion < UiSkinBinaryPayload::s_UiSkinTypographyVersion && FindField(asset, "typography")){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography requires schema version {}")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , UiSkinBinaryPayload::s_UiSkinTypographyVersion
-        );
-        return false;
-    }
-    if(schemaVersion >= UiSkinBinaryPayload::s_UiSkinPaletteVersion){
-        if(!ParsePalette(nwbFilePath, asset, parsed.palette))
-            return false;
-        parsed.hasPalette = true;
-    }
-    if(schemaVersion == UiSkinBinaryPayload::s_UiSkinTypographyVersion){
-        if(!ParseTypography(nwbFilePath, asset, parsed.typography))
-            return false;
-        parsed.hasTypography = true;
-    }
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena))
         return false;
     if(!Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_DiagnosticPrefix, "texture", true, parsed.texture))
@@ -384,9 +357,7 @@ bool ParseUiSkinCookMetadata(
     outEntry.referenceDensity = parsed.referenceDensity;
     outEntry.completeToolkitSkin = parsed.completeToolkitSkin;
     outEntry.palette = parsed.palette;
-    outEntry.hasPalette = parsed.hasPalette;
     outEntry.typography = parsed.typography;
-    outEntry.hasTypography = parsed.hasTypography;
     return true;
 }
 

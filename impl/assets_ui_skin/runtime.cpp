@@ -97,9 +97,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         MakeNotNull(NWB_TEXT("UI skin"))
     ))
         return false;
-    if(header.version != UiSkinBinaryPayload::s_UiSkinVersion
-        && header.version != UiSkinBinaryPayload::s_UiSkinPaletteVersion
-        && header.version != UiSkinBinaryPayload::s_UiSkinTypographyVersion){
+    if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
     }
@@ -143,26 +141,22 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         region.drawMode = static_cast<UiSkinDrawMode::Enum>(packed.drawMode);
         candidate.m_regions.push_back(region);
     }
-    if(header.version >= UiSkinBinaryPayload::s_UiSkinPaletteVersion){
-        UiSkinPalette palette;
-        for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
-            UiSkinBinaryPayload::ColorBinary packed;
-            if(!ReadPOD(binary, cursor, packed)){
-                NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
-                return false;
-            }
-            palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
-        }
-        candidate.setPalette(palette);
-    }
-    if(header.version == UiSkinBinaryPayload::s_UiSkinTypographyVersion){
-        UiSkinBinaryPayload::TypographyBinary packed;
+    UiSkinPalette palette;
+    for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
+        UiSkinBinaryPayload::ColorBinary packed;
         if(!ReadPOD(binary, cursor, packed)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
         }
-        candidate.setTypography({ packed.defaultFontSize });
+        palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
     }
+    candidate.setPalette(palette);
+    UiSkinBinaryPayload::TypographyBinary typography;
+    if(!ReadPOD(binary, cursor, typography)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
+        return false;
+    }
+    candidate.setTypography({ typography.defaultFontSize });
     if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("UiSkin::loadBinary"))))
         return false;
     if(!candidate.validatePayload())
@@ -206,23 +200,21 @@ bool UiSkin::validatePayload()const{
             }
         }
     }
-    if(m_hasPalette){
-        for(usize index = 0u; index < m_palette.colors.size(); ++index){
-            const UiSkinColor& color = m_palette.colors[index];
-            if(
-                !IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f
-                || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f
-                || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f
-                || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
-                return false;
-            }
+    for(usize index = 0u; index < m_palette.colors.size(); ++index){
+        const UiSkinColor& color = m_palette.colors[index];
+        if(
+            !IsFinite(color.r) || color.r < 0.0f || color.r > 16.0f
+            || !IsFinite(color.g) || color.g < 0.0f || color.g > 16.0f
+            || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f
+            || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
+            return false;
         }
     }
-    if(m_hasTypography && (!m_hasPalette || !IsFinite(m_typography.defaultFontSize)
-        || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a palette and a default font size in [1/64, 2048]"));
+    if(!IsFinite(m_typography.defaultFontSize)
+        || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
         return false;
     }
     return true;
@@ -254,9 +246,7 @@ void UiSkin::setAtlas(
     m_referenceDensity = referenceDensity;
     m_regions = Move(regions);
     m_palette = {};
-    m_hasPalette = false;
     m_typography = {};
-    m_hasTypography = false;
 }
 
 const UiSkinRegion* UiSkin::findRegion(const Name& name)const{

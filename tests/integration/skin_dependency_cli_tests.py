@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
 import shutil
 import struct
@@ -22,6 +23,7 @@ CONFIGURATION = "--configuration"
 TEXTURE_IDENTITY = "engine/ui/texture"
 TEXTURE_MAGIC = 0x54455831
 SKIN_MAGIC = 0x55495331
+SKIN_VERSION = 3
 NAME_HASH_BYTES = 64
 ATLAS_EXTENT = (256, 256)
 ARTIFACT_MAGIC = 0x4142574E
@@ -34,13 +36,22 @@ def _write_metadata(path: pathlib.Path, text: str) -> None:
 
 
 def _write_skin(path: pathlib.Path, texture: str, extent: tuple[int, int] = ATLAS_EXTENT) -> None:
+    roles = (
+        "text.normal", "text.disabled", "text.tooltip", "edit.background", "edit.selection",
+        "edit.inactive_selection", "edit.caret", "edit.preedit", "scrollbar.track", "scrollbar.thumb",
+        "scrollbar.disabled", "popup.backdrop", "control.hover_tint", "control.pressed_tint",
+        "control.disabled_tint", "progress.track_tint", "progress.fill_tint",
+    )
+    colors = [{"name": role, "rgba": [1.0, 1.0, 1.0, 1.0]} for role in roles]
     _write_metadata(path, (
         "ui_skin asset;\n"
-        "asset.schema_version = 1;\n"
+        f"asset.schema_version = {SKIN_VERSION};\n"
         f'asset.texture = "{texture}";\n'
         f"asset.atlas_extent = [{extent[0]}, {extent[1]}];\n"
         "asset.reference_density = 1.0;\n"
         'asset.regions = [{"name": "panel.normal", "rect": [0, 0, 24, 24]}];\n'
+        f"asset.colors = {json.dumps(colors)};\n"
+        'asset.typography = {"default_font_size": 16.0};\n'
     ))
 
 
@@ -130,6 +141,8 @@ def _package_identities(payloads: dict[bytes, bytes]) -> tuple[bytes, bytes]:
     texture = payloads[texture_identity]
     if len(skin) < 80 or len(texture) < 24:
         raise AssertionError("skin package contains a truncated skin or texture header")
+    if struct.unpack_from("<I", skin, 4)[0] != SKIN_VERSION:
+        raise AssertionError("skin package did not write the current skin version")
     if skin[8:8 + NAME_HASH_BYTES] != texture_identity:
         raise AssertionError("packaged skin refers to a texture identity absent from the package")
     if struct.unpack_from("<II", skin, 72) != ATLAS_EXTENT:

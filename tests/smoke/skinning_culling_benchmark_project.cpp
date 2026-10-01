@@ -150,8 +150,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 [[nodiscard]] static bool EnvironmentFlagEnabled(const AStringView name){
     NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
     AString<NWB::Core::Alloc::GlobalArena> value(arena);
-    const AString<NWB::Core::Alloc::GlobalArena> environmentName(name, arena);
-    if(!ReadEnvironmentVariable(environmentName.c_str(), value))
+    if(!ReadEnvironmentVariable(name, value))
         return false;
 
     return !value.empty() && value[0] != '\0' && value[0] != '0';
@@ -162,7 +161,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 }
 
 [[nodiscard]] static bool FastSmokeEnabled(){
-    return EnvironmentFlagEnabled(s_FastSmokeEnv.data());
+    return EnvironmentFlagEnabled(s_FastSmokeEnv);
 }
 
 static void BuildAnimatedJointMatrix(

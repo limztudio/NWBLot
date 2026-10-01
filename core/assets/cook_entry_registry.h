@@ -221,7 +221,7 @@ public:
         const bool logBuildFailure
     )
         : m_entries(arena)
-        , m_assetKindText(assetKindText, arena)
+        , m_assetKindText(assetKindText)
         , m_parseDocument(parseDocument)
         , m_parseValue(parseValue)
         , m_buildAsset(buildAsset)
@@ -284,7 +284,7 @@ public:
 
         for(EntryT& entry : m_entries){
             if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(
-                TStringView(m_assetKindText),
+                m_assetKindText,
                 CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 context.seenVirtualPathHashes
             ))
@@ -294,7 +294,7 @@ public:
             if(!m_buildAsset(entry, asset)){
                 if(m_logBuildFailure){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
-                        , TStringView(m_assetKindText)
+                        , m_assetKindText
                         , StringConvert(entry.virtualPath.c_str())
                     );
                 }
@@ -302,7 +302,7 @@ public:
             }
 
             if(!context.writer.writeCookedAsset(
-                TStringView(m_assetKindText),
+                m_assetKindText,
                 CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 asset,
                 codec
@@ -316,7 +316,7 @@ public:
 private:
     bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
         if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(
-            TStringView(m_assetKindText),
+            m_assetKindText,
             CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
             context.seenVirtualPathHashes
         ))
@@ -328,7 +328,7 @@ private:
 
 private:
     CookVector<EntryT> m_entries;
-    TString<CookArena> m_assetKindText;
+    TStringView m_assetKindText;
     DocumentParseFunction m_parseDocument = nullptr;
     ValueParseFunction m_parseValue = nullptr;
     BuildAssetFunction m_buildAsset = nullptr;
@@ -375,6 +375,7 @@ public:
     }
 
 public:
+    // The asset label's backing text must outlive this registry.
     template<typename EntryT, typename AssetT, typename CodecT>
     bool registerType(
         const Name& assetType,

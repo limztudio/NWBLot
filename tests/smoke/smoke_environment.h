@@ -26,8 +26,7 @@ inline constexpr Name s_SmokeEnvironmentArena("tests/smoke/environment");
 using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
 
 [[nodiscard]] inline bool ReadSmokeEnvironmentText(const AStringView variableName, SmokeEnvironmentString& outValue){
-    const SmokeEnvironmentString environmentName(variableName, outValue.get_allocator());
-    return ReadEnvironmentVariable(environmentName.c_str(), outValue) && !outValue.empty();
+    return ReadEnvironmentVariable(variableName, outValue) && !outValue.empty();
 }
 
 [[nodiscard]] inline bool ReadSmokeEnvironmentF32(const AStringView variableName, f32& outValue){

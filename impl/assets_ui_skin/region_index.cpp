@@ -58,7 +58,8 @@ void UiSkin::setAtlas(
     const u32 width,
     const u32 height,
     const f32 referenceDensity,
-    RegionVector&& regions){
+    RegionVector&& regions
+){
     RegionVector candidate(m_regions.get_allocator().arena());
     candidate = Move(regions);
     auto index = __hidden_ui_skin_region_index::BuildRegionIndex(candidate, candidate.get_allocator().arena());

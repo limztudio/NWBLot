@@ -28,9 +28,9 @@ namespace __hidden_built_asset{
 inline constexpr u32 s_Magic = 0x4142574eu;
 inline constexpr u32 s_Version = 1u;
 inline constexpr usize s_HeaderSize = sizeof(u32) * 2u + sizeof(NameHash) + sizeof(u64) * 2u;
-inline constexpr char s_TemporaryNamePrefix[] = ".nwb_";
+inline constexpr AStringView s_TemporaryNamePrefix = ".nwb_";
 inline constexpr char s_TemporaryNameSeparator = '_';
-inline constexpr char s_TemporaryNameExtension[] = ".tmp";
+inline constexpr AStringView s_TemporaryNameExtension = ".tmp";
 inline constexpr u64 s_TemporarySequenceStep = 1u;
 Atomic<u64> g_TemporarySequence{0u};
 

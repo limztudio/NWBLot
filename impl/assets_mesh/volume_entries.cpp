@@ -107,14 +107,14 @@ static bool ParseSkinValue(
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
         registry,
-        MakeNotNull(NWB_TEXT("mesh")),
+        NWB_TEXT("mesh"),
         &ParseMeshDocument,
         &ParseMeshValue,
         [](MeshCookEntry& entry, Mesh& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMeshAsset); }
     )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
             registry,
-            MakeNotNull(NWB_TEXT("skin")),
+            NWB_TEXT("skin"),
             &ParseSkinDocument,
             &ParseSkinValue,
             [](SkinCookEntry& entry, Skin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkinAsset); }

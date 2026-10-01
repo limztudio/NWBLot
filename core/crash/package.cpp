@@ -56,7 +56,7 @@ static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const String
     out += "\": ";
 }
 
-static const char* ArtifactStrategyName(const CrashRequest& request){
+static StringView ArtifactStrategyName(const CrashRequest& request){
     switch(request.platform){
     case PlatformKind::Windows:
         return "windows_minidump_external_handler";
@@ -352,7 +352,7 @@ static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStri
     CopyFixedBuffer(procPath, PackageNames::s_LinuxProcRootPath);
     AppendUnsignedToFixedBuffer(procPath, request.processId);
     AppendFixedBuffer(procPath, "/");
-    AppendFixedBuffer(procPath, procName.data());
+    AppendFixedBuffer(procPath, procName);
 
     CopyFileToPackage(arena, request, procPath, outputName);
 }
@@ -420,12 +420,6 @@ template<typename ArenaT>
 static void AppendArchiveText(CrashBytesT<ArenaT>& out, const AStringView text){
     for(const char ch : text)
         out.push_back(static_cast<u8>(ch));
-}
-
-template<typename ArenaT>
-static void AppendArchiveText(CrashBytesT<ArenaT>& out, const char* text){
-    if(text)
-        AppendArchiveText(out, AStringView(text));
 }
 
 template<typename ArenaT>

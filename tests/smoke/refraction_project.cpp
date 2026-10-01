@@ -167,7 +167,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-const tchar* NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Refraction Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Refraction Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_refraction_smoke::RefractionSmokeProject>(context);
 }

@@ -194,7 +194,7 @@ public:
 
 
 public:
-    usize pushEvent(const char* name);
+    usize pushEvent(AStringView name);
     void popEvent()noexcept;
     // Clears only active nesting. Published device history remains available for in-flight crash reports.
     void resetEventStack()noexcept;

@@ -108,7 +108,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
     Device::AmdBreadcrumbWrite breadcrumb;
     __hidden_command_markers::CrashMarkerRollback crashMarkerRollback(m_gpuCrashMarkerTracker);
     if(useGpuMarkers){
-        gpuCrashMarker = m_gpuCrashMarkerTracker.pushEvent(markerName.c_str());
+        gpuCrashMarker = m_gpuCrashMarkerTracker.pushEvent(name);
         crashMarkerRollback.arm();
         if(useAmdBreadcrumb){
             breadcrumb = m_device.reserveAmdBreadcrumb(m_creationDesc.physicalQueue, gpuCrashMarker);

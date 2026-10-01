@@ -209,7 +209,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     const auto validateShader = [this](
         Shader* const shader,
         const ShaderType::Mask expectedType,
-        const tchar* const stageName
+        const TStringView stageName
     ){
         if(!shader)
             return true;
@@ -506,7 +506,7 @@ void CommandList::endDynamicRendering(){
 }
 
 void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
-    constexpr const tchar* s_OperationName = NWB_TEXT("begin render pass");
+    constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(!validateRenderPassBegin(framebuffer, params, s_OperationName))

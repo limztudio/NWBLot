@@ -152,16 +152,16 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
     }
     else{
         Sort(samples.begin(), samples.end());
-        const auto record = [](const NotNull<const char*> key, const u64 value){
+        const auto record = [](const AStringView key, const u64 value){
             char text[32u] = {};
             const AStringView formatted = FormatDecimal(value, text);
             text[formatted.size()] = '\0';
-            testing::Test::RecordProperty(key.get(), text);
+            testing::Test::RecordProperty(AInteropString(key), text);
         };
-        record(NotNull<const char*>("median_analysis_ns"), samples[s_Samples / 2u]);
-        record(NotNull<const char*>("scratch_bytes"), peakScratch);
-        record(NotNull<const char*>("task_count"), taskCount);
-        record(NotNull<const char*>("raw_edge_count"), pairCount);
+        record("median_analysis_ns", samples[s_Samples / 2u]);
+        record("scratch_bytes", peakScratch);
+        record("task_count", taskCount);
+        record("raw_edge_count", pairCount);
     }
 }
 

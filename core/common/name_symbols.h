@@ -30,9 +30,9 @@ namespace NameSymbols{
 
 
 inline constexpr usize s_MaxResolvedTextLength = 1024u;
-inline constexpr char s_FileName[] = "namesym";
-inline constexpr char s_FileExtension[] = ".namesym";
-inline constexpr char s_FileHeader[] = "nwb_namesym_v1";
+inline constexpr AStringView s_FileName = "namesym";
+inline constexpr AStringView s_FileExtension = ".namesym";
+inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 inline constexpr usize s_DebugHashTextLength = NameDetail::s_DebugHashTextLength;
 
 

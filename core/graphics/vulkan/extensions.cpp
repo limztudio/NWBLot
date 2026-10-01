@@ -112,7 +112,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    constexpr const tchar* s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
+    constexpr TStringView s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
     constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(
         static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute)
     );

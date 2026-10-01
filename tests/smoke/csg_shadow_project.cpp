@@ -381,7 +381,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-const tchar* NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB CSG Shadow Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_csg_shadow_smoke::CsgShadowSmokeProject>(context);
 }

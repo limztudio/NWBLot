@@ -177,13 +177,13 @@ VkFormat ConvertFormat(Format::Enum format);
 VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
 extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0);
 bool IsSupportedSampleCount(u32 sampleCount);
-bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
+bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
 bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
 bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
-bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName);
+bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, TStringView operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
 bool BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
@@ -201,7 +201,7 @@ bool BuildBufferImageCopyLayout(
     u64 depthPitch,
     BufferImageCopyRequiredSize::Enum requiredSizeMode,
     BufferImageCopyPitchFields::Enum pitchFields,
-    const tchar* operationName,
+    TStringView operationName,
     BufferImageCopyLayout& outLayout
 );
 VkImageSubresourceLayers BuildImageSubresourceLayers(
@@ -216,7 +216,7 @@ bool BuildTextureImageViewCreateInfo(
     const TextureSubresourceSet& resolvedSubresources,
     TextureDimension::Enum dimension,
     Format::Enum format,
-    const tchar* operationName,
+    TStringView operationName,
     bool assertFailure,
     VkImageViewCreateInfo& outViewInfo
 );
@@ -262,7 +262,7 @@ template<typename... Pointers>
 }
 
 template<typename... Pointers>
-inline bool DebugValidateNotNull(const tchar* operationName, const tchar* message, Pointers... pointers){
+inline bool DebugValidateNotNull(TStringView operationName, TStringView message, Pointers... pointers){
 #if defined(NWB_DEBUG)
     if(!AreAllPointersValid(pointers...)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
@@ -282,8 +282,8 @@ inline bool DebugValidateBufferRange(
     const BufferDesc& desc,
     const u64 offsetBytes,
     const u64 sizeBytes,
-    const tchar* operationName,
-    const tchar* rangeName
+    TStringView operationName,
+    TStringView rangeName
 ){
 #if defined(NWB_DEBUG)
     if(!IsBufferRangeInBounds(desc, offsetBytes, sizeBytes)){
@@ -312,8 +312,8 @@ inline bool DebugResolveTextureSlice(
     const TextureDesc& desc,
     const TextureSlice& slice,
     const TextureFormatBlockLayout& formatLayout,
-    const tchar* operationName,
-    const tchar* message,
+    TStringView operationName,
+    TStringView message,
     TextureSlice& outResolved
 ){
 #if defined(NWB_DEBUG)
@@ -335,8 +335,8 @@ inline bool DebugResolveTextureSlice(
 inline bool DebugValidateTextureSliceExtentsMatch(
     const TextureSlice& first,
     const TextureSlice& second,
-    const tchar* operationName,
-    const tchar* message
+    TStringView operationName,
+    TStringView message
 ){
 #if defined(NWB_DEBUG)
     if(first.width != second.width || first.height != second.height || first.depth != second.depth){
@@ -354,7 +354,7 @@ inline bool DebugValidateTextureSliceExtentsMatch(
     return true;
 }
 
-inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, const tchar* operationName){
+inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, TStringView operationName){
 #if defined(NWB_DEBUG)
     if(!IsTextureSubresourceRangeValid(subresources)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
@@ -369,7 +369,7 @@ inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& su
     return true;
 }
 
-inline bool DebugValidateBufferImageCopyAspect(VkImageAspectFlags aspectMask, const tchar* operationName){
+inline bool DebugValidateBufferImageCopyAspect(VkImageAspectFlags aspectMask, TStringView operationName){
 #if defined(NWB_DEBUG)
     if(!ValidateBufferImageCopyAspectMask(aspectMask, operationName)){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil buffer-image copies are not supported"), operationName);
@@ -385,13 +385,13 @@ inline bool DebugValidateBufferImageCopyAspect(VkImageAspectFlags aspectMask, co
 
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
-bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
-bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
+bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
+bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, TStringView operationName);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
 [[nodiscard]] bool ConvertAccelStructBuildFlags(
     RayTracingAccelStructBuildFlags::Mask buildFlags,
     VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
-    const tchar* operationName
+    TStringView operationName
 );
 bool BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
@@ -399,7 +399,7 @@ bool BuildGraphicsPipelineFixedState(
     PipelineStencilFaceMode::Enum stencilFaceMode,
     const VkDynamicState* dynamicStates,
     u32 dynamicStateCount,
-    const tchar* operationName,
+    TStringView operationName,
     GraphicsPipelineFixedState& outState
 );
 bool BuildClusterOperationInputInfo(
@@ -408,7 +408,7 @@ bool BuildClusterOperationInputInfo(
     VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
     VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
     VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
-    const tchar* operationName
+    TStringView operationName
 );
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
 VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
@@ -417,7 +417,7 @@ u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context);
 VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
 CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
-bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
+bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType){
@@ -572,7 +572,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
     return colorBlending;
 }
 
-bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, const tchar* operationName);
+bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState);
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
 

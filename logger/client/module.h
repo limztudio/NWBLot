@@ -26,14 +26,14 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const tchar* loggerName>
+template<typename T, const TStringView& loggerName>
 class ClientBase : public IClient, public QueuedLoggerWorkerBase<T, loggerName>{
 protected:
     using BaseType = LoggerWorkerBase<T, loggerName>;
     using UpdateBaseType = QueuedLoggerWorkerBase<T, loggerName>;
 
 
-    explicit ClientBase(const NotNull<const char*> allocationLog)
+    explicit ClientBase(const AStringView allocationLog)
         : UpdateBaseType(allocationLog)
     {}
 
@@ -56,10 +56,10 @@ namespace ClientPayloadKind{
     };
 };
 
-inline constexpr tchar s_ClientName[] = NWB_TEXT("Client");
+inline constexpr TStringView s_ClientName = NWB_TEXT("Client");
 class Client final : public ClientBase<Client, s_ClientName>{
-    template<typename, const tchar*> friend class LoggerWorkerBase;
-    template<typename, const tchar*> friend class QueuedLoggerWorkerBase;
+    template<typename, const TStringView&> friend class LoggerWorkerBase;
+    template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;
 
     using ClientBaseType = ClientBase<Client, s_ClientName>;
     using BaseType = ClientBaseType::BaseType;
@@ -81,7 +81,7 @@ public:
 
 
 protected:
-    bool internalInit(NotNull<const char*> url);
+    bool internalInit(AStringView url);
     bool internalUpdate();
     [[nodiscard]] inline bool workerCanExit()const{
         return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
@@ -125,10 +125,10 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar s_ClientStandaloneName[] = NWB_TEXT("ClientStandalone");
+inline constexpr TStringView s_ClientStandaloneName = NWB_TEXT("ClientStandalone");
 class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStandaloneName>{
-    template<typename, const tchar*> friend class LoggerWorkerBase;
-    template<typename, const tchar*> friend class QueuedLoggerWorkerBase;
+    template<typename, const TStringView&> friend class LoggerWorkerBase;
+    template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;
 
     using ClientBaseType = ClientBase<ClientStandalone, s_ClientStandaloneName>;
     using BaseType = ClientBaseType::BaseType;

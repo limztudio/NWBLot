@@ -158,14 +158,14 @@ public:
     template<typename CookEntryT>
     static void LogMeshletCookMetrics(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry
     );
     template<typename CookEntryT>
     [[nodiscard]] static bool PrecomputeMeshletTriangleData(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry,
     MeshletTrianglePrecompute& outData
@@ -319,7 +319,7 @@ public:
     template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
     [[nodiscard]] static bool AddMeshletTriangleToBuilder(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const MeshletTriangleData& triangle,
     VertexRefVectorT& localSourceVertexRefs,
     MeshletDesc& meshlet,
@@ -334,7 +334,7 @@ public:
     );
     [[nodiscard]] static bool AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -347,7 +347,7 @@ public:
     );
     [[nodiscard]] static bool GrowMeshletFromFrontier(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -384,7 +384,7 @@ public:
     >
     [[nodiscard]] static bool BuildZippedMeshletRefs(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const CookEntryT& entry,
     const LocalVertexVectorT& sourceVertexRefs,
     PositionRefVectorT& outPositionRefs,
@@ -395,7 +395,7 @@ public:
     template<typename CookEntryT>
     static bool BuildMeshlets(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     CookEntryT& entry,
     Core::CpuTaskScheduler& cpuScheduler
@@ -491,7 +491,7 @@ MeshletCookMetrics MeshCookMeshlets::BuildMeshletCookMetrics(const CookEntryT& e
 template<typename CookEntryT>
 void MeshCookMeshlets::LogMeshletCookMetrics(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry
 ){
@@ -515,7 +515,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}")
-        , metaKind.get()
+        , metaKind
         , PathToString<tchar>(nwbFilePath)
         , metrics.meshletCount
         , primitiveCountAverage
@@ -541,7 +541,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
 template<typename CookEntryT>
 bool MeshCookMeshlets::PrecomputeMeshletTriangleData(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry,
     MeshletTrianglePrecompute& outData
@@ -555,7 +555,7 @@ bool MeshCookMeshlets::PrecomputeMeshletTriangleData(
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
     if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -1102,7 +1102,7 @@ void MeshCookMeshlets::AddMeshletTriangleNeighborsToFrontier(
 template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
 bool MeshCookMeshlets::AddMeshletTriangleToBuilder(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const MeshletTriangleData& triangle,
     VertexRefVectorT& localSourceVertexRefs,
     MeshletDesc& meshlet,
@@ -1114,7 +1114,7 @@ bool MeshCookMeshlets::AddMeshletTriangleToBuilder(
         if(!found){
             if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet")
-                    , metaKind.get()
+                    , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;
@@ -1210,7 +1210,7 @@ template<
 >
 [[nodiscard]] bool MeshCookMeshlets::BuildZippedMeshletRefs(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const CookEntryT& entry,
     const LocalVertexVectorT& sourceVertexRefs,
     PositionRefVectorT& outPositionRefs,
@@ -1236,7 +1236,7 @@ template<
         if(!FindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits")
-                    , metaKind.get()
+                    , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;
@@ -1249,7 +1249,7 @@ template<
         if(!FindMeshletAttributeRef(outAttributeRefs, outAttributeSkins, attributeRef, source.skin, localAttribute)){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits")
-                    , metaKind.get()
+                    , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;
@@ -1269,7 +1269,7 @@ template<
 template<typename CookEntryT>
 bool MeshCookMeshlets::BuildMeshlets(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     CookEntryT& entry,
     Core::CpuTaskScheduler& cpuScheduler
@@ -1417,7 +1417,7 @@ bool MeshCookMeshlets::BuildMeshlets(
 
     if(entry.meshlets.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
         return false;

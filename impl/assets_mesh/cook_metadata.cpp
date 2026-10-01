@@ -78,14 +78,14 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(
 const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const AStringView fieldName){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(field && field->isList())
         return field;
 
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list")
-        , metaKind.get()
+        , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)
     );
@@ -113,14 +113,14 @@ MetadataF32ValueFailure::Enum MeshCookMetadata::ValidateMetadataFiniteF32Value(
 
 void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const AStringView label,
     const MetadataF32ValueFailure::Enum failure
 ){
     switch(failure){
     case MetadataF32ValueFailure::NotNumeric:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -128,7 +128,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
 
     case MetadataF32ValueFailure::NonFinite:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -136,7 +136,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
 
     case MetadataF32ValueFailure::OutOfRange:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -165,14 +165,14 @@ MetadataU32ValueFailure::Enum MeshCookMetadata::ValidateMetadataU32Value(const C
 
 void MeshCookMetadata::LogMetadataU32ValueFailure(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const AStringView label,
     const MetadataU32ValueFailure::Enum failure
 ){
     switch(failure){
     case MetadataU32ValueFailure::NotNumeric:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -180,7 +180,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
 
     case MetadataU32ValueFailure::NonIntegerOrNegative:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -188,7 +188,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
 
     case MetadataU32ValueFailure::OutOfRange:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
-            , metaKind.get()
+            , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -203,7 +203,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
 bool MeshCookMetadata::ParseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const AStringView label,
     u32& outValue
 ){

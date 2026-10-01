@@ -33,7 +33,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
             UniquePtr<Core::Assets::IAsset> candidateAsset;
             const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-                ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
+                ref.name(), candidateAsset, NWB_TEXT("UiLayerSystem"), "UI skin"
             );
             if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;

@@ -100,7 +100,7 @@ void CommandList::copyTexture(
     Texture& src,
     const TextureSlice& srcSlice
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("copy texture to staging texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("copy texture to staging texture");
     if(!validateStagingTextureCopyResources(
         dest,
         src,
@@ -174,7 +174,7 @@ void CommandList::copyTexture(
     StagingTexture& src,
     const TextureSlice& srcSlice
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("copy staging texture to texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("copy staging texture to texture");
     if(!validateStagingTextureCopyResources(
         src,
         dest,
@@ -253,7 +253,7 @@ bool CommandList::validateStagingTextureCopyResources(
     Texture& texture,
     const CpuAccessMode::Enum requiredCpuAccess,
     const VkImageUsageFlags requiredImageUsage,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!validateCommandRecordingScope(operationName))
         return false;

@@ -80,15 +80,16 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     return true;
 }
 
-bool RendererGatherBenchmarkProbe::write(const NotNull<const char*> path, const NotNull<const char*> workload, const bool memoryEnabled, const u32 renderers,
+bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const bool memoryEnabled, const u32 renderers,
     const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
     const bool complete = finished() && m_cpu.size() == s_SampleFrames;
-    OutputFileStream output(path.get(), s_FileOpenTruncate);
+    const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
+    OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);
     if(!output.is_open())
         return false;
     output.setf(s_FileFormatFixed, s_FileFormatFloatField);
     output.precision(9);
-    output << "{\"type\":\"configuration\",\"schema\":1,\"workload\":\"" << workload.get()
+    output << "{\"type\":\"configuration\",\"schema\":1,\"workload\":\"" << workload
         << "\",\"mode\":\"" << (memoryEnabled ? "memory" : "timing")
         << "\",\"width\":960,\"height\":720,\"warmup\":" << s_WarmupFrames
         << ",\"samples\":" << s_SampleFrames << ",\"drain\":" << s_DrainFrames

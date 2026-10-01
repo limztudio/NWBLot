@@ -22,15 +22,15 @@ bool SamplerAssetLoader::Create(
     const Sampler& samplerAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 ){
-    const NotNull<const tchar*> owner = ownerName;
+    const TStringView owner = ownerName;
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
     NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
         return true;
     if(outResource.sampler || outResource.samplerHeapHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler resource is partially initialized; release it before recreating"), owner.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler resource is partially initialized; release it before recreating"), owner);
         return false;
     }
     // Sampler::loadBinary already validated the cooked description; keep a debug-only invariant here.
@@ -40,7 +40,7 @@ bool SamplerAssetLoader::Create(
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load sampler '{}' without an initialized descriptor heap")
-            , owner.get()
+            , owner
             , StringConvert(samplerName.c_str())
         );
         return false;
@@ -48,18 +48,18 @@ bool SamplerAssetLoader::Create(
 
     Core::SamplerHandle sampler = device.createSampler(samplerAsset.description());
     if(!sampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create sampler '{}'"), owner.get(), StringConvert(samplerName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create sampler '{}'"), owner, StringConvert(samplerName.c_str()));
         return false;
     }
 
     const Core::GpuDescriptorHandle samplerHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!samplerHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner.get(), StringConvert(samplerName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner, StringConvert(samplerName.c_str()));
         return false;
     }
     if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
         heap.free(samplerHandle);
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner.get(), StringConvert(samplerName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner, StringConvert(samplerName.c_str()));
         return false;
     }
 
@@ -74,10 +74,10 @@ bool SamplerAssetLoader::Load(
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 ){
-    const NotNull<const tchar*> owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, MakeNotNull(Sampler::s_AssetTypeText.data())))
+    const TStringView owner = ownerName;
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, Sampler::s_AssetTypeText))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
@@ -87,7 +87,7 @@ bool SamplerAssetLoader::Load(
         samplerVirtualPath,
         loadedAsset,
         owner,
-        MakeNotNull(Sampler::s_AssetTypeText.data())
+        Sampler::s_AssetTypeText
     );
     if(!loadedSampler)
         return false;

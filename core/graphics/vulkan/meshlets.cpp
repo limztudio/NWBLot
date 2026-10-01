@@ -65,16 +65,16 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
-    const auto validateShaderOwner = [this](Shader* const shader, const NotNull<const tchar*> stageName){
+    const auto validateShaderOwner = [this](Shader* const shader, const TStringView stageName){
         if(!shader || &shader->m_context == &m_context)
             return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline {} shader belongs to another device."), stageName.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline {} shader belongs to another device."), stageName);
         return false;
     };
     if(
-        !validateShaderOwner(desc.AS.get(), MakeNotNull(NWB_TEXT("task")))
-        || !validateShaderOwner(desc.MS.get(), MakeNotNull(NWB_TEXT("mesh")))
-        || !validateShaderOwner(desc.PS.get(), MakeNotNull(NWB_TEXT("fragment")))
+        !validateShaderOwner(desc.AS.get(), NWB_TEXT("task"))
+        || !validateShaderOwner(desc.MS.get(), NWB_TEXT("mesh"))
+        || !validateShaderOwner(desc.PS.get(), NWB_TEXT("fragment"))
     )
         return nullptr;
 

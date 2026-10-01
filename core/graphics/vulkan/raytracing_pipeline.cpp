@@ -32,7 +32,7 @@ VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipe
     return flags;
 }
 
-bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, const tchar* operation){
+bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, TStringView operation){
     const u32 handleSize = context.rayTracingPipelineProperties.shaderGroupHandleSize;
     const u32 handleAlignment = context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     const u32 baseAlignment = context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
@@ -129,7 +129,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     const auto validateShader = [this](
         Shader* const shader,
         const ShaderType::Mask allowedShaderTypes,
-        const tchar* const stageName
+        const TStringView stageName
     ){
         if(!shader){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader is null"), stageName);

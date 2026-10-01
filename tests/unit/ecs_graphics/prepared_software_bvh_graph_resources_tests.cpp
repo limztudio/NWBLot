@@ -379,11 +379,11 @@ TEST(PreparedSoftwareBvhGraphResources, UniqueAndRepeatedRequestsDoNotAllocateBe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkGraphResources(
@@ -441,15 +441,15 @@ static void BenchmarkGraphResources(
         EXPECT_FALSE(view.findImportedBuffer(missing).valid());
         EXPECT_EQ(missing->getReferenceCount(), s_ExpectedDualCount);
     }
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_unique_meshes"), uniqueMeshes);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_builds"), buildCount);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_unrelated"), unrelatedCount);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_late_missing"), lateMissing ? 1u : 0u);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_scratch_peak_bytes"), scratchPeak);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_extra_peak_bytes"), scratchExtraPeak);
-    RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_scratch_reserved_bytes"), scratchReserved);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_ns", elapsed);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_iterations", iterations);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_unique_meshes", uniqueMeshes);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_builds", buildCount);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_unrelated", unrelatedCount);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_late_missing", lateMissing ? 1u : 0u);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_scratch_peak_bytes", scratchPeak);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_extra_peak_bytes", scratchExtraPeak);
+    RecordUnsignedProperty("sw_bvh_resource_lookup_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(PreparedSoftwareBvhGraphResourcesBenchmark, DISABLED_Unique1){

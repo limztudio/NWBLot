@@ -27,6 +27,9 @@ public:
     explicit constexpr AssetRef(const char* path)
         : virtualPath(path)
     {}
+    explicit constexpr AssetRef(const AStringView path)
+        : virtualPath(path)
+    {}
 
 
 public:

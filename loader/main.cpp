@@ -65,7 +65,6 @@ inline constexpr AStringView s_DisabledText = "false";
 inline constexpr int s_LoaderExitSuccess = 0;
 inline constexpr int s_LoaderExitFailure = -1;
 inline constexpr u16 s_EmptyFrameClientExtent = 0u;
-inline constexpr tchar s_EmptyWindowTitleTerminator = 0;
 inline constexpr u16 s_StandaloneLoggerPort = 0u;
 inline constexpr AStringView s_LoaderAppName = "loader";
 inline constexpr AStringView s_CrashUploadTokenOption = "--crash-upload-token";
@@ -329,8 +328,8 @@ static int RunProjectRuntime(
             return __hidden_loader::s_LoaderExitFailure;
         }
 
-        const tchar* projectWindowTitle = NWB::QueryProjectWindowTitle();
-        if(!projectWindowTitle || projectWindowTitle[0] == __hidden_loader::s_EmptyWindowTitleTerminator){
+        const TStringView projectWindowTitle = NWB::QueryProjectWindowTitle();
+        if(projectWindowTitle.empty()){
             NWB_LOGGER_FATAL(NWB_TEXT("Invalid project window title"));
             return __hidden_loader::s_LoaderExitFailure;
         }
@@ -338,7 +337,7 @@ static int RunProjectRuntime(
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
         if(telemetryClient)
             frame.setTelemetryUploadCallback(&__hidden_loader::UploadTelemetry, telemetryClient);
-        frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
+        frame.graphics().setWindowTitle(projectWindowTitle);
         const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
@@ -484,7 +483,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     }
 
     NWB::Log::Client logger;
-    if(!logger.init(MakeNotNull(options.logAddress.c_str())))
+    if(!logger.init(AStringView(options.logAddress.data(), options.logAddress.size())))
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
@@ -512,7 +511,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     __hidden_loader::LoaderOptions options(commandLineArena);
     CLI::App app{ __hidden_loader::s_LoaderAppName.data() };
 
-    AInteropString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
+    AInteropString address(Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault));
     u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);

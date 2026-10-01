@@ -25,17 +25,17 @@ namespace PipelineTool{
 inline constexpr int s_PipelineExitSuccess = 0;
 inline constexpr int s_PipelineExitFailure = 1;
 inline constexpr int s_PipelineExitFatal = -1;
-inline constexpr char s_PipelineAppDescription[] = "NWB asset pipeline";
-inline constexpr char s_PipelineInputOption[] = "input,--input";
-inline constexpr char s_PipelineInputListOption[] = "--input-list";
-inline constexpr char s_PipelineOutputOption[] = "-o,--output,--output-directory";
-inline constexpr char s_PipelineRepoRootOption[] = "--repo-root";
-inline constexpr char s_PipelineAssetRootOption[] = "--asset-root";
-inline constexpr char s_PipelineCacheDirectoryOption[] = "--cache-directory";
-inline constexpr char s_PipelineAssetTypeOption[] = "--asset-type";
-inline constexpr char s_PipelineConfigurationOption[] = "--configuration";
-inline constexpr char s_PipelineSkinDependenciesOption[] = "--include-skin-dependencies";
-inline constexpr char s_PipelineCliHelpRequestName[] = "CallForHelp";
+inline constexpr AStringView s_PipelineAppDescription = "NWB asset pipeline";
+inline constexpr AStringView s_PipelineInputOption = "input,--input";
+inline constexpr AStringView s_PipelineInputListOption = "--input-list";
+inline constexpr AStringView s_PipelineOutputOption = "-o,--output,--output-directory";
+inline constexpr AStringView s_PipelineRepoRootOption = "--repo-root";
+inline constexpr AStringView s_PipelineAssetRootOption = "--asset-root";
+inline constexpr AStringView s_PipelineCacheDirectoryOption = "--cache-directory";
+inline constexpr AStringView s_PipelineAssetTypeOption = "--asset-type";
+inline constexpr AStringView s_PipelineConfigurationOption = "--configuration";
+inline constexpr AStringView s_PipelineSkinDependenciesOption = "--include-skin-dependencies";
+inline constexpr AStringView s_PipelineCliHelpRequestName = "CallForHelp";
 
 struct PipelineOptions{
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> inputs;

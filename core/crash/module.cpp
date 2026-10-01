@@ -64,16 +64,16 @@ static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, con
 
 static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
-    if(record.event)
-        hash = UpdateFnv64TextExact(hash, AStringView(record.event));
-    if(record.category)
-        hash = UpdateFnv64TextExact(hash, AStringView(record.category));
-    if(record.expression)
-        hash = UpdateFnv64TextExact(hash, AStringView(record.expression));
-    if(record.message)
-        hash = UpdateFnv64TextExact(hash, AStringView(record.message));
-    if(record.file)
-        hash = UpdateFnv64TextExact(hash, AStringView(record.file));
+    if(!record.event.empty())
+        hash = UpdateFnv64TextExact(hash, record.event);
+    if(!record.category.empty())
+        hash = UpdateFnv64TextExact(hash, record.category);
+    if(!record.expression.empty())
+        hash = UpdateFnv64TextExact(hash, record.expression);
+    if(!record.message.empty())
+        hash = UpdateFnv64TextExact(hash, record.message);
+    if(!record.file.empty())
+        hash = UpdateFnv64TextExact(hash, record.file);
     hash = UpdateFnv64(hash, reinterpret_cast<const u8*>(&record.line), sizeof(record.line));
     return hash;
 }
@@ -156,12 +156,11 @@ NWB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::Cr
 
 NWB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
     Detail::CrashDumpRequestOptions options;
-    const char* const diagnosticEventName = DiagnosticEventNameFromRecord(record);
-    options.event = diagnosticEventName ? AStringView(diagnosticEventName) : AStringView();
-    options.triggerCategory = record.category ? AStringView(record.category) : AStringView();
-    options.triggerExpression = record.expression ? AStringView(record.expression) : AStringView();
-    options.triggerMessage = record.message ? AStringView(record.message) : AStringView();
-    options.triggerFile = record.file ? AStringView(record.file) : AStringView();
+    options.event = DiagnosticEventNameFromRecord(record);
+    options.triggerCategory = record.category;
+    options.triggerExpression = record.expression;
+    options.triggerMessage = record.message;
+    options.triggerFile = record.file;
     options.triggerInstructionPointer = record.instructionPointer;
     options.triggerLine = record.line;
     options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;

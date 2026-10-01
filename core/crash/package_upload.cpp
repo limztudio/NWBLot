@@ -72,9 +72,11 @@ static void* CrashCurlRealloc(void* const ptr, const size_t size)noexcept{
 }
 
 static char* CrashCurlStrdup(const char* const text)noexcept{
+    if(!text)
+        return nullptr;
     ScopedLock lock(s_CurlAllocatorMutex);
 
-    return DuplicateArenaCString(DumpArena(), text);
+    return DuplicateArenaCString(DumpArena(), AStringView(text));
 }
 
 static void* CrashCurlCalloc(const size_t count, const size_t size)noexcept{
@@ -126,10 +128,9 @@ static bool IsSafePackageName(ArenaT& arena, const ::Path<ArenaT>& path){
 }
 
 template<typename ArenaT>
-static CrashStringT<ArenaT> CrashUploadUrl(ArenaT& arena, const char* logServerUrl){
+static CrashStringT<ArenaT> CrashUploadUrl(ArenaT& arena, const AStringView logServerUrl){
     CrashStringT<ArenaT> url{arena};
-    if(logServerUrl)
-        url += logServerUrl;
+    url += logServerUrl;
     if(url.empty())
         return url;
 

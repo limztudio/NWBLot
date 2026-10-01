@@ -17,11 +17,13 @@
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/diagnostics.h>
+#include <global/environment.h>
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
 #include <global/filesystem/volume_naming.h>
+#include <global/fixed_buffer.h>
 #include <global/hash_utils.h>
 #include <global/limit.h>
 #include <global/math/type.h>
@@ -31,6 +33,7 @@
 #include <global/process_execution.h>
 #include <global/process_memory_map.h>
 #include <global/termination.h>
+#include <global/shared_library.h>
 #include <global/text_utils.h>
 
 #include <core/alloc/persistent.h>
@@ -61,9 +64,11 @@ static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
 static constexpr AStringView s_GRAPHICSVOLUME = "GraphicsVolume";
 static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
-static constexpr char s_BIN_SH[] = "/bin/sh";
-static constexpr char s_C[] = "-c";
-static constexpr tchar s_PARALLEL_LOGGER_MESSAGE[] = NWB_TEXT("parallel logger message");
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+static constexpr AStringView s_BIN_SH = "/bin/sh";
+static constexpr AStringView s_C = "-c";
+#endif
+static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = NWB_TEXT("parallel logger message");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,11 +131,11 @@ void DestroyArenaReference(
 }
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
-static const char* s_DiagnosticEventName = nullptr;
-static const char* s_DiagnosticEventCategory = nullptr;
-static const char* s_DiagnosticEventExpression = nullptr;
-static const char* s_DiagnosticEventMessage = nullptr;
-static const char* s_DiagnosticEventFile = nullptr;
+static AStringView s_DiagnosticEventName = {};
+static AStringView s_DiagnosticEventCategory = {};
+static AStringView s_DiagnosticEventExpression = {};
+static AStringView s_DiagnosticEventMessage = {};
+static AStringView s_DiagnosticEventFile = {};
 static u32 s_DiagnosticEventLine = 0u;
 inline constexpr usize s_DiagnosticEventCaptureTextBytes = 2048u;
 static char s_DiagnosticEventNameText[s_DiagnosticEventCaptureTextBytes] = {};
@@ -166,24 +171,23 @@ static void VerifyAlignedReallocation(Arena& arena){
     EXPECT_EQ(arena.reallocate(resized, s_Alignment, 0u), nullptr);
 }
 
-static const char* CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const char* const text)noexcept{
-    const char* const source = text ? text : "";
+static AStringView CopyDiagnosticEventText(char (&outText)[s_DiagnosticEventCaptureTextBytes], const AStringView text)noexcept{
     usize copied = 0u;
-    while(source[copied] != 0 && copied + 1u < s_DiagnosticEventCaptureTextBytes){
-        outText[copied] = source[copied];
+    while(copied < text.size() && copied + 1u < s_DiagnosticEventCaptureTextBytes){
+        outText[copied] = text[copied];
         ++copied;
     }
     outText[copied] = 0;
-    return outText;
+    return AStringView(outText, copied);
 }
 
 static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventCaptureCount = 0u;
-    s_DiagnosticEventName = nullptr;
-    s_DiagnosticEventCategory = nullptr;
-    s_DiagnosticEventExpression = nullptr;
-    s_DiagnosticEventMessage = nullptr;
-    s_DiagnosticEventFile = nullptr;
+    s_DiagnosticEventName = {};
+    s_DiagnosticEventCategory = {};
+    s_DiagnosticEventExpression = {};
+    s_DiagnosticEventMessage = {};
+    s_DiagnosticEventFile = {};
     s_DiagnosticEventLine = 0u;
     s_DiagnosticEventNameText[0u] = 0;
     s_DiagnosticEventCategoryText[0u] = 0;
@@ -284,16 +288,47 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(product, 0u);
 }
 
-TEST(Global, ParsesIntegerViews){
+TEST(Global, NumericParsersRespectViewBoundsAndRejectEmptyInput){
     i64 signedValue = 0;
-    EXPECT_TRUE(ParseI64("-42", signedValue));
+    EXPECT_TRUE(ParseI64(AStringView("-42trailing").substr(0u, 3u), signedValue));
     EXPECT_EQ(signedValue, -42);
     EXPECT_FALSE(ParseI64("42x", signedValue));
 
     u64 unsignedValue = 0u;
-    EXPECT_TRUE(ParseU64("42", unsignedValue));
+    EXPECT_TRUE(ParseU64(AStringView("42trailing").substr(0u, 2u), unsignedValue));
     EXPECT_EQ(unsignedValue, 42u);
     EXPECT_FALSE(ParseU64("-1", unsignedValue));
+
+    signedValue = 99;
+    unsignedValue = 99u;
+    EXPECT_FALSE(ParseI64FromChars({}, signedValue));
+    EXPECT_FALSE(ParseU64FromChars({}, unsignedValue));
+    EXPECT_EQ(signedValue, 99);
+    EXPECT_EQ(unsignedValue, 99u);
+
+    f64 doubleValue = 99.0;
+    f32 floatValue = 99.0f;
+    EXPECT_FALSE(ParseF64FromChars({}, doubleValue));
+    EXPECT_FALSE(ParseF32FromChars({}, floatValue));
+    EXPECT_EQ(doubleValue, 99.0);
+    EXPECT_EQ(floatValue, 99.0f);
+    EXPECT_TRUE(ParseF64FromChars(AStringView("1.25trailing").substr(0u, 4u), doubleValue));
+    EXPECT_TRUE(ParseF32FromChars(AStringView("1.25trailing").substr(0u, 4u), floatValue));
+    EXPECT_EQ(doubleValue, 1.25);
+    EXPECT_EQ(floatValue, 1.25f);
+}
+
+TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
+    constexpr char s_Text[] = { 'a', 'b', 'c', 'd', 'e', 'f' };
+    char text[5u] = {};
+    CopyFixedBuffer(text, AStringView(s_Text, 3u));
+    EXPECT_EQ(AStringView(text), AStringView("abc"));
+    AppendFixedBuffer(text, AStringView(s_Text + 3u, 2u));
+    EXPECT_EQ(AStringView(text), AStringView("abcd"));
+    CopyFixedBuffer(text, AStringView(s_Text, sizeof(s_Text)));
+    EXPECT_EQ(AStringView(text), AStringView("abcd"));
+    CopyFixedBuffer(text, {});
+    EXPECT_TRUE(AStringView(text).empty());
 }
 
 TEST(Global, ArenaRefDeleterUsesAssociatedNamespaceHook){
@@ -419,6 +454,102 @@ TEST(Global, PersistentArenaReallocationPreservesAlignment){
     VerifyAlignedReallocation(arena);
 }
 
+TEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks){
+    constexpr AStringView s_Source = "Identity\\Bounded.trailing";
+    constexpr AStringView s_Bounded = s_Source.substr(0u, 16u);
+    constexpr Name s_ViewName(s_Bounded);
+    constexpr Name s_LiteralName("identity/bounded");
+    constexpr char s_EmbeddedNull[]{ 'a', '\0', 'b' };
+    constexpr Name s_InvalidName(AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull)));
+    static_assert(s_ViewName == s_LiteralName);
+    static_assert(s_InvalidName == NAME_NONE);
+    static_assert(Name(AStringView{}) != NAME_NONE);
+    static_assert(Name(static_cast<const char*>(nullptr)) == NAME_NONE);
+
+    NameSymbolCallbackProbe probe;
+    EXPECT_EQ(s_ViewName.identityHash(), s_LiteralName.identityHash());
+    EXPECT_EQ(probe.recordCount, 0u);
+    const Name runtimeView(s_Bounded);
+    EXPECT_EQ(runtimeView, s_LiteralName);
+    EXPECT_EQ(probe.recordCount, 1u);
+    EXPECT_EQ(probe.resolveCount, 0u);
+}
+
+TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
+    const char bytes[]{ static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
+    const AStringView text(bytes, LengthOf(bytes));
+    u32 unicode = 0u;
+    EXPECT_EQ(DecodeUtf8CodePoint(text, unicode), 4);
+    EXPECT_EQ(unicode, 0x1F600u);
+    for(usize size = 0u; size < text.size(); ++size)
+        EXPECT_EQ(DecodeUtf8CodePoint(text.substr(0u, size), unicode), 0);
+
+    const char overlong[]{ static_cast<char>(0xC0), static_cast<char>(0x80) };
+    EXPECT_EQ(DecodeUtf8CodePoint(AStringView(overlong, LengthOf(overlong)), unicode), 0);
+}
+
+TEST(Global, EnvironmentVariableNamesSupportSlicesAndOutputAliasing){
+    NWB::Tests::TestArena<> testArena;
+    ::AString<NWB::Core::Alloc::GlobalArena> expected(testArena.arena);
+    ASSERT_TRUE(ReadEnvironmentVariable(AStringView("PATH"), expected));
+    ::AString<NWB::Core::Alloc::GlobalArena> actual(testArena.arena);
+    ASSERT_TRUE(ReadEnvironmentVariable(AStringView("PATH.trailing").substr(0u, 4u), actual));
+    EXPECT_EQ(actual, expected);
+
+    actual.assign("PATH");
+    ASSERT_TRUE(ReadEnvironmentVariable(AStringView(actual), actual));
+    EXPECT_EQ(actual, expected);
+    const char invalidName[]{ 'P', 'A', 'T', 'H', '\0', 'X' };
+    EXPECT_FALSE(ReadEnvironmentVariable(AStringView(invalidName, LengthOf(invalidName)), actual));
+    EXPECT_TRUE(actual.empty());
+}
+
+TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/invalid_process_arguments");
+    const auto outputPath = root / "output.txt";
+    ErrorCode error;
+    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(WriteTextFile(outputPath, AStringView("retained")));
+    const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
+
+    const char invalidArgument[]{ 'a', '\0', 'b' };
+    const AStringView arguments[]{ "unused_program", AStringView(invalidArgument, LengthOf(invalidArgument)) };
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)), -1);
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)), -1);
+    AString output(testArena.arena);
+    ASSERT_TRUE(ReadTextFile(outputPath, output));
+    EXPECT_EQ(output, "retained");
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+#if defined(NWB_PLATFORM_WINDOWS)
+TEST(Global, SharedLibraryAcceptsBoundedNamesAndResetsFailedSymbols){
+    NWB::Tests::TestArena<> testArena;
+    SharedLibrary library;
+    constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
+    ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
+    using CurrentProcessIdFn = DWORD(WINAPI*)();
+    CurrentProcessIdFn currentProcessId = nullptr;
+    ASSERT_TRUE(library.resolve(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u), currentProcessId));
+    EXPECT_EQ(currentProcessId(), ::GetCurrentProcessId());
+
+    const char invalidSymbol[]{ 'G', '\0', 'e' };
+    EXPECT_FALSE(library.resolve(testArena.arena, AStringView(invalidSymbol, LengthOf(invalidSymbol)), currentProcessId));
+    EXPECT_EQ(currentProcessId, nullptr);
+}
+#endif
+
+TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
+    constexpr AStringView s_Format = "value {}.trailing";
+    const DiagnosticEventText narrow = MakeDiagnosticEventText(s_Format.substr(0u, 8u), 42u);
+    EXPECT_EQ(AStringView(narrow.c_str()), AStringView("value 42"));
+    constexpr WStringView s_WideFormat = L"value {}.trailing";
+    const DiagnosticEventText wide = MakeDiagnosticEventText(s_WideFormat.substr(0u, 8u), 42u);
+    EXPECT_EQ(AStringView(wide.c_str()), AStringView("value 42"));
+    EXPECT_EQ(AStringView(MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u).c_str()), AStringView{});
+}
+
 TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     constexpr Name first("Identity\\First");
     constexpr Name same("identity/first");
@@ -439,8 +570,8 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(first, same);
     EXPECT_NE(first, second);
     EXPECT_TRUE(first < second || second < first);
-    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST.data())));
-    EXPECT_EQ(first.identityHash(), ComputeNameHash(s_IDENTITY_FIRST.data()));
+    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST)));
+    EXPECT_EQ(first.identityHash(), ComputeNameHash(s_IDENTITY_FIRST));
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         NameHash changed = first.identityHash();
         changed.qwords[lane] ^= 1u;
@@ -451,7 +582,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(NWB_BUILDMODE)
-    EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST.data()));
+    EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
 }
@@ -761,14 +892,14 @@ TEST(Global, TextUtilityHelpers){
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
-    const char* const argv[] = {
+    const AStringView argv[] = {
         s_BIN_SH,
         s_C,
-        "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done",
-        nullptr
+        "printf '%s\\nxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' \"$$\"; exec 1>&-; while :; do :; done"
     };
-    AString output;
-    EXPECT_FALSE(CaptureProcessOutput(output, argv, 16u, 64u, 250u));
+    NWB::Tests::TestArena<> testArena;
+    AString output(testArena.arena);
+    EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 16u, 64u, 250u));
 
     const usize lineEnd = output.find('\n');
     ASSERT_NE(lineEnd, AString::npos);
@@ -791,15 +922,15 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
 }
 
 TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
-    const char* const argv[] = {
+    const AStringView argv[] = {
         s_BIN_SH,
         s_C,
-        "while :; do printf x; done",
-        nullptr
+        "while :; do printf x; done"
     };
-    AString output;
+    NWB::Tests::TestArena<> testArena;
+    AString output(testArena.arena);
     const u64 startMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds();
-    EXPECT_FALSE(CaptureProcessOutput(output, argv, 64u, 64u, 100u));
+    EXPECT_FALSE(CaptureProcessOutput(testArena.arena, output, argv, 64u, 64u, 100u));
     const u64 elapsedMilliseconds = ProcessExecutionDetail::MonotonicMilliseconds() - startMilliseconds;
 
     if(startMilliseconds != 0u)
@@ -814,15 +945,14 @@ TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
     ASSERT_TRUE(EnsureEmptyDirectory(root, error));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
-    const char* const argv[] = {
+    const AStringView argv[] = {
         s_BIN_SH,
         s_C,
-        "printf stdout; printf stderr >&2; exit 23",
-        nullptr
+        AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u)
     };
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, argv, outputPathText.c_str()), 23);
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, nullptr, outputPathText.c_str()), -1);
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText)), 23);
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)), -1);
 
     AString output;
     ASSERT_TRUE(ReadTextFile(outputPath, output));
@@ -890,7 +1020,7 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
 #endif
 
 TEST(Global, FilesystemVolumeSegmentNaming){
-    EXPECT_TRUE(ValidVolumeName(s_GRAPHICS.data()));
+    EXPECT_TRUE(ValidVolumeName(s_GRAPHICS));
     EXPECT_TRUE(ValidVolumeName("runtime_pipeline-cache"));
     EXPECT_FALSE(ValidVolumeName(""));
     EXPECT_FALSE(ValidVolumeName("graphics/cache"));
@@ -1213,26 +1343,26 @@ TEST(Global, DiagnosticEventHook){
     };
 
     SetDiagnosticEventCallback(callback);
-    CaptureDiagnosticEvent(s_UNIT.data(), "message", "diagnostics_test.cpp", 42u);
+    CaptureDiagnosticEvent(AStringView("unit.trailing").substr(0u, 4u), AStringView("message.trailing").substr(0u, 7u), "diagnostics_test.cpp", 42u);
     ClearDiagnosticEventCallback(callback);
-    CaptureDiagnosticEvent(s_UNIT.data(), "ignored");
+    CaptureDiagnosticEvent(s_UNIT, "ignored");
 
     EXPECT_EQ(s_DiagnosticEventCaptureCount, 1u);
-    ASSERT_NE(s_DiagnosticEventName, nullptr);
-    ASSERT_NE(s_DiagnosticEventCategory, nullptr);
-    ASSERT_NE(s_DiagnosticEventExpression, nullptr);
-    ASSERT_NE(s_DiagnosticEventMessage, nullptr);
-    ASSERT_NE(s_DiagnosticEventFile, nullptr);
-    EXPECT_STREQ(s_DiagnosticEventName, "");
-    EXPECT_STREQ(s_DiagnosticEventCategory, "unit");
-    EXPECT_STREQ(s_DiagnosticEventExpression, "");
-    EXPECT_STREQ(s_DiagnosticEventMessage, "message");
-    EXPECT_STREQ(s_DiagnosticEventFile, "diagnostics_test.cpp");
+    ASSERT_NE(s_DiagnosticEventName.data(), nullptr);
+    ASSERT_NE(s_DiagnosticEventCategory.data(), nullptr);
+    ASSERT_NE(s_DiagnosticEventExpression.data(), nullptr);
+    ASSERT_NE(s_DiagnosticEventMessage.data(), nullptr);
+    ASSERT_NE(s_DiagnosticEventFile.data(), nullptr);
+    EXPECT_EQ(s_DiagnosticEventName, AStringView(""));
+    EXPECT_EQ(s_DiagnosticEventCategory, AStringView("unit"));
+    EXPECT_EQ(s_DiagnosticEventExpression, AStringView(""));
+    EXPECT_EQ(s_DiagnosticEventMessage, AStringView("message"));
+    EXPECT_EQ(s_DiagnosticEventFile, AStringView("diagnostics_test.cpp"));
     EXPECT_EQ(s_DiagnosticEventLine, 42u);
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert.data()), DiagnosticEventName::s_Assert.data());
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert.data()), DiagnosticEventName::s_Assert.data());
-    EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), nullptr);
-    EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data() }), DiagnosticEventName::s_Error.data());
+    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert), DiagnosticEventName::s_Assert);
+    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert), DiagnosticEventName::s_Assert);
+    EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView{});
+    EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error }), DiagnosticEventName::s_Error);
 }
 
 TEST(Global, OwnershipInvariantTerminationIsAlwaysActive){

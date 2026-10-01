@@ -139,7 +139,7 @@ GpuVersion<GpuTextureImageVersion> GpuRendererState::prepareTextureImage(const S
     if(!version)
         return {};
     if(!TextureAssetLoader::Create(
-        version->m_texture, source->texture(), source->identity().name(), m_graphics, MakeNotNull(NWB_TEXT("UI Texture Image"))
+        version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")
     ))
         return {};
     if(!__hidden_ui_gpu_texture_images::ValidVersion(*version)){

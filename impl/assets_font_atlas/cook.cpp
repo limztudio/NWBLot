@@ -21,11 +21,11 @@ NWB_IMPL_BEGIN
 
 
 bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("FontAtlasAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
     return
-        atlas.checkVirtualPath(MakeNotNull(NWB_TEXT("FontAtlas::validatePayload")))
+        atlas.checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload"))
         && SerializeFontAtlasPayload(atlas.payload(), outBinary)
     ;
 }

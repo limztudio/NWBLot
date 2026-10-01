@@ -25,14 +25,14 @@ TEST(RgdDecode, MissingFileFailsGracefully){
 
 // A non-RDF blob: the parser must reject it without crashing or throwing past the boundary.
 TEST(RgdDecode, GarbageInputFailsGracefully){
-    const char* const path = "nwb_rgd_smoke_garbage.rgd";
+    constexpr AStringView path = "nwb_rgd_smoke_garbage.rgd";
     {
-        OutputFileStream f(path, s_FileOpenBinary);
+        OutputFileStream f(path.data(), s_FileOpenBinary);
         ASSERT_TRUE(f.is_open());
         f << "not a valid radeon gpu detective capture\n";
     }
     AInteropString out;
-    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(path, out));
+    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(path.data(), out));
 
     NWB::Tests::TestArena<> testArena;
     Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, path);

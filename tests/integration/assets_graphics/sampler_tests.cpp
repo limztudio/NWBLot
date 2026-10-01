@@ -117,7 +117,8 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
         testArena,
         outputDirectory,
         Name("project/samplers/linear_clamp"),
-        loadedAsset
+        loadedAsset,
+        1u
     ));
     ASSERT_NE(loadedAsset.get(), nullptr);
     const NWB::Impl::Sampler& sampler = static_cast<const NWB::Impl::Sampler&>(*loadedAsset);

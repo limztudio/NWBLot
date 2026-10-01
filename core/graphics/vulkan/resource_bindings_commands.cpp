@@ -80,7 +80,7 @@ void CommandList::bindDescriptorBufferHeap(
     const ComputePipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
+    constexpr TStringView s_OperationName = NWB_TEXT("bind compute descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(
@@ -110,7 +110,7 @@ void CommandList::bindDescriptorBufferHeap(
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline){
-    constexpr const tchar* s_OperationName = NWB_TEXT("bind graphics descriptor-buffer heap");
+    constexpr TStringView s_OperationName = NWB_TEXT("bind graphics descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(
@@ -145,7 +145,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Graphi
 }
 
 void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline){
-    constexpr const tchar* s_OperationName = NWB_TEXT("bind meshlet descriptor-buffer heap");
+    constexpr TStringView s_OperationName = NWB_TEXT("bind meshlet descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(
@@ -184,7 +184,7 @@ void CommandList::bindDescriptorBufferHeap(
     const RayTracingPipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("bind ray-tracing descriptor-buffer heap");
+    constexpr TStringView s_OperationName = NWB_TEXT("bind ray-tracing descriptor-buffer heap");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(
@@ -220,7 +220,7 @@ void CommandList::bindDescriptorBufferHeapNative(
     const VkPipelineBindPoint bindPoint,
     const PipelineBindingState& pipelineBindings,
     const GpuDescriptorHandle accelStructHandle,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!validateCommandRecordingScope(operationName))
         return;

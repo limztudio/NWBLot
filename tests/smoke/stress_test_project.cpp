@@ -687,7 +687,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
 #if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
     return NWB_TEXT("NWB Hybrid Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)

@@ -26,8 +26,8 @@ SharedImageSource LoadImageSource(
     const Texture* texture = assets.loadTypedSync<Texture>(
         identity.name(),
         loadedAsset,
-        MakeNotNull(NWB_TEXT("LoadImageSource")),
-        MakeNotNull("texture")
+        NWB_TEXT("LoadImageSource"),
+        "texture"
     );
     if(!texture)
         return {};

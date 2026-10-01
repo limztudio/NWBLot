@@ -248,21 +248,21 @@ ITextInputService& Frame::textInput(){
     return *m_textInput;
 }
 
-NotNull<const tchar*> Frame::windowTitleOrDefault()const{
-    const NotNull<const tchar*> title = m_graphics.getWindowTitle();
-    return MakeNotNull(title.get()[0] != 0 ? title.get() : NWB_TEXT("NWB"));
+TStringView Frame::windowTitleOrDefault()const{
+    const TStringView title = m_graphics.getWindowTitle();
+    return !title.empty() ? title : TStringView(NWB_TEXT("NWB"));
 }
 
-const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
         NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
 
-    const NotNull<const tchar*> title = m_graphics.getWindowTitle();
-    if(m_appliedWindowTitle == title.get())
-        return nullptr;
+    const TStringView title = m_graphics.getWindowTitle();
+    if(TStringView(m_appliedWindowTitle) == title)
+        return {};
 
-    m_appliedWindowTitle = title.get();
-    return m_appliedWindowTitle.c_str();
+    m_appliedWindowTitle = title;
+    return TStringView(m_appliedWindowTitle);
 }
 
 

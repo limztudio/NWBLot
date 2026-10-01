@@ -459,11 +459,11 @@ TEST(MaterialSampledTextureCollection, UnexpectedResolverUnwindReleasesPendingHa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkCollection(
@@ -525,13 +525,13 @@ static void BenchmarkCollection(
     }
     EXPECT_TRUE(success);
     EXPECT_EQ(observedCount, uniqueTextures * iterations);
-    RecordUnsignedProperty(MakeNotNull("material_texture_collection_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("material_texture_unique_count"), uniqueTextures);
-    RecordUnsignedProperty(MakeNotNull("material_texture_draw_count"), drawCount);
-    RecordUnsignedProperty(MakeNotNull("material_texture_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("material_texture_reference_count"), drawCount * s_ExpectedDualCount * (hybrid ? s_ExpectedDualCount : 1u) * iterations);
-    RecordUnsignedProperty(MakeNotNull("material_texture_scratch_peak_bytes"), scratchPeak);
-    RecordUnsignedProperty(MakeNotNull("material_texture_scratch_reserved_bytes"), scratchReserved);
+    RecordUnsignedProperty("material_texture_collection_ns", elapsed);
+    RecordUnsignedProperty("material_texture_unique_count", uniqueTextures);
+    RecordUnsignedProperty("material_texture_draw_count", drawCount);
+    RecordUnsignedProperty("material_texture_iterations", iterations);
+    RecordUnsignedProperty("material_texture_reference_count", drawCount * s_ExpectedDualCount * (hybrid ? s_ExpectedDualCount : 1u) * iterations);
+    RecordUnsignedProperty("material_texture_scratch_peak_bytes", scratchPeak);
+    RecordUnsignedProperty("material_texture_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_PassSingleTexture){

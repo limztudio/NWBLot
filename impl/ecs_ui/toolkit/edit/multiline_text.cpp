@@ -37,7 +37,7 @@ struct TextStep{
 
 [[nodiscard]] static bool ReadStep(const AStringView source, const usize offset, TextStep& step){
     u32 scalar = 0u;
-    const i32 decoded = DecodeUtf8CodePoint(source.data() + offset, static_cast<i32>(Min<usize>(source.size() - offset, 4u)), scalar);
+    const i32 decoded = DecodeUtf8CodePoint(source.substr(offset, 4u), scalar);
     if(decoded <= 0 || (scalar >= 0xD800u && scalar <= 0xDFFFu))
         return false;
     step.sourceBytes = static_cast<usize>(decoded);
@@ -72,7 +72,7 @@ bool ValidateMultilineText(const AStringView text){
     usize offset = 0u;
     while(offset < text.size()){
         u32 scalar = 0u;
-        const i32 decoded = DecodeUtf8CodePoint(text.data() + offset, static_cast<i32>(Min<usize>(text.size() - offset, 4u)), scalar);
+        const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
         if(decoded <= 0 || !__hidden_ui_multiline_text::IsCanonicalScalar(scalar))
             return false;
         offset += static_cast<usize>(decoded);

@@ -27,21 +27,21 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr usize s_AndroidTombstoneFrameMinimumTextLength = 4u;
 inline constexpr char s_TombstoneFrameMarker = '#';
 inline constexpr AStringView s_TombstoneProgramCounterToken = " pc ";
-inline constexpr char s_AndroidTombstoneMissingReport[] =
+inline constexpr AStringView s_AndroidTombstoneMissingReport =
     "status=not_decoded\nresolver=android_tombstone_native_symbols\n"
     "android_tombstone=missing\ndetail=Android resolver requires Java/ApplicationExitInfo tombstone attachment and native symbol store\n"
 ;
-inline constexpr char s_AndroidTombstoneParsedStatus[] = "status=tombstone_parsed\n";
-inline constexpr char s_AndroidTombstoneUndecodedStatus[] = "status=not_decoded\n";
-inline constexpr char s_AndroidTombstoneResolverLine[] = "resolver=android_tombstone_native_symbols\n";
-inline constexpr char s_AndroidTombstonePresentLine[] = "android_tombstone=present\n";
-inline constexpr char s_AndroidTombstoneNoFramesDetail[] =
+inline constexpr AStringView s_AndroidTombstoneParsedStatus = "status=tombstone_parsed\n";
+inline constexpr AStringView s_AndroidTombstoneUndecodedStatus = "status=not_decoded\n";
+inline constexpr AStringView s_AndroidTombstoneResolverLine = "resolver=android_tombstone_native_symbols\n";
+inline constexpr AStringView s_AndroidTombstonePresentLine = "android_tombstone=present\n";
+inline constexpr AStringView s_AndroidTombstoneNoFramesDetail =
     "detail=tombstone attached, but no native frame lines were recognized; native symbols are required for full decoding\n"
 ;
-inline constexpr char s_AndroidTombstoneFramesDetail[] =
+inline constexpr AStringView s_AndroidTombstoneFramesDetail =
     "detail=tombstone native frame lines copied; native symbol store is required for offline address resolution\n"
 ;
-inline constexpr char s_TombstoneCallstackSectionHeader[] = "\n[tombstone_callstack]\n";
+inline constexpr AStringView s_TombstoneCallstackSectionHeader = "\n[tombstone_callstack]\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

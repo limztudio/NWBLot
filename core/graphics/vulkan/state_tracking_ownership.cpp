@@ -261,7 +261,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("set permanent buffer state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set permanent buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){

@@ -91,7 +91,7 @@ public:
 
 
 private:
-    void markFailed(const tchar* reason);
+    void markFailed(TStringView reason);
     void requestTerminalQuit();
     void resetPendingReadback();
     [[nodiscard]] bool stagingMatches(const Core::TextureDesc& description)const;
@@ -134,7 +134,7 @@ private:
 // capture is published; false on config/startup failure. Projects with extra capture options pass them through.
 [[nodiscard]] inline bool ConfigureSmokeFramebufferCapture(
     ProjectRuntimeContext& context,
-    const tchar* const projectName,
+    const TStringView projectName,
     const u32 defaultFrameCount,
     UniquePtr<FramebufferCapture>& outCapture,
     const FramebufferCaptureOptions& options = {}

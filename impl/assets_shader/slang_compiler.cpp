@@ -654,18 +654,17 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         __hidden_slang_compiler::ScratchString outputPathText = PathToString<char>(argumentArena, request.outputPath);
         arguments.push_back(Move(outputPathText));
 
-        __hidden_slang_compiler::ScratchVector<const char*> argv(argumentArena);
-        argv.reserve(arguments.size() + 1u);
+        __hidden_slang_compiler::ScratchVector<AStringView> argv(argumentArena);
+        argv.reserve(arguments.size());
         for(const __hidden_slang_compiler::ScratchString& argument : arguments)
-            argv.push_back(argument.c_str());
-        argv.push_back(nullptr);
+            argv.push_back(AStringView(argument.data(), argument.size()));
 
         const __hidden_slang_compiler::ScratchString diagnosticsPathText = PathToString<char>(argumentArena, diagnosticsPath);
         bool exitCodeQueryFailed = false;
         const int exitCode = ::RunProcessRedirectedToFile(
             argumentArena,
-            argv.data(),
-            diagnosticsPathText.c_str(),
+            argv,
+            AStringView(diagnosticsPathText.data(), diagnosticsPathText.size()),
             &exitCodeQueryFailed
         );
         if(exitCodeQueryFailed)

@@ -618,7 +618,8 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
             testArena,
             outputDirectory,
             shaderVirtualPath,
-            loadedShader
+            loadedShader,
+            s_ExpectedDualCount
         ));
         if(loadedShader){
             const NWB::Impl::Shader& shader = static_cast<const NWB::Impl::Shader&>(*loadedShader);
@@ -732,7 +733,8 @@ TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
             testArena,
             outputDirectory,
             shaderVirtualPath,
-            loadedShader
+            loadedShader,
+            s_ExpectedDualCount
         ));
     }
 

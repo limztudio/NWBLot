@@ -443,7 +443,7 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
         const TextureSubresourceSet& resolvedSubresources,
         TextureDimension::Enum dimension,
         Format::Enum format,
-        const tchar* operationName,
+        TStringView operationName,
         bool assertFailure,
         VkImageViewCreateInfo& outViewInfo
     );

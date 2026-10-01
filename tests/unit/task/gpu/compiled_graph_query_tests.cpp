@@ -32,11 +32,11 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void CheckPacketQueries(const usize taskCount){
@@ -130,9 +130,9 @@ static void CheckPacketQueries(const usize taskCount){
         if(iteration != 0u && sequenceNanoseconds < minimumSequenceNanoseconds)
             minimumSequenceNanoseconds = sequenceNanoseconds;
     }
-    RecordUnsignedProperty(NotNull<const char*>{ "packet_query_task_count" }, taskCount);
-    RecordUnsignedProperty(NotNull<const char*>{ "packet_order_query_ns" }, minimumOrderNanoseconds);
-    RecordUnsignedProperty(NotNull<const char*>{ "packet_sequence_query_ns" }, minimumSequenceNanoseconds);
+    RecordUnsignedProperty("packet_query_task_count", taskCount);
+    RecordUnsignedProperty("packet_order_query_ns", minimumOrderNanoseconds);
+    RecordUnsignedProperty("packet_sequence_query_ns", minimumSequenceNanoseconds);
 }
 
 

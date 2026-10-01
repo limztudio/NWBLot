@@ -249,8 +249,8 @@ inline void StripUtf8Bom(StringT& inOutText){
     return (value & TextDetail::s_Utf8ContinuationMask) == TextDetail::s_Utf8ContinuationMarker;
 }
 
-[[nodiscard]] inline i32 DecodeUtf8CodePoint(const char* bytes, const i32 length, u32& unicode){
-    if(length <= 0)
+[[nodiscard]] inline i32 DecodeUtf8CodePoint(const AStringView bytes, u32& unicode){
+    if(bytes.empty())
         return 0;
 
     const u8 c0 = static_cast<u8>(bytes[0]);
@@ -260,7 +260,7 @@ inline void StripUtf8Bom(StringT& inOutText){
     }
 
     if((c0 & TextDetail::s_Utf8TwoByteMask) == TextDetail::s_Utf8TwoByteMarker){
-        if(length < TextDetail::s_Utf8TwoByteLength)
+        if(bytes.size() < TextDetail::s_Utf8TwoByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
@@ -273,7 +273,7 @@ inline void StripUtf8Bom(StringT& inOutText){
     }
 
     if((c0 & TextDetail::s_Utf8ThreeByteMask) == TextDetail::s_Utf8ThreeByteMarker){
-        if(length < TextDetail::s_Utf8ThreeByteLength)
+        if(bytes.size() < TextDetail::s_Utf8ThreeByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
@@ -290,7 +290,7 @@ inline void StripUtf8Bom(StringT& inOutText){
     }
 
     if((c0 & TextDetail::s_Utf8FourByteMask) == TextDetail::s_Utf8FourByteMarker){
-        if(length < TextDetail::s_Utf8FourByteLength)
+        if(bytes.size() < TextDetail::s_Utf8FourByteLength)
             return 0;
 
         const u8 c1 = static_cast<u8>(bytes[1]);
@@ -436,22 +436,38 @@ template<usize N>
 inline constexpr int s_DecimalParseBase = 10;
 
 
-[[nodiscard]] inline bool ParseI64FromChars(const char* begin, const char* end, i64& outValue){
+[[nodiscard]] inline bool ParseI64FromChars(const AStringView text, i64& outValue){
+    if(text.empty())
+        return false;
+    const char* begin = text.data();
+    const char* end = begin + text.size();
     const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseU64FromChars(const char* begin, const char* end, u64& outValue){
+[[nodiscard]] inline bool ParseU64FromChars(const AStringView text, u64& outValue){
+    if(text.empty())
+        return false;
+    const char* begin = text.data();
+    const char* end = begin + text.size();
     const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseF64FromChars(const char* begin, const char* end, f64& outValue){
+[[nodiscard]] inline bool ParseF64FromChars(const AStringView text, f64& outValue){
+    if(text.empty())
+        return false;
+    const char* begin = text.data();
+    const char* end = begin + text.size();
     const auto parseResult = std::from_chars(begin, end, outValue);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseF32FromChars(const char* begin, const char* end, f32& outValue){
+[[nodiscard]] inline bool ParseF32FromChars(const AStringView text, f32& outValue){
+    if(text.empty())
+        return false;
+    const char* begin = text.data();
+    const char* end = begin + text.size();
     const auto parseResult = std::from_chars(begin, end, outValue);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
@@ -462,9 +478,7 @@ inline constexpr int s_DecimalParseBase = 10;
     if(text.empty())
         return false;
 
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    return ParseU64FromChars(begin, end, outValue);
+    return ParseU64FromChars(text, outValue);
 }
 
 [[nodiscard]] inline bool ParseI64(const AStringView text, i64& outValue){
@@ -472,9 +486,7 @@ inline constexpr int s_DecimalParseBase = 10;
     if(text.empty())
         return false;
 
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    return ParseI64FromChars(begin, end, outValue);
+    return ParseI64FromChars(text, outValue);
 }
 
 template<typename CharT>

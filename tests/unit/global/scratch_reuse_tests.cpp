@@ -98,31 +98,31 @@ template<usize Count>
     return true;
 }
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
     constexpr Array<usize, 5u> s_CallCounts{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
-    constexpr Array<NotNull<const char*>, 5u> s_UsedKeys{
-        MakeNotNull("scratch_used_after_1"), MakeNotNull("scratch_used_after_2"), MakeNotNull("scratch_used_after_4"),
-        MakeNotNull("scratch_used_after_8"), MakeNotNull("scratch_used_after_16"),
+    constexpr Array<AStringView, 5u> s_UsedKeys{
+        "scratch_used_after_1", "scratch_used_after_2", "scratch_used_after_4",
+        "scratch_used_after_8", "scratch_used_after_16",
     };
-    constexpr Array<NotNull<const char*>, 5u> s_ReservedKeys{
-        MakeNotNull("scratch_reserved_after_1"), MakeNotNull("scratch_reserved_after_2"), MakeNotNull("scratch_reserved_after_4"),
-        MakeNotNull("scratch_reserved_after_8"), MakeNotNull("scratch_reserved_after_16"),
+    constexpr Array<AStringView, 5u> s_ReservedKeys{
+        "scratch_reserved_after_1", "scratch_reserved_after_2", "scratch_reserved_after_4",
+        "scratch_reserved_after_8", "scratch_reserved_after_16",
     };
     for(usize index = 0u; index < samples.size(); ++index){
         RecordUnsignedProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
         RecordUnsignedProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
     }
-    RecordUnsignedProperty(MakeNotNull("scratch_reuse_ns"), samples.back().elapsed);
-    RecordUnsignedProperty(MakeNotNull("scratch_reuse_calls"), s_CallCounts.back());
-    RecordUnsignedProperty(MakeNotNull("scratch_reuse_peak_bytes"), samples.back().memory.peakUsedBytes);
-    RecordUnsignedProperty(MakeNotNull("scratch_heap_allocations_after_first"),
+    RecordUnsignedProperty("scratch_reuse_ns", samples.back().elapsed);
+    RecordUnsignedProperty("scratch_reuse_calls", s_CallCounts.back());
+    RecordUnsignedProperty("scratch_reuse_peak_bytes", samples.back().memory.peakUsedBytes);
+    RecordUnsignedProperty("scratch_heap_allocations_after_first",
         samples.back().heap.allocationCount - samples.front().heap.allocationCount);
 }
 
@@ -569,7 +569,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
     for(const u64 value : caller)
         EXPECT_EQ(value, 0x76543210u);
     RecordSeries(samples);
-    RecordUnsignedProperty(MakeNotNull("scratch_collection_count"), 4096u);
+    RecordUnsignedProperty("scratch_collection_count", 4096u);
 }
 
 TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
@@ -596,7 +596,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
     }
     EXPECT_TRUE(valid);
     RecordSeries(samples);
-    RecordUnsignedProperty(MakeNotNull("scratch_batch_allocations"), LengthOf(s_Requests) * 128u);
+    RecordUnsignedProperty("scratch_batch_allocations", LengthOf(s_Requests) * 128u);
 }
 
 

@@ -59,7 +59,7 @@ public:
 
 public:
     // Registration follows the actual renderer; stop releases its optional borrow before world destruction.
-    [[nodiscard]] bool start(Impl::RendererSystem& renderer, NotNull<const char*> path);
+    [[nodiscard]] bool start(Impl::RendererSystem& renderer, AStringView path);
     void stop();
     [[nodiscard]] bool write()const;
     virtual bool shouldRenderUnfocused()override{ return true; }

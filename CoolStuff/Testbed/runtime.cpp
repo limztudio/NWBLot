@@ -56,12 +56,15 @@ static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"
 static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
 static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
 static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
-static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
-static constexpr tchar s_InitWorldFailedText[] = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
-static constexpr tchar s_CharacterInvalidText[] = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
-static constexpr tchar s_StartupSceneText[] = NWB_TEXT("ProjectTestbed: startup scene created ({})");
-static constexpr tchar s_ShutdownText[] = NWB_TEXT("ProjectTestbed: shutdown");
-static constexpr char s_InitWorldFailedNarrow[] = "ProjectTestbed initialization failed";
+static constexpr TStringView s_DefaultSceneDescription = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
+static constexpr TStringView s_InitWorldFailedText = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
+static constexpr TStringView s_CharacterInvalidText = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
+static constexpr TStringView s_StartupSceneText = NWB_TEXT("ProjectTestbed: startup scene created ({})");
+static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown");
+static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
@@ -252,7 +255,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
         NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
-        throw RuntimeException(__hidden_runtime::s_InitWorldFailedNarrow);
+        throw RuntimeException(__hidden_runtime::s_InitWorldFailedNarrow.data());
     }
     return MakeNotNullUnique(Move(world));
 }

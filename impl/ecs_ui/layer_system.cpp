@@ -101,7 +101,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         }
         UniquePtr<Core::Assets::IAsset> candidateAsset;
         const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-            ref.name(), candidateAsset, MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI skin")
+            ref.name(), candidateAsset, NWB_TEXT("UiLayerSystem"), "UI skin"
         );
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;

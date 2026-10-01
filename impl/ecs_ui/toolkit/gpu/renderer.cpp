@@ -237,7 +237,7 @@ bool GpuRenderer::setSkin(
     }
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Texture* texture = m_state->m_assets.loadTypedSync<Texture>(
-        binding.texture.name(), loadedAsset, MakeNotNull(NWB_TEXT("GpuRenderer")), MakeNotNull("UI atlas texture")
+        binding.texture.name(), loadedAsset, NWB_TEXT("GpuRenderer"), "UI atlas texture"
     );
     if(!texture || !skin.validateTexture(*texture))
         return false;
@@ -246,7 +246,7 @@ bool GpuRenderer::setSkin(
         return false;
     version->m_binding = binding;
     if(!TextureAssetLoader::Create(
-        version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, MakeNotNull(NWB_TEXT("GpuRenderer"))
+        version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, NWB_TEXT("GpuRenderer")
     ))
         return false;
     if(!version->m_texture.readinessToken.valid() || !version->m_texture.readinessToken.hasPhysicalQueueIdentity())

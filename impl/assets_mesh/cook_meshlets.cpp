@@ -168,7 +168,7 @@ void MeshCookMeshlets::UpdateBestMeshletCandidateFromResult(
 
 bool MeshCookMeshlets::AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -197,7 +197,7 @@ bool MeshCookMeshlets::AddVisitedMeshletTriangle(
 
 bool MeshCookMeshlets::GrowMeshletFromFrontier(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,

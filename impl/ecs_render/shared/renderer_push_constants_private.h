@@ -248,14 +248,14 @@ NWB_INLINE void SetEmulatedVertexAttribute(
     Core::VertexAttributeDesc& attribute,
     const Core::Format::Enum format,
     const u32 offsetByteCount,
-    const char* name
+    const AStringView name
 ){
     attribute
         .setFormat(format)
         .setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
         .setOffset(offsetByteCount)
         .setElementStride(s_EmulatedVertexStride)
-        .setName(name)
+        .setName(Name(name))
     ;
 }
 

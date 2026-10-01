@@ -113,8 +113,8 @@ bool ValidateAccelStructBuildInputRange(
     u64 offset,
     u64 byteSize,
     u64 requiredAddressAlignment,
-    const tchar* operation,
-    const tchar* resourceName
+    TStringView operation,
+    TStringView resourceName
 ){
     auto* buffer = bufferResource;
     if(!buffer){
@@ -157,8 +157,8 @@ bool ValidateStridedBuildInputRange(
     u32 elementCount,
     u64 stride,
     u64 elementSize,
-    const tchar* operation,
-    const tchar* resourceName
+    TStringView operation,
+    TStringView resourceName
 ){
     u64 byteSize = 0;
     if(!ComputeStridedRangeByteSize(elementCount, stride, elementSize, byteSize)){
@@ -176,7 +176,7 @@ bool FillBlasGeometryForSizeQuery(
     VkAccelerationStructureGeometrySpheresDataNV& spheresData,
     VkAccelerationStructureGeometryLinearSweptSpheresDataNV& lssData,
     u32& primitiveCount,
-    const tchar* operation,
+    TStringView operation,
     bool requireBuffers
 ){
     geometry = MakeVkStruct<VkAccelerationStructureGeometryKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR);
@@ -580,7 +580,7 @@ bool FillBlasGeometryForSizeQuery(
 bool ConvertAccelStructBuildFlags(
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
     VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     constexpr u8 s_KnownFlags =
         static_cast<u8>(RayTracingAccelStructBuildFlags::AllowUpdate)

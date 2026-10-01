@@ -263,54 +263,54 @@ Device::Device(const DeviceDesc& desc)
     m_context.rayTracingInvocationReorderExtFeatureEnabled = desc.rayTracingInvocationReorderExtFeatureEnabled;
 
     for(usize i = 0; i < desc.numInstanceExtensions; ++i){
-        const char* ext = desc.instanceExtensions[i];
-        if(NWB_STRCMP(ext, VK_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0)
+        const AStringView ext = desc.instanceExtensions[i];
+        if(ext == VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
             m_context.extensions.EXT_debug_utils = true;
     }
 
     for(usize i = 0; i < desc.numDeviceExtensions; ++i){
-        const char* ext = desc.deviceExtensions[i];
-        if(NWB_STRCMP(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
+        const AStringView ext = desc.deviceExtensions[i];
+        if(ext == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)
             m_context.extensions.KHR_synchronization2 = true;
-        else if(NWB_STRCMP(ext, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
             m_context.extensions.KHR_calibrated_timestamps = true;
-        else if(NWB_STRCMP(ext, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)
             m_context.extensions.KHR_ray_tracing_pipeline = true;
-        else if(NWB_STRCMP(ext, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_RAY_QUERY_EXTENSION_NAME)
             m_context.extensions.KHR_ray_query = true;
-        else if(NWB_STRCMP(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
             m_context.extensions.KHR_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_SWAPCHAIN_EXTENSION_NAME)
             m_context.extensions.KHR_swapchain = true;
-        else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
             m_context.extensions.KHR_dynamic_rendering = true;
-        else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
             m_context.extensions.EXT_descriptor_buffer = true;
-        else if(NWB_STRCMP(ext, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
             m_context.extensions.EXT_calibrated_timestamps = true;
-        else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME)
             m_context.extensions.EXT_opacity_micromap = true;
-        else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
+        else if(ext == VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME)
             m_context.extensions.NV_cooperative_vector = true;
-        else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
+        else if(ext == VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME)
             m_context.extensions.NV_cluster_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) == 0)
+        else if(ext == VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME)
             m_context.extensions.NV_device_diagnostic_checkpoints = true;
-        else if(NWB_STRCMP(ext, VK_EXT_DEVICE_FAULT_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_DEVICE_FAULT_EXTENSION_NAME)
             m_context.extensions.EXT_device_fault = true;
-        else if(NWB_STRCMP(ext, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME)
             m_context.extensions.EXT_texture_compression_astc_hdr = true;
-        else if(NWB_STRCMP(ext, VK_AMD_BUFFER_MARKER_EXTENSION_NAME) == 0)
+        else if(ext == VK_AMD_BUFFER_MARKER_EXTENSION_NAME)
             m_context.extensions.AMD_buffer_marker = true;
-        else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_MESH_SHADER_EXTENSION_NAME)
             m_context.extensions.EXT_mesh_shader = true;
-        else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
+        else if(ext == VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)
             m_context.extensions.KHR_fragment_shading_rate = true;
-        else if(NWB_STRCMP(ext, VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
+        else if(ext == VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
             m_context.extensions.EXT_ray_tracing_invocation_reorder = true;
-        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
+        else if(ext == VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
             m_context.extensions.NV_ray_tracing_invocation_reorder = true;
-        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) == 0)
+        else if(ext == VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
             m_context.extensions.NV_ray_tracing_linear_swept_spheres = true;
     }
 

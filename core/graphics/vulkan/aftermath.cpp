@@ -130,15 +130,16 @@ bool Initialize(){
     if(state.active)
         return true; // process-global: only enable once.
 
-    if(!state.library.open(Common::s_AftermathRuntimeName)){
+    Alloc::GlobalArena& arena = DumpArena();
+    if(!state.library.open(arena, Common::s_AftermathRuntimeName)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime is not present next to the executable; GPU crash dumps disabled."));
         return false;
     }
 
     if(
-        !state.library.resolve("GFSDK_Aftermath_EnableGpuCrashDumps", state.enable)
-        || !state.library.resolve("GFSDK_Aftermath_DisableGpuCrashDumps", state.disable)
-        || !state.library.resolve("GFSDK_Aftermath_GetCrashDumpStatus", state.getStatus)
+        !state.library.resolve(arena, "GFSDK_Aftermath_EnableGpuCrashDumps", state.enable)
+        || !state.library.resolve(arena, "GFSDK_Aftermath_DisableGpuCrashDumps", state.disable)
+        || !state.library.resolve(arena, "GFSDK_Aftermath_GetCrashDumpStatus", state.getStatus)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
         state.library.close();

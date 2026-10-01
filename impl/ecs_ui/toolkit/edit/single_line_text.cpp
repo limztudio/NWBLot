@@ -29,7 +29,7 @@ struct TextStep{
 
 static bool ReadStep(const AStringView source, const usize offset, TextStep& step){
     u32 scalar = 0u;
-    const i32 decoded = DecodeUtf8CodePoint(source.data() + offset, static_cast<i32>(Min<usize>(source.size() - offset, 4u)), scalar);
+    const i32 decoded = DecodeUtf8CodePoint(source.substr(offset, 4u), scalar);
     if(decoded <= 0 || (scalar >= 0xD800u && scalar <= 0xDFFFu))
         return false;
     const bool space = (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x85u || scalar == 0x2028u || scalar == 0x2029u;

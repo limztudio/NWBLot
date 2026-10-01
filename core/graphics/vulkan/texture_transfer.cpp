@@ -105,7 +105,7 @@ namespace __hidden_texture_transfer{
 
 
 void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
-    constexpr const tchar* s_OperationName = NWB_TEXT("copy texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("copy texture");
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
         return;
@@ -292,7 +292,7 @@ bool CommandList::tryWriteTexture(
     usize depthPitch,
     TextureUploadAspect::Enum aspect
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("write texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("write texture");
     if(!data){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source data is null"));
         return false;
@@ -454,7 +454,7 @@ void CommandList::writeTexture(
 }
 
 void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources){
-    constexpr const tchar* s_OperationName = NWB_TEXT("resolve texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("resolve texture");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(&src.m_context != &m_context || &dest.m_context != &m_context){

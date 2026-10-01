@@ -18,6 +18,7 @@
 #include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/process_execution.h>
+#include <logger/common.h>
 #include <logger/server/crash_auth.h>
 #include <logger/server/crash_ingest.h>
 #include <logger/server/crash_paths.h>
@@ -195,7 +196,7 @@ static void LinuxSilenceExpectedCrashChildConsole(){
     return false;
 }
 
-[[nodiscard]] static const char* LinuxObservableAssertCategory(){
+[[nodiscard]] static AStringView LinuxObservableAssertCategory(){
 #if NWB_OCCUR_ASSERT
     return DiagnosticEventCategory::s_Assert.data();
 #else
@@ -955,14 +956,44 @@ TEST_F(LoggerServerCrash, CrashRetentionPrunesOldestInvalidUploads){
     RemoveTestArtifacts(arena, s_Group);
 }
 
+TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedNulls){
+    TestArena testArena;
+    constexpr tchar s_Message[] = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
+    const TStringView message(s_Message, LengthOf(s_Message));
+    const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Log::Type::Warning, NWB::Log::LogString(message, testArena.arena));
+    NWB::Log::LogBytes payload(testArena.arena);
+    ASSERT_TRUE(NWB::Log::BuildMessagePayload(source, payload));
+
+    constexpr usize s_PrefixBytes = sizeof(tchar);
+    NWB::Log::LogBytes shifted(testArena.arena);
+    shifted.resize(s_PrefixBytes + payload.size());
+    NWB_MEMCPY(shifted.data() + s_PrefixBytes, payload.size(), payload.data(), payload.size());
+    NWB::Log::MessageType parsed = NWB::Log::MakeMessageType(testArena.arena);
+    TStringView error;
+    ASSERT_TRUE(NWB::Log::ParseMessagePayload(testArena.arena, shifted.data() + s_PrefixBytes, payload.size(), parsed, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_EQ(Get<1u>(parsed), NWB::Log::Type::Warning);
+    EXPECT_EQ(TStringView(Get<2u>(parsed)), message);
+
+    shifted.back() = 1u;
+    EXPECT_FALSE(NWB::Log::ParseMessagePayload(testArena.arena, shifted.data() + s_PrefixBytes, payload.size(), parsed, error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_TRUE(Get<2u>(parsed).empty());
+}
+
 TEST_F(LoggerServerCrash, CrashUploadAuthorizationMatchesBearerToken){
-    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), nullptr));
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), AStringView()));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(AStringView(), "bad"));
     EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token"));
-    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, nullptr));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, AStringView()));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, s_SECRET_TOKEN.data()));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer wrong"));
     EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, "Bearer secret-token "));
+
+    const char headerBytes[] = "Bearer secret-token trailing";
+    const AStringView header(headerBytes, LengthOf("Bearer secret-token") - 1u);
+    EXPECT_TRUE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header));
+    EXPECT_FALSE(NWB::Log::CrashUploadAuthorizationMatches(s_SECRET_TOKEN, header.substr(0u, header.size() - 1u)));
 }
 
 

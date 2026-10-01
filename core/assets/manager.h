@@ -94,11 +94,11 @@ public:
     [[nodiscard]] static bool CheckLoaderEnter(
         const AssetRef<TAsset>& assetRef,
         const TResource& resource,
-        const NotNull<const tchar*> owner,
-        const NotNull<const char*> assetKindText
+        const TStringView owner,
+        const AStringView assetKindText
     ){
         if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner.get(), StringConvert(assetKindText.get()));
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
             return false;
         }
         return !resource.valid();
@@ -109,13 +109,13 @@ public:
     [[nodiscard]] const AssetT* loadTypedSync(
         const Name& virtualPath,
         UniquePtr<IAsset>& outLoadedAsset,
-        const NotNull<const tchar*> ownerName,
-        const NotNull<const char*> assetKindText
+        const TStringView ownerName,
+        const AStringView assetKindText
     )const{
         if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
-                , ownerName.get()
-                , StringConvert(assetKindText.get())
+                , ownerName
+                , StringConvert(assetKindText)
                 , StringConvert(virtualPath.c_str())
             );
             return nullptr;
@@ -123,9 +123,9 @@ public:
         const AssetT* typedAsset = CastAsset<AssetT>(outLoadedAsset.get());
         if(!typedAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
-                , ownerName.get()
+                , ownerName
                 , StringConvert(virtualPath.c_str())
-                , StringConvert(assetKindText.get())
+                , StringConvert(assetKindText)
             );
             return nullptr;
         }

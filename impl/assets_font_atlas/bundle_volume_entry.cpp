@@ -51,10 +51,10 @@ public:
             return false;
         if(
             !Core::Assets::CookEntryRegistryDetail::RegisterParsedVirtualPath(
-                MakeNotNull(NWB_TEXT("font")), entry.fontVirtualPath, context.seenVirtualPathHashes
+                NWB_TEXT("font"), entry.fontVirtualPath, context.seenVirtualPathHashes
             )
             || !Core::Assets::CookEntryRegistryDetail::RegisterParsedVirtualPath(
-                MakeNotNull(NWB_TEXT("font atlas")), entry.atlasVirtualPath, context.seenVirtualPathHashes
+                NWB_TEXT("font atlas"), entry.atlasVirtualPath, context.seenVirtualPathHashes
             )
         )
             return false;
@@ -79,10 +79,10 @@ public:
         for(const FontBundleCookEntry& entry : m_entries){
             if(
                 !Core::Assets::CookEntryRegistryDetail::RegisterCookedVirtualPath(
-                    MakeNotNull(NWB_TEXT("font")), entry.fontVirtualPath, context.seenVirtualPathHashes
+                    NWB_TEXT("font"), entry.fontVirtualPath, context.seenVirtualPathHashes
                 )
                 || !Core::Assets::CookEntryRegistryDetail::RegisterCookedVirtualPath(
-                    MakeNotNull(NWB_TEXT("font atlas")), entry.atlasVirtualPath, context.seenVirtualPathHashes
+                    NWB_TEXT("font atlas"), entry.atlasVirtualPath, context.seenVirtualPathHashes
                 )
             )
                 return false;
@@ -96,8 +96,8 @@ public:
             if(!font.validatePayload() || !atlas.validatePayload() || !ValidateFontAtlasSourceMatch(atlas.payload(), font))
                 return false;
             if(
-                !context.writer.writeCookedAsset(MakeNotNull(NWB_TEXT("font")), entry.fontVirtualPath, font, fontCodec)
-                || !context.writer.writeCookedAsset(MakeNotNull(NWB_TEXT("font atlas")), entry.atlasVirtualPath, atlas, atlasCodec)
+                !context.writer.writeCookedAsset(NWB_TEXT("font"), entry.fontVirtualPath, font, fontCodec)
+                || !context.writer.writeCookedAsset(NWB_TEXT("font atlas"), entry.atlasVirtualPath, atlas, atlasCodec)
             )
                 return false;
         }

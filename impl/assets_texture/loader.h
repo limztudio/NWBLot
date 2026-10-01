@@ -54,7 +54,7 @@ namespace TextureAssetLoader{
     const Texture& textureAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 );
 
 // Loads a cooked Texture asset through the normal asset manager, then delegates to Create().
@@ -64,7 +64,7 @@ namespace TextureAssetLoader{
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 );
 
 // Frees the global descriptor first, then releases the owner's TextureHandle. Safe to call on an empty resource.

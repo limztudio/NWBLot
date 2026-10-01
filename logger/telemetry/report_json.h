@@ -25,15 +25,15 @@ namespace __hidden_telemetry_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr char s_JsonNullText[] = "null";
-inline constexpr char s_JsonQueueIndexFormat[] = "{{\"index\": {}, \"deviceGeneration\": {}}}";
-inline constexpr char s_JsonInitialQueueKey[] = "{\"initialQueue\": ";
-inline constexpr char s_JsonPlannedQueueKey[] = ", \"plannedQueue\": ";
-inline constexpr char s_JsonAcceptedQueueKey[] = ", \"acceptedQueue\": ";
-inline constexpr char s_JsonPreviousAcceptedQueueKey[] = ", \"previousAcceptedQueue\": ";
-inline constexpr char s_JsonQueueClassKey[] = ", \"queueClass\": ";
-inline constexpr char s_JsonReasonKey[] = ", \"reason\": ";
-inline constexpr char s_JsonAcceptanceKey[] = ", \"acceptance\": ";
+inline constexpr AStringView s_JsonNullText = "null";
+inline constexpr AStringView s_JsonQueueIndexFormat = "{{\"index\": {}, \"deviceGeneration\": {}}}";
+inline constexpr AStringView s_JsonInitialQueueKey = "{\"initialQueue\": ";
+inline constexpr AStringView s_JsonPlannedQueueKey = ", \"plannedQueue\": ";
+inline constexpr AStringView s_JsonAcceptedQueueKey = ", \"acceptedQueue\": ";
+inline constexpr AStringView s_JsonPreviousAcceptedQueueKey = ", \"previousAcceptedQueue\": ";
+inline constexpr AStringView s_JsonQueueClassKey = ", \"queueClass\": ";
+inline constexpr AStringView s_JsonReasonKey = ", \"reason\": ";
+inline constexpr AStringView s_JsonAcceptanceKey = ", \"acceptance\": ";
 
 
 [[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept;

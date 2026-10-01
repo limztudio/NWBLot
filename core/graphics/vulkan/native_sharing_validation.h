@@ -36,7 +36,7 @@ template<typename UsageFlags, typename CreateFlags>
     const VkPhysicalDevice physicalDevice,
     const ResourceQueueSharing::Mask queueSharing,
     const NativeResourceProvenance<UsageFlags, CreateFlags>& provenance,
-    const char* const logPrefix
+    const AStringView logPrefix
 ){
     if(provenance.sharingMode == VK_SHARING_MODE_EXCLUSIVE){
         if(provenance.queueFamilyIndexCount != 0u || provenance.queueFamilyIndices != nullptr){

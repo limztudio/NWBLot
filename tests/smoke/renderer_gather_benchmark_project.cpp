@@ -176,7 +176,7 @@ public:
         m_timingRegistered = true;
         SmokeEnvironmentString compilerOutput(m_context.objectArena);
         if(ReadSmokeEnvironmentText("NWB_GATHER_COMPILER_STATISTICS_FILE", compilerOutput)){
-            if(!m_compilerProbe.start(renderer, MakeNotNull(compilerOutput.c_str())))
+            if(!m_compilerProbe.start(renderer, AStringView(compilerOutput)))
                 return false;
         }
         NWB::Core::Perf::CaptureOptions capture;
@@ -198,7 +198,7 @@ public:
         m_compilerProbe.stop();
         if(!m_compilerProbe.write())
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
-        if(!m_probe.write(MakeNotNull(m_output.c_str()), MakeNotNull(m_workload.c_str()), m_memoryEnabled, m_renderers, m_runtimeRenderers, m_transparentRenderers, m_runtimeOwners))
+        if(!m_probe.write(AStringView(m_output), AStringView(m_workload), m_memoryEnabled, m_renderers, m_runtimeRenderers, m_transparentRenderers, m_runtimeOwners))
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: shutdown successful frames {}"), m_probe.successfulFrames());
@@ -336,7 +336,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960u, 720u }; }
-const tchar* NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
+TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Renderer Gather Benchmark"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_renderer_gather_benchmark::RendererGatherBenchmarkProject>(context);
 }

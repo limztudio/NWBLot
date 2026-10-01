@@ -80,10 +80,10 @@ struct DeviceDesc{
 
     VkAllocationCallbacks* allocationCallbacks = nullptr;
 
-    const char** instanceExtensions = nullptr;
+    const AStringView* instanceExtensions = nullptr;
     usize numInstanceExtensions = 0;
 
-    const char** deviceExtensions = nullptr;
+    const AStringView* deviceExtensions = nullptr;
     usize numDeviceExtensions = 0;
 
     // Indicates if VkPhysicalDeviceVulkan12Features::bufferDeviceAddress was set to 'true' at device creation time
@@ -146,7 +146,7 @@ extern DeviceHandle CreateDevice(const DeviceDesc& desc);
 
 extern VkFormat ConvertFormat(Format::Enum format);
 
-extern const tchar* ResultToString(VkResult result);
+extern TStringView ResultToString(VkResult result);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

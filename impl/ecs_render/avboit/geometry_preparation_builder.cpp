@@ -40,10 +40,10 @@ namespace __hidden_geometry_preparation{
 
 
 struct PhaseIdentities{
-    const char* geometryIdentity;
-    const char* geometryLabel;
-    const char* sampledIdentity;
-    const char* sampledLabel;
+    AStringView geometryIdentity;
+    AStringView geometryLabel;
+    AStringView sampledIdentity;
+    AStringView sampledLabel;
 };
 
 

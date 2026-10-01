@@ -654,27 +654,27 @@ TEST(ComputeEmulationAliasPlan, SmallValidationUsesNoScratchAllocation){
 }
 
 struct MetricNames{
-    NotNull<const char*> capture;
-    NotNull<const char*> matches;
-    NotNull<const char*> planPeak;
-    NotNull<const char*> scratchPeak;
+    AStringView capture;
+    AStringView matches;
+    AStringView planPeak;
+    AStringView scratchPeak;
 };
 
 inline constexpr MetricNames s_RegularMetrics{
-    MakeNotNull("alias_regular_capture_ns"), MakeNotNull("alias_regular_matches_ns"),
-    MakeNotNull("alias_regular_plan_peak_bytes"), MakeNotNull("alias_regular_scratch_peak_bytes"),
+    "alias_regular_capture_ns", "alias_regular_matches_ns",
+    "alias_regular_plan_peak_bytes", "alias_regular_scratch_peak_bytes",
 };
 inline constexpr MetricNames s_AvboitMetrics{
-    MakeNotNull("alias_avboit_capture_ns"), MakeNotNull("alias_avboit_matches_ns"),
-    MakeNotNull("alias_avboit_plan_peak_bytes"), MakeNotNull("alias_avboit_scratch_peak_bytes"),
+    "alias_avboit_capture_ns", "alias_avboit_matches_ns",
+    "alias_avboit_plan_peak_bytes", "alias_avboit_scratch_peak_bytes",
 };
 inline constexpr MetricNames s_IntervalMetrics{
-    MakeNotNull("alias_interval_capture_ns"), MakeNotNull("alias_interval_matches_ns"),
-    MakeNotNull("alias_interval_plan_peak_bytes"), MakeNotNull("alias_interval_scratch_peak_bytes"),
+    "alias_interval_capture_ns", "alias_interval_matches_ns",
+    "alias_interval_plan_peak_bytes", "alias_interval_scratch_peak_bytes",
 };
 inline constexpr MetricNames s_ReceiverMetrics{
-    MakeNotNull("alias_receiver_capture_ns"), MakeNotNull("alias_receiver_matches_ns"),
-    MakeNotNull("alias_receiver_plan_peak_bytes"), MakeNotNull("alias_receiver_scratch_peak_bytes"),
+    "alias_receiver_capture_ns", "alias_receiver_matches_ns",
+    "alias_receiver_plan_peak_bytes", "alias_receiver_scratch_peak_bytes",
 };
 
 namespace AliasWorkload{
@@ -686,11 +686,11 @@ namespace AliasWorkload{
     };
 };
 
-static void RecordMetric(const NotNull<const char*> key, const u64 value){
+static void RecordMetric(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 template<typename Plan>
@@ -755,9 +755,9 @@ static void BenchmarkAliasPlans(const usize count, const usize iterations, const
     MeasurePlan<ReceiverPlan>(
         context, s_ReceiverMetrics, iterations, workload != AliasWorkload::LatePointer && workload != AliasWorkload::LateIntersection
     );
-    RecordMetric(MakeNotNull("alias_draw_count"), count);
-    RecordMetric(MakeNotNull("alias_iterations"), iterations);
-    RecordMetric(MakeNotNull("alias_workload"), static_cast<u64>(workload));
+    RecordMetric("alias_draw_count", count);
+    RecordMetric("alias_iterations", iterations);
+    RecordMetric("alias_workload", static_cast<u64>(workload));
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_Unique1){
@@ -811,10 +811,10 @@ TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_MutatedCsgIntersection1024){
         scratchPeak = Max(scratchPeak, scratch.memoryStats().peakUsedBytes);
     }
     EXPECT_EQ(matches, 0u);
-    RecordMetric(MakeNotNull("alias_receiver_matches_ns"), elapsed);
-    RecordMetric(MakeNotNull("alias_receiver_scratch_peak_bytes"), scratchPeak);
-    RecordMetric(MakeNotNull("alias_draw_count"), 1024u);
-    RecordMetric(MakeNotNull("alias_iterations"), s_Iterations);
+    RecordMetric("alias_receiver_matches_ns", elapsed);
+    RecordMetric("alias_receiver_scratch_peak_bytes", scratchPeak);
+    RecordMetric("alias_draw_count", 1024u);
+    RecordMetric("alias_iterations", s_Iterations);
 }
 
 

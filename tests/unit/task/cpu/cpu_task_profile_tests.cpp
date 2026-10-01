@@ -30,6 +30,9 @@ inline constexpr AStringView s_SampleKeys[s_SampleCount] = {
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] CpuTaskSchedulerConfig WorkerConfig(const u32 workerCount){
     CpuTaskSchedulerConfig config;
     config.workerCount = workerCount;
@@ -47,17 +50,17 @@ inline constexpr AStringView s_SampleKeys[s_SampleCount] = {
     return value;
 }
 
-void RecordUnsigned(const char* key, const u64 value){
+void RecordUnsigned(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key, text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void RecordSample(const u32 sample, const u64 nanoseconds, const u64 checksum){
     if(sample < s_WarmupCount)
         return;
-    RecordUnsigned(s_SampleKeys[sample - s_WarmupCount].data(), nanoseconds);
+    RecordUnsigned(s_SampleKeys[sample - s_WarmupCount], nanoseconds);
     RecordUnsigned("checksum", checksum);
 }
 

@@ -81,7 +81,7 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
 [[nodiscard]] static bool ReportMeshBufferSetupFailure(
     const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure,
     const Name& meshName,
-    const NotNull<const tchar*> label
+    const TStringView label
 ){
     switch(failure){
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
@@ -89,30 +89,30 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
             , StringConvert(meshName.c_str())
-            , label.get()
+            , label
         );
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
             , StringConvert(meshName.c_str())
-            , label.get()
+            , label
         );
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
-        , label.get()
+        , label
         , StringConvert(meshName.c_str())
     );
     return false;
 }
 
-[[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const NotNull<const tchar*> label){
+[[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
     const Name bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
-            , label.get()
+            , label
             , StringConvert(meshName.c_str())
         );
     }
@@ -125,7 +125,7 @@ template<typename PayloadT, typename PayloadVector>
     const Name& meshName,
     const AStringView suffix,
     const PayloadVector& payload,
-    const NotNull<const tchar*> label,
+    const TStringView label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
 ){
@@ -158,7 +158,7 @@ template<typename PayloadT, typename PayloadVector>
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
     const PayloadVector& payload,
-    const NotNull<const tchar*> label,
+    const TStringView label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
 ){
@@ -182,7 +182,7 @@ template<typename PayloadVector>
     Core::BufferHandle& outBuffer,
     const AStringView suffix,
     const PayloadVector& payload,
-    const NotNull<const tchar*> label
+    const TStringView label
 ){
     outBuffer = nullptr;
 
@@ -215,12 +215,12 @@ template<typename PayloadVector>
     const Core::BufferHandle& buffer,
     const u32 logicalByteCount,
     const Name& meshName,
-    const NotNull<const tchar*> label
+    const TStringView label
 ){
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer")
             , StringConvert(meshName.c_str())
-            , label.get()
+            , label
         );
         return false;
     }
@@ -232,7 +232,7 @@ template<typename PayloadVector>
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes")
             , StringConvert(meshName.c_str())
-            , label.get()
+            , label
             , logicalByteCount
         );
         return false;
@@ -293,8 +293,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
         meshPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("RendererSystem")),
-        MakeNotNull("mesh")
+        NWB_TEXT("RendererSystem"),
+        "mesh"
     );
     if(!loadedMesh)
         return false;
@@ -327,7 +327,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.positionBuffer,
         AStringView(":positions"),
         mesh.positionStream(),
-        MakeNotNull(NWB_TEXT("position")),
+        NWB_TEXT("position"),
         true,
         rtSupported
     ) && uploaded;
@@ -337,7 +337,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.normalBuffer,
         AStringView(":normals"),
         mesh.normalStream(),
-        MakeNotNull(NWB_TEXT("normal"))
+        NWB_TEXT("normal")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
         m_graphics,
@@ -345,7 +345,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.tangentBuffer,
         AStringView(":tangents"),
         mesh.tangentStream(),
-        MakeNotNull(NWB_TEXT("tangent"))
+        NWB_TEXT("tangent")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(
         m_graphics,
@@ -353,7 +353,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.uv0Buffer,
         AStringView(":uv0"),
         mesh.uv0Stream(),
-        MakeNotNull(NWB_TEXT("uv0"))
+        NWB_TEXT("uv0")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
         m_graphics,
@@ -361,7 +361,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.colorBuffer,
         AStringView(":colors"),
         mesh.colorStream(),
-        MakeNotNull(NWB_TEXT("color"))
+        NWB_TEXT("color")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(
         m_graphics,
@@ -369,7 +369,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletDescBuffer,
         AStringView(":meshlets"),
         mesh.meshlets(),
-        MakeNotNull(NWB_TEXT("meshlet descriptor"))
+        NWB_TEXT("meshlet descriptor")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(
         m_graphics,
@@ -377,7 +377,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletBoundsBuffer,
         AStringView(":meshlet_bounds"),
         mesh.meshletBounds(),
-        MakeNotNull(NWB_TEXT("meshlet bounds")),
+        NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
@@ -387,7 +387,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletPositionRefDeltaBuffer,
         AStringView(":meshlet_position_ref_deltas"),
         mesh.meshletPositionRefDeltas(),
-        MakeNotNull(NWB_TEXT("meshlet position ref delta"))
+        NWB_TEXT("meshlet position ref delta")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
@@ -396,7 +396,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletAttributeRefDeltaBuffer,
         AStringView(":meshlet_attribute_ref_deltas"),
         mesh.meshletAttributeRefDeltas(),
-        MakeNotNull(NWB_TEXT("meshlet attribute ref delta"))
+        NWB_TEXT("meshlet attribute ref delta")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
         m_graphics,
@@ -404,7 +404,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletLocalVertexRefBuffer,
         AStringView(":meshlet_local_vertex_refs"),
         mesh.meshletLocalVertexRefs(),
-        MakeNotNull(NWB_TEXT("meshlet local vertex ref"))
+        NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
@@ -413,7 +413,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         createdMesh.meshletPrimitiveIndexBuffer,
         AStringView(":meshlet_primitive_indices"),
         mesh.meshletPrimitiveIndices(),
-        MakeNotNull(NWB_TEXT("meshlet primitive index"))
+        NWB_TEXT("meshlet primitive index")
     ) && uploaded;
     if(!uploaded)
         return false;
@@ -615,7 +615,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,
         createdMesh.meshName,
-        MakeNotNull(NWB_TEXT("meshlet primitive index"))
+        NWB_TEXT("meshlet primitive index")
     ))
         return false;
     NWB_ASSERT(createdMesh.valid());

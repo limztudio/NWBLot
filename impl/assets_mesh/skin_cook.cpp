@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
 
 
 bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("SkinAssetCodec::serialize")))
         return false;
 
     const Skin& skin = static_cast<const Skin&>(asset);
@@ -58,14 +58,14 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skin.influences(),
-        MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize")),
-        MakeNotNull(NWB_TEXT("influences"))
+        NWB_TEXT("SkinAssetCodec::serialize"),
+        NWB_TEXT("influences")
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skin.inverseBindMatrices(),
-            MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize")),
-            MakeNotNull(NWB_TEXT("inverse bind matrices"))
+            NWB_TEXT("SkinAssetCodec::serialize"),
+            NWB_TEXT("inverse bind matrices")
         )
     ;
 }

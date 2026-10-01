@@ -2732,6 +2732,17 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
     CheckGeneratedMaterialBindSource(generatedSourceView);
 
+    {
+        NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+        mountDesc.volumeName = "graphics";
+        mountDesc.mountDirectory = outputDirectory;
+        auto filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+        ASSERT_TRUE(filesystem);
+        EXPECT_TRUE(filesystem->fileExists(Name("project/meshes/minimal_mesh")));
+        EXPECT_TRUE(filesystem->fileExists(NWB::Core::ShaderArchive::IndexVirtualPathName()));
+        EXPECT_EQ(filesystem->fileCount(), 2u);
+    }
+
     const Path shaderIncludeProbePath = root / "shader_include_probe.slang";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
         shaderIncludeProbePath,
@@ -2749,9 +2760,29 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
         scratchArena
     ));
     EXPECT_TRUE(ContainsCanonicalPath(dependencies, generatedIncludePath));
+
+    // Removing the last bind source must clear its generated include on a recook with the same cache.
+    const Path assetRoot = root / "assets";
+    ErrorCode errorCode;
+    ASSERT_TRUE(RemoveFile(assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND, errorCode));
+    ASSERT_FALSE(errorCode);
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    errorCode.clear();
+    EXPECT_FALSE(FileExists(generatedIncludePath, errorCode));
+    EXPECT_FALSE(errorCode);
+    {
+        NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
+        mountDesc.volumeName = "graphics";
+        mountDesc.mountDirectory = outputDirectory;
+        auto filesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
+        ASSERT_TRUE(filesystem);
+        EXPECT_TRUE(filesystem->fileExists(Name("project/meshes/minimal_mesh")));
+        EXPECT_TRUE(filesystem->fileExists(NWB::Core::ShaderArchive::IndexVirtualPathName()));
+        EXPECT_EQ(filesystem->fileCount(), 2u);
+    }
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    ErrorCode errorCode;
+    errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 
     Path shaderProbeRoot(testArena.arena);

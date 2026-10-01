@@ -14,21 +14,6 @@
 
 
 template<usize N>
-inline void CopyFixedBuffer(char (&dst)[N], const char* src)noexcept{
-    if constexpr(N == 0u)
-        return;
-    if(!src){
-        dst[0] = 0;
-        return;
-    }
-
-    usize i = 0u;
-    for(; i + 1u < N && src[i] != 0; ++i)
-        dst[i] = src[i];
-    dst[i] = 0;
-}
-
-template<usize N>
 inline void CopyFixedBuffer(char (&dst)[N], const AStringView src)noexcept{
     if constexpr(N == 0u)
         return;
@@ -40,7 +25,7 @@ inline void CopyFixedBuffer(char (&dst)[N], const AStringView src)noexcept{
 }
 
 template<usize N>
-inline void AppendFixedBuffer(char (&dst)[N], const char* src)noexcept{
+inline void AppendFixedBuffer(char (&dst)[N], const AStringView src)noexcept{
     if constexpr(N == 0u)
         return;
 
@@ -49,8 +34,11 @@ inline void AppendFixedBuffer(char (&dst)[N], const char* src)noexcept{
         ++len;
 
     usize i = 0u;
-    while(len + 1u < N && src && src[i] != 0)
-        dst[len++] = src[i++];
+    while(len + 1u < N && i < src.size()){
+        dst[len] = src[i];
+        ++len;
+        ++i;
+    }
     dst[len] = 0;
 }
 

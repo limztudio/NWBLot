@@ -17,12 +17,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Text is borrowed during synchronous capture; callbacks must copy it before retaining it.
 struct DiagnosticEventRecord{
-    const char* event = nullptr;
-    const char* category = nullptr;
-    const char* expression = nullptr;
-    const char* message = nullptr;
-    const char* file = nullptr;
+    StringView event = {};
+    StringView category = {};
+    StringView expression = {};
+    StringView message = {};
+    StringView file = {};
     u64 instructionPointer = 0u;
     u32 line = 0u;
     bool terminatesProcess = false;
@@ -98,7 +99,7 @@ inline constexpr i32 s_PointerTextRadix = 16;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const std::string_view text)noexcept{
+inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const AStringView text)noexcept{
     const usize copySize = text.size() >= s_MaxEventTextBytes
         ? s_MaxEventTextBytes - 1u
         : text.size()
@@ -108,7 +109,7 @@ inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const std::strin
     outText[copySize] = 0;
 }
 
-inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const std::wstring_view text)noexcept{
+inline void CopyEventText(char (&outText)[s_MaxEventTextBytes], const WStringView text)noexcept{
     usize writeCursor = 0u;
     for(const wchar_t ch : text){
         if(writeCursor + 1u >= s_MaxEventTextBytes)
@@ -129,12 +130,12 @@ inline void AppendEventChar(char (&outText)[s_MaxEventTextBytes], usize& outCurs
     outText[outCursor] = 0;
 }
 
-inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const std::string_view text)noexcept{
+inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const AStringView text)noexcept{
     for(const char ch : text)
         AppendEventChar(outText, outCursor, ch);
 }
 
-inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const std::wstring_view text)noexcept{
+inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const WStringView text)noexcept{
     for(const wchar_t ch : text){
         AppendEventChar(
             outText,
@@ -147,7 +148,7 @@ inline void AppendEventText(char (&outText)[s_MaxEventTextBytes], usize& outCurs
 }
 
 template<typename CharT>
-inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const std::basic_string_view<CharT> text)noexcept{
+inline void AppendFormatLiteral(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> text)noexcept{
     for(usize i = 0u; i < text.size(); ++i){
         const CharT ch = text[i];
         if(ch == static_cast<CharT>('{') && i + 1u < text.size() && text[i + 1u] == static_cast<CharT>('{')){
@@ -177,18 +178,18 @@ inline void AppendEventNumber(char (&outText)[s_MaxEventTextBytes], usize& outCu
     if constexpr(std::is_floating_point_v<T>){
         const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
         if(result.ec == std::errc{})
-            AppendEventText(outText, outCursor, std::string_view(buffer, static_cast<usize>(result.ptr - buffer)));
+            AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
     }
     else{
         const auto result = std::to_chars(buffer, buffer + sizeof(buffer), value);
         if(result.ec == std::errc{})
-            AppendEventText(outText, outCursor, std::string_view(buffer, static_cast<usize>(result.ptr - buffer)));
+            AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
     }
 }
 
 inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const void* const value)noexcept{
     if(!value){
-        AppendEventText(outText, outCursor, std::string_view(s_NullText));
+        AppendEventText(outText, outCursor, AStringView(s_NullText));
         return;
     }
 
@@ -198,15 +199,15 @@ inline void AppendEventPointer(char (&outText)[s_MaxEventTextBytes], usize& outC
     if(result.ec != std::errc{})
         return;
 
-    AppendEventText(outText, outCursor, std::string_view(s_PointerHexPrefix));
-    AppendEventText(outText, outCursor, std::string_view(buffer, static_cast<usize>(result.ptr - buffer)));
+    AppendEventText(outText, outCursor, AStringView(s_PointerHexPrefix));
+    AppendEventText(outText, outCursor, AStringView(buffer, static_cast<usize>(result.ptr - buffer)));
 }
 
 template<typename T>
 inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T& value)noexcept{
     using RawT = std::remove_cvref_t<T>;
     if constexpr(std::is_same_v<RawT, bool>){
-        AppendEventText(outText, outCursor, value ? std::string_view(s_TrueText) : std::string_view(s_FalseText));
+        AppendEventText(outText, outCursor, value ? AStringView(s_TrueText) : AStringView(s_FalseText));
     }
     else if constexpr(std::is_same_v<RawT, char>){
         AppendEventChar(outText, outCursor, value);
@@ -215,13 +216,13 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
         AppendEventChar(outText, outCursor, value >= 0 && value <= s_AsciiCharacterMax ? static_cast<char>(value) : '?');
     }
     else if constexpr(std::is_same_v<RawT, std::nullptr_t>){
-        AppendEventText(outText, outCursor, std::string_view(s_NullText));
+        AppendEventText(outText, outCursor, AStringView(s_NullText));
     }
     else if constexpr(std::is_pointer_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<RawT>>, char>){
-        AppendEventText(outText, outCursor, value ? std::string_view(value) : std::string_view(s_NullText));
+        AppendEventText(outText, outCursor, value ? AStringView(value) : AStringView(s_NullText));
     }
     else if constexpr(std::is_pointer_v<RawT> && std::is_same_v<std::remove_cv_t<std::remove_pointer_t<RawT>>, wchar_t>){
-        AppendEventText(outText, outCursor, value ? std::wstring_view(value) : std::wstring_view());
+        AppendEventText(outText, outCursor, value ? WStringView(value) : WStringView());
     }
     else if constexpr(std::is_pointer_v<RawT>){
         AppendEventPointer(outText, outCursor, value);
@@ -232,11 +233,11 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
     else if constexpr(std::is_enum_v<RawT>){
         AppendEventNumber(outText, outCursor, static_cast<std::underlying_type_t<RawT>>(value));
     }
-    else if constexpr(requires{ std::string_view(value); }){
-        AppendEventText(outText, outCursor, std::string_view(value));
+    else if constexpr(requires{ AStringView(value); }){
+        AppendEventText(outText, outCursor, AStringView(value));
     }
-    else if constexpr(requires{ std::wstring_view(value); }){
-        AppendEventText(outText, outCursor, std::wstring_view(value));
+    else if constexpr(requires{ WStringView(value); }){
+        AppendEventText(outText, outCursor, WStringView(value));
     }
     else if constexpr(requires{ value.c_str(); }){
         AppendEventArgument(outText, outCursor, value.c_str());
@@ -245,12 +246,12 @@ inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& out
         AppendEventArgument(outText, outCursor, value.value);
     }
     else{
-        AppendEventText(outText, outCursor, std::string_view(s_UnprintableText));
+        AppendEventText(outText, outCursor, AStringView(s_UnprintableText));
     }
 }
 
 template<typename CharT>
-[[nodiscard]] inline usize FindReplacementEnd(const std::basic_string_view<CharT> text, const usize begin)noexcept{
+[[nodiscard]] inline usize FindReplacementEnd(const BasicStringView<CharT> text, const usize begin)noexcept{
     for(usize i = begin; i < text.size(); ++i){
         if(text[i] == static_cast<CharT>('}'))
             return i;
@@ -260,7 +261,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const std::basic_string_view<CharT> fmt)noexcept{
+inline void FormatEventTextArgs(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const BasicStringView<CharT> fmt)noexcept{
     AppendFormatLiteral(outText, outCursor, fmt);
 }
 
@@ -268,7 +269,7 @@ template<typename CharT, typename Arg, typename... Args>
 inline void FormatEventTextArgs(
     char (&outText)[s_MaxEventTextBytes],
     usize& outCursor,
-    const std::basic_string_view<CharT> fmt,
+    const BasicStringView<CharT> fmt,
     Arg&& arg,
     Args&&... args
 )noexcept{
@@ -305,24 +306,10 @@ inline void FormatEventTextArgs(
 }
 
 template<typename CharT, typename... Args>
-inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const std::basic_string_view<CharT> fmt, Args&&... args)noexcept{
+inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const BasicStringView<CharT> fmt, Args&&... args)noexcept{
     usize outCursor = 0u;
     outText[0] = 0;
     FormatEventTextArgs(outText, outCursor, fmt, Forward<Args>(args)...);
-}
-
-[[nodiscard]] inline bool TextEquals(const char* lhs, const char* rhs)noexcept{
-    if(!lhs || !rhs)
-        return lhs == rhs;
-
-    while(*lhs != 0 && *rhs != 0){
-        if(*lhs != *rhs)
-            return false;
-        ++lhs;
-        ++rhs;
-    }
-
-    return *lhs == *rhs;
 }
 
 
@@ -335,15 +322,15 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const std::bas
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const char* DiagnosticEventNameFromCategory(const char* const category)noexcept{
-    if(DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_Assert.data()) || DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_FatalAssert.data()))
-        return DiagnosticEventName::s_Assert.data();
+[[nodiscard]] inline StringView DiagnosticEventNameFromCategory(const StringView category)noexcept{
+    if(category == DiagnosticEventCategory::s_Assert || category == DiagnosticEventCategory::s_FatalAssert)
+        return DiagnosticEventName::s_Assert;
 
-    return nullptr;
+    return {};
 }
 
-[[nodiscard]] inline const char* DiagnosticEventNameFromRecord(const DiagnosticEventRecord& record)noexcept{
-    if(record.event && record.event[0] != 0)
+[[nodiscard]] inline StringView DiagnosticEventNameFromRecord(const DiagnosticEventRecord& record)noexcept{
+    if(!record.event.empty())
         return record.event;
 
     return DiagnosticEventNameFromCategory(record.category);
@@ -357,23 +344,23 @@ struct DiagnosticEventText{
 
 inline DiagnosticEventText MakeDiagnosticEventText(const char* const text)noexcept{
     DiagnosticEventText output;
-    DiagnosticDetail::CopyEventText(output.value, text ? std::string_view(text) : std::string_view());
+    DiagnosticDetail::CopyEventText(output.value, text ? AStringView(text) : AStringView());
     return output;
 }
 
 inline DiagnosticEventText MakeDiagnosticEventText(const wchar_t* const text)noexcept{
     DiagnosticEventText output;
-    DiagnosticDetail::CopyEventText(output.value, text ? std::wstring_view(text) : std::wstring_view());
+    DiagnosticDetail::CopyEventText(output.value, text ? WStringView(text) : WStringView());
     return output;
 }
 
-inline DiagnosticEventText MakeDiagnosticEventText(const std::string_view text)noexcept{
+inline DiagnosticEventText MakeDiagnosticEventText(const AStringView text)noexcept{
     DiagnosticEventText output;
     DiagnosticDetail::CopyEventText(output.value, text);
     return output;
 }
 
-inline DiagnosticEventText MakeDiagnosticEventText(const std::wstring_view text)noexcept{
+inline DiagnosticEventText MakeDiagnosticEventText(const WStringView text)noexcept{
     DiagnosticEventText output;
     DiagnosticDetail::CopyEventText(output.value, text);
     return output;
@@ -382,14 +369,14 @@ inline DiagnosticEventText MakeDiagnosticEventText(const std::wstring_view text)
 template<typename Traits, typename Allocator>
 inline DiagnosticEventText MakeDiagnosticEventText(const std::basic_string<char, Traits, Allocator>& text)noexcept{
     DiagnosticEventText output;
-    DiagnosticDetail::CopyEventText(output.value, std::string_view(text.data(), text.size()));
+    DiagnosticDetail::CopyEventText(output.value, AStringView(text.data(), text.size()));
     return output;
 }
 
 template<typename Traits, typename Allocator>
 inline DiagnosticEventText MakeDiagnosticEventText(const std::basic_string<wchar_t, Traits, Allocator>& text)noexcept{
     DiagnosticEventText output;
-    DiagnosticDetail::CopyEventText(output.value, std::wstring_view(text.data(), text.size()));
+    DiagnosticDetail::CopyEventText(output.value, WStringView(text.data(), text.size()));
     return output;
 }
 
@@ -397,7 +384,7 @@ template<typename... Args>
 inline DiagnosticEventText MakeDiagnosticEventText(std::format_string<Args...> fmt, Args&&... args)noexcept{
     DiagnosticEventText output;
     const auto text = fmt.get();
-    DiagnosticDetail::FormatEventText(output.value, std::string_view(text.data(), text.size()), Forward<Args>(args)...);
+    DiagnosticDetail::FormatEventText(output.value, AStringView(text.data(), text.size()), Forward<Args>(args)...);
     return output;
 }
 
@@ -405,22 +392,33 @@ template<typename... Args>
 inline DiagnosticEventText MakeDiagnosticEventText(std::wformat_string<Args...> fmt, Args&&... args)noexcept{
     DiagnosticEventText output;
     const auto text = fmt.get();
-    DiagnosticDetail::FormatEventText(output.value, std::wstring_view(text.data(), text.size()), Forward<Args>(args)...);
+    DiagnosticDetail::FormatEventText(output.value, WStringView(text.data(), text.size()), Forward<Args>(args)...);
     return output;
 }
 
 template<typename Arg, typename... Args>
-inline DiagnosticEventText MakeDiagnosticEventText(const char* const fmt, Arg&& arg, Args&&... args)noexcept{
+inline DiagnosticEventText MakeDiagnosticEventText(const AStringView fmt, Arg&& arg, Args&&... args)noexcept{
     DiagnosticEventText output;
-    DiagnosticDetail::FormatEventText(output.value, fmt ? std::string_view(fmt) : std::string_view(), Forward<Arg>(arg), Forward<Args>(args)...);
+    DiagnosticDetail::FormatEventText(output.value, fmt, Forward<Arg>(arg), Forward<Args>(args)...);
     return output;
+}
+
+template<typename Arg, typename... Args>
+inline DiagnosticEventText MakeDiagnosticEventText(const WStringView fmt, Arg&& arg, Args&&... args)noexcept{
+    DiagnosticEventText output;
+    DiagnosticDetail::FormatEventText(output.value, fmt, Forward<Arg>(arg), Forward<Args>(args)...);
+    return output;
+}
+
+
+template<typename Arg, typename... Args>
+inline DiagnosticEventText MakeDiagnosticEventText(const char* const fmt, Arg&& arg, Args&&... args)noexcept{
+    return MakeDiagnosticEventText(fmt ? AStringView(fmt) : AStringView(), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
 template<typename Arg, typename... Args>
 inline DiagnosticEventText MakeDiagnosticEventText(const wchar_t* const fmt, Arg&& arg, Args&&... args)noexcept{
-    DiagnosticEventText output;
-    DiagnosticDetail::FormatEventText(output.value, fmt ? std::wstring_view(fmt) : std::wstring_view(), Forward<Arg>(arg), Forward<Args>(args)...);
-    return output;
+    return MakeDiagnosticEventText(fmt ? WStringView(fmt) : WStringView(), Forward<Arg>(arg), Forward<Args>(args)...);
 }
 
 
@@ -450,16 +448,6 @@ NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
     }
 
     DiagnosticEventRecord normalizedRecord = record;
-    if(!normalizedRecord.event)
-        normalizedRecord.event = "";
-    if(!normalizedRecord.category)
-        normalizedRecord.category = "";
-    if(!normalizedRecord.expression)
-        normalizedRecord.expression = "";
-    if(!normalizedRecord.message)
-        normalizedRecord.message = "";
-    if(!normalizedRecord.file)
-        normalizedRecord.file = "";
 #if __has_builtin(__builtin_return_address) || defined(__GNUC__)
     if(normalizedRecord.instructionPointer == 0u)
         normalizedRecord.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(__builtin_return_address(0)));
@@ -471,7 +459,7 @@ NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
     DiagnosticDetail::g_EventActive.notify_all();
 }
 
-inline void CaptureDiagnosticEvent(const char* category, const char* message, const char* file = nullptr, const u32 line = 0u)noexcept{
+inline void CaptureDiagnosticEvent(const StringView category, const StringView message, const StringView file = {}, const u32 line = 0u)noexcept{
     CaptureDiagnosticEvent(DiagnosticEventRecord{
         .category = category,
         .message = message,

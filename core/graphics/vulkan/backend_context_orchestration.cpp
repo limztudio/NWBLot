@@ -109,8 +109,14 @@ bool BackendContext::createDevice(){
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DeviceExtensionSetupArena, s_DeviceSetupScratchArenaBytes);
 
-    auto vecInstanceExt = VulkanDetail::StringSetToVector(m_enabledExtensions.instance, scratchArena);
-    auto vecDeviceExt = VulkanDetail::StringMapKeysToVector(m_enabledExtensions.device, scratchArena);
+    Vector<AStringView, Alloc::ScratchArena> vecInstanceExt(scratchArena);
+    Vector<AStringView, Alloc::ScratchArena> vecDeviceExt(scratchArena);
+    vecInstanceExt.reserve(m_enabledExtensions.instance.size());
+    vecDeviceExt.reserve(m_enabledExtensions.device.size());
+    for(const auto& extension : m_enabledExtensions.instance)
+        vecInstanceExt.emplace_back(extension);
+    for(const auto& extension : m_enabledExtensions.device)
+        vecDeviceExt.emplace_back(extension.first);
 
     DeviceDesc deviceDesc(m_allocator, m_cpuScheduler);
     deviceDesc.instance = m_vulkanInstance;

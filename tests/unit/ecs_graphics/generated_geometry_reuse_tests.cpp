@@ -80,7 +80,7 @@ public:
 
 
 public:
-    [[nodiscard]] Core::BufferHandle makeBuffer(const char* identity){
+    [[nodiscard]] Core::BufferHandle makeBuffer(AStringView identity){
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(512u).setDebugName(Name(identity))
         );

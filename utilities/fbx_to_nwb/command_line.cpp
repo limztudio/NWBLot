@@ -42,24 +42,24 @@ struct OptionPresence{
 
 inline constexpr int s_FbxToNwbExitSuccess = 0;
 inline constexpr int s_FbxToNwbExitFailure = 1;
-inline constexpr char s_FbxToNwbAppName[] = "fbx_to_nwb";
-inline constexpr char s_FbxToNwbHelpFlag[] = "-h,--help";
-inline constexpr char s_FbxToNwbInputOption[] = "input";
-inline constexpr char s_FbxToNwbOutputOption[] = "-o,--output";
-inline constexpr char s_FbxToNwbAssetTypeOption[] = "--asset-type";
-inline constexpr char s_FbxToNwbVirtualRootOption[] = "--virtual-root";
-inline constexpr char s_FbxToNwbMeshOption[] = "-m,--mesh";
-inline constexpr char s_FbxToNwbNormalModeOption[] = "--normal-mode";
-inline constexpr char s_FbxToNwbScaleOption[] = "--scale";
-inline constexpr char s_FbxToNwbTriangleAreaEpsilonOption[] = "--triangle-area-length-squared-epsilon";
-inline constexpr char s_FbxToNwbDefaultColorOption[] = "--default-color";
-inline constexpr char s_FbxToNwbPreserveSpaceFlag[] = "--preserve-space";
-inline constexpr char s_FbxToNwbIncludeHiddenFlag[] = "--include-hidden";
-inline constexpr char s_FbxToNwbLocalFlag[] = "--local";
-inline constexpr char s_FbxToNwbIgnoreColorsFlag[] = "--ignore-colors";
-inline constexpr char s_FbxToNwbFlipWindingFlag[] = "--flip-winding";
-inline constexpr char s_FbxToNwbSeparateAssetsFlag[] = "--separate-assets";
-inline constexpr char s_FbxToNwbRefreshNwbFlag[] = "--refresh-nwb";
+inline constexpr AStringView s_FbxToNwbAppName = "fbx_to_nwb";
+inline constexpr AStringView s_FbxToNwbHelpFlag = "-h,--help";
+inline constexpr AStringView s_FbxToNwbInputOption = "input";
+inline constexpr AStringView s_FbxToNwbOutputOption = "-o,--output";
+inline constexpr AStringView s_FbxToNwbAssetTypeOption = "--asset-type";
+inline constexpr AStringView s_FbxToNwbVirtualRootOption = "--virtual-root";
+inline constexpr AStringView s_FbxToNwbMeshOption = "-m,--mesh";
+inline constexpr AStringView s_FbxToNwbNormalModeOption = "--normal-mode";
+inline constexpr AStringView s_FbxToNwbScaleOption = "--scale";
+inline constexpr AStringView s_FbxToNwbTriangleAreaEpsilonOption = "--triangle-area-length-squared-epsilon";
+inline constexpr AStringView s_FbxToNwbDefaultColorOption = "--default-color";
+inline constexpr AStringView s_FbxToNwbPreserveSpaceFlag = "--preserve-space";
+inline constexpr AStringView s_FbxToNwbIncludeHiddenFlag = "--include-hidden";
+inline constexpr AStringView s_FbxToNwbLocalFlag = "--local";
+inline constexpr AStringView s_FbxToNwbIgnoreColorsFlag = "--ignore-colors";
+inline constexpr AStringView s_FbxToNwbFlipWindingFlag = "--flip-winding";
+inline constexpr AStringView s_FbxToNwbSeparateAssetsFlag = "--separate-assets";
+inline constexpr AStringView s_FbxToNwbRefreshNwbFlag = "--refresh-nwb";
 inline constexpr u32 s_CliOptionPresentCount = 0u;
 
 
@@ -125,7 +125,7 @@ bool PromptDouble(const AString& label, const f64 defaultValue, f64& outValue, b
         }
 
         f64 parsed = 0.0;
-        if(ParseF64FromChars(line.data(), line.data() + line.size(), parsed) && IsFinite(parsed) && parsed > 0.0){
+        if(ParseF64FromChars(AStringView(line.data(), line.size()), parsed) && IsFinite(parsed) && parsed > 0.0){
             outValue = parsed;
             return true;
         }
@@ -354,8 +354,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
 
-    CLI::App app{ __hidden_command_line::s_FbxToNwbAppName };
-    app.set_help_flag(__hidden_command_line::s_FbxToNwbHelpFlag, "Show help");
+    CLI::App app{ __hidden_command_line::s_FbxToNwbAppName.data() };
+    app.set_help_flag(__hidden_command_line::s_FbxToNwbHelpFlag.data(), "Show help");
 
     AInteropString inputPath(options.inputPath.data(), options.inputPath.size());
     AInteropString outputPathText(options.outputPath.data(), options.outputPath.size());
@@ -368,33 +368,33 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     bool local = false;
     bool ignoreColors = false;
 
-    app.add_option(__hidden_command_line::s_FbxToNwbInputOption, inputPath, "Input FBX file path");
-    CLI::Option* outputOption = app.add_option(__hidden_command_line::s_FbxToNwbOutputOption, outputPathText, "Output NWB asset metadata path");
+    app.add_option(__hidden_command_line::s_FbxToNwbInputOption.data(), inputPath, "Input FBX file path");
+    CLI::Option* outputOption = app.add_option(__hidden_command_line::s_FbxToNwbOutputOption.data(), outputPathText, "Output NWB asset metadata path");
     AInteropString assetTypeDescription = "Output asset type: ";
     const AString assetTypeOptions = OutputAssetTypeOptionsText();
     assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
-    CLI::Option* assetTypeOption = app.add_option(__hidden_command_line::s_FbxToNwbAssetTypeOption, assetType, assetTypeDescription);
-    app.add_option(__hidden_command_line::s_FbxToNwbVirtualRootOption, virtualRoot, "Virtual asset root used when output path is outside an assets directory");
-    CLI::Option* meshOption = app.add_option(__hidden_command_line::s_FbxToNwbMeshOption, meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    CLI::Option* assetTypeOption = app.add_option(__hidden_command_line::s_FbxToNwbAssetTypeOption.data(), assetType, assetTypeDescription);
+    app.add_option(__hidden_command_line::s_FbxToNwbVirtualRootOption.data(), virtualRoot, "Virtual asset root used when output path is outside an assets directory");
+    CLI::Option* meshOption = app.add_option(__hidden_command_line::s_FbxToNwbMeshOption.data(), meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* normalModeOption = app.add_option(
-        __hidden_command_line::s_FbxToNwbNormalModeOption,
+        __hidden_command_line::s_FbxToNwbNormalModeOption.data(),
         normalMode,
         "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals"
     );
-    CLI::Option* scaleOption = app.add_option(__hidden_command_line::s_FbxToNwbScaleOption, options.scale, "Additional uniform scale applied after import");
+    CLI::Option* scaleOption = app.add_option(__hidden_command_line::s_FbxToNwbScaleOption.data(), options.scale, "Additional uniform scale applied after import");
     app.add_option(
-        __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption,
+        __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption.data(),
         options.triangleAreaLengthSquaredEpsilon,
         "Minimum squared triangle cross-product length kept during import"
     );
-    CLI::Option* defaultColorOption = app.add_option(__hidden_command_line::s_FbxToNwbDefaultColorOption, defaultColorText, "Default RGBA color, for example 1,1,1,1");
-    CLI::Option* preserveSpaceOption = app.add_flag(__hidden_command_line::s_FbxToNwbPreserveSpaceFlag, options.preserveSpace, "Keep the FBX source axes and units");
-    CLI::Option* includeHiddenOption = app.add_flag(__hidden_command_line::s_FbxToNwbIncludeHiddenFlag, options.includeHidden, "Include hidden FBX mesh nodes");
-    CLI::Option* localOption = app.add_flag(__hidden_command_line::s_FbxToNwbLocalFlag, local, "Do not bake node transforms into mesh");
-    CLI::Option* ignoreColorsOption = app.add_flag(__hidden_command_line::s_FbxToNwbIgnoreColorsFlag, ignoreColors, "Use the default color instead of FBX vertex colors");
-    CLI::Option* flipWindingOption = app.add_flag(__hidden_command_line::s_FbxToNwbFlipWindingFlag, options.flipWinding, "Swap the second and third index of every triangle");
-    CLI::Option* separateAssetsOption = app.add_flag(__hidden_command_line::s_FbxToNwbSeparateAssetsFlag, options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
-    CLI::Option* refreshNwbOption = app.add_flag(__hidden_command_line::s_FbxToNwbRefreshNwbFlag, options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    CLI::Option* defaultColorOption = app.add_option(__hidden_command_line::s_FbxToNwbDefaultColorOption.data(), defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    CLI::Option* preserveSpaceOption = app.add_flag(__hidden_command_line::s_FbxToNwbPreserveSpaceFlag.data(), options.preserveSpace, "Keep the FBX source axes and units");
+    CLI::Option* includeHiddenOption = app.add_flag(__hidden_command_line::s_FbxToNwbIncludeHiddenFlag.data(), options.includeHidden, "Include hidden FBX mesh nodes");
+    CLI::Option* localOption = app.add_flag(__hidden_command_line::s_FbxToNwbLocalFlag.data(), local, "Do not bake node transforms into mesh");
+    CLI::Option* ignoreColorsOption = app.add_flag(__hidden_command_line::s_FbxToNwbIgnoreColorsFlag.data(), ignoreColors, "Use the default color instead of FBX vertex colors");
+    CLI::Option* flipWindingOption = app.add_flag(__hidden_command_line::s_FbxToNwbFlipWindingFlag.data(), options.flipWinding, "Swap the second and third index of every triangle");
+    CLI::Option* separateAssetsOption = app.add_flag(__hidden_command_line::s_FbxToNwbSeparateAssetsFlag.data(), options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    CLI::Option* refreshNwbOption = app.add_flag(__hidden_command_line::s_FbxToNwbRefreshNwbFlag.data(), options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");

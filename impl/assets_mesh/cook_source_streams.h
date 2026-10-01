@@ -55,27 +55,27 @@ public:
     static bool ParseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const bool includeSkin,
     ScratchVector<MeshVertexRef>& outVertexRefs,
     Core::Alloc::ScratchArena& scratchArena
     );
     static bool ValidateSourceStreamIndex(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const AStringView streamName,
     const u32 index,
     const usize streamCount
     );
     static bool ValidateSourceIndexStream(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const usize vertexRefCount
     );
     static bool ValidateSourceVertexRefs(
     const Path& nwbFilePath,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const bool includeSkin,
     const SourceMeshStreams& streams,
     const usize skinCount
@@ -85,7 +85,7 @@ public:
     static bool ParseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     const bool includeSkin,
     SourceMeshStreams& streams,
     const usize skinCount,

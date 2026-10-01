@@ -75,11 +75,11 @@ void ExpectSameAssignment(const Graphics::GpuTaskQueueAssignment& actual, const 
     EXPECT_EQ(actual.score.ownershipTransfers, expected.score.ownershipTransfers);
 }
 
-void RecordUnsigned(const NotNull<const char*> key, const u64 value){
+void RecordUnsigned(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
@@ -104,7 +104,7 @@ void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
         const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
         ASSERT_TRUE(assigned);
         if(sample != 0u)
-            RecordUnsigned(NotNull<const char*>(s_SampleKeys[sample - 1u].data()), elapsed);
+            RecordUnsigned(s_SampleKeys[sample - 1u], elapsed);
         scratchBytes = scratch.memoryStats().peakUsedBytes;
         for(usize index = 0u; index < taskCount; ++index){
             const auto task = view.taskAt(index).id;
@@ -115,9 +115,9 @@ void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
             ExpectSameAssignment(*actual, *reference);
         }
     }
-    RecordUnsigned(NotNull<const char*>("task_count"), taskCount);
-    RecordUnsigned(NotNull<const char*>("queue_count"), queueCount);
-    RecordUnsigned(NotNull<const char*>("scratch_bytes"), scratchBytes);
+    RecordUnsigned("task_count", taskCount);
+    RecordUnsigned("queue_count", queueCount);
+    RecordUnsigned("scratch_bytes", scratchBytes);
 }
 
 TEST(GpuTaskGraph, UnusedQueueCapabilitiesPreserveSingleRouteDiagnostics){

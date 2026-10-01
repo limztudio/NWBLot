@@ -98,7 +98,7 @@ u32 Skeleton::findJointIndex(const Name jointName)const{
 }
 
 bool Skeleton::validatePayload()const{
-    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Skeleton::validatePayload"))))
+    if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
     if(m_joints.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton has no joints"));
@@ -208,8 +208,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkeletonBinaryPayload::s_SkeletonMagic,
-        MakeNotNull(NWB_TEXT("Skeleton::loadBinary")),
-        MakeNotNull(NWB_TEXT("skeleton"))
+        NWB_TEXT("Skeleton::loadBinary"),
+        NWB_TEXT("skeleton")
     ))
         return false;
 
@@ -219,8 +219,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.jointCount,
         jointBinaries,
-        MakeNotNull(NWB_TEXT("Skeleton::loadBinary")),
-        MakeNotNull(NWB_TEXT("joints"))
+        NWB_TEXT("Skeleton::loadBinary"),
+        NWB_TEXT("joints")
     ))
         return false;
 
@@ -239,7 +239,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     rebuildHierarchy();
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Skeleton::loadBinary")))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
         && validatePayload()
     ;
 }

@@ -377,7 +377,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
 bool CommandList::prepareUploadStaging(
     const usize dataSize,
-    const tchar* operationName,
+    TStringView operationName,
     Buffer*& outStagingBuffer,
     u64& outStagingOffset,
     void*& outCpuVA,
@@ -412,7 +412,7 @@ bool CommandList::prepareUploadStaging(
 bool CommandList::prepareUploadStaging(
     const void* data,
     const usize dataSize,
-    const tchar* operationName,
+    TStringView operationName,
     Buffer*& outStagingBuffer,
     u64& outStagingOffset,
     const u32 alignment

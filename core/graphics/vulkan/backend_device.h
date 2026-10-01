@@ -492,7 +492,7 @@ private:
     void savePipelineCacheData();
     [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
         const BindingLayoutVector& bindingLayouts,
-        const tchar* operationName,
+        TStringView operationName,
         VkPipelineLayout& outPipelineLayout,
         u32& outPushConstantByteSize,
         bool& outOwnsPipelineLayout,
@@ -504,20 +504,20 @@ private:
         const VkMemoryDedicatedRequirements& dedicatedRequirements,
         u64 offset,
         VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
-        const tchar* operationName,
-        const tchar* resourceName,
+        TStringView operationName,
+        TStringView resourceName,
         VulkanDetail::HeapBindingRange& outRange
     )const;
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
-        const tchar* operationName,
+        TStringView operationName,
         PipelineBindingState& outBindings,
         Alloc::ScratchArena& scratchArena
     )const;
     template<typename PipelineT>
     [[nodiscard]] bool configurePipelineBindingsOrDestroy(
         const BindingLayoutVector& bindingLayouts,
-        const tchar* operationName,
+        TStringView operationName,
         PipelineT* pipeline,
         Alloc::ScratchArena& scratchArena
     )const{
@@ -534,7 +534,7 @@ private:
         const VulkanDetail::PipelineStencilFaceMode::Enum stencilFaceMode,
         const VkDynamicState* dynamicStates,
         const u32 dynamicStateCount,
-        const tchar* operationName,
+        TStringView operationName,
         PipelineT* pipeline,
         VulkanDetail::GraphicsPipelineFixedState& outState
     )const{
@@ -554,7 +554,7 @@ private:
     }
     template<typename PipelineT>
     [[nodiscard]] bool createPipelineOrDestroy(
-        const tchar* operationName,
+        TStringView operationName,
         PipelineT* pipeline,
         const VkComputePipelineCreateInfo& pipelineInfo
     )const{
@@ -568,7 +568,7 @@ private:
     }
     template<typename PipelineT>
     [[nodiscard]] bool createPipelineOrDestroy(
-        const tchar* operationName,
+        TStringView operationName,
         PipelineT* pipeline,
         const VkGraphicsPipelineCreateInfo& pipelineInfo
     )const{

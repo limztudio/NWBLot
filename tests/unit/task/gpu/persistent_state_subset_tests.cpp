@@ -728,11 +728,11 @@ TEST(PersistentStateSubset, ReusesSelectionScratchBeforeMergedStateIndicesAcross
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void BenchmarkSubset(
@@ -792,14 +792,14 @@ void BenchmarkSubset(
     ASSERT_EQ(completed, iterations);
     ASSERT_EQ(resultCount, uniqueCount);
     EXPECT_EQ(cache.retainedBufferCount(), uniqueCount);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_source_count"), sourceCount);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_selection_count"), selectionCount);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_unique_count"), uniqueCount);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_heap_allocations"), after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_scratch_peak_bytes"), scratchPeak);
-    RecordUnsignedProperty(MakeNotNull("persistent_subset_scratch_reserved_bytes"), scratchReserved);
+    RecordUnsignedProperty("persistent_subset_ns", elapsed);
+    RecordUnsignedProperty("persistent_subset_iterations", iterations);
+    RecordUnsignedProperty("persistent_subset_source_count", sourceCount);
+    RecordUnsignedProperty("persistent_subset_selection_count", selectionCount);
+    RecordUnsignedProperty("persistent_subset_unique_count", uniqueCount);
+    RecordUnsignedProperty("persistent_subset_heap_allocations", after.allocationCount - before.allocationCount);
+    RecordUnsignedProperty("persistent_subset_scratch_peak_bytes", scratchPeak);
+    RecordUnsignedProperty("persistent_subset_scratch_reserved_bytes", scratchReserved);
 }
 
 // Opt in with --gtest_also_run_disabled_tests and the PersistentStateSubsetBenchmark.* filter.

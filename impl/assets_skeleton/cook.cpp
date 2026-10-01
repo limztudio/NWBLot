@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SkeletonAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
     const Skeleton& skeleton = static_cast<const Skeleton&>(asset);
@@ -61,8 +61,8 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     return Core::Assets::AppendVectorPayload(
         outBinary,
         jointBinaries,
-        MakeNotNull(NWB_TEXT("SkeletonAssetCodec::serialize")),
-        MakeNotNull(NWB_TEXT("joints"))
+        NWB_TEXT("SkeletonAssetCodec::serialize"),
+        NWB_TEXT("joints")
     );
 }
 

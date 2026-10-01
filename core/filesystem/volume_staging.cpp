@@ -96,7 +96,7 @@ namespace FilesystemVolumeStagingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr char s_StagedVolumeTokenPrefix[] = "volume_";
+constexpr AStringView s_StagedVolumeTokenPrefix = "volume_";
 constexpr char s_StagedVolumeKeySeparator = '|';
 constexpr usize s_StagedVolumeHashDigits = sizeof(u64) * 2u;
 
@@ -126,7 +126,7 @@ StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStr
     stageKey += volumeName;
 
     AString<Core::Alloc::ScratchArena> stageToken{scratchArena};
-    stageToken.reserve((sizeof(s_StagedVolumeTokenPrefix) - 1u) + s_StagedVolumeHashDigits);
+    stageToken.reserve(s_StagedVolumeTokenPrefix.size() + s_StagedVolumeHashDigits);
     stageToken += s_StagedVolumeTokenPrefix;
     AppendHexU64<char, Core::Alloc::ScratchArena>(ComputeFnv64Text(AStringView(stageKey)), stageToken);
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);

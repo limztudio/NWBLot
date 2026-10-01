@@ -35,7 +35,7 @@ concept BackendApi = requires(
     bool& presentationAccepted
 ){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
-    { constBackend.getRendererString() }->SameAs<const tchar*>;
+    { constBackend.getRendererString() }->SameAs<TStringView>;
 
     { backend.enumerateAdapters(adapters) }->SameAs<bool>;
     { constBackend.getSelectedAdapterInfo(adapters[0]) }->SameAs<bool>;

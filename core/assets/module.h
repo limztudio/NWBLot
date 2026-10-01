@@ -74,11 +74,11 @@ public:
 
 public:
     // Shared "virtual path is empty" guard used by loadBinary/validatePayload/serialize entry points.
-    [[nodiscard]] bool checkVirtualPath(const NotNull<const tchar*> failureContext)const{
+    [[nodiscard]] bool checkVirtualPath(const TStringView failureContext)const{
         if(virtualPath())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: virtual path is empty"), failureContext.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: virtual path is empty"), failureContext);
         return false;
     }
 
@@ -141,13 +141,13 @@ public:
 public:
     [[nodiscard]] bool checkSerializeAssetType(
         const IAsset& asset,
-        const NotNull<const tchar*> failureContext
+        const TStringView failureContext
     )const{
         if(asset.assetType() == assetType())
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'")
-            , failureContext.get()
+            , failureContext
             , StringConvert(asset.assetType().c_str())
             , StringConvert(assetType().c_str())
         );

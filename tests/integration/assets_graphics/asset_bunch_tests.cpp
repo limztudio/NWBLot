@@ -108,11 +108,11 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     return fixture.document.parse(AStringView(source));
 }
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkDeclarationExpansion(const usize assetCount, const usize iterations){
@@ -179,13 +179,13 @@ static void BenchmarkDeclarationExpansion(const usize assetCount, const usize it
     }
     output.clear();
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    RecordUnsignedProperty(MakeNotNull("bunch_expand_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("bunch_expand_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("bunch_declaration_count"), fixture.document.declarations().size());
-    RecordUnsignedProperty(MakeNotNull("bunch_export_count"), assetCount);
-    RecordUnsignedProperty(MakeNotNull("bunch_reference_count"), assetCount * s_ExpectedDualCount);
-    RecordUnsignedProperty(MakeNotNull("bunch_heap_allocations"), afterHeap.allocationCount - beforeHeap.allocationCount);
-    RecordUnsignedProperty(MakeNotNull("bunch_scratch_reserved_bytes"), fixture.scratchArena.memoryStats().reservedBytes);
+    RecordUnsignedProperty("bunch_expand_ns", elapsed);
+    RecordUnsignedProperty("bunch_expand_iterations", iterations);
+    RecordUnsignedProperty("bunch_declaration_count", fixture.document.declarations().size());
+    RecordUnsignedProperty("bunch_export_count", assetCount);
+    RecordUnsignedProperty("bunch_reference_count", assetCount * s_ExpectedDualCount);
+    RecordUnsignedProperty("bunch_heap_allocations", afterHeap.allocationCount - beforeHeap.allocationCount);
+    RecordUnsignedProperty("bunch_scratch_reserved_bytes", fixture.scratchArena.memoryStats().reservedBytes);
 }
 
 

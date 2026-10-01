@@ -30,18 +30,6 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename CharT>
-inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
-    u64 hash = seed;
-    if(str == nullptr)
-        return hash;
-    for(; *str != CharT{}; ++str){
-        hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(*str)));
-        hash *= s_Fnv64Prime;
-    }
-    return hash;
-}
-
 [[nodiscard]] inline u64 UpdateFnv64(u64 hash, const u8* bytes, const usize byteCount){
     if(bytes == nullptr || byteCount == 0)
         return hash;

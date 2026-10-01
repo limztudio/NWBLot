@@ -39,8 +39,8 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr auto s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
-[[nodiscard]] inline const tchar* MessageTypeToString(Type::Enum type){
+inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
+[[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type){
     switch(type){
     case Type::Info:
         return NWB_TEXT("INFO");
@@ -127,10 +127,10 @@ template<typename PayloadContainer>
     const void* contents,
     const usize totalSize,
     MessageType& outMessage,
-    const tchar*& outError
+    TStringView& outError
 ){
     outMessage = MakeMessageType(arena);
-    outError = nullptr;
+    outError = {};
 
     if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
         outError = NWB_TEXT("Received a truncated message");
@@ -162,14 +162,20 @@ template<typename PayloadContainer>
         return false;
     }
 
-    const auto* msgText = reinterpret_cast<const tchar*>(payload.data() + cursor);
-    const usize msgCharCount = textBytes / sizeof(tchar);
-    if(msgText[msgCharCount - 1u] != 0){
+    tchar terminator = 0;
+    usize terminatorCursor = totalSize - sizeof(tchar);
+    if(!ReadPOD(payload, terminatorCursor, terminator) || terminator != 0){
         outError = NWB_TEXT("Received a non-null-terminated message");
         return false;
     }
 
-    outMessage = MakeTuple(Move(time), type, LogString(msgText, msgCharCount - 1u, arena));
+    // Serialized text can start at an unaligned byte offset; copy into aligned character storage before reading it.
+    LogString message(arena);
+    const usize messageBytes = textBytes - sizeof(tchar);
+    message.resize(messageBytes / sizeof(tchar));
+    if(messageBytes != 0u)
+        NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
+    outMessage = MakeTuple(Move(time), type, Move(message));
     return true;
 }
 
@@ -251,15 +257,15 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const tchar* loggerName>
+template<typename T, const TStringView& loggerName>
 class LoggerWorkerBase{
 protected:
     static inline bool globalInit(){ return true; }
 
 
 public:
-    explicit LoggerWorkerBase(const NotNull<const char*> allocationLog)
-        : m_arena(allocationLog.get())
+    explicit LoggerWorkerBase(const AStringView allocationLog)
+        : m_arena(Name(allocationLog))
         , m_messageQueue(m_arena)
         , m_exit(false)
     {}
@@ -336,7 +342,7 @@ protected:
     Atomic<bool> m_exit;
 };
 
-template<typename T, f32 updateIntervalSeconds, const tchar* loggerName>
+template<typename T, f32 updateIntervalSeconds, const TStringView& loggerName>
 class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
     friend LoggerWorkerBase<T, loggerName>;
 
@@ -370,7 +376,7 @@ private:
 
 
 public:
-    explicit IntervalLoggerWorkerBase(const NotNull<const char*> allocationLog)
+    explicit IntervalLoggerWorkerBase(const AStringView allocationLog)
         : LoggerWorkerBase<T, loggerName>(allocationLog)
         , m_lastUpdateTime(TimerNow())
     {}
@@ -384,10 +390,10 @@ protected:
 private:
     Timer m_lastUpdateTime;
 };
-template<typename T, f32 updateIntervalSeconds, const tchar* loggerName>
+template<typename T, f32 updateIntervalSeconds, const TStringView& loggerName>
 bool IntervalLoggerWorkerBase<T, updateIntervalSeconds, loggerName>::s_GlobalInit = false;
 
-template<typename T, const tchar* loggerName>
+template<typename T, const TStringView& loggerName>
 class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
     friend LoggerWorkerBase<T, loggerName>;
 
@@ -415,7 +421,7 @@ private:
 
 
 public:
-    explicit QueuedLoggerWorkerBase(const NotNull<const char*> allocationLog)
+    explicit QueuedLoggerWorkerBase(const AStringView allocationLog)
         : LoggerWorkerBase<T, loggerName>(allocationLog)
         , m_semaphore(0)
     {}
@@ -433,7 +439,7 @@ protected:
 protected:
     Semaphore<> m_semaphore;
 };
-template<typename T, const tchar* loggerName>
+template<typename T, const TStringView& loggerName>
 bool QueuedLoggerWorkerBase<T, loggerName>::s_GlobalInit = false;
 
 

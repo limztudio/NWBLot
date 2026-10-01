@@ -193,7 +193,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
                 const VkResult faultResult = m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
-                    const char* faultDescription = faultInfo.description;
+                    const AStringView faultDescription(faultInfo.description, NWB_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
                     report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
                     if(vendorBinaryByteSize != 0u){
                         if(!vendorBinary.empty()){
@@ -221,7 +221,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
                     for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                        const char* vendorDescription = vendorInfo.description;
+                        const AStringView vendorDescription(vendorInfo.description, NWB_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
                         report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
                             , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)

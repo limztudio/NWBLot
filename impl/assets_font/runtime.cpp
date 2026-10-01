@@ -45,8 +45,8 @@ bool Font::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         FontBinaryPayload::s_FontMagic,
-        MakeNotNull(NWB_TEXT("Font::loadBinary")),
-        MakeNotNull(NWB_TEXT("font"))
+        NWB_TEXT("Font::loadBinary"),
+        NWB_TEXT("font")
     ))
         return false;
     if(header.version != FontBinaryPayload::s_FontVersion || header.reserved != 0u || header.faceIndex != 0u){
@@ -72,7 +72,7 @@ bool Font::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 bool Font::validatePayload()const{
-    return checkVirtualPath(MakeNotNull(NWB_TEXT("Font::validatePayload"))) && ValidateFontSource(m_fontBytes, m_faceIndex);
+    return checkVirtualPath(NWB_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
 }
 
 void Font::setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex){

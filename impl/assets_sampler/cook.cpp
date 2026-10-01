@@ -164,7 +164,7 @@ static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s
 
 
 bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SamplerAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("SamplerAssetCodec::serialize")))
         return false;
 
     const Sampler& sampler = static_cast<const Sampler&>(asset);

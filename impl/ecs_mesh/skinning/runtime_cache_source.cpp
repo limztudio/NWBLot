@@ -220,7 +220,7 @@ template<typename MeshT, typename SkinStreamT>
         instance.meshletPositionRefDeltas,
         instance.meshletAttributeRefDeltas,
         true,
-        [&](const usize meshletIndex, const tchar* reason){
+        [&](const usize meshletIndex, const TStringView reason){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}")
                 , meshletIndex
                 , reason
@@ -367,8 +367,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
         meshAsset.name(),
         loadedMeshAsset,
-        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
-        MakeNotNull("mesh")
+        NWB_TEXT("MeshSkinningRuntimeCache"),
+        "mesh"
     );
     if(!loadedMesh)
         return false;
@@ -377,8 +377,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Skin* preloadedSkin = m_assetManager.loadTypedSync<Skin>(
         skinAsset.name(),
         loadedSkinAsset,
-        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
-        MakeNotNull("skin")
+        NWB_TEXT("MeshSkinningRuntimeCache"),
+        "skin"
     );
     if(!preloadedSkin)
         return false;

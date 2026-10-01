@@ -283,11 +283,11 @@ template<typename Callback>
     return true;
 }
 
-void RecordUnsigned(const NotNull<const char*> key, const u64 value){
+void RecordUnsigned(const AStringView key, const u64 value){
     char buffer[s_NumberBufferBytes] = {};
     const AStringView text = FormatDecimal(value, buffer);
     buffer[text.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), buffer);
+    testing::Test::RecordProperty(AInteropString(key), buffer);
 }
 
 template<typename Callback>
@@ -341,12 +341,12 @@ void BenchmarkCallbacks(TestArena& testArena, Graphics::Alloc::ScratchArena& scr
                     ? s_IndexedSampleKeys[sample - s_Warmups]
                     : s_ScalarSampleKeys[sample - s_Warmups]
                 ;
-                RecordUnsigned(NotNull<const char*>(key.data()), elapsed);
+                RecordUnsigned(key, elapsed);
             }
         }
     }
-    RecordUnsigned(NotNull<const char*>("callback_count"), callbackCount);
-    RecordUnsigned(NotNull<const char*>("checksum"), expectedChecksum);
+    RecordUnsigned("callback_count", callbackCount);
+    RecordUnsigned("checksum", expectedChecksum);
 }
 
 

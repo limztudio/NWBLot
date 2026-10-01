@@ -195,7 +195,8 @@ namespace FormatKind{
 struct FormatInfo{
     static constexpr usize s_ByteSize = 16u;
 
-    const char* name;
+    // Literal backing and a bounded length preserve the compact format metadata layout.
+    const char* m_name;
     Format::Enum format;
     u8 bytesPerBlock;
     u8 blockSize;
@@ -208,10 +209,12 @@ struct FormatInfo{
     bool hasStencil : 1;
     bool isSigned : 1;
     bool isSRGB : 1;
+    u8 m_nameLength;
 
+    template<usize NameSize>
     constexpr FormatInfo(
         const Format::Enum formatValue,
-        const char* const nameValue,
+        const char (&nameValue)[NameSize],
         const u8 bytesPerBlockValue,
         const u8 blockSizeValue,
         const FormatKind::Enum kindValue,
@@ -224,7 +227,7 @@ struct FormatInfo{
         const bool isSignedValue,
         const bool isSrgbValue
     )
-        : name(nameValue)
+        : m_name(nameValue)
         , format(formatValue)
         , bytesPerBlock(bytesPerBlockValue)
         , blockSize(blockSizeValue)
@@ -237,9 +240,17 @@ struct FormatInfo{
         , hasStencil(hasStencilValue)
         , isSigned(isSignedValue)
         , isSRGB(isSrgbValue)
-    {}
+        , m_nameLength(static_cast<u8>(NameSize - 1u))
+    {
+        static_assert(NameSize - 1u <= Limit<u8>::s_Max, "Format names must fit the compact metadata length");
+    }
+
+    [[nodiscard]] constexpr AStringView getName()const noexcept{ return AStringView(m_name, m_nameLength); }
 };
 static_assert(sizeof(FormatInfo) == FormatInfo::s_ByteSize, "FormatInfo should remain tightly packed");
+static_assert(alignof(FormatInfo) == alignof(void*), "FormatInfo should retain pointer alignment");
+static_assert(IsStandardLayout_V<FormatInfo>, "FormatInfo should retain standard layout");
+static_assert(IsTriviallyCopyable_V<FormatInfo>, "FormatInfo should remain trivially copyable");
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;

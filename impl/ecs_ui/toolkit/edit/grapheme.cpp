@@ -22,7 +22,7 @@ namespace __hidden_ui_grapheme{
 
 
 static bool Decode(const AStringView text, const usize offset, u32& scalar, usize& length){
-    const i32 decoded = DecodeUtf8CodePoint(text.data() + offset, static_cast<i32>(Min<usize>(text.size() - offset, 4u)), scalar);
+    const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
     if(decoded <= 0 || (scalar >= 0xD800u && scalar <= 0xDFFFu))
         return false;
     length = static_cast<usize>(decoded);

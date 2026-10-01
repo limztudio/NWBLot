@@ -173,7 +173,7 @@ bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
         NWB_LOGGER_WARNING(
             NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"),
-            StringConvert(GetFormatInfo(format).name),
+            StringConvert(GetFormatInfo(format).getName()),
             ResultToString(res)
         );
     }

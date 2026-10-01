@@ -256,7 +256,7 @@ public:
         return m_taskGraphOutputLayerContributor;
     }
 
-    [[nodiscard]] const tchar* getRendererString()const;
+    [[nodiscard]] TStringView getRendererString()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
@@ -274,8 +274,8 @@ public:
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
-    [[nodiscard]] NotNull<const tchar*> getWindowTitle()const{ return MakeNotNull(m_windowTitle.c_str()); }
-    void setWindowTitle(NotNull<const tchar*> title);
+    [[nodiscard]] TStringView getWindowTitle()const{ return m_windowTitle; }
+    void setWindowTitle(TStringView title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
     // Valid only while Graphics is preparing, rendering, or presenting one successfully acquired frame. The

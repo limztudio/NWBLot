@@ -49,7 +49,7 @@ static bool ParseTextureDocument(
 static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
         registry,
-        MakeNotNull(NWB_TEXT("texture")),
+        NWB_TEXT("texture"),
         &ParseTextureDocument,
         [](TextureCookEntry& entry, Texture& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildTextureAsset); },
         false

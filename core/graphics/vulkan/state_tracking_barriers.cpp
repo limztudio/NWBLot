@@ -560,7 +560,7 @@ void CommandList::setTextureState(
 ){
     if(!textureResource)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("set texture state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!validateTextureForGpuState(textureResource, stateBits, s_OperationName))

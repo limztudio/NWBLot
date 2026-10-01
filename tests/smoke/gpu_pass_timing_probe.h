@@ -65,7 +65,7 @@ private:
 
 
 public:
-    explicit GpuPassTimingProbe(const tchar* label)
+    explicit GpuPassTimingProbe(TStringView label)
         : m_arena(s_Arena)
         , m_scopes(m_arena)
         , m_label(label)
@@ -191,7 +191,7 @@ private:
 private:
     Core::Alloc::GlobalArena m_arena;
     Vector<ScopeState, Core::Alloc::GlobalArena> m_scopes;
-    const tchar* m_label = NWB_TEXT("Smoke");
+    TStringView m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
     u32 m_intervalFrames = 0u;

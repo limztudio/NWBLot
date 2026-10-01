@@ -14,6 +14,8 @@ target_sources(nwb_global PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh/tangent_frame_rebuild.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/triangle_area.h"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit.h"
+    "${CMAKE_CURRENT_LIST_DIR}/span.h"
+    "${CMAKE_CURRENT_LIST_DIR}/string_view.h"
     "${CMAKE_CURRENT_LIST_DIR}/sha256.h"
     "${CMAKE_CURRENT_LIST_DIR}/termination.h"
     "${CMAKE_CURRENT_LIST_DIR}/terminal_entry.h"

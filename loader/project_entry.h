@@ -131,7 +131,7 @@ public:
 
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
-const tchar* QueryProjectWindowTitle();
+TStringView QueryProjectWindowTitle();
 bool ConfigureProjectRuntime(ProjectStartupContext& context);
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 

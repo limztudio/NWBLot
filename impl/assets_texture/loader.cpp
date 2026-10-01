@@ -231,14 +231,14 @@ bool TextureAssetLoader::Create(
     const Texture& textureAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 ){
-    const NotNull<const tchar*> owner = ownerName;
+    const TStringView owner = ownerName;
     NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
         return true;
     if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner);
         return false;
     }
     // Texture::loadBinary already validated the cooked payload; keep a debug-only invariant here.
@@ -248,7 +248,7 @@ bool TextureAssetLoader::Create(
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap")
-            , owner.get()
+            , owner
             , StringConvert(textureAsset.virtualPath().c_str())
         );
         return false;
@@ -257,7 +257,7 @@ bool TextureAssetLoader::Create(
     Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset);
     if(format == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'")
-            , owner.get()
+            , owner
             , StringConvert(textureAsset.virtualPath().c_str())
         );
         return false;
@@ -318,7 +318,7 @@ bool TextureAssetLoader::Create(
         );
     }
     if(!texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
     }
 
@@ -357,7 +357,7 @@ bool TextureAssetLoader::Create(
             || mip.sliceCount == 0u
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region")
-                , owner.get()
+                , owner
                 , StringConvert(imageName.c_str())
                 , static_cast<u32>(mipIndex)
             );
@@ -391,7 +391,7 @@ bool TextureAssetLoader::Create(
     // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
     const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
     if(!sampledImageHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
     }
     ScopeExit releaseDescriptor([&heap, sampledImageHandle]()noexcept{ heap.free(sampledImageHandle); });
@@ -403,7 +403,7 @@ bool TextureAssetLoader::Create(
         Core::s_AllSubresources,
         textureDimension
     ))){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
     }
 
@@ -418,7 +418,7 @@ bool TextureAssetLoader::Create(
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
     })){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner.get(), StringConvert(imageName.c_str()));
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
     }
 
@@ -436,10 +436,10 @@ bool TextureAssetLoader::Load(
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 ){
-    const NotNull<const tchar*> owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, MakeNotNull(Texture::s_AssetTypeText.data())))
+    const TStringView owner = ownerName;
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, Texture::s_AssetTypeText))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
@@ -449,7 +449,7 @@ bool TextureAssetLoader::Load(
         textureVirtualPath,
         loadedAsset,
         owner,
-        MakeNotNull(Texture::s_AssetTypeText.data())
+        Texture::s_AssetTypeText
     );
     if(!loadedTexture)
         return false;

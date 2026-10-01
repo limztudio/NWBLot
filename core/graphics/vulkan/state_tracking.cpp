@@ -340,7 +340,7 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){
     if(!texture)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
+    constexpr TStringView s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isTextureReadyForCommandQueue(texture)){
@@ -353,7 +353,7 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
 void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
+    constexpr TStringView s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isBufferReadyForCommandQueue(buffer)){
@@ -366,7 +366,7 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
 void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!texture)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("begin tracking texture state");
+    constexpr TStringView s_OperationName = NWB_TEXT("begin tracking texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){

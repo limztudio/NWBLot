@@ -97,7 +97,7 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static const tchar* CsgSkinnedVisibleFpsLabel(){
+[[nodiscard]] static TStringView CsgSkinnedVisibleFpsLabel(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
     return NWB_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
@@ -453,7 +453,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
     return NWB_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)

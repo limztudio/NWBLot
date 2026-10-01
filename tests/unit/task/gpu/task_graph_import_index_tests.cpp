@@ -513,11 +513,11 @@ TEST(TaskGraphImportIndex, LargeResetAndReverseRefillClearTypedAndGenericIdentit
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkImports(const usize count, const usize cycles, const usize lookupPasses){
@@ -642,23 +642,23 @@ static void BenchmarkImports(const usize count, const usize cycles, const usize 
         }
     }
     const ArenaMemoryStats memory = context.graphArena.memoryStats();
-    RecordUnsignedProperty(MakeNotNull("graph_import_count"), count);
-    RecordUnsignedProperty(MakeNotNull("graph_import_cycles"), cycles);
-    RecordUnsignedProperty(MakeNotNull("graph_import_lookup_passes"), lookupPasses);
-    RecordUnsignedProperty(MakeNotNull("graph_import_generic_ns"), genericNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_generic_repeat_ns"), genericRepeatNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_typed_ns"), typedNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_typed_repeat_ns"), typedRepeatNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_sets_ns"), setNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_sets_repeat_ns"), setRepeatNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_lookup_ns"), lookupNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_reset_ns"), resetNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_refill_ns"), refillNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("graph_import_arena_used_bytes"), memory.usedBytes);
-    RecordUnsignedProperty(MakeNotNull("graph_import_arena_peak_bytes"), memory.peakUsedBytes);
-    RecordUnsignedProperty(MakeNotNull("graph_import_arena_reserved_bytes"), memory.reservedBytes);
-    RecordUnsignedProperty(MakeNotNull("graph_import_arena_allocation_count"), memory.allocationCount);
-    RecordUnsignedProperty(MakeNotNull("graph_import_arena_deallocation_count"), memory.deallocationCount);
+    RecordUnsignedProperty("graph_import_count", count);
+    RecordUnsignedProperty("graph_import_cycles", cycles);
+    RecordUnsignedProperty("graph_import_lookup_passes", lookupPasses);
+    RecordUnsignedProperty("graph_import_generic_ns", genericNanoseconds);
+    RecordUnsignedProperty("graph_import_generic_repeat_ns", genericRepeatNanoseconds);
+    RecordUnsignedProperty("graph_import_typed_ns", typedNanoseconds);
+    RecordUnsignedProperty("graph_import_typed_repeat_ns", typedRepeatNanoseconds);
+    RecordUnsignedProperty("graph_import_sets_ns", setNanoseconds);
+    RecordUnsignedProperty("graph_import_sets_repeat_ns", setRepeatNanoseconds);
+    RecordUnsignedProperty("graph_import_lookup_ns", lookupNanoseconds);
+    RecordUnsignedProperty("graph_import_reset_ns", resetNanoseconds);
+    RecordUnsignedProperty("graph_import_refill_ns", refillNanoseconds);
+    RecordUnsignedProperty("graph_import_arena_used_bytes", memory.usedBytes);
+    RecordUnsignedProperty("graph_import_arena_peak_bytes", memory.peakUsedBytes);
+    RecordUnsignedProperty("graph_import_arena_reserved_bytes", memory.reservedBytes);
+    RecordUnsignedProperty("graph_import_arena_allocation_count", memory.allocationCount);
+    RecordUnsignedProperty("graph_import_arena_deallocation_count", memory.deallocationCount);
 }
 
 TEST(TaskGraphImportIndexBenchmark, DISABLED_Resources1){

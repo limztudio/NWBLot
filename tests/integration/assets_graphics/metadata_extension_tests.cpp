@@ -140,11 +140,11 @@ static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 [[nodiscard]] static bool WriteFixtureFile(const NWB::Path& path, const AStringView text){
@@ -229,16 +229,16 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
     const ArenaMemoryStats after = parseArena.memoryStats();
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_GT(liveBytes, 0u);
-    RecordUnsignedProperty(MakeNotNull("metadata_parse_ns"), elapsedNanoseconds);
-    RecordUnsignedProperty(MakeNotNull("metadata_file_count"), files.size());
-    RecordUnsignedProperty(MakeNotNull("metadata_registered_buckets"), registeredBucketCount);
-    RecordUnsignedProperty(MakeNotNull("metadata_parse_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("metadata_parse_allocations"), after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty(MakeNotNull("metadata_parse_reallocations"), after.reallocationCount - before.reallocationCount);
-    RecordUnsignedProperty(MakeNotNull("metadata_parse_deallocations"), after.deallocationCount - before.deallocationCount);
-    RecordUnsignedProperty(MakeNotNull("metadata_retained_live_bytes"), liveBytes);
-    RecordUnsignedProperty(MakeNotNull("metadata_peak_used_bytes"), after.peakUsedBytes);
-    RecordUnsignedProperty(MakeNotNull("metadata_final_used_bytes"), after.usedBytes);
+    RecordUnsignedProperty("metadata_parse_ns", elapsedNanoseconds);
+    RecordUnsignedProperty("metadata_file_count", files.size());
+    RecordUnsignedProperty("metadata_registered_buckets", registeredBucketCount);
+    RecordUnsignedProperty("metadata_parse_iterations", iterations);
+    RecordUnsignedProperty("metadata_parse_allocations", after.allocationCount - before.allocationCount);
+    RecordUnsignedProperty("metadata_parse_reallocations", after.reallocationCount - before.reallocationCount);
+    RecordUnsignedProperty("metadata_parse_deallocations", after.deallocationCount - before.deallocationCount);
+    RecordUnsignedProperty("metadata_retained_live_bytes", liveBytes);
+    RecordUnsignedProperty("metadata_peak_used_bytes", after.peakUsedBytes);
+    RecordUnsignedProperty("metadata_final_used_bytes", after.usedBytes);
 }
 
 

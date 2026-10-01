@@ -29,7 +29,7 @@ bool BuildClusterOperationInputInfo(
     VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
     VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
     VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
-    const tchar* operationName
+    TStringView operationName
 ){
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(params.type){

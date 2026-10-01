@@ -49,7 +49,7 @@ static f32 CausticVector3LengthSquared(const SIMDVector value){
 }
 
 struct CausticRefractCase{
-    const char* name;
+    AStringView name;
     Float3U incident;
     Float3U normal;
     f32 eta;

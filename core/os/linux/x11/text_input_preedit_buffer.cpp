@@ -31,7 +31,7 @@ namespace __hidden_x11_preedit{
             return true;
         }
         u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.data() + position, static_cast<i32>(text.size() - position), codePoint);
+        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
         if(bytes <= 0 || codePoint == 0u || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
             return false;
         position += static_cast<usize>(bytes);
@@ -49,7 +49,7 @@ namespace __hidden_x11_preedit{
     usize position = 0u;
     while(position < text.size()){
         u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.data() + position, static_cast<i32>(text.size() - position), codePoint);
+        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
         if(bytes <= 0 || codePoint == 0u || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
             return false;
         position += static_cast<usize>(bytes);

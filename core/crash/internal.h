@@ -54,14 +54,14 @@ inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 #endif
 
 #if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
+inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
 #else
-inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
+inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
 #endif
 
-inline constexpr tchar s_RequestHandleArgument[] = NWB_TEXT("--request-handle");
-inline constexpr tchar s_AckHandleArgument[] = NWB_TEXT("--ack-handle");
-inline constexpr tchar s_AckEventArgument[] = NWB_TEXT("--ack-event");
+inline constexpr TStringView s_RequestHandleArgument = NWB_TEXT("--request-handle");
+inline constexpr TStringView s_AckHandleArgument = NWB_TEXT("--ack-handle");
+inline constexpr TStringView s_AckEventArgument = NWB_TEXT("--ack-event");
 inline constexpr StringView s_RequestFdArgument = "--request-fd";
 inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
@@ -293,8 +293,8 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const char* PlatformKindName(u32 platform)noexcept;
-[[nodiscard]] const char* ReasonKindName(u32 reasonKind)noexcept;
+[[nodiscard]] StringView PlatformKindName(u32 platform)noexcept;
+[[nodiscard]] StringView ReasonKindName(u32 reasonKind)noexcept;
 
 void SnapshotCrashState(CrashRequest& outRequest, CrashReasonKind::Enum reasonKind, u32 reasonCode)noexcept;
 void SuppressNextPlatformCrashCapture()noexcept;

@@ -45,7 +45,7 @@ using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 
 
 bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Model::validatePayload"))))
+    if(!checkVirtualPath(NWB_TEXT("Model::validatePayload")))
         return false;
     if(m_skeletonObjects.empty() && m_staticMeshObjects.empty() && m_skinnedMeshObjects.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: model has no objects"));
@@ -175,8 +175,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         ModelBinaryPayload::s_ModelMagic,
-        MakeNotNull(NWB_TEXT("Model::loadBinary")),
-        MakeNotNull(NWB_TEXT("model"))
+        NWB_TEXT("Model::loadBinary"),
+        NWB_TEXT("model")
     ))
         return false;
 
@@ -189,8 +189,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skeletonObjectCount,
         skeletonObjectBinaries,
-        MakeNotNull(NWB_TEXT("Model::loadBinary")),
-        MakeNotNull(NWB_TEXT("skeleton objects"))
+        NWB_TEXT("Model::loadBinary"),
+        NWB_TEXT("skeleton objects")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -198,8 +198,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.staticMeshObjectCount,
         staticMeshObjectBinaries,
-        MakeNotNull(NWB_TEXT("Model::loadBinary")),
-        MakeNotNull(NWB_TEXT("static mesh objects"))
+        NWB_TEXT("Model::loadBinary"),
+        NWB_TEXT("static mesh objects")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -207,8 +207,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skinnedMeshObjectCount,
         skinnedMeshObjectBinaries,
-        MakeNotNull(NWB_TEXT("Model::loadBinary")),
-        MakeNotNull(NWB_TEXT("skinned mesh objects"))
+        NWB_TEXT("Model::loadBinary"),
+        NWB_TEXT("skinned mesh objects")
     ))
         return false;
 
@@ -245,7 +245,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         m_skinnedMeshObjects.push_back(object);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Model::loadBinary")))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary"))
         && validatePayload(scratchArena)
     ;
 }

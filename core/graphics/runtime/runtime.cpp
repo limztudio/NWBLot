@@ -394,7 +394,7 @@ bool GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubm
 }
 
 
-const tchar* GraphicsRuntime::getRendererString()const{
+TStringView GraphicsRuntime::getRendererString()const{
     return m_backend->getRendererString();
 }
 
@@ -412,11 +412,11 @@ void GraphicsRuntime::getDPIScaleInfo(f32& x, f32& y)const{
     y = m_dpiScaleFactorY;
 }
 
-void GraphicsRuntime::setWindowTitle(NotNull<const tchar*> title){
-    if(m_windowTitle == title.get())
+void GraphicsRuntime::setWindowTitle(const TStringView title){
+    if(m_windowTitle == title)
         return;
 
-    m_windowTitle = title.get();
+    m_windowTitle = title;
 }
 
 void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData){

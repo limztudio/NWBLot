@@ -533,7 +533,8 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
         testArena,
         outputDirectory,
         Name("project/textures/checker"),
-        loadedAsset
+        loadedAsset,
+        1u
     ));
     ASSERT_NE(loadedAsset.get(), nullptr);
 
@@ -575,7 +576,8 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
         testArena,
         outputDirectory,
         Name("project/textures/bright"),
-        loadedAsset
+        loadedAsset,
+        1u
     ));
     ASSERT_NE(loadedAsset.get(), nullptr);
 
@@ -630,7 +632,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
         outputDirectory,
         Name("project/textures/sky"),
         cubeAsset,
-        3u
+        s_ExpectedDualCount
     ));
     ASSERT_NE(cubeAsset.get(), nullptr);
     const NWB::Impl::Texture& cube = static_cast<const NWB::Impl::Texture&>(*cubeAsset);
@@ -645,7 +647,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
         outputDirectory,
         Name("project/textures/fog"),
         volumeAsset,
-        3u
+        s_ExpectedDualCount
     ));
     ASSERT_NE(volumeAsset.get(), nullptr);
     const NWB::Impl::Texture& volume = static_cast<const NWB::Impl::Texture&>(*volumeAsset);

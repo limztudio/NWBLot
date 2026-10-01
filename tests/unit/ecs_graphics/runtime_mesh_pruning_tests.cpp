@@ -611,11 +611,11 @@ TEST(RuntimeMeshPruning, MembershipStopsAtItsLastRequestedIdentityWithoutRetaini
     EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
 }
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkPruning(const usize bindingCount, const usize cachedCount, const usize iterations, const bool shared){
@@ -652,14 +652,14 @@ static void BenchmarkPruning(const usize bindingCount, const usize cachedCount, 
     }
     EXPECT_EQ(retainedCount, cachedCount * iterations);
     EXPECT_TRUE(context.retired.empty());
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_binding_count"), bindingCount);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_cached_count"), cachedCount);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_resolve_count"), context.firstProvider.m_resolveCalls + context.secondProvider.m_resolveCalls);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_identity_count"), context.firstProvider.m_identityCalls + context.secondProvider.m_identityCalls);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_scratch_peak_bytes"), scratchPeak);
-    RecordUnsignedProperty(MakeNotNull("runtime_prune_scratch_reserved_bytes"), scratchReserved);
+    RecordUnsignedProperty("runtime_prune_ns", elapsed);
+    RecordUnsignedProperty("runtime_prune_iterations", iterations);
+    RecordUnsignedProperty("runtime_prune_binding_count", bindingCount);
+    RecordUnsignedProperty("runtime_prune_cached_count", cachedCount);
+    RecordUnsignedProperty("runtime_prune_resolve_count", context.firstProvider.m_resolveCalls + context.secondProvider.m_resolveCalls);
+    RecordUnsignedProperty("runtime_prune_identity_count", context.firstProvider.m_identityCalls + context.secondProvider.m_identityCalls);
+    RecordUnsignedProperty("runtime_prune_scratch_peak_bytes", scratchPeak);
+    RecordUnsignedProperty("runtime_prune_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(RuntimeMeshPruningBenchmark, DISABLED_SingleLiveBinding){

@@ -19,8 +19,8 @@ namespace __hidden_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr auto s_LoggerAppName = NWB_TEXT("fbx_to_nwb");
-inline constexpr auto s_LoggerInitFailureText = NWB_TEXT("[fbx_to_nwb] logger.init() failed");
+inline constexpr TStringView s_LoggerAppName = NWB_TEXT("fbx_to_nwb");
+inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[fbx_to_nwb] logger.init() failed");
 inline constexpr int s_FbxToNwbEntryFailure = -1;
 inline constexpr u32 s_MinParallelCoreCount = 1u;
 inline constexpr u32 s_NoWorkerThreads = 0u;

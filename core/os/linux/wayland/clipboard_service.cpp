@@ -142,7 +142,7 @@ void WaylandClipboardService::startNativeRequest(
         return;
     }
     Offer* const offer = m_selected[channel == ClipboardChannel::Clipboard ? 0u : 1u];
-    if(!m_focused || !offer || !offer->mime){
+    if(!m_focused || !offer || offer->mime.empty()){
         if(!completeNativeRequest(token, ClipboardStatus::Unavailable))
             NWB_FATAL_ASSERT(false);
         return;
@@ -158,10 +158,10 @@ void WaylandClipboardService::startNativeRequest(
     m_received.clear();
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(channel == ClipboardChannel::PrimarySelection)
-        zwp_primary_selection_offer_v1_receive(static_cast<zwp_primary_selection_offer_v1*>(offer->handle), offer->mime, writeFd);
+        zwp_primary_selection_offer_v1_receive(static_cast<zwp_primary_selection_offer_v1*>(offer->handle), offer->mime.data(), writeFd);
     else
 #endif
-        wl_data_offer_receive(static_cast<wl_data_offer*>(offer->handle), offer->mime, writeFd);
+        wl_data_offer_receive(static_cast<wl_data_offer*>(offer->handle), offer->mime.data(), writeFd);
     CloseClipboardPipe(writeFd);
     if(wl_display_flush(&m_display) < 0 && errno != EAGAIN)
         finishRead(ClipboardStatus::NativeFailure);

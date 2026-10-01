@@ -38,16 +38,16 @@ namespace __hidden_material_upload{
 
 
 struct UploadIdentities{
-    const char* instanceIdentity;
-    const char* instanceLabel;
-    const char* typedIdentity;
-    const char* typedLabel;
-    const char* receiverIdentity;
-    const char* receiverLabel;
-    const char* cutterIdentity;
-    const char* cutterLabel;
-    const char* clipIdentity;
-    const char* clipLabel;
+    AStringView instanceIdentity;
+    AStringView instanceLabel;
+    AStringView typedIdentity;
+    AStringView typedLabel;
+    AStringView receiverIdentity;
+    AStringView receiverLabel;
+    AStringView cutterIdentity;
+    AStringView cutterLabel;
+    AStringView clipIdentity;
+    AStringView clipLabel;
 };
 
 

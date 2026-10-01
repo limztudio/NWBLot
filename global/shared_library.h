@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "type.h"
+#include "basic_string.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -27,16 +27,18 @@ public:
 
 
 public:
-    [[nodiscard]] bool open(const tchar* name){
+    template<typename ArenaT>
+    [[nodiscard]] bool open(ArenaT& arena, const TStringView name){
         if(m_handle)
             return true;
-        if(!name)
+        if(name.empty() || name.find(tchar{}) != TStringView::npos)
             return false;
 
+        const TString<ArenaT> nativeName(name, arena);
 #if defined(NWB_PLATFORM_WINDOWS)
-        m_handle = ::LoadLibrary(name);
+        m_handle = ::LoadLibrary(nativeName.c_str());
 #else
-        m_handle = ::dlopen(name, RTLD_NOW | RTLD_LOCAL);
+        m_handle = ::dlopen(nativeName.c_str(), RTLD_NOW | RTLD_LOCAL);
 #endif
         return m_handle != nullptr;
     }
@@ -55,22 +57,24 @@ public:
         m_handle = nullptr;
     }
 
-    template<typename Fn>
-    [[nodiscard]] bool resolve(const char* symbolName, Fn& outFn){
-        outFn = reinterpret_cast<Fn>(resolveRaw(symbolName));
+    template<typename ArenaT, typename Fn>
+    [[nodiscard]] bool resolve(ArenaT& arena, const AStringView symbolName, Fn& outFn){
+        outFn = reinterpret_cast<Fn>(resolveRaw(arena, symbolName));
         return outFn != nullptr;
     }
 
 
 private:
-    [[nodiscard]] void* resolveRaw(const char* symbolName)const{
-        if(!m_handle || !symbolName)
+    template<typename ArenaT>
+    [[nodiscard]] void* resolveRaw(ArenaT& arena, const AStringView symbolName)const{
+        if(!m_handle || symbolName.empty() || symbolName.find(char{}) != AStringView::npos)
             return nullptr;
 
+        const AString<ArenaT> nativeSymbolName(symbolName, arena);
 #if defined(NWB_PLATFORM_WINDOWS)
-        return reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(m_handle), symbolName));
+        return reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(m_handle), nativeSymbolName.c_str()));
 #else
-        return ::dlsym(m_handle, symbolName);
+        return ::dlsym(m_handle, nativeSymbolName.c_str());
 #endif
     }
 

@@ -38,8 +38,8 @@ struct SymbolRecordView{
 
 inline constexpr char s_NamesymRecordSeparator = '\t';
 inline constexpr char s_NamesymRecordTerminator = '\n';
-inline constexpr char s_NamesymProducerSuffix[] = "\tproducer=runtime\n";
-inline constexpr char s_NamesymRuntimeSource[] = "\truntime\t";
+inline constexpr AStringView s_NamesymProducerSuffix = "\tproducer=runtime\n";
+inline constexpr AStringView s_NamesymRuntimeSource = "\truntime\t";
 
 void AppendDebugHashText(SymbolString& outText, const NameHash& hash){
     char hashText[NameSymbols::s_DebugHashTextLength + 1u] = {};

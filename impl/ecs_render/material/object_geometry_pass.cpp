@@ -75,14 +75,14 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(
             NWB_MESH_OBJECT_VERTEX_TANGENT_BYTE_OFFSET, NWB_MESH_OBJECT_VERTEX_UV0_BYTE_OFFSET,
             NWB_MESH_OBJECT_VERTEX_COLOR_BYTE_OFFSET,
         };
-        const char* const names[] = { "POSITION", "NORMAL", "TANGENT", "TEXCOORD", "COLOR" };
+        constexpr AStringView names[] = { "POSITION", "NORMAL", "TANGENT", "TEXCOORD", "COLOR" };
         for(u32 index = 0u; index < LengthOf(attributes); ++index){
             attributes[index]
                 .setFormat(formats[index])
                 .setBufferIndex(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
                 .setOffset(offsets[index])
                 .setElementStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE)
-                .setName(names[index])
+                .setName(Name(names[index]))
             ;
         }
         m_materialState.m_objectGeometryInputLayout = device.createInputLayout(

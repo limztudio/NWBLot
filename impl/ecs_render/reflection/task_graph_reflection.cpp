@@ -37,7 +37,7 @@ namespace __hidden_reflection_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar s_DisabledReflectionRoute[] = NWB_TEXT("disabled");
+inline constexpr TStringView s_DisabledReflectionRoute = NWB_TEXT("disabled");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,7 +237,7 @@ struct DispatchTask{
             if(payload.fallbackDispatchLogged && !*payload.fallbackDispatchLogged){
                 const u32 mode = payload.resources.parameters.traceMode;
                 const bool screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
-                const tchar* route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
+                TStringView route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
                 if(mode == NWB_REFLECTION_MODE_DISABLED)
                     route = s_DisabledReflectionRoute;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: {}"), route);

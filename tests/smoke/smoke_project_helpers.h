@@ -34,7 +34,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 
 [[nodiscard]] inline NotNullUniquePtr<Core::ECS::World> CreateSmokeWorldOrDie(
     ProjectRuntimeContext& context,
-    const tchar* const projectName
+    const TStringView projectName
 ){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
@@ -68,7 +68,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
     return activeCamera.camera;
 }
 
-[[nodiscard]] inline f32 ReadSmokeFrozenYawFromEnvironment(const char* const variableName){
+[[nodiscard]] inline f32 ReadSmokeFrozenYawFromEnvironment(const AStringView variableName){
     f32 parsed = -1.0f;
     return ReadSmokeEnvironmentF32(variableName, parsed) ? parsed : -1.0f;
 }
@@ -173,14 +173,14 @@ inline void SetSmokeYawWindowTitle(
     NWB_TSPRINTF(
         title,
         s_TitleCapacity,
-        NWB_TEXT("%s  |  yaw %.4f rad (%.2f deg)%s"),
-        QueryProjectWindowTitle(),
+        NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
+        static_cast<i32>(QueryProjectWindowTitle().size()),
+        QueryProjectWindowTitle().data(),
         display.wrappedRadians,
         display.degrees,
         manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
     );
-    const tchar* titlePtr = title;
-    context.graphics.setWindowTitle(MakeNotNull(titlePtr));
+    context.graphics.setWindowTitle(TStringView(title));
 }
 
 

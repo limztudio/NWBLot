@@ -28,14 +28,14 @@ NWB_VULKAN_BEGIN
 
 
 // Command operation labels shared by command-list recording paths.
-inline constexpr tchar s_CloseCommandListOperation[] = NWB_TEXT("close command list");
-inline constexpr tchar s_OwnershipReleaseBarriersOperation[] = NWB_TEXT("append ownership-release barriers");
-inline constexpr tchar s_DispatchRaysOperation[] = NWB_TEXT("dispatch rays");
-inline constexpr tchar s_CopyBufferOperation[] = NWB_TEXT("copy buffer");
-inline constexpr tchar s_ClearTextureBoxOperation[] = NWB_TEXT("clear texture box");
-inline constexpr tchar s_ReleaseTextureOwnershipOperation[] = NWB_TEXT("release texture ownership");
-inline constexpr tchar s_SetPushConstantsOperation[] = NWB_TEXT("set push constants");
-inline constexpr tchar s_DirectCommandIrCopyBufferOperation[] = NWB_TEXT("direct command-IR copy buffer");
+inline constexpr TStringView s_CloseCommandListOperation = NWB_TEXT("close command list");
+inline constexpr TStringView s_OwnershipReleaseBarriersOperation = NWB_TEXT("append ownership-release barriers");
+inline constexpr TStringView s_DispatchRaysOperation = NWB_TEXT("dispatch rays");
+inline constexpr TStringView s_CopyBufferOperation = NWB_TEXT("copy buffer");
+inline constexpr TStringView s_ClearTextureBoxOperation = NWB_TEXT("clear texture box");
+inline constexpr TStringView s_ReleaseTextureOwnershipOperation = NWB_TEXT("release texture ownership");
+inline constexpr TStringView s_SetPushConstantsOperation = NWB_TEXT("set push constants");
+inline constexpr TStringView s_DirectCommandIrCopyBufferOperation = NWB_TEXT("direct command-IR copy buffer");
 
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
@@ -388,36 +388,36 @@ private:
         CommandQueue::Enum executionQueueClass,
         bool graphSubmissionAuthorized
     )const noexcept;
-    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName);
+    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
     [[nodiscard]] bool validateRenderPassBegin(
         Framebuffer& framebuffer,
         const RenderPassParameters& params,
-        const tchar* operationName
+        TStringView operationName
     );
-    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName);
+    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, TStringView operationName);
     [[nodiscard]] bool validateViewportState(
         const ViewportState& viewport,
-        const tchar* operationName
+        TStringView operationName
     );
     [[nodiscard]] bool validateTextureForGpuState(
         Texture* texture,
         ResourceStates::Mask requiredState,
-        const tchar* operationName,
+        TStringView operationName,
         VkImageUsageFlags requiredUsage = 0u
     );
     [[nodiscard]] bool validateBufferForGpuState(
         Buffer* buffer,
         ResourceStates::Mask requiredState,
-        const tchar* operationName,
+        TStringView operationName,
         VkBufferUsageFlags explicitRequiredUsage = 0u
     );
     [[nodiscard]] bool validateGraphicsState(const GraphicsState& state);
     [[nodiscard]] bool validateMeshletState(const MeshletState& state);
-    [[nodiscard]] bool validateGraphicsDrawState(const tchar* operationName, bool indexed);
+    [[nodiscard]] bool validateGraphicsDrawState(TStringView operationName, bool indexed);
     [[nodiscard]] bool validateGraphicsDrawArguments(
         const DrawArguments& arguments,
         bool indexed,
-        const tchar* operationName
+        TStringView operationName
     );
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
     [[nodiscard]] bool isTextureAdmittedToCommandQueue(const Texture& texture)const noexcept;
@@ -462,7 +462,7 @@ private:
         VkPipelineBindPoint bindPoint,
         const PipelineBindingState& pipelineBindings,
         GpuDescriptorHandle accelStructHandle,
-        const tchar* operationName
+        TStringView operationName
     );
     void ensureDescriptorBuffersBound(
         DescriptorBufferManager& manager,
@@ -475,10 +475,10 @@ private:
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
-    [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName);
-    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName);
-    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName);
-    void rejectCommandRecording(const tchar* operationName, const tchar* reason);
+    [[nodiscard]] bool validateCommandRecordingScope(TStringView operationName);
+    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
+    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);
+    void rejectCommandRecording(TStringView operationName, TStringView reason);
     void invalidateCommandRecording()noexcept;
     void discardInvalidCommandBuffer();
     [[nodiscard]] bool validateIndirectBuffer(
@@ -486,27 +486,27 @@ private:
         u64 offsetBytes,
         u64 commandSizeBytes,
         u32 commandCount,
-        const tchar* commandName
+        TStringView commandName
     );
     [[nodiscard]] bool prepareDrawIndirect(
         u32 offsetBytes,
         u32 drawCount,
         u64 commandSizeBytes,
-        const tchar* operationLabel,
-        const tchar* commandName,
+        TStringView operationLabel,
+        TStringView commandName,
         VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
         Buffer*& outIndirectBuffer
     );
-    void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
+    void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, TStringView valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     [[nodiscard]] bool validateStagingTextureCopyResources(
         StagingTexture& stagingTexture,
         Texture& texture,
         CpuAccessMode::Enum requiredCpuAccess,
         VkImageUsageFlags requiredImageUsage,
-        const tchar* operationName
+        TStringView operationName
     );
     bool prepareStagingTextureCopy(
         StagingTexture& stagingResource,
@@ -517,7 +517,7 @@ private:
     )const;
     bool prepareUploadStaging(
         usize dataSize,
-        const tchar* operationName,
+        TStringView operationName,
         Buffer*& outStagingBuffer,
         u64& outStagingOffset,
         void*& outCpuVA,
@@ -526,7 +526,7 @@ private:
     bool prepareUploadStaging(
         const void* data,
         usize dataSize,
-        const tchar* operationName,
+        TStringView operationName,
         Buffer*& outStagingBuffer,
         u64& outStagingOffset,
         u32 alignment = s_DefaultUploadSuballocationAlignment
@@ -535,7 +535,7 @@ private:
         u64 buildScratchSize,
         u64 scratchAlignment,
         VkDeviceAddress& outScratchAddress,
-        const tchar* operationName
+        TStringView operationName
     );
     [[nodiscard]] bool validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
@@ -544,7 +544,7 @@ private:
         const AccelStructGeometryBuildSignature* geometrySignatures,
         usize geometrySignatureCount,
         bool performUpdate,
-        const tchar* operationName,
+        TStringView operationName,
         bool& outHasPriorBuild
     );
     bool buildTopLevelAccelStructFromInstanceData(
@@ -553,7 +553,7 @@ private:
         usize numInstances,
         RayTracingAccelStructBuildFlags::Mask buildFlags,
         VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
-        const tchar* operationName
+        TStringView operationName
     );
     [[nodiscard]] CommandMarkerRecordingToken beginMarkerLease(const AStringView name);
     [[nodiscard]] bool endMarkerLease(const CommandMarkerRecordingToken& token);

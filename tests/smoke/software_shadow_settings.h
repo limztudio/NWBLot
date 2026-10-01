@@ -68,7 +68,7 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
-    struct ResolutionOverride{ const char* name; u32* destination; };
+    struct ResolutionOverride{ AStringView name; u32* destination; };
     const ResolutionOverride overrides[] = {
         { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", &settings.directionalResolution },
         { "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION", &settings.pointResolution },
@@ -77,13 +77,13 @@ namespace NWB::Tests::Smoke{
         if(!ReadSmokeEnvironmentText(setting.name, value))
             continue;
         u64 parsed = 0u;
-        if(!ParseU64FromChars(value.data(), value.data() + value.size(), parsed) || parsed > Limit<u32>::s_Max)
+        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max)
             return false;
         *setting.destination = static_cast<u32>(parsed);
     }
     if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BUDGET_MIB", value)){
         u64 parsed = 0u;
-        if(!ParseU64FromChars(value.data(), value.data() + value.size(), parsed) || parsed > Limit<u32>::s_Max / (1024u * 1024u))
+        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max / (1024u * 1024u))
             return false;
         settings.memoryBudgetBytes = parsed * 1024u * 1024u;
     }

@@ -18,8 +18,8 @@ namespace __hidden_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr auto s_LoggerAppName = NWB_TEXT("tex_conv");
-inline constexpr auto s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logger.init() failed");
+inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv");
+inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logger.init() failed");
 inline constexpr int s_TexConvEntryFailure = -1;
 
 

@@ -27,22 +27,22 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr char s_LinuxUnknownSymbolText[] = "??";
-inline constexpr char s_LinuxUnknownLocationPrefix[] = "??:";
-inline constexpr char s_LinuxSymbolFrameSeparator[] = " <- ";
-inline constexpr char s_LinuxSymbolLocationSeparator[] = " at ";
-inline constexpr char s_LinuxSymbolLocationBarePrefix[] = "at ";
-inline constexpr char s_LlvmSymbolizerTool[] = "llvm-symbolizer";
-inline constexpr char s_Addr2LineTool[] = "addr2line";
-inline constexpr char s_LlvmSymbolizerObjectPrefix[] = "--obj=";
-inline constexpr char s_LlvmSymbolizerDemangleFlag[] = "--demangle";
-inline constexpr char s_LlvmSymbolizerFunctionsFlag[] = "--functions";
-inline constexpr char s_LlvmSymbolizerInliningFlag[] = "--inlining=true";
-inline constexpr char s_Addr2LineFunctionsFlag[] = "-f";
-inline constexpr char s_Addr2LineDemangleFlag[] = "-C";
-inline constexpr char s_Addr2LineInlineFlag[] = "-i";
-inline constexpr char s_Addr2LineExeFlag[] = "-e";
-inline constexpr char s_AnonymousModulePath[] = "<anonymous>";
+inline constexpr AStringView s_LinuxUnknownSymbolText = "??";
+inline constexpr AStringView s_LinuxUnknownLocationPrefix = "??:";
+inline constexpr AStringView s_LinuxSymbolFrameSeparator = " <- ";
+inline constexpr AStringView s_LinuxSymbolLocationSeparator = " at ";
+inline constexpr AStringView s_LinuxSymbolLocationBarePrefix = "at ";
+inline constexpr AStringView s_LlvmSymbolizerTool = "llvm-symbolizer";
+inline constexpr AStringView s_Addr2LineTool = "addr2line";
+inline constexpr AStringView s_LlvmSymbolizerObjectPrefix = "--obj=";
+inline constexpr AStringView s_LlvmSymbolizerDemangleFlag = "--demangle";
+inline constexpr AStringView s_LlvmSymbolizerFunctionsFlag = "--functions";
+inline constexpr AStringView s_LlvmSymbolizerInliningFlag = "--inlining=true";
+inline constexpr AStringView s_Addr2LineFunctionsFlag = "-f";
+inline constexpr AStringView s_Addr2LineDemangleFlag = "-C";
+inline constexpr AStringView s_Addr2LineInlineFlag = "-i";
+inline constexpr AStringView s_Addr2LineExeFlag = "-e";
+inline constexpr AStringView s_AnonymousModulePath = "<anonymous>";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,11 +140,11 @@ struct LinuxSymbolFileCache{
 
 [[nodiscard]] static bool RunLinuxSymbolizerCommand(
     LogArena& arena,
-    const char* const* argv,
+    const Span<const AStringView> arguments,
     CrashReportText& outSymbol
 ){
     CrashReportText output{arena};
-    if(!CaptureProcessOutput(output, argv))
+    if(!CaptureProcessOutput(arena, output, arguments))
         return false;
 
     return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
@@ -165,34 +165,32 @@ struct LinuxSymbolFileCache{
         objectArgument += s_LlvmSymbolizerObjectPrefix;
         objectArgument.append(modulePathText.data(), modulePathText.size());
 
-        const char* const argv[] = {
+        const AStringView arguments[] = {
             s_LlvmSymbolizerTool,
             s_LlvmSymbolizerDemangleFlag,
             s_LlvmSymbolizerFunctionsFlag,
             s_LlvmSymbolizerInliningFlag,
-            objectArgument.c_str(),
-            addressArgument.c_str(),
-            nullptr
+            AStringView(objectArgument),
+            AStringView(addressArgument),
         };
 
-        return RunLinuxSymbolizerCommand(arena, argv, outSymbol);
+        return RunLinuxSymbolizerCommand(arena, arguments, outSymbol);
     }
 
     CrashReportText modulePathArgument{arena};
     modulePathArgument.append(modulePathText.data(), modulePathText.size());
 
-    const char* const argv[] = {
+    const AStringView arguments[] = {
         s_Addr2LineTool,
         s_Addr2LineFunctionsFlag,
         s_Addr2LineDemangleFlag,
         s_Addr2LineInlineFlag,
         s_Addr2LineExeFlag,
-        modulePathArgument.c_str(),
-        addressArgument.c_str(),
-        nullptr
+        AStringView(modulePathArgument),
+        AStringView(addressArgument),
     };
 
-    return RunLinuxSymbolizerCommand(arena, argv, outSymbol);
+    return RunLinuxSymbolizerCommand(arena, arguments, outSymbol);
 }
 
 [[nodiscard]] static bool FindLinuxSymbolFile(

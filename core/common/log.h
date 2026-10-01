@@ -100,14 +100,14 @@ inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
 
-[[nodiscard]] inline const char* DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
+[[nodiscard]] inline StringView DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
     switch(type){
     case LogType::Assert:
-        return DiagnosticEventName::s_Assert.data();
+        return DiagnosticEventName::s_Assert;
     case LogType::Error:
-        return DiagnosticEventName::s_Error.data();
+        return DiagnosticEventName::s_Error;
     case LogType::Fatal:
-        return DiagnosticEventName::s_Fatal.data();
+        return DiagnosticEventName::s_Fatal;
     default:
         return "";
     }
@@ -119,17 +119,19 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, LogString&
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const LogString& message){
     logger.enqueue(message, type);
 }
-inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const char* message){
-    logger.enqueue(StringConvert(logger.arena(), AStringView(message)), type);
-}
-inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const wchar* message){
-    logger.enqueue(StringConvert(logger.arena(), WStringView(message)), type);
-}
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const AStringView message){
     logger.enqueue(StringConvert(logger.arena(), message), type);
 }
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const WStringView message){
     logger.enqueue(StringConvert(logger.arena(), message), type);
+}
+template<typename In>
+    requires((IsPointer_V<In> || IsArray_V<In>) && (BasicStringDetail::CanMakeCharView<In> || BasicStringDetail::CanMakeWCharView<In>))
+inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const In& message){
+    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+        EnqueueMessage(logger, type, AStringView(message));
+    else
+        EnqueueMessage(logger, type, WStringView(message));
 }
 template<typename ArenaT>
 inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, const TString<ArenaT>& message){
@@ -151,8 +153,8 @@ inline void EnqueueMessage(ILogger& logger, const LogType::Enum type, WFormatStr
 inline void EnqueuePreparedMessageAndCapture(
     ILogger& logger,
     const LogType::Enum type,
-    const char* diagnosticCategory,
-    const char* file,
+    const StringView diagnosticCategory,
+    const StringView file,
     const u32 line,
     LogString&& message
 ){
@@ -170,8 +172,8 @@ inline void EnqueuePreparedMessageAndCapture(
 inline void EnqueuePreparedMessageAndCapture(
     ILogger& logger,
     const LogType::Enum type,
-    const char* diagnosticCategory,
-    const char* file,
+    const StringView diagnosticCategory,
+    const StringView file,
     const u32 line,
     const LogString& message
 ){
@@ -188,8 +190,8 @@ inline void EnqueuePreparedMessageAndCapture(
 
 inline void CaptureMessageDiagnostic(
     const LogType::Enum type,
-    const char* diagnosticCategory,
-    const char* file,
+    const StringView diagnosticCategory,
+    const StringView file,
     const u32 line,
     const DiagnosticEventText& diagnosticMessage
 ){
@@ -212,45 +214,45 @@ template<typename In>
     return output;
 }
 
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, LogString&& message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, LogString&& message){
     EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, Move(message));
 }
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const LogString& message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const LogString& message){
     EnqueuePreparedMessageAndCapture(logger, type, diagnosticCategory, file, line, message);
 }
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const char* message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const AStringView message){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
     EnqueueMessage(logger, type, message);
 }
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const wchar* message){
-    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
-    EnqueueMessage(logger, type, message);
-}
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const AStringView message){
-    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
-    EnqueueMessage(logger, type, message);
-}
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const WStringView message){
-    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
-    EnqueueMessage(logger, type, message);
-}
-template<typename ArenaT>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const TString<ArenaT>& message){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const WStringView message){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
     EnqueueMessage(logger, type, message);
 }
 template<typename In>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, const BasicStringDetail::StringConvertArg<In>& message){
+    requires((IsPointer_V<In> || IsArray_V<In>) && (BasicStringDetail::CanMakeCharView<In> || BasicStringDetail::CanMakeWCharView<In>))
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const In& message){
+    if constexpr(BasicStringDetail::CanMakeCharView<In>)
+        EnqueueMessageAndCapture(logger, type, diagnosticCategory, file, line, AStringView(message));
+    else
+        EnqueueMessageAndCapture(logger, type, diagnosticCategory, file, line, WStringView(message));
+}
+template<typename ArenaT>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const TString<ArenaT>& message){
+    CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText(message));
+    EnqueueMessage(logger, type, message);
+}
+template<typename In>
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, const BasicStringDetail::StringConvertArg<In>& message){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeConvertedDiagnosticEventText(message));
     EnqueueMessage(logger, type, message);
 }
 template<typename... ARGS>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, AFormatString<ARGS...> fmt, ARGS&&... args){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, AFormatString<ARGS...> fmt, ARGS&&... args){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText<ARGS...>(fmt, Forward<ARGS>(args)...));
     EnqueueMessage(logger, type, fmt, Forward<ARGS>(args)...);
 }
 template<typename... ARGS>
-inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const char* diagnosticCategory, const char* file, const u32 line, WFormatString<ARGS...> fmt, ARGS&&... args){
+inline void EnqueueMessageAndCapture(ILogger& logger, const LogType::Enum type, const StringView diagnosticCategory, const StringView file, const u32 line, WFormatString<ARGS...> fmt, ARGS&&... args){
     CaptureMessageDiagnostic(type, diagnosticCategory, file, line, MakeDiagnosticEventText<ARGS...>(fmt, Forward<ARGS>(args)...));
     EnqueueMessage(logger, type, fmt, Forward<ARGS>(args)...);
 }
@@ -307,7 +309,7 @@ NWB_COMMON_END
         [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                          \
             sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
     }while(false)
-#define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type.data()
+#define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \

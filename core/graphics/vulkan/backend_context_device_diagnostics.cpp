@@ -97,8 +97,8 @@ void BackendContext::logVulkanDeviceConfiguration(
     const usize sameClassComputeQueueCount = sameClassQueueCount(CommandQueue::Compute);
     const usize sameClassTransferQueueCount = sameClassQueueCount(CommandQueue::Transfer);
 
-    const char* const sameClassGraphicsQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? VulkanDetail::s_DisabledQueueReason.data()
+    const AStringView sameClassGraphicsQueueReason = !m_deviceParams.enableSameClassMultiQueue
+        ? VulkanDetail::s_DisabledQueueReason
         : m_sameClassGraphicsQueueEnabled
             ? m_secondaryGraphicsQueueFamily != m_graphicsQueueFamily
                 ? "cross-family and/or primary-family Graphics queues selected"
@@ -129,8 +129,8 @@ void BackendContext::logVulkanDeviceConfiguration(
     ;
     m_asyncComputeLaneEnabled = m_deviceParams.enableAsyncComputeLane && m_computeQueueEnabled;
     const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
-    const char* const asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
-        ? VulkanDetail::s_DisabledQueueReason.data()
+    const AStringView asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
+        ? VulkanDetail::s_DisabledQueueReason
         : asyncComputeLaneEffective
             ? "dedicated compute family selected"
             : "no dedicated compute-only family"
@@ -143,8 +143,8 @@ void BackendContext::logVulkanDeviceConfiguration(
         , StringConvert(asyncComputeLaneReason)
     );
 
-    const char* const sameClassComputeQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? VulkanDetail::s_DisabledQueueReason.data()
+    const AStringView sameClassComputeQueueReason = !m_deviceParams.enableSameClassMultiQueue
+        ? VulkanDetail::s_DisabledQueueReason
         : !m_computeQueueEnabled
             ? "primary dedicated Compute queue unavailable"
             : m_sameClassComputeQueueEnabled
@@ -173,8 +173,8 @@ void BackendContext::logVulkanDeviceConfiguration(
         && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) != Limit<u32>::s_Max
     ;
     const bool transferQueueEffective = m_transferQueueEnabled;
-    const char* const transferQueueReason = !m_deviceParams.enableTransferQueue
-        ? VulkanDetail::s_DisabledQueueReason.data()
+    const AStringView transferQueueReason = !m_deviceParams.enableTransferQueue
+        ? VulkanDetail::s_DisabledQueueReason
         : transferQueueEffective
             ? "dedicated transfer-only family selected"
             : "no dedicated transfer-only family"
@@ -188,8 +188,8 @@ void BackendContext::logVulkanDeviceConfiguration(
         , StringConvert(transferQueueReason)
     );
 
-    const char* const sameClassTransferQueueReason = !m_deviceParams.enableSameClassMultiQueue
-        ? VulkanDetail::s_DisabledQueueReason.data()
+    const AStringView sameClassTransferQueueReason = !m_deviceParams.enableSameClassMultiQueue
+        ? VulkanDetail::s_DisabledQueueReason
         : !transferQueueEffective
             ? "primary dedicated Transfer queue unavailable"
             : m_sameClassTransferQueueEnabled

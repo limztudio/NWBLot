@@ -25,7 +25,7 @@ static Core::TextureHandle CreateRenderTarget(
     const u32 width,
     const u32 height,
     const Core::Format::Enum format,
-    const NotNull<const char*> debugName,
+    const AStringView debugName,
     const Core::Color& clearValue,
     const bool shareWithAsyncCompute = false
 ){
@@ -35,7 +35,7 @@ static Core::TextureHandle CreateRenderTarget(
         .setHeight(height)
         .setFormat(format)
         .setInRenderTarget(true)
-        .setName(debugName.get())
+        .setName(Name(debugName))
         .setClearValue(clearValue)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
@@ -81,7 +81,7 @@ static Core::TextureHandle CreateTransmittanceVolume(
 static Core::BufferHandle CreateU32Buffer(
     Core::GraphicsRuntime& graphics,
     const u64 byteSize,
-    const NotNull<const char*> debugName
+    const AStringView debugName
 ){
     Core::BufferDesc desc;
     desc
@@ -90,7 +90,7 @@ static Core::BufferHandle CreateU32Buffer(
         .setCanHaveUAVs(true)
         // Shared by raster passes and interleaved compute kernels.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setDebugName(debugName.get())
+        .setDebugName(Name(debugName))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle buffer = graphics.createBuffer(desc);
@@ -186,7 +186,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         avboitTargets.lowWidth,
         avboitTargets.lowHeight,
         avboitTargets.lowRasterFormat,
-        MakeNotNull("engine/avboit/low_raster"),
+        "engine/avboit/low_raster",
         transparentBlack
     );
     if(!avboitTargets.lowRasterTarget){
@@ -199,7 +199,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumColorFormat,
-        MakeNotNull("engine/avboit/accum_color"),
+        "engine/avboit/accum_color",
         transparentBlack,
         true
     );
@@ -213,7 +213,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         avboitTargets.fullWidth,
         avboitTargets.fullHeight,
         avboitTargets.accumExtinctionFormat,
-        MakeNotNull("engine/avboit/accum_extinction"),
+        "engine/avboit/accum_extinction",
         transparentBlack,
         true
     );
@@ -225,22 +225,22 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     // Capture the primary interface before blending loses it.
     avboitTargets.foregroundAccumColor = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, accumColorFormat,
-        MakeNotNull("engine/avboit/foreground_color"), transparentBlack, true);
+        "engine/avboit/foreground_color", transparentBlack, true);
     avboitTargets.foregroundAccumExtinction = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat,
-        MakeNotNull("engine/avboit/foreground_extinction"), transparentBlack, true);
+        "engine/avboit/foreground_extinction", transparentBlack, true);
     avboitTargets.refractionNormalIor = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
-        MakeNotNull("engine/avboit/refraction_normal_ior"), transparentBlack, true);
+        "engine/avboit/refraction_normal_ior", transparentBlack, true);
     avboitTargets.refractionTintCoverage = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
-        MakeNotNull("engine/avboit/refraction_tint_coverage"), transparentBlack, true);
+        "engine/avboit/refraction_tint_coverage", transparentBlack, true);
     avboitTargets.refractionInstance = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::R32_FLOAT,
-        MakeNotNull("engine/avboit/refraction_instance"), transparentBlack, true);
+        "engine/avboit/refraction_instance", transparentBlack, true);
     avboitTargets.refractionSpecularRoughness = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
-        MakeNotNull("engine/avboit/refraction_specular_roughness"), Core::Color(0.f, 0.f, 0.f, 1.f), true);
+        "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
     Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
     refractionDepthDesc.setName("engine/avboit/refraction_depth")
         .setInitialState(Core::ResourceStates::Common)
@@ -333,7 +333,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.coverageBuffer = __hidden_avboit_targets::CreateU32Buffer(
         m_graphics,
         coverageBytes,
-        MakeNotNull("engine/avboit/depth_coverage")
+        "engine/avboit/depth_coverage"
     );
     if(!avboitTargets.coverageBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
@@ -343,7 +343,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.depthWarpBuffer = __hidden_avboit_targets::CreateU32Buffer(
         m_graphics,
         depthWarpBytes,
-        MakeNotNull("engine/avboit/depth_warp_lut")
+        "engine/avboit/depth_warp_lut"
     );
     if(!avboitTargets.depthWarpBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
@@ -353,7 +353,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.controlBuffer = __hidden_avboit_targets::CreateU32Buffer(
         m_graphics,
         static_cast<u64>(ECSRenderAvboitDetail::s_AvboitControlWordCount) * sizeof(u32),
-        MakeNotNull("engine/avboit/control")
+        "engine/avboit/control"
     );
     if(!avboitTargets.controlBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
@@ -363,7 +363,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.extinctionBuffer = __hidden_avboit_targets::CreateU32Buffer(
         m_graphics,
         extinctionBytes,
-        MakeNotNull("engine/avboit/packed_extinction_volume")
+        "engine/avboit/packed_extinction_volume"
     );
     if(!avboitTargets.extinctionBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
@@ -373,7 +373,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.extinctionOverflowBuffer = __hidden_avboit_targets::CreateU32Buffer(
         m_graphics,
         extinctionOverflowBytes,
-        MakeNotNull("engine/avboit/extinction_overflow_depth")
+        "engine/avboit/extinction_overflow_depth"
     );
     if(!avboitTargets.extinctionOverflowBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));

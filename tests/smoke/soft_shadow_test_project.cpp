@@ -378,12 +378,11 @@ public:
         tchar title[s_TitleCapacity];
         NWB_TSPRINTF(
             title, s_TitleCapacity,
-            NWB_TEXT("%s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            NWB::QueryProjectWindowTitle(), yawDisplay.degrees, angleDegrees, configuredSourceRadius(),
+            NWB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
+            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, configuredSourceRadius(),
             m_yaw.manualControl() ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
         );
-        const tchar* titlePtr = title;
-        m_context.graphics.setWindowTitle(MakeNotNull(titlePtr));
+        m_context.graphics.setWindowTitle(TStringView(title));
     }
 
 
@@ -418,7 +417,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Soft Shadow Test");
 }
 

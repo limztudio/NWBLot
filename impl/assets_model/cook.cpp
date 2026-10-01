@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("ModelAssetCodec::serialize")))
         return false;
 
     const Model& model = static_cast<const Model&>(asset);
@@ -94,20 +94,20 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skeletonObjectBinaries,
-        MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
-        MakeNotNull(NWB_TEXT("skeleton objects"))
+        NWB_TEXT("ModelAssetCodec::serialize"),
+        NWB_TEXT("skeleton objects")
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             staticMeshObjectBinaries,
-            MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
-            MakeNotNull(NWB_TEXT("static mesh objects"))
+            NWB_TEXT("ModelAssetCodec::serialize"),
+            NWB_TEXT("static mesh objects")
         )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skinnedMeshObjectBinaries,
-            MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
-            MakeNotNull(NWB_TEXT("skinned mesh objects"))
+            NWB_TEXT("ModelAssetCodec::serialize"),
+            NWB_TEXT("skinned mesh objects")
         )
     ;
 }

@@ -38,17 +38,17 @@ using ScratchString = AssetsVolumeCookDetail::ScratchString;
 
 static constexpr u32 s_ObjectFileMagic = 0x4f4a424e; // NBJO
 static constexpr u16 s_ObjectFileVersion = 2u;
-static constexpr char s_ObjectFileVersionPrefix[] = "v2_";
-static constexpr char s_ObjectFileHashSeparator[] = "__";
-static constexpr char s_ObjectFileExtension[] = ".nwbobj";
-static constexpr char s_ObjectCacheDirectoryName[] = "objects";
+static constexpr AStringView s_ObjectFileVersionPrefix = "v2_";
+static constexpr AStringView s_ObjectFileHashSeparator = "__";
+static constexpr AStringView s_ObjectFileExtension = ".nwbobj";
+static constexpr AStringView s_ObjectCacheDirectoryName = "objects";
 static constexpr usize s_ObjectFileHashFieldCount = 3u;
 static constexpr usize s_ObjectFileHashSeparatorCount = s_ObjectFileHashFieldCount - 1u;
 static constexpr usize s_ObjectFileNameReserveBytes =
-    (sizeof(s_ObjectFileVersionPrefix) - 1u)
+    s_ObjectFileVersionPrefix.size()
     + (NameDetail::s_HexDigitsPerHashLane * s_ObjectFileHashFieldCount)
-    + ((sizeof(s_ObjectFileHashSeparator) - 1u) * s_ObjectFileHashSeparatorCount)
-    + (sizeof(s_ObjectFileExtension) - 1u)
+    + (s_ObjectFileHashSeparator.size() * s_ObjectFileHashSeparatorCount)
+    + s_ObjectFileExtension.size()
 ;
 
 struct AssetVolumeObjectFileHeader{
@@ -233,7 +233,7 @@ public:
 
 public:
     virtual bool writeCookedAsset(
-        const NotNull<const tchar*> assetKind,
+        const TStringView assetKind,
         const Name& virtualPath,
         const Core::Assets::IAsset& asset,
         const Core::Assets::IAssetCodec& codec
@@ -241,7 +241,7 @@ public:
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'")
-                , assetKind.get()
+                , assetKind
                 , StringConvert(virtualPath.c_str())
             );
             return false;

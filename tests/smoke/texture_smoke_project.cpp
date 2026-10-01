@@ -190,7 +190,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     return { 1280, 900 };
 }
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Texture Smoke");
 }
 

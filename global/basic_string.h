@@ -95,7 +95,7 @@ struct ConstString{
         for(usize i = 0; i < N; ++i)
             data[i] = str[i];
     }
-    constexpr operator const char*()const{ return data; }
+    constexpr operator AStringView()const{ return AStringView(data, N - 1u); }
     constexpr const char* c_str()const{ return data; }
 };
 template<usize N>
@@ -105,7 +105,7 @@ struct ConstWString{
         for(usize i = 0; i < N; ++i)
             data[i] = str[i];
     }
-    constexpr operator const wchar*()const{ return data; }
+    constexpr operator WStringView()const{ return WStringView(data, N - 1u); }
     constexpr const wchar* c_str()const{ return data; }
 };
 #if defined(NWB_UNICODE)

@@ -313,7 +313,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Skinned Caustic Smoke");
 }
 

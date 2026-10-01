@@ -211,7 +211,7 @@ public:
             NWB::Tests::Smoke::SmokeEnvironmentString settleValue(m_context.objectArena);
             if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_GI_SMOKE_MIN_SETTLE_SECONDS", settleValue)){
                 f32 requestedSettleSeconds = 0.0f;
-                if(!ParseF32FromChars(settleValue.data(), settleValue.data() + settleValue.size(), requestedSettleSeconds)
+                if(!ParseF32FromChars(AStringView(settleValue.data(), settleValue.size()), requestedSettleSeconds)
                     || !IsFinite(requestedSettleSeconds) || requestedSettleSeconds < 0.0f){
                     NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_SMOKE_MIN_SETTLE_SECONDS"));
                     return false;
@@ -620,7 +620,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB GI Test");
 }
 

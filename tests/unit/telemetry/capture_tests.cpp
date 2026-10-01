@@ -107,15 +107,16 @@ TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
     EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
 }
 
-TEST(Telemetry, DiagnosticPayloadRejectsCorruptedHeaderAfterValidParse){
+TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
 
+    constexpr char s_Message[] = { 'd', 0, 'm' };
     const DiagnosticEventRecord source{
-        .event = DiagnosticEventName::s_Error.data(),
+        .event = AStringView("error.trailing").substr(0u, 5u),
         .category = "unit_category",
         .expression = "value != nullptr",
-        .message = "diagnostic message",
+        .message = AStringView(s_Message, sizeof(s_Message)),
         .file = "diagnostic_test.cpp",
         .instructionPointer = 0x1234u,
         .line = 77u,
@@ -126,6 +127,8 @@ TEST(Telemetry, DiagnosticPayloadRejectsCorruptedHeaderAfterValidParse){
 
     Telemetry::DiagnosticPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(AStringView(parsed.event), source.event);
+    EXPECT_EQ(AStringView(parsed.message), source.message);
 
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));

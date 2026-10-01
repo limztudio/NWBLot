@@ -75,7 +75,7 @@ public:
     [[nodiscard]] bool finished()const{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
     [[nodiscard]] u32 successfulFrames()const{ return m_successfulFrames; }
 
-    [[nodiscard]] bool write(NotNull<const char*> path, NotNull<const char*> workload, bool memoryEnabled, u32 renderers,
+    [[nodiscard]] bool write(AStringView path, AStringView workload, bool memoryEnabled, u32 renderers,
         u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;
 
 

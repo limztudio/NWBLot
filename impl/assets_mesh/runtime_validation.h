@@ -42,14 +42,14 @@ public:
     const Core::Assets::AssetVector<Half4U>& tangents,
     const Core::Assets::AssetVector<Float2U>& uv0,
     const Core::Assets::AssetVector<Half4U>& colors,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateMeshletPayload(
@@ -66,7 +66,7 @@ public:
     const usize uv0Count,
     const usize colorCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
     );
     [[nodiscard]] static bool ValidateSharedMeshPayload(
@@ -83,7 +83,7 @@ public:
     const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
     const usize skinCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
@@ -91,7 +91,7 @@ public:
     const MeshGeometryPayloadT& payload,
     const usize skinCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
     );
 
@@ -109,7 +109,7 @@ template<typename MeshGeometryPayloadT>
     const MeshGeometryPayloadT& payload,
     const usize skinCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
 ){
     return ValidateSharedMeshPayload(

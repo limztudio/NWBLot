@@ -431,7 +431,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FramebufferCapture::markFailed(const tchar* const reason){
+void FramebufferCapture::markFailed(const TStringView reason){
     if(m_failed)
         return;
 

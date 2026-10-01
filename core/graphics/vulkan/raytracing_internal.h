@@ -159,14 +159,14 @@ bool ComputeRayTracingHandleLayout(
     u32& outHandleSize,
     u32& outHandleSizeAligned,
     u32& outBaseAlignment,
-    const tchar* operation
+    TStringView operation
 );
 
 bool ComputeShaderTableByteSize(
     u32 recordCount,
     u32 handleSizeAligned,
     u64& outByteSize,
-    const tchar* operation
+    TStringView operation
 );
 
 [[nodiscard]] bool ComputeShaderTableAllocationByteSize(
@@ -190,7 +190,7 @@ bool FillBlasGeometryForSizeQuery(
     VkAccelerationStructureGeometrySpheresDataNV& spheresData,
     VkAccelerationStructureGeometryLinearSweptSpheresDataNV& lssData,
     u32& primitiveCount,
-    const tchar* operation,
+    TStringView operation,
     bool requireBuffers
 );
 

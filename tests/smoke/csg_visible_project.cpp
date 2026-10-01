@@ -79,7 +79,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     Name("project/smoke/csg_visible/capsule_receiver"),
 };
 
-[[nodiscard]] static const tchar* CsgVisibleFpsLabel(){
+[[nodiscard]] static TStringView CsgVisibleFpsLabel(){
     return NWB_TEXT("CsgVisibleSmokeProject");
 }
 
@@ -375,7 +375,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB CSG Visible Smoke");
 }
 

@@ -32,7 +32,7 @@ inline constexpr StringView g_ArgCmd[] = {
 };
 inline constexpr u16 s_DefaultLogServerPort = 7117u;
 inline const Tuple<
-    const char*
+    AStringView
     , u16
 > g_ArgDefault = {
     "http://localhost",

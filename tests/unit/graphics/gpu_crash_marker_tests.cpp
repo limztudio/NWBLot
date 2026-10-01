@@ -43,6 +43,26 @@ static_assert(IsNothrowDestructible_V<Core::GraphicsBackend::CommandList>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes){
+    TestArena testArena;
+    Core::GpuCrashTracker crashTracker(testArena.arena);
+    Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
+    char label[] = { 'O', 'u', 't', 'e', 'r', 'X' };
+    const usize outerHash = commandListTracker.pushEvent(AStringView(label, 5u));
+    label[0] = 'x';
+
+    const char nestedLabel[] = { 'I', '\0', 'n' };
+    const usize nestedHash = commandListTracker.pushEvent(AStringView(nestedLabel, sizeof(nestedLabel)));
+    const Core::ResolvedMarker outer = crashTracker.resolveMarker(outerHash);
+    const Core::ResolvedMarker nested = crashTracker.resolveMarker(nestedHash);
+    ASSERT_TRUE(outer.first());
+    ASSERT_TRUE(nested.first());
+    EXPECT_EQ(outer.second(), AStringView("Outer"));
+    constexpr char expected[] = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
+    EXPECT_EQ(nested.second(), AStringView(expected, sizeof(expected)));
+}
+
+
 TEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandListTrackerReset){
     TestArena testArena;
     Core::GpuCrashTracker crashTracker(testArena.arena);
@@ -93,7 +113,7 @@ TEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryRes
     usize markerIndex = 0u;
     for(const AStringView markerName : markerNames){
         Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
-        markerHashes[markerIndex] = commandListTracker.pushEvent(markerName.data());
+        markerHashes[markerIndex] = commandListTracker.pushEvent(markerName);
         ++markerIndex;
     }
 
@@ -152,7 +172,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
                     growthMidpoint.arrive_and_wait();
 
                 commandListTracker.resetEventStack();
-                const usize insertedHash = commandListTracker.pushEvent(markerNames[markerIndex].data());
+                const usize insertedHash = commandListTracker.pushEvent(markerNames[markerIndex]);
                 const Core::ResolvedMarker inserted = crashTracker.resolveMarker(insertedHash);
                 if(!inserted.first() || inserted.second() != markerNames[markerIndex])
                     invalidObservation.store(true, MemoryOrder::release);

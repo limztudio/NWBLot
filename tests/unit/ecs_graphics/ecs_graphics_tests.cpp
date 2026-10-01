@@ -799,7 +799,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
         instance.meshletPositionRefDeltas,
         instance.meshletAttributeRefDeltas,
         true,
-        [](const usize, const tchar*){ return false; }
+        [](const usize, const TStringView){ return false; }
     );
     NWB_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());

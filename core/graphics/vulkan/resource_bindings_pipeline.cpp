@@ -19,7 +19,7 @@ NWB_VULKAN_BEGIN
 
 bool Device::createPipelineLayoutForBindingLayouts(
     const BindingLayoutVector& bindingLayouts,
-    const tchar* operationName,
+    TStringView operationName,
     VkPipelineLayout& outPipelineLayout,
     u32& outPushConstantByteSize,
     bool& outOwnsPipelineLayout,
@@ -203,7 +203,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
 bool Device::configurePipelineBindings(
     const BindingLayoutVector& bindingLayouts,
-    const tchar* operationName,
+    TStringView operationName,
     PipelineBindingState& outBindings,
     Alloc::ScratchArena& scratchArena
 )const{

@@ -399,19 +399,19 @@ template<typename StringT>
 
 
 template<typename DstCharT, typename SrcCharT>
-inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const SrcCharT* src){
+inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const BasicStringView<SrcCharT> src){
     if(dstSize == 0)
         return;
 
-    if(src == nullptr){
-        dst[0] = DstCharT{};
-        return;
-    }
-
     usize writeIndex = 0;
-    for(; writeIndex + 1 < dstSize && src[writeIndex] != SrcCharT{}; ++writeIndex)
+    for(; writeIndex + 1 < dstSize && writeIndex < src.size() && src[writeIndex] != SrcCharT{}; ++writeIndex)
         dst[writeIndex] = static_cast<DstCharT>(Canonicalize(src[writeIndex]));
     dst[writeIndex] = DstCharT{};
+}
+
+template<typename DstCharT, typename SrcCharT>
+inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const SrcCharT* src){
+    CopyCanonical(dst, dstSize, src ? BasicStringView<SrcCharT>(src) : BasicStringView<SrcCharT>());
 }
 
 template<typename StringT>

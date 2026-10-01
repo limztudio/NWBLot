@@ -80,7 +80,7 @@ Bool X11TextInputService::onPreeditCaret(XIC context, const XPointer data, const
     usize current = 0u;
     while(position < service.m_preedit.caretByte()){
         u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.data() + position, static_cast<i32>(text.size() - position), codePoint);
+        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
         position += static_cast<usize>(bytes);
         ++current;
     }

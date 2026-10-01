@@ -59,8 +59,8 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/bundle
     if(!EnsureDirectories(directory, error) || error)
         return false;
     const Path fixtureRoot = BundleFixtureRoot(testArena);
-    static constexpr const char* s_Filenames[] = { "latin.font", "latin.atlas" };
-    for(const char* filename : s_Filenames){
+    static constexpr AStringView s_Filenames[] = { "latin.font", "latin.atlas" };
+    for(const AStringView filename : s_Filenames){
         const Path source = fixtureRoot / filename;
         const Path destination = directory / filename;
         Core::Assets::AssetBytes bytes(testArena.arena);
@@ -96,7 +96,7 @@ struct CaptureWriter final : Core::Assets::ICookedAssetWriter{
     {}
 
     virtual bool writeCookedAsset(
-        NotNull<const tchar*>,
+        TStringView,
         const Name& virtualPath,
         const Core::Assets::IAsset& asset,
         const Core::Assets::IAssetCodec& codec

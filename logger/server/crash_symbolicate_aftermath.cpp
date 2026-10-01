@@ -33,11 +33,11 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr char s_AftermathSectionHeader[] = "\n[aftermath]\n";
-inline constexpr char s_AftermathSkippedReport[] = "status=skipped\ndetail=logserver built without the Aftermath SDK\n";
-inline constexpr char s_AftermathCreateDecoderFailedReport[] = "status=decode_failed\ndetail=create_decoder\n";
-inline constexpr char s_AftermathGenerateJsonFailedReport[] = "status=decode_failed\ndetail=generate_json\n";
-inline constexpr char s_AftermathGetJsonFailedReport[] = "status=decode_failed\ndetail=get_json\n";
+inline constexpr AStringView s_AftermathSectionHeader = "\n[aftermath]\n";
+inline constexpr AStringView s_AftermathSkippedReport = "status=skipped\ndetail=logserver built without the Aftermath SDK\n";
+inline constexpr AStringView s_AftermathCreateDecoderFailedReport = "status=decode_failed\ndetail=create_decoder\n";
+inline constexpr AStringView s_AftermathGenerateJsonFailedReport = "status=decode_failed\ndetail=generate_json\n";
+inline constexpr AStringView s_AftermathGetJsonFailedReport = "status=decode_failed\ndetail=get_json\n";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,14 +67,14 @@ struct AftermathDecoder{
     PFN_GFSDK_Aftermath_GpuCrashDump_GetJSON getJson = nullptr;
     PFN_GFSDK_Aftermath_GpuCrashDump_DestroyDecoder destroyDecoder = nullptr;
 
-    [[nodiscard]] bool load(){
-        if(!library.open(Core::Common::s_AftermathRuntimeName))
+    [[nodiscard]] bool load(LogArena& arena){
+        if(!library.open(arena, Core::Common::s_AftermathRuntimeName))
             return false;
 
-        return library.resolve("GFSDK_Aftermath_GpuCrashDump_CreateDecoder", createDecoder)
-            && library.resolve("GFSDK_Aftermath_GpuCrashDump_GenerateJSON", generateJson)
-            && library.resolve("GFSDK_Aftermath_GpuCrashDump_GetJSON", getJson)
-            && library.resolve("GFSDK_Aftermath_GpuCrashDump_DestroyDecoder", destroyDecoder)
+        return library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder", createDecoder)
+            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON", generateJson)
+            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_GetJSON", getJson)
+            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_DestroyDecoder", destroyDecoder)
         ;
     }
 };
@@ -109,7 +109,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     }
 
     AftermathDecoder decoderLib;
-    if(!decoderLib.load()){
+    if(!decoderLib.load(arena)){
         outReport += "\n[aftermath]\nstatus=skipped\ndetail=Aftermath runtime not found next to logserver\n";
         return;
     }

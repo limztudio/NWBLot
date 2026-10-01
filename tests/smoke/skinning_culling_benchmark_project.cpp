@@ -117,7 +117,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static const char* BenchmarkModeName(const BenchmarkMode::Enum mode){
+[[nodiscard]] static AStringView BenchmarkModeName(const BenchmarkMode::Enum mode){
     switch(mode){
     case BenchmarkMode::NoCulling: return "no_culling";
     case BenchmarkMode::FrustumOnly: return "frustum_only";
@@ -126,7 +126,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     }
 }
 
-[[nodiscard]] static const char* BenchmarkViewName(const BenchmarkView::Enum view){
+[[nodiscard]] static AStringView BenchmarkViewName(const BenchmarkView::Enum view){
     switch(view){
     case BenchmarkView::Front: return "front";
     case BenchmarkView::Back: return "back";
@@ -147,17 +147,18 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     return jointIndex != 0u && (RandomJointSeed(jointIndex, characterIndex) % modulo) == 0u;
 }
 
-[[nodiscard]] static bool EnvironmentFlagEnabled(const char* name){
+[[nodiscard]] static bool EnvironmentFlagEnabled(const AStringView name){
     NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
     AString<NWB::Core::Alloc::GlobalArena> value(arena);
-    if(!ReadEnvironmentVariable(name, value))
+    const AString<NWB::Core::Alloc::GlobalArena> environmentName(name, arena);
+    if(!ReadEnvironmentVariable(environmentName.c_str(), value))
         return false;
 
     return !value.empty() && value[0] != '\0' && value[0] != '0';
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
-    return EnvironmentFlagEnabled(s_StaticPreviewEnv.data());
+    return EnvironmentFlagEnabled(s_StaticPreviewEnv);
 }
 
 [[nodiscard]] static bool FastSmokeEnabled(){
@@ -679,7 +680,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Skinning Culling Benchmark");
 }
 

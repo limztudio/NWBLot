@@ -396,8 +396,8 @@ bool Device::validateHeapMemoryBinding(
     const VkMemoryDedicatedRequirements& dedicatedRequirements,
     const u64 offset,
     const VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
-    const tchar* operationName,
-    const tchar* resourceName,
+    TStringView operationName,
+    TStringView resourceName,
     VulkanDetail::HeapBindingRange& outRange
 )const{
     outRange = {};

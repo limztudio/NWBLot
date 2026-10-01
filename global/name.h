@@ -80,7 +80,7 @@ inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT c
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text){
+[[nodiscard]] inline constexpr bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text){
     for(const CharT ch : text){
         if(ch == CharT{})
             return false;
@@ -166,7 +166,7 @@ inline constexpr NameHash ComputeNameHash(const CharT* str){
 }
 
 template<typename CharT>
-inline NameHash ComputeNameHash(const BasicStringView<CharT> text){
+inline constexpr NameHash ComputeNameHash(const BasicStringView<CharT> text){
     NameHash hash = {};
     NameDetail::InitializeNameHash(hash);
     if(!NameDetail::UpdateCanonicalNameHashText(hash, text))
@@ -363,7 +363,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
     if(dstSize == 0)
         return;
 
-    static constexpr char s_Hex[] = "0123456789abcdef";
+    static constexpr AStringView s_Hex = "0123456789abcdef";
 
     if(dstSize <= s_DebugHashTextLength){
         dst[0] = CharT{};
@@ -387,7 +387,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
 template<typename CharT>
-inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
+inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
     if(dstSize == 0)
         return;
 
@@ -410,20 +410,19 @@ inline void CopyDebugName(const BasicStringView<CharT> text, char* dst, const us
 #if defined(NWB_BUILDMODE)
 inline void RecordStoredNameSymbolText(
     const NameHash& hash,
-    const char* const text,
-    const usize textCapacity,
+    const AStringView text,
     const bool hasText
 ){
-    if(!hasText || text == nullptr || textCapacity == 0u || IsZeroHash(hash))
+    if(!hasText || text.empty() || IsZeroHash(hash))
         return;
 
     usize textSize = 0u;
-    while(textSize < textCapacity && text[textSize] != '\0')
+    while(textSize < text.size() && text[textSize] != '\0')
         ++textSize;
-    if(textSize == textCapacity)
+    if(textSize == text.size())
         return;
 
-    RecordNameSymbolText(hash, AStringView(text, textSize));
+    RecordNameSymbolText(hash, text.substr(0u, textSize));
 }
 #endif
 
@@ -520,7 +519,7 @@ public:
         NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
     }
-    explicit Name(const AStringView text)
+    explicit constexpr Name(const AStringView text)
         : m_hash(ComputeNameHash(text))
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
@@ -532,9 +531,10 @@ public:
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
-        NameDetail::RecordNameSymbolText(m_hash, text);
+        if(!IsConstantEvaluated())
+            NameDetail::RecordNameSymbolText(m_hash, text);
     }
-    explicit Name(const WStringView text)
+    explicit constexpr Name(const WStringView text)
         : m_hash(ComputeNameHash(text))
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         , m_debugName{}
@@ -546,7 +546,8 @@ public:
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
-        NameDetail::RecordNameSymbolText(m_hash, text);
+        if(!IsConstantEvaluated())
+            NameDetail::RecordNameSymbolText(m_hash, text);
     }
 
 
@@ -581,13 +582,13 @@ public:
     }
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
-    [[nodiscard]] const char* logText()const{
+    [[nodiscard]] AStringView logText()const{
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
-        return m_debugName;
+        return AStringView(m_debugName);
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
         NameDetail::HashToDebugString(m_hash, buf, NameDetail::s_SymbolTextBufferLength);
-        return buf;
+        return AStringView(buf, NameDetail::s_DebugHashTextLength);
 #endif
     }
 
@@ -595,8 +596,8 @@ public:
 private:
 #if defined(NWB_BUILDMODE)
     constexpr void recordBuildModeSymbolText()const{
-        if(!std::is_constant_evaluated())
-            NameDetail::RecordStoredNameSymbolText(m_hash, m_debugName, sizeof(m_debugName), m_hasSymbolText);
+        if(!IsConstantEvaluated())
+            NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName, sizeof(m_debugName)), m_hasSymbolText);
     }
 #endif
 
@@ -673,8 +674,8 @@ inline u64 UpdateFnv64U64(u64 hash, const u64 value){
     return hash;
 }
 
-inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
-inline constexpr u64 s_DerivePrefixHash = FNV1a64(s_DerivePrefix, s_Fnv64OffsetBasis);
+inline constexpr AStringView s_DerivePrefix = "nwb/name/derive";
+inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, s_DerivePrefix);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -271,7 +271,7 @@ bool BackendContext::pickPhysicalDevice(){
             };
             VulkanDetail::PhysicalDeviceFeatureSupport featureSupport;
             VulkanDetail::QueryPhysicalDeviceFeatureSupport(m_instanceDispatch, dev, featureQueryOptions, featureSupport);
-            if(const char* const missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport)){
+            if(const AStringView missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport); !missingFeature.empty()){
                 errorStream << "\n  - does not support required feature " << missingFeature;
                 deviceIsGood = false;
             }

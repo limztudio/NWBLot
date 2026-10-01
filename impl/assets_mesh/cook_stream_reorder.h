@@ -65,8 +65,8 @@ public:
     template<typename StreamVectorT>
     [[nodiscard]] static bool RemapMeshStreamRef(
     const Name& virtualPath,
-    const NotNull<const tchar*> metaKind,
-    const NotNull<const tchar*> streamName,
+    const TStringView metaKind,
+    const TStringView streamName,
     const StreamVectorT& source,
     ScratchVector<u32>& remap,
     StreamVectorT& reordered,
@@ -80,13 +80,13 @@ public:
     template<typename CookEntryT>
     [[nodiscard]] static bool RemapMeshletAttributeRefs(
     CookEntryT& entry,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder
     );
     template<typename CookEntryT, typename SkinRemapperT>
     [[nodiscard]] static bool RemapMeshletPositionRefs(
     CookEntryT& entry,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder,
     SkinRemapperT remapSkin
     );
@@ -122,8 +122,8 @@ void MeshCookStreamReorder::PrepareMeshStreamReorder(
 template<typename StreamVectorT>
 bool MeshCookStreamReorder::RemapMeshStreamRef(
     const Name& virtualPath,
-    const NotNull<const tchar*> metaKind,
-    const NotNull<const tchar*> streamName,
+    const TStringView metaKind,
+    const TStringView streamName,
     const StreamVectorT& source,
     ScratchVector<u32>& remap,
     StreamVectorT& reordered,
@@ -131,9 +131,9 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
 ){
     if(index == s_MeshMissingStreamIndex){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing")
-            , metaKind.get()
+            , metaKind
             , StringConvert(virtualPath.c_str())
-            , streamName.get()
+            , streamName
         );
         return false;
     }
@@ -141,9 +141,9 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
     const u32 sourceIndex = index;
     if(static_cast<usize>(sourceIndex) >= source.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is out of range")
-            , metaKind.get()
+            , metaKind
             , StringConvert(virtualPath.c_str())
-            , streamName.get()
+            , streamName
         );
         return false;
     }
@@ -152,9 +152,9 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
     if(mappedIndex == s_MeshMissingStreamIndex){
         if(reordered.size() >= static_cast<usize>(s_MeshMissingStreamIndex)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': reordered {} stream exceeds u32 index limits")
-                , metaKind.get()
+                , metaKind
                 , StringConvert(virtualPath.c_str())
-                , streamName.get()
+                , streamName
             );
             return false;
         }
@@ -184,7 +184,7 @@ void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(
 template<typename CookEntryT>
 bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
     CookEntryT& entry,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder
 ){
     for(const MeshletDesc& meshlet : entry.meshlets){
@@ -193,7 +193,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                MakeNotNull(NWB_TEXT("normal")),
+                NWB_TEXT("normal"),
                 entry.normals,
                 reorder.normalRemap,
                 reorder.normals,
@@ -203,7 +203,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                MakeNotNull(NWB_TEXT("tangent")),
+                NWB_TEXT("tangent"),
                 entry.tangents,
                 reorder.tangentRemap,
                 reorder.tangents,
@@ -213,7 +213,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                MakeNotNull(NWB_TEXT("uv0")),
+                NWB_TEXT("uv0"),
                 entry.uv0,
                 reorder.uv0Remap,
                 reorder.uv0,
@@ -223,7 +223,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                MakeNotNull(NWB_TEXT("color")),
+                NWB_TEXT("color"),
                 entry.colors,
                 reorder.colorRemap,
                 reorder.colors,
@@ -240,7 +240,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
 template<typename CookEntryT, typename SkinRemapperT>
 bool MeshCookStreamReorder::RemapMeshletPositionRefs(
     CookEntryT& entry,
-    const NotNull<const tchar*> metaKind,
+    const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder,
     SkinRemapperT remapSkin
 ){
@@ -250,7 +250,7 @@ bool MeshCookStreamReorder::RemapMeshletPositionRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                MakeNotNull(NWB_TEXT("position")),
+                NWB_TEXT("position"),
                 entry.positions,
                 reorder.positionRemap,
                 reorder.positions,

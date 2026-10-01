@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 
 
 bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("ShaderAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
         return false;
 
     const Shader& shader = static_cast<const Shader&>(asset);

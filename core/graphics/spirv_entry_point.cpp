@@ -91,17 +91,15 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
 
     outEntryPoint.shaderType = ConvertExecutionModel(instructionWords[s_SpirvEntryPointExecutionModelWordIndex]);
 
-    const auto* entryPointBytes = reinterpret_cast<const char*>(&instructionWords[s_SpirvEntryPointNameWordIndex]);
-    const usize entryPointMaxBytes = (static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount) * sizeof(u32);
-
-    usize entryPointLength = 0;
-    while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
-        ++entryPointLength;
-
-    if(entryPointLength == entryPointMaxBytes)
+    const AStringView entryPointBytes(
+        reinterpret_cast<const char*>(&instructionWords[s_SpirvEntryPointNameWordIndex]),
+        (static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount) * sizeof(u32)
+    );
+    const usize entryPointLength = entryPointBytes.find('\0');
+    if(entryPointLength == AStringView::npos)
         return false;
 
-    outEntryPoint.name = AStringView(entryPointBytes, entryPointLength);
+    outEntryPoint.name = entryPointBytes.substr(0u, entryPointLength);
     return true;
 }
 

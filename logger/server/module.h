@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar s_ServerName[] = NWB_TEXT("Server");
+inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
 inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
@@ -33,8 +33,8 @@ struct PendingCrashUpload{
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
 
 class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>{
-    template<typename, const tchar*> friend class LoggerWorkerBase;
-    template<typename, f32, const tchar*> friend class IntervalLoggerWorkerBase;
+    template<typename, const TStringView&> friend class LoggerWorkerBase;
+    template<typename, f32, const TStringView&> friend class IntervalLoggerWorkerBase;
 
     using BaseType = LoggerWorkerBase<Server, s_ServerName>;
     using UpdateBaseType = IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>;

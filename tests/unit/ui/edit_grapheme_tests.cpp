@@ -19,9 +19,14 @@ using namespace NWB::Impl::Ui;
 using namespace NWB::UiEditTests;
 
 struct GraphemeCase{
-    const char* text;
-    const char* expectedOffsets;
-    usize bytes;
+    AStringView text;
+    AStringView expectedOffsets;
+
+    template<usize TextSize, usize OffsetSize>
+    constexpr GraphemeCase(const char (&textValue)[TextSize], const char (&offsetValue)[OffsetSize], const usize byteCount)
+        : text(textValue, byteCount)
+        , expectedOffsets(offsetValue, OffsetSize - 1u)
+    {}
 };
 
 static constexpr GraphemeCase s_ConformanceCases[] = {
@@ -41,19 +46,20 @@ TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCa
     for(usize index = 0u; index < 766u; ++index){
         SCOPED_TRACE(index);
         const GraphemeCase& test = s_ConformanceCases[index];
-        ASSERT_TRUE(GraphemeSegmentation::Build({ test.text, test.bytes }, actual));
-        const char* cursor = test.expectedOffsets;
+        ASSERT_TRUE(GraphemeSegmentation::Build(test.text, actual));
+        const AStringView expectedOffsets = test.expectedOffsets;
+        usize cursor = 0u;
         usize offsetIndex = 0u;
-        while(*cursor != '\0'){
+        while(cursor < expectedOffsets.size()){
             usize expected = 0u;
-            while(*cursor >= '0' && *cursor <= '9'){
-                expected = expected * 10u + static_cast<usize>(*cursor - '0');
+            while(cursor < expectedOffsets.size() && expectedOffsets[cursor] >= '0' && expectedOffsets[cursor] <= '9'){
+                expected = expected * 10u + static_cast<usize>(expectedOffsets[cursor] - '0');
                 ++cursor;
             }
             ASSERT_LT(offsetIndex, actual.size());
             EXPECT_EQ(actual[offsetIndex], expected);
             ++offsetIndex;
-            if(*cursor == ',')
+            if(cursor < expectedOffsets.size() && expectedOffsets[cursor] == ',')
                 ++cursor;
         }
         EXPECT_EQ(offsetIndex, actual.size());

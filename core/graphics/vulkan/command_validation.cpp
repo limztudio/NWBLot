@@ -19,7 +19,7 @@ NWB_VULKAN_BEGIN
 
 bool CommandList::validateFramebufferForRendering(
     Framebuffer* const framebuffer,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!framebuffer)
         return true;
@@ -250,7 +250,7 @@ bool CommandList::validateFramebufferForRendering(
 bool CommandList::validateRenderPassBegin(
     Framebuffer& framebuffer,
     const RenderPassParameters& params,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(m_renderPassActive){
         rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
@@ -348,7 +348,7 @@ bool CommandList::validateRenderPassBegin(
 
 bool CommandList::prepareFramebufferForRendering(
     Framebuffer* const framebuffer,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!framebuffer)
         return true;
@@ -385,7 +385,7 @@ bool CommandList::prepareFramebufferForRendering(
 
 bool CommandList::validateViewportState(
     const ViewportState& viewportState,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(viewportState.viewports.size() > 1u || viewportState.scissorRects.size() > 1u){
         rejectCommandRecording(operationName, NWB_TEXT("only one viewport and scissor are supported"));
@@ -422,7 +422,7 @@ bool CommandList::validateViewportState(
 bool CommandList::validateTextureForGpuState(
     Texture* const texture,
     const ResourceStates::Mask requiredState,
-    const tchar* const operationName,
+    const TStringView operationName,
     const VkImageUsageFlags explicitRequiredUsage
 ){
     if(!publicCommandStateAccessible())
@@ -450,7 +450,7 @@ bool CommandList::validateTextureForGpuState(
 bool CommandList::validateBufferForGpuState(
     Buffer* const buffer,
     const ResourceStates::Mask requiredState,
-    const tchar* const operationName,
+    const TStringView operationName,
     const VkBufferUsageFlags explicitRequiredUsage
 ){
     if(!publicCommandStateAccessible())

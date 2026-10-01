@@ -733,23 +733,23 @@ private:
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
         u32& outGroupIndex,
-        const tchar* operationName,
-        const tchar* exportKind
+        TStringView operationName,
+        TStringView exportKind
     )const;
     [[nodiscard]] bool preflightShaderRecord(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
         u32 recordCount,
         ShaderRecordPreflight& outPreflight,
-        const tchar* operationName,
-        const tchar* exportKind
+        TStringView operationName,
+        TStringView exportKind
     )const;
     [[nodiscard]] bool allocateSBTBuffer(
         const ShaderRecordPreflight& preflight,
         BufferHandle& outBuffer,
         u64& outOffset,
-        const tchar* operationName,
-        const tchar* recordName
+        TStringView operationName,
+        TStringView recordName
     );
     [[nodiscard]] u32 appendShaderRecord(
         AStringView exportName,
@@ -758,9 +758,9 @@ private:
         BufferHandle& buffer,
         u64& offset,
         u32& count,
-        const tchar* operationName,
-        const tchar* recordName,
-        const tchar* exportKind
+        TStringView operationName,
+        TStringView recordName,
+        TStringView exportKind
     );
 
 

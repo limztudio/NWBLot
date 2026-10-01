@@ -133,7 +133,7 @@ bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& fil
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const char* AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()
+AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()
 {
 #if defined(NWB_DEBUG)
     return "dbg";
@@ -270,8 +270,8 @@ bool AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(
 bool AssetsGraphicsFixture::CookSingleGraphicsMeta(
     const AStringView metaText,
     const AStringView caseName,
-    const char* assetDirectory,
-    const char* assetFilename,
+    AStringView assetDirectory,
+    AStringView assetFilename,
     AssetsGraphicsFixture::TestArena& testArena,
     AssetsGraphicsFixture::Path& outRoot,
     AssetsGraphicsFixture::Path& outOutputDirectory
@@ -334,8 +334,8 @@ bool AssetsGraphicsFixture::CookSingleMeshMeta(
 
 bool AssetsGraphicsFixture::ReadSmokeAssetMeta(
     AssetsGraphicsFixture::TestArena& testArena,
-    const char* assetDirectory,
-    const char* assetFilename,
+    AStringView assetDirectory,
+    AStringView assetFilename,
     AssetsGraphicsFixture::AString& outMetaText
 )
 {
@@ -350,8 +350,8 @@ bool AssetsGraphicsFixture::ReadSmokeAssetMeta(
 
 
 bool AssetsGraphicsFixture::CookSmokeAssetMeta(
-    const char* assetDirectory,
-    const char* assetFilename,
+    AStringView assetDirectory,
+    AStringView assetFilename,
     const AStringView caseName,
     AssetsGraphicsFixture::TestArena& testArena,
     AssetsGraphicsFixture::Path& outRoot,
@@ -378,7 +378,7 @@ bool AssetsGraphicsFixture::CookSmokeAssetMeta(
 
 
 bool AssetsGraphicsFixture::CookSmokeMeshMeta(
-    const char* assetFilename,
+    AStringView assetFilename,
     const AStringView caseName,
     AssetsGraphicsFixture::TestArena& testArena,
     AssetsGraphicsFixture::Path& outRoot,
@@ -387,6 +387,40 @@ bool AssetsGraphicsFixture::CookSmokeMeshMeta(
 {
     return CookSmokeAssetMeta("meshes", assetFilename, caseName, testArena, outRoot, outOutputDirectory);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_fixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static bool WriteMaterialBindDiscoveryMetadata(const AssetsGraphicsFixture::Path& assetRoot){
+    if(!AssetsGraphicsFixture::WriteTextFile(
+        assetRoot / "material_interfaces" / "bind_discovery.nwb",
+        "include asset;\r\n\r\nasset.defines = { \"NWB_TEST_MATERIAL_BIND_DISCOVERY\": [\"1\"] };\r\n"
+    ))
+        return false;
+    return AssetsGraphicsFixture::WriteTextFile(
+        assetRoot / "material_interfaces" / "bind_discovery.slangi",
+        "// limztudio@gmail.com\r\n"
+        "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n"
+        "#ifndef NWB_TEST_MATERIAL_BIND_DISCOVERY_SLANGI\r\n"
+        "#define NWB_TEST_MATERIAL_BIND_DISCOVERY_SLANGI\r\n\r\n\r\n"
+        "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n\r\n"
+        "#endif\r\n\r\n\r\n"
+        "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////\r\n\r\n"
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -404,6 +438,8 @@ bool AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(
         return false;
 
     const Path assetRoot = outRoot / "assets";
+    if(!__hidden_assets_graphics_fixture::WriteMaterialBindDiscoveryMetadata(assetRoot))
+        return false;
     if(!WriteTextFile(assetRoot / "meshes" / "minimal_mesh.nwb", s_MinimalMeshMeta))
         return false;
     if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
@@ -452,6 +488,8 @@ bool AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
 
     const Path firstAssetRoot = outRoot / "first" / "assets";
     const Path secondAssetRoot = outRoot / "second" / "assets";
+    if(!__hidden_assets_graphics_fixture::WriteMaterialBindDiscoveryMetadata(firstAssetRoot))
+        return false;
     if(!WriteTextFile(firstAssetRoot / "meshes" / "minimal_mesh.nwb", s_MinimalMeshMeta))
         return false;
     if(!WriteTextFile(firstAssetRoot / "material_interfaces" / "test_surface.bind", s_MinimalMaterialBindSource))
@@ -470,9 +508,9 @@ bool AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
 bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
-    const char* stage,
-    const char* metaFilename,
-    const char* sourceFilename,
+    AStringView stage,
+    AStringView metaFilename,
+    AStringView sourceFilename,
     const AStringView sourceText
 )
 {
@@ -702,7 +740,8 @@ bool AssetsGraphicsFixture::LoadCookedMinimalMesh(
         testArena,
         outputDirectory,
         Name("project/meshes/minimal_mesh"),
-        outLoadedAsset
+        outLoadedAsset,
+        1u
     );
 }
 
@@ -720,7 +759,8 @@ bool AssetsGraphicsFixture::LoadCookedMesh(
         testArena,
         outputDirectory,
         assetName,
-        outLoadedAsset
+        outLoadedAsset,
+        1u
     );
 }
 
@@ -863,7 +903,7 @@ bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
         outPositionRefDeltas,
         outAttributeRefDeltas,
         skinRequired,
-        [](const usize, const tchar*){ return false; }
+        [](const usize, const TStringView){ return false; }
     );
 }
 

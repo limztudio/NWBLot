@@ -110,15 +110,11 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceProperties physicalDeviceProperties;
     m_instanceDispatch.vkGetPhysicalDeviceProperties(m_vulkanPhysicalDevice, &physicalDeviceProperties);
 
-#ifdef NWB_UNICODE
-    {
-        const char* deviceName = physicalDeviceProperties.deviceName;
-        const usize len = NWB_STRNLEN(deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE);
-        m_rendererString = StringConvert(m_arena, AStringView(deviceName, len));
-    }
-#else
-    m_rendererString = physicalDeviceProperties.deviceName;
-#endif
+    const AStringView deviceName(
+        physicalDeviceProperties.deviceName,
+        NWB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE)
+    );
+    m_rendererString = StringConvert(m_arena, deviceName);
 
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
     const bool coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
@@ -151,7 +147,7 @@ bool BackendContext::createVulkanDevice(){
         featureQueryOptions,
         featureSupport
     );
-    if(const char* const missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport)){
+    if(const AStringView missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport); !missingFeature.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
         return false;
     }

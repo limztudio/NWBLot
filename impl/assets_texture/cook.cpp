@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
 
 
 bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("TextureAssetCodec::serialize"))))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("TextureAssetCodec::serialize")))
         return false;
 
     const Texture& texture = static_cast<const Texture&>(asset);
@@ -102,8 +102,8 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!Core::Assets::AppendVectorPayload(
         outBinary,
         mipBinaries,
-        MakeNotNull(NWB_TEXT("TextureAssetCodec::serialize")),
-        MakeNotNull(NWB_TEXT("mip levels"))
+        NWB_TEXT("TextureAssetCodec::serialize"),
+        NWB_TEXT("mip levels")
     ))
         return false;
 

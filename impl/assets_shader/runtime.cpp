@@ -37,7 +37,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ShaderAssetCodecAutoRegistrar, ShaderAssetCod
 
 
 bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Shader::loadBinary"))))
+    if(!checkVirtualPath(NWB_TEXT("Shader::loadBinary")))
         return false;
 
     Core::Assets::AssetString entryPoint(m_entryPoint.get_allocator().arena());

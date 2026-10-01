@@ -60,19 +60,19 @@ private:
 };
 
 
-void RecordUnsigned(const NotNull<const char*> key, const u64 value){
+void RecordUnsigned(const AStringView key, const u64 value){
     constexpr usize s_TextCapacity = 32u;
     char text[s_TextCapacity] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void RecordSample(const u32 sample, const u64 nanoseconds, const u64 checksum){
     if(sample < s_Warmups)
         return;
-    RecordUnsigned(NotNull<const char*>{ s_SampleKeys[sample - s_Warmups].data() }, nanoseconds);
-    RecordUnsigned(NotNull<const char*>{ "checksum" }, checksum);
+    RecordUnsigned(s_SampleKeys[sample - s_Warmups], nanoseconds);
+    RecordUnsigned("checksum", checksum);
 }
 
 [[nodiscard]] u64 Work(u64 value)noexcept{
@@ -95,9 +95,9 @@ void ProfileWaiters(Alloc::ScratchArena& scratch, const u32 workers, const u32 w
     config.workerCount = workers;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
-    RecordUnsigned(NotNull<const char*>{ "worker_count" }, workers);
-    RecordUnsigned(NotNull<const char*>{ "scope_waiters" }, waiterCount);
-    RecordUnsigned(NotNull<const char*>{ "ready_tasks" }, s_TaskCount);
+    RecordUnsigned("worker_count", workers);
+    RecordUnsigned("scope_waiters", waiterCount);
+    RecordUnsigned("ready_tasks", s_TaskCount);
     for(u32 sample = 0u; sample < s_Warmups + s_Samples; ++sample){
         for(u64& value : output)
             value = 0u;
@@ -170,10 +170,10 @@ void ProfileContributions(Alloc::ScratchArena& scratch, const u32 workers, const
     Atomic<u32> continuations{ 0u };
     Atomic<u32> leaves{ 0u };
     CpuTaskScheduler scheduler(Config(workers));
-    RecordUnsigned(NotNull<const char*>{ "worker_count" }, workers);
-    RecordUnsigned(NotNull<const char*>{ "root_prerequisites" }, roots);
-    RecordUnsigned(NotNull<const char*>{ "continuation_chain" }, chain);
-    RecordUnsigned(NotNull<const char*>{ "join_mode" }, joinMode);
+    RecordUnsigned("worker_count", workers);
+    RecordUnsigned("root_prerequisites", roots);
+    RecordUnsigned("continuation_chain", chain);
+    RecordUnsigned("join_mode", joinMode);
     for(u32 sample = 0u; sample < s_Warmups + s_Samples; ++sample){
         for(u32& value : visits)
             value = 0u;

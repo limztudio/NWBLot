@@ -41,7 +41,7 @@ namespace DeviceExtensionFeature{
 };
 
 struct DeviceExtensionEntry{
-    const char* name;
+    AStringView name;
     DeviceExtensionFeature::Enum feature = DeviceExtensionFeature::None;
 };
 

@@ -29,7 +29,7 @@ public:
     [[nodiscard]] static bool EncodeMeshletRefs(
     CookEntryT& entry,
     const bool skinRequired,
-    const NotNull<const tchar*> metaKind
+    const TStringView metaKind
     );
 
 
@@ -46,7 +46,7 @@ template<typename CookEntryT>
 bool MeshCookRefEncoding::EncodeMeshletRefs(
     CookEntryT& entry,
     const bool skinRequired,
-    const NotNull<const tchar*> metaKind
+    const TStringView metaKind
 ){
     return EncodeMeshletRefDeltas(
         entry.meshlets,
@@ -55,9 +55,9 @@ bool MeshCookRefEncoding::EncodeMeshletRefs(
         entry.meshletPositionRefDeltas,
         entry.meshletAttributeRefDeltas,
         skinRequired,
-        [&](const usize meshletIndex, const tchar* reason){
+        [&](const usize meshletIndex, const TStringView reason){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}")
-                , metaKind.get()
+                , metaKind
                 , StringConvert(entry.virtualPath.c_str())
                 , meshletIndex
                 , reason

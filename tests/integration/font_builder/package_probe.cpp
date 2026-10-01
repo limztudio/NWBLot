@@ -21,8 +21,8 @@ namespace __hidden_font_builder_package_probe{
 
 
 inline constexpr Name s_PackageArena("tests/integration/font_builder/package");
-inline constexpr auto s_LoggerAppName = NWB_TEXT("font_builder_package_probe");
-inline constexpr auto s_LoggerInitFailureText = NWB_TEXT("[font_builder_package_probe] logger.init() failed");
+inline constexpr TStringView s_LoggerAppName = NWB_TEXT("font_builder_package_probe");
+inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[font_builder_package_probe] logger.init() failed");
 inline constexpr int s_EntryFailure = -1;
 
 
@@ -59,7 +59,7 @@ inline constexpr int s_EntryFailure = -1;
     return true;
 }
 
-[[nodiscard]] static bool DecodePackage(const char* source, const char* destination){
+[[nodiscard]] static bool DecodePackage(const AStringView source, const AStringView destination){
     NWB::Core::Assets::AssetArena arena(s_PackageArena);
     const NWB::Path sourcePath(arena, source);
     const NWB::Path destinationPath(arena, destination);

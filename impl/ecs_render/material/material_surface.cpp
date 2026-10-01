@@ -58,12 +58,12 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 [[nodiscard]] static ResourceT* FindOrCreateCachedAsset(
     CacheT& cache,
     const Core::Assets::AssetRef<AssetT>& assetRef,
-    const NotNull<const char*> emptyKindText,
+    const AStringView emptyKindText,
     LoadFn&& loadResource,
     ReleaseFn&& releaseResource
 ){
     if(!assetRef.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText.get()));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
         return nullptr;
     }
 
@@ -95,7 +95,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     TextureGpuResource* const textureResource = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
         resources.textureAssetCache,
         textureAsset,
-        MakeNotNull("Texture2D"),
+        "Texture2D",
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
             if(!TextureAssetLoader::Load(
                 outResource,
@@ -103,7 +103,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                MakeNotNull(NWB_TEXT("RendererSystem"))
+                NWB_TEXT("RendererSystem")
             ))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
@@ -143,7 +143,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
-        MakeNotNull(Sampler::s_AssetTypeText.data()),
+        Sampler::s_AssetTypeText,
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
             return SamplerAssetLoader::Load(
                 outResource,
@@ -151,7 +151,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                MakeNotNull(NWB_TEXT("RendererSystem"))
+                NWB_TEXT("RendererSystem")
             );
         },
         [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
@@ -502,8 +502,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const Material* loadedMaterial = m_assetManager.loadTypedSync<Material>(
         materialPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("RendererSystem")),
-        MakeNotNull("material")
+        NWB_TEXT("RendererSystem"),
+        "material"
     );
     if(!loadedMaterial)
         return false;

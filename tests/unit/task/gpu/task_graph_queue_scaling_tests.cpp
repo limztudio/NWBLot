@@ -43,18 +43,18 @@ namespace Scenario{
 };
 
 
-void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void CheckAutomaticPlacement(
     const usize taskCount,
     const Scenario::Enum scenario,
-    const NotNull<const char*> durationProperty,
-    const NotNull<const char*> scratchProperty){
+    const AStringView durationProperty,
+    const AStringView scratchProperty){
     SCOPED_TRACE(scenario);
     SCOPED_TRACE(taskCount);
     TestArena testArena;
@@ -141,25 +141,25 @@ void CheckAutomaticPlacement(
 
 void CheckScenarios(const usize taskCount){
     CheckAutomaticPlacement(
-        taskCount, Scenario::SingleQueue, NotNull<const char*>("single_queue_ns"), NotNull<const char*>("single_queue_scratch_bytes")
+        taskCount, Scenario::SingleQueue, "single_queue_ns", "single_queue_scratch_bytes"
     );
     CheckAutomaticPlacement(
-        taskCount, Scenario::Conservative, NotNull<const char*>("conservative_ns"), NotNull<const char*>("conservative_scratch_bytes")
+        taskCount, Scenario::Conservative, "conservative_ns", "conservative_scratch_bytes"
     );
     CheckAutomaticPlacement(
-        taskCount, Scenario::Independent, NotNull<const char*>("independent_ns"), NotNull<const char*>("independent_scratch_bytes")
+        taskCount, Scenario::Independent, "independent_ns", "independent_scratch_bytes"
     );
     CheckAutomaticPlacement(
-        taskCount, Scenario::MergeChain, NotNull<const char*>("merge_chain_ns"), NotNull<const char*>("merge_chain_scratch_bytes")
+        taskCount, Scenario::MergeChain, "merge_chain_ns", "merge_chain_scratch_bytes"
     );
     CheckAutomaticPlacement(
-        taskCount, Scenario::SerialChain, NotNull<const char*>("serial_chain_ns"), NotNull<const char*>("serial_chain_scratch_bytes")
+        taskCount, Scenario::SerialChain, "serial_chain_ns", "serial_chain_scratch_bytes"
     );
     CheckAutomaticPlacement(
         taskCount,
         Scenario::SameClassBalance,
-        NotNull<const char*>("same_class_balance_ns"),
-        NotNull<const char*>("same_class_balance_scratch_bytes")
+        "same_class_balance_ns",
+        "same_class_balance_scratch_bytes"
     );
 }
 

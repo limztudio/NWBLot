@@ -79,7 +79,7 @@ inline bool ResolveShaderEntryPoint(
     const usize wordCount,
     const AStringView entryName,
     const ShaderType::Mask shaderType,
-    const char* errorContext,
+    const AStringView errorContext,
     GraphicsString& outEntryPointName
 ){
     const SpirvEntryPointLookupResult::Enum lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);

@@ -9,7 +9,6 @@
 #include <global/termination.h>
 
 namespace __hidden_graphics_api{
-static constexpr StringView s_UnknownFormatName = "UNKNOWN";
 static constexpr int s_UnknownFormatBlockX = 0;
 static constexpr int s_UnknownFormatBlockY = 0;
 };
@@ -82,7 +81,7 @@ RayTracingPipelineDesc& RayTracingPipelineDesc::addBindingLayout(const BindingLa
 
 
 static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
-    { Format::UNKNOWN              , __hidden_graphics_api::s_UnknownFormatName.data(), __hidden_graphics_api::s_UnknownFormatBlockX, __hidden_graphics_api::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
+    { Format::UNKNOWN              , "UNKNOWN", __hidden_graphics_api::s_UnknownFormatBlockX, __hidden_graphics_api::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
     { Format::R8_SINT              , "R8_SINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, true , false },
@@ -621,7 +620,7 @@ GpuCrashMarkerTracker::GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsA
     , m_eventStackOffsets(arena)
 {}
 
-usize GpuCrashMarkerTracker::pushEvent(const char* name){
+usize GpuCrashMarkerTracker::pushEvent(const AStringView name){
     GraphicsString nextEventStack(m_eventStack, m_eventStack.get_allocator());
     if(!nextEventStack.empty())
         nextEventStack.append("/");

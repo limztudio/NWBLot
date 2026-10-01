@@ -22,7 +22,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComputeShaderTableByteSize(const u32 recordCount, const u32 handleSizeAligned, u64& outByteSize, const tchar* operation){
+bool ComputeShaderTableByteSize(const u32 recordCount, const u32 handleSizeAligned, u64& outByteSize, TStringView operation){
     if(recordCount == 0u || handleSizeAligned == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count or stride is invalid"), operation);
         return false;
@@ -261,8 +261,8 @@ bool ShaderTable::findGroupIndex(
     const AStringView exportName,
     const ShaderTableRecordKind::Enum expectedKind,
     u32& outGroupIndex,
-    const tchar* operationName,
-    const tchar* exportKind
+    TStringView operationName,
+    TStringView exportKind
 )const{
     if(exportName.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} export name is empty"), operationName, exportKind);
@@ -316,8 +316,8 @@ bool ShaderTable::preflightShaderRecord(
     const ShaderTableRecordKind::Enum expectedKind,
     const u32 recordCount,
     ShaderRecordPreflight& outPreflight,
-    const tchar* operationName,
-    const tchar* exportKind
+    TStringView operationName,
+    TStringView exportKind
 )const{
     if(!findGroupIndex(exportName, expectedKind, outPreflight.groupIndex, operationName, exportKind))
         return false;
@@ -382,8 +382,8 @@ bool ShaderTable::allocateSBTBuffer(
     const ShaderRecordPreflight& preflight,
     BufferHandle& outBuffer,
     u64& outOffset,
-    const tchar* operationName,
-    const tchar* recordName
+    TStringView operationName,
+    TStringView recordName
 ){
     BufferDesc bufferDesc;
     bufferDesc.byteSize = preflight.allocationByteSize;
@@ -454,9 +454,9 @@ u32 ShaderTable::appendShaderRecord(
     BufferHandle& buffer,
     u64& offset,
     u32& count,
-    const tchar* operationName,
-    const tchar* recordName,
-    const tchar* exportKind
+    TStringView operationName,
+    TStringView recordName,
+    TStringView exportKind
 ){
     if(count == Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader table record count exceeds u32 range"), operationName);

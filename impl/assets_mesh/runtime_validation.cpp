@@ -84,7 +84,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const Core::Assets::AssetVector<Half4U>& tangents,
     const Core::Assets::AssetVector<Float2U>& uv0,
     const Core::Assets::AssetVector<Half4U>& colors,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
 ){
     if(
@@ -170,7 +170,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
 ){
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_MeshletAttributeSkinSharingArena);
@@ -243,7 +243,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const usize uv0Count,
     const usize colorCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){
@@ -508,7 +508,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
     const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
     const usize skinCount,
     const bool skinRequired,
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText
 ){
     if(!ValidateMeshStreams(positions, normals, tangents, uv0, colors, contextText, meshPathText))

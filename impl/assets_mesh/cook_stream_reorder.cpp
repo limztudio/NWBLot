@@ -30,7 +30,7 @@ bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(
                 return true;
 
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin")
-                , s_MeshMetaKind.get()
+                , s_MeshMetaKind
                 , StringConvert(entry.virtualPath.c_str())
             );
             return false;

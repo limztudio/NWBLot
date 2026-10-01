@@ -109,7 +109,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
 
-[[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::FrameGraphNodeKind::Resource:
         return "ellipse";
@@ -122,7 +122,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     }
 }
 
-[[nodiscard]] const char* FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::FrameGraphNodeKind::Pass:
         return "pass";
@@ -132,11 +132,11 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "external";
     case Telemetry::FrameGraphNodeKind::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
-[[nodiscard]] const char* FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept{
+[[nodiscard]] AStringView FrameGraphEdgeLabel(const Telemetry::FrameGraphEdgeKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::FrameGraphEdgeKind::Reads:
         return "reads";
@@ -150,7 +150,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     }
 }
 
-[[nodiscard]] const char* FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
+[[nodiscard]] AStringView FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
     switch(queueClass){
     case Telemetry::FrameGraphQueueClass::Graphics:
         return "graphics";
@@ -160,11 +160,11 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "transfer";
     case Telemetry::FrameGraphQueueClass::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
-[[nodiscard]] const char* FrameGraphQueueAssignmentReasonText(
+[[nodiscard]] AStringView FrameGraphQueueAssignmentReasonText(
     const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
 )noexcept{
     switch(reason){
@@ -176,11 +176,11 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scored";
     case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
-[[nodiscard]] const char* FrameGraphQueueAssignmentAcceptanceText(
+[[nodiscard]] AStringView FrameGraphQueueAssignmentAcceptanceText(
     const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance
 )noexcept{
     switch(acceptance){
@@ -193,7 +193,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
         return "notAccepted";
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -201,7 +201,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const char* FrameGraphTaskPacketizationDecisionText(
+[[nodiscard]] AStringView FrameGraphTaskPacketizationDecisionText(
     const Telemetry::FrameGraphTaskPacketizationDecision::Enum decision
 )noexcept{
     switch(decision){
@@ -229,7 +229,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scoredMergeDomainMismatch";
     case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 

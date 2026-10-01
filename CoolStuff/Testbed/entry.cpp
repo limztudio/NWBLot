@@ -21,10 +21,10 @@
 
 
 namespace __hidden_testbed_entry{
-static constexpr tchar s_WindowTitle[] = NWB_TEXT("NWB Testbed");
-static constexpr tchar s_WorldAllocFailed[] = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
-static constexpr tchar s_ResolverNull[] = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
-static constexpr tchar s_DestroyRequiresIdleOrLoss[] = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
@@ -38,7 +38,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
     return __hidden_testbed_entry::s_WindowTitle;
 }
 

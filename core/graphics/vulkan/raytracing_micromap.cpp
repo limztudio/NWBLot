@@ -38,7 +38,7 @@ VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFor
 bool ConvertOpacityMicromapBuildFlags(
     const RayTracingOpacityMicromapBuildFlags::Mask flags,
     VkBuildMicromapFlagsEXT& outFlags,
-    const tchar* operation
+    TStringView operation
 ){
     constexpr u8 s_KnownFlags = RayTracingOpacityMicromapBuildFlags::FastTrace
         | RayTracingOpacityMicromapBuildFlags::FastBuild
@@ -71,7 +71,7 @@ bool BuildOpacityMicromapUsageCounts(
     const u32 maxOpacity2StateSubdivisionLevel,
     const u32 maxOpacity4StateSubdivisionLevel,
     MicromapUsageVector& outUsageCounts,
-    const tchar* operation
+    TStringView operation
 ){
     outUsageCounts.clear();
     outUsageCounts.reserve(counts.size());
@@ -118,7 +118,7 @@ bool ResolveOpacityMicromapBuildInputAddress(
     Buffer& buffer,
     const u64 offset,
     const u64 byteSize,
-    const tchar* resourceName,
+    TStringView resourceName,
     VkDeviceAddress& outAddress
 ){
     constexpr u64 s_DeviceAddressAlignment = 256u;
@@ -327,7 +327,7 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     constexpr VkBufferUsageFlags s_StorageUsage =
         VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     ;
-    constexpr const tchar* s_OperationName = NWB_TEXT("build opacity micromap");
+    constexpr TStringView s_OperationName = NWB_TEXT("build opacity micromap");
     if(
         !validateBufferForGpuState(
             inputBuffer,

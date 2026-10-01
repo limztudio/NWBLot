@@ -33,7 +33,7 @@ private:
     struct Offer{
         WaylandClipboardService& service;
         void* handle = nullptr;
-        const char* mime = nullptr;
+        AStringView mime;
         u8 rank = 0u;
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
         Timer created = TimerNow();

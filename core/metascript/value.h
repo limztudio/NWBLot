@@ -111,18 +111,17 @@ public:
 
         constexpr bool canAppendString =
             requires(Container& c, usize n){ c.reserve(n); }
-            && requires(Container& c, const MChar* data, usize size){ c.emplace_back(data, size); }
+            && requires(Container& c, const MStringView text){ c.emplace_back(text); }
         ;
         constexpr bool canAppendArenaString =
             requires(Container& c, usize n){ c.reserve(n); }
             && requires(Container& c){ c.get_allocator().arena(); }
             && requires(
                 Container& c,
-                const MChar* data,
-                usize size,
+                const MStringView text,
                 typename Container::value_type::allocator_type allocator
             ){
-                c.emplace_back(data, size, allocator);
+                c.emplace_back(text, allocator);
             }
         ;
         const usize listOffset = outList.size();
@@ -131,14 +130,14 @@ public:
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
                 const MStringView text = elem.asString();
-                outList.emplace_back(text.data(), text.size(), arena);
+                outList.emplace_back(text, arena);
             }
         }
         else if constexpr(canAppendString){
             outList.reserve(listOffset + list.size());
             for(const auto& elem : list){
                 const MStringView text = elem.asString();
-                outList.emplace_back(text.data(), text.size());
+                outList.emplace_back(text);
             }
         }
         else{
@@ -146,7 +145,7 @@ public:
             for(usize i = 0u; i < list.size(); ++i){
                 const auto& elem = list[i];
                 const MStringView text = elem.asString();
-                outList[listOffset + i].assign(text.data(), text.size());
+                outList[listOffset + i].assign(text);
             }
         }
         return true;

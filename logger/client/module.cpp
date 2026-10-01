@@ -52,7 +52,7 @@ bool Client::globalInit(){
 
 
 Client::Client()
-    : ClientBaseType(MakeNotNull("NWB::Log::Client"))
+    : ClientBaseType("NWB::Log::Client")
     , m_curl(nullptr)
     , m_pendingPayload(BaseType::arena())
     , m_messageUrl(BaseType::arena())
@@ -72,9 +72,9 @@ Client::~Client(){
     }
 }
 
-bool Client::internalInit(NotNull<const char*> url){
-    m_messageUrl = AStringView(url.get());
-    m_telemetryUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), AStringView(url.get()), AStringView(s_TelemetryUploadEndpoint));
+bool Client::internalInit(const AStringView url){
+    m_messageUrl = url;
+    m_telemetryUrl = __hidden_log_client::UrlWithEndpoint(BaseType::arena(), url, s_TelemetryUploadEndpoint);
 
     m_curl = curl_easy_init();
     if(!m_curl){
@@ -215,7 +215,7 @@ bool ClientStandalone::globalInit(){
 
 
 ClientStandalone::ClientStandalone()
-    : ClientBaseType(MakeNotNull("NWB::Log::ClientStandalone"))
+    : ClientBaseType("NWB::Log::ClientStandalone")
     , m_processedMessageFile(BaseType::arena())
 {}
 ClientStandalone::~ClientStandalone(){

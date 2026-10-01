@@ -5,6 +5,9 @@
 #pragma once
 
 
+#include "string_view.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -28,22 +31,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const char* CurrentAbiName()noexcept{
-    [[maybe_unused]] static constexpr char s_Arm64AbiName[] = "arm64";
-    [[maybe_unused]] static constexpr char s_ArmAbiName[] = "arm";
-    [[maybe_unused]] static constexpr char s_X86_64AbiName[] = "x86_64";
-    [[maybe_unused]] static constexpr char s_X86AbiName[] = "x86";
-    [[maybe_unused]] static constexpr char s_UnknownAbiName[] = "unknown";
+[[nodiscard]] inline constexpr StringView CurrentAbiName()noexcept{
 #if defined(__aarch64__) || defined(_M_ARM64)
-    return s_Arm64AbiName;
+    return "arm64";
 #elif defined(__arm__) || defined(_M_ARM)
-    return s_ArmAbiName;
+    return "arm";
 #elif defined(__x86_64__) || defined(_M_X64)
-    return s_X86_64AbiName;
+    return "x86_64";
 #elif defined(__i386__) || defined(_M_IX86)
-    return s_X86AbiName;
+    return "x86";
 #else
-    return s_UnknownAbiName;
+    return "unknown";
 #endif
 }
 

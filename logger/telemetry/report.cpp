@@ -128,7 +128,7 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const char* EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
+AStringView EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
     switch(kind){
     case Telemetry::EventKind::TextLog:
         return "textLog";
@@ -142,11 +142,11 @@ const char* EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
         return "memoryFrame";
     case Telemetry::EventKind::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
-const char* PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)noexcept{
+AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)noexcept{
     switch(source){
     case Telemetry::PerfTimingSource::Cpu:
         return "cpu";
@@ -154,7 +154,7 @@ const char* PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
         return "gpu";
     case Telemetry::PerfTimingSource::Unknown:
     default:
-        return ::__hidden_telemetry_report::s_UnknownReportField.data();
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 

@@ -72,16 +72,18 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline char* DuplicateArenaCString(ArenaT& arena, const char* const text){
-    if(!text)
+[[nodiscard]] inline char* DuplicateArenaCString(ArenaT& arena, const AStringView text){
+    if(text.size() == Limit<usize>::s_Max)
         return nullptr;
 
-    const usize byteCount = static_cast<usize>(NWB_STRLEN(text)) + 1u;
+    const usize byteCount = text.size() + 1u;
     char* const copy = static_cast<char*>(AllocateArenaCMemory(arena, byteCount));
     if(!copy)
         return nullptr;
 
-    NWB_MEMCPY(copy, byteCount, text, byteCount);
+    if(!text.empty())
+        NWB_MEMCPY(copy, byteCount, text.data(), text.size());
+    copy[text.size()] = 0;
     return copy;
 }
 

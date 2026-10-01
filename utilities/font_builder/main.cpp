@@ -18,8 +18,8 @@ namespace __hidden_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr auto s_LoggerAppName = NWB_TEXT("font_builder");
-inline constexpr auto s_LoggerInitFailureText = NWB_TEXT("[font_builder] logger.init() failed");
+inline constexpr TStringView s_LoggerAppName = NWB_TEXT("font_builder");
+inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[font_builder] logger.init() failed");
 inline constexpr int s_FontBuilderEntryFailure = -1;
 
 

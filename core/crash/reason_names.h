@@ -21,7 +21,7 @@ NWB_CRASH_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline const char* PosixSignalName(const u64 signalNumber)noexcept{
+[[nodiscard]] inline StringView PosixSignalName(const u64 signalNumber)noexcept{
 #if defined(SIGILL)
     if(signalNumber == static_cast<u64>(SIGILL))
         return "SIGILL";
@@ -64,7 +64,7 @@ inline constexpr u32 s_WindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
 inline constexpr u32 s_WindowsExceptionIntegerOverflowCode = 0xC0000095u;
 inline constexpr u32 s_WindowsExceptionStackOverflowCode = 0xC00000FDu;
 
-[[nodiscard]] inline const char* WindowsExceptionName(const u64 exceptionCode)noexcept{
+[[nodiscard]] inline StringView WindowsExceptionName(const u64 exceptionCode)noexcept{
     switch(exceptionCode){
     case s_WindowsExceptionBreakpointCode:
         return "breakpoint";

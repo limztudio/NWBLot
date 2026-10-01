@@ -153,11 +153,11 @@ struct ReportFixture{
     return text.substr(begin, end == AStringView::npos ? text.size() - begin : end - begin);
 }
 
-void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 taskCount, const usize iterations = 3u){
@@ -196,15 +196,15 @@ void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 task
     EXPECT_EQ(CountText(json, s_PACKET_INDEX), packetCount);
     EXPECT_EQ(CountText(json, "\"runtimeStatistics\": null"), taskCount);
     EXPECT_EQ(CountText(dot, "runtime_packet_submission_count="), ownerCount);
-    RecordUnsignedProperty(MakeNotNull("report_build_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("report_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("report_node_count"), fixture.nodes.size());
-    RecordUnsignedProperty(MakeNotNull("report_owner_count"), ownerCount);
-    RecordUnsignedProperty(MakeNotNull("report_packet_count"), packetCount);
-    RecordUnsignedProperty(MakeNotNull("report_physical_queue_count"), fixture.queues.size());
-    RecordUnsignedProperty(MakeNotNull("report_heap_allocations"), after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty(MakeNotNull("report_json_bytes"), report.json.size());
-    RecordUnsignedProperty(MakeNotNull("report_dot_bytes"), report.graph.size());
+    RecordUnsignedProperty("report_build_ns", elapsed);
+    RecordUnsignedProperty("report_iterations", iterations);
+    RecordUnsignedProperty("report_node_count", fixture.nodes.size());
+    RecordUnsignedProperty("report_owner_count", ownerCount);
+    RecordUnsignedProperty("report_packet_count", packetCount);
+    RecordUnsignedProperty("report_physical_queue_count", fixture.queues.size());
+    RecordUnsignedProperty("report_heap_allocations", after.allocationCount - before.allocationCount);
+    RecordUnsignedProperty("report_json_bytes", report.json.size());
+    RecordUnsignedProperty("report_dot_bytes", report.graph.size());
 }
 
 

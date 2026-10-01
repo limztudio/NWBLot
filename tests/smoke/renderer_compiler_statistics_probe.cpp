@@ -98,10 +98,10 @@ RendererCompilerStatisticsProbe::RendererCompilerStatisticsProbe(Core::GraphicsR
 
 RendererCompilerStatisticsProbe::~RendererCompilerStatisticsProbe(){ stop(); }
 
-bool RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const NotNull<const char*> path){
-    if(m_enabled || path.get()[0] == '\0')
+bool RendererCompilerStatisticsProbe::start(Impl::RendererSystem& renderer, const AStringView path){
+    if(m_enabled || path.empty())
         return false;
-    m_output = path.get();
+    m_output.assign(path);
     m_samples.reserve(s_Capacity);
     m_renderer = &renderer;
     getGraphics().addRenderPassToBack(*this);

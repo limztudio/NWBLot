@@ -56,11 +56,11 @@ namespace ImportScenario{
     return Graphics::ComputePipelineHandle(pipeline, Graphics::ComputePipelineHandle::deleter_type(&arena), AdoptRef);
 }
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void CheckImportScaling(const usize importCount, const ImportScenario::Enum scenario){
@@ -168,9 +168,9 @@ static void CheckImportScaling(const usize importCount, const ImportScenario::En
             }
         }
     }
-    RecordUnsignedProperty(NotNull<const char*>{ "import_count" }, importCount);
-    RecordUnsignedProperty(NotNull<const char*>{ "append_ns" }, minimumAppendNanoseconds);
-    RecordUnsignedProperty(NotNull<const char*>{ "reimport_ns" }, minimumReimportNanoseconds);
+    RecordUnsignedProperty("import_count", importCount);
+    RecordUnsignedProperty("append_ns", minimumAppendNanoseconds);
+    RecordUnsignedProperty("reimport_ns", minimumReimportNanoseconds);
 }
 
 

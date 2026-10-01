@@ -151,7 +151,7 @@ void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_resourceReferences.trackRetainedBuffer(buffer);
 }
 
-bool CommandList::validateCommandRecordingScope(const tchar* const operationName){
+bool CommandList::validateCommandRecordingScope(const TStringView operationName){
     if(!publicCommandStateAccessible())
         return false;
     if(m_commandRecordingFailed)
@@ -176,7 +176,7 @@ bool CommandList::validateCommandRecordingScope(const tchar* const operationName
 
     NWB_LOGGER_CRITICAL_WARNING(
         NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})"),
-        operationName ? operationName : NWB_TEXT("unnamed command"),
+        !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
         m_creationDesc.physicalQueue.index,
         m_creationDesc.physicalQueue.deviceGeneration,
         static_cast<u32>(m_creationDesc.queueType),
@@ -189,7 +189,7 @@ bool CommandList::validateCommandRecordingScope(const tchar* const operationName
 
 bool CommandList::recordAndValidateCommandCapability(
     const GpuQueueCapability::Mask requiredCapabilities,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!publicCommandStateAccessible())
         return false;
@@ -233,7 +233,7 @@ bool CommandList::recordAndValidateCommandCapability(
 
     NWB_LOGGER_CRITICAL_WARNING(
         NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})"),
-        operationName ? operationName : NWB_TEXT("unnamed command"),
+        !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
         m_creationDesc.physicalQueue.index,
         m_creationDesc.physicalQueue.deviceGeneration,
         static_cast<u32>(m_creationDesc.queueType),
@@ -248,7 +248,7 @@ bool CommandList::recordAndValidateCommandCapability(
 
 bool CommandList::recordAndValidateAnyCommandCapability(
     const GpuQueueCapability::Mask alternativeCapabilities,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!publicCommandStateAccessible())
         return false;
@@ -277,14 +277,14 @@ bool CommandList::recordAndValidateAnyCommandCapability(
     return recordAndValidateCommandCapability(static_cast<GpuQueueCapability::Mask>(selectedBit), operationName);
 }
 
-void CommandList::rejectCommandRecording(const tchar* const operationName, const tchar* const reason){
+void CommandList::rejectCommandRecording(const TStringView operationName, const TStringView reason){
     if(!publicCommandStateAccessible())
         return;
     if(!m_commandRecordingFailed){
         NWB_LOGGER_CRITICAL_WARNING(
             NWB_TEXT("Vulkan: Rejecting {} command recording: {}"),
-            operationName ? operationName : NWB_TEXT("unnamed command"),
-            reason ? reason : NWB_TEXT("invalid command semantics")
+            !operationName.empty() ? operationName : NWB_TEXT("unnamed command"),
+            !reason.empty() ? reason : NWB_TEXT("invalid command semantics")
         );
     }
     invalidateCommandRecording();

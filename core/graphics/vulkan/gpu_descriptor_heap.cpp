@@ -631,7 +631,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
     else if(allocator.nextFresh < allocator.capacity)
         slot = allocator.nextFresh;
     else{
-        const tchar* const namespaceName = descriptorClass == GpuDescriptorClass::Sampler
+        const TStringView namespaceName = descriptorClass == GpuDescriptorClass::Sampler
             ? NWB_TEXT("sampler")
             : (descriptorClass == GpuDescriptorClass::AccelStruct ? NWB_TEXT("accel-struct") : NWB_TEXT("resource"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: {} namespace exhausted (capacity {}).")

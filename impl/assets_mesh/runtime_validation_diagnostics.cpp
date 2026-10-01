@@ -15,12 +15,12 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText,
     const TStringView detailText
 ){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {}")
-        , contextText.get()
+        , contextText
         , meshPathText
         , detailText
     );
@@ -29,14 +29,14 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText,
     const TStringView itemText,
     const usize itemIndex,
     const TStringView detailText
 ){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {} {} {}")
-        , contextText.get()
+        , contextText
         , meshPathText
         , itemText
         , itemIndex
@@ -47,13 +47,13 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
     const TStringView detailText
 ){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} {}")
-        , contextText.get()
+        , contextText
         , meshPathText
         , meshletIndex
         , detailText
@@ -63,14 +63,14 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletAttributePayloadValidation(
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
     const usize attributeIndex,
     const TStringView detailText
 ){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has attribute ref {} {}")
-        , contextText.get()
+        , contextText
         , meshPathText
         , meshletIndex
         , attributeIndex
@@ -81,14 +81,14 @@ NWB_IMPL_BEGIN
 
 
 [[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPrimitivePayloadValidation(
-    const NotNull<const tchar*> contextText,
+    const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
     const usize primitiveIndex,
     const TStringView detailText
 ){
     NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} {}")
-        , contextText.get()
+        , contextText
         , meshPathText
         , meshletIndex
         , primitiveIndex

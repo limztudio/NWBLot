@@ -11,7 +11,7 @@
 #include <core/graphics/frame_graph_nodes.h>
 
 namespace __hidden_frame_telemetry{
-static constexpr char s_UnknownStageLabel[] = "Unknown";
+static constexpr AStringView s_UnknownStageLabel = "Unknown";
 };
 
 

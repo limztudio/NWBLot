@@ -210,7 +210,7 @@ template<typename PayloadT, typename PayloadVector>
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
-    const NotNull<const tchar*> label,
+    const TStringView label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
@@ -223,7 +223,7 @@ template<typename PayloadT, typename PayloadVector>
     );
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
-            , label.get()
+            , label
             , instance.handle.value
         );
         return {};
@@ -241,16 +241,16 @@ template<typename PayloadT, typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return buffer;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'")
-        , label.get()
+        , label
         , instance.handle.value
     );
     return {};
@@ -264,7 +264,7 @@ template<typename PayloadT, typename PayloadVector>
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
-    const NotNull<const tchar*> label,
+    const TStringView label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
@@ -293,7 +293,7 @@ template<typename PayloadVector>
     const AStringView suffix,
     const PayloadVector& payload,
     const bool canHaveUavs,
-    const NotNull<const tchar*> label,
+    const TStringView label,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
 ){
     outBuffer = nullptr;
@@ -306,7 +306,7 @@ template<typename PayloadVector>
     );
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
-            , label.get()
+            , label
             , instance.handle.value
         );
         return false;
@@ -326,14 +326,14 @@ template<typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return true;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"),
-            label.get(),
+            label,
             instance.handle.value
         );
         return false;
@@ -368,7 +368,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("rest_positions"),
         instance.restPositions,
         false,
-        MakeNotNull(NWB_TEXT("rest position"))
+        NWB_TEXT("rest position")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -377,7 +377,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("rest_normals"),
         instance.restNormals,
         false,
-        MakeNotNull(NWB_TEXT("rest normal"))
+        NWB_TEXT("rest normal")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -386,7 +386,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("rest_tangents"),
         instance.restTangents,
         false,
-        MakeNotNull(NWB_TEXT("rest tangent"))
+        NWB_TEXT("rest tangent")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
         m_graphics,
@@ -395,7 +395,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("skinned_positions"),
         instance.restPositions,
         true,
-        MakeNotNull(NWB_TEXT("skinned position")),
+        NWB_TEXT("skinned position"),
         true,
         rtSupported,
         Core::ResourceQueueSharing::GraphicsAndAsyncCompute
@@ -407,7 +407,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("skinned_normals"),
         instance.restNormals,
         true,
-        MakeNotNull(NWB_TEXT("skinned normal"))
+        NWB_TEXT("skinned normal")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -416,7 +416,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("skinned_tangents"),
         instance.restTangents,
         true,
-        MakeNotNull(NWB_TEXT("skinned tangent"))
+        NWB_TEXT("skinned tangent")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float2U>(
         m_graphics,
@@ -425,7 +425,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("uv0"),
         instance.uv0,
         false,
-        MakeNotNull(NWB_TEXT("uv0"))
+        NWB_TEXT("uv0")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -434,7 +434,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("colors"),
         instance.colors,
         false,
-        MakeNotNull(NWB_TEXT("color"))
+        NWB_TEXT("color")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletDesc>(
         m_graphics,
@@ -443,7 +443,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlets"),
         instance.meshlets,
         false,
-        MakeNotNull(NWB_TEXT("meshlet descriptor"))
+        NWB_TEXT("meshlet descriptor")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletBounds>(
         m_graphics,
@@ -452,7 +452,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlet_bounds"),
         instance.meshletBounds,
         true,
-        MakeNotNull(NWB_TEXT("meshlet bounds")),
+        NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
@@ -463,7 +463,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlet_position_ref_deltas"),
         instance.meshletPositionRefDeltas,
         false,
-        MakeNotNull(NWB_TEXT("meshlet position ref delta"))
+        NWB_TEXT("meshlet position ref delta")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
@@ -473,7 +473,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlet_attribute_ref_deltas"),
         instance.meshletAttributeRefDeltas,
         false,
-        MakeNotNull(NWB_TEXT("meshlet attribute ref delta"))
+        NWB_TEXT("meshlet attribute ref delta")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletLocalVertexRef>(
         m_graphics,
@@ -482,7 +482,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlet_local_vertex_refs"),
         instance.meshletLocalVertexRefs,
         false,
-        MakeNotNull(NWB_TEXT("meshlet local vertex ref"))
+        NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
@@ -492,7 +492,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("meshlet_primitive_indices"),
         instance.meshletPrimitiveIndices,
         false,
-        MakeNotNull(NWB_TEXT("meshlet primitive index"))
+        NWB_TEXT("meshlet primitive index")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
         m_graphics,
@@ -501,7 +501,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         AStringView("attribute_skins"),
         instance.attributeSkins,
         false,
-        MakeNotNull(NWB_TEXT("attribute skin"))
+        NWB_TEXT("attribute skin")
     ) && uploaded;
 
     // Both shadow backends trace triangles; always build the reconstructed index buffer.
@@ -542,7 +542,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             AStringView("rt_triangle_indices"),
             triangleIndices,
             false,
-            MakeNotNull(NWB_TEXT("rt triangle index")),
+            NWB_TEXT("rt triangle index"),
             true,
             rtSupported,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
@@ -580,7 +580,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             AStringView("rt_triangle_attributes"),
             triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
-            MakeNotNull(NWB_TEXT("rt triangle attribute")),
+            NWB_TEXT("rt triangle attribute"),
             true,
             false,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute

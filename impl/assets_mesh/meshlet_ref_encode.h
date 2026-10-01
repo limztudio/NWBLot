@@ -56,7 +56,7 @@ struct MeshletRefEncodeChannel{
     u32 RefT::* indexMember = nullptr;
     u32 MeshletDesc::* baseMember = nullptr;
     MeshletRefDeltaWidth::Enum width = MeshletRefDeltaWidth::U8;
-    const tchar* failureText = nullptr;
+    TStringView failureText;
 };
 
 using MeshletPositionRefEncodeChannel = MeshletRefEncodeChannel<MeshletPositionStreamRef>;

@@ -197,7 +197,7 @@ bool BackendContext::createVulkanSwapChain(){
     m_swapChainState.backBufferFormat = surfaceFormatSelection.backBufferFormat;
     m_swapChainState.outputMode = surfaceFormatSelection.outputMode;
     if(m_deviceParams.enableHDR10Output && m_swapChainState.outputMode != SwapChainOutputMode::HDR10){
-        const tchar* const reason = hdr10ExtensionEnabled
+        const TStringView reason = hdr10ExtensionEnabled
             ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format")
             : NWB_TEXT("VK_EXT_swapchain_colorspace is unavailable")
         ;
@@ -220,7 +220,7 @@ bool BackendContext::createVulkanSwapChain(){
         && (surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u
     ;
     if(m_deviceParams.enableSwapChainReadback){
-        const tchar* const status = swapChainReadbackAvailable
+        const TStringView status = swapChainReadbackAvailable
             ? NWB_TEXT("enabled")
             : NWB_TEXT("unavailable because the surface lacks transfer-source image usage")
         ;

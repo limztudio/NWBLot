@@ -34,16 +34,19 @@ namespace __hidden_gtest_nwb_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr char s_Vkon12DriverSortingDisableKey[] = "VK_DISABLE_VKON12_DRIVER_SORTING";
-inline constexpr char s_Vkon12DriverSortingDisableValue[] = "1";
-inline constexpr char s_ThreadsafeDeathTestStyle[] = "threadsafe";
+inline constexpr AStringView s_Vkon12DriverSortingDisableKey = "VK_DISABLE_VKON12_DRIVER_SORTING";
+inline constexpr AStringView s_Vkon12DriverSortingDisableValue = "1";
+inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static bool ConfigureWindowsArm64VulkanLayerPolicy(){
 #if defined(NWB_PLATFORM_WINDOWS) && (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_M_ARM64EC)
     char* existingValue = nullptr;
     usize existingValueSize = 0u;
-    const errno_t readResult = ::_dupenv_s(&existingValue, &existingValueSize, s_Vkon12DriverSortingDisableKey);
+    const errno_t readResult = ::_dupenv_s(&existingValue, &existingValueSize, s_Vkon12DriverSortingDisableKey.data());
     if(readResult != 0){
         ::free(existingValue);
         return false;
@@ -55,7 +58,7 @@ static bool ConfigureWindowsArm64VulkanLayerPolicy(){
 
     // D3DMappingLayers 1.2506.2.0 omits vkGetDeviceProcAddr from its ARM64 driver-sorting layer. Overlapping Vulkan
     // instances then corrupt loader bookkeeping during device teardown. Use the layer manifest's official disable key.
-    return ::_putenv_s(s_Vkon12DriverSortingDisableKey, s_Vkon12DriverSortingDisableValue) == 0;
+    return ::_putenv_s(s_Vkon12DriverSortingDisableKey.data(), s_Vkon12DriverSortingDisableValue.data()) == 0;
 #else
     return true;
 #endif
@@ -87,7 +90,7 @@ static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
     ::testing::InitGoogleTest(&googleTestArgc, argv);
     // Common initialization starts worker threads before individual suites run.  Re-exec death tests so GoogleTest
     // never forks that live threaded runtime; v1.18 diagnoses the unsafe fast-style fork and can skip its death body.
-    GTEST_FLAG_SET(death_test_style, __hidden_gtest_nwb_main::s_ThreadsafeDeathTestStyle);
+    GTEST_FLAG_SET(death_test_style, __hidden_gtest_nwb_main::s_ThreadsafeDeathTestStyle.data());
     return RUN_ALL_TESTS();
 }
 

@@ -5,7 +5,9 @@
 #pragma once
 
 
+#include "containers.h"
 #include "filesystem.h"
+#include "span.h"
 #include "platform.h"
 #include "text_utils.h"
 #include "type.h"
@@ -34,6 +36,38 @@
 
 
 namespace ProcessExecutionDetail{
+
+
+template<typename ArenaT>
+struct NativeProcessArguments{
+    Vector<AString<ArenaT>, ArenaT> text;
+    Vector<const char*, ArenaT> argv;
+    ArenaT& arena;
+
+    explicit NativeProcessArguments(ArenaT& owner)
+        : text(owner)
+        , argv(owner)
+        , arena(owner)
+    {}
+
+    [[nodiscard]] bool build(const Span<const AStringView> arguments){
+        if(arguments.empty() || arguments.front().empty())
+            return false;
+        for(const AStringView argument : arguments){
+            if(argument.find('\0') != AStringView::npos)
+                return false;
+        }
+
+        text.reserve(arguments.size());
+        argv.reserve(arguments.size() + 1u);
+        for(const AStringView argument : arguments){
+            text.emplace_back(argument, arena);
+            argv.push_back(text.back().c_str());
+        }
+        argv.push_back(nullptr);
+        return true;
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,14 +319,19 @@ template<typename ArenaT>
 template<typename ArenaT>
 [[nodiscard]] inline int RunProcessRedirectedToFile(
     ArenaT& arena,
-    const char* const* argv,
-    const char* const outputPath,
+    const Span<const AStringView> arguments,
+    const AStringView outputPath,
     bool* const outExitCodeQueryFailed = nullptr
 ){
     if(outExitCodeQueryFailed)
         *outExitCodeQueryFailed = false;
-    if(!argv || !argv[0] || !outputPath)
+    if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return -1;
+    ProcessExecutionDetail::NativeProcessArguments<ArenaT> nativeArguments(arena);
+    if(!nativeArguments.build(arguments))
+        return -1;
+    const AString<ArenaT> nativeOutputPath(outputPath, arena);
+    const auto& argv = nativeArguments.argv;
 
 #if defined(NWB_PLATFORM_WINDOWS)
     SECURITY_ATTRIBUTES securityAttributes = {};
@@ -300,7 +339,7 @@ template<typename ArenaT>
     securityAttributes.bInheritHandle = TRUE;
 
     HANDLE outputHandle = CreateFileA(
-        outputPath,
+        nativeOutputPath.c_str(),
         GENERIC_WRITE,
         FILE_SHARE_READ,
         &securityAttributes,
@@ -312,8 +351,8 @@ template<typename ArenaT>
         return -1;
 
     AString<ArenaT> commandLine{arena};
-    for(const char* const* argument = argv; *argument; ++argument)
-        ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, AStringView(*argument));
+    for(const AStringView argument : arguments)
+        ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, argument);
 
     STARTUPINFOA startupInfo = {};
     startupInfo.cb = sizeof(startupInfo);
@@ -350,7 +389,7 @@ template<typename ArenaT>
     static_cast<void>(arena);
 
     const int outputFileDescriptor = ::open(
-        outputPath,
+        nativeOutputPath.c_str(),
         O_CREAT | O_TRUNC | O_WRONLY,
         ProcessExecutionDetail::s_RedirectedOutputFileMode
     );
@@ -372,7 +411,7 @@ template<typename ArenaT>
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         if(::close(outputFileDescriptor) != 0)
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
-        ::execvp(argv[0], const_cast<char* const*>(argv));
+        ::execvp(argv[0], const_cast<char* const*>(argv.data()));
         _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
     }
 
@@ -397,18 +436,21 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename StringT>
+template<typename ArenaT, typename StringT>
 [[nodiscard]] inline bool CaptureProcessOutput(
+    ArenaT& arena,
     StringT& outOutput,
-    const char* const* argv,
+    const Span<const AStringView> arguments,
     const usize maxOutputBytes = ProcessExecutionDetail::s_DefaultCaptureOutputMaxBytes,
     const usize readBufferBytes = ProcessExecutionDetail::s_CaptureReadBufferBytes,
     const usize timeoutMilliseconds = ProcessExecutionDetail::s_DefaultCaptureProcessOutputTimeoutMilliseconds
 ){
+    ProcessExecutionDetail::NativeProcessArguments<ArenaT> nativeArguments(arena);
+    const bool validArguments = nativeArguments.build(arguments);
     outOutput.clear();
-
-    if(!argv || !argv[0] || readBufferBytes == 0u)
+    if(!validArguments || readBufferBytes == 0u)
         return false;
+    const auto& argv = nativeArguments.argv;
 
     int pipeFds[2] = { -1, -1 };
     if(::pipe(pipeFds) != 0)
@@ -438,7 +480,7 @@ template<typename StringT>
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
         if(::close(pipeFds[1]) != 0)
             _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
-        ::execvp(argv[0], const_cast<char* const*>(argv));
+        ::execvp(argv[0], const_cast<char* const*>(argv.data()));
         _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
     }
 

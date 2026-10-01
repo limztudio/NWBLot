@@ -88,11 +88,11 @@ static void PrepareWorkload(
         && AStringView(output) == AStringView(fixture.expectedDerived);
 }
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void BenchmarkDerivedPath(
@@ -108,17 +108,17 @@ static void BenchmarkDerivedPath(
         sentinel[index] = static_cast<u8>(index + 37u);
 
     constexpr Array<usize, 5u> s_CallCounts{ 1u, 2u, 4u, 8u, 16u };
-    constexpr Array<NotNull<const char*>, 5u> s_UsedKeys{
-        MakeNotNull("scratch_used_after_1"), MakeNotNull("scratch_used_after_2"), MakeNotNull("scratch_used_after_4"),
-        MakeNotNull("scratch_used_after_8"), MakeNotNull("scratch_used_after_16"),
+    constexpr Array<AStringView, 5u> s_UsedKeys{
+        "scratch_used_after_1", "scratch_used_after_2", "scratch_used_after_4",
+        "scratch_used_after_8", "scratch_used_after_16",
     };
-    constexpr Array<NotNull<const char*>, 5u> s_ReservedKeys{
-        MakeNotNull("scratch_reserved_after_1"), MakeNotNull("scratch_reserved_after_2"), MakeNotNull("scratch_reserved_after_4"),
-        MakeNotNull("scratch_reserved_after_8"), MakeNotNull("scratch_reserved_after_16"),
+    constexpr Array<AStringView, 5u> s_ReservedKeys{
+        "scratch_reserved_after_1", "scratch_reserved_after_2", "scratch_reserved_after_4",
+        "scratch_reserved_after_8", "scratch_reserved_after_16",
     };
-    constexpr Array<NotNull<const char*>, 5u> s_ElapsedKeys{
-        MakeNotNull("path_ns_after_1"), MakeNotNull("path_ns_after_2"), MakeNotNull("path_ns_after_4"),
-        MakeNotNull("path_ns_after_8"), MakeNotNull("path_ns_after_16"),
+    constexpr Array<AStringView, 5u> s_ElapsedKeys{
+        "path_ns_after_1", "path_ns_after_2", "path_ns_after_4",
+        "path_ns_after_8", "path_ns_after_16",
     };
     Array<PathSample, 5u> samples{};
     usize sampleIndex = 0u;
@@ -141,10 +141,10 @@ static void BenchmarkDerivedPath(
         RecordUnsignedProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
         RecordUnsignedProperty(s_ElapsedKeys[index], samples[index].elapsed);
     }
-    RecordUnsignedProperty(MakeNotNull("path_build_ns"), elapsed);
-    RecordUnsignedProperty(MakeNotNull("path_build_calls"), s_CallCounts.back());
-    RecordUnsignedProperty(MakeNotNull("path_output_bytes"), fixture.expectedDerived.size());
-    RecordUnsignedProperty(MakeNotNull("scratch_peak_bytes"), samples.back().memory.peakUsedBytes);
+    RecordUnsignedProperty("path_build_ns", elapsed);
+    RecordUnsignedProperty("path_build_calls", s_CallCounts.back());
+    RecordUnsignedProperty("path_output_bytes", fixture.expectedDerived.size());
+    RecordUnsignedProperty("scratch_peak_bytes", samples.back().memory.peakUsedBytes);
     scratchArena.deallocate(sentinel, 1u, 64u);
 }
 

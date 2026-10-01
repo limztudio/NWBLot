@@ -103,9 +103,9 @@ public:
     [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
     [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
 
-    [[nodiscard]] NotNull<const tchar*> windowTitleOrDefault()const;
+    [[nodiscard]] TStringView windowTitleOrDefault()const;
     [[nodiscard]] inline bool quitRequested()const{ return m_quitRequested; }
-    [[nodiscard]] const tchar* syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
+    [[nodiscard]] Optional<TStringView> syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
 
 private:

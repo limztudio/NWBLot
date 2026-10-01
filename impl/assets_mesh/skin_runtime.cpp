@@ -38,7 +38,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 
 
 bool Skin::validatePayload()const{
-    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Skin::validatePayload"))))
+    if(!checkVirtualPath(NWB_TEXT("Skin::validatePayload")))
         return false;
     if(!m_mesh.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: mesh reference is empty"));
@@ -72,8 +72,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkinBinaryPayload::s_SkinMagic,
-        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
-        MakeNotNull(NWB_TEXT("skin"))
+        NWB_TEXT("Skin::loadBinary"),
+        NWB_TEXT("skin")
     ))
         return false;
 
@@ -85,8 +85,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.influenceCount,
         m_influences,
-        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
-        MakeNotNull(NWB_TEXT("influences"))
+        NWB_TEXT("Skin::loadBinary"),
+        NWB_TEXT("influences")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -94,12 +94,12 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.inverseBindMatrixCount,
         m_inverseBindMatrices,
-        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
-        MakeNotNull(NWB_TEXT("inverse bind matrices"))
+        NWB_TEXT("Skin::loadBinary"),
+        NWB_TEXT("inverse bind matrices")
     ))
         return false;
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Skin::loadBinary")))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary"))
         && validatePayload()
     ;
 }

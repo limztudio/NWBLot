@@ -28,8 +28,8 @@ constexpr usize s_ParserScratchArenaBytes = 4096u;
 constexpr usize s_InitialReferencePathSegmentCount = 4u;
 constexpr usize s_InitialStructFieldCount = 8u;
 constexpr usize s_DocumentReaderChunkBytes = 4096u;
-constexpr char s_ExpectedTokenFoundSeparator[] = ", found ";
-constexpr usize s_ExpectedTokenFoundSeparatorLength = sizeof(s_ExpectedTokenFoundSeparator) - 1u;
+constexpr AStringView s_ExpectedTokenFoundSeparator = ", found ";
+constexpr usize s_ExpectedTokenFoundSeparatorLength = s_ExpectedTokenFoundSeparator.size();
 
 
 [[nodiscard]] bool BinaryI64Overflows(const TokenType::Enum op, const i64 lhs, const i64 rhs){
@@ -554,7 +554,7 @@ private:
             advance();
 
             i64 result = 0;
-            if(!ParseI64FromChars(text.data(), text.data() + text.size(), result)){
+            if(!ParseI64FromChars(text, result)){
                 error("invalid integer literal");
                 return Value(m_arena);
             }
@@ -565,7 +565,7 @@ private:
             advance();
 
             f64 result = 0.0;
-            if(!ParseF64FromChars(text.data(), text.data() + text.size(), result)){
+            if(!ParseF64FromChars(text, result)){
                 error("invalid double literal");
                 return Value(m_arena);
             }
@@ -940,10 +940,10 @@ private:
         const Value& rhs,
         const u32 line,
         const u32 column,
-        const char* operandError,
+        const AStringView operandError,
         const bool rejectZeroDivisor = false){
         if(!(lhs.isNumeric() && rhs.isNumeric())){
-            if(operandError)
+            if(!operandError.empty())
                 error(line, column, operandError);
             return false;
         }
@@ -962,7 +962,7 @@ private:
         switch(op){
         case TokenType::Plus:
             if(lhs.isNumeric() && rhs.isNumeric())
-                return validateNumericOperands(op, lhs, rhs, line, column, nullptr);
+                return validateNumericOperands(op, lhs, rhs, line, column, {});
             if(lhs.isString() && rhs.isString()){
                 if(AddOverflows<usize>(lhs.asString().size(), rhs.asString().size())){
                     error(line, column, "string concatenation size overflow");
@@ -999,7 +999,7 @@ private:
             return true;
         case TokenType::PlusEqual:
             if(target.isNumeric() && rhs.isNumeric())
-                return validateNumericOperands(op, target, rhs, line, column, nullptr);
+                return validateNumericOperands(op, target, rhs, line, column, {});
             if(target.isString() && rhs.isString()){
                 if(AddOverflows<usize>(target.asString().size(), rhs.asString().size())){
                     error(line, column, "string append size overflow");
@@ -1065,7 +1065,7 @@ private:
         )
             msg.reserve(expected.size() + s_ExpectedTokenFoundSeparatorLength + desc.size());
         msg.append(expected.data(), expected.size());
-        msg.append(s_ExpectedTokenFoundSeparator, s_ExpectedTokenFoundSeparatorLength);
+        msg.append(s_ExpectedTokenFoundSeparator);
         msg.append(desc.data(), desc.size());
         error(m_current.line, m_current.column, MStringView(msg.data(), msg.size()));
     }

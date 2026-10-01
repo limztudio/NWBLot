@@ -92,7 +92,7 @@ bool ConfigurePipelineMultisampleState(
     const u32 sampleCount,
     const bool alphaToCoverageEnable,
     VkPipelineMultisampleStateCreateInfo& outState,
-    const tchar* operationName
+    TStringView operationName
 ){
     outState = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
@@ -128,7 +128,7 @@ bool BuildGraphicsPipelineFixedState(
     const PipelineStencilFaceMode::Enum stencilFaceMode,
     const VkDynamicState* dynamicStates,
     const u32 dynamicStateCount,
-    const tchar* operationName,
+    TStringView operationName,
     GraphicsPipelineFixedState& outState
 ){
     outState.viewportState = MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
@@ -156,7 +156,7 @@ bool BuildGraphicsPipelineFixedState(
 
 bool BuildPipelineRenderingInfo(
     const FramebufferInfo& fbinfo,
-    const tchar* operationName,
+    TStringView operationName,
     VkPipelineRenderingCreateInfo& outRenderingInfo,
     PipelineRenderingFormatVector& outColorFormats
 ){
@@ -261,7 +261,7 @@ bool ValidateDescriptorBufferBindingFootprint(
     const VkDeviceSize setSizeBytes,
     const VkDeviceSize bindingOffsetBytes,
     const u32 bindingSlot,
-    const tchar* operationName
+    TStringView operationName
 ){
     const u32 descriptorSize = manager.getDescriptorSize(descriptorType);
     if(
@@ -303,7 +303,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc){
     return pushConstantByteSize;
 }
 
-bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize, const tchar* operationName){
+bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSize, TStringView operationName){
     if(byteSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: push constant size is zero"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed push constant operation: size is zero"));
@@ -332,7 +332,7 @@ bool CreatePipelineLayout(
     const u32 setLayoutCount,
     const u32 pushConstantByteSize,
     VkPipelineLayout& outLayout,
-    const tchar* operationName
+    TStringView operationName
 ){
     VkResult res = VK_SUCCESS;
 

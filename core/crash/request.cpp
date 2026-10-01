@@ -39,7 +39,7 @@ static PlatformKind::Enum CurrentPlatformKind()noexcept{
 #endif
 }
 
-const char* PlatformKindName(const u32 platform)noexcept{
+StringView PlatformKindName(const u32 platform)noexcept{
     switch(platform){
     case PlatformKind::Windows:
         return "windows";
@@ -48,11 +48,11 @@ const char* PlatformKindName(const u32 platform)noexcept{
     case PlatformKind::Android:
         return "android";
     default:
-        return s_UnknownPlatformLabel.data();
+        return s_UnknownPlatformLabel;
     }
 }
 
-const char* ReasonKindName(const u32 reasonKind)noexcept{
+StringView ReasonKindName(const u32 reasonKind)noexcept{
     switch(reasonKind){
     case CrashReasonKind::WindowsException:
         return "windows_exception";
@@ -61,11 +61,11 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
     case CrashReasonKind::Terminate:
         return "terminate";
     case CrashReasonKind::ManualDump:
-        return s_ManualDumpCategory.data();
+        return s_ManualDumpCategory;
     case CrashReasonKind::GpuCrash:
-        return s_GpuCrashCategory.data();
+        return s_GpuCrashCategory;
     default:
-        return s_UnknownReasonLabel.data();
+        return s_UnknownReasonLabel;
     }
 }
 
@@ -207,13 +207,13 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
                     return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
             }
             if(!options.gpuDump.empty()){
-                const char* gpuDumpFileName = nullptr;
+                StringView gpuDumpFileName;
                 if(options.gpuDumpKind == GpuCrashDumpKind::RadeonGpuDetective)
-                    gpuDumpFileName = PackageNames::s_GpuDetectiveCaptureFileName.data();
+                    gpuDumpFileName = PackageNames::s_GpuDetectiveCaptureFileName;
                 else if(options.gpuDumpKind == GpuCrashDumpKind::Aftermath)
-                    gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName.data();
+                    gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName;
 
-                if(gpuDumpFileName){
+                if(!gpuDumpFileName.empty()){
                     if(!WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump))
                         return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };
                 }

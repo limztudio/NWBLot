@@ -31,7 +31,7 @@ static constexpr u32 s_TimeoutMs = 5000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static ssize_t WriteWithoutSigpipe(const int fd, const char* bytes, const usize size){
+static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes){
     sigset_t blocked;
     sigset_t previous;
     sigset_t pending;
@@ -43,7 +43,7 @@ static ssize_t WriteWithoutSigpipe(const int fd, const char* bytes, const usize 
     )
         TerminateInvariant();
     const bool alreadyPending = sigismember(&pending, SIGPIPE) == 1;
-    const ssize_t count = write(fd, bytes, size);
+    const ssize_t count = write(fd, bytes.data(), bytes.size());
     const int writeError = errno;
     if(count < 0 && writeError == EPIPE && !alreadyPending){
         const timespec timeout{};
@@ -166,7 +166,7 @@ ClipboardStatus::Enum ClipboardPipeWriter::advance(){
     ){
         ++calls;
         const usize size = Min(m_text.size() - m_offset, __hidden_clipboard_pipe::s_PumpByteBudget - consumed);
-        const ssize_t count = __hidden_clipboard_pipe::WriteWithoutSigpipe(m_fd, m_text.data() + m_offset, size);
+        const ssize_t count = __hidden_clipboard_pipe::WriteWithoutSigpipe(m_fd, AStringView(m_text).substr(m_offset, size));
         if(count > 0){
             m_offset += static_cast<usize>(count);
             consumed += static_cast<usize>(count);

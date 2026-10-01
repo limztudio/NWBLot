@@ -107,10 +107,10 @@ struct PhysicalDeviceFeatureSupport{
 [[nodiscard]] inline bool HasDeviceExtension(
     const VkExtensionProperties* const extensions,
     const u32 extensionCount,
-    const char* const extensionName
+    const AStringView extensionName
 )noexcept{
     for(u32 extensionIndex = 0u; extensionIndex < extensionCount; ++extensionIndex){
-        if(NWB_STRCMP(extensions[extensionIndex].extensionName, extensionName) == 0)
+        if(AStringView(extensions[extensionIndex].extensionName) == extensionName)
             return true;
     }
     return false;
@@ -173,7 +173,7 @@ inline void QueryPhysicalDeviceFeatureSupport(
     outSupport.maintenance4.pNext = nullptr;
 }
 
-[[nodiscard]] inline const char* FindMissingMandatoryPhysicalDeviceFeature(
+[[nodiscard]] inline AStringView FindMissingMandatoryPhysicalDeviceFeature(
     const PhysicalDeviceFeatureSupport& support
 )noexcept{
     const VkPhysicalDeviceFeatures& core = support.features.features;
@@ -241,7 +241,7 @@ inline void QueryPhysicalDeviceFeatureSupport(
         return "synchronization2";
     if(support.descriptorBuffer.descriptorBuffer != VK_TRUE)
         return "descriptorBuffer";
-    return nullptr;
+    return {};
 }
 
 

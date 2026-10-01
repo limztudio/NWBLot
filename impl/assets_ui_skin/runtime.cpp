@@ -93,8 +93,8 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         UiSkinBinaryPayload::s_UiSkinMagic,
-        MakeNotNull(NWB_TEXT("UiSkin::loadBinary")),
-        MakeNotNull(NWB_TEXT("UI skin"))
+        NWB_TEXT("UiSkin::loadBinary"),
+        NWB_TEXT("UI skin")
     ))
         return false;
     if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
@@ -157,7 +157,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
     candidate.setTypography({ typography.defaultFontSize });
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("UiSkin::loadBinary"))))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("UiSkin::loadBinary")))
         return false;
     candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
@@ -168,7 +168,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 bool UiSkin::validatePayload()const{
-    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("UiSkin::validatePayload"))))
+    if(!checkVirtualPath(NWB_TEXT("UiSkin::validatePayload")))
         return false;
     if(m_regions.size() > s_UiSkinMaxRegionCount){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::validatePayload failed: region count {} exceeds schema limit {}"), m_regions.size(), s_UiSkinMaxRegionCount);

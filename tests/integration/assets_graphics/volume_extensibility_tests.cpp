@@ -135,7 +135,7 @@ static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAss
 static bool RegisterProjectProbeCookEntry(NWB::Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ProjectProbeCookEntry, ProjectProbeAsset, ProjectProbeAssetCodec>(
         ProjectProbeAsset::AssetTypeName(),
-        MakeNotNull(NWB_TEXT("project probe asset")),
+        NWB_TEXT("project probe asset"),
         &ParseProjectProbeDocument,
         &ParseProjectProbeValue,
         &BuildProjectProbeAsset

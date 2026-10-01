@@ -43,11 +43,11 @@ namespace TerminalDependencyScenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void CheckTerminalDependencies(
@@ -238,11 +238,11 @@ static void CheckTerminalDependencies(
         }
     }
     if(benchmark){
-        RecordUnsignedProperty(NotNull<const char*>{ "reader_count" }, readerCount);
-        RecordUnsignedProperty(NotNull<const char*>{ "compile_ns" }, minimumCompileNanoseconds);
-        RecordUnsignedProperty(NotNull<const char*>{ "resource_state_planning_ns" }, minimumResourcePlanningNanoseconds);
-        RecordUnsignedProperty(NotNull<const char*>{ "packet_dependency_planning_ns" }, minimumDependencyPlanningNanoseconds);
-        RecordUnsignedProperty(NotNull<const char*>{ "scratch_peak_bytes" }, scratchArena.memoryStats().peakUsedBytes);
+        RecordUnsignedProperty("reader_count", readerCount);
+        RecordUnsignedProperty("compile_ns", minimumCompileNanoseconds);
+        RecordUnsignedProperty("resource_state_planning_ns", minimumResourcePlanningNanoseconds);
+        RecordUnsignedProperty("packet_dependency_planning_ns", minimumDependencyPlanningNanoseconds);
+        RecordUnsignedProperty("scratch_peak_bytes", scratchArena.memoryStats().peakUsedBytes);
     }
 }
 

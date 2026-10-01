@@ -26,18 +26,18 @@ template<typename ValueContainer>
     usize& inOutCursor,
     const u64 count,
     ValueContainer& outValues,
-    const NotNull<const tchar*> failureContext,
-    const NotNull<const tchar*> label
+    const TStringView failureContext,
+    const TStringView label
 ){
     const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
     if(failure == BinaryVectorPayloadFailure::None)
         return true;
 
     if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext.get(), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext.get(), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
     }
 
     return false;
@@ -49,16 +49,16 @@ template<typename HeaderT>
     usize& inOutCursor,
     HeaderT& outHeader,
     const u32 expectedMagic,
-    const NotNull<const tchar*> failureContext,
-    const NotNull<const tchar*> assetType
+    const TStringView failureContext,
+    const TStringView assetType
 ){
     if(!ReadPOD(binary, inOutCursor, outHeader)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
         return false;
     }
 
     if(outHeader.magic != expectedMagic){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext.get(), assetType.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
         return false;
     }
 
@@ -68,10 +68,10 @@ template<typename HeaderT>
 [[nodiscard]] inline bool ReadCompletePayload(
     const AssetBytes& binary,
     const usize cursor,
-    const NotNull<const tchar*> failureContext
+    const TStringView failureContext
 ){
     if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;
     }
 
@@ -92,18 +92,18 @@ template<typename ValueContainer>
 [[nodiscard]] bool AppendVectorPayload(
     AssetBytes& outBinary,
     const ValueContainer& values,
-    const NotNull<const tchar*> failureContext,
-    const NotNull<const tchar*> label
+    const TStringView failureContext,
+    const TStringView label
 ){
     const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
     if(failure == BinaryVectorPayloadFailure::None)
         return true;
 
     if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext.get(), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext.get(), label.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
     }
 
     return false;

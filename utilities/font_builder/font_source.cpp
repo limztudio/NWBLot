@@ -83,8 +83,8 @@ bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payloa
         return false;
     }
     unsigned int spread = options.spread;
-    const char* module = options.outline ? "sdf" : "bsdf";
-    if(FT_Property_Set(m_library, module, "spread", &spread) != 0 || FT_Set_Pixel_Sizes(m_face, 0u, options.ppem) != 0){
+    const AStringView module = options.outline ? "sdf" : "bsdf";
+    if(FT_Property_Set(m_library, module.data(), "spread", &spread) != 0 || FT_Set_Pixel_Sizes(m_face, 0u, options.ppem) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType rejected SDF spread or bake size"));
         return false;
     }

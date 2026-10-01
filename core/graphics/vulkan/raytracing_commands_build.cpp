@@ -174,7 +174,7 @@ bool CommandList::suballocateBuildScratchAddress(
     const u64 buildScratchSize,
     const u64 scratchAlignment,
     VkDeviceAddress& outScratchAddress,
-    const tchar* operationName
+    TStringView operationName
 ){
     outScratchAddress = 0u;
     if(buildScratchSize == 0u)
@@ -239,7 +239,7 @@ bool CommandList::validateAccelStructBuildSignature(
     const AccelStructGeometryBuildSignature* const geometrySignatures,
     const usize geometrySignatureCount,
     const bool performUpdate,
-    const tchar* const operationName,
+    const TStringView operationName,
     bool& outHasPriorBuild
 ){
     outHasPriorBuild = false;
@@ -329,7 +329,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     const usize numInstances,
     const RayTracingAccelStructBuildFlags::Mask buildFlags,
     const VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
-    const tchar* operationName
+    TStringView operationName
 ){
     Buffer* const backingBuffer = as.getBackingBuffer();
     if(
@@ -563,7 +563,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     constexpr VkBufferUsageFlags s_BuildInputUsage =
         VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     ;
-    const auto validateBuildInput = [&](Buffer* const buffer, const tchar* const resourceName) -> bool{
+    const auto validateBuildInput = [&](Buffer* const buffer, const TStringView resourceName) -> bool{
         if(!buffer)
             return true;
         if(isBufferReadyForCommandQueue(buffer, s_BuildInputUsage))

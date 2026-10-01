@@ -247,11 +247,11 @@ void CheckIndexedScores(const Shape::Enum shape){
 }
 
 
-void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
@@ -281,11 +281,11 @@ void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
         scratchBytes = scratch.memoryStats().peakUsedBytes;
     }
     Sort(samples, samples + LengthOf(samples));
-    RecordUnsignedProperty(NotNull<const char*>("median_assignment_ns"), samples[LengthOf(samples) / 2u]);
-    RecordUnsignedProperty(NotNull<const char*>("minimum_assignment_ns"), samples[0u]);
-    RecordUnsignedProperty(NotNull<const char*>("scratch_bytes"), scratchBytes);
-    RecordUnsignedProperty(NotNull<const char*>("task_count"), taskCount);
-    RecordUnsignedProperty(NotNull<const char*>("edge_count"), analysis.schedulingEdges().size());
+    RecordUnsignedProperty("median_assignment_ns", samples[LengthOf(samples) / 2u]);
+    RecordUnsignedProperty("minimum_assignment_ns", samples[0u]);
+    RecordUnsignedProperty("scratch_bytes", scratchBytes);
+    RecordUnsignedProperty("task_count", taskCount);
+    RecordUnsignedProperty("edge_count", analysis.schedulingEdges().size());
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         const auto* assignment = assignments.find(view.taskAt(taskIndex).id);
         ASSERT_NE(assignment, nullptr);
@@ -317,12 +317,21 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
     };
     constexpr StorageCase s_Cases[] = {
         { 16u, Shape::DisjointPairs }, { 64u, Shape::DisjointPairs },
-        { 130u, Shape::DisjointPairs }, { 256u, Shape::DisjointPairs },
+        { 130u, Shape::DisjointPairs }, { 256u, Shape::DisjointPairs }, { 257u, Shape::DisjointPairs },
         { 382u, Shape::FanOut }, { 382u, Shape::FanIn }, { 513u, Shape::ReversedPairs },
         { 4032u, Shape::DenseLayers }, { 4033u, Shape::DenseLayers }, { 4097u, Shape::DenseLayers },
     };
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
     constexpr usize s_BoundsBudgetDivisor = 32u;
+    constexpr usize s_ReachabilityVectorCount = 4u;
+    usize emptyVectorBookkeepingBytes = 0u;
+    {
+        // Debug STL modes can allocate container bookkeeping through the arena even for empty vectors.
+        Graphics::Alloc::ScratchArena bookkeepingScratch(s_TaskGraphScratchArena);
+        const Vector<u64, Graphics::Alloc::ScratchArena> emptyVector(bookkeepingScratch);
+        emptyVectorBookkeepingBytes = bookkeepingScratch.memoryStats().usedBytes;
+    }
+    const usize reachabilityBookkeepingBytes = s_ReachabilityVectorCount * emptyVectorBookkeepingBytes;
     for(const auto& testCase : s_Cases){
         SCOPED_TRACE(testCase.m_taskCount);
         SCOPED_TRACE(testCase.m_shape);
@@ -335,6 +344,7 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
         Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
         GpuTaskSchedulingReachability reachability(scratch);
+        ASSERT_EQ(scratch.memoryStats().usedBytes, reachabilityBookkeepingBytes);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(view, analysis, reachability));
         const usize wordsPerRow = (testCase.m_taskCount + s_BitsPerWord - 1u) / s_BitsPerWord;
         const usize matrixBytes = testCase.m_taskCount * wordsPerRow * sizeof(u64);
@@ -348,7 +358,10 @@ TEST(GpuTaskQueueScoring, SparsePartialRowsAndDenseThresholdsBoundPeakScratch){
         }
         else{
             const usize boundsBudget = wordsPerRow >= s_BitsPerWord ? matrixBytes / s_BoundsBudgetDivisor : 0u;
-            EXPECT_LE(scratch.memoryStats().peakUsedBytes, denseBytes + boundsBudget);
+            // Dense rows retain one temporary bounds vector at this threshold.
+            const usize boundsBookkeepingBytes = wordsPerRow >= s_BitsPerWord ? emptyVectorBookkeepingBytes : 0u;
+            const usize peakBookkeepingBytes = reachabilityBookkeepingBytes + boundsBookkeepingBytes;
+            EXPECT_LE(scratch.memoryStats().peakUsedBytes, denseBytes + boundsBudget + peakBookkeepingBytes);
         }
     }
 }

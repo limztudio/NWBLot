@@ -103,7 +103,7 @@ protected:
         const Core::Assets::AssetBytes& binary,
         usize& inOutCursor,
         const HeaderT& header,
-        const NotNull<const tchar*> failureContext
+        const TStringView failureContext
     ){
         return MeshAssetBinaryPayload::ReadMeshAttributeStreams(
             binary,
@@ -123,7 +123,7 @@ protected:
         const Core::Assets::AssetBytes& binary,
         usize& inOutCursor,
         const HeaderT& header,
-        const NotNull<const tchar*> failureContext
+        const TStringView failureContext
     ){
         return MeshAssetBinaryPayload::ReadMeshletStreams(
             binary,

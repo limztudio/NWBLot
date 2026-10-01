@@ -27,7 +27,7 @@ bool ApplyCausticQualitySmokeSettings(
     SmokeEnvironmentString value(arena);
     if(ReadSmokeEnvironmentText("NWB_CAUSTIC_PHOTON_GRID_DIVISOR", value)){
         u64 parsed = 0u;
-        if(!ParseU64FromChars(value.data(), value.data() + value.size(), parsed) || parsed > Limit<u32>::s_Max)
+        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max)
             return false;
         settings.photonGridDivisor = static_cast<u32>(parsed);
     }

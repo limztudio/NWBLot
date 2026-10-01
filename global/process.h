@@ -22,8 +22,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline int RunSystemCommand(const char* command){
-    return std::system(command);
+template<typename ArenaT>
+[[nodiscard]] inline int RunSystemCommand(ArenaT& arena, const AStringView command){
+    if(command.find(char{}) != AStringView::npos)
+        return -1;
+    const AString<ArenaT> nativeCommand(command, arena);
+    return std::system(nativeCommand.c_str());
 }
 
 template<typename ArenaT>
@@ -32,9 +36,9 @@ template<typename ArenaT>
     AString<ArenaT> systemCommand("\"", command.get_allocator());
     systemCommand += command;
     systemCommand += '"';
-    return RunSystemCommand(systemCommand.c_str());
+    return std::system(systemCommand.c_str());
 #else
-    return RunSystemCommand(command.c_str());
+    return std::system(command.c_str());
 #endif
 }
 

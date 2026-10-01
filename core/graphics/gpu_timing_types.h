@@ -39,11 +39,17 @@ static_assert(IsTriviallyCopyable_V<GpuTimingScope>, "GPU timing publication mus
 
 struct GpuTimingScopeDefinition{
     Name identity = NAME_NONE;
+    // Label storage must outlive the definition and every recording that uses it.
     AStringView markerLabel;
 
 
     constexpr GpuTimingScopeDefinition() = default;
-    constexpr explicit GpuTimingScopeDefinition(const char* const label)
+    template<usize LabelSize>
+    constexpr explicit GpuTimingScopeDefinition(const char (&label)[LabelSize])
+        : identity(label)
+        , markerLabel(label)
+    {}
+    explicit GpuTimingScopeDefinition(const AStringView label)
         : identity(label)
         , markerLabel(label)
     {}

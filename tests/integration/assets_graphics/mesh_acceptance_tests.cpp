@@ -229,7 +229,7 @@ template<typename MeshT>
 
 static bool CookAndLoadSmokeMesh(
     TestArena& testArena,
-    const char* assetFilename,
+    AStringView assetFilename,
     const AStringView caseName,
     const Name assetName,
     Path& outRoot,
@@ -535,7 +535,7 @@ template<typename MeshT>
 
 template<typename CallbackT>
 static void RunSmokeMeshAcceptance(
-    const char* assetFilename,
+    AStringView assetFilename,
     const AStringView caseName,
     const Name assetName,
     CallbackT&& callback

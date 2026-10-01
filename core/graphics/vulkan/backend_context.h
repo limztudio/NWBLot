@@ -128,20 +128,20 @@ public:
 
 public:
     [[nodiscard]] Device* getDevice()const{ return m_rhiDevice.get(); }
-    [[nodiscard]] const tchar* getRendererString()const{ return m_rendererString.c_str(); }
+    [[nodiscard]] TStringView getRendererString()const{ return m_rendererString; }
     bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const;
 
-    [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{
+    [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
         const GraphicsString lookup(extensionName, m_arena);
         return m_enabledExtensions.instance.find(lookup) != m_enabledExtensions.instance.end();
     }
-    [[nodiscard]] bool isDeviceExtensionEnabled(const char* extensionName)const{
+    [[nodiscard]] bool isDeviceExtensionEnabled(AStringView extensionName)const{
         const GraphicsString lookup(extensionName, m_arena);
         return m_enabledExtensions.device.find(lookup) != m_enabledExtensions.device.end();
     }
-    [[nodiscard]] bool isLayerEnabled(const char* layerName)const{
+    [[nodiscard]] bool isLayerEnabled(AStringView layerName)const{
         const GraphicsString lookup(layerName, m_arena);
         return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }

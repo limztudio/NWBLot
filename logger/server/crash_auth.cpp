@@ -14,20 +14,20 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CrashUploadAuthorizationMatches(const AStringView expectedToken, const char* authorizationHeader)noexcept{
+bool CrashUploadAuthorizationMatches(const AStringView expectedToken, const AStringView authorizationHeader)noexcept{
     if(expectedToken.empty())
         return true;
-    if(!authorizationHeader)
+    if(authorizationHeader.empty())
         return false;
 
     constexpr AStringView s_BearerPrefix("Bearer ");
-    const AStringView header(authorizationHeader);
+    const AStringView header = authorizationHeader;
     if(header.size() != s_BearerPrefix.size() + expectedToken.size())
         return false;
-    if(AStringView(header.data(), s_BearerPrefix.size()) != s_BearerPrefix)
+    if(header.substr(0u, s_BearerPrefix.size()) != s_BearerPrefix)
         return false;
 
-    return AStringView(header.data() + s_BearerPrefix.size(), expectedToken.size()) == expectedToken;
+    return header.substr(s_BearerPrefix.size()) == expectedToken;
 }
 
 

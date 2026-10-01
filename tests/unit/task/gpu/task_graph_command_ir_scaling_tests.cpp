@@ -31,11 +31,11 @@ namespace __hidden_task_graph_command_ir_scaling_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-void RecordUnsignedProperty(const char* key, const u64 value){
+void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key, text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 [[nodiscard]] bool AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){

@@ -174,7 +174,7 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
 
     for(i32 i = 0; i < byteCount;){
         u32 unicode = 0;
-        i32 consumed = DecodeUtf8CodePoint(buffer + i, byteCount - i, unicode);
+        i32 consumed = DecodeUtf8CodePoint(AStringView(buffer + i, static_cast<usize>(byteCount - i)), unicode);
         if(consumed <= 0){
             unicode = static_cast<u8>(buffer[i]);
             consumed = 1;
@@ -389,7 +389,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData){
 
 
 bool InitX11Frame(Frame& frame){
-    const tchar* windowTitle = frame.windowTitleOrDefault().get();
+    const TStringView windowTitle = frame.windowTitleOrDefault();
     constexpr long s_WindowEventMask =
         ExposureMask
         | FocusChangeMask
@@ -464,7 +464,7 @@ bool InitX11Frame(Frame& frame){
     s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(GetX11Display(frameData), True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
 
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
-    XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle);
+    XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle.data());
 
     // Tag the top-level window with the process id so smoke teardown can locate
     // the exact window for graceful WM_DELETE_WINDOW close on headless XWayland,
@@ -568,8 +568,8 @@ bool RunX11Frame(Frame& frame){
         if(!QueryWindowState(frame, width, height, windowVisible, windowIsInFocus))
             return false;
 
-        if(const tchar* title = frame.syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
-            XStoreName(GetX11Display(frameData), GetX11Window(frameData), title);
+        if(const Optional<TStringView> title = frame.syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
+            XStoreName(GetX11Display(frameData), GetX11Window(frameData), title->data());
             XFlush(GetX11Display(frameData));
         }
 

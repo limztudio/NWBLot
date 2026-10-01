@@ -33,7 +33,7 @@ static bool IsWhitespace(const u32 scalar){
 
 static RunClass::Enum Classify(const AStringView text, const usize offset){
     u32 scalar = 0u;
-    const i32 decoded = DecodeUtf8CodePoint(text.data() + offset, static_cast<i32>(Min<usize>(text.size() - offset, 4u)), scalar);
+    const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
     if(decoded <= 0)
         return RunClass::Text;
     if(IsWhitespace(scalar))

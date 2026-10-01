@@ -46,10 +46,10 @@ inline constexpr usize s_InitialPathBufferCapacity = 256u;
 inline constexpr usize s_FileSizeHighPartShiftBits = sizeof(u32) * 8u;
 inline constexpr u32 s_CreateDirectoryPermissionMask = 0777u;
 inline constexpr char s_StagedDirectoryPrefix = '.';
-inline constexpr char s_StageDirectorySuffix[] = "_stage";
-inline constexpr char s_BackupDirectorySuffix[] = "_backup";
-inline constexpr usize s_StageDirectorySuffixLength = sizeof(s_StageDirectorySuffix) - 1u;
-inline constexpr usize s_BackupDirectorySuffixLength = sizeof(s_BackupDirectorySuffix) - 1u;
+inline constexpr AStringView s_StageDirectorySuffix = "_stage";
+inline constexpr AStringView s_BackupDirectorySuffix = "_backup";
+inline constexpr usize s_StageDirectorySuffixLength = s_StageDirectorySuffix.size();
+inline constexpr usize s_BackupDirectorySuffixLength = s_BackupDirectorySuffix.size();
 inline constexpr usize s_StageDirectoryNameExtraCharacters = 1u + s_StageDirectorySuffixLength;
 inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirectorySuffixLength;
 

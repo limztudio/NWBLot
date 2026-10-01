@@ -167,7 +167,7 @@ public:
 #endif
 
 
-[[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
+[[nodiscard]] static TStringView TransparentMultiFpsLabel(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
@@ -836,7 +836,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 
-const tchar* NWB::QueryProjectWindowTitle(){
+TStringView NWB::QueryProjectWindowTitle(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)

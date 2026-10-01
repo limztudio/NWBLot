@@ -26,14 +26,14 @@ namespace RendererFramePipelineDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr char s_SceneShadowInstanceMaterialName[] = "render.deferred_effects.instance_material";
-inline constexpr char s_SceneShadowMaterialTypedName[] = "render.deferred_effects.material_typed";
-inline constexpr char s_SceneShadowInstancesName[] = "render.deferred_effects.shadow_instances";
-inline constexpr char s_SceneShadowInstanceMaterialLabel[] = "Shadow Instance Materials";
-inline constexpr char s_SceneShadowMaterialTypedLabel[] = "Shadow Typed Materials";
-inline constexpr char s_SceneShadowInstancesLabel[] = "Shadow Instances";
-inline constexpr char s_SceneTlasResourceName[] = "render.deferred_effects.tlas";
-inline constexpr char s_SceneTlasResourceLabel[] = "Scene TLAS";
+inline constexpr AStringView s_SceneShadowInstanceMaterialName = "render.deferred_effects.instance_material";
+inline constexpr AStringView s_SceneShadowMaterialTypedName = "render.deferred_effects.material_typed";
+inline constexpr AStringView s_SceneShadowInstancesName = "render.deferred_effects.shadow_instances";
+inline constexpr AStringView s_SceneShadowInstanceMaterialLabel = "Shadow Instance Materials";
+inline constexpr AStringView s_SceneShadowMaterialTypedLabel = "Shadow Typed Materials";
+inline constexpr AStringView s_SceneShadowInstancesLabel = "Shadow Instances";
+inline constexpr AStringView s_SceneTlasResourceName = "render.deferred_effects.tlas";
+inline constexpr AStringView s_SceneTlasResourceLabel = "Scene TLAS";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ template<typename ImportBufferFn, typename AppendBufferFn>
         Name(s_SceneShadowMaterialTypedName),
         Name(s_SceneShadowInstancesName),
     };
-    const char* const sceneShadowLabels[] = {
+    const AStringView sceneShadowLabels[] = {
         "Scene BVH Nodes",
         "Scene Instances",
         s_SceneShadowInstanceMaterialLabel,

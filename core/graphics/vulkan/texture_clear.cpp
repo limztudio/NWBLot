@@ -20,7 +20,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     if(!clearDepth && !clearStencil)
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -100,10 +100,10 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     const TextureSubresourceSet& resolvedSubresources,
     const Rect& rect,
     const VkClearColorValue& clearValue,
-    const tchar* valueName
+    TStringView valueName
 ){
     static_cast<void>(valueName);
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear color attachment");
+    constexpr TStringView s_OperationName = NWB_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a color attachment is required"));
         return false;
@@ -165,7 +165,7 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
     const bool clearStencil,
     const u8 stencil
 ){
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil attachment");
+    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
         return false;
@@ -243,7 +243,7 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture box");
+    constexpr TStringView s_OperationName = NWB_TEXT("clear depth/stencil texture box");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;

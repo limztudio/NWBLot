@@ -152,12 +152,12 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringVi
         return NAME_NONE;
 
     NameHash derivedHash = {};
-    static constexpr char s_VirtualPathPrefix[] = "nwb/shader/archive/path";
+    static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
     for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
         u64 laneHash = UpdateFnv64(
             s_Fnv64OffsetBasis,
-            reinterpret_cast<const u8*>(s_VirtualPathPrefix),
-            sizeof(s_VirtualPathPrefix) - 1
+            reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()),
+            s_VirtualPathPrefix.size()
         );
         laneHash = __hidden_shader_archive::UpdateFnv64NameLane(laneHash, shaderName.hash(), lane);
         laneHash = UpdateFnv64TextExact(laneHash, variantName);

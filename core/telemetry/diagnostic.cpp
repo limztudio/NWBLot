@@ -78,11 +78,11 @@ bool BuildDiagnosticPayload(
 ){
     outPayload.clear();
 
-    const AStringView event = SafeStringView(record.event);
-    const AStringView category = SafeStringView(record.category);
-    const AStringView expression = SafeStringView(record.expression);
-    const AStringView message = SafeStringView(record.message);
-    const AStringView file = SafeStringView(record.file);
+    const AStringView event = record.event;
+    const AStringView category = record.category;
+    const AStringView expression = record.expression;
+    const AStringView message = record.message;
+    const AStringView file = record.file;
 
     usize payloadBytes = sizeof(EncodedDiagnosticPayloadHeader);
     if(

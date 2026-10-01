@@ -49,7 +49,7 @@ static bool ParseSamplerDocument(
 static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         registry,
-        MakeNotNull(NWB_TEXT("sampler")),
+        NWB_TEXT("sampler"),
         &ParseSamplerDocument,
         [](SamplerCookEntry& entry, Sampler& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSamplerAsset); },
         false

@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_wayland_clipboard{
-static constexpr Array<const char*, 4u> s_Utf8Mimes{
+static constexpr Array<AStringView, 4u> s_Utf8Mimes{
     "text/plain;charset=utf-8", "text/plain;charset=UTF-8", "UTF8_STRING", "text/plain"
 };
 
@@ -25,12 +25,12 @@ static constexpr Array<const char*, 4u> s_Utf8Mimes{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void SelectMime(const char* const mime, const char*& selected, u8& rank){
-    if(!mime)
+static void SelectMime(const AStringView mime, AStringView& selected, u8& rank){
+    if(mime.empty())
         return;
     for(usize index = 0u; index < s_Utf8Mimes.size(); ++index){
         const u8 candidate = static_cast<u8>(s_Utf8Mimes.size() - index);
-        if(AStringView(mime) == s_Utf8Mimes[index] && candidate > rank){
+        if(mime == s_Utf8Mimes[index] && candidate > rank){
             selected = s_Utf8Mimes[index];
             rank = candidate;
         }
@@ -154,8 +154,8 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const wl_data_source_listener listener{ onSourceTarget, onSourceSend, onSourceCancelled, onSourceDrop, onSourceFinished, onSourceAction };
         if(wl_data_source_add_listener(native, &listener, source.get()) != 0)
             NWB_FATAL_ASSERT(false);
-        for(const char* const mime : __hidden_wayland_clipboard::s_Utf8Mimes)
-            wl_data_source_offer(native, mime);
+        for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
+            wl_data_source_offer(native, mime.data());
         wl_data_device_set_selection(m_device, native, m_serial);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
@@ -167,8 +167,8 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         static const zwp_primary_selection_source_v1_listener listener{ onPrimarySend, onPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &listener, source.get()) != 0)
             NWB_FATAL_ASSERT(false);
-        for(const char* const mime : __hidden_wayland_clipboard::s_Utf8Mimes)
-            zwp_primary_selection_source_v1_offer(native, mime);
+        for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
+            zwp_primary_selection_source_v1_offer(native, mime.data());
         zwp_primary_selection_device_v1_set_selection(m_primaryDevice, native, m_serial);
     }
 #else
@@ -201,7 +201,7 @@ void WaylandClipboardService::onSelection(void* const data, wl_data_device*, wl_
 
 void WaylandClipboardService::onOfferMime(void* const data, wl_data_offer*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(mime, offer.mime, offer.rank);
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.mime, offer.rank);
 }
 
 void WaylandClipboardService::onOfferActions(void*, wl_data_offer*, u32){}
@@ -212,10 +212,10 @@ void WaylandClipboardService::onSourceTarget(void*, wl_data_source*, const char*
 
 void WaylandClipboardService::onSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
-    const char* supported = nullptr;
+    AStringView supported;
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(mime, supported, rank);
-    if(supported)
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), supported, rank);
+    if(!supported.empty())
         source.service.sendSource(source, fd);
     else{
         int rejectedFd = fd;
@@ -255,15 +255,15 @@ void WaylandClipboardService::onPrimarySelection(void* const data, zwp_primary_s
 
 void WaylandClipboardService::onPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(mime, offer.mime, offer.rank);
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.mime, offer.rank);
 }
 
 void WaylandClipboardService::onPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
-    const char* supported = nullptr;
+    AStringView supported;
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(mime, supported, rank);
-    if(supported)
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), supported, rank);
+    if(!supported.empty())
         source.service.sendSource(source, fd);
     else{
         int rejectedFd = fd;

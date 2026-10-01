@@ -348,7 +348,7 @@ inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, con
     return true;
 }
 
-inline bool ReportTextureCreateDescError(const tchar* operationName, const tchar* message, const bool assertFailure){
+inline bool ReportTextureCreateDescError(TStringView operationName, TStringView message, const bool assertFailure){
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     if(assertFailure)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
@@ -357,7 +357,7 @@ inline bool ReportTextureCreateDescError(const tchar* operationName, const tchar
 
 inline bool ValidateTextureCreateDesc(
     const TextureDesc& desc,
-    const tchar* operationName,
+    TStringView operationName,
     const bool assertFailure,
     TextureCreateMetadata& outMetadata
 ){

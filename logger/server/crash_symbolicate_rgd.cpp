@@ -26,9 +26,9 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-inline constexpr char s_GpuDetectiveSectionHeader[] = "\n[gpu_detective]\n";
-inline constexpr char s_GpuDetectiveDecodeFailedStatus[] = "status=decode_failed\n";
-inline constexpr char s_ReportDetailPrefix[] = "detail=";
+inline constexpr AStringView s_GpuDetectiveSectionHeader = "\n[gpu_detective]\n";
+inline constexpr AStringView s_GpuDetectiveDecodeFailedStatus = "status=decode_failed\n";
+inline constexpr AStringView s_ReportDetailPrefix = "detail=";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

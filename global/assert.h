@@ -16,10 +16,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar s_AssertColon[] = NWB_TEXT(":");
-inline constexpr tchar s_AssertNewline[] = NWB_TEXT("\n");
-inline constexpr tchar s_AssertLabel[] = NWB_TEXT("ASSERT ");
-inline constexpr tchar s_FatalAssertLabel[] = NWB_TEXT("FATAL ASSERT ");
+inline constexpr TStringView s_AssertColon = NWB_TEXT(":");
+inline constexpr TStringView s_AssertNewline = NWB_TEXT("\n");
+inline constexpr TStringView s_AssertLabel = NWB_TEXT("ASSERT ");
+inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,8 +27,8 @@ inline constexpr tchar s_FatalAssertLabel[] = NWB_TEXT("FATAL ASSERT ");
 
 #define NWB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
-        .event = ::DiagnosticEventName::s_Assert.data(),                                 \
-        .category = categoryValue.data(),                                                \
+        .event = ::DiagnosticEventName::s_Assert,                                        \
+        .category = categoryValue,                                                       \
         .expression = #conditionValue,                                                   \
         .message = messageTextValue,                                                     \
         .file = __FILE__,                                                                \
@@ -43,7 +43,7 @@ inline constexpr tchar s_FatalAssertLabel[] = NWB_TEXT("FATAL ASSERT ");
 #define NWB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
 {                                                                                        \
     if(!(condition)){                                                                    \
-        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, nullptr);                    \
+        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
         NWB_DETAIL_ASSERT_ABORT(label);                                                  \
     }                                                                                    \
 }

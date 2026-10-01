@@ -282,31 +282,31 @@ void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
         , m_frameTargets.width
         , m_frameTargets.height
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.albedoFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.normalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.worldPositionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.compositeColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.depthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.albedoFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.normalFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.worldPositionFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.opaqueColorFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.compositeColorFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.depthFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.shadowVisibilityFormat).getName())
         , m_frameTargets.csgPeelLayerCount
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgCapNormalFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalDepthFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgIntervalIdFormat).getName())
         , m_frameTargets.csgReceiverEventLayerCount
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventDataFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverEventCountFormat).getName())
         , m_frameTargets.csgReceiverSpanLayerCount
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanDataFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgReceiverSpanCountFormat).getName())
         , m_frameTargets.csgRemovedIntervalLayerCount
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).name)
-        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).name)
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDepthFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCapNormalFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalDataFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.csgRemovedIntervalCountFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumColorFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.accumExtinctionFormat).getName())
+        , StringConvert(Core::GetFormatInfo(m_frameTargets.avboit.transmittanceFormat).getName())
     );
 }
 

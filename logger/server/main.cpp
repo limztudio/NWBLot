@@ -32,7 +32,7 @@ inline constexpr StringView s_CrashUploadTokenOption = "--crash-upload-token";
 inline constexpr StringView s_CrashRetainPackagesOption = "--crash-retain-packages";
 inline constexpr StringView s_CrashRetainRawOption = "--crash-retain-raw";
 inline constexpr StringView s_CrashRetainInvalidOption = "--crash-retain-invalid";
-inline constexpr tchar s_LogFileNameBase[] = NWB_TEXT("logserver");
+inline constexpr TStringView s_LogFileNameBase = NWB_TEXT("logserver");
 inline constexpr Name s_CommandLineArena("logger/server/command_line");
 inline constexpr int s_LoggerServerExitSuccess = 0;
 inline constexpr int s_LoggerServerExitFailure = -1;

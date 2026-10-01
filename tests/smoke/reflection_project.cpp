@@ -255,7 +255,7 @@ public:
 
 
 private:
-    bool readFlag(const char* name, bool& value){
+    bool readFlag(const AStringView name, bool& value){
         SmokeEnvironmentString text(m_context.objectArena);
         if(!ReadSmokeEnvironmentText(name, text))
             return true;
@@ -270,7 +270,7 @@ private:
         return true;
     }
 
-    bool readU32(const char* name, u32& value, const u32 minimum, const u32 maximum){
+    bool readU32(const AStringView name, u32& value, const u32 minimum, const u32 maximum){
         SmokeEnvironmentString text(m_context.objectArena);
         if(!ReadSmokeEnvironmentText(name, text))
             return true;
@@ -375,7 +375,7 @@ private:
             SmokeEnvironmentString roughnessText(m_context.objectArena);
             if(
                 ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_ROUGHNESS", roughnessText)
-                && (!ParseF32FromChars(roughnessText.data(), roughnessText.data() + roughnessText.size(), m_authoredRoughness)
+                && (!ParseF32FromChars(AStringView(roughnessText.data(), roughnessText.size()), m_authoredRoughness)
                     || !IsFinite(m_authoredRoughness) || m_authoredRoughness < 0.f || m_authoredRoughness > 1.f)
             )
                 return false;
@@ -680,7 +680,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB_FATAL_ASSERT_MSG(extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
-const tchar* NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Reflection Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Reflection Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_reflection_smoke::ReflectionSmokeProject>(context);
 }

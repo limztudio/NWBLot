@@ -21,7 +21,7 @@ namespace NWB::Tests::Smoke{
 
 class FpsProbe final{
 public:
-    explicit FpsProbe(const tchar* label)
+    explicit FpsProbe(TStringView label)
         : m_label(label)
     {}
 
@@ -79,7 +79,7 @@ private:
     static constexpr f64 s_LargeFrameSeconds = 3600.0;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
-    const tchar* m_label = NWB_TEXT("Smoke");
+    TStringView m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
     f64 m_minFrameSeconds = s_LargeFrameSeconds;

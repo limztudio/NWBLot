@@ -395,8 +395,8 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    const tchar* windowClassName = NWB_TEXT("NWB_LOGGER");
-    const tchar* windowTitle = NWB_TEXT("NWBLogger");
+    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 
@@ -409,7 +409,7 @@ bool Frame::init(){
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = windowClassName;
+        wc.lpszClassName = s_WindowClassName.data();
     }
     if(!RegisterClassEx(&wc))
         return false;
@@ -417,7 +417,7 @@ bool Frame::init(){
     HWND hwnd = CreateWindowEx(
         s_WindowExtendedStyle,
         wc.lpszClassName,
-        windowTitle,
+        s_WindowTitle.data(),
         s_WindowStyle,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
@@ -451,7 +451,7 @@ bool Frame::mainLoop(){
 
 void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     HWND listHwnd = nullptr;
-    const tchar* itemText = nullptr;
+    TStringView itemText;
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
 
@@ -461,7 +461,7 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
             return;
 
         FrameDetail::s_Store->messages.emplace_back(LogString(str, FrameDetail::s_Store->arena), type);
-        itemText = FrameDetail::s_Store->messages.back().first().c_str();
+        itemText = TStringView(FrameDetail::s_Store->messages.back().first());
         listHwnd = FrameDetail::s_ListHwnd;
     }
 
@@ -471,7 +471,7 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     if(!listHwnd)
         return;
 
-    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText));
+    SendMessage(listHwnd, LB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.data()));
 
     const auto numItem = SendMessage(listHwnd, LB_GETCOUNT, 0, 0);
     if(numItem > 0)

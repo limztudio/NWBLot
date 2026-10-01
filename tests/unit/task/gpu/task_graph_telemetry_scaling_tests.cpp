@@ -43,11 +43,11 @@ namespace Scenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
+static void RecordUnsignedProperty(const AStringView key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);
     text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key.get(), text);
+    testing::Test::RecordProperty(AInteropString(key), text);
 }
 
 static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scenario, const bool benchmark){
@@ -137,10 +137,10 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     }
     EXPECT_EQ(dependencyIndex, analysis.edges().size());
     if(benchmark){
-        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_task_count" }, taskCount);
-        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_edge_count" }, edges.size());
-        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_export_ns" }, minimumNanoseconds);
-        RecordUnsignedProperty(NotNull<const char*>{ "telemetry_scratch_peak_bytes" }, peakScratchBytes);
+        RecordUnsignedProperty("telemetry_task_count", taskCount);
+        RecordUnsignedProperty("telemetry_edge_count", edges.size());
+        RecordUnsignedProperty("telemetry_export_ns", minimumNanoseconds);
+        RecordUnsignedProperty("telemetry_scratch_peak_bytes", peakScratchBytes);
     }
 }
 

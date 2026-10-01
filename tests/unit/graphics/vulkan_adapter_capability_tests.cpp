@@ -105,18 +105,29 @@ TEST(VulkanQueueFamilySelection, RejectsMissingRequiredRolesAndIgnoresEmptyFamil
     EXPECT_EQ(noGraphics.computeFamily, 0);
 }
 
+TEST(VulkanAdapterSelection, ExtensionLookupHonorsNonTerminatedViewBounds){
+    VkExtensionProperties extensions[1] = {};
+    NWB_STRCPY(extensions[0].extensionName, VK_MAX_EXTENSION_NAME_SIZE, "VK_EXT_sample");
+    constexpr char nameWithSuffix[] = "VK_EXT_sample_suffix";
+    constexpr usize extensionNameLength = sizeof("VK_EXT_sample") - 1u;
+    EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix, extensionNameLength)));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix)));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix, extensionNameLength - 1u)));
+}
+
+
 TEST(VulkanAdapterSelection, MandatoryFeatureContractIncludesCoreVersionedAndExtensionFeatures){
     auto support = FullySupportedFeatures();
-    EXPECT_EQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), nullptr);
+    EXPECT_TRUE(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support).empty());
 
     support.vulkan12.shaderFloat16 = VK_FALSE;
-    EXPECT_STREQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), "shaderFloat16");
+    EXPECT_EQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), AStringView("shaderFloat16"));
     support = FullySupportedFeatures();
     support.dynamicRendering.dynamicRendering = VK_FALSE;
-    EXPECT_STREQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), "dynamicRendering");
+    EXPECT_EQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), AStringView("dynamicRendering"));
     support = FullySupportedFeatures();
     support.descriptorBuffer.descriptorBuffer = VK_FALSE;
-    EXPECT_STREQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), "descriptorBuffer");
+    EXPECT_EQ(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support), AStringView("descriptorBuffer"));
 }
 
 TEST(VulkanAdapterSelection, PreflightsFullFeatureContractBeforeDiscretePreference){

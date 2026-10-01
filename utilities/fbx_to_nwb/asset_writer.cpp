@@ -57,12 +57,6 @@ public:
         return *this;
     }
 
-    NwbTextOutputStream& operator<<(const char* text){
-        if(text)
-            writeText(AStringView(text));
-        return *this;
-    }
-
     NwbTextOutputStream& operator<<(const AStringView text){
         writeText(text);
         return *this;
@@ -74,6 +68,7 @@ public:
     }
 
     template<typename T>
+        requires(!IsConvertible_V<const T&, AStringView>)
     NwbTextOutputStream& operator<<(const T& value){
         m_stream << value;
         return *this;
@@ -89,24 +84,23 @@ public:
 
 private:
     void writeText(const AStringView text){
-        const char* const data = text.data();
         usize chunkBegin = 0u;
         for(usize i = 0u; i < text.size(); ++i){
-            const char character = data[i];
+            const char character = text[i];
             if(character != '\r' && character != '\n')
                 continue;
 
             if(i > chunkBegin)
-                m_stream.write(data + chunkBegin, static_cast<StreamSize>(i - chunkBegin));
+                m_stream.write(text.data() + chunkBegin, static_cast<StreamSize>(i - chunkBegin));
 
-            if(character == '\r' && i + 1u < text.size() && data[i + 1u] == '\n')
+            if(character == '\r' && i + 1u < text.size() && text[i + 1u] == '\n')
                 ++i;
             m_stream.write("\r\n", 2);
             chunkBegin = i + 1u;
         }
 
         if(chunkBegin < text.size())
-            m_stream.write(data + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
+            m_stream.write(text.data() + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
     }
 
 

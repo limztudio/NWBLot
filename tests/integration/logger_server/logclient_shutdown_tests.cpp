@@ -172,7 +172,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
     {
         NWB::Log::Client client;
         const AString<NWB::Log::LogArena> url = StringFormat(client.arena(), "http://127.0.0.1:{}", server.port());
-        ASSERT_TRUE(client.init(MakeNotNull(url.c_str())));
+        ASSERT_TRUE(client.init(AStringView(url.data(), url.size())));
 
         for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
             client.enqueue(StringFormat(

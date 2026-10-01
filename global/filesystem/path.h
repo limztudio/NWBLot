@@ -171,10 +171,9 @@ public:
                 return;
             }
 
-            const PathChar* const text = m_path->m_text.data();
+            const native_string_view text = m_path->native();
 #if defined(NWB_PLATFORM_WINDOWS)
-            const auto fullText = native_string_view(text, m_path->m_text.size());
-            const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(fullText);
+            const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(text);
             if(rootDirectoryLength != 0u){
                 m_begin = 0u;
                 m_end = rootDirectoryLength;
@@ -182,7 +181,7 @@ public:
                 return;
             }
 
-            const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(fullText);
+            const usize rootNameLength = GlobalFilesystemPathDetail::RootNameLength(text);
             if(rootNameLength != 0u){
                 m_begin = 0u;
                 m_end = rootNameLength;

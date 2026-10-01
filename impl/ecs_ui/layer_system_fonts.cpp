@@ -29,14 +29,14 @@ bool UiLayerSystem::loadFonts(Core::Alloc::ScratchArena& scratchArena){
     sources.reserve(m_fontRefs.size());
     for(usize index = 0u; index < m_fontRefs.size(); ++index){
         const Font* font = m_assetManager.loadTypedSync<Font>(
-            m_fontRefs[index].font.name(), assets[index], MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI font")
+            m_fontRefs[index].font.name(), assets[index], NWB_TEXT("UiLayerSystem"), "UI font"
         );
         if(!font)
             return false;
         const FontAtlas* atlas = nullptr;
         if(m_fontRefs[index].atlas.valid()){
             atlas = m_assetManager.loadTypedSync<FontAtlas>(
-                m_fontRefs[index].atlas.name(), atlasAssets[index], MakeNotNull(NWB_TEXT("UiLayerSystem")), MakeNotNull("UI font atlas")
+                m_fontRefs[index].atlas.name(), atlasAssets[index], NWB_TEXT("UiLayerSystem"), "UI font atlas"
             );
             if(!atlas)
                 NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: optional font atlas unavailable; using native coverage"));

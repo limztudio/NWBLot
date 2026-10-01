@@ -217,43 +217,43 @@ inline constexpr StringView s_UnknownDebugLabel = "unknown";
 inline constexpr StringView s_DisabledQueueReason = "disabled";
 
 
-inline const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
+inline AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
     switch(type){
     case VK_PHYSICAL_DEVICE_TYPE_OTHER: return "other";
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "integrated GPU";
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "discrete GPU";
     case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "virtual GPU";
     case VK_PHYSICAL_DEVICE_TYPE_CPU: return "CPU";
-    default: return s_UnknownDebugLabel.data();
+    default: return s_UnknownDebugLabel;
     }
 }
 
-inline const char* SwapChainFormatToString(VkFormat format){
+inline AStringView SwapChainFormatToString(VkFormat format){
     switch(format){
     case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return "VK_FORMAT_A2B10G10R10_UNORM_PACK32";
     case VK_FORMAT_R8G8B8A8_UNORM: return "VK_FORMAT_R8G8B8A8_UNORM";
     case VK_FORMAT_R8G8B8A8_SRGB: return "VK_FORMAT_R8G8B8A8_SRGB";
     case VK_FORMAT_B8G8R8A8_UNORM: return "VK_FORMAT_B8G8R8A8_UNORM";
     case VK_FORMAT_B8G8R8A8_SRGB: return "VK_FORMAT_B8G8R8A8_SRGB";
-    default: return s_UnknownDebugLabel.data();
+    default: return s_UnknownDebugLabel;
     }
 }
 
-inline const char* ColorSpaceToString(VkColorSpaceKHR colorSpace){
+inline AStringView ColorSpaceToString(VkColorSpaceKHR colorSpace){
     switch(colorSpace){
     case VK_COLOR_SPACE_HDR10_ST2084_EXT: return "VK_COLOR_SPACE_HDR10_ST2084_EXT";
     case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
-    default: return s_UnknownDebugLabel.data();
+    default: return s_UnknownDebugLabel;
     }
 }
 
-inline const char* PresentModeToString(VkPresentModeKHR mode){
+inline AStringView PresentModeToString(VkPresentModeKHR mode){
     switch(mode){
     case VK_PRESENT_MODE_IMMEDIATE_KHR: return "VK_PRESENT_MODE_IMMEDIATE_KHR";
     case VK_PRESENT_MODE_MAILBOX_KHR: return "VK_PRESENT_MODE_MAILBOX_KHR";
     case VK_PRESENT_MODE_FIFO_KHR: return "VK_PRESENT_MODE_FIFO_KHR";
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
-    default: return s_UnknownDebugLabel.data();
+    default: return s_UnknownDebugLabel;
     }
 }
 
@@ -395,13 +395,13 @@ inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     }
 }
 
-[[maybe_unused]] inline const char* DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
+[[maybe_unused]] inline AStringView DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
     switch(severity){
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
-    default: return s_UnknownDebugLabel.data();
+    default: return s_UnknownDebugLabel;
     }
 }
 
@@ -416,8 +416,8 @@ inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     if(backend && backend->isValidationMessageIdIgnored(messageId))
         return VK_FALSE;
 
-    const char* messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
-    const char* message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
+    const AStringView messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
+    const AStringView message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
     NWB_LOGGER_WARNING(
         NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
         StringConvert(DebugUtilsSeverityToString(severity)),

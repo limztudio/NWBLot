@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 bool CommandList::validateGraphicsState(const GraphicsState& state){
-    constexpr const tchar* s_OperationName = NWB_TEXT("set graphics state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set graphics state");
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
         return false;
@@ -168,7 +168,7 @@ bool CommandList::validateGraphicsState(const GraphicsState& state){
 }
 
 bool CommandList::validateMeshletState(const MeshletState& state){
-    constexpr const tchar* s_OperationName = NWB_TEXT("set meshlet state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set meshlet state");
     if(state.pipeline && &state.pipeline->m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
         return false;
@@ -244,7 +244,7 @@ bool CommandList::validateMeshletState(const MeshletState& state){
 }
 
 bool CommandList::validateGraphicsDrawState(
-    const tchar* const operationName,
+    const TStringView operationName,
     const bool indexed
 ){
     GraphicsPipeline* const pipeline = m_currentGraphicsState.pipeline;
@@ -292,7 +292,7 @@ bool CommandList::validateGraphicsDrawState(
 bool CommandList::validateGraphicsDrawArguments(
     const DrawArguments& arguments,
     const bool indexed,
-    const tchar* const operationName
+    const TStringView operationName
 ){
     if(!validateGraphicsDrawState(operationName, indexed))
         return false;
@@ -364,7 +364,7 @@ bool CommandList::validateIndirectBuffer(
     const u64 offsetBytes,
     const u64 commandSizeBytes,
     const u32 commandCount,
-    const tchar* const commandName
+    const TStringView commandName
 ){
     if(!buffer){
         rejectCommandRecording(commandName, NWB_TEXT("no indirect-argument buffer is bound"));
@@ -394,8 +394,8 @@ bool CommandList::prepareDrawIndirect(
     const u32 offsetBytes,
     const u32 drawCount,
     const u64 commandSizeBytes,
-    const tchar* const operationLabel,
-    const tchar* const commandName,
+    const TStringView operationLabel,
+    const TStringView commandName,
     const VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
     Buffer*& outIndirectBuffer
 ){

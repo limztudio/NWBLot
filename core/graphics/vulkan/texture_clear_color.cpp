@@ -168,7 +168,7 @@ void CommandList::clearTextureBoxInt(
 void CommandList::clearColorTexture(
     Texture& texture,
     TextureSubresourceSet subresources,
-    const tchar* valueName,
+    TStringView valueName,
     const VkClearColorValue& clearValue,
     const bool integerValue,
     const bool signedIntegerValue
@@ -176,7 +176,7 @@ void CommandList::clearColorTexture(
     if(!publicCommandStateAccessible())
         return;
     static_cast<void>(valueName);
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("clear texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -288,7 +288,7 @@ void CommandList::clearColorTextureBox(
     Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
-    const tchar* valueName,
+    TStringView valueName,
     const VkClearColorValue& clearValue,
     const bool integerValue,
     const bool signedIntegerValue
@@ -298,7 +298,7 @@ void CommandList::clearColorTextureBox(
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
     static_cast<void>(valueName);
-    constexpr const tchar* s_OperationName = s_ClearTextureBoxOperation;
+    constexpr TStringView s_OperationName = s_ClearTextureBoxOperation;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;

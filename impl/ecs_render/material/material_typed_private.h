@@ -246,7 +246,7 @@ template<typename MaterialTypedByteVector>
 inline void AssertMaterialTypedUploadRange(
     const MaterialTypedByteRange& range,
     const usize uploadByteCount,
-    [[maybe_unused]] const tchar* rangeName
+    [[maybe_unused]] const TStringView rangeName
 ){
     if(range.byteCount == 0u){
         NWB_ASSERT_MSG(

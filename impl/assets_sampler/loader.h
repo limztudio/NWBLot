@@ -45,7 +45,7 @@ namespace SamplerAssetLoader{
     const Sampler& samplerAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 );
 [[nodiscard]] bool Load(
     SamplerGpuResource& outResource,
@@ -53,7 +53,7 @@ namespace SamplerAssetLoader{
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const NotNull<const tchar*> ownerName
+    const TStringView ownerName
 );
 void Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics);
 

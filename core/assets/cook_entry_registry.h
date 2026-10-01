@@ -74,7 +74,7 @@ public:
 
 public:
     virtual bool writeCookedAsset(
-        NotNull<const tchar*> assetKind,
+        TStringView assetKind,
         const Name& virtualPath,
         const IAsset& asset,
         const IAssetCodec& codec
@@ -141,7 +141,7 @@ template<typename StringT>
 
 
 [[nodiscard]] inline bool RegisterParsedVirtualPath(
-    const NotNull<const tchar*> assetKind,
+    const TStringView assetKind,
     const Name& virtualPath,
     CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
@@ -154,18 +154,18 @@ template<typename StringT>
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
         , StringConvert(virtualPath.c_str())
-        , assetKind.get()
+        , assetKind
     );
     return false;
 }
 
 [[nodiscard]] inline bool RegisterCookedVirtualPath(
-    const NotNull<const tchar*> assetKind,
+    const TStringView assetKind,
     const Name& virtualPath,
     CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
     }
 
@@ -174,7 +174,7 @@ template<typename StringT>
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'")
-        , assetKind.get()
+        , assetKind
         , StringConvert(virtualPath.c_str())
     );
     return false;
@@ -214,14 +214,14 @@ public:
     CookEntryBucket(
         CookArena& arena,
         const Name& assetType,
-        const NotNull<const tchar*> assetKindText,
+        const TStringView assetKindText,
         DocumentParseFunction parseDocument,
         ValueParseFunction parseValue,
         BuildAssetFunction buildAsset,
         const bool logBuildFailure
     )
         : m_entries(arena)
-        , m_assetKindText(assetKindText)
+        , m_assetKindText(assetKindText, arena)
         , m_parseDocument(parseDocument)
         , m_parseValue(parseValue)
         , m_buildAsset(buildAsset)
@@ -284,7 +284,7 @@ public:
 
         for(EntryT& entry : m_entries){
             if(!CookEntryRegistryDetail::RegisterCookedVirtualPath(
-                m_assetKindText,
+                TStringView(m_assetKindText),
                 CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 context.seenVirtualPathHashes
             ))
@@ -294,7 +294,7 @@ public:
             if(!m_buildAsset(entry, asset)){
                 if(m_logBuildFailure){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
-                        , m_assetKindText.get()
+                        , TStringView(m_assetKindText)
                         , StringConvert(entry.virtualPath.c_str())
                     );
                 }
@@ -302,7 +302,7 @@ public:
             }
 
             if(!context.writer.writeCookedAsset(
-                m_assetKindText,
+                TStringView(m_assetKindText),
                 CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
                 asset,
                 codec
@@ -316,7 +316,7 @@ public:
 private:
     bool appendParsedEntry(EntryT&& entry, CookEntryParseContext& context){
         if(!CookEntryRegistryDetail::RegisterParsedVirtualPath(
-            m_assetKindText,
+            TStringView(m_assetKindText),
             CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
             context.seenVirtualPathHashes
         ))
@@ -328,7 +328,7 @@ private:
 
 private:
     CookVector<EntryT> m_entries;
-    NotNull<const tchar*> m_assetKindText;
+    TString<CookArena> m_assetKindText;
     DocumentParseFunction m_parseDocument = nullptr;
     ValueParseFunction m_parseValue = nullptr;
     BuildAssetFunction m_buildAsset = nullptr;
@@ -378,7 +378,7 @@ public:
     template<typename EntryT, typename AssetT, typename CodecT>
     bool registerType(
         const Name& assetType,
-        const NotNull<const tchar*> assetKindText,
+        const TStringView assetKindText,
         typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
         typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
         typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
@@ -516,7 +516,7 @@ public:
 template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline bool RegisterSingleDocumentCookEntry(
     CookEntryRegistry& registry,
-    const NotNull<const tchar*> assetKindText,
+    const TStringView assetKindText,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
     const bool logBuildFailure = true
@@ -535,7 +535,7 @@ template<typename EntryT, typename AssetT, typename CodecT>
 template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline bool RegisterDocumentValueCookEntry(
     CookEntryRegistry& registry,
-    const NotNull<const tchar*> assetKindText,
+    const TStringView assetKindText,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
     typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,

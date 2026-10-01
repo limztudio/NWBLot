@@ -184,8 +184,8 @@ public:
     using TestArena = NWB::Tests::TestArena<AssetsGraphicsTestArenaTag>;
 
     struct MinimalAssetCookInfo{
-        const char* assetDirectory = "";
-        const char* assetFilename = "";
+        AStringView assetDirectory = "";
+        AStringView assetFilename = "";
     };
 
     using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
@@ -1199,7 +1199,7 @@ public:
 #endif
     static bool PrepareCleanDirectory(const Path& directory);
     static bool WriteTextFile(const Path& filePath, const AStringView text);
-    static const char* AssetsGraphicsTestConfigurationName();
+    static AStringView AssetsGraphicsTestConfigurationName();
     static Path AssetsGraphicsTestRepoRoot(TestArena& testArena);
     static Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName);
     static bool PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName, Path& outRoot);
@@ -1226,8 +1226,8 @@ public:
     static bool CookSingleGraphicsMeta(
         const AStringView metaText,
         const AStringView caseName,
-        const char* assetDirectory,
-        const char* assetFilename,
+        AStringView assetDirectory,
+        AStringView assetFilename,
         TestArena& testArena,
         Path& outRoot,
         Path& outOutputDirectory
@@ -1249,20 +1249,20 @@ public:
     );
     static bool ReadSmokeAssetMeta(
         TestArena& testArena,
-        const char* assetDirectory,
-        const char* assetFilename,
+        AStringView assetDirectory,
+        AStringView assetFilename,
         AString& outMetaText
     );
     static bool CookSmokeAssetMeta(
-        const char* assetDirectory,
-        const char* assetFilename,
+        AStringView assetDirectory,
+        AStringView assetFilename,
         const AStringView caseName,
         TestArena& testArena,
         Path& outRoot,
         Path& outOutputDirectory
     );
     static bool CookSmokeMeshMeta(
-        const char* assetFilename,
+        AStringView assetFilename,
         const AStringView caseName,
         TestArena& testArena,
         Path& outRoot,
@@ -1294,9 +1294,9 @@ public:
     static bool WriteMaterialBindShaderProbeSource(
         TestArena& testArena,
         const Path& assetRoot,
-        const char* stage,
-        const char* metaFilename,
-        const char* sourceFilename,
+        AStringView stage,
+        AStringView metaFilename,
+        AStringView sourceFilename,
         const AStringView sourceText
     );
     static bool CookMaterialBindShaderProbe(
@@ -1351,13 +1351,14 @@ public:
         Path& outRoot,
         Path& outOutputDirectory
     );
+    // Only volumes selecting graphics metadata or materials include a shader archive index.
     template<typename AssetCodecT>
     static bool LoadCookedAsset(
         TestArena& testArena,
         const Path& outputDirectory,
         const Name assetName,
         UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
-        const usize expectedVolumeFileCount = 2u
+        const usize expectedVolumeFileCount
     ){
         NWB::Core::Filesystem::VolumeMountDesc mountDesc(testArena.arena);
         mountDesc.volumeName = "graphics";

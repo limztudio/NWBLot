@@ -535,8 +535,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 bool Frame::init(){
     FrameDetail::EnableProcessDpiAwareness();
 
-    const tchar* ClassName = NWB_TEXT("NWB_FRAME");
-    const tchar* windowTitle = windowTitleOrDefault().get();
+    constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
+    const TStringView windowTitle = windowTitleOrDefault();
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     auto& frameData = data<Common::WinFrame>();
@@ -550,7 +550,7 @@ bool Frame::init(){
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = ClassName;
+        wc.lpszClassName = s_ClassName.data();
     }
     if(!RegisterClassEx(&wc)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window registration failed"));
@@ -617,7 +617,7 @@ bool Frame::init(){
     HWND hwnd = CreateWindowEx(
         s_WindowExtendedStyle,
         wc.lpszClassName,
-        windowTitle,
+        windowTitle.data(),
         s_WindowStyle,
         x,
         y,
@@ -658,11 +658,11 @@ bool Frame::mainLoop(){
             const u32 width = windowVisible ? static_cast<u32>(rect.right - rect.left) : 0;
             const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
             const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
-            if(const tchar* title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
+            if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
 #ifdef NWB_UNICODE
-                SetWindowTextW(data<Common::WinFrame>().hwnd(), title);
+                SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data());
 #else
-                SetWindowTextA(data<Common::WinFrame>().hwnd(), title);
+                SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data());
 #endif
             }
         },

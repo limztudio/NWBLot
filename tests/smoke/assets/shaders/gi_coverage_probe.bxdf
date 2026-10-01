@@ -2,11 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing;
-// blue marks the perpendicular -X face so the capture checker can assess the faces independently.
+// Test-only view of the full-resolution surfel resolve alpha. Red means covered, green means missing; blue marks the perpendicular -X face so the capture checker can assess the faces independently.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
     const half coverage = saturate(half(
@@ -22,3 +18,4 @@ half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -103,7 +103,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_workerDepth(m_arena)
     , m_searchStack(m_arena)
     , m_searchVisits(m_arena)
-    , m_scopeNegativeVisits(m_arena)
+    , m_scopeContributionVisits(m_arena)
     , m_profileLabels(m_arena)
     , m_profileEvents(m_arena)
     , m_readyProfiles(m_arena)
@@ -194,7 +194,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
         index = static_cast<u32>(m_nodes.size());
         ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
         m_searchVisits.resize(m_nodes.size() + 1u, 0u);
-        m_scopeNegativeVisits.resize(m_nodes.size() + 1u, 0u);
+        m_scopeContributionVisits.resize(m_nodes.size() + 1u, 0u);
         if(m_profileEnabled.load(MemoryOrder::relaxed))
             m_readyProfiles.resize(m_nodes.size() + 1u);
         m_nodes.emplace_back(m_arena);
@@ -431,81 +431,6 @@ bool CpuTaskScheduler::hasReadyLocked(
         if(!preferredScope || findScopeReadyLocked(index, *preferredScope, previous) != TaskHandle::s_InvalidIndex)
             return true;
     }
-    return false;
-}
-
-u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u32& previous)noexcept{
-    previous = TaskHandle::s_InvalidIndex;
-    if(m_nodes[m_ready[queue].head].scope == &wait.m_scope)
-        return m_ready[queue].head;
-    if(wait.m_publicationGeneration != m_scopePublicationGeneration){
-        for(TaskHandle& anchor : wait.m_unrelatedAnchors)
-            anchor = {};
-        wait.m_publicationGeneration = m_scopePublicationGeneration;
-    }
-    TaskHandle& anchor = wait.m_unrelatedAnchors[queue];
-    if(const TaskNode* const node = resolveLocked(anchor)){
-        if(node->state == TaskState::Ready && queueIndex(node->options) == queue)
-            previous = anchor.index;
-    }
-    // Publication can add paths to the joined scope. Retirement only removes paths, so a
-    // still-queued unrelated anchor stays safe until publication, even across other joins.
-    u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_nodes[previous].next;
-    while(index != TaskHandle::s_InvalidIndex && !contributesToScopeLocked(index, wait)){
-        previous = index;
-        index = m_nodes[index].next;
-    }
-    anchor = previous == TaskHandle::s_InvalidIndex ? TaskHandle{} : TaskHandle{ m_domainIdentity, previous, m_nodes[previous].generation };
-    return index;
-}
-
-void CpuTaskScheduler::invalidateScopeSearchLocked(const bool publication)noexcept{
-    if(publication && ++m_scopePublicationGeneration == 0u)
-        TerminateInvariant();
-    if(++m_scopeSearchGeneration != 0u)
-        return;
-    for(u64& visit : m_scopeNegativeVisits)
-        visit = 0u;
-    ++m_scopeSearchGeneration;
-}
-
-bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
-    if(m_nodes[index].scope == &wait.m_scope)
-        return true;
-    if(m_scopeSearchWaitIdentity != wait.m_identity){
-        m_scopeSearchWaitIdentity = wait.m_identity;
-        invalidateScopeSearchLocked(false);
-    }
-    if(m_scopeNegativeVisits[index] == m_scopeSearchGeneration)
-        return false;
-    if(++m_searchGeneration == 0u){
-        for(u64& visit : m_searchVisits)
-            visit = 0u;
-        ++m_searchGeneration;
-    }
-    m_searchStack.clear();
-    m_searchStack.push_back(index);
-    m_searchVisits[index] = m_searchGeneration;
-    for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
-        const TaskNode& node = m_nodes[m_searchStack[cursor]];
-        if(node.scope == &wait.m_scope)
-            return true;
-        const auto visit = [this](const TaskHandle handle){
-            if(
-                resolveLocked(handle) && m_searchVisits[handle.index] != m_searchGeneration
-                && m_scopeNegativeVisits[handle.index] != m_scopeSearchGeneration
-            ){
-                m_searchVisits[handle.index] = m_searchGeneration;
-                m_searchStack.push_back(handle.index);
-            }
-        };
-        visit(node.parent);
-        for(const TaskHandle dependent : node.dependents)
-            visit(dependent);
-    }
-    // Only exhausted searches are reusable; publication invalidates negatives.
-    for(const u32 visited : m_searchStack)
-        m_scopeNegativeVisits[visited] = m_scopeSearchGeneration;
     return false;
 }
 

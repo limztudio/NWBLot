@@ -280,6 +280,84 @@ void ProfileCompletedScopeJoins(const bool submitBeforeJoining){
 }
 
 
+void ProfilePositiveScopeGraph(Alloc::ScratchArena& scratch, const u32 workers, const usize chainLength, const bool scopedJoin){
+    constexpr usize s_Roots = 512u;
+    constexpr u32 s_Scopes = 2u;
+    Vector<CpuTaskHandle, Alloc::ScratchArena> prerequisites(s_Roots, CpuTaskHandle{}, scratch);
+    Vector<u32, Alloc::ScratchArena> visits(s_Roots, 0u, scratch);
+    Atomic<u32> continuations{ 0u };
+    Atomic<u32> leaves{ 0u };
+    CpuTaskScheduler scheduler(WorkerConfig(workers));
+    RecordUnsigned("root_prerequisites", s_Roots);
+    RecordUnsigned("continuation_chain", chainLength);
+    RecordUnsigned("scoped_join", scopedJoin ? 1u : 0u);
+    for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
+        for(u32& value : visits)
+            value = 0u;
+        continuations.store(0u, MemoryOrder::relaxed);
+        leaves.store(0u, MemoryOrder::relaxed);
+        Atomic<bool> start{ false };
+        Atomic<u32> entered{ 0u };
+        CpuTaskScope first(scheduler);
+        CpuTaskScope second(scheduler);
+        ScopeExit drainOnFailure([&]()noexcept{
+            start.store(true, MemoryOrder::release);
+            start.notify_all();
+            scheduler.drain();
+        });
+        for(u32 waiter = 0u; waiter < workers; ++waiter){
+            ASSERT_TRUE(scheduler.submit([&, waiter](){
+                entered.fetch_add(1u, MemoryOrder::release);
+                entered.notify_one();
+                start.wait(false, MemoryOrder::acquire);
+                if(scopedJoin){
+                    if(waiter == 0u)
+                        first.wait();
+                    if(waiter == 1u || workers == 1u)
+                        second.wait();
+                }
+            }).valid());
+        }
+        for(u32 observed = entered.load(MemoryOrder::acquire); observed != workers; observed = entered.load(MemoryOrder::acquire))
+            entered.wait(observed, MemoryOrder::acquire);
+        for(usize index = 0u; index < s_Roots; ++index){
+            prerequisites[index] = scheduler.submit([&, index](){ ++visits[index]; });
+            ASSERT_TRUE(prerequisites[index].valid());
+        }
+        auto tail = scheduler.submit(
+            [&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); },
+            {},
+            prerequisites.data(),
+            s_Roots
+        );
+        ASSERT_TRUE(tail.valid());
+        for(usize index = 0u; index < chainLength; ++index){
+            tail = scheduler.submit([&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); }, tail);
+            ASSERT_TRUE(tail.valid());
+        }
+        ASSERT_TRUE(first.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        ASSERT_TRUE(second.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        const Timer begin = TimerNow();
+        start.store(true, MemoryOrder::release);
+        start.notify_all();
+        if(workers == 0u && scopedJoin){
+            first.wait();
+            second.wait();
+        }
+        scheduler.wait();
+        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+        drainOnFailure.release();
+        for(const u32 value : visits)
+            ASSERT_EQ(value, 1u);
+        ASSERT_EQ(continuations.load(MemoryOrder::acquire), chainLength + 1u);
+        ASSERT_EQ(leaves.load(MemoryOrder::acquire), s_Scopes);
+        ASSERT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        RecordSample(sample, nanoseconds, s_Roots + chainLength + 1u + s_Scopes);
+    }
+    RecordWorkers(scheduler);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -464,6 +542,57 @@ TEST(CpuTaskProfile, DISABLED_EmptyScopeJoins){
 
 TEST(CpuTaskProfile, DISABLED_CompletedScopeJoins){
     __hidden_cpu_task_profile_tests::ProfileCompletedScopeJoins(true);
+}
+
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain128NoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_0_128");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 0u, 128u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain512NoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_0_512");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 0u, 512u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain2048NoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_0_2048");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 0u, 2048u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain512OneWorker){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_1_512");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 1u, 512u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain2048OneWorker){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_1_2048");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 1u, 2048u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain128TwoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_2_128");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 2u, 128u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain512TwoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_2_512");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 2u, 512u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeChain2048TwoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_scope_2_2048");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 2u, 2048u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeGraphGlobalControlNoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_control_0");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 0u, 2048u, false);
+}
+
+TEST(CpuTaskProfile, DISABLED_PositiveScopeGraphGlobalControlTwoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_positive_control_2");
+    __hidden_cpu_task_profile_tests::ProfilePositiveScopeGraph(scratch, 2u, 2048u, false);
 }
 
 

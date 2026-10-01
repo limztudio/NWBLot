@@ -326,6 +326,7 @@ void BuildSchedulingEdges(
             return topologicalIndices[rawEdges[lhs].consumer.index] < topologicalIndices[rawEdges[rhs].consumer.index];
         });
         const usize lastConsumerRank = topologicalIndices[rawEdges[candidates.back()].consumer.index];
+        usize firstUnreachedCandidate = 0u;
         for(usize candidateIndex = 0u; candidateIndex < candidates.size(); ++candidateIndex){
             const usize edgeIndex = candidates[candidateIndex];
             const u32 consumerIndex = rawEdges[edgeIndex].consumer.index;
@@ -338,6 +339,13 @@ void BuildSchedulingEdges(
             pending.clear();
             pending.push_back(consumerIndex);
             reached[consumerIndex] = producerIndex;
+            while(
+                firstUnreachedCandidate < candidates.size()
+                && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex
+            )
+                ++firstUnreachedCandidate;
+            if(firstUnreachedCandidate == candidates.size())
+                break;
             for(usize pendingIndex = 0u; pendingIndex < pending.size(); ++pendingIndex){
                 const u32 taskIndex = pending[pendingIndex];
                 for(usize adjacencyIndex = adjacency.offsets[taskIndex]; adjacencyIndex < adjacency.offsets[taskIndex + 1u]; ++adjacencyIndex){
@@ -346,11 +354,25 @@ void BuildSchedulingEdges(
                     if(descendantRank > lastConsumerRank || reached[descendantIndex] == producerIndex)
                         continue;
                     reached[descendantIndex] = producerIndex;
+                    if(descendantIndex == rawEdges[candidates[firstUnreachedCandidate]].consumer.index){
+                        do{
+                            ++firstUnreachedCandidate;
+                        }while(
+                            firstUnreachedCandidate < candidates.size()
+                            && reached[rawEdges[candidates[firstUnreachedCandidate]].consumer.index] == producerIndex
+                        );
+                        if(firstUnreachedCandidate == candidates.size())
+                            break;
+                    }
                     // Mark the last target, but no path at or beyond it can reach another direct consumer.
                     if(descendantRank < lastConsumerRank)
                         pending.push_back(descendantIndex);
                 }
+                if(firstUnreachedCandidate == candidates.size())
+                    break;
             }
+            if(firstUnreachedCandidate == candidates.size())
+                break;
         }
     }
     outSchedulingEdges.clear();

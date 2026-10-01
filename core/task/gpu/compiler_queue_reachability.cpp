@@ -242,6 +242,10 @@ bool BuildGpuTaskSchedulingReachability(
     outReachability.m_taskCount = taskCount;
     outReachability.m_wordsPerRow = wordsPerRow;
     outReachability.m_words.resize(totalWordCount, 0u);
+    // Reverse topology completes each consumer's nonzero descendant span before its producer reads it.
+    outReachability.m_relatedWordRanges.resize(taskCount);
+    for(auto& range : outReachability.m_relatedWordRanges)
+        range = { .m_begin = wordsPerRow, .m_end = 0u };
     for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
         const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
         if(
@@ -258,19 +262,23 @@ bool BuildGpuTaskSchedulingReachability(
             if(consumerIndex >= taskCount || consumerIndex == source.index)
                 return fail();
             const usize consumerRowOffset = consumerIndex * wordsPerRow;
-            for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex){
+            const auto& consumerRange = outReachability.m_relatedWordRanges[consumerIndex];
+            for(usize wordIndex = consumerRange.m_begin; wordIndex < consumerRange.m_end; ++wordIndex){
                 outReachability.m_words[sourceRowOffset + wordIndex] |=
                     outReachability.m_words[consumerRowOffset + wordIndex]
                 ;
             }
-            const usize consumerWord = sourceRowOffset + consumerIndex / s_BitsPerWord;
+            const usize consumerWordIndex = consumerIndex / s_BitsPerWord;
+            const usize consumerWord = sourceRowOffset + consumerWordIndex;
             outReachability.m_words[consumerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
+            auto& sourceRange = outReachability.m_relatedWordRanges[source.index];
+            sourceRange.m_begin = Min(sourceRange.m_begin, Min(consumerRange.m_begin, consumerWordIndex));
+            sourceRange.m_end = Max(sourceRange.m_end, Max(consumerRange.m_end, consumerWordIndex + 1u));
         }
     }
     // Symmetrize the completed directed closure with bounded tile storage; ranks preserve strict direction.
     __hidden_gpu_task_queue_reachability::SymmetrizeTaskRelations(outReachability.m_words, taskCount, wordsPerRow);
     outReachability.m_topologicalRanks.resize(taskCount);
-    outReachability.m_relatedWordRanges.resize(taskCount);
     for(usize orderIndex = 0u; orderIndex < analysis.topologicalOrder().size(); ++orderIndex)
         outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){

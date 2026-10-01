@@ -384,5 +384,127 @@ TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnch
 }
 
 
+TEST(CpuTaskWaitTests, APositiveSearchCannotAdmitVisitedUnrelatedSiblingBranches){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 prerequisites = 0u;
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    const auto root = scheduler.submit([&](){ ++prerequisites; });
+    ASSERT_TRUE(root.valid());
+    const auto sibling = scheduler.submit([&](){ ++unrelated; }, root);
+    ASSERT_TRUE(sibling.valid());
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }, sibling).valid());
+    const auto positive = scheduler.submit([&](){ ++prerequisites; }, root);
+    ASSERT_TRUE(positive.valid());
+    ASSERT_TRUE(scope.submit([&](){ ++joined; }, positive).valid());
+    scope.wait();
+    EXPECT_EQ(prerequisites, s_ExpectedDualCount);
+    EXPECT_EQ(joined, 1u);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+}
+
+TEST(CpuTaskWaitTests, PublicationCanMakeAnEarlierNegativeSiblingContribute){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelatedTail = 0u;
+    u32 prerequisite = 0u;
+    u32 joined = 0u;
+    const auto root = scheduler.submit([](){});
+    ASSERT_TRUE(root.valid());
+    const auto sibling = scheduler.submit([&](){ ++prerequisite; }, root);
+    ASSERT_TRUE(sibling.valid());
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelatedTail; }, sibling).valid());
+    const auto positive = scheduler.submit([](){}, root);
+    ASSERT_TRUE(positive.valid());
+    ASSERT_TRUE(scope.submit([&](){
+        EXPECT_EQ(prerequisite, 0u);
+        ++joined;
+        EXPECT_TRUE(scope.submit([&](){ ++joined; }, sibling).valid());
+    }, positive).valid());
+    scope.wait();
+    EXPECT_EQ(prerequisite, 1u);
+    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(unrelatedTail, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelatedTail, 1u);
+}
+
+
+TEST(CpuTaskWaitTests, AShortestScopeProofDoesNotAdmitUnprocessedSiblingFrontiers){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    const auto root = scheduler.submit([](){});
+    ASSERT_TRUE(root.valid());
+    const auto sibling = scheduler.submit([&](){ ++unrelated; }, root);
+    ASSERT_TRUE(sibling.valid());
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }, sibling).valid());
+    ASSERT_TRUE(scope.submit([&](){ ++joined; }, root).valid());
+    scope.wait();
+    EXPECT_EQ(joined, 1u);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+}
+
+TEST(CpuTaskWaitTests, RecycledPositivePrerequisiteSlotsDoNotAdmitUnrelatedWork){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    const auto root = scheduler.submit([](){});
+    ASSERT_TRUE(root.valid());
+    const auto positive = scheduler.submit([](){}, root);
+    ASSERT_TRUE(positive.valid());
+    ASSERT_TRUE(scope.submit([&](){
+        CpuTaskHandle recycled;
+        JoiningThread producer([&](){ recycled = scheduler.submit([&](){ ++unrelated; }); });
+        producer.join();
+        EXPECT_TRUE(recycled.valid());
+        EXPECT_EQ(recycled.index, positive.index);
+        EXPECT_NE(recycled.generation, positive.generation);
+        ++joined;
+        EXPECT_TRUE(scope.submit([&](){ ++joined; }).valid());
+    }, positive).valid());
+    scope.wait();
+    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, 1u);
+}
+
+TEST(CpuTaskWaitTests, StructuredParentCompletionStaysScopedUntilEveryChildRetires){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    constexpr u32 s_Children = 64u;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelated = 0u;
+    u32 children = 0u;
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }).valid());
+    ASSERT_TRUE(scope.submit([&](){
+        for(u32 child = 0u; child < s_Children; ++child)
+            EXPECT_TRUE(scheduler.submit([&](){ ++children; }).valid());
+    }).valid());
+    scope.wait();
+    EXPECT_EQ(children, s_Children);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, 1u);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

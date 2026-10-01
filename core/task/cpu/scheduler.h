@@ -130,6 +130,7 @@ private:
     static constexpr usize s_MainThreadTargetSlot = 3u;
     static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
     static constexpr usize s_ChunksPerWorker = 4u;
+    static constexpr u64 s_ScopeSearchGenerationStep = 2u;
     inline static thread_local Execution* s_execution = nullptr;
 
     struct ScopeWait{
@@ -275,7 +276,7 @@ private:
     Vector<u32, Alloc::GlobalArena> m_workerDepth;
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
-    Vector<u64, Alloc::GlobalArena> m_scopeNegativeVisits;
+    Vector<u64, Alloc::GlobalArena> m_scopeContributionVisits;
     Vector<ProfileLabelRecord, Alloc::GlobalArena> m_profileLabels;
     Vector<CpuTaskProfileEvent, Alloc::GlobalArena> m_profileEvents;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
@@ -289,7 +290,7 @@ private:
     u64 m_searchGeneration = 0u;
     u64 m_nextScopeWaitIdentity = 0u;
     u64 m_scopeSearchWaitIdentity = 0u;
-    u64 m_scopeSearchGeneration = 1u;
+    u64 m_scopeSearchGeneration = s_ScopeSearchGenerationStep;
     u64 m_scopePublicationGeneration = 1u;
     u64 m_dispatchCount = 0u;
     mutable Futex m_mutex;

@@ -17,4 +17,4 @@ Dependencies run in one direction:
 nwb_graphics (runtime) -> nwb_gpu_task -> nwb_graphics_backend -> nwb_cpu_task -> nwb_alloc
 ```
 
-Backend code cannot include GPU graph/runtime headers, GPU tasks cannot include the graphics runtime, and CPU tasks cannot include graphics. The task-domain policy checks enforce these boundaries. Tests mirror the task layout under `tests/unit/task/cpu` and `tests/unit/task/gpu`; native graphics tests remain under `tests/unit/graphics`.
+Backend code cannot include GPU graph/runtime headers, GPU tasks cannot include the graphics runtime, and CPU tasks cannot include graphics. Task-domain unit tests mirror the layout under `tests/unit/task/cpu` and `tests/unit/task/gpu`; backend resource and presentation contract tests live under `tests/unit/graphics`.

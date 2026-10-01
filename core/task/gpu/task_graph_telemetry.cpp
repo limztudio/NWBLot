@@ -4,11 +4,10 @@
 
 #include "task_graph.h"
 #include "compiler.h"
+#include "dependency_pair_hash.h"
 #include "queue_assignment_telemetry.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
-
-#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,18 +20,6 @@ NWB_CORE_BEGIN
 
 
 namespace __hidden_task_graph_telemetry{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct DependencyPairHasher{
-    [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
-        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> 32u));
-        HashCombine(hash, static_cast<u32>(pairKey));
-        return hash;
-    }
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -393,9 +380,9 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
     }
     for(const GpuTaskExternalDependencyEdge& edge : analysis.externalDependencies())
         builder.addEdge(completionNodes[edge.completion.index], taskNodes[edge.consumer.index], Telemetry::FrameGraphEdgeKind::DependsOn);
-    HashMap<u64, u8, __hidden_task_graph_telemetry::DependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> inferredFlags(
+    HashMap<u64, u8, GpuTaskDependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> inferredFlags(
         0u,
-        __hidden_task_graph_telemetry::DependencyPairHasher{},
+        GpuTaskDependencyPairHasher{},
         EqualTo<u64>{},
         scratchArena
     );

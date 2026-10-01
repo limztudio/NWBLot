@@ -220,4 +220,27 @@ Debug and Optimize each passed the CPU, GPU, and global suites: 74 CPU cases pas
 
 Opt-in `CpuTaskProfile` cases cover prefix/fan-in scaling, individual and dependent tasks at zero/one/four workers, empty/completed joins, and the existing range controls. Original and intermediate binaries, raw XML, method files, hashes, and final results are under ignored `__cmake/scheduler_optimization/2026-10-01/`; the direct final comparison is `final_original_comparison/final_summary.json`. The historical source-policy scanners referenced above were removed before this revision. This work followed the current `.helper/` standards instead.
 
-The final review found no further demonstrated low-risk changes in these paths. Targeted notifications, claim/setup fusion, and automatic nested chunk tuning require additional representative workload evidence.
+That pass left per-scope notification routing, claim/setup fusion, and automatic nested chunk tuning unproven; those changes require additional representative workload evidence.
+
+### 2026-10-01: reuse proven scope prerequisites
+
+A follow-up probe found that successful scope searches still walked a shared continuation chain for every ready prerequisite and again for each chain node. Scope searches now retain both outcomes in the existing per-node stamp vector. Even generations encode exhausted negative searches; the following odd value encodes a proven path to the joined scope. No second cache array is allocated. The former negative-only field and search implementation are replaced by this contribution cache in `scheduler_scope_search.cpp`.
+
+A successful search propagates positive results backward through only its processed breadth-first prefix, following generation-valid parent/dependent edges already proved positive. Visited siblings without such a path remain unmarked, and unprocessed sibling frontiers are not scanned. A live prerequisite's proven downstream path cannot disappear through retirement: every dependent or structured parent on that path still awaits the prerequisite's completion. Publication and changes of wait identity conservatively invalidate both outcomes; generation-tagged ready cursors retain their existing rules.
+
+An isolated Linux x64 Optimize comparison used 512 ready prerequisites feeding a shared chain and two scoped continuations. Native-worker cases occupy all workers with gate callbacks that enter cooperative scope joins; ordinary whole-scheduler joins over the same graph serve as controls. Three counterbalanced epochs produced 72 validated samples per design and shape:
+
+| Scoped join workload | Before | Tagged contribution cache |
+| --- | ---: | ---: |
+| 128 continuation nodes, zero workers | 0.978 ms | 0.082 ms |
+| 512 continuation nodes, zero workers | 4.941 ms | 0.132 ms |
+| 2,048 continuation nodes, zero workers | 43.098 ms | 0.335 ms |
+| 2,048 continuation nodes, one worker | 46.529 ms | 1.101 ms |
+| 512 continuation nodes, two workers | 9.756 ms | 1.958 ms |
+| 2,048 continuation nodes, two workers | 51.685 ms | 7.445 ms |
+
+Zero-worker whole-scheduler controls remained near 0.25 ms for the largest graph. Concurrent wait identities still invalidate the shared cache, limiting the two-worker improvement. Short one-worker controls varied substantially, so their small differences are not treated as wins. These synthetic graph measurements do not establish application frame-rate gains. Source/binary hashes, raw samples, and the isolated comparison are retained under ignored `__cmake/scheduler_residual_audit/2026-10-01/`.
+
+The isolated candidate passed the existing Debug and Optimize CPU suites (74 passed and one hardware-dependent skip each), plus 100 sibling/publication regression checks per configuration. Persisted regressions additionally cover shortest-path sibling frontiers, recycled positive slots, and structured-parent completion. Opt-in `CpuTaskProfile` cases preserve the shared-chain workloads at zero/one/two workers and same-graph whole-scheduler controls.
+
+The combined final source passed Debug and Optimize with 79 CPU tests and one hardware-dependent skip per configuration. Scope-wait and cancellation cases also passed 50 repetitions per configuration (2,000 checks total), and all 31 opt-in CPU benchmarks passed. A final counterbalanced complete-binary comparison collected 32 samples per design/control: the unrelated 4,096-task ready-prefix control changed from 110.066 to 114.572 microseconds (about 4% slower); the other five controls stayed within 2%. The small control changes are not claimed as improvements. Combined build logs, XML, repeated-run logs, and control samples are under ignored `__cmake/scheduler_recheck/2026-10-01/final_validation/`.

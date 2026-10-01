@@ -26,6 +26,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compiler.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis_internal.h"
+    "${CMAKE_CURRENT_LIST_DIR}/dependency_pair_hash.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis_topology.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_finalization.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_internal.h"

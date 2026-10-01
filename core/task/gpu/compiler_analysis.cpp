@@ -4,6 +4,7 @@
 
 #include "compiler_analysis_internal.h"
 #include "compiler_internal.h"
+#include "dependency_pair_hash.h"
 
 #include <global/hash_utils.h>
 #include <global/timer.h>
@@ -85,14 +86,6 @@ struct TrackedResourceAccessLists{
     TrackedResourceAccessList readers;
 };
 
-struct DependencyPairHasher{
-    [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
-        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> s_EdgePairProducerShift));
-        HashCombine(hash, static_cast<u32>(pairKey));
-        return hash;
-    }
-};
-
 // Store stable edge ordinals so the deduplication index does not copy complete dependency keys.
 struct InferredDependencyHasher{
     const GraphicsVector<GpuTaskDependencyEdge>* edges = nullptr;
@@ -101,7 +94,7 @@ struct InferredDependencyHasher{
     [[nodiscard]] usize operator()(const usize index)const noexcept{
         const GpuTaskDependencyEdge& edge = (*edges)[index];
         const u64 taskPair = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
-        usize hash = DependencyPairHasher{}(taskPair);
+        usize hash = GpuTaskDependencyPairHasher{}(taskPair);
         HashCombine(hash, edge.resource.index);
         HashCombine(hash, edge.resourceVersion.index);
         HashCombine(hash, edge.hazard);
@@ -381,8 +374,8 @@ bool GpuTaskGraphCompiler::analyze(
         usize rawEdge = 0u;
         usize firstInferredEdge = Limit<usize>::s_Max;
     };
-    HashMap<u64, DependencyPairIndices, DependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> dependencyPairs(
-        0, DependencyPairHasher(), EqualTo<u64>(), scratchArena
+    HashMap<u64, DependencyPairIndices, GpuTaskDependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> dependencyPairs(
+        0, GpuTaskDependencyPairHasher(), EqualTo<u64>(), scratchArena
     );
     Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
     HashSet<usize, InferredDependencyHasher, InferredDependencyEqual, Alloc::ScratchArena> inferredEdgeIndices(

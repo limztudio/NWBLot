@@ -122,6 +122,20 @@ bool GpuTaskGraphCompiler::assignQueues(
             }
         }
     }
+    if(needsSchedulingReachability && !analysis.schedulingEdges().empty()){
+        constexpr usize s_OverlapQueueMinimum = 2u;
+        usize capableQueueCount = 0u;
+        for(usize queueIndex = 0u; queueIndex < topology.queueCount && capableQueueCount < s_OverlapQueueMinimum; ++queueIndex){
+            for(const GpuTaskQueuePlacementGroup& group : groups){
+                if(HasCapabilities(topology.queues[queueIndex].capabilities, group.requiredCapabilities)){
+                    ++capableQueueCount;
+                    break;
+                }
+            }
+        }
+        // Capability matches overestimate every legal static, balancing, and timing route across the complete graph.
+        needsSchedulingReachability = capableQueueCount >= s_OverlapQueueMinimum;
+    }
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
     if(needsSchedulingReachability && !BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);

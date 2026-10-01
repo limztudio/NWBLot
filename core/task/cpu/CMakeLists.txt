@@ -6,6 +6,7 @@ target_sources(nwb_cpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/profiling.h"
     "${CMAKE_CURRENT_LIST_DIR}/types.h"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler_range.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/scheduler_scope_search.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler_wait.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"

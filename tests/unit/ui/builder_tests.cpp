@@ -178,6 +178,25 @@ TEST_F(UiBuilderTests, LabelTextChangesPreserveStableIdAndDeclarationLifetime){
     EXPECT_EQ(m_context.input().targets().size(), 1u);
 }
 
+TEST_F(UiBuilderTests, PanelAndSiblingButtonsPaintTheirDeclarationStyles){
+    ASSERT_TRUE(begin(1u));
+    EXPECT_FALSE(m_builder.button("first", "First"));
+    m_builder.style().panel = Name("button.normal");
+    m_builder.style().button = Name("button.pressed");
+    EXPECT_FALSE(m_builder.button("second", "Second"));
+    ASSERT_TRUE(finish());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    Rect panel;
+    Rect first;
+    Rect second;
+    ASSERT_TRUE(regionQuad(snapshot, 0u, panel));
+    ASSERT_TRUE(regionQuad(snapshot, 1u, first));
+    ASSERT_TRUE(regionQuad(snapshot, 3u, second));
+    EXPECT_LT(first.y, second.y);
+    EXPECT_EQ(panel.x, 0.0f);
+    EXPECT_EQ(panel.y, 0.0f);
+}
+
 TEST_F(UiBuilderTests, CheckboxTogglesOncePerAcceptedActionAcrossRepeatedBuilds){
     bool checked = false;
     ASSERT_TRUE(begin(1u));

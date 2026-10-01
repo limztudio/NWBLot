@@ -22,7 +22,8 @@ NWB_IMPL_UI_BEGIN
 class TextAreaNavigationResolver final : public IEditNavigationResolver{
 public:
     TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
-        const TextAreaState& state, f32 fontSize);
+        const TextAreaState& state, f32 fontSize,
+        u32 scriptTag = TextScriptTag('L', 'a', 't', 'n'), StringView language = "en");
     virtual ~TextAreaNavigationResolver()override = default;
 
 
@@ -43,6 +44,8 @@ private:
     const u64 m_instanceGeneration;
     const u64 m_revision;
     const f32 m_fontSize;
+    const u32 m_scriptTag;
+    AString<Core::Alloc::GlobalArena> m_language;
 };
 
 

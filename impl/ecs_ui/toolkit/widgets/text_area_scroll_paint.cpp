@@ -29,24 +29,24 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const WidgetId thumbId = MakeWidgetId(item.state.id, horizontal ? "scroll.x.thumb" : "scroll.y.thumb");
         const bool hovered = m_context.input().hover() == thumbId;
         const bool pressed = m_context.input().capture() == thumbId;
-        const Name& thumbName = !enabled ? m_scrollbarStyle.thumbDisabled : pressed ? m_scrollbarStyle.thumbPressed
-            : hovered ? m_scrollbarStyle.thumbHover : m_scrollbarStyle.thumb;
-        const UiSkinRegion* track = region(m_scrollbarStyle.track, m_scrollbarStyle.trackFallback);
-        const UiSkinRegion* thumb = region(thumbName, m_scrollbarStyle.thumbFallback);
+        const Name& thumbName = !enabled ? item.scrollbarStyle.thumbDisabled : pressed ? item.scrollbarStyle.thumbPressed
+            : hovered ? item.scrollbarStyle.thumbHover : item.scrollbarStyle.thumb;
+        const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback);
+        const UiSkinRegion* thumb = region(thumbName, item.scrollbarStyle.thumbFallback);
         if(track)
             painted = m_paint.drawRegion(track->name, bar.track);
         else
-            m_paint.fillRect(bar.track, m_scrollbarStyle.trackColor);
+            m_paint.fillRect(bar.track, item.scrollbarStyle.trackColor);
         if(painted && thumb)
             painted = m_paint.drawRegion(thumb->name, bar.thumb);
         else if(painted)
-            m_paint.fillRect(bar.thumb, enabled ? m_scrollbarStyle.thumbColor : m_scrollbarStyle.disabledColor);
+            m_paint.fillRect(bar.thumb, enabled ? item.scrollbarStyle.thumbColor : item.scrollbarStyle.disabledColor);
     }
     if(painted && placement.corner.width > 0.0f && placement.corner.height > 0.0f){
-        if(const UiSkinRegion* track = region(m_scrollbarStyle.track, m_scrollbarStyle.trackFallback))
+        if(const UiSkinRegion* track = region(item.scrollbarStyle.track, item.scrollbarStyle.trackFallback))
             painted = m_paint.drawRegion(track->name, placement.corner);
         else
-            m_paint.fillRect(placement.corner, m_scrollbarStyle.trackColor);
+            m_paint.fillRect(placement.corner, item.scrollbarStyle.trackColor);
     }
     const bool popped = m_paint.popClip();
     if(!painted || !popped)

@@ -47,6 +47,10 @@ class BuilderScopeFrame final : NoCopy{
 private:
     struct Item{
         WidgetState state;
+        WidgetStyle style;
+        SelectableStyle selectableStyle;
+        EditBoxStyle editStyle;
+        ScrollbarStyle scrollbarStyle;
         TextLayout text;
         EditBoxView editView;
         EditBoxState* editState = nullptr;
@@ -81,6 +85,7 @@ private:
 
     struct WindowFrame{
         WindowState* state = nullptr;
+        WidgetStyle style;
         WindowOptions options;
         WindowMetrics metrics;
         WidgetState titleState;
@@ -136,6 +141,8 @@ private:
     struct ListFrame{
         const IListDataSource* source = nullptr;
         ListState* state = nullptr;
+        WidgetStyle widgetStyle;
+        ListStyle style;
         ListOptions options;
         ControlToken token;
         Insets padding;
@@ -150,6 +157,8 @@ private:
         ISearchableListDataSource* searchSource = nullptr;
         SearchComboState* search = nullptr;
         ComboState* state = nullptr;
+        ComboStyle style;
+        PopupStyle popupStyle;
         ComboOptions options;
         WidgetState popup;
         WidgetState rows;
@@ -184,6 +193,7 @@ private:
         WidgetState widget;
         WidgetState anchor;
         TooltipState* state = nullptr;
+        TooltipStyle style;
         TooltipOptions options;
         TextLayout text;
         u64 revision = 0u;
@@ -206,6 +216,7 @@ private:
         WidgetState rows;
         const IListDataSource* source = nullptr;
         ContextMenuState* state = nullptr;
+        PopupStyle popupStyle;
         ContextMenuOptions options;
         PopupToken popupToken;
         PopupToken parentToken;
@@ -235,6 +246,8 @@ private:
     bool m_popupVisible = false;
     PopupOptions m_popupOptions;
     PopupPlacement m_popupPlacement;
+    WidgetStyle m_panelStyle;
+    PopupStyle m_popupPaintStyle;
     LayoutTree m_layout;
     PaintVector<Item> m_items;
     PaintVector<TextAreaFrame> m_textAreas;

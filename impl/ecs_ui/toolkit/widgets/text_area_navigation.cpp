@@ -108,7 +108,7 @@ private:
 
 
 TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
-    const TextAreaState& state, const f32 fontSize)
+    const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language)
     : m_arena(arena)
     , m_text(text)
     , m_context(context)
@@ -116,6 +116,8 @@ TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena&
     , m_instanceGeneration(state.instanceGeneration())
     , m_revision(state.revision())
     , m_fontSize(fontSize)
+    , m_scriptTag(scriptTag)
+    , m_language(language.data(), language.size(), arena)
 {}
 
 EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction,
@@ -130,7 +132,9 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
         return {};
     const __hidden_ui_text_area_navigation::ModelStamp expected(model);
     EditBoxView view(m_arena);
-    if(!view.snapshot(model) || view.shape(m_text, { {}, m_fontSize }) != TextLayoutStatus::Success)
+    const ShapeRequest request{ {}, m_fontSize, TextDirection::LeftToRight, m_scriptTag,
+        StringView(m_language.data(), m_language.size()) };
+    if(!view.snapshot(model) || view.shape(m_text, request) != TextLayoutStatus::Success)
         return {};
     if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))
         return {};

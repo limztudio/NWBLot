@@ -29,7 +29,7 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
     if(!ScrollbarLayout::Calculate(
         box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth,
-        state.scroll(), m_scrollbarStyle.thickness, m_scrollbarStyle.minimumThumb, viewport
+        state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb, viewport
     ))
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
@@ -47,7 +47,7 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
         || !state.m_scrollInput.updateOffsets({ placement.scroll, placement.scrollY })
     )
         return false;
-    if(!item.editView.paint(m_text, m_paint, *m_skin, placement, m_editStyle, item.editFlags) || !textAreaMatches(frame))
+    if(!item.editView.paint(m_text, m_paint, *m_skin, placement, item.editStyle, item.editFlags) || !textAreaMatches(frame))
         return false;
     state.m_visual.placement = placement;
     state.m_visual.scroll = placement.scroll;

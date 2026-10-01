@@ -79,12 +79,14 @@ ListResult Builder::virtualList(
     ListFrame frame;
     frame.source = &source;
     frame.state = &state;
+    frame.widgetStyle = m_style;
+    frame.style = m_listStyle;
     frame.options = options;
     frame.token = token;
     frame.rowCount = source.rowCount();
     frame.focusOnCommit = options.enabled && previouslyFocused && !result.focused;
-    frame.padding = m_listStyle.padding;
-    const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
+    frame.padding = frame.style.padding;
+    const UiSkinRegion* background = region(frame.style.background, frame.style.backgroundFallback);
     if(!background){
         m_context.fail();
         result.valid = false;

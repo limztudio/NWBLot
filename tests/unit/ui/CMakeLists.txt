@@ -16,6 +16,7 @@ target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/progress_layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/progress_builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/builder_skin_palette_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/builder_text_shaping_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/slider_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/slider_behavior_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/slider_layout_tests.cpp"

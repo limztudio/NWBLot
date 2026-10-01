@@ -63,6 +63,24 @@ TEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTarge
     EXPECT_EQ(m_context.input().focus(), anchor());
 }
 
+TEST_F(UiPopupToolsBuilderTests, VisibleTooltipPaintsItsDeclarationStyleAfterALaterStyleChange){
+    ASSERT_TRUE(acceptTools(1u, true, false));
+    ASSERT_TRUE(moveToAnchor());
+    ASSERT_TRUE(begin(2u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 280.0f }));
+    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
+    m_builder.tooltipStyle().background = Name("button.normal");
+    ASSERT_TRUE(m_builder.tooltip("tip", "anchor", "Helpful text", m_tooltip, m_tooltipOptions));
+    m_builder.tooltipStyle().background = Name("button.pressed");
+    ASSERT_TRUE(finishPanel());
+    ASSERT_TRUE(m_tooltip.visible());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    Rect background;
+    ASSERT_TRUE(skinQuad(snapshot, 6u, background));
+    EXPECT_FLOAT_EQ(background.x, m_tooltip.placement().bounds.x);
+    EXPECT_FLOAT_EQ(background.y, m_tooltip.placement().bounds.y);
+}
+
 TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequiresAnotherDelay){
     m_tooltipOptions.delaySeconds = 0.5f;
     m_deltaSeconds = 0.5f;

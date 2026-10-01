@@ -79,6 +79,8 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
         floatFrame->focused = result.focused;
     }
     Item item(m_arena);
+    item.style = m_style;
+    item.editStyle = m_editStyle;
     item.state = *widget;
     item.editOptions = options;
     if(!prepareEditBox(item, model, state, result)){
@@ -137,12 +139,13 @@ bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, 
     item.editFlags = { item.editOptions.enabled, m_context.input().hover() == item.state.id, result.focused, item.editOptions.readOnly,
         state.caretElapsed < 0.5 };
     item.editFlags.preeditCaretVisible = result.preeditCaretVisible;
-    if(!item.editView.snapshot(model) || item.editView.shape(m_text, { {}, m_style.fontSize }) != TextLayoutStatus::Success){
+    if(!item.editView.snapshot(model)
+        || item.editView.shape(m_text, textShapeRequest({}, m_style.fontSize)) != TextLayoutStatus::Success){
         m_context.fail();
         return false;
     }
     item.editState = &state;
-    item.padding = m_editStyle.padding;
+    item.padding = item.editStyle.padding;
 
     const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
     for(const auto& name : names){
@@ -166,7 +169,7 @@ bool Builder::paintEditBox(const Item& item, const LayoutBox& box, const HitTarg
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
     if(!item.editView.arrange(box.rectangle, item.padding, visibleClip(box.clip), item.editState->scroll, placement, caretWidth))
         return false;
-    if(!item.editView.paint(m_text, m_paint, *m_skin, placement, m_editStyle, item.editFlags))
+    if(!item.editView.paint(m_text, m_paint, *m_skin, placement, item.editStyle, item.editFlags))
         return false;
     item.editState->placement = placement;
     item.editState->scroll = placement.scroll;

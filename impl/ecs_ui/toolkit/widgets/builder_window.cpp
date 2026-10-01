@@ -24,12 +24,13 @@ bool Builder::beginWindow(
         return false;
     }
     reset();
+    m_scope->m_window.style = m_style;
     const UiSkinRegion* frame = region(m_style.window, m_style.window);
     const UiSkinRegion* header = region(m_style.windowTitle, m_style.windowTitle);
     const UiSkinRegion* collapse = region(m_style.windowCollapse, m_style.windowCollapse);
     const UiSkinRegion* resize = region(m_style.windowResize, m_style.windowResize);
     WidgetState* window = m_context.declare(stableKey, WidgetKind::Window);
-    ShapeRequest request{ title, m_style.fontSize };
+    const ShapeRequest request = textShapeRequest(title, m_style.fontSize);
     if(
         !frame || !header || (options.collapsible && !collapse)
         || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window

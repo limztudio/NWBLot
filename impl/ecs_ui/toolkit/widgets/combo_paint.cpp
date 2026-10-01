@@ -25,10 +25,10 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const bool focused = input.focus() == item.state.id;
     const bool hovered = input.hover() == item.state.id;
-    const Name& name = !item.enabled ? m_comboStyle.disabled : frame.open ? m_comboStyle.open
-        : focused ? m_comboStyle.focused : hovered ? m_comboStyle.hover : m_comboStyle.normal;
-    const UiSkinRegion* field = region(name, m_comboStyle.fallback);
-    const UiSkinRegion* arrow = region(m_comboStyle.arrow, m_comboStyle.arrowFallback);
+    const Name& name = !item.enabled ? frame.style.disabled : frame.open ? frame.style.open
+        : focused ? frame.style.focused : hovered ? frame.style.hover : frame.style.normal;
+    const UiSkinRegion* field = region(name, frame.style.fallback);
+    const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!field || !arrow)
         return false;
     const Rect clip = visibleClip(box.clip);
@@ -42,14 +42,14 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const bool arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon,
         item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f });
     const Rect textClip{ box.rectangle.x + item.padding.left, box.rectangle.y + item.padding.top,
-        Max(0.0f, icon.x - m_comboStyle.arrowGap - box.rectangle.x - item.padding.left), contentHeight };
+        Max(0.0f, icon.x - frame.style.arrowGap - box.rectangle.x - item.padding.left), contentHeight };
     m_paint.pushClip(textClip);
     const Point origin{ textClip.x, textClip.y + Max(0.0f, (contentHeight - item.text.measure().y) * 0.5f) };
     const bool textPainted = arrowPainted && m_text.paint(m_paint, item.text, origin,
-        item.enabled ? m_style.text : m_style.disabledText);
+        item.enabled ? item.style.text : item.style.disabledText);
     const bool textPopped = m_paint.popClip();
-    const bool focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(m_style.focus)
-        || m_paint.drawRegion(m_style.focus, box.rectangle));
+    const bool focusPainted = textPainted && (!focused || !item.enabled || !m_skin->findRegion(item.style.focus)
+        || m_paint.drawRegion(item.style.focus, box.rectangle));
     const bool popped = m_paint.popClip();
     if(!focusPainted || !textPopped || !popped || !comboMatches(frame))
         return false;
@@ -84,7 +84,7 @@ bool Builder::paintCombos(){
 }
 
 bool Builder::paintComboPopup(ComboFrame& frame){
-    const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
+    const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!background || !comboMatches(frame))
         return false;
     const Rect& anchor = frame.state->bounds();
@@ -107,9 +107,9 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     PopupPlacement placement;
     if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
         return false;
-    const Insets padding{ Max(m_popupStyle.padding.left, background->padding.left),
-        Max(m_popupStyle.padding.top, background->padding.top), Max(m_popupStyle.padding.right, background->padding.right),
-        Max(m_popupStyle.padding.bottom, background->padding.bottom) };
+    const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
+        Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),
+        Max(frame.popupStyle.padding.bottom, background->padding.bottom) };
     PopupScope scope;
     scope.token = frame.popupToken;
     scope.parent = frame.parentToken;

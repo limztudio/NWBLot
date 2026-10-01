@@ -29,7 +29,7 @@ bool Builder::paintContextMenus(){
 bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     const Item& anchor = m_scope->m_items[frame.anchorIndex];
     const LayoutBox* anchorBox = m_scope->m_layout.box(anchor.node);
-    const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
+    const UiSkinRegion* background = region(frame.popupStyle.background, frame.popupStyle.fallback);
     if(!anchorBox || !background || !contextMenuMatches(frame))
         return false;
     const Rect clip = visibleClip(anchorBox->clip);
@@ -63,9 +63,9 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
             m_context.fail();
         return false;
     }
-    const Insets padding{ Max(m_popupStyle.padding.left, background->padding.left),
-        Max(m_popupStyle.padding.top, background->padding.top), Max(m_popupStyle.padding.right, background->padding.right),
-        Max(m_popupStyle.padding.bottom, background->padding.bottom) };
+    const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
+        Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),
+        Max(frame.popupStyle.padding.bottom, background->padding.bottom) };
     m_paint.pushClip(placement.bounds);
     const bool backgroundPainted = m_paint.drawRegion(background->name, placement.bounds);
     const bool popped = m_paint.popClip();

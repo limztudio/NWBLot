@@ -97,7 +97,8 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     result.valid = true;
     result.focused = options.enabled && m_context.input().focus() == widget->id;
     if(m_editHost){
-        TextAreaNavigationResolver navigation(m_arena, m_text, m_context, state, m_style.fontSize);
+        TextAreaNavigationResolver navigation(m_arena, m_text, m_context, state, m_style.fontSize,
+            m_textScriptTag, StringView(m_textLanguage.data(), m_textLanguage.size()));
         __hidden_builder_text_area::TextAreaActions actions(model, state, m_context);
         result = m_editHost->editNavigated(*widget, model, editOptions, m_context.popupToken(), state.m_navigation, navigation, actions);
     }
@@ -132,6 +133,9 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     frame.focused = result.focused;
     snapshotTextArea(frame);
     Item item(m_arena);
+    item.style = m_style;
+    item.editStyle = m_editStyle;
+    item.scrollbarStyle = m_scrollbarStyle;
     item.state = *widget;
     item.editOptions = editOptions;
     if(!prepareEditBox(item, model, state.m_visual, result) || !textAreaMatches(frame)){

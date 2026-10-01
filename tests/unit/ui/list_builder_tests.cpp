@@ -231,6 +231,26 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
+    m_source.count = 0u;
+    ListState secondState;
+    ASSERT_TRUE(begin(1u));
+    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
+    m_builder.listStyle().background = Name("button.normal");
+    ASSERT_TRUE(m_builder.virtualList("first", m_source, m_state, Options()).valid);
+    m_builder.listStyle().background = Name("button.hover");
+    ASSERT_TRUE(m_builder.virtualList("second", m_source, secondState, Options()).valid);
+    ASSERT_TRUE(finishPanel());
+    const DrawSnapshot snapshot = m_paint.freeze();
+    Rect first;
+    Rect second;
+    ASSERT_TRUE(skinQuad(snapshot, 6u, first));
+    ASSERT_TRUE(skinQuad(snapshot, 7u, second));
+    EXPECT_LT(first.y, second.y);
+    EXPECT_EQ(first.width, 280.0f);
+    EXPECT_EQ(second.width, 280.0f);
+}
+
 TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyphs){
     ASSERT_TRUE(prepare(1u));
     const u64 visible = m_state.placement().endRow - m_state.placement().firstRow;

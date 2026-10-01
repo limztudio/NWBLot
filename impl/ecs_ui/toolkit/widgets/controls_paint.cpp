@@ -21,7 +21,7 @@ bool Builder::paintPanel(){
     if(!panel)
         return false;
     m_paint.pushClip(visibleClip(panel->clip));
-    const bool painted = m_paint.drawRegion(m_style.panel, panel->rectangle);
+    const bool painted = m_paint.drawRegion(m_scope->m_panelStyle.panel, panel->rectangle);
     const bool popped = m_paint.popClip();
     HitTarget barrier;
     barrier.rectangle = panel->rectangle;
@@ -69,14 +69,14 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     Point origin{ box.rectangle.x, box.rectangle.y };
     const Point measured = item.text.measure();
     if(item.state.kind == WidgetKind::Separator){
-        painted = m_paint.drawRegion(m_style.separator, box.rectangle);
+        painted = m_paint.drawRegion(item.style.separator, box.rectangle);
         const bool popped = m_paint.popClip();
         return painted && popped;
     }
     if(item.state.kind == WidgetKind::Button){
-        const Name& preferred = !item.enabled ? m_style.buttonDisabled
-            : captured && hover ? m_style.buttonPressed : hover ? m_style.buttonHover : m_style.button;
-        const UiSkinRegion* skinRegion = region(preferred, m_style.button);
+        const Name& preferred = !item.enabled ? item.style.buttonDisabled
+            : captured && hover ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
+        const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
         const f32 contentWidth = Max(0.0f, box.rectangle.width - item.padding.left - item.padding.right);
         const f32 contentHeight = Max(0.0f, box.rectangle.height - item.padding.top - item.padding.bottom);
@@ -84,26 +84,26 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         origin.y += item.padding.top + Max(0.0f, (contentHeight - measured.y) * 0.5f);
     }
     else if(item.state.kind == WidgetKind::Checkbox){
-        const Name& preferred = !item.enabled ? m_style.checkboxDisabled
-            : item.checked ? m_style.checkboxChecked : hover ? m_style.checkboxHover : m_style.checkbox;
-        const UiSkinRegion* skinRegion = region(preferred, m_style.checkbox);
+        const Name& preferred = !item.enabled ? item.style.checkboxDisabled
+            : item.checked ? item.style.checkboxChecked : hover ? item.style.checkboxHover : item.style.checkbox;
+        const UiSkinRegion* skinRegion = region(preferred, item.style.checkbox);
         const Rect square{ origin.x, origin.y + Max(0.0f, (box.rectangle.height - item.checkboxExtent) * 0.5f),
             item.checkboxExtent, item.checkboxExtent };
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, square);
-        if(painted && item.checked && m_skin->findRegion(m_style.checkboxMark)){
+        if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
             const f32 inset = item.checkboxExtent * 0.2f;
             const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f };
-            painted = m_paint.drawRegion(m_style.checkboxMark,
+            painted = m_paint.drawRegion(item.style.checkboxMark,
                 { square.x + inset, square.y + inset, square.width - 2.0f * inset, square.height - 2.0f * inset }, tint
             );
         }
-        origin.x += item.checkboxExtent + m_style.gap;
+        origin.x += item.checkboxExtent + item.style.gap;
         origin.y += Max(0.0f, (box.rectangle.height - measured.y) * 0.5f);
     }
-    if(painted && focused && item.enabled && interactive && m_skin->findRegion(m_style.focus))
-        painted = m_paint.drawRegion(m_style.focus, box.rectangle);
+    if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
+        painted = m_paint.drawRegion(item.style.focus, box.rectangle);
     if(painted)
-        painted = m_text.paint(m_paint, item.text, origin, item.enabled ? m_style.text : m_style.disabledText);
+        painted = m_text.paint(m_paint, item.text, origin, item.enabled ? item.style.text : item.style.disabledText);
     const bool popped = m_paint.popClip();
     if(!painted || !popped)
         return false;

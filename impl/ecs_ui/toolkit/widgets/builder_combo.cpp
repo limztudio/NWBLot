@@ -106,6 +106,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.results = &results;
     frame.searchSource = searchSource;
     frame.search = search;
+    frame.style = m_comboStyle;
+    frame.popupStyle = m_popupStyle;
     frame.queryHeight = searchOptions ? searchOptions->queryHeight : 0.0f;
     frame.queryGap = searchOptions ? searchOptions->queryGap : 0.0f;
     snapshotComboQuery(frame);
@@ -141,14 +143,15 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     frame.listFocusOnCommit = options.enabled && previouslyListFocused && m_context.input().focus() != frame.rows.id;
     Item item(m_arena);
     item.state = field;
+    item.style = m_style;
     item.enabled = options.enabled;
     item.combo = static_cast<u32>(m_scope->m_combos.size());
-    item.padding = m_comboStyle.padding;
+    item.padding = frame.style.padding;
     Point minimum;
-    const Name names[]{ m_comboStyle.normal, m_comboStyle.hover, m_comboStyle.open,
-        m_comboStyle.focused, m_comboStyle.disabled };
+    const Name names[]{ frame.style.normal, frame.style.hover, frame.style.open,
+        frame.style.focused, frame.style.disabled };
     for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_comboStyle.fallback);
+        const UiSkinRegion* skinRegion = region(name, frame.style.fallback);
         if(!skinRegion){
             m_context.fail();
             return {};
@@ -160,12 +163,12 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         item.padding.right = Max(item.padding.right, skinRegion->padding.right);
         item.padding.bottom = Max(item.padding.bottom, skinRegion->padding.bottom);
     }
-    const UiSkinRegion* arrow = region(m_comboStyle.arrow, m_comboStyle.arrowFallback);
+    const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!arrow){
         m_context.fail();
         return {};
     }
-    frame.arrowExtent = Max(m_comboStyle.arrowExtent, Max(arrow->minimumWidth, arrow->minimumHeight));
+    frame.arrowExtent = Max(frame.style.arrowExtent, Max(arrow->minimumWidth, arrow->minimumHeight));
     u64 index = 0u;
     const bool selected = state.selectedKey() != 0u;
     if(
@@ -176,7 +179,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     // Text is shaped before another source callback can invalidate a temporary row label.
-    const ShapeRequest request{ selected ? source.text(index) : options.placeholder, m_style.fontSize };
+    const ShapeRequest request = textShapeRequest(selected ? source.text(index) : options.placeholder, item.style.fontSize);
     if(m_text.layout(request, item.text) != TextLayoutStatus::Success || !comboMatches(frame)){
         m_context.fail();
         return {};
@@ -185,6 +188,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     ListFrame list;
     list.source = frame.results;
     list.state = &state.m_list;
+    list.widgetStyle = m_style;
+    list.style = m_listStyle;
     list.options.rowHeight = options.rowHeight;
     list.options.wheelRows = options.wheelRows;
     list.options.enabled = options.enabled;
@@ -194,8 +199,8 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     list.rowCount = frame.resultCount;
     if(frame.editor != s_LayoutNoParent)
         list.keyboardFocus = m_scope->m_comboEditors[frame.editor].state.id;
-    list.padding = m_listStyle.padding;
-    const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
+    list.padding = list.style.padding;
+    const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
     if(!background){
         m_context.fail();
         return {};
@@ -208,7 +213,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { Max(minimum.x, measured.x + frame.arrowExtent + m_comboStyle.arrowGap
+    description.intrinsicSize = { Max(minimum.x, measured.x + frame.arrowExtent + frame.style.arrowGap
         + item.padding.left + item.padding.right), Max(minimum.y, Max(measured.y, frame.arrowExtent)
         + item.padding.top + item.padding.bottom) };
     if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){

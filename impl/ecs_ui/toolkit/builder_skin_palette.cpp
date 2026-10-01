@@ -38,7 +38,7 @@ namespace __hidden_ui_builder_skin_palette{
 
 
 void Builder::setSkin(const UiSkin& skin){
-    if(declarationBlocked()){
+    if(!balanced() || m_context.failed()){
         m_context.fail();
         return;
     }

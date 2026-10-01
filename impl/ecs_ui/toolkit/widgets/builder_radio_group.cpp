@@ -182,7 +182,8 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         TextLayout label(m_arena);
         const StringView text = frame.m_source.text(index);
         // Do not call any further source method until the temporary label has been shaped and copied.
-        if(!radioGroupStateMatches(frame) || m_text.layout({ text, frame.m_widgetStyle.fontSize }, label) != TextLayoutStatus::Success)
+        if(!radioGroupStateMatches(frame)
+            || m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize), label) != TextLayoutStatus::Success)
             return false;
         if(!radioGroupMatches(frame))
             return false;

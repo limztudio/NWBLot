@@ -48,6 +48,7 @@ bool Builder::selectable(
     Item* item = addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item)
         return false;
+    item->selectableStyle = m_listStyle.row;
     item->checked = selected;
     return m_context.takeActivation(item->state, item->enabled);
 }
@@ -56,7 +57,8 @@ bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
     if(!SelectablePainter::Paint(
-        m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), m_listStyle.row, flags, m_style.text, m_style.disabledText
+        m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags,
+        item.style.text, item.style.disabledText
     ))
         return false;
     HitTarget target;

@@ -35,6 +35,22 @@ public:
 
 
 protected:
+    [[nodiscard]] bool installKoreanFallback(){
+        const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
+        Core::Assets::AssetBytes bytes(m_arena);
+        if(!Tests::ReadBundledFontBytes(path, bytes))
+            return false;
+        Font korean(m_arena, Name("tests/ui/fonts/korean"));
+        korean.setFontBytes(Move(bytes));
+        if(!korean.validatePayload())
+            return false;
+        const FontSource sources[]{
+            { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u },
+            { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), korean, 1u },
+        };
+        return m_text.setFonts(sources, LengthOf(sources));
+    }
+
     [[nodiscard]] bool shapeCurrent(){
         return m_view.snapshot(m_model) && m_view.shape(m_text, { {}, 14.0f }) == TextLayoutStatus::Success;
     }
@@ -357,6 +373,33 @@ TEST_F(UiTextAreaNavigationTests, ShapeFailurePreservesModelAndViewportIntent){
     EXPECT_FLOAT_EQ(m_state.scroll().x, 5.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 20.0f);
     EXPECT_TRUE(m_state.navigation().matches(preferred));
+}
+
+TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAlignedWithVisibleJamo){
+    ASSERT_TRUE(installKoreanFallback());
+    ASSERT_TRUE(m_model.setText("\xE1\x84\x92\xE1\x85\xA1\xE1\x86\xAB\naaa"));
+    ASSERT_TRUE(m_model.setSelection(9u, 9u));
+    const ShapeRequest request{ {}, 14.0f, TextDirection::LeftToRight, TextScriptTag('H', 'a', 'n', 'g'), "ko" };
+    EditBoxView visual(m_arena);
+    ASSERT_TRUE(visual.snapshot(m_model));
+    ASSERT_EQ(visual.shape(m_text, request), TextLayoutStatus::Success);
+    Rect caret;
+    ASSERT_TRUE(visual.caretGeometry().caretRect(visual.displayCaret(), caret));
+    usize expected = 0u;
+    ASSERT_TRUE(visual.caretGeometry().verticalTarget(visual.displayCaret(), true, caret.x, expected));
+
+    const auto preferred = m_state.navigation().snapshot();
+    AString<Core::Alloc::GlobalArena> language("ko", m_arena);
+    TextAreaNavigationResolver configured(m_arena, m_text, m_context, m_state, 14.0f,
+        TextScriptTag('H', 'a', 'n', 'g'), StringView(language.data(), language.size()));
+    language.assign("!!", 2u);
+    const EditNavigationResult matching = configured.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
+    ASSERT_TRUE(matching.resolved);
+    EXPECT_EQ(matching.committedByte, expected);
+    TextAreaNavigationResolver defaultPolicy(m_arena, m_text, m_context, m_state, 14.0f);
+    const EditNavigationResult different = defaultPolicy.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
+    ASSERT_TRUE(different.resolved);
+    EXPECT_NE(matching.committedByte, different.committedByte);
 }
 
 

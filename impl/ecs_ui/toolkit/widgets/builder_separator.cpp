@@ -35,6 +35,7 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
     const f32 minimum = horizontal ? skinRegion->minimumHeight : skinRegion->minimumWidth;
     const f32 thickness = options.thickness > 0.0f ? options.thickness : Max(1.0f, minimum);
     Item item(m_arena);
+    item.style = m_style;
     item.state = *state;
     LayoutNodeDesc description;
     description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };

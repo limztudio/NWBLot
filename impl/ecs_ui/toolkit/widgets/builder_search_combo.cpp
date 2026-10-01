@@ -46,6 +46,8 @@ bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
         return false;
     Item item(m_arena);
     item.state = editor;
+    item.style = m_style;
+    item.editStyle = m_editStyle;
     item.editOptions.enabled = frame.options.enabled;
     EditBoxResult result;
     result.valid = true;

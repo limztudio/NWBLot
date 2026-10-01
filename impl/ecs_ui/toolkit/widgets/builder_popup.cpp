@@ -75,13 +75,16 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     }
     m_scope = next;
     m_scope->m_panelState = declaration;
+    m_scope->m_popupPaintStyle = m_popupStyle;
     m_scope->m_bounds = placement.bounds;
     LayoutNodeDesc description;
     description.direction = LayoutDirection::Column;
     description.width = { LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
     description.height = { LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
-    description.padding = { Max(m_popupStyle.padding.left, background->padding.left), Max(m_popupStyle.padding.top, background->padding.top),
-        Max(m_popupStyle.padding.right, background->padding.right), Max(m_popupStyle.padding.bottom, background->padding.bottom) };
+    description.padding = { Max(m_scope->m_popupPaintStyle.padding.left, background->padding.left),
+        Max(m_scope->m_popupPaintStyle.padding.top, background->padding.top),
+        Max(m_scope->m_popupPaintStyle.padding.right, background->padding.right),
+        Max(m_scope->m_popupPaintStyle.padding.bottom, background->padding.bottom) };
     description.gap = m_style.gap;
     u32 node = 0u;
     if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node)){

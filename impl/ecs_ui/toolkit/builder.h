@@ -111,6 +111,8 @@ public:
     [[nodiscard]] const InputRouter& input()const{ return m_context.input(); }
     [[nodiscard]] bool failed()const{ return m_context.failed(); }
     void setSkin(const UiSkin& skin);
+    // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
+    [[nodiscard]] bool setTextShaping(u32 scriptTag, StringView language);
     [[nodiscard]] WidgetStyle& style(){ if(declarationBlocked()) m_context.fail(); return m_style; }
     [[nodiscard]] ScrollbarStyle& scrollbarStyle(){ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
     [[nodiscard]] EditBoxStyle& editStyle(){ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
@@ -130,6 +132,7 @@ public:
 
 private:
     [[nodiscard]] bool declarationBlocked()const{ return m_finalizing || m_declaring; }
+    [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const;
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
     [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const;
@@ -224,6 +227,8 @@ private:
     usize m_popupFrameCount = 0u;
     const UiSkin* m_skin = nullptr;
     WidgetStyle m_style;
+    AString<Core::Alloc::GlobalArena> m_textLanguage;
+    u32 m_textScriptTag = TextScriptTag('L', 'a', 't', 'n');
     f32 m_skinDefaultFontSize = 16.0f;
     EditBoxStyle m_editStyle;
     ScrollbarStyle m_scrollbarStyle;

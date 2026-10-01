@@ -26,7 +26,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     ScrollPlacement placement;
     if(!ScrollLayout::Calculate(
-        box.rectangle, clip, frame.padding, m_listStyle.scrollbarWidth, m_listStyle.minimumThumb,
+        box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
         frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
     ))
         return false;
@@ -36,7 +36,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     )
         return false;
     if(!ScrollLayout::Calculate(
-        box.rectangle, clip, frame.padding, m_listStyle.scrollbarWidth, m_listStyle.minimumThumb,
+        box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
         frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
     ))
         return false;
@@ -44,7 +44,7 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(placement.endRow - placement.firstRow > 1024u || !frame.state->m_scroll.setOffset(placement.offset))
         return false;
     frame.state->m_placement = placement;
-    const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
+    const UiSkinRegion* background = region(frame.style.background, frame.style.backgroundFallback);
     if(!background)
         return false;
     m_paint.pushClip(clip);
@@ -70,10 +70,10 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
         return false;
     if(placement.scrollbarVisible){
-        const UiSkinRegion* track = region(m_listStyle.track, m_listStyle.trackFallback);
+        const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
         const WidgetId thumbId = MakeWidgetId(item.state.id, "scrollbar");
         const bool hover = m_context.input().hover() == thumbId;
-        const UiSkinRegion* thumb = region(hover ? m_listStyle.thumbHover : m_listStyle.thumb, m_listStyle.thumbFallback);
+        const UiSkinRegion* thumb = region(hover ? frame.style.thumbHover : frame.style.thumb, frame.style.thumbFallback);
         if(!track || !thumb)
             return false;
         m_paint.pushClip(clip);
@@ -121,13 +121,14 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
         Rect rectangle;
         if(!ScrollLayout::RowBounds(index, placement, frame.options.rowHeight, rectangle))
             return false;
-        const ShapeRequest request{ frame.source->text(index), m_style.fontSize };
+        const ShapeRequest request = textShapeRequest(frame.source->text(index), frame.widgetStyle.fontSize);
         if(!listStateMatches(frame) || m_text.layout(request, text) != TextLayoutStatus::Success)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key,
             m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
         if(!SelectablePainter::Paint(
-            m_paint, m_text, *m_skin, text, rectangle, placement.contentClip, m_listStyle.row, flags, m_style.text, m_style.disabledText
+            m_paint, m_text, *m_skin, text, rectangle, placement.contentClip, frame.style.row, flags,
+            frame.widgetStyle.text, frame.widgetStyle.disabledText
         ))
             return false;
         if(item.enabled){

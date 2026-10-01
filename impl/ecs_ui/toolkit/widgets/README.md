@@ -2,6 +2,8 @@
 
 `Ui::Builder` declares panels and windows, scoped row/column containers, labels, buttons, checkboxes, separators, edit boxes, selectable rows, virtualized lists and ordinary/searchable combos. Tooltips and context menus attach to preceding content items. It shapes text and arranges the content before emitting paint and hit targets in the same order. Application values remain in the host model; the GPU snapshot owns copied geometry and image references.
 
+Widget, list, combo, popup, editor, tooltip and scrollbar styles are copied at each declaration. Changing a style between sibling declarations affects only later controls; deferred painting uses the style that measured each control. Panel, window and user-popup chrome retain their style from the matching begin call.
+
 ## Windows
 
 Keep a `WindowState` in the host component or application model. Its bounds, initialized flag, collapsed flag, and pointer gesture baselines persist across callbacks. The builder borrows this object only until the matching `endWindow()`; the object must remain alive throughout that scope. Frozen draw snapshots do not borrow it.

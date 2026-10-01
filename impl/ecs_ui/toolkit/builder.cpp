@@ -25,7 +25,27 @@ Builder::Builder(Core::Alloc::GlobalArena& arena, Context& context, PaintBuilder
     , m_scopeFrame(arena)
     , m_scope(MakeNotNull(&m_scopeFrame))
     , m_popupFrames(arena)
+    , m_textLanguage("en", arena)
 {}
+
+bool Builder::setTextShaping(const u32 scriptTag, const StringView language){
+    if(!balanced() || m_context.failed()){
+        m_context.fail();
+        return false;
+    }
+    const ShapeRequest request{ {}, 16.0f, TextDirection::LeftToRight, scriptTag, language };
+    if(ValidateTextRequest(request, false) != TextLayoutStatus::Success)
+        return false;
+    AString<Core::Alloc::GlobalArena> copied(language.data(), language.size(), m_arena);
+    m_textLanguage = Move(copied);
+    m_textScriptTag = scriptTag;
+    return true;
+}
+
+ShapeRequest Builder::textShapeRequest(const StringView text, const f32 fontSize)const{
+    return { text, fontSize, TextDirection::LeftToRight, m_textScriptTag,
+        StringView(m_textLanguage.data(), m_textLanguage.size()) };
+}
 
 bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const LayoutDirection::Enum direction){
     if(
@@ -42,6 +62,7 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
         return false;
     }
     reset();
+    m_scope->m_panelStyle = m_style;
     m_scope->m_panelState = *state;
     m_scope->m_bounds = bounds;
     LayoutNodeDesc description;
@@ -167,9 +188,10 @@ Builder::Item* Builder::addItem(
     if(!state)
         return nullptr;
     Item item(m_arena);
+    item.style = m_style;
     item.state = *state;
     item.enabled = options.enabled && synchronizePopup();
-    ShapeRequest request{ text, m_style.fontSize };
+    const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
     if(m_text.layout(request, item.text) != TextLayoutStatus::Success){
         m_context.fail();
         return nullptr;

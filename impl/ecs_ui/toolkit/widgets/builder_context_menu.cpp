@@ -52,6 +52,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.source = &source;
     frame.state = &state;
+    frame.popupStyle = m_popupStyle;
     frame.options = options;
     frame.options.enabled = options.enabled && anchor->enabled;
     const bool previouslyOpen = state.isOpen();
@@ -112,6 +113,8 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     ListFrame list;
     list.source = &source;
     list.state = &state.m_list;
+    list.widgetStyle = m_style;
+    list.style = m_listStyle;
     list.token = frame.listToken;
     list.rowCount = frame.rowCount;
     list.options.rowHeight = options.rowHeight;
@@ -120,8 +123,8 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     list.options.enabled = frame.options.enabled;
     list.focusOnCommit = frame.open && frame.options.enabled && previouslyListFocused
         && m_context.input().focus() != frame.rows.id;
-    list.padding = m_listStyle.padding;
-    const UiSkinRegion* background = region(m_listStyle.background, m_listStyle.backgroundFallback);
+    list.padding = list.style.padding;
+    const UiSkinRegion* background = region(list.style.background, list.style.backgroundFallback);
     if(!background || !contextMenuMatches(frame)){
         m_context.fail();
         return result;

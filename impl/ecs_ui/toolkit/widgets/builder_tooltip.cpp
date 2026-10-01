@@ -57,11 +57,12 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     frame.widget = *widget;
     frame.anchor = anchor->state;
     frame.state = &state;
+    frame.style = m_tooltipStyle;
     frame.options = options;
     frame.revision = state.revision();
     frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.layer = m_context.popupLayer() + 1u;
-    const ShapeRequest request{ text, m_style.fontSize };
+    const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
     if(m_text.layout(request, frame.text) != TextLayoutStatus::Success){
         m_context.fail();
         return false;
@@ -101,12 +102,12 @@ bool Builder::paintTooltips(){
             frame.revision = frame.state->revision();
             continue;
         }
-        const UiSkinRegion* background = region(m_tooltipStyle.background, m_tooltipStyle.fallback);
+        const UiSkinRegion* background = region(frame.style.background, frame.style.fallback);
         if(!background)
             return false;
-        const Insets padding{ Max(background->padding.left, m_tooltipStyle.padding.left),
-            Max(background->padding.top, m_tooltipStyle.padding.top), Max(background->padding.right, m_tooltipStyle.padding.right),
-            Max(background->padding.bottom, m_tooltipStyle.padding.bottom) };
+        const Insets padding{ Max(background->padding.left, frame.style.padding.left),
+            Max(background->padding.top, frame.style.padding.top), Max(background->padding.right, frame.style.padding.right),
+            Max(background->padding.bottom, frame.style.padding.bottom) };
         const Point measured = frame.text.measure();
         PopupOptions options;
         options.anchor = box->rectangle;
@@ -127,7 +128,7 @@ bool Builder::paintTooltips(){
             Max(0.0f, placement.bounds.height - padding.top - padding.bottom) };
         m_paint.pushClip(content);
         const bool painted = backgroundPainted
-            && m_text.paint(m_paint, frame.text, { content.x, content.y }, m_tooltipStyle.text);
+            && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);
         const bool contentPopped = m_paint.popClip();
         const bool popped = m_paint.popClip();
         const bool ended = m_paint.endOverlay();

@@ -91,6 +91,7 @@ TextLayoutStatus::Enum TextShaper::shape(const ShapeRequest& request, ShapedRun&
         || !m_fonts[0]->shape(request, 0u, static_cast<u32>(request.text.size()), m_primary)
     )
         return TextLayoutStatus::FontFailure;
+    run.glyphs.reserve(m_primary.size());
     m_spans.clear();
     m_spans.reserve(m_primary.size());
     usize begin = 0u;

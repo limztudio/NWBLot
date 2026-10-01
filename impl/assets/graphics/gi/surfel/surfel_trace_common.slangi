@@ -18,7 +18,7 @@
 #include "surfel_runtime.slangi"
 #include "surfel_sh.slangi"
 #include "surfel_guide.slangi"
-#include "surfel_hash.slangi"        // nwbSurfelCellCoord / nwbSurfelHashCell
+#include "surfel_hash.slangi" // nwbSurfelCellCoord / nwbSurfelHashCell
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,14 +102,12 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     uint rayCount = maximumRayCount;
     if(sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
         rayCount = min(rayCount, NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
-    const uint uniformRayCount = sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT
-        ? min(rayCount, NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL) : rayCount;
+    const uint uniformRayCount = sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT ? min(rayCount, NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL) : rayCount;
     const uint guidedRayCount = rayCount - uniformRayCount;
     // The dispatch visits each surfel once per updateDivisor frames. Stagger workgroups over four visits rather
     // than using sampleCount, which saturates at 0xFFFF and would eventually stop guide training.
     // Train on the first mature update as well as every fresh update.
-    const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT
-        || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
+    const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
 
     if(rayIndex < rayCount){
         const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
@@ -201,7 +199,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float oldWeight = max(oldGuideLane[rayIndex & 3u], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
         s_surfelGuideUpdated[rayIndex] = observations != 0u
             ? lerp(oldWeight, max(observed / float(observations), NWB_SURFEL_GUIDE_INITIAL_WEIGHT), NWB_SURFEL_GUIDE_OBSERVED_BLEND)
-            : lerp(oldWeight, NWB_SURFEL_GUIDE_INITIAL_WEIGHT, NWB_SURFEL_GUIDE_UNOBSERVED_DECAY);
+            : lerp(oldWeight, NWB_SURFEL_GUIDE_INITIAL_WEIGHT, NWB_SURFEL_GUIDE_UNOBSERVED_DECAY)
+        ;
     }
 
     if(updateGuide)

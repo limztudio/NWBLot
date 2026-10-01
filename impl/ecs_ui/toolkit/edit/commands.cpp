@@ -71,7 +71,14 @@ EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke, const EditT
         request.command = stroke.control && mode == EditTextMode::Multiline ? EditCommand::DocumentEnd : EditCommand::End;
         break;
     case EditKey::Backspace: request.command = stroke.control ? EditCommand::WordBackspace : EditCommand::Backspace; break;
-    case EditKey::Delete: request.command = stroke.control ? EditCommand::WordDelete : EditCommand::Delete; break;
+    case EditKey::Delete:
+        request.command = stroke.shift && !stroke.control ? EditCommand::Cut
+            : stroke.control ? EditCommand::WordDelete : EditCommand::Delete;
+        break;
+    case EditKey::Insert:
+        request.command = stroke.control && !stroke.shift ? EditCommand::Copy
+            : stroke.shift && !stroke.control ? EditCommand::Paste : EditCommand::None;
+        break;
     case EditKey::Enter:
         request.command = mode == EditTextMode::Multiline && !stroke.control ? EditCommand::Newline : EditCommand::Submit;
         break;

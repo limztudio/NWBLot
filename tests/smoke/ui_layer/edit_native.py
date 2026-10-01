@@ -14,7 +14,7 @@ from window_capture_smoke import LinuxXEvent, SmokeFailure, SmokeSkip, WinPoint
 
 KEYS = {
     "Tab": 0x09, "Return": 0x0D, "space": 0x20, "Escape": 0x1B,
-    "BackSpace": 0x08, "Delete": 0x2E, "Left": 0x25, "Right": 0x27,
+    "BackSpace": 0x08, "Insert": 0x2D, "Delete": 0x2E, "Left": 0x25, "Right": 0x27,
     "Home": 0x24, "End": 0x23, "F5": 0x74, "F6": 0x75, "F7": 0x76,
     **{letter: ord(letter.upper()) for letter in "abcdefghijklmnopqrstuvwxyz"},
 }
@@ -58,7 +58,7 @@ class EditNativeInput(NativeInput):
         if not 1 <= count <= 0xFFFF or (not down and count != 1):
             raise SmokeFailure("native key message has an invalid repeat count")
         if self.windows:
-            extended = name in ("Delete", "Left", "Right", "Home", "End")
+            extended = name in ("Insert", "Delete", "Left", "Right", "Home", "End")
             flags = count | ((1 << 24) if extended else 0)
             flags |= (1 << 30) if repeat or not down else 0
             flags |= (1 << 31) if not down else 0

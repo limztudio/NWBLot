@@ -297,6 +297,38 @@ TEST_F(UiEditBoxHostTests, DelayedPasteAppliesOnlyAfterSuccessfulCompletion){
     EXPECT_FALSE(m_model.canUndo());
 }
 
+TEST_F(UiEditBoxHostTests, AlternateClipboardKeysShareOwnedCopyCutAndPasteCompletionRules){
+    ASSERT_TRUE(m_model.setText("base"));
+    ASSERT_TRUE(activate());
+    ASSERT_TRUE(key(Ui::InputKey::A, false, true));
+    ASSERT_TRUE(frame(m_model));
+    m_clipboard.delayed = true;
+    ASSERT_TRUE(key(Ui::InputKey::Insert, false, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    EXPECT_EQ(m_clipboard.startedOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(m_clipboard.startedText, "base");
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(key(Ui::InputKey::Delete, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    EXPECT_EQ(m_clipboard.startedOperation, ClipboardOperation::WriteText);
+    EXPECT_EQ(m_model.text(), "base");
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::Success));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_TRUE(m_model.text().empty());
+    ASSERT_TRUE(key(Ui::InputKey::Insert, true));
+    ASSERT_TRUE(frame(m_model));
+    ASSERT_TRUE(m_clipboard.pump());
+    EXPECT_EQ(m_clipboard.startedOperation, ClipboardOperation::ReadText);
+    ASSERT_TRUE(m_clipboard.deliver(m_clipboard.startedToken, ClipboardStatus::Success, "base"));
+    ASSERT_TRUE(frame(m_model));
+    EXPECT_EQ(m_model.text(), "base");
+    ASSERT_TRUE(m_model.undo());
+    EXPECT_TRUE(m_model.text().empty());
+}
+
 TEST_F(UiEditBoxHostTests, QueuedNativeEditFencesACompletedPasteBeforeModelMutation){
     ASSERT_TRUE(m_model.setText("base"));
     ASSERT_TRUE(activate());

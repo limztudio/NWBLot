@@ -46,6 +46,35 @@ TEST_F(UiEditCommandTests, ShortcutTranslationPreservesWordSelectionAndLeavesAlt
     EXPECT_EQ(TranslateEditCommand({ static_cast<EditKey::Enum>(255u) }).command, EditCommand::None);
 }
 
+TEST_F(UiEditCommandTests, AlternateClipboardChordsRejectAmbiguousModifiersRepeatsAndPreedit){
+    ASSERT_TRUE(m_model.setText("selected"));
+    ASSERT_TRUE(m_model.selectAll());
+    const EditCommandRequest copy = TranslateEditCommand({ EditKey::Insert, true });
+    const EditCommandRequest paste = TranslateEditCommand({ EditKey::Insert, false, true });
+    const EditCommandRequest cut = TranslateEditCommand({ EditKey::Delete, false, true });
+    EXPECT_EQ(copy.command, EditCommand::Copy);
+    EXPECT_EQ(paste.command, EditCommand::Paste);
+    EXPECT_EQ(cut.command, EditCommand::Cut);
+    EXPECT_EQ(TranslateEditCommand({ EditKey::Delete, true, true }).command, EditCommand::WordDelete);
+    EXPECT_EQ(TranslateEditCommand({ EditKey::Insert, true, true }).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand({ EditKey::Insert, true, false, true }).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand({ EditKey::Delete, false, true, true }).command, EditCommand::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, copy, true).clipboard, EditClipboardAction::Copy);
+    EXPECT_EQ(ApplyEditCommand(m_model, paste, true).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, cut, true).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Insert, true, false, false, true })).clipboard,
+        EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Insert, false, true, false, true })).clipboard,
+        EditClipboardAction::None);
+    EXPECT_EQ(ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Delete, false, true, false, true })).clipboard,
+        EditClipboardAction::None);
+    ASSERT_TRUE(m_model.beginComposition());
+    ASSERT_TRUE(m_model.updateComposition("draft", 0u, 5u));
+    for(const EditCommandRequest request : { copy, paste, cut })
+        EXPECT_EQ(ApplyEditCommand(m_model, request).clipboard, EditClipboardAction::None);
+    EXPECT_EQ(m_model.text(), "selected");
+}
+
 TEST_F(UiEditCommandTests, ShiftMovementSelectsWholeGraphemesAndArrowsCollapseAtSelectionEdges){
     ASSERT_TRUE(m_model.setText("a\xCC\x81z"));
     EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Home }).selectionChanged);

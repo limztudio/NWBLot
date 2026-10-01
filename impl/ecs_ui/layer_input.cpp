@@ -46,6 +46,7 @@ Ui::InputKey::Enum TranslateKey(const i32 key){
     case Core::Key::End: return Ui::InputKey::End;
     case Core::Key::Backspace: return Ui::InputKey::Backspace;
     case Core::Key::Delete: return Ui::InputKey::Delete;
+    case Core::Key::Insert: return Ui::InputKey::Insert;
     case Core::Key::A: return Ui::InputKey::A;
     case Core::Key::C: return Ui::InputKey::C;
     case Core::Key::X: return Ui::InputKey::X;

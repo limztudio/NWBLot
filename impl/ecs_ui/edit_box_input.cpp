@@ -30,6 +30,7 @@ namespace __hidden_ui_edit_box_input{
     case Ui::InputKey::End: return Ui::EditKey::End;
     case Ui::InputKey::Backspace: return Ui::EditKey::Backspace;
     case Ui::InputKey::Delete: return Ui::EditKey::Delete;
+    case Ui::InputKey::Insert: return Ui::EditKey::Insert;
     case Ui::InputKey::A: return Ui::EditKey::A;
     case Ui::InputKey::C: return Ui::EditKey::C;
     case Ui::InputKey::X: return Ui::EditKey::X;

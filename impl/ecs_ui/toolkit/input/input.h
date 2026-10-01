@@ -30,7 +30,7 @@ namespace InputEventType{
 namespace InputKey{
     enum Enum : u8{
         None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Up, Down, PageUp, PageDown,
-        Menu, F10
+        Menu, Insert, F10
     };
 };
 

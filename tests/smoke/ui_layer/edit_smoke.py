@@ -80,6 +80,33 @@ class EditRun:
             "queued_focus_limit": "A posted batch may straddle frames. Old-owner text may commit before focus moves; it must never enter the new owner."}
         (self.args.output_directory / "edit.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
+    def alternate_clipboard(self):
+        primary = "Alternate"
+        length = len(primary.encode("utf-8"))
+        self.native.tap("a", control=True)
+        self.native.text(primary)
+        self.native.tap("a", control=True)
+        self.native.tap("Insert", control=True)
+        self.native.tap("Tab")
+        self.native.tap("a", control=True)
+        self.native.tap("Insert", shift=True)
+        self.checkpoint("alternate_clipboard_copy_paste", model(primary, 0, length), model(primary, focused=True), extent=(800, 600))
+        self.native.tap("a", control=True)
+        self.native.tap("Delete", shift=True)
+        self.checkpoint("alternate_clipboard_cut", model(primary, 0, length), model("", focused=True), extent=(800, 600))
+        self.native.tap("Insert", shift=True)
+        self.checkpoint("alternate_clipboard_cut_paste", model(primary, 0, length), model(primary, focused=True), extent=(800, 600))
+        self.native.tap("Tab", shift=True)
+        self.native.tap("F5")
+        self.native.tap("a", control=True)
+        self.native.tap("Delete", shift=True)
+        self.native.tap("Insert", shift=True)
+        self.checkpoint("alternate_clipboard_read_only", model(primary, 0, length, True), model(primary),
+            readonly=True, selection=True, extent=(800, 600))
+        self.native.tap("F5")
+        self.native.tap("End")
+        return primary
+
     def execute(self):
         primary, secondary = "Hello 한글", "Target"
         self.checkpoint("initial", model(primary), model(secondary))
@@ -175,6 +202,7 @@ class EditRun:
         self.checkpoint("horizontal_scroll_home", model(primary, 0, 0, True), model(secondary), extent=(800, 600))
         if self.snapshot["fields"]["primary"]["scroll"] != 0.0:
             raise SmokeFailure("Home did not restore the edit box's left text edge")
+        primary = secondary = self.alternate_clipboard()
         if self.native.windows:
             self.native.tap("F7")
             primary, secondary = "Hello 한글", "Target"

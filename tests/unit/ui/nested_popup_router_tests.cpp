@@ -437,6 +437,27 @@ TEST_F(UiNestedPopupRouterTests, FencingAncestorImmediatelySuppressesAllDescenda
     EXPECT_FALSE(m_router.consumeActivation({ 301u }));
 }
 
+TEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRestoresUnderlyingFocus){
+    focusBase();
+    const PopupScope scope = Scope(100u, 1u);
+    const HitTarget host = Child(scope, 1u, 1u, true);
+    HitTarget owner = Barrier(scope, 2u);
+    owner.owner = host.id;
+    owner.ownerDeclarationGeneration = host.declarationGeneration;
+    owner.control = host.control;
+    const HitTarget targets[]{ Base(), host, owner };
+    ASSERT_TRUE(m_router.commitTargets(targets, 3u, 2u, &scope, 1u));
+    m_router.invalidateTarget(host.id);
+    EXPECT_EQ(m_router.targets().size(), 1u);
+    EXPECT_EQ(m_router.findTarget(owner.id), nullptr);
+    EXPECT_EQ(m_router.popupCount(), 1u);
+    EXPECT_FALSE(m_router.focus().valid());
+    m_router.invalidateTarget(owner.id);
+    EXPECT_EQ(m_router.popupCount(), 0u);
+    EXPECT_EQ(m_router.focus(), Base().id);
+    EXPECT_EQ(m_router.targets().size(), 1u);
+}
+
 TEST_F(UiNestedPopupRouterTests, NativeFocusLossDismissesWholeFamilyWithoutRestoringUnderlyingFocus){
     focusBase();
     const PopupScope parent = Scope(100u, 1u);

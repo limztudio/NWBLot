@@ -568,6 +568,54 @@ TEST_F(UiContextTests, CapacityReplacementPreservesSurvivorLifetimesAndDeclarati
     EXPECT_EQ(m_context.states().find(survivor.id), nullptr);
 }
 
+TEST_F(UiContextTests, RetiringAPassiveLabelPreservesLiveInputBeforeAndAfterPublication){
+    const WidgetRoot root{ 181u, 1u };
+    ASSERT_TRUE(m_context.beginFrame(1u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    const WidgetState* action = m_context.declare("action", WidgetKind::Button);
+    ASSERT_NE(action, nullptr);
+    const WidgetState retained = *action;
+    ASSERT_TRUE(m_context.addTarget(retained, ButtonTarget()));
+    const WidgetState* label = m_context.declare("label", WidgetKind::Label);
+    ASSERT_NE(label, nullptr);
+    const WidgetId omitted = label->id;
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    ASSERT_TRUE(m_context.commitFrame(1u));
+    ASSERT_TRUE(click().pointerConsumed);
+    ASSERT_TRUE(m_context.input().queue({ .type = InputEventType::PrimaryDown, .position = { 15.0f, 25.0f } }));
+    ASSERT_TRUE(m_context.input().process().pointerConsumed);
+    const u64 hoverActivity = m_context.input().hoverActivityGeneration();
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    const u64 actionSequence = m_context.input().actions()[0u].id.sequence;
+
+    ASSERT_TRUE(m_context.beginFrame(2u));
+    ASSERT_TRUE(m_context.beginRoot(root));
+    action = m_context.declare("action", WidgetKind::Button);
+    ASSERT_NE(action, nullptr);
+    ASSERT_TRUE(m_context.addTarget(*action, ButtonTarget()));
+    ASSERT_TRUE(m_context.endRoot());
+    ASSERT_TRUE(m_context.finishFrame());
+    EXPECT_EQ(m_context.states().find(omitted), nullptr);
+    EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
+    EXPECT_EQ(m_context.input().focus(), retained.id);
+    EXPECT_EQ(m_context.input().capture(), retained.id);
+    EXPECT_EQ(m_context.input().hover(), retained.id);
+    EXPECT_EQ(m_context.input().hoverActivityGeneration(), hoverActivity);
+    ASSERT_EQ(m_context.input().actions().size(), 1u);
+    EXPECT_EQ(m_context.input().actions()[0u].id.sequence, actionSequence);
+    ASSERT_TRUE(m_context.commitFrame(2u));
+    EXPECT_EQ(m_context.input().focus(), retained.id);
+    EXPECT_EQ(m_context.input().capture(), retained.id);
+    EXPECT_EQ(m_context.input().hoverActivityGeneration(), hoverActivity);
+    EXPECT_TRUE(m_context.input().consumeActivation(retained.id));
+    EXPECT_FALSE(m_context.input().consumeActivation(retained.id));
+    ASSERT_TRUE(m_context.input().queue({ .type = InputEventType::PrimaryUp, .position = { 15.0f, 25.0f } }));
+    EXPECT_TRUE(m_context.input().process().pointerConsumed);
+    EXPECT_TRUE(m_context.input().consumeActivation(retained.id));
+    EXPECT_FALSE(m_context.input().consumeActivation(retained.id));
+}
+
 TEST_F(UiContextTests, RepeatedCapacityFailuresRetireOmittedStatesAndAllowRetry){
     constexpr usize s_Count = s_WidgetMaxStates;
     const WidgetRoot root{ 171u, 1u };

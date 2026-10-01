@@ -111,6 +111,32 @@ TEST_F(UiInputTests, AcceptedTargetLookupPreservesCommittedGeometryAcrossFailure
     EXPECT_EQ(m_router.findTarget({ 10u }), nullptr);
 }
 
+TEST_F(UiInputTests, AbsentTargetInvalidationPreservesLiveFocusCaptureHoverAndQueuedActions){
+    const HitTarget target = Target(1u);
+    ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
+    click();
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    const u64 actionSequence = m_router.actions()[0u].id.sequence;
+    ASSERT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
+    const u64 hoverActivity = m_router.hoverActivityGeneration();
+    m_router.invalidateTarget({ 999u });
+    m_router.invalidateTarget({});
+    EXPECT_EQ(m_router.layoutGeneration(), 7u);
+    EXPECT_EQ(m_router.targets().size(), 1u);
+    EXPECT_EQ(m_router.focus(), target.id);
+    EXPECT_EQ(m_router.capture(), target.id);
+    EXPECT_EQ(m_router.hover(), target.id);
+    EXPECT_EQ(m_router.hoverActivityGeneration(), hoverActivity);
+    EXPECT_TRUE(m_router.primaryDown());
+    ASSERT_EQ(m_router.actions().size(), 1u);
+    EXPECT_EQ(m_router.actions()[0u].id.sequence, actionSequence);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+    EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
+    EXPECT_TRUE(m_router.consumeActivation(target.id));
+    EXPECT_FALSE(m_router.consumeActivation(target.id));
+}
+
 TEST_F(UiInputTests, FirstClickConsumesBeforeFocusExistsAndActivationIsNotReplayed){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));

@@ -229,6 +229,8 @@ const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declaratio
 
 void InputRouter::invalidateTarget(const WidgetId id){
     retirePopup(id);
+    if(!findTarget(id))
+        return;
     for(usize index = m_targets.size(); index > 0u; --index){
         if(m_targets[index - 1u].id == id || m_targets[index - 1u].owner == id)
             m_targets.erase(m_targets.begin() + static_cast<isize>(index - 1u));

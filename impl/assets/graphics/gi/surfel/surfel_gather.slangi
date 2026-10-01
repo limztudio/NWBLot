@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-pixel surfel gather: bias outward, walk the capped (2*extent+1)^3 neighbourhood, weight by normal * falloff *
-// sample confidence. Returns a normalized irradiance estimate and a separate ambient-blend coverage weight.
+// Per-pixel surfel gather: bias outward, walk the capped (2*extent+1)^3 neighbourhood, weight by normal * falloff * sample confidence. Returns a normalized irradiance estimate and a separate ambient-blend coverage weight.
 
 
 #include "surfel_heap_resources.slangi"

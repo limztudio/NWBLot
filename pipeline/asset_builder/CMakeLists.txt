@@ -22,7 +22,6 @@ nwb_target_link_libraries_whole_archive(nwb_asset_builder
     nwb_assets_bunch_cook
     nwb_assets_texture_volume_entry
     nwb_assets_ui_skin_volume_entry
-    nwb_assets_font_volume_entry
     nwb_assets_font_atlas_volume_entry
     nwb_assets_sampler_volume_entry
     nwb_assets_material_volume_entry

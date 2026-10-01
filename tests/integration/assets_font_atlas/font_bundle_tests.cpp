@@ -135,6 +135,8 @@ TEST(AssetsFontBundle, OneDocumentPublishesPairedFontAndAtlasWithDerivedIdentiti
     Core::Assets::CookEntryRegistry registry(testArena.arena);
     ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
     ASSERT_NE(registry.find(Name("font_bundle")), nullptr);
+    EXPECT_EQ(registry.find(Font::AssetTypeName()), nullptr);
+    EXPECT_EQ(registry.find(FontAtlas::AssetTypeName()), nullptr);
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse("font_bundle asset; asset.schema_version = 1;"));
     Core::CpuTaskScheduler scheduler(1u);

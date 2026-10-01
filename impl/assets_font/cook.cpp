@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook.h"
+#include "asset.h"
 #include "binary_payload.h"
 
 #include <global/binary.h>
@@ -37,24 +37,6 @@ bool FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     outBinary.reserve(sizeof(header) + font.fontBytes().size());
     AppendPOD(outBinary, header);
     outBinary.insert(outBinary.end(), font.fontBytes().begin(), font.fontBytes().end());
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildFontAsset(const FontCookEntry& entry, Font& outFont){
-    if(entry.faceIndex != 0u || entry.fontBytes.empty() || entry.fontBytes.size() > s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("BuildFontAsset failed: unsupported face index or source size"));
-        return false;
-    }
-    Font candidate(entry.arena, entry.virtualPath);
-    Core::Assets::AssetBytes bytes(entry.fontBytes.begin(), entry.fontBytes.end(), entry.arena);
-    candidate.setFontBytes(Move(bytes), entry.faceIndex);
-    if(!candidate.validatePayload())
-        return false;
-    outFont = Move(candidate);
     return true;
 }
 

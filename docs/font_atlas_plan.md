@@ -1,6 +1,6 @@
 # Offline font bundles and RGBA SDF atlases
 
-Status: implemented on `custom_ui`. The UI text service shapes with the original SFNT bytes and optionally paints from a matching signed-distance atlas. The offline builder prepares those two payloads before normal asset cooking. Toolkit work is tracked in [the custom UI plan](custom_ui_plan.md).
+Status: implemented on `main`. The UI text service shapes with the original SFNT bytes and optionally paints from a matching signed-distance atlas. The offline builder prepares those two payloads before normal asset cooking. Toolkit work is tracked in [the custom UI plan](custom_ui_plan.md).
 
 ## Authoring contract
 
@@ -13,6 +13,8 @@ Status: implemented on `custom_ui`. The UI text service shapes with the original
 | `<stem>.atlas` | Binary FTA1 atlas with indexed glyph records, linear RGBA8 SDF groups, original positioning tables, metrics, and content hashes. |
 
 The asset builder scans `.nwb` declarations. The bundle cooker opens the adjacent `.font` and `.atlas` with the same stem, admits both as a unit, derives the `Font` virtual identity from the `.nwb` path, and publishes `FontAtlas` at that identity plus `_atlas`. It checks the atlas's local stem marker, source SHA-256, face index, units per em, glyph count, and exact positioning-table bytes against the font before rebinding its full virtual identity. Missing, mismatched, malformed, or partial trios fail without publishing either cooked asset. Cook time reads bounded binary payloads directly; it does not parse a glyph-sized text document or rerasterize the face.
+
+This is the only authoring contract. Standalone `font` and `font_atlas` declarations, older external atlas payloads and zstd/base64 text embedding are no longer imported. Regenerate old assets with `font_builder`; runtime codecs retain only their current version.
 
 The current runtime `Font` and `FontAtlas` codecs remain FON1 and FTA1 version 1. A prepared `.font` stores the same SFNT bytes used by FreeType and HarfBuzz, so later atlas regeneration and native-coverage fallback do not require the original external file. This is a transport and cook-time change, not a font-outline conversion. The original font notices remain next to the default bundles; see the [default-font README](../impl/assets/ui/fonts/default/README.md).
 

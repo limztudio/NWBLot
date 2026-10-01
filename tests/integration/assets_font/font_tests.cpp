@@ -4,11 +4,9 @@
 
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/binary_payload.h>
-#include <impl/assets_font/cook.h>
 #include <impl/assets_font/font_validation.h>
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/cook_entry_registry.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
@@ -46,47 +44,19 @@ using namespace Impl;
 struct FontTestArenaTag{};
 using FontTestArena = TestArena<FontTestArenaTag>;
 
-static constexpr Name s_ScratchArena("tests/integration/assets_font/cook");
-static constexpr AStringView s_LatinMetadata =
-    "font asset;\r\n"
-    "asset.schema_version = 1;\r\n"
-    "asset.source = \"NotoSans-Regular.ttf\";\r\n"
-    "asset.face_index = 0;\r\n"
-;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Path AssetRoot(FontTestArena& testArena){
-    return Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "assets_font_legacy_tests";
-}
-
-[[nodiscard]] static bool PrepareLegacySource(FontTestArena& testArena){
-    const Path bundled = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
-    Core::Assets::AssetBytes source(testArena.arena);
-    if(!ReadBundledFontBytes(bundled, source))
-        return false;
-    const Path sourcePath = AssetRoot(testArena) / "ui" / "fonts" / "default" / "NotoSans-Regular.ttf";
-    ErrorCode error;
-    return EnsureDirectories(sourcePath.parent_path(), error) && WriteBinaryFile(sourcePath, source);
-}
-
-[[nodiscard]] static bool ParseMetadata(FontTestArena& testArena, const AStringView metadata, FontCookEntry& entry){
-    if(!PrepareLegacySource(testArena))
-        return false;
-    Core::Metascript::Document document(testArena.arena);
-    if(!document.parse(metadata))
-        return false;
-    const Path assetRoot = AssetRoot(testArena);
-    const Path metadataPath = assetRoot / "ui" / "fonts" / "default" / "latin.nwb";
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    return ParseFontCookMetadata(assetRoot, "engine", metadataPath, document, entry, scratchArena);
-}
-
 [[nodiscard]] static bool LoadLatin(FontTestArena& testArena, Font& outFont){
-    FontCookEntry entry(testArena.arena);
-    return ParseMetadata(testArena, s_LatinMetadata, entry) && BuildFontAsset(entry, outFont);
+    const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
+    Core::Assets::AssetBytes binary(testArena.arena);
+    ErrorCode error;
+    Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin"));
+    if(!ReadBinaryFile(path, binary, error) || error || !candidate.loadBinary(binary))
+        return false;
+    outFont = Move(candidate);
+    return true;
 }
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
@@ -170,13 +140,10 @@ TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceByte
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsFont, RuntimeAndCookRegistrarsExposeTypedFont){
+TEST(AssetsFont, RuntimeRegistrarExposesTypedFont){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    Core::Assets::CookEntryRegistry cookRegistry(testArena.arena);
-    ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(cookRegistry));
-    EXPECT_TRUE(cookRegistry.has(Font::AssetTypeName()));
     Font font(testArena.arena);
     ASSERT_TRUE(LoadLatin(testArena, font));
     FontAssetCodec codec;
@@ -297,56 +264,6 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
         }
         EXPECT_FALSE(ValidateFontSource(bytes, 0u)) << variant;
     }
-}
-
-TEST(AssetsFont, CookRejectsInvalidSchemaFaceAndSourceWithoutReplacingEntry){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    FontTestArena testArena;
-    FontCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, s_LatinMetadata, entry));
-    const Core::Assets::AssetBytes original(entry.fontBytes.begin(), entry.fontBytes.end(), testArena.arena);
-    static constexpr AStringView s_Overrides[] = {
-        "asset.schema_version = 2;\r\n",
-        "asset.schema_version = 1.0;\r\n",
-        "asset.unknown = 1;\r\n",
-        "asset.face_index = 1;\r\n",
-        "asset.face_index = -1;\r\n",
-        "asset.face_index = 0.0;\r\n",
-        "asset.source = 1;\r\n",
-        "asset.source = \"\";\r\n",
-        "asset.source = \"../NotoSans-Regular.ttf\";\r\n",
-        "asset.source = \"nested/NotoSans-Regular.ttf\";\r\n",
-        "asset.source = \"/NotoSans-Regular.ttf\";\r\n",
-        "asset.source = \"NotoSans-Regular.woff\";\r\n",
-        "asset.source = \"missing.ttf\";\r\n",
-    };
-    for(const AStringView overrideText : s_Overrides){
-        TestAString metadata(s_LatinMetadata);
-        metadata.append(overrideText);
-        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
-        EXPECT_EQ(entry.fontBytes, original);
-        EXPECT_EQ(entry.virtualPath, Name("engine/ui/fonts/default/latin"));
-    }
-}
-
-TEST(AssetsFont, OptionalFaceIndexDefaultsToZeroAndFailedBuildIsAtomic){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    FontTestArena testArena;
-    FontCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, "font asset; asset.schema_version = 1; asset.source = \"NotoSans-Regular.ttf\";", entry));
-    EXPECT_EQ(entry.faceIndex, 0u);
-    Font font(testArena.arena);
-    ASSERT_TRUE(BuildFontAsset(entry, font));
-    const Core::Assets::AssetBytes original(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
-    entry.faceIndex = 1u;
-    EXPECT_FALSE(BuildFontAsset(entry, font));
-    EXPECT_EQ(font.fontBytes(), original);
-    entry.faceIndex = 0u;
-    entry.fontBytes[0u] = 0xffu;
-    EXPECT_FALSE(BuildFontAsset(entry, font));
-    EXPECT_EQ(font.fontBytes(), original);
 }
 
 

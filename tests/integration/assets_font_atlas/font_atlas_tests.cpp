@@ -4,10 +4,8 @@
 
 #include <impl/assets_font_atlas/asset.h>
 #include <impl/assets_font_atlas/binary_payload.h>
-#include <impl/assets_font_atlas/cook.h>
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/cook_entry_registry.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
@@ -43,8 +41,6 @@ using namespace Impl;
 
 struct FontAtlasTestArenaTag{};
 using AtlasTestArena = TestArena<FontAtlasTestArenaTag>;
-
-static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/cook");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,22 +81,22 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/cook")
         }
         payload.glyphs.push_back(glyph);
     }
+    static constexpr u8 s_KernBytes[] = {
+        0x00u, 0x00u, 0x00u, 0x01u, 0x00u, 0x00u, 0x00u, 0x14u,
+        0x00u, 0x01u, 0x00u, 0x01u, 0x00u, 0x06u, 0x00u, 0x00u,
+        0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x01u, 0xffu, 0xecu,
+    };
+    FontAtlasPositioningTable table(testArena.arena);
+    table.tag = s_FontAtlasKernTag;
+    table.bytes.assign(s_KernBytes, s_KernBytes + LengthOf(s_KernBytes));
+    table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
+    payload.positioningTables.push_back(Move(table));
     return payload;
 }
 
 static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, const u32 value){
     for(u32 index = 0u; index < 4u; ++index)
         bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
-}
-
-[[nodiscard]] static bool ParseMetadata(AtlasTestArena& testArena, const AStringView metadata, FontAtlasCookEntry& entry){
-    Core::Metascript::Document document(testArena.arena);
-    if(!document.parse(metadata))
-        return false;
-    const Path assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / "tests" / "integration" / "assets_font_atlas" / "fixtures";
-    const Path metadataPath = assetRoot / "atlas.nwb";
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    return ParseFontAtlasCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
 }
 
 
@@ -136,7 +132,7 @@ TEST(AssetsFontAtlas, CodecRoundTripPreservesFourChannelsWhitespaceAndTypedIdent
     Core::Assets::AssetBytes binary(testArena.arena);
     ASSERT_TRUE(codec.serialize(atlas, binary));
     EXPECT_EQ(binary.size(), FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes
-        + FontAtlasBinaryPayload::s_GroupHeaderBytes + 256u);
+        + FontAtlasBinaryPayload::s_GroupHeaderBytes + 256u + FontAtlasBinaryPayload::s_TableHeaderBytes + 24u);
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     ASSERT_TRUE(codec.deserialize(testArena.arena, atlas.virtualPath(), binary, loadedAsset));
     const FontAtlas* loaded = Core::Assets::CastAsset<FontAtlas>(loadedAsset.get());
@@ -145,6 +141,9 @@ TEST(AssetsFontAtlas, CodecRoundTripPreservesFourChannelsWhitespaceAndTypedIdent
     EXPECT_EQ(loaded->payload().fontSha256, atlas.payload().fontSha256);
     EXPECT_EQ(loaded->payload().groups[0u].pixels, atlas.payload().groups[0u].pixels);
     EXPECT_EQ(loaded->payload().groups[0u].sha256, atlas.payload().groups[0u].sha256);
+    ASSERT_EQ(loaded->payload().positioningTables.size(), 1u);
+    EXPECT_EQ(loaded->payload().positioningTables[0u].bytes, atlas.payload().positioningTables[0u].bytes);
+    EXPECT_EQ(loaded->payload().positioningTables[0u].sha256, atlas.payload().positioningTables[0u].sha256);
     for(u32 index = 0u; index < 4u; ++index){
         ASSERT_NE(loaded->glyph(index), nullptr);
         EXPECT_EQ(loaded->glyph(index)->channel, index);
@@ -299,76 +298,6 @@ TEST(AssetsFontAtlas, RejectsIncompleteOrDuplicateGlyphPolicyAndUnsupportedLimit
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
 }
 
-TEST(AssetsFontAtlas, UnknownMetadataAndInvalidFixedTokensPreserveCookEntry){
-    using namespace __hidden_font_atlas_tests;
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AtlasTestArena testArena;
-    FontAtlasCookEntry entry(testArena.arena);
-    entry.payload = MakePayload(testArena);
-    entry.virtualPath = Name("project/existing");
-    const Sha256Digest originalHash = entry.payload.fontSha256;
-    EXPECT_FALSE(ParseMetadata(testArena, "font_atlas asset; asset.schema_version=1; asset.unknown=1;", entry));
-    EXPECT_FALSE(ParseMetadata(testArena, "font_atlas asset; asset.schema_version=2;", entry));
-    EXPECT_FALSE(ParseMetadata(testArena, "font_atlas asset; asset.schema_version=1; asset.mip_count=2;", entry));
-    EXPECT_EQ(entry.virtualPath, Name("project/existing"));
-    EXPECT_EQ(entry.payload.fontSha256, originalHash);
-}
-
-TEST(AssetsFontAtlas, MetadataPayloadCookRoundTripRetainsPositioningBytesAndMetrics){
-    using namespace __hidden_font_atlas_tests;
-    AtlasTestArena testArena;
-    const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "tests" / "integration" / "assets_font_atlas" / "fixtures" / "atlas.nwb";
-    TestAString metadata;
-    ASSERT_TRUE(ReadTextFile(path, metadata));
-    FontAtlasCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, metadata, entry));
-    EXPECT_EQ(entry.virtualPath, Name("project/atlas"));
-    ASSERT_EQ(entry.payload.positioningTables.size(), 1u);
-    EXPECT_EQ(entry.payload.positioningTables[0u].tag, s_FontAtlasKernTag);
-    FontAtlas atlas(testArena.arena);
-    ASSERT_TRUE(BuildFontAtlasAsset(entry, atlas));
-    Core::Assets::AssetBytes binary(testArena.arena);
-    FontAtlasAssetCodec codec;
-    ASSERT_TRUE(codec.serialize(atlas, binary));
-    FontAtlas loaded(testArena.arena, atlas.virtualPath());
-    ASSERT_TRUE(loaded.loadBinary(binary));
-    EXPECT_EQ(loaded.payload().positioningTables[0u].bytes, entry.payload.positioningTables[0u].bytes);
-    EXPECT_EQ(loaded.payload().positioningTables[0u].sha256, entry.payload.positioningTables[0u].sha256);
-    EXPECT_FLOAT_EQ(loaded.payload().ascenderUnits, 800.f);
-    EXPECT_EQ(loaded.payload().groups[0u].pixels, entry.payload.groups[0u].pixels);
-}
-
-TEST(AssetsFontAtlas, MetadataRejectsTraversalUnknownFieldsCountsAndPayloadHashAtomically){
-    using namespace __hidden_font_atlas_tests;
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    AtlasTestArena testArena;
-    const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "tests" / "integration" / "assets_font_atlas" / "fixtures" / "atlas.nwb";
-    TestAString original;
-    ASSERT_TRUE(ReadTextFile(path, original));
-    FontAtlasCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, original, entry));
-    const Sha256Digest originalHash = entry.payload.groups[0u].sha256;
-    static constexpr AStringView s_Overrides[] = {
-        "asset.unknown=1;",
-        "asset.font_sha256=\"invalid\";",
-        "asset.font=\"../fonts/body\";",
-        "asset.source_glyph_count=4294967295;",
-        "asset.groups=[{\"extent\":[8,8],\"data\":\"../pattern.rgba\",\"byte_count\":256,\"sha256\":\"40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880\"}];",
-        "asset.groups=[{\"extent\":[8,8],\"data\":\"pattern.rgba\",\"byte_count\":255,\"sha256\":\"40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880\"}];",
-        "asset.groups=[{\"extent\":[8,8],\"data\":\"pattern.rgba\",\"byte_count\":256,\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"}];",
-        "asset.positioning_tables=[{\"tag\":\"kern\",\"data\":\"pattern.rgba\",\"byte_count\":256,\"sha256\":\"40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880\"}];",
-    };
-    for(const AStringView overrideText : s_Overrides){
-        TestAString metadata(original);
-        metadata.append(overrideText);
-        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
-        EXPECT_EQ(entry.payload.groups[0u].sha256, originalHash);
-        EXPECT_EQ(entry.virtualPath, Name("project/atlas"));
-    }
-}
-
 TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFont){
     using namespace __hidden_font_atlas_tests;
     CapturingLogger logger;
@@ -382,6 +311,7 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     ASSERT_TRUE(font.validatePayload());
     FontAtlasPayload payload = MakePayload(testArena);
     payload.fontSha256 = ComputeSha256({ font.fontBytes().data(), font.fontBytes().size() });
+    payload.positioningTables.clear();
     const Core::Assets::AssetBytes& source = font.fontBytes();
     const u32 tableCount = (static_cast<u32>(source[4u]) << 8u) | source[5u];
     const auto bigU32 = [](const u8* input){
@@ -418,7 +348,7 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     EXPECT_FALSE(ValidateFontAtlasSourceMatch(payload, font));
 }
 
-TEST(AssetsFontAtlas, RuntimeAndVolumeRegistrarsExposeFontAtlasType){
+TEST(AssetsFontAtlas, RuntimeRegistrarExposesFontAtlasType){
     using namespace __hidden_font_atlas_tests;
     AtlasTestArena testArena;
     Core::Common::InitializerGuard initializers;
@@ -430,9 +360,6 @@ TEST(AssetsFontAtlas, RuntimeAndVolumeRegistrarsExposeFontAtlasType){
     ASSERT_TRUE(SerializeFontAtlasPayload(payload, binary));
     UniquePtr<Core::Assets::IAsset> loaded;
     EXPECT_TRUE(codecs.deserializeAsset(FontAtlas::AssetTypeName(), Name("project/fonts/body_atlas"), binary, loaded));
-    Core::Assets::CookEntryRegistry entries(testArena.arena);
-    ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(entries));
-    EXPECT_NE(entries.find(FontAtlas::AssetTypeName()), nullptr);
 }
 
 

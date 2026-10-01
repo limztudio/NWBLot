@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "cook.h"
+#include "asset.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,20 +25,6 @@ bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
         return false;
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
     return atlas.validatePayload() && SerializeFontAtlasPayload(atlas.payload(), outBinary);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool BuildFontAtlasAsset(const FontAtlasCookEntry& entry, FontAtlas& outAtlas){
-    FontAtlas candidate(entry.arena, entry.virtualPath);
-    FontAtlasPayload payload(entry.payload);
-    candidate.setPayload(Move(payload));
-    if(!candidate.validatePayload())
-        return false;
-    outAtlas = Move(candidate);
-    return true;
 }
 
 

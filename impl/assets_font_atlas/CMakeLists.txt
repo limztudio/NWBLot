@@ -13,33 +13,19 @@ nwb_declare_static_library(nwb_assets_font_atlas)
 target_sources(nwb_assets_font_atlas PRIVATE ${_nwb_font_atlas_runtime_sources})
 target_link_libraries(nwb_assets_font_atlas PUBLIC nwb_assets_font)
 
-nwb_declare_static_library(nwb_assets_font_atlas_source)
-target_sources(nwb_assets_font_atlas_source PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/source_payload.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/source_payload.h"
-)
-target_link_libraries(nwb_assets_font_atlas_source PUBLIC nwb_assets_font_atlas PRIVATE zstd)
-
 if(NWB_BUILD_PIPELINE)
     nwb_declare_static_library(nwb_assets_font_atlas_cook)
     target_sources(nwb_assets_font_atlas_cook PRIVATE
         ${_nwb_font_atlas_runtime_sources}
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata_records.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata_values.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata_payload.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/bundle_cook.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/cook.h"
-        "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.h"
         "${CMAKE_CURRENT_LIST_DIR}/bundle_cook.h"
     )
-    target_link_libraries(nwb_assets_font_atlas_cook PUBLIC nwb_assets_font nwb_metascript nwb_assets_font_atlas_source)
+    target_link_libraries(nwb_assets_font_atlas_cook PUBLIC nwb_assets_font nwb_metascript)
     target_compile_definitions(nwb_assets_font_atlas_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_font_atlas_volume_entry)
     target_sources(nwb_assets_font_atlas_volume_entry PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/bundle_volume_entry.cpp"
     )
     target_link_libraries(nwb_assets_font_atlas_volume_entry PRIVATE nwb_assets_font_atlas_cook nwb_assets_font_cook nwb_assets_cook)

@@ -21,6 +21,30 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_ui_text_paint{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct PreparedGlyph{
+    Rect rectangle;
+    Rect uv;
+    const SharedSdfAtlasPage* sdfPage = nullptr;
+    u32 pageIndex = 0u;
+    u32 channel = 0u;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color){
     const DisplayMetrics& metrics = paint.displayMetrics();
     const f32 pixelScale = Max(metrics.pixelScaleX, metrics.pixelScaleY);
@@ -66,13 +90,22 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             return false;
     }
     // Exact rectangles remove conservative overinclusion before image admission; painter order remains unchanged.
-    usize retained = 0u;
+    Vector<__hidden_ui_text_paint::PreparedGlyph, Core::Alloc::ScratchArena> prepared(scratchArena);
+    prepared.reserve(candidates.size());
     for(const usize index : candidates){
         const PlacedGlyph& glyph = layout.glyphs()[index];
-        Rect rectangle;
+        __hidden_ui_text_paint::PreparedGlyph item;
         if(const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize)){
-            if(!TextGlyphVisibility::atlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, rectangle))
+            if(!TextGlyphVisibility::atlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, item.rectangle))
                 return false;
+            if(item.rectangle.width > 0.0f && item.rectangle.height > 0.0f){
+                const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
+                item.sdfPage = &atlas->page(record.group);
+                item.channel = record.channel;
+                const SdfAtlasPageBinding& binding = (*item.sdfPage)->binding();
+                item.uv = { static_cast<f32>(record.x) / binding.width, static_cast<f32>(record.y) / binding.height,
+                    static_cast<f32>(record.width) / binding.width, static_cast<f32>(record.height) / binding.height };
+            }
         }
         else{
             const AtlasGlyph* record = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
@@ -80,92 +113,54 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
-            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle, deviceScale))
+            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, item.rectangle, deviceScale))
                 return false;
+            item.pageIndex = record->pageIndex;
+            item.uv = { record->pixels.x / s_GlyphAtlasPageExtent, record->pixels.y / s_GlyphAtlasPageExtent,
+                record->pixels.width / s_GlyphAtlasPageExtent, record->pixels.height / s_GlyphAtlasPageExtent };
         }
-        const TextGlyphIntersection::Enum status = TextGlyphVisibility::intersect(rectangle, clip);
+        const TextGlyphIntersection::Enum status = TextGlyphVisibility::intersect(item.rectangle, clip);
         if(status == TextGlyphIntersection::Invalid)
             return false;
-        if(status == TextGlyphIntersection::Visible){
-            candidates[retained] = index;
-            ++retained;
-        }
+        if(status == TextGlyphIntersection::Visible)
+            prepared.push_back(item);
     }
-    candidates.resize(retained);
-    if(candidates.empty())
+    if(prepared.empty())
         return true;
     m_pages.clear();
     m_sdfPages.clear();
-    for(const usize index : candidates){
-        const PlacedGlyph& glyph = layout.glyphs()[index];
-        if(const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize)){
-            const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
-            const SharedSdfAtlasPage& page = atlas->page(record.group);
-            const bool present = FindIf(m_sdfPages.begin(), m_sdfPages.end(), [&page](const SharedSdfAtlasPage& existing){
-                return existing.get() == page.get();
-            }) != m_sdfPages.end();
-            if(!present)
+    for(auto& glyph : prepared){
+        if(glyph.sdfPage){
+            const SharedSdfAtlasPage& page = *glyph.sdfPage;
+            const auto existing = FindIf(m_sdfPages.begin(), m_sdfPages.end(), [&page](const SharedSdfAtlasPage& item){
+                return item.get() == page.get();
+            });
+            glyph.pageIndex = static_cast<u32>(existing - m_sdfPages.begin());
+            if(existing == m_sdfPages.end())
                 m_sdfPages.push_back(page);
         }
         else{
-            const AtlasGlyph* record = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
-            if(!record){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must remain present"));
-                return false;
-            }
-            SharedGlyphPage page = m_atlas->page(record->pageIndex);
+            SharedGlyphPage page = m_atlas->page(glyph.pageIndex);
             if(!page)
                 return false;
-            const bool present = FindIf(m_pages.begin(), m_pages.end(), [&page](const SharedGlyphPage& existing){
-                return existing.get() == page.get();
-            }) != m_pages.end();
-            if(!present)
+            const auto existing = FindIf(m_pages.begin(), m_pages.end(), [&page](const SharedGlyphPage& item){
+                return item.get() == page.get();
+            });
+            glyph.pageIndex = static_cast<u32>(existing - m_pages.begin());
+            if(existing == m_pages.end())
                 m_pages.push_back(Move(page));
         }
     }
     if(!paint.prepareImages(m_pages.data(), m_pages.size(), m_sdfPages.data(), m_sdfPages.size()))
         return false;
-    for(const usize index : candidates){
-        const PlacedGlyph& glyph = layout.glyphs()[index];
-        if(const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize)){
-            const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
-            const SharedSdfAtlasPage& page = atlas->page(record.group);
-            Rect rectangle;
-            if(!TextGlyphVisibility::atlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, rectangle))
-                return false;
-            const Rect uv{
-                static_cast<f32>(record.x) / page->binding().width,
-                static_cast<f32>(record.y) / page->binding().height,
-                static_cast<f32>(record.width) / page->binding().width,
-                static_cast<f32>(record.height) / page->binding().height
-            };
-            if(!paint.drawSdfGlyph(page, record.channel, rectangle, uv, color)){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI SDF glyph draw must succeed"));
-                return false;
-            }
-        }
-        else{
-            const AtlasGlyph* record = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
-            if(!record){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must remain present"));
-                return false;
-            }
-            const SharedGlyphPage page = m_atlas->page(record->pageIndex);
-            if(!page)
-                return false;
-            Rect rectangle;
-            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, rectangle, deviceScale))
-                return false;
-            const Rect uv{
-                record->pixels.x / s_GlyphAtlasPageExtent,
-                record->pixels.y / s_GlyphAtlasPageExtent,
-                record->pixels.width / s_GlyphAtlasPageExtent,
-                record->pixels.height / s_GlyphAtlasPageExtent
-            };
-            if(!paint.drawGlyph(page, rectangle, uv, color)){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
-                return false;
-            }
+    for(const auto& glyph : prepared){
+        const bool drawn = glyph.sdfPage
+            ? paint.drawSdfGlyph(m_sdfPages[glyph.pageIndex], glyph.channel, glyph.rectangle, glyph.uv, color)
+            : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color)
+        ;
+        if(!drawn){
+            NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
+            return false;
         }
     }
     return true;

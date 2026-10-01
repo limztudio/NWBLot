@@ -38,10 +38,9 @@ bool Context::takeControlAction(
         m_input.invalidateTarget(state.id);
         return false;
     }
-    for(const auto& target : m_input.targets()){
-        if(target.id == state.id && target.popup != m_currentPopup)
-            return false;
-    }
+    const HitTarget* target = m_input.findTarget(state.id);
+    if(target && target->popup != m_currentPopup)
+        return false;
     return m_input.consumeControlAction(state.id, state.declarationGeneration, token, action);
 }
 
@@ -53,10 +52,9 @@ bool Context::takePartPointerGesture(
         m_input.invalidateTarget(owner.id);
         return false;
     }
-    for(const auto& target : m_input.targets()){
-        if(target.id == part && (target.popup != m_currentPopup || target.owner != owner.id))
-            return false;
-    }
+    const HitTarget* target = m_input.findTarget(part);
+    if(target && (target->popup != m_currentPopup || target->owner != owner.id))
+        return false;
     return m_input.consumePointerGesture(part, owner.declarationGeneration, gesture);
 }
 

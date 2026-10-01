@@ -144,11 +144,8 @@ bool UiEditBoxHost::hasTextFocus()const{
         || entry->displayed.popup != entry->popup
     )
         return false;
-    for(const auto& target : m_context.input().targets()){
-        if(target.id == entry->widget.id && target.declarationGeneration == entry->owner.declarationGeneration)
-            return target.enabled && target.textEditable && target.popup == entry->popup;
-    }
-    return false;
+    const Ui::HitTarget* target = m_context.input().findTarget(entry->widget.id, entry->owner.declarationGeneration);
+    return target && target->enabled && target->textEditable && target->popup == entry->popup;
 }
 
 bool UiEditBoxHost::wantsTextInput()const{

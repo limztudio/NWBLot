@@ -151,10 +151,9 @@ bool Context::takeActivation(const WidgetState& state, const bool enabled){
         m_input.invalidateTarget(state.id);
         return false;
     }
-    for(const auto& target : m_input.targets()){
-        if(target.id == state.id && target.popup != m_currentPopup)
-            return false;
-    }
+    const HitTarget* target = m_input.findTarget(state.id);
+    if(target && target->popup != m_currentPopup)
+        return false;
     return !m_failed && m_input.consumeActivation(state.id);
 }
 
@@ -165,10 +164,9 @@ bool Context::takePointerGesture(const WidgetState& state, const bool enabled, P
         m_input.invalidateTarget(state.id);
         return false;
     }
-    for(const auto& target : m_input.targets()){
-        if(target.id == state.id && target.popup != m_currentPopup)
-            return false;
-    }
+    const HitTarget* target = m_input.findTarget(state.id);
+    if(target && target->popup != m_currentPopup)
+        return false;
     return m_input.consumePointerGesture(state.id, state.declarationGeneration, gesture);
 }
 

@@ -86,6 +86,7 @@ public:
     [[nodiscard]] usize popupCount()const{ return m_popups.size(); }
     // Accepted observations are borrowed only until layout publication, reset, or declaration retirement.
     [[nodiscard]] const PopupScope* popupScope(const PopupToken& token)const;
+    [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const;
     [[nodiscard]] PopupToken topPopupToken()const{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] u64 focusLossGeneration()const{ return m_focusLossGeneration; }
     // Remove a hidden/deleted declaration immediately while a prior GPU frame remains pending.
@@ -134,7 +135,6 @@ public:
 
 
 private:
-    [[nodiscard]] const HitTarget* findTarget(WidgetId id, u64 declarationGeneration = 0u)const;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     [[nodiscard]] bool validControlTargets()const;

@@ -35,14 +35,8 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
         state.m_ownerDeclaration = widget->declarationGeneration;
     }
     const InputRouter& input = m_context.input();
-    const HitTarget* accepted = nullptr;
-    const HitTarget* hovered = nullptr;
-    for(const auto& target : input.targets()){
-        if(target.id == anchor->state.id && target.declarationGeneration == anchor->state.declarationGeneration)
-            accepted = &target;
-        if(target.id == input.hover())
-            hovered = &target;
-    }
+    const HitTarget* accepted = input.findTarget(anchor->state.id, anchor->state.declarationGeneration);
+    const HitTarget* hovered = input.findTarget(input.hover());
     const bool overAnchor = hovered && (hovered->id == anchor->state.id || hovered->owner == anchor->state.id);
     const bool eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
         && !m_pointerBusy && !input.primaryDown() && !input.secondaryDown() && !input.capture().valid()

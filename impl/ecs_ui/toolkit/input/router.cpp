@@ -211,6 +211,22 @@ bool InputRouter::commitTargets(
     return true;
 }
 
+const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const{
+    usize begin = 0u;
+    usize end = m_lookup.size();
+    while(begin < end){
+        const usize middle = begin + (end - begin) / 2u;
+        if(m_lookup[middle].value < id.value)
+            begin = middle + 1u;
+        else
+            end = middle;
+    }
+    if(begin == m_lookup.size() || m_lookup[begin].value != id.value)
+        return nullptr;
+    const HitTarget& target = m_targets[m_lookup[begin].index];
+    return declarationGeneration == 0u || target.declarationGeneration == declarationGeneration ? &target : nullptr;
+}
+
 void InputRouter::invalidateTarget(const WidgetId id){
     retirePopup(id);
     for(usize index = m_targets.size(); index > 0u; --index){
@@ -277,22 +293,6 @@ bool InputRouter::wouldConsumePointer(const Point& position)const{
     if(m_secondaryDown)
         return m_secondarySequenceConsumed;
     return hasPopup() || m_capture.valid() || hitTest(position).valid();
-}
-
-const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const{
-    usize begin = 0u;
-    usize end = m_lookup.size();
-    while(begin < end){
-        const usize middle = begin + (end - begin) / 2u;
-        if(m_lookup[middle].value < id.value)
-            begin = middle + 1u;
-        else
-            end = middle;
-    }
-    if(begin == m_lookup.size() || m_lookup[begin].value != id.value)
-        return nullptr;
-    const HitTarget& target = m_targets[m_lookup[begin].index];
-    return declarationGeneration == 0u || target.declarationGeneration == declarationGeneration ? &target : nullptr;
 }
 
 const HitTarget* InputRouter::findHitTarget(const Point& position)const{

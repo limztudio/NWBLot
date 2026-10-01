@@ -75,6 +75,42 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(UiInputTests, AcceptedTargetLookupPreservesCommittedGeometryAcrossFailureRetirementAndReset){
+    const HitTarget initial[]{ Target(50u), Target(10u), Target(90u) };
+    ASSERT_TRUE(m_router.commitTargets(initial, 3u, 1u));
+    EXPECT_EQ(m_router.findTarget({}), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 20u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 10u }, initial[1u].declarationGeneration + 1u), nullptr);
+    const HitTarget* accepted = m_router.findTarget({ 10u }, initial[1u].declarationGeneration);
+    ASSERT_NE(accepted, nullptr);
+    EXPECT_EQ(accepted, &m_router.targets()[1u]);
+
+    HitTarget duplicate[]{ Target(70u), Target(70u) };
+    duplicate[0u].rectangle.x = 40.0f;
+    EXPECT_FALSE(m_router.commitTargets(duplicate, 2u, 2u));
+    EXPECT_EQ(m_router.findTarget({ 10u }), accepted);
+    EXPECT_EQ(m_router.findTarget({ 70u }), nullptr);
+    EXPECT_FLOAT_EQ(accepted->rectangle.x, initial[1u].rectangle.x);
+
+    m_router.invalidateTarget({ 50u });
+    EXPECT_EQ(m_router.findTarget({ 50u }), nullptr);
+    ASSERT_NE(m_router.findTarget({ 10u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 10u }), &m_router.targets()[0u]);
+    ASSERT_NE(m_router.findTarget({ 90u }), nullptr);
+    EXPECT_EQ(m_router.findTarget({ 90u }), &m_router.targets()[1u]);
+
+    HitTarget replacement = Target(10u);
+    replacement.declarationGeneration = initial[1u].declarationGeneration + 1u;
+    replacement.rectangle.x = 60.0f;
+    ASSERT_TRUE(m_router.commitTargets(&replacement, 1u, 2u));
+    EXPECT_EQ(m_router.findTarget({ 10u }, initial[1u].declarationGeneration), nullptr);
+    ASSERT_NE(m_router.findTarget({ 10u }, replacement.declarationGeneration), nullptr);
+    EXPECT_FLOAT_EQ(m_router.findTarget({ 10u })->rectangle.x, 60.0f);
+    EXPECT_EQ(m_router.findTarget({ 90u }), nullptr);
+    m_router.reset();
+    EXPECT_EQ(m_router.findTarget({ 10u }), nullptr);
+}
+
 TEST_F(UiInputTests, FirstClickConsumesBeforeFocusExistsAndActivationIsNotReplayed){
     const HitTarget target = Target(1u);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));

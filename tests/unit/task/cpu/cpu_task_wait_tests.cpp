@@ -236,6 +236,153 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
+TEST(CpuTaskWaitTests, ScopeJoinSkipsUnrelatedPrefixesAcrossPriorityQueues){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    constexpr u32 s_UnrelatedTasks = 1024u;
+    constexpr u32 s_ScopedTasks = 128u;
+    constexpr u32 s_Priorities = 3u;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    for(u32 index = 0u; index < s_UnrelatedTasks; ++index){
+        CpuTaskOptions options;
+        options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
+        ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }, options).valid());
+    }
+    for(u32 index = 0u; index < s_ScopedTasks; ++index){
+        CpuTaskOptions options;
+        options.priority = static_cast<CpuTaskPriority::Enum>(index % s_Priorities);
+        ASSERT_TRUE(scope.submit([&](){ ++joined; }, options).valid());
+    }
+    scope.wait();
+    EXPECT_EQ(joined, s_ScopedTasks);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, s_UnrelatedTasks);
+}
+
+TEST(CpuTaskWaitTests, NestedJoinCanRetireAnUnrelatedAnchorWithoutNewPublication){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    const auto anchor = scheduler.submit([&](){ ++unrelated; });
+    ASSERT_TRUE(anchor.valid());
+    ASSERT_TRUE(scope.submit([&](){
+        EXPECT_EQ(unrelated, 0u);
+        scheduler.wait(anchor);
+        EXPECT_EQ(unrelated, 1u);
+        ++joined;
+    }).valid());
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }).valid());
+    ASSERT_TRUE(scope.submit([&](){ ++joined; }).valid());
+    scope.wait();
+    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 1u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, s_ExpectedDualCount);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+}
+
+TEST(CpuTaskWaitTests, AnotherWorkerCanClaimAnUnrelatedAnchorDuringScopeExecution){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    Atomic<bool> waiterEntered{ false };
+    Atomic<bool> blockerEntered{ false };
+    Atomic<bool> startWaiter{ false };
+    Atomic<bool> releaseBlocker{ false };
+    Atomic<bool> anchorEntered{ false };
+    Atomic<bool> releaseAnchor{ false };
+    Atomic<u32> joined{ 0u };
+    Atomic<u32> unrelated{ 0u };
+    CpuTaskSchedulerConfig config;
+    config.workerCount = s_ExpectedDualCount;
+    config.heterogeneous = false;
+    CpuTaskScheduler scheduler(config);
+    CpuTaskScope scope(scheduler);
+    ScopeExit release([&]()noexcept{
+        startWaiter.store(true, MemoryOrder::release);
+        releaseBlocker.store(true, MemoryOrder::release);
+        releaseAnchor.store(true, MemoryOrder::release);
+    });
+    const auto waiter = scheduler.submit([&](){
+        waiterEntered.store(true, MemoryOrder::release);
+        while(!startWaiter.load(MemoryOrder::acquire))
+            SleepMS(1u);
+        scope.wait();
+    });
+    ASSERT_TRUE(waiter.valid());
+    while(!waiterEntered.load(MemoryOrder::acquire))
+        SleepMS(1u);
+    ASSERT_TRUE(scheduler.submit([&](){
+        blockerEntered.store(true, MemoryOrder::release);
+        while(!releaseBlocker.load(MemoryOrder::acquire))
+            SleepMS(1u);
+    }).valid());
+    while(!blockerEntered.load(MemoryOrder::acquire))
+        SleepMS(1u);
+    ASSERT_TRUE(scheduler.submit([&](){
+        anchorEntered.store(true, MemoryOrder::release);
+        while(!releaseAnchor.load(MemoryOrder::acquire))
+            SleepMS(1u);
+    }).valid());
+    ASSERT_TRUE(scope.submit([&](){
+        releaseBlocker.store(true, MemoryOrder::release);
+        while(!anchorEntered.load(MemoryOrder::acquire))
+            SleepMS(1u);
+        joined.fetch_add(1u, MemoryOrder::relaxed);
+    }).valid());
+    ASSERT_TRUE(scheduler.submit([&](){ unrelated.fetch_add(1u, MemoryOrder::relaxed); }).valid());
+    ASSERT_TRUE(scope.submit([&](){
+        EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 0u);
+        joined.fetch_add(1u, MemoryOrder::relaxed);
+        releaseAnchor.store(true, MemoryOrder::release);
+    }).valid());
+    startWaiter.store(true, MemoryOrder::release);
+    scheduler.wait(waiter);
+    scheduler.wait();
+    EXPECT_EQ(joined.load(MemoryOrder::acquire), s_ExpectedDualCount);
+    EXPECT_EQ(unrelated.load(MemoryOrder::acquire), 1u);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+}
+
+TEST(CpuTaskWaitTests, DependencyCompletionAppendsScopedWorkAfterAnUnrelatedAnchor){
+    using namespace __hidden_cpu_task_wait_tests;
+    WaitDeadline deadline;
+    Atomic<bool> entered{ false };
+    Atomic<bool> release{ false };
+    CpuTaskScheduler scheduler(1u);
+    CpuTaskScope scope(scheduler);
+    ScopeExit releaseOnFailure([&]()noexcept{ release.store(true, MemoryOrder::release); });
+    const auto prerequisite = scheduler.submit([&](){
+        entered.store(true, MemoryOrder::release);
+        while(!release.load(MemoryOrder::acquire))
+            SleepMS(1u);
+    });
+    ASSERT_TRUE(prerequisite.valid());
+    while(!entered.load(MemoryOrder::acquire))
+        SleepMS(1u);
+    CpuTaskOptions mainThread;
+    mainThread.target = CpuTaskTarget::MainThread;
+    u32 unrelated = 0u;
+    u32 joined = 0u;
+    ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }, mainThread).valid());
+    ASSERT_TRUE(scope.submit([&](){
+        ++joined;
+        release.store(true, MemoryOrder::release);
+    }, mainThread).valid());
+    ASSERT_TRUE(scope.submit([&](){ ++joined; }, mainThread, &prerequisite, 1u).valid());
+    scope.wait();
+    EXPECT_EQ(joined, s_ExpectedDualCount);
+    EXPECT_EQ(unrelated, 0u);
+    scheduler.wait();
+    EXPECT_EQ(unrelated, 1u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

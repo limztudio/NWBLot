@@ -110,11 +110,6 @@ private:
         Optional<ProfileSample> m_sample;
     };
 
-    struct ScopeWait{
-        CpuTaskScope& scope;
-        u64 identity = 0u;
-    };
-
     struct Execution{
         CpuTaskScheduler& scheduler;
         Execution* previous;
@@ -136,6 +131,13 @@ private:
     static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
     static constexpr usize s_ChunksPerWorker = 4u;
     inline static thread_local Execution* s_execution = nullptr;
+
+    struct ScopeWait{
+        CpuTaskScope& m_scope;
+        u64 m_identity = 0u;
+        u64 m_publicationGeneration = 0u;
+        TaskHandle m_unrelatedAnchors[s_QueueCount]{};
+    };
 
 
 private:
@@ -218,22 +220,22 @@ private:
         CpuAffinity::Enum affinity,
         bool mainThread,
         bool cooperative,
-        const ScopeWait* preferredScope = nullptr
+        ScopeWait* preferredScope = nullptr
     )noexcept;
     [[nodiscard]] bool hasReadyLocked(
         CpuAffinity::Enum affinity,
         bool mainThread,
         bool cooperative,
-        const ScopeWait* preferredScope = nullptr
+        ScopeWait* preferredScope = nullptr
     )noexcept;
-    void invalidateScopeSearchLocked()noexcept;
+    [[nodiscard]] u32 findScopeReadyLocked(usize queue, ScopeWait& wait, u32& previous)noexcept;
+    void invalidateScopeSearchLocked(bool publication)noexcept;
     [[nodiscard]] bool contributesToScopeLocked(u32 index, const ScopeWait& wait)noexcept;
     [[nodiscard]] bool queueEligible(usize queue, CpuAffinity::Enum affinity, bool mainThread, bool cooperative)const noexcept;
     void execute(TaskHandle handle, usize workerIndex, CpuAffinity::Enum affinity, bool cooperative);
-    void finishBody(TaskHandle handle, bool succeeded)noexcept;
-    void retire(TaskHandle handle)noexcept;
+    void retire(TaskHandle handle, TaskNode& first)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
-    [[nodiscard]] bool executeOne(bool cooperative, const ScopeWait* preferredScope = nullptr);
+    [[nodiscard]] bool executeOne(bool cooperative, ScopeWait* preferredScope = nullptr);
     void drainTask(TaskHandle handle)noexcept;
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
@@ -241,7 +243,7 @@ private:
     [[nodiscard]] bool isExecuting()const noexcept{ return s_execution && &s_execution->scheduler == this; }
     [[nodiscard]] u32 workerWakeMaskLocked()const noexcept;
     void notifyWorkers(u32 wakeMask)noexcept;
-    void notifyProgress(u32 wakeMask)noexcept;
+    void notifyProgress(u32 wakeMask, bool wakeJoiners)noexcept;
     void notifyProgress()noexcept;
     void profileReadyLocked(u32 index)noexcept;
     [[nodiscard]] ProfileSample prepareProfileLocked(
@@ -288,12 +290,14 @@ private:
     u64 m_nextScopeWaitIdentity = 0u;
     u64 m_scopeSearchWaitIdentity = 0u;
     u64 m_scopeSearchGeneration = 1u;
+    u64 m_scopePublicationGeneration = 1u;
     u64 m_dispatchCount = 0u;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;
     ConditionVariableAny m_workerChanged[s_AffinitySlotCount];
     usize m_outstanding = 0u;
     bool m_aborting = false;
+    u32 m_joinWaiters = 0u;
     CpuTaskSchedulerStatistics m_statistics;
     Atomic<bool> m_profileEnabled{ false };
     u64 m_profileEpoch = 0u;

@@ -38,18 +38,22 @@ void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
     }
 }
 
-void CpuTaskScheduler::notifyProgress(const u32 wakeMask)noexcept{
-    m_changed.notify_all();
+void CpuTaskScheduler::notifyProgress(const u32 wakeMask, const bool wakeJoiners)noexcept{
+    // Wait registration and this snapshot share m_mutex; later waiters observe the published progress in their predicates.
+    if(wakeJoiners)
+        m_changed.notify_all();
     notifyWorkers(wakeMask);
 }
 
 void CpuTaskScheduler::notifyProgress()noexcept{
     u32 wakeMask;
+    bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
         wakeMask = workerWakeMaskLocked();
+        wakeJoiners = m_joinWaiters != 0u;
     }
-    notifyProgress(wakeMask);
+    notifyProgress(wakeMask, wakeJoiners);
 }
 
 

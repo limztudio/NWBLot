@@ -224,6 +224,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
     TaskHandle handle;
     TaskNode* node;
     u32 wakeMask;
+    bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
         if(m_aborting || (scope && scope->m_canceled))
@@ -246,8 +247,10 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
             return {};
         if(node->latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
+        u64 dependencySearchGeneration = 0u;
         if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
             beginLockedSearch();
+            dependencySearchGeneration = m_searchGeneration;
             const auto visit = [this](const TaskHandle candidate){
                 if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
                     m_searchVisits[candidate.index] = m_searchGeneration;
@@ -258,14 +261,6 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
             for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
                 const u32 candidateIndex = m_searchStack[cursor];
                 const TaskNode& reachable = m_nodes[candidateIndex];
-                for(usize dependency = 0u; dependency < dependencyCount; ++dependency){
-                    if(
-                        dependencies[dependency].domainIdentity == m_domainIdentity
-                        && dependencies[dependency].index == candidateIndex
-                        && dependencies[dependency].generation == reachable.generation
-                    )
-                        return {};
-                }
                 for(const TaskHandle dependent : reachable.dependents)
                     visit(dependent);
                 visit(reachable.parent);
@@ -275,8 +270,12 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         m_searchStack.clear();
         m_searchStack.reserve(dependencyCount);
         for(usize index = 0u; index < dependencyCount; ++index){
-            if(resolveLocked(dependencies[index]))
-                m_searchStack.push_back(dependencies[index].index);
+            if(resolveLocked(dependencies[index])){
+                const u32 dependencyIndex = dependencies[index].index;
+                if(dependencySearchGeneration != 0u && m_searchVisits[dependencyIndex] == dependencySearchGeneration)
+                    return {};
+                m_searchStack.push_back(dependencyIndex);
+            }
         }
         Sort(m_searchStack.begin(), m_searchStack.end());
         for(usize first = 0u; first < m_searchStack.size();){
@@ -313,14 +312,15 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
         if(scope)
             scope->m_pending.fetch_add(1u, MemoryOrder::release);
-        invalidateScopeSearchLocked();
+        invalidateScopeSearchLocked(true);
         node->state = TaskState::Waiting;
         if(node->dependencies == 0u)
             enqueueLocked(handle.index);
         wakeMask = workerWakeMaskLocked();
+        wakeJoiners = m_joinWaiters != 0u;
     }
     release.release();
-    notifyProgress(wakeMask);
+    notifyProgress(wakeMask, wakeJoiners);
     return handle;
 }
 
@@ -382,7 +382,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    const ScopeWait* const preferredScope
+    ScopeWait* const preferredScope
 )noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
@@ -397,14 +397,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
             if(queue.head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
                 continue;
             u32 previous = TaskHandle::s_InvalidIndex;
-            u32 nodeIndex = queue.head;
-            while(
-                preferredScope && nodeIndex != TaskHandle::s_InvalidIndex
-                && !contributesToScopeLocked(nodeIndex, *preferredScope)
-            ){
-                previous = nodeIndex;
-                nodeIndex = m_nodes[nodeIndex].next;
-            }
+            const u32 nodeIndex = preferredScope ? findScopeReadyLocked(index, *preferredScope, previous) : queue.head;
             if(nodeIndex == TaskHandle::s_InvalidIndex)
                 continue;
             TaskNode& node = m_nodes[nodeIndex];
@@ -429,20 +422,46 @@ bool CpuTaskScheduler::hasReadyLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    const ScopeWait* const preferredScope
+    ScopeWait* const preferredScope
 )noexcept{
     for(usize index = 0u; index < s_QueueCount; ++index){
-        if(!queueEligible(index, affinity, mainThread, cooperative))
+        if(m_ready[index].head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
             continue;
-        for(u32 node = m_ready[index].head; node != TaskHandle::s_InvalidIndex; node = m_nodes[node].next){
-            if(!preferredScope || contributesToScopeLocked(node, *preferredScope))
-                return true;
-        }
+        u32 previous = TaskHandle::s_InvalidIndex;
+        if(!preferredScope || findScopeReadyLocked(index, *preferredScope, previous) != TaskHandle::s_InvalidIndex)
+            return true;
     }
     return false;
 }
 
-void CpuTaskScheduler::invalidateScopeSearchLocked()noexcept{
+u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u32& previous)noexcept{
+    previous = TaskHandle::s_InvalidIndex;
+    if(m_nodes[m_ready[queue].head].scope == &wait.m_scope)
+        return m_ready[queue].head;
+    if(wait.m_publicationGeneration != m_scopePublicationGeneration){
+        for(TaskHandle& anchor : wait.m_unrelatedAnchors)
+            anchor = {};
+        wait.m_publicationGeneration = m_scopePublicationGeneration;
+    }
+    TaskHandle& anchor = wait.m_unrelatedAnchors[queue];
+    if(const TaskNode* const node = resolveLocked(anchor)){
+        if(node->state == TaskState::Ready && queueIndex(node->options) == queue)
+            previous = anchor.index;
+    }
+    // Publication can add paths to the joined scope. Retirement only removes paths, so a
+    // still-queued unrelated anchor stays safe until publication, even across other joins.
+    u32 index = previous == TaskHandle::s_InvalidIndex ? m_ready[queue].head : m_nodes[previous].next;
+    while(index != TaskHandle::s_InvalidIndex && !contributesToScopeLocked(index, wait)){
+        previous = index;
+        index = m_nodes[index].next;
+    }
+    anchor = previous == TaskHandle::s_InvalidIndex ? TaskHandle{} : TaskHandle{ m_domainIdentity, previous, m_nodes[previous].generation };
+    return index;
+}
+
+void CpuTaskScheduler::invalidateScopeSearchLocked(const bool publication)noexcept{
+    if(publication && ++m_scopePublicationGeneration == 0u)
+        TerminateInvariant();
     if(++m_scopeSearchGeneration != 0u)
         return;
     for(u64& visit : m_scopeNegativeVisits)
@@ -451,11 +470,11 @@ void CpuTaskScheduler::invalidateScopeSearchLocked()noexcept{
 }
 
 bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait& wait)noexcept{
-    if(m_nodes[index].scope == &wait.scope)
+    if(m_nodes[index].scope == &wait.m_scope)
         return true;
-    if(m_scopeSearchWaitIdentity != wait.identity){
-        m_scopeSearchWaitIdentity = wait.identity;
-        invalidateScopeSearchLocked();
+    if(m_scopeSearchWaitIdentity != wait.m_identity){
+        m_scopeSearchWaitIdentity = wait.m_identity;
+        invalidateScopeSearchLocked(false);
     }
     if(m_scopeNegativeVisits[index] == m_scopeSearchGeneration)
         return false;
@@ -469,7 +488,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
     m_searchVisits[index] = m_searchGeneration;
     for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
         const TaskNode& node = m_nodes[m_searchStack[cursor]];
-        if(node.scope == &wait.scope)
+        if(node.scope == &wait.m_scope)
             return true;
         const auto visit = [this](const TaskHandle handle){
             if(
@@ -560,6 +579,7 @@ void CpuTaskScheduler::execute(
     bool succeeded = false;
     ScopeExit finish([&]()noexcept{
         const Timer end = profile ? TimerNow() : Timer{};
+        bool readyToRetire;
         {
             ScopedLock lock(m_mutex);
             if(profile){
@@ -578,8 +598,16 @@ void CpuTaskScheduler::execute(
                 else if(affinity == CpuAffinity::Efficiency)
                     --m_busyEfficiency;
             }
+            if(!succeeded){
+                m_aborting = true;
+                node->canceled = true;
+            }
+            NWB_ASSERT(node->state == TaskState::Running);
+            readyToRetire = node->children == 0u;
+            node->state = readyToRetire ? TaskState::Retiring : TaskState::Children;
         }
-        finishBody(handle, succeeded);
+        if(readyToRetire)
+            retire(handle, *node);
     });
     {
         Execution execution(*this, handle, workerIndex, affinity);
@@ -591,39 +619,17 @@ void CpuTaskScheduler::execute(
     succeeded = true;
 }
 
-void CpuTaskScheduler::finishBody(const TaskHandle handle, const bool succeeded)noexcept{
-    bool readyToRetire;
-    {
-        ScopedLock lock(m_mutex);
-        TaskNode* node = resolveLocked(handle);
-        if(!node)
-            return;
-        if(!succeeded){
-            m_aborting = true;
-            node->canceled = true;
-        }
-        node->state = TaskState::Children;
-        readyToRetire = node->children == 0u;
-        if(readyToRetire)
-            node->state = TaskState::Retiring;
-    }
-    if(readyToRetire)
-        retire(handle);
-}
-
-void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
-    while(handle.valid()){
-        TaskNode* node;
-        {
-            ScopedLock lock(m_mutex);
-            node = resolveLocked(handle);
-            if(!node || node->state != TaskState::Retiring)
-                return;
-        }
+void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
+    TaskNode* node = &first;
+    while(node){
+        // The locked Retiring transition transfers exclusive retirement ownership to this caller.
+        NWB_ASSERT(node->state == TaskState::Retiring);
         // Tasks retain callables until descendants complete; destruction precedes publication.
         node->function.reset();
-        TaskHandle parentToRetire;
+        TaskHandle parentHandle;
+        TaskNode* parentToRetire = nullptr;
         u32 wakeMask;
+        bool wakeJoiners;
         {
             ScopedLock lock(m_mutex);
             node->canceled = node->canceled || m_aborting || (node->scope && node->scope->m_canceled);
@@ -641,7 +647,8 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
                 NWB_ASSERT(parent->children > 0u);
                 if(--parent->children == 0u && parent->state == TaskState::Children){
                     parent->state = TaskState::Retiring;
-                    parentToRetire = node->parent;
+                    parentHandle = node->parent;
+                    parentToRetire = parent;
                 }
             }
             if(node->scope)
@@ -667,9 +674,11 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
                 m_freeNode = handle.index;
             }
             wakeMask = workerWakeMaskLocked();
+            wakeJoiners = m_joinWaiters != 0u;
         }
-        notifyProgress(wakeMask);
-        handle = parentToRetire;
+        notifyProgress(wakeMask, wakeJoiners);
+        handle = parentHandle;
+        node = parentToRetire;
     }
 }
 
@@ -717,7 +726,7 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
     }
 }
 
-bool CpuTaskScheduler::executeOne(const bool cooperative, const ScopeWait* const preferredScope){
+bool CpuTaskScheduler::executeOne(const bool cooperative, ScopeWait* const preferredScope){
     TaskHandle handle;
     const usize workerIndex = currentWorkerIndex();
     const CpuAffinity::Enum affinity = currentWorkerAffinity();

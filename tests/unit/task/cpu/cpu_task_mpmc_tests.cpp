@@ -200,6 +200,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
 TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPumps){
     using namespace __hidden_cpu_task_mpmc_tests;
     DeadlineGuard deadline;
+    constexpr u32 s_JoinKinds = 3u;
     const ThreadId owner = QueryCurrentThreadId();
     Atomic<u32> ready{ 0u };
     Atomic<u32> firstPublished{ 0u };
@@ -242,7 +243,8 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                     invoked.fetch_add(1u, MemoryOrder::release);
                 };
                 const CpuTaskOptions options{ .cost = CpuTaskCost::Light, .target = CpuTaskTarget::MainThread };
-                const CpuTaskHandle handle = task % 2u == 0u
+                const u32 joinKind = task % s_JoinKinds;
+                const CpuTaskHandle handle = task % 2u == 0u || joinKind == 1u
                     ? scope.submit(Move(callback), options)
                     : scheduler.submit(Move(callback), options)
                 ;
@@ -252,7 +254,12 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
                 }
                 if(task == 0u)
                     firstPublished.fetch_add(1u, MemoryOrder::release);
-                scheduler.wait(handle);
+                if(joinKind == 0u)
+                    scheduler.wait(handle);
+                else if(joinKind == 1u)
+                    scope.wait();
+                else
+                    scheduler.wait();
             }
         });
     }
@@ -282,6 +289,66 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
     EXPECT_EQ(invoked.load(MemoryOrder::acquire), s_ExternalProducerCount * s_TasksPerProducer);
     for(const auto& count : visits)
         EXPECT_EQ(count.load(MemoryOrder::acquire), 1u);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
+}
+
+
+TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedulerJoins){
+    using namespace __hidden_cpu_task_mpmc_tests;
+    DeadlineGuard deadline;
+    constexpr u32 s_JoinKinds = 3u;
+    constexpr u32 s_Rounds = 32u;
+    CpuTaskScheduler scheduler(0u);
+    u32 callbacks = 0u;
+    for(u32 round = 0u; round < s_Rounds; ++round){
+        CpuTaskScope scope(scheduler);
+        const auto handle = scope.submit([&](){ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
+        ASSERT_TRUE(handle.valid());
+        Atomic<bool> start{ false };
+        Atomic<bool> expired{ false };
+        Atomic<u32> entered{ 0u };
+        Atomic<u32> finished{ 0u };
+        JoiningThread waiters[s_JoinKinds];
+        ScopeExit finishWaiters([&]()noexcept{
+            start.store(true, MemoryOrder::release);
+            scope.cancel();
+            scheduler.pumpMainThread();
+            for(auto& waiter : waiters){
+                if(waiter.joinable())
+                    waiter.join();
+            }
+        });
+        for(u32 kind = 0u; kind < s_JoinKinds; ++kind){
+            waiters[kind] = JoiningThread([&, kind](){
+                if(!WaitUntil([&](){ return start.load(MemoryOrder::acquire); })){
+                    expired.store(true, MemoryOrder::release);
+                    return;
+                }
+                entered.fetch_add(1u, MemoryOrder::release);
+                if(kind == 0u)
+                    scheduler.wait(handle);
+                else if(kind == 1u)
+                    scope.wait();
+                else
+                    scheduler.wait();
+                finished.fetch_add(1u, MemoryOrder::release);
+            });
+        }
+        if(round % 2u == 0u){
+            start.store(true, MemoryOrder::release);
+            ASSERT_TRUE(WaitUntil([&](){ return entered.load(MemoryOrder::acquire) == s_JoinKinds; }));
+        }
+        // Alternate retirement racing wait registration with retirement completed before any join starts.
+        scope.cancel();
+        scheduler.pumpMainThread();
+        start.store(true, MemoryOrder::release);
+        for(auto& waiter : waiters)
+            waiter.join();
+        finishWaiters.release();
+        EXPECT_FALSE(expired.load(MemoryOrder::acquire));
+        EXPECT_EQ(finished.load(MemoryOrder::acquire), s_JoinKinds);
+    }
+    EXPECT_EQ(callbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 

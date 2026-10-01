@@ -47,6 +47,7 @@ void CpuTaskScheduler::parallelRange(
 
     TaskHandle inlineTask;
     u32 wakeMask;
+    bool wakeJoiners;
     {
         ScopedLock lock(m_mutex);
         if(
@@ -102,14 +103,15 @@ void CpuTaskScheduler::parallelRange(
                 enqueueLocked(index);
             index = next;
         }
-        invalidateScopeSearchLocked();
+        invalidateScopeSearchLocked(true);
         chunks.m_pending.fetch_add(chunkCount, MemoryOrder::release);
         m_outstanding = outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
         wakeMask = workerWakeMaskLocked();
+        wakeJoiners = m_joinWaiters != 0u;
     }
     releaseReservations.release();
-    notifyProgress(wakeMask);
+    notifyProgress(wakeMask, wakeJoiners);
     if(inlineTask.valid())
         execute(inlineTask, currentWorkerIndex(), currentWorkerAffinity(), true);
     chunks.wait();

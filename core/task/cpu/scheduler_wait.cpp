@@ -33,6 +33,9 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
         if(executeOne(isExecuting()))
             continue;
         UniqueLock lock(m_mutex);
+        ++m_joinWaiters;
+        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+
         m_changed.wait(lock, [this, handle](){
             return !resolveLocked(handle) || hasReadyLocked(currentWorkerAffinity(), isMainThread(), isExecuting());
         });
@@ -54,6 +57,9 @@ void CpuTaskScheduler::wait(){
         if(executeOne(false))
             continue;
         UniqueLock lock(m_mutex);
+        ++m_joinWaiters;
+        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+
         m_changed.wait(lock, [this](){
             return m_outstanding == 0u || hasReadyLocked(CpuAffinity::Any, isMainThread(), false);
         });
@@ -109,11 +115,13 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
     Optional<ProfileMeasure> profile;
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profile.emplace(*this, CpuTaskProfileKind::ScopeJoin, TaskHandle{}, scope.m_profileLabel);
+    if(scope.m_pending.load(MemoryOrder::acquire) == 0u)
+        return;
     ScopeWait wait{ scope };
     {
         ScopedLock lock(m_mutex);
-        wait.identity = ++m_nextScopeWaitIdentity;
-        if(wait.identity == 0u)
+        wait.m_identity = ++m_nextScopeWaitIdentity;
+        if(wait.m_identity == 0u)
             TerminateInvariant();
         validateWaitLocked({}, &scope);
     }
@@ -121,6 +129,9 @@ void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
         if(executeOne(isExecuting() || scope.m_allowCallerWork, &wait))
             continue;
         UniqueLock lock(m_mutex);
+        ++m_joinWaiters;
+        ScopeExit unregisterWaiter([this]()noexcept{ --m_joinWaiters; });
+
         m_changed.wait(lock, [this, &scope, &wait](){
             validateWaitLocked({}, &scope);
             return

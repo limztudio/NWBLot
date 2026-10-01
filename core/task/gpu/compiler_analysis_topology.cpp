@@ -4,6 +4,8 @@
 
 #include "compiler_analysis_internal.h"
 
+#include <global/bit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,6 +28,82 @@ using namespace GpuTaskGraphCompilerDetail;
 struct TaskCycleTraversalFrame{
     usize nextAdjacencyIndex = 0u;
     u32 taskIndex = 0u;
+};
+
+
+// Allocated only after the stable forward scan exceeds its linear work budget.
+struct TopologicalReadyIndex final : NoCopy{
+    static constexpr usize s_IndexBitsPerLevel = 6u;
+    static constexpr usize s_BitsPerWord = static_cast<usize>(1u) << s_IndexBitsPerLevel;
+    static constexpr usize s_MaxLevels = (sizeof(u32) * 8u + s_IndexBitsPerLevel - 1u) / s_IndexBitsPerLevel;
+    Vector<u64, Alloc::ScratchArena> m_words;
+    Array<usize, s_MaxLevels> m_levelOffsets = {};
+    usize m_levelCount = 0u;
+    usize m_taskCount = 0u;
+
+
+    explicit TopologicalReadyIndex(Alloc::ScratchArena& arena)
+        : m_words(arena)
+    {}
+
+
+    void initialize(const Vector<u32, Alloc::ScratchArena>& indegrees){
+        m_taskCount = indegrees.size();
+        usize levelWords = (m_taskCount - 1u) / s_BitsPerWord + 1u;
+        usize wordCount = 0u;
+        for(;;){
+            NWB_ASSERT(m_levelCount < m_levelOffsets.size());
+            m_levelOffsets[m_levelCount++] = wordCount;
+            wordCount += levelWords;
+            if(levelWords == 1u)
+                break;
+            levelWords = (levelWords - 1u) / s_BitsPerWord + 1u;
+        }
+        m_words.resize(wordCount, 0u);
+        for(usize taskIndex = 0u; taskIndex < m_taskCount; ++taskIndex){
+            if(indegrees[taskIndex] == 0u)
+                m_words[taskIndex / s_BitsPerWord] |= static_cast<u64>(1u) << (taskIndex % s_BitsPerWord);
+        }
+        for(usize level = 1u; level < m_levelCount; ++level){
+            const usize lowerWordCount = m_levelOffsets[level] - m_levelOffsets[level - 1u];
+            for(usize word = 0u; word < lowerWordCount; ++word){
+                if(m_words[m_levelOffsets[level - 1u] + word] != 0u)
+                    m_words[m_levelOffsets[level] + word / s_BitsPerWord] |= static_cast<u64>(1u) << (word % s_BitsPerWord);
+            }
+        }
+    }
+
+    void add(const u32 taskIndex)noexcept{
+        usize index = taskIndex;
+        for(usize level = 0u; level < m_levelCount; ++level){
+            u64& word = m_words[m_levelOffsets[level] + index / s_BitsPerWord];
+            const bool wasEmpty = word == 0u;
+            word |= static_cast<u64>(1u) << (index % s_BitsPerWord);
+            if(!wasEmpty)
+                break;
+            index /= s_BitsPerWord;
+        }
+    }
+
+    [[nodiscard]] usize takeLowest()noexcept{
+        if(m_words[m_levelOffsets[m_levelCount - 1u]] == 0u)
+            return m_taskCount;
+        usize taskIndex = 0u;
+        for(usize level = m_levelCount; level > 0u; --level){
+            const u64 word = m_words[m_levelOffsets[level - 1u] + taskIndex];
+            NWB_ASSERT(word != 0u);
+            taskIndex = taskIndex * s_BitsPerWord + static_cast<usize>(CountTrailingZeros(word));
+        }
+        usize index = taskIndex;
+        for(usize level = 0u; level < m_levelCount; ++level){
+            u64& word = m_words[m_levelOffsets[level] + index / s_BitsPerWord];
+            word &= ~(static_cast<u64>(1u) << (index % s_BitsPerWord));
+            if(word != 0u)
+                break;
+            index /= s_BitsPerWord;
+        }
+        return taskIndex;
+    }
 };
 
 
@@ -90,13 +168,25 @@ bool BuildTopologicalOrder(
     outCycleEdges.clear();
     outOrder.reserve(taskCount);
     usize firstReadyCandidate = 0u;
+    constexpr usize s_ScanBudgetMultiplier = 2u;
+    usize scanBudget = taskCount > Limit<usize>::s_Max / s_ScanBudgetMultiplier
+        ? Limit<usize>::s_Max : taskCount * s_ScanBudgetMultiplier;
+    TopologicalReadyIndex readyIndex(scratchArena);
     for(usize emittedCount = 0u; emittedCount < taskCount; ++emittedCount){
+        if(scanBudget == 0u && readyIndex.m_levelCount == 0u)
+            readyIndex.initialize(indegrees);
         usize nextTask = taskCount;
-        for(usize taskIndex = firstReadyCandidate; taskIndex < taskCount; ++taskIndex){
-            if(indegrees[taskIndex] == 0u){
-                nextTask = taskIndex;
-                break;
+        if(readyIndex.m_levelCount != 0u)
+            nextTask = readyIndex.takeLowest();
+        else{
+            for(usize taskIndex = firstReadyCandidate; taskIndex < taskCount; ++taskIndex){
+                if(indegrees[taskIndex] == 0u){
+                    nextTask = taskIndex;
+                    break;
+                }
             }
+            const usize scanned = nextTask - firstReadyCandidate + (nextTask < taskCount ? 1u : 0u);
+            scanBudget = scanned >= scanBudget ? 0u : scanBudget - scanned;
         }
         if(nextTask == taskCount)
             break;
@@ -111,8 +201,12 @@ bool BuildTopologicalOrder(
         ){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
             NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
-            if(--indegrees[edge.consumer.index] == 0u)
-                firstReadyCandidate = Min(firstReadyCandidate, static_cast<usize>(edge.consumer.index));
+            if(--indegrees[edge.consumer.index] == 0u){
+                if(readyIndex.m_levelCount != 0u)
+                    readyIndex.add(edge.consumer.index);
+                else
+                    firstReadyCandidate = Min(firstReadyCandidate, static_cast<usize>(edge.consumer.index));
+            }
         }
     }
     if(outOrder.size() == taskCount)
@@ -231,6 +325,7 @@ void BuildSchedulingEdges(
         Sort(candidates.data(), candidates.data() + candidates.size(), [&](const usize lhs, const usize rhs){
             return topologicalIndices[rawEdges[lhs].consumer.index] < topologicalIndices[rawEdges[rhs].consumer.index];
         });
+        const usize lastConsumerRank = topologicalIndices[rawEdges[candidates.back()].consumer.index];
         for(usize candidateIndex = 0u; candidateIndex < candidates.size(); ++candidateIndex){
             const usize edgeIndex = candidates[candidateIndex];
             const u32 consumerIndex = rawEdges[edgeIndex].consumer.index;
@@ -247,10 +342,13 @@ void BuildSchedulingEdges(
                 const u32 taskIndex = pending[pendingIndex];
                 for(usize adjacencyIndex = adjacency.offsets[taskIndex]; adjacencyIndex < adjacency.offsets[taskIndex + 1u]; ++adjacencyIndex){
                     const u32 descendantIndex = rawEdges[adjacency.edgeIndices[adjacencyIndex]].consumer.index;
-                    if(reached[descendantIndex] == producerIndex)
+                    const usize descendantRank = topologicalIndices[descendantIndex];
+                    if(descendantRank > lastConsumerRank || reached[descendantIndex] == producerIndex)
                         continue;
                     reached[descendantIndex] = producerIndex;
-                    pending.push_back(descendantIndex);
+                    // Mark the last target, but no path at or beyond it can reach another direct consumer.
+                    if(descendantRank < lastConsumerRank)
+                        pending.push_back(descendantIndex);
                 }
             }
         }

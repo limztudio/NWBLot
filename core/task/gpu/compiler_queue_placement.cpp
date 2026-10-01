@@ -347,7 +347,7 @@ namespace GpuTaskGraphCompilerDetail{
     bool allTasksAllowOverlap = true;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
-        const u64 cost = scoringData.taskCosts[assignment.task.index];
+        const u64 cost = scoringData.m_taskCosts[assignment.task.index];
         exclusions.totalCost += cost;
         if(assignment.queue == candidate.id)
             exclusions.candidateQueueCost += cost;
@@ -380,28 +380,15 @@ namespace GpuTaskGraphCompilerDetail{
     if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
         const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
         NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
-        overlap = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
+        overlap = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
-        for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
-            if(
-                assignmentIndex >= group.assignmentOffset
-                && assignmentIndex - group.assignmentOffset < group.assignmentCount
-            )
-                continue;
-            const GpuTaskQueueAssignment& other = assignments[assignmentIndex];
-            if(other.queue == candidate.id)
-                continue;
-            bool independent = true;
-            for(usize taskOffset = 0u; taskOffset < group.assignmentCount && independent; ++taskOffset){
-                const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
-                independent = schedulingReachability.transitivelyIndependent(taskID, other.task);
-            }
-            if(independent){
-                const u64 cost = scoringData.taskCosts[other.task.index];
-                overlap = overlap > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : overlap + cost;
-            }
-        }
+        overlap = scoringData.independentQueueCost(
+            schedulingReachability,
+            candidate.id,
+            NotNull<const GpuTaskQueueAssignment*>(assignments.data() + group.assignmentOffset),
+            group.assignmentCount
+        );
     }
     score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max)
         ? Limit<i32>::s_Max

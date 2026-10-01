@@ -145,6 +145,140 @@ void ProfileNestedRanges(Alloc::ScratchArena& scratch, const u32 workers){
     RecordWorkers(scheduler);
 }
 
+void ProfileReadyPrefix(const usize unrelatedCount){
+    constexpr usize s_ScopeCount = 512u;
+    u32 unrelatedInvocations = 0u;
+    u32 joinedInvocations = 0u;
+    CpuTaskScheduler scheduler(0u);
+    RecordUnsigned("worker_count", 0u);
+    RecordUnsigned("unrelated_ready_tasks", unrelatedCount);
+    RecordUnsigned("scope_tasks", s_ScopeCount);
+    for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
+        unrelatedInvocations = 0u;
+        joinedInvocations = 0u;
+        CpuTaskScope joined(scheduler);
+        for(usize index = 0u; index < unrelatedCount; ++index)
+            ASSERT_TRUE(scheduler.submit([&](){ ++unrelatedInvocations; }).valid());
+        for(usize index = 0u; index < s_ScopeCount; ++index)
+            ASSERT_TRUE(joined.submit([&](){ ++joinedInvocations; }).valid());
+
+        const Timer begin = TimerNow();
+        joined.wait();
+        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+        ASSERT_EQ(joinedInvocations, s_ScopeCount);
+        ASSERT_EQ(unrelatedInvocations, 0u);
+        scheduler.wait();
+        ASSERT_EQ(unrelatedInvocations, unrelatedCount);
+        ASSERT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        RecordSample(sample, nanoseconds, joinedInvocations + unrelatedInvocations);
+    }
+}
+
+void ProfileNestedFanIn(Alloc::ScratchArena& scratch, const usize chainLength){
+    constexpr usize s_FanIn = 1024u;
+    Vector<CpuTaskHandle, Alloc::ScratchArena> prerequisites(s_FanIn, CpuTaskHandle{}, scratch);
+    u32 invocations = 0u;
+    bool accepted = false;
+    u64 nanoseconds = 0u;
+    CpuTaskScheduler scheduler(0u);
+    RecordUnsigned("worker_count", 0u);
+    RecordUnsigned("dependent_chain_length", chainLength);
+    RecordUnsigned("nested_fanin", s_FanIn);
+    for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
+        invocations = 0u;
+        accepted = false;
+        nanoseconds = 0u;
+        auto tail = scheduler.submit([&](){
+            const Timer begin = TimerNow();
+            const auto child = scheduler.submit([&](){ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
+            nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+            accepted = child.valid();
+            ++invocations;
+        });
+        ASSERT_TRUE(tail.valid());
+        for(usize index = 0u; index < chainLength; ++index){
+            tail = scheduler.submit([&](){ ++invocations; }, tail);
+            ASSERT_TRUE(tail.valid());
+        }
+        for(CpuTaskHandle& prerequisite : prerequisites){
+            prerequisite = scheduler.submit([&](){ ++invocations; });
+            ASSERT_TRUE(prerequisite.valid());
+        }
+        scheduler.wait();
+        ASSERT_TRUE(accepted);
+        ASSERT_EQ(invocations, chainLength + s_FanIn + 2u);
+        ASSERT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        RecordSample(sample, nanoseconds, invocations);
+    }
+}
+
+
+void ProfileIndividualTasks(Alloc::ScratchArena& scratch, const u32 workers, const bool dependencyChain){
+    constexpr usize s_TaskCount = 1024u;
+    constexpr u32 s_Rounds = 4u;
+    Vector<u64, Alloc::ScratchArena> output(s_TaskCount, 0u, scratch);
+    Vector<u64, Alloc::ScratchArena> expected(s_TaskCount, 0u, scratch);
+    for(usize index = 0u; index < s_TaskCount; ++index){
+        const u64 predecessor = dependencyChain && index != 0u ? expected[index - 1u] : 0u;
+        expected[index] = Work(static_cast<u64>(index) + 1u + predecessor, s_Rounds);
+    }
+    CpuTaskScheduler scheduler(WorkerConfig(workers));
+    RecordUnsigned("elements", s_TaskCount);
+    RecordUnsigned("dependency_chain", dependencyChain ? 1u : 0u);
+    RecordUnsigned("rounds_per_task", s_Rounds);
+    for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
+        for(u64& value : output)
+            value = 0u;
+        bool accepted = true;
+        CpuTaskHandle previous;
+        const Timer begin = TimerNow();
+        for(usize index = 0u; index < s_TaskCount; ++index){
+            const auto task = [&, index](){
+                const u64 predecessor = dependencyChain && index != 0u ? output[index - 1u] : 0u;
+                output[index] = Work(static_cast<u64>(index) + 1u + predecessor, s_Rounds);
+            };
+            previous = dependencyChain ? scheduler.submit(task, previous) : scheduler.submit(task);
+            accepted = previous.valid() && accepted;
+        }
+        scheduler.wait();
+        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+        ASSERT_TRUE(accepted);
+        u64 checksum = 0u;
+        for(usize index = 0u; index < s_TaskCount; ++index){
+            ASSERT_EQ(output[index], expected[index]);
+            checksum += output[index];
+        }
+        ASSERT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        RecordSample(sample, nanoseconds, checksum);
+    }
+    RecordWorkers(scheduler);
+}
+
+
+void ProfileCompletedScopeJoins(const bool submitBeforeJoining){
+    constexpr u32 s_Joins = 16384u;
+    u32 invocations = 0u;
+    CpuTaskScheduler scheduler(0u);
+    CpuTaskScope scope(scheduler);
+    if(submitBeforeJoining){
+        const auto task = scope.submit([&](){ ++invocations; });
+        ASSERT_TRUE(task.valid());
+        scheduler.wait(task);
+    }
+    RecordUnsigned("worker_count", 0u);
+    RecordUnsigned("joins", s_Joins);
+    RecordUnsigned("completed_scope", submitBeforeJoining ? 1u : 0u);
+    for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
+        const Timer begin = TimerNow();
+        for(u32 repetition = 0u; repetition < s_Joins; ++repetition)
+            scope.wait();
+        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+        ASSERT_EQ(invocations, submitBeforeJoining ? 1u : 0u);
+        ASSERT_EQ(scheduler.statistics().outstandingTasks, 0u);
+        RecordSample(sample, nanoseconds, invocations);
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -263,6 +397,73 @@ TEST(CpuTaskProfile, DISABLED_CanceledHistoryLookups){
         ASSERT_EQ(statistics.outstandingTasks, 0u);
         RecordSample(sample, nanoseconds, statistics.canceledTasks);
     }
+}
+
+TEST(CpuTaskProfile, DISABLED_ScopeJoinNoReadyPrefix){
+    __hidden_cpu_task_profile_tests::ProfileReadyPrefix(0u);
+}
+
+TEST(CpuTaskProfile, DISABLED_ScopeJoinReadyPrefix1024){
+    __hidden_cpu_task_profile_tests::ProfileReadyPrefix(1024u);
+}
+
+TEST(CpuTaskProfile, DISABLED_ScopeJoinReadyPrefix4096){
+    __hidden_cpu_task_profile_tests::ProfileReadyPrefix(4096u);
+}
+
+TEST(CpuTaskProfile, DISABLED_NestedFanInNoDependentChain){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_fanin_no_chain");
+    __hidden_cpu_task_profile_tests::ProfileNestedFanIn(scratch, 0u);
+}
+
+TEST(CpuTaskProfile, DISABLED_NestedFanInDependentChain1024){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_fanin_chain_1024");
+    __hidden_cpu_task_profile_tests::ProfileNestedFanIn(scratch, 1024u);
+}
+
+TEST(CpuTaskProfile, DISABLED_NestedFanInDependentChain4096){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_fanin_chain_4096");
+    __hidden_cpu_task_profile_tests::ProfileNestedFanIn(scratch, 4096u);
+}
+
+
+TEST(CpuTaskProfile, DISABLED_TinyIndividualTasksNoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_individual_tasks_0");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 0u, false);
+}
+
+TEST(CpuTaskProfile, DISABLED_DependencyChainNoWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_dependency_chain_0");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 0u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_TinyIndividualTasksOneWorker){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_individual_tasks_1");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 1u, false);
+}
+
+TEST(CpuTaskProfile, DISABLED_DependencyChainOneWorker){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_dependency_chain_1");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 1u, true);
+}
+
+TEST(CpuTaskProfile, DISABLED_TinyIndividualTasksFourWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_individual_tasks_4");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 4u, false);
+}
+
+TEST(CpuTaskProfile, DISABLED_DependencyChainFourWorkers){
+    NWB::Core::Alloc::ScratchArena scratch("tests/task/cpu/profile_dependency_chain_4");
+    __hidden_cpu_task_profile_tests::ProfileIndividualTasks(scratch, 4u, true);
+}
+
+
+TEST(CpuTaskProfile, DISABLED_EmptyScopeJoins){
+    __hidden_cpu_task_profile_tests::ProfileCompletedScopeJoins(false);
+}
+
+TEST(CpuTaskProfile, DISABLED_CompletedScopeJoins){
+    __hidden_cpu_task_profile_tests::ProfileCompletedScopeJoins(true);
 }
 
 

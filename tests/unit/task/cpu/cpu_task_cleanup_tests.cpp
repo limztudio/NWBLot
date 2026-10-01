@@ -5,6 +5,7 @@
 #include <core/task/cpu/scheduler.h>
 #include <global/terminal_entry.h>
 
+#include <global/termination.h>
 #include <global/timer.h>
 
 #include <gtest/gtest.h>
@@ -49,6 +50,39 @@ struct RetirementProbe{
     ~RetirementProbe()noexcept{
         if(retirements)
             retirements->fetch_add(1u, MemoryOrder::release);
+    }
+};
+
+
+struct ReentrantRetirementProbe{
+    CpuTaskScheduler& m_scheduler;
+    const CpuTaskHandle& m_handle;
+    bool& m_incomplete;
+    usize& m_outstanding;
+    bool m_active = true;
+
+
+    ReentrantRetirementProbe(CpuTaskScheduler& scheduler, const CpuTaskHandle& handle, bool& incomplete, usize& outstanding)noexcept
+        : m_scheduler(scheduler)
+        , m_handle(handle)
+        , m_incomplete(incomplete)
+        , m_outstanding(outstanding)
+    {}
+    ReentrantRetirementProbe(const ReentrantRetirementProbe&) = delete;
+    ReentrantRetirementProbe(ReentrantRetirementProbe&& other)noexcept
+        : m_scheduler(other.m_scheduler)
+        , m_handle(other.m_handle)
+        , m_incomplete(other.m_incomplete)
+        , m_outstanding(other.m_outstanding)
+        , m_active(other.m_active)
+    {
+        other.m_active = false;
+    }
+    ~ReentrantRetirementProbe()noexcept{
+        if(m_active){
+            m_incomplete = !m_scheduler.isComplete(m_handle);
+            m_outstanding = m_scheduler.statistics().outstandingTasks;
+        }
     }
 };
 
@@ -311,6 +345,41 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
     }, [](){ return -1; });
     EXPECT_EQ(result, 67);
     EXPECT_EQ(callbacks, 1u);
+}
+
+
+TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCompletionPublishes){
+    using namespace __hidden_cpu_task_cleanup_tests;
+    JoiningThread watchdog([](const StopToken& stop){
+        const Timer begin = TimerNow();
+        while(!stop.stop_requested()){
+            if(DurationInMS<u64>(TimerNow(), begin) >= s_TaskTimeoutMS)
+                TerminateInvariant();
+            SleepMS(1u);
+        }
+    });
+    CpuTaskHandle parent;
+    bool incompleteDuringRetirement = false;
+    usize outstandingDuringRetirement = 0u;
+    u32 callbacks = 0u;
+    CpuTaskScheduler scheduler(0u);
+    parent = scheduler.submit([
+        &scheduler, &callbacks,
+        probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)
+    ](){
+        EXPECT_TRUE(probe.m_active);
+        EXPECT_TRUE(scheduler.submit([&](){ ++callbacks; }).valid());
+    });
+    ASSERT_TRUE(parent.valid());
+    const auto dependent = scheduler.submit([&](){
+        EXPECT_TRUE(incompleteDuringRetirement);
+        EXPECT_EQ(outstandingDuringRetirement, s_ExpectedDualCount);
+        ++callbacks;
+    }, parent);
+    ASSERT_TRUE(dependent.valid());
+    scheduler.wait(dependent);
+    EXPECT_EQ(callbacks, s_ExpectedDualCount);
+    EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
 

@@ -100,7 +100,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         ASSERT_TRUE(compiler.analyze(declarations, analysis, scratchArena));
         GpuTaskSchedulingReachability reachability(scratchArena);
         ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
-        GpuTaskQueueScoringData scoringData(declarations, analysis, options, scratchArena);
+        GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, options, scratchArena);
         bool reachable[s_TaskCount][s_TaskCount] = {};
         for(const Graphics::GpuTaskDependencyEdge& edge : analysis.edges())
             reachable[edge.producer.index][edge.consumer.index] = true;
@@ -125,7 +125,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
             u64 totalCost = 0u;
             for(const Graphics::GpuTaskQueueAssignment& assignment : assignments)
                 totalCost += costs[assignment.task.index];
-            EXPECT_EQ(scoringData.totalAssignedCost, totalCost);
+            EXPECT_EQ(scoringData.m_totalAssignedCost, totalCost);
             for(const Graphics::GpuPhysicalQueueInfo& candidate : queues){
                 u64 assignedCost = 0u;
                 for(const Graphics::GpuTaskQueueAssignment& assignment : assignments)
@@ -218,7 +218,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
         }
         Graphics::GraphicsVector<Graphics::GpuTaskQueueAssignment> emptyAssignments(testArena.arena);
         scoringData.rebuildAssignmentLoads(emptyAssignments, topology);
-        EXPECT_EQ(scoringData.totalAssignedCost, 0u);
+        EXPECT_EQ(scoringData.m_totalAssignedCost, 0u);
         for(const Graphics::GpuPhysicalQueueInfo& queue : queues)
             EXPECT_EQ(scoringData.assignedQueueLoad(queue.id), 0u);
         scoringData.rebuildAssignmentLoads(assignments, topology);

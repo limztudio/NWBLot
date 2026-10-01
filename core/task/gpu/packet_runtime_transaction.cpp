@@ -585,9 +585,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const NativeSubmissionInfo& nativeSubmissionInfo,
     GpuTimingSubmissionTicket* const* const timingTickets,
     const usize timingTicketCount,
-    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount
-){
+    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks){
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     const bool submissionValid =
@@ -622,7 +620,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
         TerminateInvariant();
     }
-    if((timingTicketCount != 0u && !timingTickets) || (taskAcceptedCallbackCount != 0u && !taskAcceptedCallbacks)){
+    if(timingTicketCount != 0u && !timingTickets){
         NWB_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
         TerminateInvariant();
     }
@@ -671,11 +669,9 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     // If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
     graph.notifyPacketSubmissionAccepted(compiledGraph, planAccess, packetID, token, lease);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){
-            const GpuTaskGraphTaskAcceptedCallback& callback = taskAcceptedCallbacks[callbackIndex];
-            if(callback.task == tasks[taskIndex] && !callback.invoke(callback.context, token))
-                callbacksAccepted = false;
-        }
+        const GpuTaskGraphTaskAcceptedCallback* const callback = taskAcceptedCallbacks.find(tasks[taskIndex]);
+        if(callback && !callback->invoke(callback->context, token))
+            callbacksAccepted = false;
     }
 
     publicationGuard.complete();

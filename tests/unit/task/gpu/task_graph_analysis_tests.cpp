@@ -7,6 +7,7 @@
 
 #include <core/task/gpu/compiler_internal.h>
 #include <global/text_utils.h>
+#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -117,6 +118,18 @@ static void ExpectDagAnalysis(
         }
     }
 
+    Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability schedulingReachability(scratchArena);
+    ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, schedulingReachability));
+    for(usize source = 0u; source < taskCount; ++source){
+        for(usize destination = 0u; destination < taskCount; ++destination){
+            const Graphics::GpuTaskId sourceTask = declarations.taskAt(source).id;
+            const Graphics::GpuTaskId destinationTask = declarations.taskAt(destination).id;
+            EXPECT_EQ(schedulingReachability.reaches(sourceTask, destinationTask), reachable[source * taskCount + destination] != 0u);
+            EXPECT_EQ(schedulingReachability.transitivelyIndependent(sourceTask, destinationTask),
+                source != destination && !reachable[source * taskCount + destination] && !reachable[destination * taskCount + source]);
+        }
+    }
+
     Vector<usize, Core::Alloc::ScratchArena> reducedEdgeIndices(scratchArena);
     reducedEdgeIndices.reserve(expectedEdges.size());
     for(usize edgeIndex = 0u; edgeIndex < expectedEdges.size(); ++edgeIndex){
@@ -163,11 +176,232 @@ static void ExpectDagAnalysis(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize taskCount, const bool reversed){
+    u64 generation = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        generation = view.generation();
+    }
+    for(usize declarationIndex = 0u; declarationIndex < taskCount; ++declarationIndex){
+        const usize chainIndex = reversed ? taskCount - declarationIndex - 1u : declarationIndex;
+        Graphics::GpuTaskId dependencies[2u] = {};
+        const usize dependencyCount = Min(chainIndex, LengthOf(dependencies));
+        for(usize offset = 0u; offset < dependencyCount; ++offset){
+            const usize sourceIndex = chainIndex - offset - 1u;
+            dependencies[offset] = {
+                .generation = generation,
+                .index = static_cast<u32>(reversed ? taskCount - sourceIndex - 1u : sourceIndex),
+            };
+        }
+        ASSERT_TRUE(AddTask(graph, declarationIndex, dependencies, dependencyCount).valid());
+    }
+}
+
+static void ExpectReducedShortcutChain(
+    const Graphics::GpuTaskGraphAnalysis& analysis,
+    const usize taskCount,
+    const bool reversed){
+    ASSERT_EQ(analysis.edges().size(), taskCount * 2u - 3u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);
+    for(usize edgeIndex = 0u; edgeIndex + 1u < taskCount; ++edgeIndex){
+        const auto& edge = analysis.schedulingEdges()[edgeIndex];
+        EXPECT_EQ(edge.producer.index, reversed ? edgeIndex + 1u : edgeIndex);
+        EXPECT_EQ(edge.consumer.index, reversed ? edgeIndex : edgeIndex + 1u);
+    }
+}
+
+static void MeasureAnalysis(const Graphics::GpuTaskGraph& graph, Graphics::GpuTaskGraphAnalysis& analysis){
+    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+    const Graphics::GpuTaskGraphCompiler compiler;
+    u64 samples[5u] = {};
+    usize scratchBytes = 0u;
+    for(usize sample = 0u; sample <= LengthOf(samples); ++sample){
+        Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
+        const Timer begin = TimerNow();
+        const bool analyzed = compiler.analyze(view, analysis, scratch);
+        const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
+        ASSERT_TRUE(analyzed);
+        if(sample != 0u)
+            samples[sample - 1u] = elapsed;
+        scratchBytes = scratch.memoryStats().peakUsedBytes;
+    }
+    Sort(samples, samples + LengthOf(samples));
+    const auto record = [](const NotNull<const char*> name, const u64 value){
+        char text[32u] = {};
+        const AStringView formatted = FormatDecimal(value, text);
+        text[formatted.size()] = '\0';
+        testing::Test::RecordProperty(name.get(), text);
+    };
+    record(NotNull<const char*>("median_analysis_ns"), samples[LengthOf(samples) / 2u]);
+    record(NotNull<const char*>("minimum_analysis_ns"), samples[0u]);
+    record(NotNull<const char*>("scratch_bytes"), scratchBytes);
+    record(NotNull<const char*>("task_count"), view.taskCount());
+}
+
+static void BenchmarkShortcutChain(const usize taskCount){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_NO_FATAL_FAILURE(DeclareShortcutChain(graph, taskCount, false));
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_NO_FATAL_FAILURE(MeasureAnalysis(graph, analysis));
+    ASSERT_NO_FATAL_FAILURE(ExpectReducedShortcutChain(analysis, taskCount, false));
+}
+
+
+namespace ReadyOrderShape{
+    enum Enum : u8{
+        ConsumerFirstPairs,
+        ProducerFirstPairs,
+        ReverseChain,
+    };
+};
+
+static void DeclareReadyOrderGraph(
+    Graphics::GpuTaskGraph& graph,
+    const usize taskCount,
+    const ReadyOrderShape::Enum shape){
+    u64 generation = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        generation = view.generation();
+    }
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const usize half = taskCount / 2u;
+        const bool hasDependency = shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u < taskCount
+            : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex < half : taskIndex >= half;
+        const usize producerIndex = !hasDependency ? 0u : shape == ReadyOrderShape::ReverseChain ? taskIndex + 1u
+            : shape == ReadyOrderShape::ConsumerFirstPairs ? taskIndex + half : taskIndex - half;
+        const Graphics::GpuTaskId dependency{ .generation = generation, .index = static_cast<u32>(producerIndex) };
+        ASSERT_TRUE(AddTask(graph, taskIndex, hasDependency ? &dependency : nullptr, hasDependency ? 1u : 0u).valid());
+    }
+}
+
+static void ExpectReadyOrder(
+    const Graphics::GpuTaskGraphAnalysis& analysis,
+    const usize taskCount,
+    const ReadyOrderShape::Enum shape){
+    ASSERT_EQ(analysis.topologicalOrder().size(), taskCount);
+    for(usize index = 0u; index < taskCount; ++index){
+        const usize expected = shape == ReadyOrderShape::ReverseChain ? taskCount - index - 1u
+            : shape == ReadyOrderShape::ConsumerFirstPairs ? (index % 2u == 0u ? taskCount / 2u + index / 2u : index / 2u) : index;
+        EXPECT_EQ(analysis.topologicalOrder()[index].index, expected);
+    }
+}
+
+static void BenchmarkReadyOrder(const usize taskCount, const ReadyOrderShape::Enum shape){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_NO_FATAL_FAILURE(DeclareReadyOrderGraph(graph, taskCount, shape));
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_NO_FATAL_FAILURE(MeasureAnalysis(graph, analysis));
+    ASSERT_NO_FATAL_FAILURE(ExpectReadyOrder(analysis, taskCount, shape));
+}
+
+
+TEST(GpuTaskGraphAnalysis, PreservesLowestReadyIdAcrossRepeatedBackwardReleasesAndPartialIndexWords){
+    constexpr usize s_Counts[] = { 130u, 8194u };
+    constexpr ReadyOrderShape::Enum s_Shapes[] = {
+        ReadyOrderShape::ConsumerFirstPairs, ReadyOrderShape::ProducerFirstPairs, ReadyOrderShape::ReverseChain,
+    };
+    for(const usize count : s_Counts){
+        for(const auto shape : s_Shapes){
+            SCOPED_TRACE(count);
+            SCOPED_TRACE(shape);
+            TestArena testArena;
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            ASSERT_NO_FATAL_FAILURE(DeclareReadyOrderGraph(graph, count, shape));
+            Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+            const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+            Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
+            ASSERT_TRUE(Graphics::GpuTaskGraphCompiler().analyze(view, analysis, scratch));
+            ASSERT_NO_FATAL_FAILURE(ExpectReadyOrder(analysis, count, shape));
+        }
+    }
+}
+
+TEST(GpuTaskGraphAnalysis, RetainsCycleDiagnosticsAfterBackwardReleasePrefixExhaustsReadyWork){
+    constexpr usize s_PrefixCount = 130u;
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_NO_FATAL_FAILURE(DeclareReadyOrderGraph(graph, s_PrefixCount, ReadyOrderShape::ConsumerFirstPairs));
+    u64 generation = 0u;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        generation = view.generation();
+    }
+    const Graphics::GpuTaskId first{ .generation = generation, .index = s_PrefixCount };
+    const Graphics::GpuTaskId second{ .generation = generation, .index = s_PrefixCount + 1u };
+    ASSERT_EQ(AddTask(graph, s_PrefixCount, &second, 1u), first);
+    ASSERT_EQ(AddTask(graph, s_PrefixCount + 1u, &first, 1u), second);
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+    Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
+    EXPECT_FALSE(Graphics::GpuTaskGraphCompiler().analyze(view, analysis, scratch));
+    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
+    EXPECT_TRUE(analysis.topologicalOrder().empty());
+    ASSERT_EQ(analysis.cyclePath().size(), 3u);
+    EXPECT_EQ(analysis.cyclePath()[0u], first);
+    EXPECT_EQ(analysis.cyclePath()[1u], second);
+    EXPECT_EQ(analysis.cyclePath()[2u], first);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ConsumerFirstPairsBenchmark1024Tasks){
+    BenchmarkReadyOrder(1024u, ReadyOrderShape::ConsumerFirstPairs);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ConsumerFirstPairsBenchmark4096Tasks){
+    BenchmarkReadyOrder(4096u, ReadyOrderShape::ConsumerFirstPairs);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ProducerFirstPairsBenchmark1024Tasks){
+    BenchmarkReadyOrder(1024u, ReadyOrderShape::ProducerFirstPairs);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ProducerFirstPairsBenchmark4096Tasks){
+    BenchmarkReadyOrder(4096u, ReadyOrderShape::ProducerFirstPairs);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ReverseChainBenchmark1024Tasks){
+    BenchmarkReadyOrder(1024u, ReadyOrderShape::ReverseChain);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ReverseChainBenchmark4096Tasks){
+    BenchmarkReadyOrder(4096u, ReadyOrderShape::ReverseChain);
+}
+
+
+
+TEST(GpuTaskGraphAnalysis, ReducesShortcutEdgesAtTheLastDirectConsumerBeforeLongTails){
+    constexpr usize s_TaskCount = 257u;
+    constexpr bool s_ReversedDeclarations[] = { false, true };
+    for(const bool reversed : s_ReversedDeclarations){
+        SCOPED_TRACE(reversed);
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        ASSERT_NO_FATAL_FAILURE(DeclareShortcutChain(graph, s_TaskCount, reversed));
+        const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
+        Core::Alloc::ScratchArena scratch(s_AnalysisScratchArena);
+        const Graphics::GpuTaskGraphCompiler compiler;
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(compiler.analyze(view, analysis, scratch));
+        ASSERT_NO_FATAL_FAILURE(ExpectReducedShortcutChain(analysis, s_TaskCount, reversed));
+    }
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ShortcutChainBenchmark1024Tasks){
+    BenchmarkShortcutChain(1024u);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ShortcutChainBenchmark4096Tasks){
+    BenchmarkShortcutChain(4096u);
+}
+
+
 TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicateDependencies){
-    const usize taskCounts[] = { 0u, 1u, 9u, 63u, 64u, 65u, 127u, 128u, 129u };
-    const u32 seeds[] = { 17u, 91u };
-    for(const usize taskCount : taskCounts){
-        for(const u32 seed : seeds){
+    constexpr usize s_TaskCounts[] = { 0u, 1u, 9u, 63u, 64u, 65u, 127u, 128u, 129u, 191u, 192u, 193u };
+    constexpr u32 s_Seeds[] = { 17u, 91u };
+    for(const usize taskCount : s_TaskCounts){
+        for(const u32 seed : s_Seeds){
             SCOPED_TRACE(taskCount);
             SCOPED_TRACE(seed);
             TestArena testArena;

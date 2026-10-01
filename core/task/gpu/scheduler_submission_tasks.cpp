@@ -60,6 +60,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(planAccess.validPacketRange(range))
         preflightExceptionScope.setFailedPacket(range.first);
 
+    GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback> acceptedCallbacks(scratchArena);
     if(
         !planAccess.validFor(declarationAccess)
         || !planAccess.validPacketRange(range)
@@ -72,7 +73,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         )
         || !transaction.validFor(planAccess)
         || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
-        || !ValidateTaskCallbackRange(
+        || !acceptedCallbacks.resolve(
             declarationAccess,
             planAccess,
             range,
@@ -157,8 +158,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             resolvedTimingTickets.data(),
             resolvedTimingTickets.size(),
             preSubmitHook,
-            taskAcceptedCallbacks,
-            taskAcceptedCallbackCount
+            acceptedCallbacks
         )){
             if(outFailedPacket)
                 *outFailedPacket = packet;

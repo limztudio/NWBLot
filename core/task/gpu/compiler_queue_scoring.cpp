@@ -20,71 +20,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena)
-    : m_words(scratchArena)
-    , m_topologicalRanks(scratchArena)
-{}
-
-bool GpuTaskSchedulingReachability::reaches(
-    const GpuTaskId& source,
-    const GpuTaskId& destination
-)const noexcept{
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
-    if(
-        !m_valid
-        || !source.valid()
-        || !destination.valid()
-        || source.generation != m_graphGeneration
-        || destination.generation != m_graphGeneration
-        || source.index >= m_taskCount
-        || destination.index >= m_taskCount
-        || source == destination
-    )
-        return false;
-    if(m_totalOrder)
-        return m_topologicalRanks[source.index] < m_topologicalRanks[destination.index];
-    if(m_words.empty())
-        return false;
-    const usize wordIndex = source.index * m_wordsPerRow + destination.index / s_BitsPerWord;
-    const u64 mask = static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
-    return (m_words[wordIndex] & mask) != 0u;
-}
-
-bool GpuTaskSchedulingReachability::transitivelyIndependent(
-    const GpuTaskId& lhs,
-    const GpuTaskId& rhs
-)const noexcept{
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
-    if(
-        !m_valid
-        || !lhs.valid()
-        || !rhs.valid()
-        || lhs.generation != m_graphGeneration
-        || rhs.generation != m_graphGeneration
-        || lhs.index >= m_taskCount
-        || rhs.index >= m_taskCount
-        || lhs == rhs
-    )
-        return false;
-    if(m_totalOrder)
-        return false;
-    if(m_words.empty())
-        return true;
-    const usize lhsToRhsWord = lhs.index * m_wordsPerRow + rhs.index / s_BitsPerWord;
-    const usize rhsToLhsWord = rhs.index * m_wordsPerRow + lhs.index / s_BitsPerWord;
-    const u64 rhsMask = static_cast<u64>(1u) << (rhs.index % s_BitsPerWord);
-    const u64 lhsMask = static_cast<u64>(1u) << (lhs.index % s_BitsPerWord);
-    return (m_words[lhsToRhsWord] & rhsMask) == 0u
-        && (m_words[rhsToLhsWord] & lhsMask) == 0u
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static i32 SaturateQueueScoreTerm(const u64 value)noexcept{
     return value > static_cast<u64>(Limit<i32>::s_Max)
         ? Limit<i32>::s_Max
@@ -168,113 +103,6 @@ bool IsLegalQueueAssignmentCandidate(
 }
 
 
-bool BuildGpuTaskSchedulingReachability(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    GpuTaskSchedulingReachability& outReachability
-){
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
-
-    outReachability.m_words.clear();
-    outReachability.m_topologicalRanks.clear();
-    outReachability.m_totalOrder = false;
-    outReachability.m_graphGeneration = 0u;
-    outReachability.m_taskCount = 0u;
-    outReachability.m_wordsPerRow = 0u;
-    outReachability.m_valid = false;
-    const auto fail = [&outReachability](){
-        outReachability.m_words.clear();
-        outReachability.m_topologicalRanks.clear();
-        outReachability.m_totalOrder = false;
-        outReachability.m_graphGeneration = 0u;
-        outReachability.m_taskCount = 0u;
-        outReachability.m_wordsPerRow = 0u;
-        outReachability.m_valid = false;
-        return false;
-    };
-    if(!analysis.validFor(graph))
-        return fail();
-
-    const usize taskCount = graph.taskCount();
-    if(taskCount > static_cast<usize>(Limit<u32>::s_Max))
-        return fail();
-    if(analysis.schedulingEdges().empty()){
-        outReachability.m_graphGeneration = graph.generation();
-        outReachability.m_taskCount = taskCount;
-        outReachability.m_valid = true;
-        return true;
-    }
-    bool totalOrder = taskCount > 1u && analysis.topologicalOrder().size() == taskCount;
-    for(usize orderIndex = 0u; orderIndex < taskCount && totalOrder; ++orderIndex){
-        const GpuTaskId source = analysis.topologicalOrder()[orderIndex];
-        if(!source.valid() || source.generation != graph.generation() || source.index >= taskCount)
-            return fail();
-        const bool finalTask = orderIndex + 1u == taskCount;
-        bool reachesNext = finalTask;
-        const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
-        for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
-            const u32 consumerIndex = consumers[consumerOffset];
-            if(consumerIndex >= taskCount || consumerIndex == source.index)
-                return fail();
-            if(!finalTask && consumerIndex == analysis.topologicalOrder()[orderIndex + 1u].index)
-                reachesNext = true;
-        }
-        totalOrder = reachesNext;
-    }
-    if(totalOrder){
-        // Direct edges between adjacent topological tasks prove all pairs ordered, so overlap cannot exist.
-        outReachability.m_topologicalRanks.resize(taskCount);
-        for(usize orderIndex = 0u; orderIndex < taskCount; ++orderIndex)
-            outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
-        outReachability.m_graphGeneration = graph.generation();
-        outReachability.m_taskCount = taskCount;
-        outReachability.m_totalOrder = true;
-        outReachability.m_valid = true;
-        return true;
-    }
-    const usize wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
-    usize totalWordCount = 0u;
-    if(
-        !TryMultiply<usize>(taskCount, wordsPerRow, totalWordCount)
-        || totalWordCount > Limit<usize>::s_Max / sizeof(u64)
-        || totalWordCount > outReachability.m_words.max_size()
-    )
-        return fail();
-
-    outReachability.m_graphGeneration = graph.generation();
-    outReachability.m_taskCount = taskCount;
-    outReachability.m_wordsPerRow = wordsPerRow;
-    outReachability.m_words.resize(totalWordCount, 0u);
-    for(usize orderIndex = analysis.topologicalOrder().size(); orderIndex > 0u; --orderIndex){
-        const GpuTaskId source = analysis.topologicalOrder()[orderIndex - 1u];
-        if(
-            !source.valid()
-            || source.generation != graph.generation()
-            || source.index >= taskCount
-        )
-            return fail();
-
-        const usize sourceRowOffset = source.index * wordsPerRow;
-        const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
-        for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
-            const usize consumerIndex = consumers[consumerOffset];
-            if(consumerIndex >= taskCount || consumerIndex == source.index)
-                return fail();
-            const usize consumerRowOffset = consumerIndex * wordsPerRow;
-            for(usize wordIndex = 0u; wordIndex < wordsPerRow; ++wordIndex){
-                outReachability.m_words[sourceRowOffset + wordIndex] |=
-                    outReachability.m_words[consumerRowOffset + wordIndex]
-                ;
-            }
-            const usize consumerWord = sourceRowOffset + consumerIndex / s_BitsPerWord;
-            outReachability.m_words[consumerWord] |= static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
-        }
-    }
-    outReachability.m_valid = true;
-    return true;
-}
-
-
 const GpuTaskQueueAssignment* FindQueueAssignment(
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
@@ -287,130 +115,6 @@ const GpuTaskQueueAssignment* FindQueueAssignment(
         return nullptr;
     const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
     return assignment.task == task ? &assignment : nullptr;
-}
-
-
-u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
-    if(!externalQueueLoads)
-        return 0u;
-    for(usize queueLoadIndex = 0u; queueLoadIndex < externalQueueLoadCount; ++queueLoadIndex){
-        const GpuTaskQueueLoad& externalLoad = externalQueueLoads[queueLoadIndex];
-        if(externalLoad.queue == queue)
-            return externalLoad.estimatedCost;
-    }
-    return 0u;
-}
-
-GpuTaskQueueScoringData::GpuTaskQueueScoringData(
-    const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueAssignmentOptions& options,
-    Alloc::ScratchArena& scratchArena)
-    : taskCosts(graph.taskCount(), scratchArena)
-    , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
-    , ownershipEdges(scratchArena)
-    , assignedQueueLoads(scratchArena)
-    , externalQueueLoads(options.queueLoads)
-    , externalQueueLoadCount(options.queueLoadCount)
-{
-    for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex)
-        taskCosts[taskIndex] = QueueCostWeight(graph.taskAt(taskIndex).scheduling.cost);
-
-    // Hazard kinds and ranges remain available in analysis for diagnostics.
-    // Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
-    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
-    uniqueEdges.reserve(analysis.inferredEdges().size());
-    for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
-        if(
-            edge.hazard == GpuTaskHazardType::VersionDependency
-            || edge.hazard == GpuTaskHazardType::VersionLifetime
-            || !edge.resource.valid()
-        )
-            continue;
-        uniqueEdges.push_back(&edge);
-    }
-    if(uniqueEdges.empty())
-        return;
-    Sort(uniqueEdges.begin(), uniqueEdges.end(), [](const GpuTaskDependencyEdge* lhs, const GpuTaskDependencyEdge* rhs){
-        if(lhs->producer.index != rhs->producer.index)
-            return lhs->producer.index < rhs->producer.index;
-        if(lhs->consumer.index != rhs->consumer.index)
-            return lhs->consumer.index < rhs->consumer.index;
-        return lhs->resource.index < rhs->resource.index;
-    });
-
-    usize uniqueEdgeCount = 0u;
-    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
-        if(uniqueEdgeCount != 0u){
-            const GpuTaskDependencyEdge& previous = *uniqueEdges[uniqueEdgeCount - 1u];
-            if(previous.producer == edge->producer && previous.consumer == edge->consumer && previous.resource == edge->resource)
-                continue;
-        }
-        uniqueEdges[uniqueEdgeCount] = edge;
-        ++uniqueEdgeCount;
-        ++ownershipEdgeOffsets[edge->producer.index + 1u];
-        ++ownershipEdgeOffsets[edge->consumer.index + 1u];
-    }
-    uniqueEdges.resize(uniqueEdgeCount);
-    for(usize taskIndex = 1u; taskIndex < ownershipEdgeOffsets.size(); ++taskIndex)
-        ownershipEdgeOffsets[taskIndex] += ownershipEdgeOffsets[taskIndex - 1u];
-
-    ownershipEdges.resize(ownershipEdgeOffsets.back());
-    Vector<usize, Alloc::ScratchArena> writeOffsets(graph.taskCount(), scratchArena);
-    for(usize taskIndex = 0u; taskIndex < writeOffsets.size(); ++taskIndex)
-        writeOffsets[taskIndex] = ownershipEdgeOffsets[taskIndex];
-    for(const GpuTaskDependencyEdge* const edge : uniqueEdges){
-        ownershipEdges[writeOffsets[edge->producer.index]] = edge;
-        ownershipEdges[writeOffsets[edge->consumer.index]] = edge;
-        ++writeOffsets[edge->producer.index];
-        ++writeOffsets[edge->consumer.index];
-    }
-}
-
-void GpuTaskQueueScoringData::rebuildAssignmentLoads(
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GpuPhysicalQueueTopology& topology){
-    assignedQueueLoads.resize(topology.queueCount);
-    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
-        assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
-
-    totalAssignedCost = 0u;
-    // Valid graph indices are u32 and each task cost is at most eight, so graph-only totals fit in u64.
-    for(const GpuTaskQueueAssignment& assignment : assignments){
-        const u64 cost = taskCosts[assignment.task.index];
-        totalAssignedCost += cost;
-        for(GpuTaskQueueLoad& load : assignedQueueLoads){
-            if(load.queue == assignment.queue){
-                load.estimatedCost += cost;
-                break;
-            }
-        }
-    }
-}
-
-void GpuTaskQueueScoringData::updateAssignmentLoads(
-    const GpuTaskId& task,
-    const GpuPhysicalQueueId& previousQueue,
-    const GpuPhysicalQueueId& selectedQueue)noexcept{
-    if(previousQueue == selectedQueue)
-        return;
-    const u64 cost = taskCosts[task.index];
-    for(GpuTaskQueueLoad& load : assignedQueueLoads){
-        if(load.queue == previousQueue){
-            NWB_ASSERT(load.estimatedCost >= cost);
-            load.estimatedCost -= cost;
-        }
-        if(load.queue == selectedQueue)
-            load.estimatedCost += cost;
-    }
-}
-
-u64 GpuTaskQueueScoringData::assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
-    for(const GpuTaskQueueLoad& load : assignedQueueLoads){
-        if(load.queue == queue)
-            return load.estimatedCost;
-    }
-    return 0u;
 }
 
 
@@ -439,7 +143,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         && taskAssignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
     ;
     const GpuTaskQueueAssignment* const ownAssignment = FindQueueAssignment(assignments, assignmentIndicesByTask, task.id);
-    const u64 ownCost = ownAssignment && !taskExcluded ? scoringData.taskCosts[task.id.index] : 0u;
+    const u64 ownCost = ownAssignment && !taskExcluded ? scoringData.m_taskCosts[task.id.index] : 0u;
     if(ownAssignment && ownAssignment->queue == candidate.id)
         queueLoad -= ownCost;
 
@@ -450,25 +154,23 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         && !task.scheduling.avoidQueueCrossing
         && schedulingReachability.mayContainIndependentTasks()
     ){
-        u64 otherQueueCost = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
+        u64 otherQueueCost = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
         if(ownAssignment && ownAssignment->queue != candidate.id)
             otherQueueCost -= ownCost;
         if(analysis.schedulingEdges().empty())
             overlap = otherQueueCost;
         else if(otherQueueCost != 0u){
-            for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
-                if(
-                    assignmentIndex >= ignoredAssignmentOffset
-                    && assignmentIndex - ignoredAssignmentOffset < ignoredAssignmentCount
-                )
-                    continue;
-                const GpuTaskQueueAssignment& assignment = assignments[assignmentIndex];
-                if(
-                    assignment.task != task.id
-                    && assignment.queue != candidate.id
-                    && schedulingReachability.transitivelyIndependent(task.id, assignment.task)
-                )
-                    overlap += scoringData.taskCosts[assignment.task.index];
+            const GpuTaskQueueAssignment unassignedTask{ .task = task.id, .initialQueue = {}, .queue = candidate.id, .score = {} };
+            overlap = scoringData.independentQueueCost(
+                schedulingReachability,
+                candidate.id,
+                NotNull<const GpuTaskQueueAssignment*>(ownAssignment ? ownAssignment : &unassignedTask),
+                1u
+            );
+            if(ignoredAssignmentCount == 1u){
+                const GpuTaskQueueAssignment& excluded = assignments[ignoredAssignmentOffset];
+                if(excluded.queue != candidate.id && schedulingReachability.transitivelyIndependent(task.id, excluded.task))
+                    overlap -= scoringData.m_taskCosts[excluded.task.index];
             }
         }
     }
@@ -521,11 +223,11 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
 
     u64 ownershipTransfers = 0u;
     for(
-        usize edgeIndex = scoringData.ownershipEdgeOffsets[task.id.index];
-        edgeIndex < scoringData.ownershipEdgeOffsets[task.id.index + 1u];
+        usize edgeIndex = scoringData.m_ownershipEdgeOffsets[task.id.index];
+        edgeIndex < scoringData.m_ownershipEdgeOffsets[task.id.index + 1u];
         ++edgeIndex
     ){
-        const GpuTaskDependencyEdge& edge = *scoringData.ownershipEdges[edgeIndex];
+        const GpuTaskDependencyEdge& edge = *scoringData.m_ownershipEdges[edgeIndex];
         const u32 producerAssignmentIndex = assignmentIndicesByTask[edge.producer.index];
         const u32 consumerAssignmentIndex = assignmentIndicesByTask[edge.consumer.index];
         if(

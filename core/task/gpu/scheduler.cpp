@@ -138,6 +138,7 @@ bool GpuTaskScheduler::submitGraph(
         return false;
     SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
+    GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskRecordedCallback> recordedCallbacks(scratchArena);
     GpuSubmissionPacketRange normalRange;
     GpuSubmissionPacketId failedPacket;
     {
@@ -164,7 +165,7 @@ bool GpuTaskScheduler::submitGraph(
             (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
             || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
             || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
-            || !ValidateTaskCallbackRange(
+            || !recordedCallbacks.resolve(
                 declarationAccess,
                 planAccess,
                 normalRange,
@@ -218,19 +219,12 @@ bool GpuTaskScheduler::submitGraph(
 
         for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskId task = tasks[taskIndex];
-            for(usize callbackIndex = 0u; callbackIndex < desc.taskRecordedCallbackCount; ++callbackIndex){
-                const GpuTaskGraphTaskRecordedCallback& callback = desc.taskRecordedCallbacks[callbackIndex];
-                if(callback.task != task)
-                    continue;
-                if(callback.invoke(
-                    callback.context,
-                    recordedGraph.packetStateSeed(packet, artifactOperation)
-                ))
-                    continue;
-                if(outFailedPacket)
-                    *outFailedPacket = packet;
-                return false;
-            }
+            const GpuTaskGraphTaskRecordedCallback* const callback = recordedCallbacks.find(task);
+            if(!callback || callback->invoke(callback->context, recordedGraph.packetStateSeed(packet, artifactOperation)))
+                continue;
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
         }
     }
 

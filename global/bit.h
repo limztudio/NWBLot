@@ -25,6 +25,12 @@ template<typename T>
     return std::countr_zero(value);
 }
 
+template<typename T>
+    requires requires(T value){ std::popcount(value); }
+[[nodiscard]] constexpr NWB_INLINE i32 CountSetBits(const T value)noexcept{
+    return std::popcount(value);
+}
+
 template<typename To, typename From>
     requires(sizeof(To) == sizeof(From) && IsTriviallyCopyable_V<To> && IsTriviallyCopyable_V<From>)
 [[nodiscard]] constexpr NWB_INLINE To BitCast(const From& source)noexcept{

@@ -170,11 +170,19 @@ struct GpuTaskGraphResourceStatePlan{
 )noexcept;
 
 class GpuTaskSchedulingReachability final : NoCopy{
+    friend struct GpuTaskQueueScoringData;
     friend bool BuildGpuTaskSchedulingReachability(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
         GpuTaskSchedulingReachability& outReachability
     );
+
+private:
+    struct WordRange{
+        usize m_begin = 0u;
+        usize m_end = 0u;
+    };
+
 
 public:
     explicit GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena);
@@ -186,9 +194,12 @@ public:
     [[nodiscard]] bool transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept;
     [[nodiscard]] bool mayContainIndependentTasks()const noexcept{ return !m_totalOrder; }
 
+
 private:
+    // Symmetric ancestor/descendant/self masks; topological ranks retain directed reachability.
     Vector<u64, Alloc::ScratchArena> m_words;
     Vector<u32, Alloc::ScratchArena> m_topologicalRanks;
+    Vector<WordRange, Alloc::ScratchArena> m_relatedWordRanges;
     u64 m_graphGeneration = 0u;
     usize m_taskCount = 0u;
     usize m_wordsPerRow = 0u;
@@ -210,26 +221,39 @@ private:
 
 
 struct GpuTaskQueueScoringData{
-    Vector<u64, Alloc::ScratchArena> taskCosts;
-    Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
-    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> ownershipEdges;
-    Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
-    u64 totalAssignedCost = 0u;
-    const GpuTaskQueueLoad* externalQueueLoads = nullptr;
-    usize externalQueueLoadCount = 0u;
+    Vector<u64, Alloc::ScratchArena> m_taskCosts;
+    Vector<u8, Alloc::ScratchArena> m_taskCostGroups;
+    Array<u64, GpuTaskCostHint::kCount> m_costGroupWeights;
+    Vector<usize, Alloc::ScratchArena> m_ownershipEdgeOffsets;
+    Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> m_ownershipEdges;
+    Vector<GpuTaskQueueLoad, Alloc::ScratchArena> m_assignedQueueLoads;
+    // Cost-group bitsets: all assigned tasks first, then one block per topology queue, never sparse queue IDs.
+    Vector<u64, Alloc::ScratchArena> m_assignedCostWords;
+    usize m_costWordsPerGroup = 0u;
+    u64 m_totalAssignedCost = 0u;
+    const GpuTaskQueueLoad* m_externalQueueLoads = nullptr;
+    usize m_externalQueueLoadCount = 0u;
 
 
-    [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     GpuTaskQueueScoringData(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
+        const GpuTaskSchedulingReachability& reachability,
         const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena
     );
 
+
+    [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] u64 independentQueueCost(
+        const GpuTaskSchedulingReachability& reachability,
+        const GpuPhysicalQueueId& queue,
+        NotNull<const GpuTaskQueueAssignment*> members,
+        usize memberCount
+    )const noexcept;
 };
 
 struct GpuTaskQueueScoreExclusions{

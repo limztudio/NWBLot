@@ -104,7 +104,7 @@ void CheckDistinctDurationRoutes(const usize taskCount){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     GpuTaskSchedulingReachability reachability(scratch);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
-    GpuTaskQueueScoringData scoringData(declarations, analysis, {}, scratch);
+    GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, {}, scratch);
     scoringData.rebuildAssignmentLoads(assignments, topology);
     u64 minimumNanoseconds = Limit<u64>::s_Max;
     for(usize iteration = 0u; iteration < 4u; ++iteration){
@@ -191,7 +191,7 @@ TEST(GpuTaskGraphTimingFeedback, RanksEqualDurationsAfterShorterCandidateAppears
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     GpuTaskSchedulingReachability reachability(scratch);
     ASSERT_TRUE(BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
-    GpuTaskQueueScoringData scoringData(declarations, analysis, {}, scratch);
+    GpuTaskQueueScoringData scoringData(declarations, analysis, reachability, {}, scratch);
     const usize candidateOrders[][4u] = {
         { 1u, 2u, 3u, 4u },
         { 2u, 1u, 3u, 4u },

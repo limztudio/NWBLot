@@ -243,5 +243,41 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
 }
 
 
+TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfileEvents){
+    using namespace NWB::Core;
+    constexpr usize s_ScopeCount = 3u;
+    constexpr u64 s_Frame = 19u;
+    CpuTaskScheduler scheduler(0u);
+    const Name names[s_ScopeCount] = {
+        Name("tests.cpu.empty_scope"), Name("tests.cpu.completed_scope"), Name("tests.cpu.canceled_scope")
+    };
+    CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
+    CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
+    CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[s_ThirdElementIndex]));
+    const auto task = completed.submit([](){});
+    ASSERT_TRUE(task.valid());
+    scheduler.wait(task);
+    u32 canceledCallbacks = 0u;
+    ASSERT_TRUE(canceled.submit([&](){ ++canceledCallbacks; }).valid());
+    canceled.cancel();
+    canceled.wait();
+    EXPECT_EQ(canceledCallbacks, 0u);
+
+    scheduler.setProfiling(true, s_Frame);
+    empty.wait();
+    completed.wait();
+    canceled.wait();
+    CpuTaskProfileEvent events[s_ScopeCount];
+    ASSERT_EQ(scheduler.readProfileEvents(events, s_ScopeCount), s_ScopeCount);
+    for(usize index = 0u; index < s_ScopeCount; ++index){
+        EXPECT_EQ(events[index].kind, CpuTaskProfileKind::ScopeJoin);
+        EXPECT_EQ(events[index].label, names[index]);
+        EXPECT_EQ(events[index].frameIndex, s_Frame);
+    }
+    EXPECT_EQ(scheduler.statistics().profilePendingEvents, 0u);
+    scheduler.setProfiling(false);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

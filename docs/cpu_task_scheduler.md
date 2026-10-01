@@ -46,11 +46,15 @@ Ordinary task handles and task scopes are the completion boundaries. A scope inc
 
 Normal scope and scheduler destruction joins outstanding work through a throwing wait. `drain()` is reserved for terminal cleanup: it stops admission across the shared scheduler and skips queued callbacks before joining active work and retiring captures. Scope `drain()` also aborts the shared service, because application unwind is terminal under the engine exception policy. Use `cancel()` followed by `wait()` for ordinary scope-local cancellation. During an existing exception, destructors use terminal drain so cleanup cannot invoke another queued throwing callback. Owners that store task scopes behind a non-throwing smart-pointer destructor must explicitly join before resetting the pointer; project world shutdown already does this through `World::clear()`.
 
-Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `Alloc::GlobalArena`. The task domain owns its arena identity in `core/task/cpu/arena_names.h`: `core/task/cpu/scheduler`. Nested dependency checks reuse the scheduler-owned search storage instead of allocating a temporary arena. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
+Completion accounting and the transition to retirement share one scheduler lock. The thread that performs the transition owns retirement, destroys the callable outside the lock, then publishes completion under the lock. An empty scope can return after an acquire load of its pending count; profiling still records the join. Joining callers register under the scheduler mutex before parking. Progress snapshots that registration under the same mutex and broadcasts only when a joiner is registered; worker notifications retain their existing policy.
+
+Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `Alloc::GlobalArena`. The task domain owns its arena identity in `core/task/cpu/arena_names.h`: `core/task/cpu/scheduler`. Nested dependency checks mark the ancestor/dependent closure once in scheduler-owned search storage, then test membership while resolving the submitted predecessors. They do not rescan the predecessor list for each reachable node or allocate a temporary arena. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
 
 ## Parallel loops and main-thread work
 
 `parallelFor()` partitions a range into ordinary CPU tasks and joins a local scope. It has no shared global dispatch slot and supports nested loops with one worker. Cooperative scope joins select work contributing to the joined scope, including its prerequisites, so unrelated queued work does not become part of a subsystem lifetime barrier. Parallel-loop callers can participate; ordinary main-thread scope waits pump eligible main-thread tasks while worker tasks execute on workers. Stable worker domain/index identities preserve native command-recording storage ownership.
+
+Each scope wait remembers a generation-tagged cursor for the unrelated prefix of each ready queue. Later claims resume after that cursor while it remains queued; a removed or recycled cursor restarts the search. Successful task or range publication invalidates the cursors because it can introduce new prerequisite paths. Nested and concurrent waits keep separate cursors, and priority/target eligibility still applies before queue selection. This avoids walking the same unrelated prefix for every joined task.
 
 The main thread must pump the scheduler while main-thread tasks are outstanding. Frame pumps at its update boundary; scheduler/task-scope waits on the main thread also make progress. Blocking an OS thread on an external latch does not pump this queue. Avoid blocking I/O, GPU completion waits, and unbounded callbacks in ordinary CPU tasks. An external callback can submit a continuation when its operation actually completes.
 
@@ -184,3 +188,36 @@ Final validation: the Linux Debug build passed for CPU/GPU tasks, perf/telemetry
 Graphics resources now expose their shared scheduler directly to Vulkan callers; the redundant parallel-range forwarding methods are removed. The resource base needs only a scheduler forward declaration, and upload declaration files include the task graph instead of the compiler. Nested dependency checks reuse the scheduler's pre-sized search vectors and generation stamps, removing the temporary dependency arena. Profiling metadata preparation no longer reads a timestamp that execution immediately overwrites; each measured interval establishes its own start time.
 
 The Linux Debug build, eight selected CPU/GPU/graphics/telemetry/native test targets, the Optimize CPU suite, and all 52 policy checks passed. Capability-dependent tests retained their existing skips.
+
+### 2026-10-01: scheduler optimization passes
+
+The completed passes add generation-tagged ready-queue cursors, stamped nested-dependency membership, shared completion accounting/retirement transitions, an acquire-load empty-scope shortcut, and registered-joiner notification gating. Capture destruction remains outside the scheduler mutex and precedes completion publication. Every successful task/range publication invalidates scope cursors; claims and retirement validate cursor generation and queue state.
+
+The original baseline was preserved before edits. Its task-domain sources match revisions `45f142ae8` through `ea1b01af4`; intervening upstream changes were in the UI domain. Final Linux x64 Optimize comparisons on AMD BC-250 used three counterbalanced epochs, 96 samples per design/workload, and no concurrent builds or heavy tests. Times are whole-operation medians:
+
+| Workload | Original | Final |
+| --- | ---: | ---: |
+| Join 512 tasks, no unrelated ready prefix | 66.903 µs | 47.495 µs |
+| Join 512 tasks behind 4,096 unrelated ready tasks | 14.086 ms | 0.112 ms |
+| Join 512 tasks behind 16,384 unrelated ready tasks | 185.502 ms | 0.890 ms |
+| Submit 1,024 nested prerequisites, no dependent chain | 24.963 µs | 23.266 µs |
+| Submit 1,024 nested prerequisites with 4,096 dependent nodes | 1.952 ms | 0.077 ms |
+
+Separate comparisons isolated the later passes against the first optimized implementation, with 48 samples per design/case:
+
+| Workload | First optimized pass | Final |
+| --- | ---: | ---: |
+| 128 single-chunk ranges | 34.618 µs | 24.199 µs |
+| 1,024 individual tiny tasks, zero workers | 201.509 µs | 147.912 µs |
+| 1,024 dependent tasks, zero workers | 232.464 µs | 160.398 µs |
+| 16,384 empty-scope joins | 324.483 µs | 51.785 µs |
+| 1,024 individual tiny tasks, four workers | 2.239 ms | 2.145 ms |
+| Two coarse ranges, four workers | 1.083 ms | 1.082 ms |
+
+The four-worker tiny case was slower in an intermediate lock-consolidation build; the final notification-gating comparison recovered that loss. Multithreaded tiny workloads remain variable, so the small differences are not general throughput guarantees. These measurements establish host scheduler costs, not application frame-rate gains.
+
+Debug and Optimize each passed the CPU, GPU, and global suites: 74 CPU cases passed with one heterogeneous-hardware skip, all 347 GPU cases passed, and all 136 global cases passed. Twenty-one focused CPU cases passed 100 repetitions, including 9,600 cancellation-race joins. Regressions cover removed/running anchors, publication changes, duplicate fan-in edges, late cycles, stale generations, capture-destructor reentry, empty/canceled join profiling, and notification races for handle/scope/scheduler joins.
+
+Opt-in `CpuTaskProfile` cases cover prefix/fan-in scaling, individual and dependent tasks at zero/one/four workers, empty/completed joins, and the existing range controls. Original and intermediate binaries, raw XML, method files, hashes, and final results are under ignored `__cmake/scheduler_optimization/2026-10-01/`; the direct final comparison is `final_original_comparison/final_summary.json`. The historical source-policy scanners referenced above were removed before this revision. This work followed the current `.helper/` standards instead.
+
+The final review found no further demonstrated low-risk changes in these paths. Targeted notifications, claim/setup fusion, and automatic nested chunk tuning require additional representative workload evidence.

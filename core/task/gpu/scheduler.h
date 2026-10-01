@@ -309,8 +309,7 @@ private:
         GpuTimingSubmissionTicket* const* timingTickets,
         usize timingTicketCount,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
-        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
-        usize taskAcceptedCallbackCount
+        const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
     )const;
 
 

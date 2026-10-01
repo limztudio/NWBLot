@@ -125,7 +125,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
     if(needsSchedulingReachability && !BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
-    GpuTaskQueueScoringData scoringData(graph, analysis, options, scratchArena);
+    GpuTaskQueueScoringData scoringData(graph, analysis, schedulingReachability, options, scratchArena);
 
     // Establish every legal route before scoring. Explicit compatible merge chains share one provisional queue;
     // their command union and external ownership facts constrain the whole chain, while packetization retains its frontier checks.
@@ -348,7 +348,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue - topology.queues)];
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
                 const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;
-                const u64 cost = scoringData.taskCosts[task.index];
+                const u64 cost = scoringData.m_taskCosts[task.index];
                 prefixQueueCost = prefixQueueCost > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : prefixQueueCost + cost;
             }
         }

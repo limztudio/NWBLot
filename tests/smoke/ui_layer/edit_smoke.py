@@ -7,8 +7,9 @@ import platform
 import sys
 import time
 
+from caret_capture import wait_for_caret_phase
 from edit_native import EditNativeInput
-from edit_probe import center, model, observe_edit, snapshot_from_logs
+from edit_probe import CARET_RGB, TOLERANCE, caret_probe_position, caret_required, center, model, observe_edit, snapshot_from_logs
 from interaction_smoke import parse_args
 from window_capture_smoke import (
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
@@ -42,6 +43,17 @@ class EditRun:
     def focus(self, field):
         self.native.click(*self.point(*center(self.snapshot["fields"][field]["bounds"])))
 
+    def wait_for_caret_phase(self, snapshot, fields, deadline):
+        width, height = self.backend.client_size(self.handle)
+        scale_x, scale_y = snapshot["scale"]
+        samples = []
+        for field in fields:
+            geometry = snapshot["fields"][field]
+            column, _, first_row, end_row = caret_probe_position(
+                geometry["caret"], geometry["content"], scale_x, scale_y, width, height)
+            samples.append((column, first_row, end_row, CARET_RGB, TOLERANCE))
+        wait_for_caret_phase(self.backend, self.handle, self.process, samples, deadline)
+
     def checkpoint(self, name, primary, secondary, *, readonly=False, visible=True, extent=None,
         selection=False, scrolled=False, allowed_primary=None):
         # Settle unchanged-state gates as well, exposing replay or late clipboard delivery.
@@ -60,6 +72,13 @@ class EditRun:
             wanted = primary
             if allowed_primary is not None and snapshot["primary"] in allowed_primary:
                 wanted = snapshot["primary"]
+            if (not self.native.windows and snapshot["primary"] == wanted and snapshot["secondary"] == secondary
+                and snapshot["readonly"] == readonly and snapshot["visible"] == visible):
+                fields = [field for field, state in (("primary", wanted), ("secondary", secondary))
+                    if caret_required(field, state, readonly, visible, selection)]
+                if fields:
+                    # Observe off-to-on before the capture's 0.2s settle; full-frame processing can alias the 1s blink cycle.
+                    self.wait_for_caret_phase(snapshot, fields, stage_deadline)
             self.backend.capture_client_window(self.handle, path)
             report = observe_edit(read_bmp_24_rows(path), snapshot, wanted, secondary, readonly, visible,
                 extent=extent, selection=selection, scrolled=scrolled)

@@ -132,11 +132,11 @@ class EditNativeInput(NativeInput):
                 self._post(0x0102, int.from_bytes(encoded[offset:offset + 2], "little"), 1)
         else:
             for character in value:
-                name = "space" if character == " " else character
+                name = "space" if character == " " else character.lower()
                 if name not in KEYS or not character.isascii():
                     raise SmokeFailure(f"X11 synthetic text does not support '{character}'")
-                self.key(name, True)
-                self.key(name, False)
+                self.key(name, True, shift=character.isupper())
+                self.key(name, False, shift=character.isupper())
         if settle:
             time.sleep(0.15)
 

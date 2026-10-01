@@ -376,13 +376,13 @@ foreach(_nwb_ui_numeric_edit_skin IN ITEMS default alternate)
             --working-directory "${_nwb_ui_smoke_runtime_root}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_numeric_edit_${_nwb_ui_numeric_edit_skin}"
             --skin "${_nwb_ui_numeric_edit_skin}"
-            --timeout 180
+            --timeout 240
             ${_nwb_ui_smoke_logserver_args}
     )
     set_tests_properties("${_nwb_ui_numeric_edit_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
         SKIP_RETURN_CODE 77
-        TIMEOUT 240
+        TIMEOUT 300
         LABELS "ui;standalone_gpu;native_input;numeric_edit;skin"
         ENVIRONMENT "NWB_UI_LAYER_IMAGE=0;NWB_UI_LAYER_IMAGE_SKIN=0;NWB_UI_LAYER_PROGRESS=0;NWB_UI_LAYER_PROGRESS_SKIN=0;NWB_UI_LAYER_SLIDER=0;NWB_UI_LAYER_SLIDER_SKIN=0;NWB_UI_LAYER_RADIO_GROUP=0;NWB_UI_LAYER_RADIO_GROUP_SKIN=0;NWB_UI_LAYER_TEXT_AREA=0;NWB_UI_LAYER_TEXT_AREA_SKIN=0;NWB_UI_LAYER_NUMERIC_EDIT=1;NWB_UI_LAYER_NUMERIC_EDIT_SKIN=${_nwb_ui_numeric_edit_skin_flag};NWB_UI_LAYER_INTERACTIVE=0;NWB_UI_LAYER_WINDOW=0;NWB_UI_LAYER_WINDOW_SKIN=0;NWB_UI_LAYER_EDIT=0;NWB_UI_LAYER_POPUP=0;NWB_UI_LAYER_POPUP_SKIN=0;NWB_UI_LAYER_LIST=0;NWB_UI_LAYER_LIST_SKIN=0;NWB_UI_LAYER_COMBO=0;NWB_UI_LAYER_COMBO_SKIN=0;NWB_UI_LAYER_SEARCH_COMBO=0;NWB_UI_LAYER_SEARCH_COMBO_SKIN=0;NWB_UI_LAYER_POPUP_TOOLS=0;NWB_UI_LAYER_POPUP_TOOLS_SKIN=0;NWB_UI_LAYER_NESTED_POPUP=0;NWB_UI_LAYER_NESTED_POPUP_SKIN=0;NWB_UI_LAYER_TEXTURE_IMAGE=0;NWB_UI_LAYER_TEXTURE_IMAGE_SKIN=0"
     )

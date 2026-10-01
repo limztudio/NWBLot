@@ -1451,6 +1451,22 @@ class LinuxX11Capture:
         # portable while Windows explicitly strips the compositor-owned non-client frame below.
         return self.capture_window(window, output_path)
 
+    def sample_client_pixels(self, window, x, y, width, height):
+        client_width, client_height = self._validated_window_size(window)
+        if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > client_width or y + height > client_height:
+            raise SmokeFailure("X11 pixel sample falls outside the client area")
+        image = self.x11.XGetImage(self.display, window, x, y, width, height,
+            ctypes.c_ulong(-1).value, self.Z_PIXMAP)
+        if not image:
+            raise SmokeFailure(f"XGetImage failed for window 0x{window:x}")
+        try:
+            if image.contents.bits_per_pixel not in (16, 24, 32) or not image.contents.data:
+                raise SmokeFailure("X11 pixel sample has unsupported or missing image data")
+            byte_order = "little" if image.contents.byte_order == self.LSB_FIRST else "big"
+            return ximage_rgb_rows(image.contents, byte_order)
+        finally:
+            self.x11.XDestroyImage(image)
+
     def _window_root_region(self, window, attributes):
         root_x = ctypes.c_int()
         root_y = ctypes.c_int()

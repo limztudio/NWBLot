@@ -15,6 +15,7 @@ FIELD = re.compile(r"field=(primary|secondary)")
 RECTANGLE = re.compile(rf"(bounds|content|caret|selection)=({NUMBER}),({NUMBER}),({NUMBER}),({NUMBER})")
 SCROLL = re.compile(rf"scroll=({NUMBER})")
 TOLERANCE = 5
+CARET_RGB = linear_rgb_bytes((0.95, 0.97, 1.0))
 
 
 def text_hash(value):
@@ -70,6 +71,19 @@ def encoded(value):
     return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
 
 
+def caret_required(field, state, readonly, visible, selection):
+    return bool(state[4] and not selection and (field != "primary" or (visible and not readonly)))
+
+
+def caret_probe_position(caret, content, scale_x, scale_y, width, height):
+    x, y, caret_width, caret_height = caret
+    column = round(x * scale_x)
+    row = round((min(y + caret_height, content[1] + content[3]) - 0.75) * scale_y)
+    if not 0 <= column < width or not 0 <= row < height:
+        raise SmokeFailure(f"edit caret probe falls outside {width}x{height}: ({column},{row})")
+    return column, row, max(0, row - 1), min(height, row + 2)
+
+
 def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, extent=None, selection=False, scrolled=False):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -86,13 +100,9 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
             "observed": list(observed), "error": error, "passed": error <= tolerance})
 
     def caret_probe(field, caret, content):
-        x, y, caret_width, caret_height = caret
-        column = round(x * scale_x)
-        row = round((min(y + caret_height, content[1] + content[3]) - 0.75) * scale_y)
-        if not 0 <= column < width or not 0 <= row < height:
-            raise SmokeFailure(f"edit caret probe falls outside {width}x{height}: ({column},{row})")
-        expected = linear_rgb_bytes((0.95, 0.97, 1.0))
-        pixels = [rows[py][column] for py in range(max(0, row - 1), min(height, row + 2))]
+        column, row, first_row, end_row = caret_probe_position(caret, content, scale_x, scale_y, width, height)
+        expected = CARET_RGB
+        pixels = [rows[py][column] for py in range(first_row, end_row)]
         error = min(max(abs(actual - reference) for actual, reference in zip(pixel, expected)) for pixel in pixels)
         probes.append({"name": f"{field}_caret", "position": [column, row], "expected": list(expected),
             "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= TOLERANCE})
@@ -117,7 +127,7 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
         probe(f"{field}_skin", (bx + bw - 16.0, by + bh - 6.0), background, tolerance=8)
         # A clear gutter outside the control catches glyphs escaping its clip when the line scrolls.
         probe(f"{field}_clip_gutter", (bx + bw + 4.0, by + bh / 2.0), (27, 34, 44), tolerance=8)
-        if state[4] and not selection and not (field == "primary" and readonly):
+        if caret_required(field, state, readonly, visible, selection):
             geometry_matches = geometry_matches and abs(kw * scale_x - 1.0) <= 0.01
             caret_probe(field, geometry["caret"], geometry["content"])
         if scrolled and state[4]:

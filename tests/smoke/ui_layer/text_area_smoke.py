@@ -8,6 +8,7 @@ import platform
 import sys
 import time
 
+from caret_capture import wait_for_caret_phase
 from text_area_native import TextAreaNativeInput
 from text_area_probe import center, document_fields, observe_text_area, snapshot_from_logs, text_hash
 from window_smoke import parse_args
@@ -85,13 +86,26 @@ class TextAreaRun:
                 continue
             if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 440.0:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
-            if self.native.windows:
-                self.backend.capture_prepared_raw_client_window(self.handle, path)
-            else:
-                self.backend.capture_client_window(self.handle, path)
-            report = observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin,
-                extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines,
-                allow_offscreen_caret=allow_offscreen_caret)
+            def capture_frame():
+                if self.native.windows:
+                    self.backend.capture_prepared_raw_client_window(self.handle, path)
+                else:
+                    self.backend.capture_client_window(self.handle, path)
+                return observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin,
+                    extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines,
+                    allow_offscreen_caret=allow_offscreen_caret)
+
+            report = capture_frame()
+            failed = [probe for probe in report["probes"] if not probe["passed"]]
+            if (not self.native.windows and report["model_matches"] and report["geometry_matches"]
+                and report["extra_matches"] and (extent is None or tuple(report["extent"]) == extent)
+                and len(failed) == 1 and failed[0]["name"] == "caret"):
+                # Reuse the exact oracle sample only when every other displayed-state requirement already matches.
+                probe = failed[0]
+                column, row = probe["position"]
+                sample = (column, max(0, row - 1), min(report["extent"][1], row + 2), probe["expected"], probe["tolerance"])
+                wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
+                report = capture_frame()
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})

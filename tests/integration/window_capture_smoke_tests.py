@@ -1517,5 +1517,28 @@ class ResizeCaptureBackendTests(unittest.TestCase):
             backend.resize_client(42, 1001, 701)
 
 
+class PixelSampleBackendTests(unittest.TestCase):
+    def test_linux_sample_rejects_outside_or_empty_regions_before_request(self):
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend._validated_window_size = mock.Mock(return_value=(100, 80))
+        backend.x11 = mock.Mock()
+        for rectangle in ((-1, 0, 1, 1), (0, -1, 1, 1), (0, 0, 0, 1), (0, 0, 1, 0), (99, 0, 2, 1), (0, 79, 1, 2)):
+            with self.subTest(rectangle=rectangle), self.assertRaises(window_capture_smoke.SmokeFailure):
+                backend.sample_client_pixels(42, *rectangle)
+        backend.x11.XGetImage.assert_not_called()
+
+    def test_linux_sample_releases_image_when_pixel_conversion_fails(self):
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend._validated_window_size = mock.Mock(return_value=(100, 80))
+        backend.display = object()
+        backend.x11 = mock.Mock()
+        image = SimpleNamespace(contents=SimpleNamespace(bits_per_pixel=32, data=1, byte_order=backend.LSB_FIRST))
+        backend.x11.XGetImage.return_value = image
+        with mock.patch.object(window_capture_smoke, "ximage_rgb_rows", side_effect=ValueError("invalid image")), \
+             self.assertRaises(ValueError):
+            backend.sample_client_pixels(42, 10, 20, 1, 3)
+        backend.x11.XDestroyImage.assert_called_once_with(image)
+
+
 if __name__ == LIT_MAIN:
     unittest.main()

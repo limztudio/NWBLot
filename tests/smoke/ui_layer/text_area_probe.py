@@ -205,7 +205,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
         pixels = [rows[y][column] for y in range(max(0, row - 1), min(height, row + 2))]
         error = min(max(abs(actual - reference) for actual, reference in zip(pixel, color)) for pixel in pixels)
         probes.append({"name": "caret", "position": [column, row], "expected": list(color),
-            "observed": [list(pixel) for pixel in pixels], "error": error, "passed": error <= 5})
+            "observed": [list(pixel) for pixel in pixels], "error": error, "tolerance": 5, "passed": error <= 5})
     model_matches = snapshot["skin"] == skin and all(snapshot[name] == int(value) for name, value in expected.items())
     extra_matches = extra is None or bool(extra(snapshot))
     return {"extent": [width, height], "snapshot": snapshot, "expected": dict(expected), "probes": probes,

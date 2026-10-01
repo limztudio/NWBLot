@@ -24,6 +24,42 @@ Validation before the current-format cleanup: Windows ARM64 / Clang `opt` builds
 
 Validation for the current-format cleanup after merging the concurrent retained-UI and XIM fixes: Windows ARM64 / Clang `opt` builds pass for Testbed and the standalone UI executable. All 1,357 toolkit, 201 ECS UI, 110 OS and 18 skin asset tests pass. Font source, atlas payload, bake, quality and font-builder CLI integration suites pass, as do the skin dependency launcher and pipeline CLI integration. Genuine Linux x86_64 syntax/type checks pass for 45 translation-unit/configuration combinations across 38 sources, including Wayland with/without primary selection and X11-only configurations; all checked source/header hashes remain stable during the run. Six native/GPU smokes pass on the rebuilt merged application: framebuffer, editor, replacement-skin searchable combo/numeric editor/text area, and direct/command-IR parity. The editor passes all 38 native/GPU gates, and its final double-click selection capture was visually inspected. Changed authored files pass encoding/CRLF, source-format and Python syntax checks, and changed C++ files remain below 800 lines.
 
+## October 2026 repeated optimization pass
+
+The follow-up review measured CPU input, text paint, shaping, skin lookup and font serialization separately. Each accepted step has its own commit. The final source review found no further safe, measured candidate within these paths; this is not a claim that every workload or GPU is optimal.
+
+- Input consumers reuse the accepted target index instead of scanning the full target array for every widget. Generation, popup, owner and control-token fences remain unchanged.
+- State ownership uses 32 inline `(kind, full instance generation)` pairs and promotes larger frames into an arena-owned hash set. Small and empty frames do not clear a retained large table. Promotion preserves duplicate detection across the entire prefix, frame abandonment and the 4,096-claim limit.
+- Skin regions keep authored order and first-match inspection behavior. A separate sorted index validates duplicates and handles lookups above 128 regions; smaller skins retain the measured faster direct scan. Index ownership follows region storage through copy, move and replacement, with atomic binary admission.
+- Text paint retains exact rectangles, UVs and page selections after preparation, then reuses them for image admission and ordered emission. All coverage preparation precedes record capture. Shaping reserves the primary glyph count before fallback assembly.
+- Font serialization validates payload bytes once. The codec still checks the asset path, and the builder serializes before reading the prepared font or publishing the same-stem bundle. Invalid inputs preserve the previous output.
+- Target retirement skips rebuilding the input index when no accepted target has that ID. Popup retirement runs first because a removed control part can still own a retained popup scope. Existing target and popup removal retain their focus/capture reconciliation order.
+
+Measurements used Windows ARM64 / Clang `opt`, warmed CPU workloads and four alternating baseline/candidate run pairs. Reported times are medians of each run's median, with matching output checksums; paint also compares exact vertex/index/command hashes and shaping compares complete layout hashes outside timed regions. Font validation/serialization uses seven alternating samples of each operation sequence on the real default bundles and compares serialized bytes. These timings describe the named CPU operation or CPU-only frame, not end-to-end FPS, GPU time or total font-bake duration.
+
+| Workload | Before | After | Reduction |
+| --- | ---: | ---: | ---: |
+| Declare/query/commit 1,024 activation targets | 448.10 us | 118.32 us | 73.6% |
+| Declare/query/commit 4,096 activation targets | 8,090.08 us | 517.73 us | 93.6% |
+| Declare/claim/commit 4,096 same-kind states | 2,233.95 us | 203.97 us | 90.9% |
+| Remove 64 passive labels, retain 128 interactive targets | 101.87 us | 9.54 us | 90.6% |
+| Successful lookup in a 1,024-region skin | 161.17 ns | 30.72 ns | 80.9% |
+| Paint 512 visible coverage glyphs | 65.25 us | 43.83 us | 32.8% |
+| Paint 512 visible baked SDF glyphs | 45.21 us | 36.12 us | 20.1% |
+| Multiline baked-font layout | 77.50 us | 69.48 us | 10.3% |
+| Default Latin atlas validation and serialization | 52.01 ms | 26.35 ms | 49.3% |
+| Default Korean atlas validation and serialization | 421.24 ms | 216.00 ms | 48.7% |
+
+Small-case and memory tradeoffs are explicit. The current 51-region default skin remains approximately unchanged for successful lookup (11.66 ns to 11.82 ns). Always using binary search regressed that case, so the final implementation retains direct scans through 128 regions. State-claim frames at 16/32 entries remain stable or improve; the 33rd claim pays roughly 0.09-0.15 us to promote the prefix. At 64 claims the measured result is approximately flat to 5% faster, at 65 it is 8-10% faster, and the improvement grows with larger panels. Mostly clipped paint and CFF-dominated mixed-font layout are approximately unchanged; sub-2% differences are treated as noise.
+
+The skin index adds four bytes per region (204 bytes for the default skin, 16 KiB at its 4,096-region limit) plus the container object. Context adds a 512-byte inline claim array on this 64-bit build and retains hash capacity after large frames; the 4,096-claim probe uses approximately 107.7 KiB more arena storage than the original vector. Prepared paint adds 48 temporary scratch bytes per conservative glyph candidate beyond the existing index array; a fully visible million-glyph layout can therefore require roughly 48 MiB more transient storage. These caches do not alter GPU textures or the offscreen target format.
+
+Generic CFF outline-bounds caching was rejected: supported static CFF can contain a Type2 `random` operator that mutates FreeType subfont state. Skipping repeated glyph loads could change later output. No font-admission restriction, new parser or compatibility path was added to enable that optimization. Broader renderer changes require a new whole-frame GPU measurement rather than extrapolating these CPU results. Local probes, exact comparison outputs and run logs are retained under `__cmake/ui_optimization/`.
+
+Final qualification: Windows ARM64 / Clang `opt` builds pass for Testbed, the standalone UI, the font builder and affected libraries/tests. All 1,370 toolkit, 201 ECS UI, 25 skin asset, 12 font-atlas asset and six font-bake tests pass, along with the font quality and font-builder CLI integration suites. Eight rebuilt native/GPU smokes pass: framebuffer, editor, replacement-skin searchable combo, tooltip/context-menu, numeric editor, text area and slider, plus direct/command-IR parity. The framebuffer text and final double-click selection captures were visually inspected. Genuine Linux x86_64 syntax/type checking passes for 28 translation-unit/configuration combinations across 21 sources, including Wayland with/without primary selection and X11-only configurations; checked source/header hashes remain unchanged during the run. All 20 changed C++ files pass UTF-8 without BOM, CRLF, banner/EOF and size checks (maximum 663 lines), and `git diff --check` passes. Native Linux linking/compositor execution, live language IME and HDR display qualification remain outside this Windows run.
+
+## Historical implementation record
+
 Implemented in the first increment:
 
 - `impl/assets_ui_skin/`: typed skin/texture identities, named sprite and nine-slice regions, logical metrics, versioned binary codec, atomic loading, MetaScript cook entry, and runtime/cook registration. Concrete schema version 1 is documented in `impl/assets_ui_skin/README.md`.

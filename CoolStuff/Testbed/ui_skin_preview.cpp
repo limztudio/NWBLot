@@ -100,6 +100,10 @@ TestbedUiSkinPreview::TestbedUiSkinPreview(
 void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const f32 x = Max(__hidden_ui_skin_preview::s_Margin, context.display.logicalWidth - __hidden_ui_skin_preview::s_PanelWidth - __hidden_ui_skin_preview::s_Margin);
     const f32 y = __hidden_ui_skin_preview::s_Margin;
+    m_widgets.paint(context);
+    const auto gallery = TestbedUiWidgetGallery::layoutBounds(context.display);
+    if(gallery.y < y + __hidden_ui_skin_preview::s_PanelHeight + 12.0f || x < 390.0f)
+        return;
     if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y)){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
@@ -116,7 +120,6 @@ void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
         return;
     }
-    m_widgets.paint(context, x, y + 228.0f);
     const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     if(
         !m_normal.paint(context.text, context.paint, { x + 20.0f, y + 17.0f }, textColor)

@@ -328,8 +328,8 @@ bool ProjectTestbed::createDefaultScene(){
     auto uiEntity = m_world->createEntity();
     auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
     customUi.paint = [this](NWB::Impl::UiPaintContext& context){
-        drawCustomUiControls(context);
         drawUiControls(context);
+        drawCustomUiControls(context);
     };
 
     NWB_LOGGER_ESSENTIAL_INFO(

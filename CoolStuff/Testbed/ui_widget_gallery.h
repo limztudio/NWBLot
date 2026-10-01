@@ -27,11 +27,19 @@
 
 class TestbedUiWidgetGallery final : NoCopy{
 public:
+    [[nodiscard]] static NWB::Impl::Ui::Rect layoutBounds(const NWB::Impl::Ui::DisplayMetrics& display);
+
+
+public:
     TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:
-    void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
+    void paint(NWB::Impl::UiPaintContext& context);
+
+
+private:
+    void paintControls(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
@@ -49,6 +57,7 @@ private:
     TestbedUiProgressGallery m_progress;
     TestbedUiImageGallery m_images;
     u32 m_count = 0u;
+    u32 m_selectedGallery = 0u;
     bool m_enabled = true;
 };
 

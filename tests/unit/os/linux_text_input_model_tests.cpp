@@ -132,6 +132,82 @@ TEST(X11FilteredKeyHistory, LongInactivityAndWindowResetCannotFenceFreshKeys){
     EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 50u, 25u, false, 1002u + s_HalfRange));
 }
 
+TEST(X11FilteredKeyHistory, SessionReplacementRejectsOldEchoesBeforeTheyCanReachANewInputContext){
+    X11FilteredKeyHistory history;
+    history.synchronizeSession({ 1u, 1u });
+    history.recordFiltered(73u, false, 100u, 50u, 1000u);
+    history.recordFiltered(73u, true, 120u, 55u, 1020u);
+    history.synchronizeSession({ 1u, 1u });
+    EXPECT_FALSE(history.isRetiredDuplicate(73u, false, 100u, 50u, false, 1030u));
+    EXPECT_TRUE(history.isForwardedDuplicate(73u, false, 100u, 50u, false, 1030u));
+    history.synchronizeSession({ 1u, 2u });
+    EXPECT_TRUE(history.isRetiredDuplicate(73u, false, 100u, 50u, false, 1040u));
+    EXPECT_TRUE(history.isRetiredDuplicate(73u, true, 120u, 55u, false, 1040u));
+    EXPECT_FALSE(history.isRetiredDuplicate(73u, false, 140u, 60u, false, 1040u));
+    history.recordFiltered(73u, false, 140u, 60u, 1040u);
+    EXPECT_TRUE(history.isRetiredDuplicate(73u, false, 100u, 50u, false, 1050u));
+    EXPECT_FALSE(history.isRetiredDuplicate(73u, false, 140u, 60u, false, 1050u));
+    EXPECT_TRUE(history.isForwardedDuplicate(73u, false, 140u, 60u, false, 1050u));
+}
+
+TEST(X11FilteredKeyHistory, InactiveSessionGapsAndServiceReplacementKeepOldSyntheticEchoesFenced){
+    X11FilteredKeyHistory history;
+    history.synchronizeSession({ 1u, 1u });
+    history.recordFiltered(23u, false, 0u, 50u, 1000u);
+    history.synchronizeSession({});
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 50u, false, 1010u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 50u, true, 1010u));
+    history.synchronizeSession({ 2u, 1u });
+    history.recordFiltered(23u, false, 0u, 51u, 1010u);
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 50u, false, 1020u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 51u, false, 1020u));
+    EXPECT_FALSE(history.isRetiredDuplicate(0u, false, 0u, 50u, false, 1020u));
+}
+
+TEST(X11FilteredKeyHistory, RetiredFrontierAdvancesWithinOneHostMillisecondAndAcrossNativeTimestampWrap){
+    X11FilteredKeyHistory history;
+    history.synchronizeSession({ 1u, 1u });
+    history.recordFiltered(23u, false, 0xfffffff0u, 50u, 1000u);
+    history.synchronizeSession({ 1u, 2u });
+    history.recordFiltered(23u, false, 5u, 50u, 1000u);
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0xfffffff0u, 50u, false, 1010u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 5u, 50u, false, 1010u));
+    history.synchronizeSession({ 1u, 3u });
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 5u, 50u, false, 1010u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 6u, 50u, false, 1010u));
+}
+
+TEST(X11FilteredKeyHistory, ZeroTimeEchoKeepsTheXimSerialUpperBitsAcrossTheWireSequenceBoundary){
+    X11FilteredKeyHistory history;
+    history.synchronizeSession({ 1u, 1u });
+    history.recordFiltered(23u, false, 0u, 0x0000fff0u, 1000u);
+    history.synchronizeSession({ 1u, 2u });
+    // XIM forwards low sequence bits in the event and high bits in its separate protocol field.
+    constexpr u32 s_CurrentSerial = 0x00010010u;
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, s_CurrentSerial, false, 1010u));
+    history.recordFiltered(23u, false, 0u, s_CurrentSerial, 1010u);
+    EXPECT_TRUE(history.isForwardedDuplicate(23u, false, 0u, s_CurrentSerial, false, 1020u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, s_CurrentSerial, false, 1020u));
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, 0x0000fff0u, false, 1020u));
+    history.synchronizeSession({ 1u, 3u });
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 0u, s_CurrentSerial, false, 1030u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 0u, 0x00020010u, false, 1030u));
+}
+
+TEST(X11FilteredKeyHistory, SessionChangesDoNotRefreshRetiredStampExpirationAndResetClearsBothHistories){
+    X11FilteredKeyHistory history;
+    constexpr u64 s_HalfRange = 1ull << 31u;
+    history.synchronizeSession({ 1u, 1u });
+    history.recordFiltered(23u, false, 100u, 50u, 1000u);
+    history.synchronizeSession({ 1u, 2u });
+    history.synchronizeSession({ 1u, 3u });
+    EXPECT_TRUE(history.isRetiredDuplicate(23u, false, 100u, 50u, false, 1000u + s_HalfRange - 1u));
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 100u, 50u, false, 1000u + s_HalfRange));
+    history.reset();
+    EXPECT_FALSE(history.isRetiredDuplicate(23u, false, 100u, 50u, false, 1001u));
+    EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1001u));
+}
+
 TEST(X11PreeditBuffer, CharacterReplacementProducesUtf8ByteCaret){
     NWB::Tests::TestArena arena;
     X11PreeditBuffer preedit(arena.arena);

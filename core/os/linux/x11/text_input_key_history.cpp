@@ -24,6 +24,25 @@ bool X11FilteredKeyHistory::current(const Stamp& stamp, const u64 receivedAtMs){
     return stamp.valid && receivedAtMs >= stamp.receivedAtMs && receivedAtMs - stamp.receivedAtMs < s_HalfRange;
 }
 
+void X11FilteredKeyHistory::synchronizeSession(const TextInputSessionToken session){
+    if(session == m_session)
+        return;
+    for(usize key = 0u; key < s_KeyCount; ++key){
+        for(usize kind = 0u; kind < m_history[key].size(); ++kind){
+            const Stamp& source = m_history[key][kind];
+            Stamp& retired = m_retiredHistory[key][kind];
+            if(
+                source.valid && (
+                    !retired.valid || source.receivedAtMs > retired.receivedAtMs
+                    || (source.receivedAtMs == retired.receivedAtMs && newer(source.timestamp, source.serial, retired))
+                )
+            )
+                retired = source;
+        }
+    }
+    m_session = session;
+}
+
 void X11FilteredKeyHistory::recordFiltered(
     const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const u64 receivedAtMs){
     if(keycode == 0u || keycode >= s_KeyCount)
@@ -41,8 +60,19 @@ bool X11FilteredKeyHistory::isForwardedDuplicate(
     return current(stamp, receivedAtMs) && !newer(timestamp, serial, stamp);
 }
 
+bool X11FilteredKeyHistory::isRetiredDuplicate(
+    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const bool sent, const u64 receivedAtMs)const{
+    if(keycode == 0u || keycode >= s_KeyCount || sent)
+        return false;
+    const Stamp& stamp = m_retiredHistory[keycode][(released ? 1u : 0u) + (timestamp == 0u ? 2u : 0u)];
+    return current(stamp, receivedAtMs) && !newer(timestamp, serial, stamp);
+}
+
 void X11FilteredKeyHistory::reset(){
+    m_session = {};
     for(auto& key : m_history)
+        key.fill({});
+    for(auto& key : m_retiredHistory)
         key.fill({});
 }
 

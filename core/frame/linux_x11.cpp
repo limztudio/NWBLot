@@ -211,11 +211,11 @@ static void ProcessKeyEvent(Frame& frame, const XKeyEvent& event, const bool dis
     const u32 serial = static_cast<u32>(event.serial);
     const u64 receivedAtMs = DurationInMS<u64>(TimerNow());
     const bool released = event.type == KeyRelease;
-    if(dispatchText && s_FilteredKeyHistory.isForwardedDuplicate(
+    if(s_FilteredKeyHistory.isForwardedDuplicate(
         keycode, released, timestamp, serial, event.send_event != False, receivedAtMs
     )){
         // The physical event already ran, but an unfiltered press must still reach XIM text lookup.
-        if(!released)
+        if(dispatchText && !released)
             DispatchKeyEvent(frame, event, InputAction::Press, true, false);
         return;
     }
@@ -524,6 +524,17 @@ bool RunX11Frame(Frame& frame){
                     continue;
             }
             if(ITextInputService* const textInput = frame.tryTextInput()){
+                s_FilteredKeyHistory.synchronizeSession(textInput->activeSession());
+                if(
+                    event.xany.window == GetX11Window(frameData) && (event.type == KeyPress || event.type == KeyRelease)
+                    && s_FilteredKeyHistory.isRetiredDuplicate(
+                        static_cast<u32>(event.xkey.keycode), event.type == KeyRelease, static_cast<u32>(event.xkey.time),
+                        static_cast<u32>(event.xkey.serial), event.xkey.send_event != False, DurationInMS<u64>(TimerNow())
+                    )
+                ){
+                    // XIM must not re-forward an old context's echo into its replacement context.
+                    continue;
+                }
                 const XEvent physical = event;
                 if(FilterX11TextInputEvent(*textInput, event)){
                     // XIM filtering owns text. Normalized physical presses/releases must remain balanced.

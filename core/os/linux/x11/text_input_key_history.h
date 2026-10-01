@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/global.h>
+#include <core/os/text_input.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,8 +37,12 @@ private:
 
 
 public:
+    void synchronizeSession(TextInputSessionToken session);
     void recordFiltered(u32 keycode, bool released, u32 timestamp, u32 serial, u64 receivedAtMs);
     [[nodiscard]] bool isForwardedDuplicate(
+        u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
+    )const;
+    [[nodiscard]] bool isRetiredDuplicate(
         u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
     )const;
     void reset();
@@ -46,7 +50,9 @@ public:
 
 private:
     // Native timestamps and zero-time XSendEvent input have independent ordering domains.
+    TextInputSessionToken m_session;
     Array<Array<Stamp, 4u>, s_KeyCount> m_history{};
+    Array<Array<Stamp, 4u>, s_KeyCount> m_retiredHistory{};
 };
 
 

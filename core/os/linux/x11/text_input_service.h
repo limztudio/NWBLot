@@ -54,6 +54,7 @@ protected:
 
 
 private:
+    void openMethod();
     [[nodiscard]] bool createContext();
     [[nodiscard]] bool convertPreeditText(const XIMText& text);
     void publishPreedit();
@@ -74,6 +75,8 @@ private:
     bool m_caretVisible = true;
     bool m_resetting = false;
     bool m_caretHintSupported = true;
+    bool m_reopenPending = false;
+    bool m_shuttingDown = false;
     X11TextInputDispatchFence m_dispatch;
 };
 

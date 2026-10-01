@@ -50,8 +50,10 @@ static constexpr Array<XIMStyle, 3u> s_PreferredStyles{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void X11TextInputService::onInputMethodDestroyed(XIM, const XPointer data, XPointer){
+void X11TextInputService::onInputMethodDestroyed(const XIM method, const XPointer data, XPointer){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
+    if(service.m_method != method)
+        return;
     service.m_method = nullptr;
     service.m_context = nullptr;
     service.m_style = 0u;
@@ -72,10 +74,11 @@ X11TextInputService::X11TextInputService(Alloc::GlobalArena& arena, Display& dis
 {}
 
 X11TextInputService::~X11TextInputService(){
+    m_shuttingDown = true;
     if(m_context)
         endNativeSession(m_nativeToken);
-    if(m_method)
-        XCloseIM(m_method);
+    else
+        releaseContext();
 }
 
 bool X11TextInputService::initialize(){
@@ -84,26 +87,7 @@ bool X11TextInputService::initialize(){
         NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: native locale initialization unavailable"));
         return true;
     }
-    m_method = XOpenIM(&m_display, nullptr, nullptr, nullptr);
-    if(!m_method){
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method unavailable; session capability disabled"));
-        return true;
-    }
-    XIMStyles* styles = nullptr;
-    const char* const error = XGetIMValues(m_method, XNQueryInputStyle, &styles, nullptr);
-    if(!error && styles){
-        for(const XIMStyle style : __hidden_x11_text_input::s_PreferredStyles){
-            if(__hidden_x11_text_input::ContainsStyle(*styles, style)){
-                m_style = style;
-                break;
-            }
-        }
-    }
-    if(styles)
-        XFree(styles);
-    XIMCallback destroyed{ reinterpret_cast<XPointer>(this), &onInputMethodDestroyed };
-    if(XSetIMValues(m_method, XNDestroyCallback, &destroyed, nullptr))
-        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method destruction notification unavailable"));
+    openMethod();
     return true;
 }
 
@@ -117,7 +101,8 @@ bool X11TextInputService::filterEvent(XEvent& event){
             releaseContext();
     });
 
-    return XFilterEvent(&event, m_window) != False;
+    // XIM transport replies target its hidden connection window, not the application window.
+    return XFilterEvent(&event, None) != False;
 }
 
 bool X11TextInputService::dispatchKey(XKeyEvent& event){
@@ -164,12 +149,21 @@ bool X11TextInputService::dispatchKey(XKeyEvent& event){
 }
 
 TextInputCapabilities X11TextInputService::capabilities()const noexcept{
-    return { m_method && m_style, (m_style & XIMPreeditCallbacks) != 0u, false, false, TextInputBackend::X11Xim };
+    const bool available = !m_shuttingDown && (m_method || m_reopenPending) && m_style;
+    return { available, available && (m_style & XIMPreeditCallbacks) != 0u, false, false, TextInputBackend::X11Xim };
 }
 
 TextInputAdmission::Enum X11TextInputService::startNativeSession(
     const TextInputSessionToken token,
     const TextInputSessionDesc& desc){
+    if(m_shuttingDown)
+        return TextInputAdmission::Unavailable;
+    if(m_reopenPending){
+        m_reopenPending = false;
+        openMethod();
+        if(!m_method || !m_style)
+            return TextInputAdmission::Unavailable;
+    }
     if(!m_method || !m_style)
         return TextInputAdmission::Unsupported;
     m_dispatch.enter();
@@ -232,6 +226,31 @@ TextInputAdmission::Enum X11TextInputService::updateNativeCaret(const TextInputR
     return TextInputAdmission::Accepted;
 }
 
+void X11TextInputService::openMethod(){
+    m_style = 0u;
+    m_caretHintSupported = true;
+    m_method = XOpenIM(&m_display, nullptr, nullptr, nullptr);
+    if(!m_method){
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method unavailable; session capability disabled"));
+        return;
+    }
+    XIMStyles* styles = nullptr;
+    const char* const error = XGetIMValues(m_method, XNQueryInputStyle, &styles, nullptr);
+    if(!error && styles){
+        for(const XIMStyle style : __hidden_x11_text_input::s_PreferredStyles){
+            if(__hidden_x11_text_input::ContainsStyle(*styles, style)){
+                m_style = style;
+                break;
+            }
+        }
+    }
+    if(styles)
+        XFree(styles);
+    XIMCallback destroyed{ reinterpret_cast<XPointer>(this), &onInputMethodDestroyed };
+    if(XSetIMValues(m_method, XNDestroyCallback, &destroyed, nullptr))
+        NWB_LOGGER_WARNING(NWB_TEXT("X11 text input: input method destruction notification unavailable"));
+}
+
 bool X11TextInputService::createContext(){
     if((m_style & XIMPreeditCallbacks) == 0u){
         m_context = XCreateIC(m_method, XNInputStyle, m_style, XNClientWindow, m_window, XNFocusWindow, m_window, nullptr);
@@ -282,6 +301,13 @@ void X11TextInputService::releaseContext()noexcept{
             m_context = nullptr;
         }
     }
+    // Forwarded keys can leave connection-wide XIM_SYNC_REPLY work behind after their IC is destroyed.
+    // A replacement session gets a fresh connection; its input cannot inherit that retired protocol queue.
+    XIM method = m_method;
+    m_method = nullptr;
+    m_reopenPending = method && XCloseIM(method) != False && m_style != 0u && !m_shuttingDown;
+    if(!m_reopenPending)
+        m_style = 0u;
     m_resetting = false;
     m_dispatch.released();
     m_preedit.clear();

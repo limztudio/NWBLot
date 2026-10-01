@@ -4,11 +4,23 @@
 
 #include "context.h"
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize Context::StateClaimHash::operator()(const StateClaim& claim)const{
+    usize hash = Hasher<u64>{}(claim.instanceGeneration);
+    HashCombine(hash, static_cast<u8>(claim.kind));
+    return hash;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,9 +59,9 @@ bool Context::beginFrame(const u64 generation){
     m_focusLossGeneration = m_input.focusLossGeneration();
     m_failed = false;
     m_declarationCount = 0u;
+    m_stateClaimCount = 0u;
     m_targets.clear();
     m_popups.clear();
-    m_stateClaims.clear();
     m_popupDepth = 0u;
     m_currentPopup = {};
     m_popupLayer = 0u;
@@ -116,17 +128,34 @@ WidgetState* Context::declarePart(const WidgetState& owner, const AStringView st
 }
 
 bool Context::claimState(const WidgetState& owner, const u64 instanceGeneration){
-    if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaims.size() == s_InputMaxTargets){
+    if(m_failed || !currentDeclaration(owner) || instanceGeneration == 0u || m_stateClaimCount == s_InputMaxTargets){
         fail();
         return false;
     }
-    for(const auto& claim : m_stateClaims){
-        if(claim.kind == owner.kind && claim.instanceGeneration == instanceGeneration){
+    const StateClaim claim{ instanceGeneration, owner.kind };
+    if(m_stateClaimCount < s_SmallStateClaims){
+        for(usize index = 0u; index < m_stateClaimCount; ++index){
+            if(m_smallStateClaims[index] == claim){
+                fail();
+                return false;
+            }
+        }
+        m_smallStateClaims[m_stateClaimCount] = claim;
+    }
+    else{
+        if(m_stateClaimCount == s_SmallStateClaims){
+            // Small frames never clear or allocate the retained hash storage from an earlier large frame.
+            m_stateClaims.clear();
+            if(m_stateClaims.bucket_count() == 0u)
+                m_stateClaims.reserve(s_SmallStateClaims * 2u);
+            m_stateClaims.insert(m_smallStateClaims.begin(), m_smallStateClaims.end());
+        }
+        if(!m_stateClaims.emplace(claim).second){
             fail();
             return false;
         }
     }
-    m_stateClaims.push_back({ instanceGeneration, owner.kind });
+    ++m_stateClaimCount;
     return true;
 }
 

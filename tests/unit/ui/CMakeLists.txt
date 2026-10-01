@@ -117,6 +117,7 @@ target_sources(nwb_ui_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/pointer_gesture_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layout_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/context_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/context_claim_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/widget_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/window_tests.cpp"

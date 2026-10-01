@@ -34,7 +34,19 @@ private:
     struct StateClaim{
         u64 instanceGeneration = 0u;
         WidgetKind::Enum kind = WidgetKind::Panel;
+
+        [[nodiscard]] bool operator==(const StateClaim&)const = default;
     };
+
+    struct StateClaimHash{
+        [[nodiscard]] usize operator()(const StateClaim& claim)const;
+    };
+
+    using StateClaims = HashSet<StateClaim, StateClaimHash, EqualTo<StateClaim>, Core::Alloc::GlobalArena>;
+
+
+private:
+    static constexpr usize s_SmallStateClaims = 32u;
 
     [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
 
@@ -102,13 +114,15 @@ private:
     PaintVector<WidgetId> m_scopes;
     PaintVector<OwnedTarget> m_targets;
     PaintVector<OwnedPopup> m_popups;
-    PaintVector<StateClaim> m_stateClaims;
+    Array<StateClaim, s_SmallStateClaims> m_smallStateClaims{};
+    StateClaims m_stateClaims;
     InputVector<HitTarget> m_commitTargets;
     InputVector<PopupScope> m_commitPopups;
     PopupToken m_currentPopup;
     Array<PopupToken, s_InputMaxPopups> m_popupStack{};
     usize m_popupDepth = 0u;
     usize m_declarationCount = 0u;
+    usize m_stateClaimCount = 0u;
     u32 m_popupLayer = 0u;
     WidgetRoot m_root;
     u64 m_frameGeneration = 0u;

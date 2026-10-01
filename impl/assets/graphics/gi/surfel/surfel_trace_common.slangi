@@ -154,7 +154,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             NWB_GI_TRACE_RAY_MAX_DISTANCE
         );
         half3 radiance = half3(0.0h, 0.0h, 0.0h);
-        if(hit.hit){
+        // A zero-reflectance hit returns zero under this diffuse model. Keep its zero guide observation.
+        if(hit.hit && any(hit.albedo != half3(0.0h))){
             radiance = nwbGiShadeHit(hit, rayDir);
             const float3 facingNormal = dot(hit.normal, rayDir) < 0.0 ? hit.normal : -hit.normal;
             const half3 bounce = min(nwbSurfelBounceGather(hit.worldPos, facingNormal), half3(half(NWB_SURFEL_BOUNCE_CLAMP), half(NWB_SURFEL_BOUNCE_CLAMP), half(NWB_SURFEL_BOUNCE_CLAMP)));

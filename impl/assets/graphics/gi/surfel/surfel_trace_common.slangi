@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared surfel trace body. The including shader selects the trace backend first (gi_sw_trace.slangi or
-// gi_hw_trace.slangi), which provides nwbGiTraceClosest / nwbGiShadeHit.
+// Shared surfel trace body. The including shader selects the trace backend first (gi_sw_trace.slangi or gi_hw_trace.slangi), which provides nwbGiTraceClosest / nwbGiShadeHit.
 
 
 #include "../constants.h"
@@ -24,8 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Snapshot of the previous frame's converged field. The bounce gather reads these global heap entries instead of the
-// live pool this trace writes, so surfel feedback sees a stable frame-start field.
+// Snapshot of the previous frame's converged field. The bounce gather reads these global heap entries instead of the live pool this trace writes, so surfel feedback sees a stable frame-start field.
 #define g_NwbSurfelSnapshotPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.snapshotPoolHeapSlot]
 #define g_NwbSurfelSnapshotCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.snapshotCellHeadHeapSlot]
 
@@ -91,21 +89,18 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     if(surfelIndex >= poolCapacity)
         return;
 
-    // The workgroup is 64 lanes even after a surfel converges to twelve rays. Load only the two group-wide fields here;
-    // pulling a whole NwbSurfel into every lane would fetch SH history in lanes that never trace a ray.
+    // The workgroup is 64 lanes even after a surfel converges to twelve rays. Load only the two group-wide fields here; pulling a whole NwbSurfel into every lane would fetch SH history in lanes that never trace a ray.
     if(g_NwbSurfelPool[surfelIndex].alive == 0u)
         return;
     const uint sampleCount = g_NwbSurfelPool[surfelIndex].sampleCount;
 
-    // Fresh surfels train all 16 directional cells with 64 rays. Mature surfels keep four uniform rays for
-    // exploration and use up to eight guided rays. Counts are group-uniform and need not be powers of two.
+    // Fresh surfels train all 16 directional cells with 64 rays. Mature surfels keep four uniform rays for exploration and use up to eight guided rays. Counts are group-uniform and need not be powers of two.
     uint rayCount = maximumRayCount;
     if(sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
         rayCount = min(rayCount, NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
     const uint uniformRayCount = sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT ? min(rayCount, NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL) : rayCount;
     const uint guidedRayCount = rayCount - uniformRayCount;
-    // The dispatch visits each surfel once per updateDivisor frames. Stagger workgroups over four visits rather
-    // than using sampleCount, which saturates at 0xFFFF and would eventually stop guide training.
+    // The dispatch visits each surfel once per updateDivisor frames. Stagger workgroups over four visits rather than using sampleCount, which saturates at 0xFFFF and would eventually stop guide training.
     // Train on the first mature update as well as every fresh update.
     const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
 
@@ -120,8 +115,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         uint bin = 0u;
         float inversePdf = NWB_GI_FULL_TURN_RADIANS;
         if(rayIndex < uniformRayCount){
-            // The odd stride visits each equal-solid-angle cell once before repeating; frame/surfel phase decorrelates
-            // the reduced four-ray uniform subset and gives the fresh 64-ray estimate four samples in every cell.
+            // The odd stride visits each equal-solid-angle cell once before repeating; frame/surfel phase decorrelates the reduced four-ray uniform subset and gives the fresh 64-ray estimate four samples in every cell.
             const uint phase = nwbSurfelGuideHash(frameIndex * 0x27d4eb2du ^ surfelIndex) % NWB_SURFEL_GUIDE_BIN_COUNT;
             bin = (rayIndex * 5u + phase) % NWB_SURFEL_GUIDE_BIN_COUNT;
         }
@@ -160,8 +154,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             radiance += hit.albedo * bounce;
         }
 
-        // Both ray classes use the same mixture PDF. Its uniform component bounds weights and continues discovering light
-        // outside previously bright cells; the 1/N factor is applied after the workgroup reduction.
+        // Both ray classes use the same mixture PDF. Its uniform component bounds weights and continues discovering light outside previously bright cells; the 1/N factor is applied after the workgroup reduction.
         const float4 weightedBasis = float4(nwbSurfelShBasis(rayDir)) * inversePdf;
         s_surfelShR[rayIndex] = float(radiance.r) * weightedBasis;
         s_surfelShG[rayIndex] = float(radiance.g) * weightedBasis;

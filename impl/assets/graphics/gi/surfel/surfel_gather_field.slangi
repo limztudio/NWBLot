@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The including pass selects a read-only surfel field through the four macros below. Keeping the traversal here
-// prevents the live deferred-lighting gather and the previous-frame trace gather from drifting apart.
+// The including pass selects a read-only surfel field through the four macros below. Keeping the traversal here prevents the live deferred-lighting gather and the previous-frame trace gather from drifting apart.
 
 
 #ifndef NWB_SURFEL_GATHER_FIELD_POOL
@@ -62,14 +61,16 @@ bool nwbSurfelGatherField(
     for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy){
         // These immutable heads are independent of each list walk; consume them in the original dx order.
         uint rowHeads[2 * NWB_SURFEL_GATHER_CELL_EXTENT + 1];
-        [unroll] for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
+        [unroll]
+        for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
             const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
             rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT] = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
         }
         for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
             uint id = rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT];
             uint walk = 0u;
-            [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
+            [loop]
+            while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
                 const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
                 const uint sampleCount = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleCount;
                 if(NWB_SURFEL_GATHER_FIELD_POOL[id].alive != 0u && sampleCount != 0u){
@@ -78,8 +79,7 @@ bool nwbSurfelGatherField(
                     const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));
                     const half confidence = half(saturate(float(sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
                     const half weight = normalWeight * distanceWeight * confidence;
-                    // Different faces now share buckets. Avoid fetching and reconstructing their SH when the exact
-                    // rounded gather weight is zero; retain the original order and weights of all contributors.
+                    // Different faces now share buckets. Avoid fetching and reconstructing their SH when the exact rounded gather weight is zero; retain the original order and weights of all contributors.
                     if(weight > half(0.0h)){
                         irradianceSum += nwbSurfelShReconstruct(
                             half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR),
@@ -97,8 +97,7 @@ bool nwbSurfelGatherField(
 
     if(totalWeight < half(NWB_SURFEL_GATHER_WEIGHT_EPSILON))
         return false;
-    // Keep the field's normalized irradiance for bounce tracing. Coverage separately fades its visible contribution
-    // near the edge of a surfel's support, where dividing by a tiny weight would otherwise cause a hard cutoff.
+    // Keep the field's normalized irradiance for bounce tracing. Coverage separately fades its visible contribution near the edge of a surfel's support, where dividing by a tiny weight would otherwise cause a hard cutoff.
     outIrradiance = irradianceSum / totalWeight;
     outCoverage = half(nwbSurfelGatherCoverage(float(totalWeight)));
     return true;

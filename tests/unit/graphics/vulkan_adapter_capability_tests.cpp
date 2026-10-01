@@ -116,6 +116,32 @@ TEST(VulkanAdapterSelection, ExtensionLookupHonorsNonTerminatedViewBounds){
 }
 
 
+TEST(VulkanAdapterSelection, ExtensionLookupBoundsNativeNamesAndRejectsEmbeddedNullRequests){
+    VkExtensionProperties extensions[1] = {};
+    char requestedName[VK_MAX_EXTENSION_NAME_SIZE];
+    for(usize characterIndex = 0u; characterIndex < VK_MAX_EXTENSION_NAME_SIZE; ++characterIndex){
+        requestedName[characterIndex] = 'a';
+        if(characterIndex + 1u < VK_MAX_EXTENSION_NAME_SIZE)
+            extensions[0].extensionName[characterIndex] = 'a';
+    }
+    const AStringView maximumFittingName(requestedName, VK_MAX_EXTENSION_NAME_SIZE - 1u);
+    EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, maximumFittingName));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(requestedName, VK_MAX_EXTENSION_NAME_SIZE)));
+
+    extensions[0].extensionName[VK_MAX_EXTENSION_NAME_SIZE - 1u] = 'a';
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, maximumFittingName));
+
+    extensions[0].extensionName[1u] = '\0';
+    constexpr char embeddedNullName[] = { 'a', '\0', 'a' };
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(embeddedNullName, sizeof(embeddedNullName))));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView{}));
+
+    extensions[0].extensionName[0u] = '\0';
+    EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView{}));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(nullptr, 0u, AStringView{}));
+}
+
+
 TEST(VulkanAdapterSelection, MandatoryFeatureContractIncludesCoreVersionedAndExtensionFeatures){
     auto support = FullySupportedFeatures();
     EXPECT_TRUE(VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(support).empty());

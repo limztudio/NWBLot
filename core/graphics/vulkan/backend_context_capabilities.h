@@ -109,8 +109,12 @@ struct PhysicalDeviceFeatureSupport{
     const u32 extensionCount,
     const AStringView extensionName
 )noexcept{
+    if(extensionName.size() >= VK_MAX_EXTENSION_NAME_SIZE || extensionName.find('\0') != AStringView::npos)
+        return false;
+
     for(u32 extensionIndex = 0u; extensionIndex < extensionCount; ++extensionIndex){
-        if(AStringView(extensions[extensionIndex].extensionName) == extensionName)
+        const auto& nativeName = extensions[extensionIndex].extensionName;
+        if(nativeName[extensionName.size()] == '\0' && AStringView(nativeName, extensionName.size()) == extensionName)
             return true;
     }
     return false;

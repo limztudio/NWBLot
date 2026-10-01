@@ -33,7 +33,7 @@ private:
     struct Offer{
         WaylandClipboardService& service;
         void* handle = nullptr;
-        AStringView mime;
+        // Zero is unsupported; positive ranks select the static MIME table in reverse order.
         u8 rank = 0u;
         ClipboardChannel::Enum channel = ClipboardChannel::Clipboard;
         Timer created = TimerNow();
@@ -60,6 +60,10 @@ public:
     static constexpr usize s_MaxOffers = 32u;
     static constexpr usize s_MaxWriters = 8u;
     static constexpr u32 s_TimeoutMs = 5000u;
+
+
+private:
+    [[nodiscard]] static NotNull<const char*> nativeMimeForRank(u8 rank);
 
 
 public:

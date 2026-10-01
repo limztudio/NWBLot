@@ -352,10 +352,8 @@ struct DiagnosticEventText{
     char value[DiagnosticDetail::s_MaxEventTextBytes] = {};
 
     [[nodiscard]] AStringView view()const noexcept{
-        usize textSize = 0u;
-        while(textSize < sizeof(value) && value[textSize] != '\0')
-            ++textSize;
-        return AStringView(value, textSize);
+        const AStringView text(value, sizeof(value));
+        return text.substr(0u, text.find('\0'));
     }
 
     [[nodiscard]] const char* c_str()const noexcept{ return value; }

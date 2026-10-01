@@ -261,10 +261,14 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
     shader->m_desc = base.m_desc;
     NWB_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), base.m_entryPointName, base.m_desc.shaderType, "shader specialization", shader->m_entryPointName)){
-        DestroyArenaObject(m_context.objectArena, shader);
-        return nullptr;
-    }
+    // The validated name starts at a SPIR-V word and keeps its offset in the byte-for-byte module copy.
+    const u32* const entryPointWords = reinterpret_cast<const u32*>(base.m_entryPointName.data());
+    NWB_ASSERT(entryPointWords >= base.m_spirvWords.data() && entryPointWords < base.m_spirvWords.data() + base.m_spirvWords.size());
+    const usize entryPointWordOffset = static_cast<usize>(entryPointWords - base.m_spirvWords.data());
+    NWB_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
+    NWB_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
+    shader->m_entryPointName = AStringView(reinterpret_cast<const char*>(shader->m_spirvWords.data() + entryPointWordOffset), base.m_entryPointName.size());
+    NWB_ASSERT(shader->m_entryPointName.data()[shader->m_entryPointName.size()] == '\0');
     shader->m_desc.entryName = shader->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};

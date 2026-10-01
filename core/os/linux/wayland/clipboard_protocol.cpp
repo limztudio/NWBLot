@@ -25,13 +25,12 @@ static constexpr Array<AStringView, 4u> s_Utf8Mimes{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void SelectMime(const AStringView mime, AStringView& selected, u8& rank){
+static void SelectMime(const AStringView mime, u8& rank){
     if(mime.empty())
         return;
     for(usize index = 0u; index < s_Utf8Mimes.size(); ++index){
         const u8 candidate = static_cast<u8>(s_Utf8Mimes.size() - index);
         if(mime == s_Utf8Mimes[index] && candidate > rank){
-            selected = s_Utf8Mimes[index];
             rank = candidate;
         }
     }
@@ -41,6 +40,11 @@ static void SelectMime(const AStringView mime, AStringView& selected, u8& rank){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+NotNull<const char*> WaylandClipboardService::nativeMimeForRank(const u8 rank){
+    NWB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
+    return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
+}
 
 void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
     NWB_ASSERT(isOwnerThread());
@@ -201,7 +205,7 @@ void WaylandClipboardService::onSelection(void* const data, wl_data_device*, wl_
 
 void WaylandClipboardService::onOfferMime(void* const data, wl_data_offer*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.mime, offer.rank);
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::onOfferActions(void*, wl_data_offer*, u32){}
@@ -212,10 +216,9 @@ void WaylandClipboardService::onSourceTarget(void*, wl_data_source*, const char*
 
 void WaylandClipboardService::onSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
-    AStringView supported;
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), supported, rank);
-    if(!supported.empty())
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
+    if(rank != 0u)
         source.service.sendSource(source, fd);
     else{
         int rejectedFd = fd;
@@ -255,15 +258,14 @@ void WaylandClipboardService::onPrimarySelection(void* const data, zwp_primary_s
 
 void WaylandClipboardService::onPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.mime, offer.rank);
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
 }
 
 void WaylandClipboardService::onPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
-    AStringView supported;
     u8 rank = 0u;
-    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), supported, rank);
-    if(!supported.empty())
+    __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
+    if(rank != 0u)
         source.service.sendSource(source, fd);
     else{
         int rejectedFd = fd;

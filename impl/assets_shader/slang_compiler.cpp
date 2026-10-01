@@ -105,11 +105,6 @@ static constexpr usize s_MaxOptimizationArgumentCount = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename ArenaT, typename ArgumentVectorT>
-static void PushCompilerArgument(ArenaT& arena, ArgumentVectorT& inOutArguments, const AStringView value){
-    using StringT = typename ArgumentVectorT::value_type;
-    inOutArguments.push_back(StringT(value, arena));
-}
 template<typename StringT>
 static bool ReadDiagnostics(const Path& diagnosticsPath, StringT& outDiagnostics){
     outDiagnostics.clear();
@@ -598,73 +593,82 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         ))
             return false;
 
-        __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> arguments(argumentArena);
-        arguments.reserve(
-            __hidden_slang_compiler::s_BaseCompilerArgumentCount
+        const usize includeDirectoryCount = compilerIncludeDirectories.size();
+        const usize defineCount = static_cast<usize>(request.defineCount);
+        constexpr usize maxFixedArgumentCount = __hidden_slang_compiler::s_BaseCompilerArgumentCount
             + __hidden_slang_compiler::s_MaxTargetProfileCapabilityCount * 2u
             + __hidden_slang_compiler::s_MaxOptimizationArgumentCount
-            + compilerIncludeDirectories.size() * 2u
-            + static_cast<usize>(request.defineCount)
-        );
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
+        ;
+        if(
+            AddOverflows<usize>(maxFixedArgumentCount, defineCount)
+            || includeDirectoryCount > (Limit<usize>::s_Max - maxFixedArgumentCount - defineCount) / 2u
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), StringConvert(request.shaderName));
+            return false;
+        }
 
-        __hidden_slang_compiler::ScratchString sourcePathText = PathToString<char>(argumentArena, compilerSourcePath);
-        arguments.push_back(Move(sourcePathText));
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-target");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "spirv");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-emit-spirv-directly");
+        const usize argumentReserve = maxFixedArgumentCount + includeDirectoryCount * 2u + defineCount;
+        const usize ownedArgumentCount = 2u + includeDirectoryCount + defineCount;
+        __hidden_slang_compiler::ScratchVector<AStringView> arguments(argumentArena);
+        arguments.reserve(argumentReserve);
+        __hidden_slang_compiler::ScratchVector<__hidden_slang_compiler::ScratchString> ownedArguments(argumentArena);
+        // Reserve owners before publishing views so inline string storage cannot move.
+        ownedArguments.reserve(ownedArgumentCount);
+        arguments.push_back(AStringView(NWB_SLANGC_EXECUTABLE));
+
+        ownedArguments.push_back(PathToString<char>(argumentArena, compilerSourcePath));
+        arguments.push_back(AStringView(ownedArguments.back()));
+        arguments.push_back("-target");
+        arguments.push_back("spirv");
+        arguments.push_back("-emit-spirv-directly");
         // The runtime pipeline selects the authored entry-point identifier, so retain its exact spelling in SPIR-V.
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-fvk-use-entrypoint-name");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-warnings-as-errors");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "all");
+        arguments.push_back("-fvk-use-entrypoint-name");
+        arguments.push_back("-warnings-as-errors");
+        arguments.push_back("all");
         if(!optimizationArgument.empty())
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, optimizationArgument);
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-profile");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, slangTargetProfile);
+            arguments.push_back(optimizationArgument);
+        arguments.push_back("-profile");
+        arguments.push_back(slangTargetProfile);
         if(!targetProfileCapability.empty()){
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-capability");
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, targetProfileCapability);
+            arguments.push_back("-capability");
+            arguments.push_back(targetProfileCapability);
         }
         for(const AStringView capability : __hidden_slang_compiler::s_SpirvBaselineCapabilities){
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-capability");
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, capability);
+            arguments.push_back("-capability");
+            arguments.push_back(capability);
         }
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-entry");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, request.entryPoint);
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-stage");
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, slangStage);
+        arguments.push_back("-entry");
+        arguments.push_back(request.entryPoint);
+        arguments.push_back("-stage");
+        arguments.push_back(slangStage);
         for(const Path& includeDirectory : compilerIncludeDirectories){
-            __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-I");
-            __hidden_slang_compiler::ScratchString includeDirectoryText = PathToString<char>(argumentArena, includeDirectory);
-            arguments.push_back(Move(includeDirectoryText));
+            arguments.push_back("-I");
+            ownedArguments.push_back(PathToString<char>(argumentArena, includeDirectory));
+            arguments.push_back(AStringView(ownedArguments.back()));
         }
 
         for(u32 i = 0; i < request.defineCount; ++i){
             const ShaderCook::ShaderMacroDefinition& define = request.defines[i];
-            __hidden_slang_compiler::ScratchString defineArgument("-D", argumentArena);
+            ownedArguments.emplace_back("-D", argumentArena);
+            __hidden_slang_compiler::ScratchString& defineArgument = ownedArguments.back();
             defineArgument += define.name;
             if(!define.value.empty()){
                 defineArgument += '=';
                 defineArgument += define.value;
             }
-            arguments.push_back(Move(defineArgument));
+            arguments.push_back(AStringView(defineArgument));
         }
 
-        __hidden_slang_compiler::PushCompilerArgument(argumentArena, arguments, "-o");
-        __hidden_slang_compiler::ScratchString outputPathText = PathToString<char>(argumentArena, request.outputPath);
-        arguments.push_back(Move(outputPathText));
-
-        __hidden_slang_compiler::ScratchVector<AStringView> argv(argumentArena);
-        argv.reserve(arguments.size());
-        for(const __hidden_slang_compiler::ScratchString& argument : arguments)
-            argv.push_back(AStringView(argument.data(), argument.size()));
+        arguments.push_back("-o");
+        ownedArguments.push_back(PathToString<char>(argumentArena, request.outputPath));
+        arguments.push_back(AStringView(ownedArguments.back()));
 
         const __hidden_slang_compiler::ScratchString diagnosticsPathText = PathToString<char>(argumentArena, diagnosticsPath);
         bool exitCodeQueryFailed = false;
         const int exitCode = ::RunProcessRedirectedToFile(
             argumentArena,
-            argv,
-            AStringView(diagnosticsPathText.data(), diagnosticsPathText.size()),
+            arguments,
+            AStringView(diagnosticsPathText),
             &exitCodeQueryFailed
         );
         if(exitCodeQueryFailed)

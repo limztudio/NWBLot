@@ -142,7 +142,7 @@ void WaylandClipboardService::startNativeRequest(
         return;
     }
     Offer* const offer = m_selected[channel == ClipboardChannel::Clipboard ? 0u : 1u];
-    if(!m_focused || !offer || offer->mime.empty()){
+    if(!m_focused || !offer || offer->rank == 0u){
         if(!completeNativeRequest(token, ClipboardStatus::Unavailable))
             NWB_FATAL_ASSERT(false);
         return;
@@ -156,12 +156,13 @@ void WaylandClipboardService::startNativeRequest(
     m_readToken = token;
     m_readDeadline = TimerAddMS(TimerNow(), s_TimeoutMs);
     m_received.clear();
+    const NotNull<const char*> mime = nativeMimeForRank(offer->rank);
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(channel == ClipboardChannel::PrimarySelection)
-        zwp_primary_selection_offer_v1_receive(static_cast<zwp_primary_selection_offer_v1*>(offer->handle), offer->mime.data(), writeFd);
+        zwp_primary_selection_offer_v1_receive(static_cast<zwp_primary_selection_offer_v1*>(offer->handle), mime.get(), writeFd);
     else
 #endif
-        wl_data_offer_receive(static_cast<wl_data_offer*>(offer->handle), offer->mime.data(), writeFd);
+        wl_data_offer_receive(static_cast<wl_data_offer*>(offer->handle), mime.get(), writeFd);
     CloseClipboardPipe(writeFd);
     if(wl_display_flush(&m_display) < 0 && errno != EAGAIN)
         finishRead(ClipboardStatus::NativeFailure);

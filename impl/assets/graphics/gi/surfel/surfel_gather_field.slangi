@@ -74,18 +74,23 @@ bool nwbSurfelGatherField(
                 const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
                 const uint sampleCount = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleCount;
                 if(NWB_SURFEL_GATHER_FIELD_POOL[id].alive != 0u && sampleCount != 0u){
-                    const float dist = length(biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position);
                     const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
-                    const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));
-                    const half confidence = half(saturate(float(sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
-                    const half weight = normalWeight * distanceWeight * confidence;
-                    // Different faces now share buckets. Avoid fetching and reconstructing their SH when the exact rounded gather weight is zero; retain the original order and weights of all contributors.
-                    if(weight > half(0.0h)){
-                        irradianceSum += nwbSurfelShReconstruct(
-                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR),
-                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG),
-                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal
-                        ) * weight;
+                    half weight = half(0.0h);
+                    // Perpendicular and opposite-facing records have zero weight regardless of distance. Reject them
+                    // before fetching position/radius or evaluating the distance falloff; retain rounded half weights.
+                    if(normalWeight > half(0.0h)){
+                        const float dist = length(biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position);
+                        const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));
+                        const half confidence = half(saturate(float(sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
+                        weight = normalWeight * distanceWeight * confidence;
+                        // Keep SH loads and reconstruction conditional on an actual contribution.
+                        if(weight > half(0.0h)){
+                            irradianceSum += nwbSurfelShReconstruct(
+                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR),
+                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG),
+                                half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal
+                            ) * weight;
+                        }
                     }
                     totalWeight += weight;
                 }

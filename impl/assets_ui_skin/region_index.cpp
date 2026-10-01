@@ -26,9 +26,7 @@ static constexpr usize s_LinearLookupRegionLimit = 128u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Core::Assets::AssetVector<u32> BuildRegionIndex(
-    const UiSkin::RegionVector& regions,
-    Core::Assets::AssetArena& arena){
+[[nodiscard]] static Core::Assets::AssetVector<u32> BuildRegionIndex(const UiSkin::RegionVector& regions, Core::Assets::AssetArena& arena){
     Core::Assets::AssetVector<u32> index(arena);
     if(regions.size() > s_UiSkinMaxRegionCount)
         return index;

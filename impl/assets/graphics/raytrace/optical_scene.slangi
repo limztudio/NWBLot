@@ -73,12 +73,12 @@ bool nwbOpticalLoadHomogeneousMedium(
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
     NwbShadowHit input = (NwbShadowHit)0;
     input.meshInstanceIndex = material.meshInstanceIndex;
-    input.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    input.surfaceDispatchId = material.surfaceDispatchId;
     input.materialConstantByteOffset = material.materialConstantByteOffset;
     input.worldPosition = origin;
     input.worldNormal = float3(0.0, 1.0, 0.0);
     input.rayDirection = direction;
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, input);
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, input);
     return nwbOpticalSetMediumProperties(surface, medium, result);
 }
 

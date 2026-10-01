@@ -184,7 +184,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_transparent_multi_asset_stamp}"
             DEPENDS
-                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_transparent_multi_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
@@ -300,7 +300,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                     --cache-directory "${_nwb_gather_cache_root}"
                     --configuration "$<CONFIG>"
                 COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_gather_asset_stamp}"
-                DEPENDS nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                     "${CMAKE_CURRENT_LIST_DIR}/generate_gather_benchmark_assets.py"
                     "${CMAKE_CURRENT_LIST_DIR}/gather_benchmark_assets/shaders/gather_benchmark_glass.surface"
                     "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_transparent_multi_asset_inputs}
@@ -675,7 +675,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                     --configuration "$<CONFIG>"
                 COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_texture_smoke_asset_stamp}"
                 DEPENDS
-                    nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                    nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                     "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                     "${_nwb_texture_smoke_source_nwb}"
                     "${_nwb_texture_smoke_source_tex}"
@@ -747,7 +747,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_visible_asset_stamp}"
             DEPENDS
-                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_csg_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
@@ -831,7 +831,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_csg_skinned_visible_asset_stamp}"
             DEPENDS
-                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 ${_nwb_csg_skinned_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
@@ -1021,7 +1021,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 --configuration "$<CONFIG>"
             COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_skinning_culling_asset_stamp}"
             DEPENDS
-                nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+                nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
                 "${_nwb_skinning_culling_model_nwb}"
                 ${_nwb_skinning_culling_asset_inputs}

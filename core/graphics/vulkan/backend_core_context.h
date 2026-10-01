@@ -99,7 +99,7 @@ struct VulkanContext{
         bool KHR_ray_tracing_pipeline = false;
         bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
-        bool buffer_device_address = false;
+        bool bufferDeviceAddress = false;
         bool EXT_descriptor_buffer = false;
         bool EXT_calibrated_timestamps = false;
         bool EXT_debug_utils = false;

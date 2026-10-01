@@ -26,11 +26,11 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const tchar* NAME>
-class ClientBase : public IClient, public BaseUpdateIfQueued<T, NAME>{
+template<typename T, const tchar* loggerName>
+class ClientBase : public IClient, public QueuedLoggerWorkerBase<T, loggerName>{
 protected:
-    using BaseType = Base<T, NAME>;
-    using UpdateBaseType = BaseUpdateIfQueued<T, NAME>;
+    using BaseType = LoggerWorkerBase<T, loggerName>;
+    using UpdateBaseType = QueuedLoggerWorkerBase<T, loggerName>;
 
 
     explicit ClientBase(const NotNull<const char*> allocationLog)
@@ -56,12 +56,12 @@ namespace ClientPayloadKind{
     };
 };
 
-inline constexpr tchar CLIENT_NAME[] = NWB_TEXT("Client");
-class Client final : public ClientBase<Client, CLIENT_NAME>{
-    template<typename, const tchar*> friend class Base;
-    template<typename, const tchar*> friend class BaseUpdateIfQueued;
+inline constexpr tchar s_ClientName[] = NWB_TEXT("Client");
+class Client final : public ClientBase<Client, s_ClientName>{
+    template<typename, const tchar*> friend class LoggerWorkerBase;
+    template<typename, const tchar*> friend class QueuedLoggerWorkerBase;
 
-    using ClientBaseType = ClientBase<Client, CLIENT_NAME>;
+    using ClientBaseType = ClientBase<Client, s_ClientName>;
     using BaseType = ClientBaseType::BaseType;
     using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
@@ -84,26 +84,26 @@ protected:
     bool internalInit(NotNull<const char*> url);
     bool internalUpdate();
     [[nodiscard]] inline bool workerCanExit()const{
-        return !m_hasPendingPayload && !m_msgCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
+        return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
     }
 
 protected:
     inline void enqueue(MessageType&& data){
-        this->m_msgQueue.emplace(Move(data));
-        m_msgCount.fetch_add(1, MemoryOrder::relaxed);
+        this->m_messageQueue.emplace(Move(data));
+        m_messageCount.fetch_add(1, MemoryOrder::relaxed);
         this->m_semaphore.release();
     }
     inline void enqueue(const MessageType& data){
-        this->m_msgQueue.emplace(data);
-        m_msgCount.fetch_add(1, MemoryOrder::relaxed);
+        this->m_messageQueue.emplace(data);
+        m_messageCount.fetch_add(1, MemoryOrder::relaxed);
         this->m_semaphore.release();
     }
 
-    inline bool try_dequeue(MessageType& msg){
-        auto ret = this->tryDequeue(msg);
-        if(ret)
-            m_msgCount.fetch_sub(1, MemoryOrder::relaxed);
-        return ret;
+    inline bool tryDequeueMessage(MessageType& msg){
+        auto dequeued = this->tryDequeue(msg);
+        if(dequeued)
+            m_messageCount.fetch_sub(1, MemoryOrder::relaxed);
+        return dequeued;
     }
 
 
@@ -116,7 +116,7 @@ private:
     bool m_hasPendingPayload;
 
 private:
-    Atomic<usize> m_msgCount;
+    Atomic<usize> m_messageCount;
     Atomic<usize> m_telemetryCount;
     ParallelQueue<LogBytes, LogArena> m_telemetryQueue;
 };
@@ -125,12 +125,12 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar CLIENT_STANDALONE_NAME[] = NWB_TEXT("ClientStandalone");
-class ClientStandalone final : public ClientBase<ClientStandalone, CLIENT_STANDALONE_NAME>{
-    template<typename, const tchar*> friend class Base;
-    template<typename, const tchar*> friend class BaseUpdateIfQueued;
+inline constexpr tchar s_ClientStandaloneName[] = NWB_TEXT("ClientStandalone");
+class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStandaloneName>{
+    template<typename, const tchar*> friend class LoggerWorkerBase;
+    template<typename, const tchar*> friend class QueuedLoggerWorkerBase;
 
-    using ClientBaseType = ClientBase<ClientStandalone, CLIENT_STANDALONE_NAME>;
+    using ClientBaseType = ClientBase<ClientStandalone, s_ClientStandaloneName>;
     using BaseType = ClientBaseType::BaseType;
     using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
@@ -157,7 +157,7 @@ protected:
 
 
 private:
-    ProcessedMessageFile m_processedMsgFile;
+    ProcessedMessageFile m_processedMessageFile;
 };
 
 

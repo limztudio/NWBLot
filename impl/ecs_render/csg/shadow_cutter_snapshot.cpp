@@ -160,10 +160,10 @@ bool BuildCsgShadowSnapshot(
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);
-    outSnapshot.contentIdentity = FNV64_OFFSET_BASIS;
+    outSnapshot.contentIdentity = s_Fnv64OffsetBasis;
     Fnv64AppendValue(outSnapshot.contentIdentity, shapeRegistry.revision());
     Fnv64AppendValue(outSnapshot.contentIdentity, receiverCount);
-    outSnapshot.identity = FNV64_OFFSET_BASIS;
+    outSnapshot.identity = s_Fnv64OffsetBasis;
     Fnv64AppendValue(outSnapshot.identity, shapeRegistry.revision());
     Fnv64AppendValue(outSnapshot.identity, receiverCount);
     for(usize index = 0u; index < receiverCount; ++index){

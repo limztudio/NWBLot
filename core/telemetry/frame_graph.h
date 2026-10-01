@@ -39,35 +39,35 @@ namespace FrameGraphEdgeKind{
 };
 
 namespace FrameGraphQueueClass{
-    static constexpr u8 kFrameGraphQueueClassUnknownBase = 0u;
-    static constexpr u8 kFrameGraphQueueClassCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueClassUnknownBase = 0u;
+    static constexpr u8 s_FrameGraphQueueClassCountValue = 4u;
     enum Enum : u8{
-        Unknown = kFrameGraphQueueClassUnknownBase,
+        Unknown = s_FrameGraphQueueClassUnknownBase,
         Graphics,
         Compute,
         Transfer,
 
-        kCount = kFrameGraphQueueClassCountValue,
+        kCount = s_FrameGraphQueueClassCountValue,
     };
 };
 
 namespace FrameGraphQueueAssignmentReason{
-    static constexpr u8 kFrameGraphQueueAssignmentReasonUnknownBase = 0u;
-    static constexpr u8 kFrameGraphQueueAssignmentReasonCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueAssignmentReasonUnknownBase = 0u;
+    static constexpr u8 s_FrameGraphQueueAssignmentReasonCountValue = 4u;
     enum Enum : u8{
-        Unknown = kFrameGraphQueueAssignmentReasonUnknownBase,
+        Unknown = s_FrameGraphQueueAssignmentReasonUnknownBase,
         RequiredGraphics,
         Conservative,
         Scored,
 
-        kCount = kFrameGraphQueueAssignmentReasonCountValue,
+        kCount = s_FrameGraphQueueAssignmentReasonCountValue,
     };
 };
 
 namespace FrameGraphQueueAssignmentModifier{
-    static constexpr u8 kFrameGraphQueueAssignmentModifierNoneBase = 0u;
+    static constexpr u8 s_FrameGraphQueueAssignmentModifierNoneBase = 0u;
     enum Mask : u8{
-        None = kFrameGraphQueueAssignmentModifierNoneBase,
+        None = s_FrameGraphQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryRouting = 1u << 2u,
@@ -87,23 +87,23 @@ namespace FrameGraphQueueAssignmentModifier{
 };
 
 namespace FrameGraphQueueAssignmentAcceptance{
-    static constexpr u8 kFrameGraphQueueAssignmentAcceptanceNotAcceptedBase = 0u;
-    static constexpr u8 kFrameGraphQueueAssignmentAcceptanceCountValue = 4u;
+    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceNotAcceptedBase = 0u;
+    static constexpr u8 s_FrameGraphQueueAssignmentAcceptanceCountValue = 4u;
     enum Enum : u8{
-        NotAccepted = kFrameGraphQueueAssignmentAcceptanceNotAcceptedBase,
+        NotAccepted = s_FrameGraphQueueAssignmentAcceptanceNotAcceptedBase,
         First,
         Unchanged,
         Changed,
 
-        kCount = kFrameGraphQueueAssignmentAcceptanceCountValue,
+        kCount = s_FrameGraphQueueAssignmentAcceptanceCountValue,
     };
 };
 
 namespace FrameGraphTaskPacketizationDecision{
-    static constexpr u8 kFrameGraphTaskPacketizationDecisionUnknownBase = 0u;
-    static constexpr u8 kFrameGraphTaskPacketizationDecisionCountValue = 12u;
+    static constexpr u8 s_FrameGraphTaskPacketizationDecisionUnknownBase = 0u;
+    static constexpr u8 s_FrameGraphTaskPacketizationDecisionCountValue = 12u;
     enum Enum : u8{
-        Unknown = kFrameGraphTaskPacketizationDecisionUnknownBase,
+        Unknown = s_FrameGraphTaskPacketizationDecisionUnknownBase,
         FirstTask,
         MergeNotRequested,
         TaskForcesBoundary,
@@ -116,7 +116,7 @@ namespace FrameGraphTaskPacketizationDecision{
         MergedFrontierScored,
         ScoredMergeDomainMismatch,
 
-        kCount = kFrameGraphTaskPacketizationDecisionCountValue,
+        kCount = s_FrameGraphTaskPacketizationDecisionCountValue,
     };
 };
 

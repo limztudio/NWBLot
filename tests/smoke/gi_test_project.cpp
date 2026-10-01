@@ -589,10 +589,10 @@ private:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::PresentationFpsProbe m_presentationFpsProbe;
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("GiTestSmokeProject") };
     u32 m_rendererBaselineRenderedFrameCount = 0u;

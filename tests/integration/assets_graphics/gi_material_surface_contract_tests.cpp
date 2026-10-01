@@ -121,14 +121,14 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
     const AStringView frostBind(frostBindSource.data(), frostBindSource.size());
     const AStringView frostSurface(frostSurfaceSource.data(), frostSurfaceSource.size());
 
-    EXPECT_TRUE(ContainsText(swTrace, "#include \"shadow/generated/transmittance_dispatch.slangi\""));
+    EXPECT_TRUE(ContainsText(swTrace, "#include \"shadow/generated/surface_dispatch.slangi\""));
     EXPECT_TRUE(ContainsText(swTrace, "const NwbMeshSurface surface = nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(swTrace, "closest.albedo = surface.baseColor;"));
-    EXPECT_TRUE(ContainsText(hwTrace, "#include \"shadow/generated/transmittance_dispatch.slangi\""));
+    EXPECT_TRUE(ContainsText(hwTrace, "#include \"shadow/generated/surface_dispatch.slangi\""));
     EXPECT_TRUE(ContainsText(hwTrace, "const NwbMeshSurface surface = nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(hwTrace, "closest.albedo = surface.baseColor;"));
 
-    EXPECT_TRUE(ContainsText(dispatchCodegen, "s_ShadowTransmittanceBindNamespacePrefix = \"nwbShadowBindModel\""));
+    EXPECT_TRUE(ContainsText(dispatchCodegen, "s_ShadowSurfaceBindNamespacePrefix = \"nwbShadowBindModel\""));
     EXPECT_TRUE(ContainsText(dispatchCodegen, "NwbMeshSurface nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(dispatchCodegen, "half3(0.5h, 0.5h, 0.5h)"));
 
@@ -236,7 +236,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(materialSurface, "appendPreparedMaterialSurfaceSampledTextures"));
     EXPECT_TRUE(ContainsText(rayTracingSystemHeaderView, "PreparedShadowTraceMaterialSampledTextureVector"));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "appendPreparedShadowTraceMaterialSampledTextures"));
-    EXPECT_TRUE(ContainsText(swBvh, "materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max"));
+    EXPECT_TRUE(ContainsText(swBvh, "materialInfo->surfaceDispatchId != Limit<u32>::s_Max"));
 
     EXPECT_TRUE(ContainsText(swShadowTrace, s_NWBSHADOWDISPATCHSURFACE));
     EXPECT_TRUE(ContainsText(hwShadowTrace, s_NWBSHADOWDISPATCHSURFACE));

@@ -65,18 +65,18 @@ inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata){
     NWB::Tests::TestArena<> testArena;
     NWB::Impl::MaterialSurfaceInfo materialInfo(testArena.arena);
-    materialInfo.shadowTransmittanceModelId = 17u;
+    materialInfo.surfaceDispatchId = 17u;
     materialInfo.transparent = true;
     materialInfo.refractive = true;
 
     const NWB::Impl::NwbRtInstanceMaterialGpu frozen =
         NWB::Impl::RayTracingDetail::ResolveInstanceShadowMaterial(materialInfo, 64u, 3u)
     ;
-    materialInfo.shadowTransmittanceModelId = 29u;
+    materialInfo.surfaceDispatchId = 29u;
     materialInfo.transparent = false;
     materialInfo.refractive = false;
 
-    EXPECT_EQ(frozen.shadowTransmittanceModelId, 17u);
+    EXPECT_EQ(frozen.surfaceDispatchId, 17u);
     EXPECT_EQ(
         frozen.flags,
         NWB::Impl::RtInstanceMaterialFlag::Transparent | NWB::Impl::RtInstanceMaterialFlag::Refractive

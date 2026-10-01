@@ -44,7 +44,7 @@ static u64 BuildDefaultCookKeyHash(
     const u64 payloadHash
 ){
     static constexpr u32 s_DefaultPayloadCookKeyVersion = 1u;
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_DefaultPayloadCookKeyVersion);
     Fnv64AppendValue(hash, virtualPath.hash());
     Fnv64AppendValue(hash, payloadSize);

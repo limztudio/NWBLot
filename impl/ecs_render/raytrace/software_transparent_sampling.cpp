@@ -24,7 +24,7 @@ void SoftwareTransparentSamplingHistory::prepareScene(const RayTracingSceneConte
 
 void SoftwareTransparentSamplingHistory::prepareLighting(const ECSRenderDetail::SceneLightGpuData* lights, const u32 lightCount)noexcept{
     NWB_ASSERT(lights || lightCount == 0u);
-    m_lightHash = FNV64_OFFSET_BASIS;
+    m_lightHash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(m_lightHash, lightCount);
     for(u32 index = 0u; index < lightCount; ++index){
         Fnv64AppendValue(m_lightHash, lights[index].position);

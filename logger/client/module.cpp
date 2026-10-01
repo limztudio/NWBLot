@@ -41,10 +41,10 @@ static constexpr u32 s_RetrySleepMs = 100u;
 
 
 bool Client::globalInit(){
-    CURLcode ret;
+    CURLcode curlResult;
 
-    ret = curl_global_init(CURL_GLOBAL_ALL);
-    if(ret != CURLE_OK)
+    curlResult = curl_global_init(CURL_GLOBAL_ALL);
+    if(curlResult != CURLE_OK)
         return false;
 
     return true;
@@ -59,7 +59,7 @@ Client::Client()
     , m_telemetryUrl(BaseType::arena())
     , m_pendingPayloadKind(ClientPayloadKind::Message)
     , m_hasPendingPayload(false)
-    , m_msgCount(0)
+    , m_messageCount(0)
     , m_telemetryCount(0)
     , m_telemetryQueue(BaseType::arena())
 {}
@@ -78,34 +78,34 @@ bool Client::internalInit(NotNull<const char*> url){
 
     m_curl = curl_easy_init();
     if(!m_curl){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to initialize CURL on {}"), CLIENT_NAME), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to initialize CURL on {}"), s_ClientName), Type::Fatal);
         return false;
     }
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
-    CURLcode ret;
+    CURLcode curlResult;
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set post on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
+    if(curlResult != CURLE_OK){
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set post on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set no-signal mode on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
+    if(curlResult != CURLE_OK){
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set no-signal mode on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set connect timeout on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
+    if(curlResult != CURLE_OK){
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set connect timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
-    if(ret != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set request timeout on {}: {}"), CLIENT_NAME, StringConvert(BaseType::arena(), curl_easy_strerror(ret))), Type::Fatal);
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
+    if(curlResult != CURLE_OK){
+        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set request timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
@@ -136,11 +136,11 @@ bool Client::internalUpdate(){
         }
 
         if(!m_hasPendingPayload){
-            if(!m_msgCount.load(MemoryOrder::relaxed))
+            if(!m_messageCount.load(MemoryOrder::relaxed))
                 return true;
 
             MessageType msg = MakeMessageType(BaseType::arena());
-            if(!try_dequeue(msg))
+            if(!tryDequeueMessage(msg))
                 return true;
 
             if(!BuildMessagePayload(msg, m_pendingPayload)){
@@ -170,33 +170,33 @@ bool Client::internalUpdate(){
     };
 
     CURL* const curlHandle = static_cast<CURL*>(m_curl);
-    CURLcode ret;
+    CURLcode curlResult;
     if(m_pendingPayload.size() > static_cast<usize>(Limit<curl_off_t>::s_Max)){
         m_pendingPayload.clear();
         m_hasPendingPayload = false;
         return true;
     }
 
-    ret = curl_easy_setopt(
+    curlResult = curl_easy_setopt(
         curlHandle,
         CURLOPT_URL,
         m_pendingPayloadKind == ClientPayloadKind::Telemetry
             ? m_telemetryUrl.c_str()
             : m_messageUrl.c_str()
     );
-    if(ret != CURLE_OK)
+    if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
-    if(ret != CURLE_OK)
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDS, reinterpret_cast<char*>(m_pendingPayload.data()));
+    if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    ret = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
-    if(ret != CURLE_OK)
+    curlResult = curl_easy_setopt(curlHandle, CURLOPT_POSTFIELDSIZE_LARGE, static_cast<curl_off_t>(m_pendingPayload.size()));
+    if(curlResult != CURLE_OK)
         return scheduleRetry();
 
-    ret = curl_easy_perform(curlHandle);
-    if(ret != CURLE_OK)
+    curlResult = curl_easy_perform(curlHandle);
+    if(curlResult != CURLE_OK)
         return scheduleRetry();
 
     m_pendingPayload.clear();
@@ -216,19 +216,19 @@ bool ClientStandalone::globalInit(){
 
 ClientStandalone::ClientStandalone()
     : ClientBaseType(MakeNotNull("NWB::Log::ClientStandalone"))
-    , m_processedMsgFile(BaseType::arena())
+    , m_processedMessageFile(BaseType::arena())
 {}
 ClientStandalone::~ClientStandalone(){
     stopWorker();
-    m_processedMsgFile.close();
+    m_processedMessageFile.close();
 }
 
 
 bool ClientStandalone::internalInit(BasicStringView<tchar> logFileNameBase){
     if(logFileNameBase.empty())
-        return m_processedMsgFile.openByExecutableName();
+        return m_processedMessageFile.openByExecutableName();
 
-    return m_processedMsgFile.open(logFileNameBase);
+    return m_processedMessageFile.open(logFileNameBase);
 }
 bool ClientStandalone::internalUpdate(){
     MessageType msg = MakeMessageType(BaseType::arena());
@@ -236,7 +236,7 @@ bool ClientStandalone::internalUpdate(){
         const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
 
         NWB_TCOUT << formattedMessage << static_cast<tchar>('\n');
-        m_processedMsgFile.writeLine(formattedMessage);
+        m_processedMessageFile.writeLine(formattedMessage);
     }
 
     return true;

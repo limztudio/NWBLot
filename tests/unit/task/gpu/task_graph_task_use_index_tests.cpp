@@ -159,7 +159,7 @@ TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyR
     Graphics::GpuTaskGraph graph(testArena.arena);
     const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/first"), "First Use Buffer");
     ASSERT_TRUE(buffer.valid());
-    const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 32u, Graphics::BufferRange::AllBytes) };
+    const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 32u, Graphics::BufferRange::s_AllBytes) };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const auto task = TaskView(uses, declarations.generation());
     const auto resource = declarations.resourceAt(buffer.index);
@@ -169,7 +169,7 @@ TEST(GpuTaskUseIndex, FirstOccurrenceReturnsNormalizedRangeAndStillRejectsEmptyR
     Ranges ranges(scratchArena);
     ranges.reserve(1u);
     ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 0u, resource, uses[0u].range, scratchArena, ranges));
-    const Graphics::BufferRange expected[] = { { 32u, Graphics::BufferRange::AllBytes } };
+    const Graphics::BufferRange expected[] = { { 32u, Graphics::BufferRange::s_AllBytes } };
     ExpectBufferRanges(ranges, expected);
     EXPECT_FALSE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 0u, resource, BufferUse(buffer, 0u, 0u).range, scratchArena, ranges));
     EXPECT_TRUE(ranges.empty());
@@ -229,7 +229,7 @@ TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
     Graphics::GpuTaskGraph graph(testArena.arena);
     const auto buffer = AddBufferMetadata(graph, Name("tests/task_use/symbolic"), "Symbolic Buffer");
     ASSERT_TRUE(buffer.valid());
-    const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 16u, 16u), BufferUse(buffer, 0u, Graphics::BufferRange::AllBytes) };
+    const Graphics::GpuTaskResourceUse uses[] = { BufferUse(buffer, 16u, 16u), BufferUse(buffer, 0u, Graphics::BufferRange::s_AllBytes) };
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const auto task = TaskView(uses, declarations.generation());
     const auto resource = declarations.resourceAt(buffer.index);
@@ -239,7 +239,7 @@ TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
     Ranges ranges(scratchArena);
     ranges.reserve(s_ExpectedDualCount);
     ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 1u, resource, uses[1u].range, scratchArena, ranges));
-    const Graphics::BufferRange expected[] = { { 0u, 16u }, { 32u, Graphics::BufferRange::AllBytes } };
+    const Graphics::BufferRange expected[] = { { 0u, 16u }, { 32u, Graphics::BufferRange::s_AllBytes } };
     ExpectBufferRanges(ranges, expected);
 }
 
@@ -286,7 +286,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     const Graphics::GpuTaskResourceUse direct[] = { BufferUse(a, 16u, 16u), BufferUse(b, 0u, 8u) };
     const Graphics::GpuTaskResourceSetUse expanded{
         .resourceSet = set,
-        .range = { .bufferRange = Graphics::BufferRange(0u, Graphics::BufferRange::AllBytes) },
+        .range = { .bufferRange = Graphics::BufferRange(0u, Graphics::BufferRange::s_AllBytes) },
         .requiredState = Graphics::ResourceStates::ShaderResource,
         .access = Graphics::GpuTaskResourceAccess::Read,
     };
@@ -312,7 +312,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     ASSERT_NE(view.prologueBarriers, nullptr);
     const Graphics::GpuGraphResourceId expectedResources[] = { a, b, a, a, b };
     const Graphics::BufferRange expectedRanges[] = {
-        { 16u, 16u }, { 0u, 8u }, { 0u, 16u }, { 32u, Graphics::BufferRange::AllBytes }, { 8u, Graphics::BufferRange::AllBytes },
+        { 16u, 16u }, { 0u, 8u }, { 0u, 16u }, { 32u, Graphics::BufferRange::s_AllBytes }, { 8u, Graphics::BufferRange::s_AllBytes },
     };
     for(usize index = 0u; index < LengthOf(expectedRanges); ++index){
         SCOPED_TRACE(index);

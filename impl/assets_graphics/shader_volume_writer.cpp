@@ -317,7 +317,7 @@ static u64 BuildShaderVariantCookKeyHash(
     const u64 bytecodeChecksum
 ){
     static constexpr u32 s_ShaderVariantCookKeyVersion = 2u;
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
     Fnv64AppendValue(hash, virtualPathHash);
     Fnv64AppendValue(hash, sourceChecksum);

@@ -170,7 +170,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setShaderVariant(materialEntry.shaderVariant);
     outMaterial.setMaterialInterface(Name(AStringView(materialEntry.materialInterface)));
     outMaterial.setShadingModelId(materialEntry.shadingModelId);
-    outMaterial.setShadowTransmittanceModelId(materialEntry.shadowTransmittanceModelId);
+    outMaterial.setSurfaceDispatchId(materialEntry.surfaceDispatchId);
     if(!SetOptionalAvboitPixelShader(
         materialEntry,
         materialEntry.avboitAccumulatePixelShaderName,
@@ -266,7 +266,7 @@ bool EmitDeferredBxdfDispatchModule(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EmitShadowTransmittanceDispatchModule(
+bool EmitShadowSurfaceDispatchModule(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
@@ -274,7 +274,7 @@ bool EmitShadowTransmittanceDispatchModule(
     Path& outIncludeRoot,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    return MaterialCookDetail::EmitShadowTransmittanceDispatchModuleImpl(
+    return MaterialCookDetail::EmitShadowSurfaceDispatchModuleImpl(
         cacheDirectory,
         configurationSafeName,
         materialBindEntries,
@@ -477,7 +477,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shading model id
-        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // shadow transmittance model id
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // surface dispatch id
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT accumulate pixel shader presence flag
         && AddBinaryReserveBytes(reserveBytes, sizeof(NameHash)) // optional AVBOIT accumulate pixel shader name
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // AVBOIT occupancy pixel shader presence flag
@@ -566,7 +566,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         materialFlags |= MaterialBinaryPayload::MaterialFlag::Refractive;
     AppendPOD(outBinary, materialFlags);
     AppendPOD(outBinary, material.shadingModelId());
-    AppendPOD(outBinary, material.shadowTransmittanceModelId());
+    AppendPOD(outBinary, material.surfaceDispatchId());
 
     // Optional per-material AVBOIT pixel shaders (accumulate, occupancy, extinction): each a presence flag plus
     // shader name hash, present only for surface-authored transparent materials and read back in this order.

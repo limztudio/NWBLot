@@ -117,7 +117,7 @@ struct SmokeTintedEntitySetup{
     meshComponent.mesh = mesh;
 
     if(!ApplySmokeMaterialTint(world, setup, colorTint, tintParameterPath))
-        return Core::ECS::ENTITY_ID_INVALID;
+        return Core::ECS::s_InvalidEntityId;
 
     return setup.entity;
 }

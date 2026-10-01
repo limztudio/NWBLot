@@ -22,7 +22,7 @@
 // Normal is world space (surface contract); backends inverse-transpose before filling.
 struct NwbShadowHit{
     uint meshInstanceIndex;
-    uint shadowTransmittanceModelId;
+    uint surfaceDispatchId;
     uint materialConstantByteOffset;
     float2 uv0;
     float3 worldNormal;
@@ -39,12 +39,12 @@ struct NwbShadowHit{
 // reads it back through the accessors below (the same names the rasterizer defines from its push constant).
 static uint g_NwbShadowMaterialConstantByteOffset = 0u;
 static uint g_NwbShadowMeshInstanceIndex = 0u;
-static uint g_NwbShadowShadingModelId = 0u;
+static uint g_NwbShadowSurfaceDispatchId = 0u;
 
 void nwbShadowSetMaterialContext(NwbShadowHit hit){
     g_NwbShadowMaterialConstantByteOffset = hit.materialConstantByteOffset;
     g_NwbShadowMeshInstanceIndex = hit.meshInstanceIndex;
-    g_NwbShadowShadingModelId = hit.shadowTransmittanceModelId;
+    g_NwbShadowSurfaceDispatchId = hit.surfaceDispatchId;
 }
 
 uint nwbMeshMaterialConstantByteOffset(){
@@ -56,7 +56,7 @@ uint nwbMeshInstanceIndex(){
 }
 
 uint nwbMeshShadingModelId(){
-    return g_NwbShadowShadingModelId;
+    return g_NwbShadowSurfaceDispatchId;
 }
 
 NwbMeshInstanceData nwbMeshLoadInstance(){

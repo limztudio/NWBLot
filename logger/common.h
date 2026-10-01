@@ -251,26 +251,26 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, const tchar* NAME>
-class Base{
+template<typename T, const tchar* loggerName>
+class LoggerWorkerBase{
 protected:
     static inline bool globalInit(){ return true; }
 
 
 public:
-    explicit Base(const NotNull<const char*> allocationLog)
+    explicit LoggerWorkerBase(const NotNull<const char*> allocationLog)
         : m_arena(allocationLog.get())
-        , m_msgQueue(m_arena)
+        , m_messageQueue(m_arena)
         , m_exit(false)
     {}
-    virtual ~Base(){
+    virtual ~LoggerWorkerBase(){
         stopWorker();
     }
 
 
 protected:
-    template<typename... ARGS>
-    inline bool internalInit(ARGS&&... args){
+    template<typename... Args>
+    inline bool internalInit(Args&&... args){
         (static_cast<void>(args), ...);
         return true;
     }
@@ -278,7 +278,7 @@ protected:
     inline bool internalUpdate(){ return true; }
 
 protected:
-    inline bool tryDequeue(MessageType& msg){ return m_msgQueue.try_pop(msg); }
+    inline bool tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
     void stopWorker(){
         const bool alreadyStopping = m_exit.exchange(true, MemoryOrder::acq_rel);
 
@@ -293,18 +293,18 @@ public:
     inline LogArena& arena(){ return m_arena; }
 
 public:
-    template<typename... ARGS>
-    inline bool init(ARGS&&... args){
+    template<typename... Args>
+    inline bool init(Args&&... args){
         if(!static_cast<T*>(this)->s_GlobalInit){
             if(!static_cast<T*>(this)->globalInit()){
-                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to global initialization on {}"), NAME), Type::Fatal);
+                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to global initialization on {}"), loggerName), Type::Fatal);
                 return false;
             }
             static_cast<T*>(this)->s_GlobalInit = true;
         }
 
-        const bool ret = static_cast<T*>(this)->internalInit(Forward<ARGS>(args)...);
-        if(!ret)
+        const bool initialized = static_cast<T*>(this)->internalInit(Forward<Args>(args)...);
+        if(!initialized)
             return false;
 
         m_thread = Thread(T::globalUpdate, static_cast<T*>(this));
@@ -329,16 +329,16 @@ public:
 
 protected:
     LogArena m_arena;
-    MessageQueue m_msgQueue;
+    MessageQueue m_messageQueue;
 
 protected:
     Thread m_thread;
     Atomic<bool> m_exit;
 };
 
-template<typename T, f32 UPDATE_INTERVAL, const tchar* NAME>
-class BaseUpdateOrdinary : public Base<T, NAME>{
-    friend Base<T, NAME>;
+template<typename T, f32 updateIntervalSeconds, const tchar* loggerName>
+class IntervalLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
+    friend LoggerWorkerBase<T, loggerName>;
 
 
 private:
@@ -348,12 +348,12 @@ private:
 private:
     static void globalUpdate(T* self){
         for(;;){
-            const Timer curTime = TimerNow();
-            const f32 elapsedSeconds = DurationInSeconds<f32>(curTime, self->m_lastTime);
-            if(elapsedSeconds < UPDATE_INTERVAL){
+            const Timer currentTime = TimerNow();
+            const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self->m_lastUpdateTime);
+            if(elapsedSeconds < updateIntervalSeconds){
                 // Ordinary updates are interval-bound. Sleep until the next deadline instead of consuming a core
                 // repeatedly polling the timer; the existing cadence still bounds message and shutdown latency.
-                const f32 remainingSeconds = UPDATE_INTERVAL - elapsedSeconds;
+                const f32 remainingSeconds = updateIntervalSeconds - elapsedSeconds;
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;
                 const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(remainingSeconds * s_MillisecondsPerSecondF)));
@@ -361,7 +361,7 @@ private:
                 continue;
             }
 
-            self->m_lastTime = curTime;
+            self->m_lastUpdateTime = currentTime;
 
             if(self->internalUpdate() && self->m_exit.load(MemoryOrder::acquire))
                 break;
@@ -370,26 +370,26 @@ private:
 
 
 public:
-    explicit BaseUpdateOrdinary(const NotNull<const char*> allocationLog)
-        : Base<T, NAME>(allocationLog)
-        , m_lastTime(TimerNow())
+    explicit IntervalLoggerWorkerBase(const NotNull<const char*> allocationLog)
+        : LoggerWorkerBase<T, loggerName>(allocationLog)
+        , m_lastUpdateTime(TimerNow())
     {}
 
 
 protected:
-    inline void enqueue(MessageType&& data){ return Base<T, NAME>::m_msgQueue.emplace(Move(data)); }
-    inline void enqueue(const MessageType& data){ return Base<T, NAME>::m_msgQueue.emplace(data); }
+    inline void enqueue(MessageType&& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); }
+    inline void enqueue(const MessageType& data){ return LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); }
 
 
 private:
-    Timer m_lastTime;
+    Timer m_lastUpdateTime;
 };
-template<typename T, f32 UPDATE_INTERVAL, const tchar* NAME>
-bool BaseUpdateOrdinary<T, UPDATE_INTERVAL, NAME>::s_GlobalInit = false;
+template<typename T, f32 updateIntervalSeconds, const tchar* loggerName>
+bool IntervalLoggerWorkerBase<T, updateIntervalSeconds, loggerName>::s_GlobalInit = false;
 
-template<typename T, const tchar* NAME>
-class BaseUpdateIfQueued : public Base<T, NAME>{
-    friend Base<T, NAME>;
+template<typename T, const tchar* loggerName>
+class QueuedLoggerWorkerBase : public LoggerWorkerBase<T, loggerName>{
+    friend LoggerWorkerBase<T, loggerName>;
 
 
 private:
@@ -415,8 +415,8 @@ private:
 
 
 public:
-    explicit BaseUpdateIfQueued(const NotNull<const char*> allocationLog)
-        : Base<T, NAME>(allocationLog)
+    explicit QueuedLoggerWorkerBase(const NotNull<const char*> allocationLog)
+        : LoggerWorkerBase<T, loggerName>(allocationLog)
         , m_semaphore(0)
     {}
 
@@ -426,15 +426,15 @@ protected:
     void internalDestroy(){ m_semaphore.release(); }
 
 protected:
-    inline void enqueue(MessageType&& data){ Base<T, NAME>::m_msgQueue.emplace(Move(data)); m_semaphore.release(); }
-    inline void enqueue(const MessageType& data){ Base<T, NAME>::m_msgQueue.emplace(data); m_semaphore.release(); }
+    inline void enqueue(MessageType&& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(Move(data)); m_semaphore.release(); }
+    inline void enqueue(const MessageType& data){ LoggerWorkerBase<T, loggerName>::m_messageQueue.emplace(data); m_semaphore.release(); }
 
 
 protected:
     Semaphore<> m_semaphore;
 };
-template<typename T, const tchar* NAME>
-bool BaseUpdateIfQueued<T, NAME>::s_GlobalInit = false;
+template<typename T, const tchar* loggerName>
+bool QueuedLoggerWorkerBase<T, loggerName>::s_GlobalInit = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -53,7 +53,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 // The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface instead of guessing one project-interface field.
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 // The shared trace body: NwbGiTraceHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
 #include "gi_trace_common.slangi"
@@ -160,7 +160,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 
                     NwbShadowHit surfaceHit;
                     surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-                    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
                     surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
                     surfaceHit.uv0 = a0.uv0 * triHit.w + a1.uv0 * triHit.u + a2.uv0 * triHit.v;
                     surfaceHit.worldNormal = nwbSafeNormalize(
@@ -170,7 +170,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
                     surfaceHit.worldPosition = worldOrigin + worldDirection * triHit.t;
                     surfaceHit.rayDirection = worldDirection;
 
-                    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+                    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
                     closest.hit = true;
                     closest.t = triHit.t;
                     closest.worldPos = surfaceHit.worldPosition;

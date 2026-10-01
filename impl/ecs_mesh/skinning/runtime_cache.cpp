@@ -134,7 +134,7 @@ void MeshSkinningRuntimeCache::eraseUnusedSource(const Name& sourceName){
 Core::ECS::EntityID MeshSkinningRuntimeCache::entityForHandle(const RuntimeMeshHandle handle)const{
     const auto foundEntity = m_handleToEntity.find(handle.value);
     if(foundEntity == m_handleToEntity.end())
-        return Core::ECS::ENTITY_ID_INVALID;
+        return Core::ECS::s_InvalidEntityId;
     return foundEntity.value();
 }
 

@@ -58,7 +58,7 @@ static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == s_Strid
 
 
 struct ActiveCameraComponent{
-    Core::ECS::EntityID camera = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID camera = Core::ECS::s_InvalidEntityId;
 };
 
 static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");

@@ -53,8 +53,8 @@ struct MaterialCookEntry{
     MaterialCookString avboitExtinctionPixelShaderName;
     ParameterMap parameters;
     u32 shadingModelId = 0u;
-    // Shadow-transmittance id, deduped over the `surface` source set.
-    u32 shadowTransmittanceModelId = 0u;
+    // Surface dispatch id, deduped over the `surface` source set.
+    u32 surfaceDispatchId = 0u;
     bool transparent = false;
     bool twoSided = false;
     // Explicit caster classification, independent of transparency; NwbMeshSurface supplies the optical parameters.
@@ -89,7 +89,7 @@ struct MaterialCookEntry{
         bxdfSource.clear();
         surfaceSource.clear();
         shadingModelId = 0u;
-        shadowTransmittanceModelId = 0u;
+        surfaceDispatchId = 0u;
         stageShaders.clear();
         avboitAccumulatePixelShaderName.clear();
         avboitOccupancyPixelShaderName.clear();
@@ -158,7 +158,7 @@ struct GeneratedMaterialPixelShader{
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
 
-// Deterministic shading-model id (unique `bxdf`) + transmittance id (unique `surface`); shared sources share ids.
+// Deterministic shading-model id (unique `bxdf`) + surface dispatch id (unique `surface`); shared sources share ids.
 // Before material build + dispatch emission.
 [[nodiscard]] bool AssignMaterialShadingModelIds(
     MaterialCookVector<MaterialCookEntry>& materialEntries,
@@ -174,9 +174,9 @@ struct GeneratedMaterialPixelShader{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-// Shadow-transmittance dispatch module (per-`.surface` include, macro-isolated per id, switch on shadowTransmittanceModelId).
+// Surface dispatch module (per-`.surface` include, macro-isolated per id, switch on surfaceDispatchId).
 // Unknown id: neutral optical fields for shadow, fixed mid-grey for GI. Always written; run after AssignMaterialShadingModelIds.
-[[nodiscard]] bool EmitShadowTransmittanceDispatchModule(
+[[nodiscard]] bool EmitShadowSurfaceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
     const MaterialCookVector<MaterialBindEntry>& materialBindEntries,

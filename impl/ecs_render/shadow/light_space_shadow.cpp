@@ -191,7 +191,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     LightSpaceCaptureIdentity identity;
     identity.scene = state.m_captureSceneIdentity;
     identity.trusted = state.m_captureSceneTrusted;
-    identity.lighting = FNV64_OFFSET_BASIS;
+    identity.lighting = s_Fnv64OffsetBasis;
     Fnv64AppendValue(identity.lighting, lightCount);
     for(u32 index = 0u; index < lightCount; ++index){
         Fnv64AppendValue(identity.lighting, lights[index].position);
@@ -200,7 +200,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
         Fnv64AppendValue(identity.lighting, lights[index].params);
         Fnv64AppendValue(identity.lighting, lights[index].params2);
     }
-    identity.layout = FNV64_OFFSET_BASIS;
+    identity.layout = s_Fnv64OffsetBasis;
     Fnv64AppendValue(identity.layout, targets.width);
     Fnv64AppendValue(identity.layout, targets.height);
     Fnv64AppendValue(identity.layout, plan.lightCount);

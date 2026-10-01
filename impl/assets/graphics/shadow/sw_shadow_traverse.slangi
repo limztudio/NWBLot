@@ -39,9 +39,9 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "sw_shadow_intersect.slangi"
 #include "sw_shadow_geometry.slangi"
 
-// (nwbShadowDispatchSurface), which routes by shadowTransmittanceModelId to return each occluder's optical params.
+// (nwbShadowDispatchSurface), which routes by surfaceDispatchId to return each occluder's optical params.
 #include "shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 #include "shadow_integrate.slangi"
 
@@ -124,14 +124,14 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 
                 NwbShadowHit hit;
                 hit.meshInstanceIndex = material.meshInstanceIndex;
-                hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                hit.surfaceDispatchId = material.surfaceDispatchId;
                 hit.materialConstantByteOffset = material.materialConstantByteOffset;
                 hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
                 hit.worldNormal = nwbSwShadowTransformNormal(instance, objectNormal);
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 
-                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+                const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
                 const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometricNormal), worldDirection);
                 const half shadingCosI = nwbShadowCosineToRay(hit.worldNormal, worldDirection);

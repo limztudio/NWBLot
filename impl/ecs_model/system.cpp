@@ -618,7 +618,7 @@ void ModelSystem::updateStaticMeshAttachments(){
 }
 
 Core::ECS::EntityID ModelSystem::findSpawnedObject(const Core::ECS::EntityID owner, const Name objectName)const{
-    Core::ECS::EntityID result = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
     m_world.view<ModelObjectComponent>().each(
         [&](const Core::ECS::EntityID entity, ModelObjectComponent& object){
             if(result.valid())

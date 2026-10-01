@@ -8,7 +8,7 @@
 #include "backend_context.h"
 #include "arena_names.h"
 #include "aftermath.h"
-#include "swapchain_presentation.h"
+#include "swap_chain_presentation.h"
 
 #include <core/common/log.h>
 

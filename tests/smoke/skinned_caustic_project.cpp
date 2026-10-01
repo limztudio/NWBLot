@@ -290,9 +290,9 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
     f64 m_animationTime = 0.0;

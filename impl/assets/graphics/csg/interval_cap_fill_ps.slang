@@ -44,7 +44,7 @@ uint nwbMeshFrameInstanceHeapSlot(){
 // guard keeps this include focused on the cap-fill material/instance accessors above.
 #include "../bindless/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +88,7 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     const NwbCsgReceiverRange receiver = g_NwbCsgReceiverRanges[cap.receiverIndex];
     NwbShadowHit hit;
     hit.meshInstanceIndex = receiver.materialContext.z;
-    hit.shadowTransmittanceModelId = receiver.materialContext.x;
+    hit.surfaceDispatchId = receiver.materialContext.x;
     hit.materialConstantByteOffset = receiver.materialContext.y;
     // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by
     // the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
@@ -96,7 +96,7 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     hit.worldNormal = cap.normal;
     hit.worldPosition = cap.worldPosition;
     hit.rayDirection = -cap.normal;
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(hit.shadowTransmittanceModelId, hit);
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(hit.surfaceDispatchId, hit);
 
     NwbCsgIntervalCapFillPixelOutput output;
     // baseColor.a carries the deferred BXDF id, while the other packed fields exactly match the mesh G-buffer.

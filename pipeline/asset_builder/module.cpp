@@ -107,7 +107,7 @@ int RunPipelineTool(const int argc, char** argv){
         NWB::Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
-        buildOptions.outputDirectory = options.outputDirectory;
+        buildOptions.outputDirectory = options.outputPath;
         buildOptions.cacheDirectory = options.cacheDirectory;
         buildOptions.configuration = options.configuration;
         buildOptions.assetType = options.assetType;

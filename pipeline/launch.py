@@ -44,7 +44,7 @@ def make_parser() -> argparse.ArgumentParser:
                         help="Include textures referenced by selected UI skins")
     parser.add_argument("--tool-directory", type=Path,
                         help="Directory containing the three built pipeline executables")
-    parser.add_argument("--dependency-computer", "--dependeny-computer", type=Path)
+    parser.add_argument("--dependency-computer", type=Path)
     parser.add_argument("--asset-builder", type=Path)
     parser.add_argument("--asset-gatherer", type=Path)
     return parser
@@ -61,7 +61,7 @@ def resolve_path(root: Path, path: Path) -> Path:
 def resolve_tools(options: argparse.Namespace, settings: ROOT_LAUNCHER.LaunchSettings) -> tuple[Path, Path, Path]:
     tools = []
     for target, explicit in (
-        ("nwb_dependeny_computer", options.dependency_computer),
+        ("nwb_dependency_computer", options.dependency_computer),
         ("nwb_asset_builder", options.asset_builder),
         ("nwb_asset_gatherer", options.asset_gatherer),
     ):

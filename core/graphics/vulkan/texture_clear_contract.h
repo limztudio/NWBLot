@@ -24,9 +24,9 @@ namespace VulkanTextureDetail{
 
 
 namespace TextureClearValueKind{
-    static constexpr u8 kTextureClearValueKindFloatBase = 0u;
+    static constexpr u8 s_TextureClearValueKindFloatBase = 0u;
     enum Enum : u8{
-        Float = kTextureClearValueKindFloatBase,
+        Float = s_TextureClearValueKindFloatBase,
         UInt,
         Int,
         DepthStencil,
@@ -34,9 +34,9 @@ namespace TextureClearValueKind{
 };
 
 namespace TextureClearQueueRequirement{
-    static constexpr u8 kTextureClearQueueRequirementTransferBase = 0u;
+    static constexpr u8 s_TextureClearQueueRequirementTransferBase = 0u;
     enum Enum : u8{
-        Transfer = kTextureClearQueueRequirementTransferBase,
+        Transfer = s_TextureClearQueueRequirementTransferBase,
         ComputeOrGraphics,
         Graphics,
     };

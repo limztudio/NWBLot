@@ -26,9 +26,9 @@ NWB_CORE_BEGIN
 // Resource classes a shader selects between. Each class maps to exactly one heap register space,
 // so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
-    static constexpr u8 kGpuDescriptorClassSampledImageBase = 0;
+    static constexpr u8 s_GpuDescriptorClassSampledImageBase = 0;
     enum Enum : u8{
-        SampledImage = kGpuDescriptorClassSampledImageBase, // Texture_SRV           -> SAMPLED_IMAGE
+        SampledImage = s_GpuDescriptorClassSampledImageBase, // Texture_SRV           -> SAMPLED_IMAGE
         StorageImage,       // Texture_UAV           -> STORAGE_IMAGE
         SampledBuffer,      // TypedBuffer_SRV       -> UNIFORM_TEXEL_BUFFER
         StorageBuffer,      // StructuredBuffer_UAV  -> STORAGE_BUFFER (structured/raw SRV+UAV share one descriptor)

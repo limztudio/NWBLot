@@ -28,7 +28,7 @@ bool IsBufferStateRangeValid(const BufferRange range, const BufferDesc& descript
     return
         range.hasExtent()
         && range.byteOffset < description.byteSize
-        && (range.byteSize == BufferRange::AllBytes || range.byteSize <= description.byteSize - range.byteOffset)
+        && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= description.byteSize - range.byteOffset)
     ;
 }
 

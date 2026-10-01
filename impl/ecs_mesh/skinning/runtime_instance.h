@@ -39,7 +39,7 @@ struct MeshSkinningRuntimeInstance{
     using AttributeSkinVector = Vector<u32, Core::Alloc::GlobalArena>;
 
     RuntimeMeshHandle handle;
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     u32 meshClass = Core::Mesh::MeshClass::Skinned;
     Name sourceName = NAME_NONE;
     RuntimeMeshLocalBounds localBounds;

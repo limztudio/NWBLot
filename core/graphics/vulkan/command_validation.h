@@ -166,7 +166,7 @@ namespace VulkanDetail{
     if(desc.mipLevels == 0u || subresources.baseMipLevel >= desc.mipLevels)
         return false;
     const u32 remainingMipLevels = desc.mipLevels - subresources.baseMipLevel;
-    if(subresources.numMipLevels == TextureSubresourceSet::AllMipLevels){
+    if(subresources.numMipLevels == TextureSubresourceSet::s_AllMipLevels){
         if(remainingMipLevels != 1u)
             return false;
     }
@@ -181,7 +181,7 @@ namespace VulkanDetail{
     case TextureDimension::Texture2DMSArray:
         if(subresources.baseArraySlice >= desc.arraySize)
             return false;
-        if(subresources.numArraySlices == TextureSubresourceSet::AllArraySlices)
+        if(subresources.numArraySlices == TextureSubresourceSet::s_AllArraySlices)
             return true;
         return
             subresources.numArraySlices != 0u
@@ -192,7 +192,7 @@ namespace VulkanDetail{
             subresources.baseArraySlice == 0u
             && (
                 subresources.numArraySlices == 1u
-                || subresources.numArraySlices == TextureSubresourceSet::AllArraySlices
+                || subresources.numArraySlices == TextureSubresourceSet::s_AllArraySlices
             )
         ;
     }

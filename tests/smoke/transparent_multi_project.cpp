@@ -301,7 +301,7 @@ static void ApplyTransparentCsgSceneTransform(
         scale
     );
     if(!entity.valid())
-        return NWB::Core::ECS::ENTITY_ID_INVALID;
+        return NWB::Core::ECS::s_InvalidEntityId;
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     if(csgReceiverGroup)

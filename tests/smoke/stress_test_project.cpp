@@ -648,11 +648,11 @@ private:
     NWB::Impl::RendererSystem& m_renderer;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_characterOwners;
     NWB::Tests::Smoke::StressCsgScene m_csgScene;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::s_InvalidEntityId;
     u32 m_charactersPerClass = s_DefaultCharactersPerClass;
     const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
     const bool m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");

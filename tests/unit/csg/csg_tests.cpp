@@ -65,7 +65,7 @@ static bool ResolveTestCsgReceiverDrawState(
 }
 
 struct TestCsgVisibilityFilter{
-    NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID hiddenEntity = NWB::Core::ECS::s_InvalidEntityId;
 };
 
 static bool TestCsgReceiverVisible(

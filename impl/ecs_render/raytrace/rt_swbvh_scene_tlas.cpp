@@ -201,7 +201,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
             if(
                 !commandList
-                && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
+                && materialInfo->surfaceDispatchId != Limit<u32>::s_Max
                 && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, *sampledTextureCollector)
             )
                 return false;
@@ -218,10 +218,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
+        if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
             contentComplete = false;
         // An opaque surface hook can be unavailable without hiding an optical boundary. Unknown classification or an unevaluable transparent surface cannot support the outside-volume shortcut.
-        if(!materialInfo || (materialInfo->transparent && materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max))
+        if(!materialInfo || (materialInfo->transparent && materialInfo->surfaceDispatchId == Limit<u32>::s_Max))
             opticalScene.markIncomplete();
         instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();

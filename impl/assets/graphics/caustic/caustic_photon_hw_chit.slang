@@ -45,14 +45,14 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
 
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;
-        hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+        hit.surfaceDispatchId = material.surfaceDispatchId;
         hit.materialConstantByteOffset = material.materialConstantByteOffset;
         hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
         hit.worldNormal = worldShadingNormal;
         hit.worldPosition = payload.worldPos;
         hit.rayDirection = WorldRayDirection();
 
-        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
         payload.ior = surface.refractionIor;
         payload.transmission = surface.shadowAbsorptionTint;
     }

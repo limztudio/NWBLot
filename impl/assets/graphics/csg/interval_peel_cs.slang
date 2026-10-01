@@ -123,9 +123,9 @@ bool nwbCsgIntersectRaySlab(
     float slabMinT = (minBound - origin) * invDirection;
     float slabMaxT = (maxBound - origin) * invDirection;
     if(slabMinT > slabMaxT){
-        const float temp = slabMinT;
+        const float previousSlabMinT = slabMinT;
         slabMinT = slabMaxT;
-        slabMaxT = temp;
+        slabMaxT = previousSlabMinT;
     }
 
     inOutMinT = max(inOutMinT, slabMinT);

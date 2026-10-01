@@ -164,12 +164,12 @@ NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMateri
         m_world, entity, Name(s_Interface), "runtime.specular_f0",
         NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
     ))
-        return NWB::Core::ECS::ENTITY_ID_INVALID;
+        return NWB::Core::ECS::s_InvalidEntityId;
     if(!NWB::Impl::SetMaterialMutableParameter(
         m_world, entity, Name(s_Interface), "runtime.perceptual_roughness",
         NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
     ))
-        return NWB::Core::ECS::ENTITY_ID_INVALID;
+        return NWB::Core::ECS::s_InvalidEntityId;
     return entity;
 }
 

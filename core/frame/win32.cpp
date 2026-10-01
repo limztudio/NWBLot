@@ -525,9 +525,9 @@ bool Frame::init(){
     FrameDetail::EnableProcessDpiAwareness();
 
     const tchar* ClassName = NWB_TEXT("NWB_FRAME");
-    const tchar* AppName = windowTitleOrDefault().get();
-    constexpr DWORD StyleEx = 0;
-    constexpr DWORD Style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+    const tchar* windowTitle = windowTitleOrDefault().get();
+    constexpr DWORD s_WindowExtendedStyle = 0;
+    constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
     auto& frameData = data<Common::WinFrame>();
 
     WNDCLASSEX wc = {};
@@ -559,7 +559,7 @@ bool Frame::init(){
     const UINT initialDpi = FrameDetail::QueryInitialWindowDpi();
 
     RECT decorationRect = { 0, 0, 0, 0 };
-    if(!FrameDetail::AdjustWindowRectForDpi(decorationRect, Style, FALSE, StyleEx, initialDpi)){
+    if(!FrameDetail::AdjustWindowRectForDpi(decorationRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
@@ -593,7 +593,7 @@ bool Frame::init(){
     frameData.height() = windowHeight;
 
     RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
-    if(!FrameDetail::AdjustWindowRectForDpi(rc, Style, FALSE, StyleEx, initialDpi)){
+    if(!FrameDetail::AdjustWindowRectForDpi(rc, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
@@ -604,10 +604,10 @@ bool Frame::init(){
     const auto y = workArea.top + (workAreaHeight > actualHeight ? ((workAreaHeight - actualHeight) >> 1) : 0);
 
     HWND hwnd = CreateWindowEx(
-        StyleEx,
+        s_WindowExtendedStyle,
         wc.lpszClassName,
-        AppName,
-        Style,
+        windowTitle,
+        s_WindowStyle,
         x,
         y,
         actualWidth,

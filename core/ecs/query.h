@@ -93,7 +93,7 @@ struct ViewIterator{
         , anchorPoolIndex(anchorPoolIndexValue)
         , index(indexValue)
         , count(countValue)
-        , entity(ENTITY_ID_INVALID)
+        , entity(s_InvalidEntityId)
     {
         if(validValue)
             skipInvalid();
@@ -108,7 +108,7 @@ struct ViewIterator{
                 Get<0>(denseIndices) = static_cast<u32>(index);
             }
             else{
-                entity = ENTITY_ID_INVALID;
+                entity = s_InvalidEntityId;
             }
             return;
         }
@@ -123,7 +123,7 @@ struct ViewIterator{
         }
 
         if(index >= count)
-            entity = ENTITY_ID_INVALID;
+            entity = s_InvalidEntityId;
     }
 
     bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex){

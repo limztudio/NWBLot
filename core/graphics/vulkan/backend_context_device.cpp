@@ -135,7 +135,7 @@ bool BackendContext::createVulkanDevice(){
 
     m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
-    constexpr usize kOptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
+    constexpr usize s_OptionalDeviceFeatureCount = static_cast<usize>(DeviceExtensionFeature::Count);
 
     const VulkanDetail::PhysicalDeviceFeatureQueryOptions featureQueryOptions{
         .apiSupportsVulkan13 = apiSupportsVulkan13,
@@ -177,7 +177,7 @@ bool BackendContext::createVulkanDevice(){
     if(coopVecExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
-    bool queriedOptionalFeatures[kOptionalDeviceFeatureCount] = {};
+    bool queriedOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         if(
             feature == DeviceExtensionFeature::DescriptorBuffer
@@ -509,7 +509,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan13features.textureCompressionASTC_HDR = textureCompressionAstcHdrFeatureEnabled ? VK_TRUE : VK_FALSE;
 
     pNext = nullptr;
-    bool enabledOptionalFeatures[kOptionalDeviceFeatureCount] = {};
+    bool enabledOptionalFeatures[s_OptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device){
         // ASTC HDR is owned by VkPhysicalDeviceVulkan13Features after promotion into Vulkan 1.3.
         if(apiSupportsVulkan13 && feature == DeviceExtensionFeature::TextureCompressionAstcHdr)

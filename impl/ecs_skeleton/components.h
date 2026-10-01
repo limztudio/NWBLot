@@ -21,9 +21,9 @@ NWB_IMPL_BEGIN
 
 
 namespace SkeletonSkinningMode{
-    static constexpr auto kSkeletonSkinningModeLinearBlendBase = 0u;
+    static constexpr auto s_SkeletonSkinningModeLinearBlendBase = 0u;
     enum Enum : u32{
-        LinearBlend = kSkeletonSkinningModeLinearBlendBase,
+        LinearBlend = s_SkeletonSkinningModeLinearBlendBase,
         DualQuaternion,
     };
 };

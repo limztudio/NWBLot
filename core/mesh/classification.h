@@ -18,9 +18,9 @@ NWB_MESH_BEGIN
 
 
 namespace MeshClass{
-    static constexpr auto kMeshClassStaticBase = 0;
+    static constexpr auto s_MeshClassStaticBase = 0;
     enum Enum : u32{
-        Static = kMeshClassStaticBase,
+        Static = s_MeshClassStaticBase,
         Skinned,
         Invalid = Limit<u32>::s_Max,
     };

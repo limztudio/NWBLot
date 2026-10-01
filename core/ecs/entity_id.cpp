@@ -29,9 +29,9 @@ EntityID EntityManager::create(){
         m_freeIndices.pop_back();
     }
     else{
-        if(m_generations.size() >= static_cast<usize>(ECSDetail::ENTITY_INVALID_INDEX)){
+        if(m_generations.size() >= static_cast<usize>(ECSDetail::s_EntityInvalidIndex)){
             NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
-            return ENTITY_ID_INVALID;
+            return s_InvalidEntityId;
         }
         index = static_cast<u32>(m_generations.size());
         m_generations.push_back(0);
@@ -54,7 +54,7 @@ void EntityManager::destroyAlive(EntityID entityId){
     NWB_ASSERT(alive(entityId));
 
     const u32 index = entityId.index();
-    m_generations[index] = static_cast<u16>((m_generations[index] + 1u) & ECSDetail::ENTITY_GENERATION_MASK);
+    m_generations[index] = static_cast<u16>((m_generations[index] + 1u) & ECSDetail::s_EntityGenerationMask);
     m_freeIndices.push_back(index);
     --m_aliveCount;
 }

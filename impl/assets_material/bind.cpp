@@ -139,7 +139,7 @@ bool BuildMaterialBindParameterKey(
 
 
 u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
-    return UpdateFnv64TextCanonical(FNV64_OFFSET_BASIS, parameterKey);
+    return UpdateFnv64TextCanonical(s_Fnv64OffsetBasis, parameterKey);
 }
 
 

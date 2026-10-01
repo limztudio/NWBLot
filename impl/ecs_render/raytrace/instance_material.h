@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 
 // CPU mirror of trace material ABI; HW and SW share instance IDs.
 struct NwbRtInstanceMaterialGpu{
-    u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
+    u32 surfaceDispatchId = Limit<u32>::s_Max;
     u32 flags = 0u;
     u32 shadingModelId = 0u;
     u32 materialConstantByteOffset = 0u;
@@ -37,9 +37,9 @@ static_assert(offsetof(NwbRtInstanceMaterialGpu, shadingModelId) == sizeof(u32) 
 
 // Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 namespace RtInstanceMaterialFlag{
-    static constexpr auto kRtInstanceMaterialFlagNoneBase = 0u;
+    static constexpr auto s_RtInstanceMaterialFlagNoneBase = 0u;
     enum Mask : u32{
-        None = kRtInstanceMaterialFlagNoneBase,
+        None = s_RtInstanceMaterialFlagNoneBase,
         Transparent = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT,
         Refractive = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE,
     };

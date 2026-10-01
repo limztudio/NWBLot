@@ -30,9 +30,9 @@ class RuntimeMeshRequestSet;
 
 
 namespace RuntimeMeshDirtyFlag{
-    static constexpr u8 kRuntimeMeshDirtyFlagNoneBase = 0;
+    static constexpr u8 s_RuntimeMeshDirtyFlagNoneBase = 0;
     enum Enum : u8{
-        None = kRuntimeMeshDirtyFlagNoneBase,
+        None = s_RuntimeMeshDirtyFlagNoneBase,
         TopologyDirty = 1u << 0u,
         AttributesDirty = 1u << 1u,
         SkinningInputDirty = 1u << 2u,
@@ -114,7 +114,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::BufferHandle localBoundsBuffer;
     // Optional meshletCount records with the same accepted bounds ABI; each record carries its own VALID proof.
     Core::BufferHandle meshletLocalBoundsBuffer;
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.
     u32 meshletPrimitiveIndexCount = 0u;

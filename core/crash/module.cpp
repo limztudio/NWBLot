@@ -63,7 +63,7 @@ static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, con
 }
 
 static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noexcept{
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     if(record.event)
         hash = UpdateFnv64TextExact(hash, AStringView(record.event));
     if(record.category)

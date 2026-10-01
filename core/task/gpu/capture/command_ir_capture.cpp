@@ -80,9 +80,9 @@ namespace GpuCommandIrDetail{
             && record.destinationSlice.width != 0u
             && record.destinationSlice.height != 0u
             && record.destinationSlice.depth != 0u
-            && record.destinationSlice.width != TextureSlice::AllDimensions
-            && record.destinationSlice.height != TextureSlice::AllDimensions
-            && record.destinationSlice.depth != TextureSlice::AllDimensions
+            && record.destinationSlice.width != TextureSlice::s_AllDimensions
+            && record.destinationSlice.height != TextureSlice::s_AllDimensions
+            && record.destinationSlice.depth != TextureSlice::s_AllDimensions
         ;
     default:
         return false;

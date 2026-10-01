@@ -118,7 +118,7 @@ add_custom_command(
         --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
         --configuration "$<CONFIG>"
     COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_ui_smoke_asset_stamp}"
-    DEPENDS nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+    DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
         "${PROJECT_SOURCE_DIR}/pipeline/launch.py" ${_nwb_ui_smoke_asset_inputs}
     WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
     COMMENT "Cooking standalone UI smoke engine and fixture assets for $<CONFIG>..."

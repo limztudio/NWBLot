@@ -50,7 +50,7 @@ struct UiPaintContext{
     Ui::TextService& text;
     const Ui::DisplayMetrics& display;
     Ui::Builder& ui;
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     f32 deltaSeconds = 0.0f;
 };
 

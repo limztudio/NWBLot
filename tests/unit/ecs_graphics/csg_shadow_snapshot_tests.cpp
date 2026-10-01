@@ -465,7 +465,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&](){
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 17u);
     });
-    expectRefresh([&](){ materials[0].shadowTransmittanceModelId = 5u; });
+    expectRefresh([&](){ materials[0].surfaceDispatchId = 5u; });
     expectRefresh([&](){ materials[0].positionSlot = 9u; });
     expectRefresh([&](){ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
     expectRefresh([&](){ ++instances[0].translation.w; });

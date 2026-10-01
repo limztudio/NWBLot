@@ -73,7 +73,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     )
         return false;
 
-    const u64 declaredSize = declaration.byteSize == BufferRange::AllBytes
+    const u64 declaredSize = declaration.byteSize == BufferRange::s_AllBytes
         ? description.byteSize - declaration.byteOffset
         : declaration.byteSize
     ;

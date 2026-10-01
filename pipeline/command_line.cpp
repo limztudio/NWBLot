@@ -58,7 +58,7 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
 {
     m_app.add_option(s_PipelineInputOption, m_inputs, "Input assets; accepts multiple paths and repeated options");
     m_app.add_option(s_PipelineInputListOption, m_inputList, "UTF-8 newline-separated input paths");
-    m_app.add_option(s_PipelineOutputOption, m_outputDirectory,
+    m_app.add_option(s_PipelineOutputOption, m_outputPath,
         m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
     if(m_tool == PipelineTool::DependencyComputer)
         m_app.add_flag(s_PipelineSkinDependenciesOption, m_includeSkinDependencies, "Include the textures referenced by selected UI skins");
@@ -84,10 +84,10 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
     if(!__hidden_command_line::AssignInputs(m_inputs, options.inputs)
         || !__hidden_command_line::AssignInputs(m_assetRoots, options.assetRoots)
         || !__hidden_command_line::AssignText(m_repoRoot, options.repoRoot)
-        || !__hidden_command_line::AssignText(m_outputDirectory, options.outputDirectory)
+        || !__hidden_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory))
         return false;
-    if(options.outputDirectory.empty()){
+    if(options.outputPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
         return false;
     }

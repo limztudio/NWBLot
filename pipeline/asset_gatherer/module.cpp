@@ -18,7 +18,7 @@ int RunPipelineTool(const int argc, char** argv){
     return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
         NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(arena);
         gatherOptions.inputs = Move(options.inputs);
-        gatherOptions.outputDirectory = Move(options.outputDirectory);
+        gatherOptions.outputDirectory = Move(options.outputPath);
         gatherOptions.configuration = options.configuration;
         gatherOptions.mergePayloads = NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge();
         return NWB::Pipeline::AssetGatherer::GatherAssets(gatherOptions) ? 0 : 1;

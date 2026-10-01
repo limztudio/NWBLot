@@ -51,7 +51,7 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.snapshot.hasCsg = false;
     state.snapshot.identity = 0u;
     state.snapshot.contentIdentity = 0u;
-    state.captureGeometryIdentity = FNV64_OFFSET_BASIS;
+    state.captureGeometryIdentity = s_Fnv64OffsetBasis;
     state.captureGeometryTrusted = true;
     state.snapshot.receiverRanges.clear();
     state.snapshot.cutters.clear();

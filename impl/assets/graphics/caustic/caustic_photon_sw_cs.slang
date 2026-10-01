@@ -55,7 +55,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 // Caustics and shadows share per-hit surface dispatch.
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 #include "caustic_trace.slangi"
 #include "light_pick.slangi"
@@ -198,14 +198,14 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
 
                         NwbShadowHit hit;
                         hit.meshInstanceIndex = material.meshInstanceIndex;
-                        hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+                        hit.surfaceDispatchId = material.surfaceDispatchId;
                         hit.materialConstantByteOffset = material.materialConstantByteOffset;
                         hit.uv0 = a0.uv0 * triangleHit.w + a1.uv0 * triangleHit.u + a2.uv0 * triangleHit.v;
                         hit.worldNormal = worldShadingNormal;
                         hit.worldPosition = closest.worldPos;
                         hit.rayDirection = worldDirection;
 
-                        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+                        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
                         closest.ior = surface.refractionIor;
                         closest.transmission = surface.shadowAbsorptionTint;
                     }

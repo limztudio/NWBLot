@@ -14,7 +14,7 @@
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,7 +165,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
 
     NwbShadowHit surfaceHit;
     surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
     surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
     surfaceHit.worldPosition = hit.position;
     surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(
@@ -174,7 +174,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     );
     surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
     surfaceHit.rayDirection = direction;
-    hit.surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+    hit.surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
     return hit;
 }
 

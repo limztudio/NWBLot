@@ -315,7 +315,7 @@ u32 BuildSceneBvhNode(
     const u32 meshInstanceIndex
 ){
     NwbRtInstanceMaterialGpu material;
-    material.shadowTransmittanceModelId = materialInfo.shadowTransmittanceModelId;
+    material.surfaceDispatchId = materialInfo.surfaceDispatchId;
     material.shadingModelId = materialInfo.shadingModelId;
     material.flags =
         (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None)

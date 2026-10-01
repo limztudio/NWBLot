@@ -145,7 +145,7 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     const Name objectName,
     const u32 objectKind
 ){
-    Core::ECS::EntityID result = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID result = Core::ECS::s_InvalidEntityId;
     world.view<Impl::ModelObjectComponent>().each(
         [&](const Core::ECS::EntityID entity, Impl::ModelObjectComponent& object){
             if(result.valid())

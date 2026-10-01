@@ -107,7 +107,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
         scale
     );
     if(!entity.valid())
-        return NWB::Core::ECS::ENTITY_ID_INVALID;
+        return NWB::Core::ECS::s_InvalidEntityId;
 
     if(csgReceiver)
         AddStaticCsgMeshReceiver(world, entity, receiverGroup, true, false);

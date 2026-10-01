@@ -64,7 +64,7 @@ function(nwb_add_name_symbol_target)
             --run "${_namesym_cook_run}"
             --ctest-regex "nwb_testbed_window_capture_smoke"
             --ctest-regex "nwb_skinned_caustic_capture_late_smoke"
-            --expect-sidecar "dependeny_computer.namesym"
+            --expect-sidecar "dependency_computer.namesym"
             --expect-sidecar "asset_builder.namesym"
             --expect-sidecar "asset_gatherer.namesym"
             --expect-sidecar "testbed.namesym"

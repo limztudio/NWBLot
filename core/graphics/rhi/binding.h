@@ -107,9 +107,9 @@ struct BindingLayoutDesc{
 // BindlessLayoutType describes descriptor classes in the global heap. Slang bindings and host layouts must agree
 // on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
-    static constexpr u8 kBindlessLayoutTypeImmutableBase = 0;
+    static constexpr u8 s_BindlessLayoutTypeImmutableBase = 0;
     enum Enum : u8{
-        Immutable = kBindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
+        Immutable = s_BindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
         MutableSrvUavCbv,   // Global non-sampler resource table
                             // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,
@@ -207,7 +207,7 @@ struct DescriptorWriteItem{
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static DescriptorWriteItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
         DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;

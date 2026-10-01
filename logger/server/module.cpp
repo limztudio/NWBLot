@@ -134,7 +134,7 @@ inline constexpr usize s_MaxLogMessageUploadBytes = s_MaxLogMessageUploadMebibyt
 inline constexpr usize s_MaxCrashPackageUploadBytes = s_MaxCrashPackageUploadMebibytes * s_BytesPerMebibyte;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
-static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept;
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept;
 
 inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
 inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
@@ -156,7 +156,7 @@ inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibyt
 }
 
 static void EnqueueServerMessage(Server& server, const NotNull<const tchar*> message, const Type::Enum type){
-    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message.get(), SERVER_NAME), type);
+    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message.get(), s_ServerName), type);
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
@@ -168,20 +168,20 @@ static void EnqueueServerMessage(Server& server, const NotNull<const tchar*> mes
         return MHD_NO;
     }
 
-    const auto ret = MHD_queue_response(&connection, statusCode, response);
+    const auto responseResult = MHD_queue_response(&connection, statusCode, response);
     MHD_destroy_response(response);
-    return ret;
+    return responseResult;
 }
 
 [[nodiscard]] MHD_Result FinishConnectionUpload(
     Server& server,
     MHD_Connection& connection,
     ConnectionInfo*& info,
-    void*& conCls
+    void*& connectionContext
 ){
-    const MHD_Result ret = QueueEmptyResponse(server, connection);
-    DestroyConnectionInfo(info, conCls);
-    return ret;
+    const MHD_Result responseResult = QueueEmptyResponse(server, connection);
+    DestroyConnectionInfo(info, connectionContext);
+    return responseResult;
 }
 
 [[nodiscard]] static Path CrashInboxDirectory(Server& server){
@@ -267,14 +267,14 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
     return info;
 }
 
-static void DestroyConnectionInfo(ConnectionInfo*& info, void*& conCls)noexcept{
+static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContext)noexcept{
     if(info){
         info->~ConnectionInfo();
         Core::Alloc::CoreFree(info);
     }
 
     info = nullptr;
-    conCls = nullptr;
+    connectionContext = nullptr;
 }
 
 
@@ -332,21 +332,21 @@ void Server::crashIngestUpdate(Server* self){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls){
+MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
     static_cast<void>(version);
 
-    if(!cls || !connection || !url || !method || !upload_data_size || !con_cls)
+    if(!serverContext || !connection || !url || !method || !uploadDataSizeAddress || !connectionContextAddress)
         return MHD_NO;
 
     const auto methodPtr = MakeNotNull(method);
     if(NWB_STRCMP(methodPtr.get(), "POST") != 0)
         return MHD_NO;
 
-    const auto thisPtr = MakeNotNull(static_cast<Server*>(cls));
-    const auto uploadDataSizePtr = MakeNotNull(upload_data_size);
+    const auto thisPtr = MakeNotNull(static_cast<Server*>(serverContext));
+    const auto uploadDataSizePtr = MakeNotNull(uploadDataSizeAddress);
     auto& uploadDataSize = *uploadDataSizePtr;
-    const auto conClsPtr = MakeNotNull(con_cls);
-    auto& conCls = *conClsPtr;
+    const auto connectionContextPtr = MakeNotNull(connectionContextAddress);
+    auto& connectionContext = *connectionContextPtr;
 
     const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint.data()) == 0;
     const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint.data()) == 0;
@@ -360,7 +360,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
                 : __hidden_logger_server::ConnectionUploadKind::LogMessage
     ;
 
-    if(!conCls){
+    if(!connectionContext){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Rejected unauthorized crash upload")), Type::Warning);
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
@@ -372,21 +372,21 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             return MHD_NO;
         }
 
-        conCls = info;
+        connectionContext = info;
         return MHD_YES;
     }
 
-    auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(conCls);
+    auto* info = static_cast<__hidden_logger_server::ConnectionInfo*>(connectionContext);
 
     if(uploadDataSize){
-        if(!upload_data){
+        if(!uploadData){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Received a malformed upload chunk")), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
-            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
+            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
 
-        const auto uploadDataPtr = MakeNotNull(upload_data);
+        const auto uploadDataPtr = MakeNotNull(uploadData);
         const usize uploadSizeLimit = __hidden_logger_server::UploadSizeLimit(info->uploadKind);
         if(
             uploadDataSize > static_cast<size_t>(uploadSizeLimit)
@@ -394,7 +394,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         ){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Received an oversized message")), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
-            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
+            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
 
@@ -402,7 +402,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         if(!info->append(uploadDataPtr, appendSize)){
             __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Failed to store upload chunk")), Type::Fatal);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
-            __hidden_logger_server::DestroyConnectionInfo(info, conCls);
+            __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
         }
 
@@ -466,14 +466,14 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         }
     }
 
-    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, conCls);
+    return __hidden_logger_server::FinishConnectionUpload(*thisPtr, *connection, info, connectionContext);
 }
 
 
 Server::Server()
     : UpdateBaseType(MakeNotNull("NWB::Log::Server"))
     , m_daemon(nullptr)
-    , m_processedMsgFile(BaseType::arena())
+    , m_processedMessageFile(BaseType::arena())
     , m_crashIngestConfig(BaseType::arena())
     , m_telemetryIngestConfig(BaseType::arena())
     , m_crashUploadToken(BaseType::arena())
@@ -489,7 +489,7 @@ Server::~Server(){
 
     stopCrashIngestWorker();
     stopWorker();
-    m_processedMsgFile.close();
+    m_processedMessageFile.close();
 }
 
 bool Server::internalInit(
@@ -509,11 +509,11 @@ bool Server::internalInit(
         enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Type::Info);
 
     if(logFileNameBase.empty()){
-        if(!m_processedMsgFile.openByExecutableName())
+        if(!m_processedMessageFile.openByExecutableName())
             return false;
     }
     else{
-        if(!m_processedMsgFile.open(logFileNameBase))
+        if(!m_processedMessageFile.open(logFileNameBase))
             return false;
     }
 
@@ -585,7 +585,7 @@ bool Server::internalUpdate(){
         Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
 
         Frame::print(formattedMessage, type);
-        m_processedMsgFile.writeLine(formattedMessage);
+        m_processedMessageFile.writeLine(formattedMessage);
     }
 
     return true;

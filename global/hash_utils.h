@@ -14,8 +14,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u64 FNV64_OFFSET_BASIS = 14695981039346656037ull;
-inline constexpr u64 FNV64_PRIME = 1099511628211ull;
+inline constexpr u64 s_Fnv64OffsetBasis = 14695981039346656037ull;
+inline constexpr u64 s_Fnv64Prime = 1099511628211ull;
 inline constexpr usize s_HashCombineGoldenRatio = 0x9e3779b9u;
 inline constexpr usize s_HashCombineLeftShift = 6u;
 inline constexpr usize s_HashCombineRightShift = 2u;
@@ -37,7 +37,7 @@ inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
         return hash;
     for(; *str != CharT{}; ++str){
         hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(*str)));
-        hash *= FNV64_PRIME;
+        hash *= s_Fnv64Prime;
     }
     return hash;
 }
@@ -48,7 +48,7 @@ inline constexpr u64 FNV1a64(const CharT* str, u64 seed){
 
     for(usize i = 0; i < byteCount; ++i){
         hash ^= static_cast<u64>(bytes[i]);
-        hash *= FNV64_PRIME;
+        hash *= s_Fnv64Prime;
     }
 
     return hash;
@@ -74,7 +74,7 @@ template<typename CharT>
 [[nodiscard]] inline constexpr u64 UpdateFnv64TextCanonical(u64 hash, const BasicStringView<CharT> text){
     for(const CharT ch : text){
         hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
-        hash *= FNV64_PRIME;
+        hash *= s_Fnv64Prime;
     }
 
     return hash;
@@ -91,7 +91,7 @@ template<typename CharT>
 
 [[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount){
     return UpdateFnv64(
-        FNV64_OFFSET_BASIS,
+        s_Fnv64OffsetBasis,
         static_cast<const u8*>(data),
         byteCount
     );

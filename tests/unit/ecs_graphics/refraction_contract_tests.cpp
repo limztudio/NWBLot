@@ -86,7 +86,7 @@ TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialConte
     EXPECT_TRUE(ContainsText(helper, "nwbRayTraceScaleGeometryVector(cross(edge0, edge1))"));
     EXPECT_TRUE(ContainsText(helper, "return nwbRayTraceNormalizeGeometryVector(worldNormal);"));
     EXPECT_TRUE(ContainsText(helper, "return hit;"));
-    EXPECT_TRUE(ContainsText(helper, "nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit)"));
+    EXPECT_TRUE(ContainsText(helper, "nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit)"));
     EXPECT_TRUE(ContainsText(resolver, "#include \"interface_hit.slangi\""));
     EXPECT_EQ(CountText(resolver, "nwbRayTraceClosestSurfaceHit("), 1u);
     EXPECT_EQ(CountText(resolver, "nwbRefractionClosestEntryInterface("), 1u);

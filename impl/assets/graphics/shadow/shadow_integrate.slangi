@@ -111,9 +111,9 @@ float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
             if(sortedT[k] < sortedT[minIndex])
                 minIndex = k;
         }
-        const float tmp = sortedT[j];
+        const float previousCrossingDistance = sortedT[j];
         sortedT[j] = sortedT[minIndex];
-        sortedT[minIndex] = tmp;
+        sortedT[minIndex] = previousCrossingDistance;
     }
     if(optics.crossingOverflow != 0u)
         return max(optics.tMax - optics.tMin, 0.0);

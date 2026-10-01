@@ -35,9 +35,9 @@ namespace PerfTimingSource{
 };
 
 namespace PerfMemoryPayloadFlag{
-    static constexpr auto kPerfMemoryPayloadFlagNoneBase = 0u;
+    static constexpr auto s_PerfMemoryPayloadFlagNoneBase = 0u;
     enum Mask : u16{
-        None = kPerfMemoryPayloadFlagNoneBase,
+        None = s_PerfMemoryPayloadFlagNoneBase,
         HasDelta = BitMask<u16>(0u),
     };
 };

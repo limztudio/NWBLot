@@ -78,7 +78,7 @@ TEST(BufferRangeStateTracking, PartialOverlapPreservesBothSidesAndWholeTransitio
 
     test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::UnorderedAccess);
     EXPECT_EQ(test.tracker.getBufferState(test.buffer.get()), Core::ResourceStates::UnorderedAccess);
-    EXPECT_EQ(test.tracker.getBufferState(test.buffer.get(), { 255u, Core::BufferRange::AllBytes }), Core::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(test.tracker.getBufferState(test.buffer.get(), { 255u, Core::BufferRange::s_AllBytes }), Core::ResourceStates::UnorderedAccess);
 }
 
 TEST(BufferRangeStateTracking, RetainedFallbackDoesNotClaimExplicitCoverage){
@@ -101,7 +101,7 @@ TEST(BufferRangeStateTracking, EmptyAndOverflowingUpdatesDoNotPublishState){
     test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::CopyDest, { 64u, 0u });
     test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::CopyDest, { 256u, 16u });
     test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::CopyDest, { 64u, 999u });
-    test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::CopyDest, { Core::BufferRange::AllBytes - 3u, 8u });
+    test.tracker.beginTrackingBuffer(test.buffer.get(), Core::ResourceStates::CopyDest, { Core::BufferRange::s_AllBytes - 3u, 8u });
 
     EXPECT_FALSE(test.tracker.hasExplicitBufferState(test.buffer.get()));
     EXPECT_EQ(test.tracker.getBufferState(test.buffer.get()), Core::ResourceStates::Unknown);

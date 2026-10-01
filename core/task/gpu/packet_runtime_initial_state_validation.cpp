@@ -102,7 +102,7 @@ bool GpuInitialStateHandoffValidation::validBufferRange(const BufferRange& range
     return
         range.hasExtent()
         && range.byteOffset < bufferSize
-        && (range.byteSize == BufferRange::AllBytes || range.byteSize <= bufferSize - range.byteOffset)
+        && (range.byteSize == BufferRange::s_AllBytes || range.byteSize <= bufferSize - range.byteOffset)
     ;
 }
 

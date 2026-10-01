@@ -81,7 +81,7 @@ namespace __hidden_camera{
         return activeCamera.camera;
     }
 
-    return Core::ECS::ENTITY_ID_INVALID;
+    return Core::ECS::s_InvalidEntityId;
 }
 
 

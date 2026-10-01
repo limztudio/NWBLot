@@ -390,9 +390,9 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::ShadowTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };

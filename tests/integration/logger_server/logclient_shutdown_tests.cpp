@@ -33,7 +33,7 @@ inline constexpr u32 s_FirstRequestDelayMilliseconds = 250u;
 class ShutdownCaptureServer final : NoCopy{
 private:
     static MHD_Result requestCallback(
-        void* cls,
+        void* serverContext,
         MHD_Connection* connection,
         const char* url,
         const char* method,
@@ -64,7 +64,7 @@ private:
 
 
 MHD_Result ShutdownCaptureServer::requestCallback(
-    void* const cls,
+    void* const serverContext,
     MHD_Connection* const connection,
     const char* const url,
     const char* const method,
@@ -77,13 +77,13 @@ MHD_Result ShutdownCaptureServer::requestCallback(
     static_cast<void>(version);
     static_cast<void>(uploadData);
 
-    if(!cls || !connection || !method || !uploadDataSize || !connectionContext)
+    if(!serverContext || !connection || !method || !uploadDataSize || !connectionContext)
         return MHD_NO;
     if(NWB_STRCMP(method, "POST") != 0)
         return MHD_NO;
 
     if(!*connectionContext){
-        *connectionContext = cls;
+        *connectionContext = serverContext;
         return MHD_YES;
     }
     if(*uploadDataSize != 0u){
@@ -91,7 +91,7 @@ MHD_Result ShutdownCaptureServer::requestCallback(
         return MHD_YES;
     }
 
-    auto& server = *static_cast<ShutdownCaptureServer*>(cls);
+    auto& server = *static_cast<ShutdownCaptureServer*>(serverContext);
     if(!server.m_delayedFirstRequest.exchange(true, MemoryOrder::acq_rel))
         SleepMS(s_FirstRequestDelayMilliseconds);
     server.m_requestCount.fetch_add(1u, MemoryOrder::release);

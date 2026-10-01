@@ -56,7 +56,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
 [[nodiscard]] inline u64 ComputeTlasStaticSceneHash(
     const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances
 ){
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendValue(hash, instances.size());
     for(const Core::RayTracingInstanceDesc& instance : instances)
@@ -70,7 +70,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
 ){
     NWB_ASSERT(instances.size() == primitives.size());
 
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendValue(hash, instances.size());
     for(usize index = 0u; index < instances.size(); ++index){
@@ -96,7 +96,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
 ){
     NWB_ASSERT(instanceMaterials.size() == instanceData.size());
 
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
     Fnv64AppendBuffer(
         hash,

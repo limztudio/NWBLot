@@ -561,9 +561,9 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     if(!resolveMaterialResourceFixtures(createdInfo))
         return false;
     createdInfo.shadingModelId = material.shadingModelId();
-    createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();
+    createdInfo.surfaceDispatchId = material.surfaceDispatchId();
     // UINT_MAX marks explicit opaque shaders without a surface hook; keep them out of CSG clipping.
-    createdInfo.csgCapSurfaceDispatchAvailable = createdInfo.shadowTransmittanceModelId != Limit<u32>::s_Max;
+    createdInfo.csgCapSurfaceDispatchAvailable = createdInfo.surfaceDispatchId != Limit<u32>::s_Max;
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();
     createdInfo.refractive = material.refractive();

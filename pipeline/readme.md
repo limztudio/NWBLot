@@ -1,7 +1,7 @@
 # Asset pipeline
 
 The pipeline has three independent executables and one Python orchestrator. Build
-the `nwb_pipeline` CMake target to produce `dependeny_computer`, `asset_builder`,
+the `nwb_pipeline` CMake target to produce `dependency_computer`, `asset_builder`,
 and `asset_gatherer` (with `.exe` on Windows). `NWB_BUILD_PIPELINE` controls these
 targets and the asset build libraries.
 
@@ -17,13 +17,13 @@ needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all thr
 tools from the selected CMake configuration. Configure, build, and pipeline
 failures retain their nonzero exit status at the root launcher.
 
-`dependeny_computer` currently returns exactly its inputs, preserving order and
+`dependency_computer` currently returns exactly its inputs, preserving order and
 duplicates. Root asset selection and dependency expansion are not implemented.
 It accepts multiple `--input` values, repeated `--input` options, or an
 `--input-list` file. Its `--output` is a UTF-8 file containing one input per line.
 
 ```console
-dependeny_computer --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
+dependency_computer --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
 ```
 
 `asset_builder` compiles selected `.nwb` assets into standalone runtime binary
@@ -72,7 +72,7 @@ asset_gatherer --input-list built/assets.list --output-directory runtime/res
 `pipeline/launch.py` replaces the removed `resource_cooker` executable. The root
 launcher discovers it as the `pipeline` command, using the same convention as the
 repository's other runnable directories. It discovers `.nwb` files, configures and
-builds `nwb_pipeline`, calls `dependeny_computer`, passes that result to
+builds `nwb_pipeline`, calls `dependency_computer`, passes that result to
 `asset_builder`, then passes the builder manifest to `asset_gatherer`. Discovery
 errors and failed stages stop the pipeline and preserve the published volume.
 

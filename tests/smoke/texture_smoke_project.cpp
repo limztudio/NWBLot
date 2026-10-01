@@ -171,8 +171,8 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     UniquePtr<FramebufferCapture> m_framebufferCapture;
-    NWB::Core::ECS::EntityID m_whiteGround = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_texturedSphere = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_whiteGround = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_texturedSphere = NWB::Core::ECS::s_InvalidEntityId;
     bool m_captureConfigurationValid = true;
 };
 

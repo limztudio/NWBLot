@@ -23,9 +23,9 @@ inline constexpr u16 s_DiagnosticPayloadVersion = 1u;
 inline constexpr u32 s_DiagnosticPayloadMagic = 0x4E574447u; // NWDG
 
 namespace DiagnosticPayloadFlag{
-    static constexpr auto kDiagnosticPayloadFlagNoneBase = 0u;
+    static constexpr auto s_DiagnosticPayloadFlagNoneBase = 0u;
     enum Mask : u16{
-        None = kDiagnosticPayloadFlagNoneBase,
+        None = s_DiagnosticPayloadFlagNoneBase,
         TerminatesProcess = BitMask<u16>(0u),
     };
 };

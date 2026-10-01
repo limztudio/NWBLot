@@ -85,9 +85,9 @@ namespace GpuTaskHazardType{
 // Dependency-edge flags are stored in the existing frame-graph telemetry payload without changing its wire format
 // or the renderer's live scheduling behavior.
 namespace GpuTaskGraphTelemetryEdgeFlag{
-    static constexpr u8 kGpuTaskGraphTelemetryEdgeFlagNoneBase = 0u;
+    static constexpr u8 s_GpuTaskGraphTelemetryEdgeFlagNoneBase = 0u;
     enum Mask : u8{
-        None = kGpuTaskGraphTelemetryEdgeFlagNoneBase,
+        None = s_GpuTaskGraphTelemetryEdgeFlagNoneBase,
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
         VersionDependency = 1u << 2u,
@@ -97,9 +97,9 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
 
 // Queue-assignment summary flags supplement the detailed frame-graph assignment payload.
 namespace GpuTaskGraphTelemetryNodeFlag{
-    static constexpr u8 kGpuTaskGraphTelemetryNodeFlagNoneBase = 0u;
+    static constexpr u8 s_GpuTaskGraphTelemetryNodeFlagNoneBase = 0u;
     enum Mask : u8{
-        None = kGpuTaskGraphTelemetryNodeFlagNoneBase,
+        None = s_GpuTaskGraphTelemetryNodeFlagNoneBase,
         AssignedGraphicsQueue = 1u << 0u,
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,

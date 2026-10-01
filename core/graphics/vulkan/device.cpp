@@ -243,7 +243,7 @@ Device::Device(const DeviceDesc& desc)
     m_context.instanceDispatch.vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
     m_pipelineCacheVolumeName.assign(VulkanDetail::s_PipelineCacheVolumeName);
 
-    m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
+    m_context.extensions.bufferDeviceAddress = desc.bufferDeviceAddressSupported;
     m_context.hostQueryResetFeatureEnabled = desc.hostQueryResetFeatureEnabled;
     m_context.textureCompressionBcFeatureEnabled = desc.textureCompressionBcFeatureEnabled;
     m_context.textureCompressionAstcLdrFeatureEnabled = desc.textureCompressionAstcLdrFeatureEnabled;

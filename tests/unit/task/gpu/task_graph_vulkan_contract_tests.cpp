@@ -490,7 +490,7 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     ));
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
-        Graphics::TextureSubresourceSet(0u, 1u, 1u, Graphics::TextureSubresourceSet::AllArraySlices)
+        Graphics::TextureSubresourceSet(0u, 1u, 1u, Graphics::TextureSubresourceSet::s_AllArraySlices)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
@@ -506,11 +506,11 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
-        Graphics::TextureSubresourceSet(0u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
+        Graphics::TextureSubresourceSet(0u, Graphics::TextureSubresourceSet::s_AllMipLevels, 0u, 1u)
     ));
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
-        Graphics::TextureSubresourceSet(1u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
+        Graphics::TextureSubresourceSet(1u, Graphics::TextureSubresourceSet::s_AllMipLevels, 0u, 1u)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc(),

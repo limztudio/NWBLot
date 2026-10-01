@@ -49,50 +49,50 @@ NWB_CRASH_BEGIN
     return "signal";
 }
 
-inline constexpr u32 kWindowsExceptionBreakpointCode = 0x80000003u;
-inline constexpr u32 kWindowsExceptionAccessViolationCode = 0xC0000005u;
-inline constexpr u32 kWindowsExceptionIllegalInstructionCode = 0xC000001Du;
-inline constexpr u32 kWindowsExceptionArrayBoundsExceededCode = 0xC000008Cu;
-inline constexpr u32 kWindowsExceptionFloatDenormalOperandCode = 0xC000008Du;
-inline constexpr u32 kWindowsExceptionFloatDivideByZeroCode = 0xC000008Eu;
-inline constexpr u32 kWindowsExceptionFloatInexactResultCode = 0xC000008Fu;
-inline constexpr u32 kWindowsExceptionFloatInvalidOperationCode = 0xC0000090u;
-inline constexpr u32 kWindowsExceptionFloatOverflowCode = 0xC0000091u;
-inline constexpr u32 kWindowsExceptionFloatStackCheckCode = 0xC0000092u;
-inline constexpr u32 kWindowsExceptionFloatUnderflowCode = 0xC0000093u;
-inline constexpr u32 kWindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
-inline constexpr u32 kWindowsExceptionIntegerOverflowCode = 0xC0000095u;
-inline constexpr u32 kWindowsExceptionStackOverflowCode = 0xC00000FDu;
+inline constexpr u32 s_WindowsExceptionBreakpointCode = 0x80000003u;
+inline constexpr u32 s_WindowsExceptionAccessViolationCode = 0xC0000005u;
+inline constexpr u32 s_WindowsExceptionIllegalInstructionCode = 0xC000001Du;
+inline constexpr u32 s_WindowsExceptionArrayBoundsExceededCode = 0xC000008Cu;
+inline constexpr u32 s_WindowsExceptionFloatDenormalOperandCode = 0xC000008Du;
+inline constexpr u32 s_WindowsExceptionFloatDivideByZeroCode = 0xC000008Eu;
+inline constexpr u32 s_WindowsExceptionFloatInexactResultCode = 0xC000008Fu;
+inline constexpr u32 s_WindowsExceptionFloatInvalidOperationCode = 0xC0000090u;
+inline constexpr u32 s_WindowsExceptionFloatOverflowCode = 0xC0000091u;
+inline constexpr u32 s_WindowsExceptionFloatStackCheckCode = 0xC0000092u;
+inline constexpr u32 s_WindowsExceptionFloatUnderflowCode = 0xC0000093u;
+inline constexpr u32 s_WindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
+inline constexpr u32 s_WindowsExceptionIntegerOverflowCode = 0xC0000095u;
+inline constexpr u32 s_WindowsExceptionStackOverflowCode = 0xC00000FDu;
 
 [[nodiscard]] inline const char* WindowsExceptionName(const u64 exceptionCode)noexcept{
     switch(exceptionCode){
-    case kWindowsExceptionBreakpointCode:
+    case s_WindowsExceptionBreakpointCode:
         return "breakpoint";
-    case kWindowsExceptionAccessViolationCode:
+    case s_WindowsExceptionAccessViolationCode:
         return "access_violation";
-    case kWindowsExceptionIllegalInstructionCode:
+    case s_WindowsExceptionIllegalInstructionCode:
         return "illegal_instruction";
-    case kWindowsExceptionArrayBoundsExceededCode:
+    case s_WindowsExceptionArrayBoundsExceededCode:
         return "array_bounds_exceeded";
-    case kWindowsExceptionFloatDenormalOperandCode:
+    case s_WindowsExceptionFloatDenormalOperandCode:
         return "float_denormal_operand";
-    case kWindowsExceptionFloatDivideByZeroCode:
+    case s_WindowsExceptionFloatDivideByZeroCode:
         return "float_divide_by_zero";
-    case kWindowsExceptionFloatInexactResultCode:
+    case s_WindowsExceptionFloatInexactResultCode:
         return "float_inexact_result";
-    case kWindowsExceptionFloatInvalidOperationCode:
+    case s_WindowsExceptionFloatInvalidOperationCode:
         return "float_invalid_operation";
-    case kWindowsExceptionFloatOverflowCode:
+    case s_WindowsExceptionFloatOverflowCode:
         return "float_overflow";
-    case kWindowsExceptionFloatStackCheckCode:
+    case s_WindowsExceptionFloatStackCheckCode:
         return "float_stack_check";
-    case kWindowsExceptionFloatUnderflowCode:
+    case s_WindowsExceptionFloatUnderflowCode:
         return "float_underflow";
-    case kWindowsExceptionIntegerDivideByZeroCode:
+    case s_WindowsExceptionIntegerDivideByZeroCode:
         return "integer_divide_by_zero";
-    case kWindowsExceptionIntegerOverflowCode:
+    case s_WindowsExceptionIntegerOverflowCode:
         return "integer_overflow";
-    case kWindowsExceptionStackOverflowCode:
+    case s_WindowsExceptionStackOverflowCode:
         return "stack_overflow";
     default:
         return "windows_exception";

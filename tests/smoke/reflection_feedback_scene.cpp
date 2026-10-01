@@ -121,12 +121,12 @@ Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, co
         m_world, entity, Name(s_Interface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3,
         Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
     ))
-        return Core::ECS::ENTITY_ID_INVALID;
+        return Core::ECS::s_InvalidEntityId;
     if(!Impl::SetMaterialMutableParameter(
         m_world, entity, Name(s_Interface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half,
         Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
     ))
-        return Core::ECS::ENTITY_ID_INVALID;
+        return Core::ECS::s_InvalidEntityId;
     return entity;
 }
 

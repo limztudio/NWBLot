@@ -578,7 +578,7 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
             0u,
             1u,
             0u,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         ),
     };
     const Graphics::GpuTaskResourceRange allMipsRange{
@@ -587,9 +587,9 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
     const Graphics::GpuTaskResourceRange unplannedTailRange{
         .textureSubresources = Graphics::TextureSubresourceSet(
             1u,
-            Graphics::TextureSubresourceSet::AllMipLevels,
+            Graphics::TextureSubresourceSet::s_AllMipLevels,
             0u,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         ),
     };
     const Graphics::GpuTaskResourceUse uses[] = {

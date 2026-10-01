@@ -17,7 +17,7 @@ namespace __hidden_dependency_computer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_DependencyComputerArena("pipeline/dependeny_computer");
+inline constexpr Name s_DependencyComputerArena("pipeline/dependency_computer");
 inline constexpr usize s_LineFeedReserveBytes = 1u;
 
 
@@ -47,9 +47,9 @@ int RunPipelineTool(const int argc, char** argv){
             text += '\n';
         }
         ErrorCode error;
-        const Path output = AbsolutePath(Path(arena, parsed.outputDirectory), error);
+        const Path output = AbsolutePath(Path(arena, parsed.outputPath), error);
         if(error || !EnsureDirectories(output.parent_path(), error) || !WriteTextFile(output, AStringView(text))){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputDirectory));
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputPath));
             return s_PipelineExitFailure;
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("DependencyComputer: returned {} inputs (skin dependencies: {})")

@@ -52,22 +52,22 @@ inline constexpr u64 s_NameHashByteMask = 0xFFu;
 
 static_assert(sizeof(NameHash) == s_NameHashBytes, "NameHash size must stay stable");
 
-inline constexpr u64 LANE_SEEDS[s_HashLaneCount] = {
-    FNV64_OFFSET_BASIS,
-    FNV64_OFFSET_BASIS ^ 0x0123456789ABCDEFull,
-    FNV64_OFFSET_BASIS ^ 0xFEDCBA9876543210ull,
-    FNV64_OFFSET_BASIS ^ 0x0F1E2D3C4B5A6978ull,
-    FNV64_OFFSET_BASIS ^ 0x8796A5B4C3D2E1F0ull,
-    FNV64_OFFSET_BASIS ^ 0xDEADBEEFCAFEBABEull,
-    FNV64_OFFSET_BASIS ^ 0x1234ABCD5678EF01ull,
-    FNV64_OFFSET_BASIS ^ 0xA0B1C2D3E4F50617ull,
+inline constexpr u64 s_LaneSeeds[s_HashLaneCount] = {
+    s_Fnv64OffsetBasis,
+    s_Fnv64OffsetBasis ^ 0x0123456789ABCDEFull,
+    s_Fnv64OffsetBasis ^ 0xFEDCBA9876543210ull,
+    s_Fnv64OffsetBasis ^ 0x0F1E2D3C4B5A6978ull,
+    s_Fnv64OffsetBasis ^ 0x8796A5B4C3D2E1F0ull,
+    s_Fnv64OffsetBasis ^ 0xDEADBEEFCAFEBABEull,
+    s_Fnv64OffsetBasis ^ 0x1234ABCD5678EF01ull,
+    s_Fnv64OffsetBasis ^ 0xA0B1C2D3E4F50617ull,
 };
-static_assert(sizeof(LANE_SEEDS) / sizeof(LANE_SEEDS[0]) == s_HashLaneCount, "LANE_SEEDS count must match s_HashLaneCount");
+static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_HashLaneCount, "s_LaneSeeds count must match s_HashLaneCount");
 
 
 inline constexpr void InitializeNameHash(NameHash& hash){
     for(u32 i = 0; i < s_HashLaneCount; ++i)
-        hash.qwords[i] = LANE_SEEDS[i];
+        hash.qwords[i] = s_LaneSeeds[i];
 }
 
 template<typename CharT>
@@ -75,7 +75,7 @@ inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT c
     const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
     for(u32 i = 0; i < s_HashLaneCount; ++i){
         hash.qwords[i] ^= byte;
-        hash.qwords[i] *= FNV64_PRIME;
+        hash.qwords[i] *= s_Fnv64Prime;
     }
 }
 
@@ -668,13 +668,13 @@ namespace NameDetail{
 inline u64 UpdateFnv64U64(u64 hash, const u64 value){
     for(u32 byteIndex = 0; byteIndex < sizeof(value); ++byteIndex){
         hash ^= static_cast<u8>((value >> (byteIndex * s_NameHashByteBitCount)) & s_NameHashByteMask);
-        hash *= FNV64_PRIME;
+        hash *= s_Fnv64Prime;
     }
     return hash;
 }
 
 inline constexpr char s_DerivePrefix[] = "nwb/name/derive";
-inline constexpr u64 s_DerivePrefixHash = FNV1a64(s_DerivePrefix, FNV64_OFFSET_BASIS);
+inline constexpr u64 s_DerivePrefixHash = FNV1a64(s_DerivePrefix, s_Fnv64OffsetBasis);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

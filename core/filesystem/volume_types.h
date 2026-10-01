@@ -18,9 +18,9 @@ NWB_FILESYSTEM_BEGIN
 
 
 namespace VolumeUsage{
-    static constexpr u8 kVolumeUsageRuntimeReadOnlyBase = 0;
+    static constexpr u8 s_VolumeUsageRuntimeReadOnlyBase = 0;
     enum Enum : u8{
-        RuntimeReadOnly = kVolumeUsageRuntimeReadOnlyBase,
+        RuntimeReadOnly = s_VolumeUsageRuntimeReadOnlyBase,
         RuntimeReadWrite,
         CookWrite
     };

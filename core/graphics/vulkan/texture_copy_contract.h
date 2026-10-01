@@ -24,9 +24,9 @@ namespace VulkanTextureDetail{
 
 
 namespace TextureCopyQueueRequirement{
-    static constexpr u8 kTextureCopyQueueRequirementTransferBase = 0u;
+    static constexpr u8 s_TextureCopyQueueRequirementTransferBase = 0u;
     enum Enum : u8{
-        Transfer = kTextureCopyQueueRequirementTransferBase,
+        Transfer = s_TextureCopyQueueRequirementTransferBase,
         ComputeOrGraphics,
         Graphics,
     };

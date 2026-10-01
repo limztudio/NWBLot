@@ -1002,7 +1002,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
 
 
 bool InitWaylandFrame(Frame& frame){
-    const char* AppName = frame.windowTitleOrDefault().get();
+    const char* windowTitle = frame.windowTitleOrDefault().get();
 
     auto& frameData = frame.data<Common::LinuxFrame>();
 
@@ -1072,8 +1072,8 @@ bool InitWaylandFrame(Frame& frame){
         return false;
     }
     xdg_toplevel_add_listener(context->toplevel, &s_ToplevelListener, context);
-    xdg_toplevel_set_title(context->toplevel, AppName);
-    xdg_toplevel_set_app_id(context->toplevel, AppName);
+    xdg_toplevel_set_title(context->toplevel, windowTitle);
+    xdg_toplevel_set_app_id(context->toplevel, windowTitle);
     xdg_toplevel_set_min_size(
         context->toplevel,
         LogicalDimensionForPixels(frameData.width(), context->bufferScale),

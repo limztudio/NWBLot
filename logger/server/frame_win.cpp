@@ -395,10 +395,10 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    const tchar* ClassName = NWB_TEXT("NWB_LOGGER");
-    const tchar* AppName = NWB_TEXT("NWBLogger");
-    constexpr DWORD StyleEx = 0;
-    constexpr DWORD Style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
+    const tchar* windowClassName = NWB_TEXT("NWB_LOGGER");
+    const tchar* windowTitle = NWB_TEXT("NWBLogger");
+    constexpr DWORD s_WindowExtendedStyle = 0;
+    constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 
     WNDCLASSEX wc = {};
     {
@@ -409,16 +409,16 @@ bool Frame::init(){
         wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
         // WNDCLASSEX encodes system color brushes as COLOR_* + 1.
         wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-        wc.lpszClassName = ClassName;
+        wc.lpszClassName = windowClassName;
     }
     if(!RegisterClassEx(&wc))
         return false;
 
     HWND hwnd = CreateWindowEx(
-        StyleEx,
+        s_WindowExtendedStyle,
         wc.lpszClassName,
-        AppName,
-        Style,
+        windowTitle,
+        s_WindowStyle,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         CW_USEDEFAULT,

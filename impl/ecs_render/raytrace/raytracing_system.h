@@ -76,9 +76,9 @@ namespace ECSRenderDetail{
 
 // Soft resolve either overwrites visibility or multiplies transparent transmittance.
 namespace SoftShadowUpsampleFold{
-    static constexpr auto kSoftShadowUpsampleFoldOverwriteBase = 0u;
+    static constexpr auto s_SoftShadowUpsampleFoldOverwriteBase = 0u;
     enum Enum : u32{
-        Overwrite = kSoftShadowUpsampleFoldOverwriteBase,
+        Overwrite = s_SoftShadowUpsampleFoldOverwriteBase,
         Multiply,
     };
 };

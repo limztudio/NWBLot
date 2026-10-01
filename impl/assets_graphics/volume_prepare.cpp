@@ -339,13 +339,13 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
 
     // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
-    Path shadowTransmittanceIncludeRoot(context.arena);
-    if(!EmitShadowTransmittanceDispatchModule(
+    Path shadowSurfaceIncludeRoot(context.arena);
+    if(!EmitShadowSurfaceDispatchModule(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         graphicsMetadata.materialBindEntries,
         materialEntries,
-        shadowTransmittanceIncludeRoot,
+        shadowSurfaceIncludeRoot,
         context.scratchArena
     ))
         return false;
@@ -457,7 +457,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         materialBindIncludeRoot,
         csgShapeIncludeRoot,
         deferredBxdfIncludeRoot,
-        shadowTransmittanceIncludeRoot,
+        shadowSurfaceIncludeRoot,
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,

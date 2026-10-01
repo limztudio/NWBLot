@@ -247,9 +247,9 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::s_InvalidEntityId;
+    NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("FlickerTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;

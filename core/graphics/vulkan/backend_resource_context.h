@@ -76,33 +76,33 @@ namespace VulkanDetail{
 
 
 namespace PipelineStencilFaceMode{
-    static constexpr u8 kPipelineStencilFaceModeDepthOnlyBase = 0u;
+    static constexpr u8 s_PipelineStencilFaceModeDepthOnlyBase = 0u;
     enum Enum : u8{
-        DepthOnly = kPipelineStencilFaceModeDepthOnlyBase,
+        DepthOnly = s_PipelineStencilFaceModeDepthOnlyBase,
         IncludeStencilFaces,
     };
 };
 
 namespace IndirectDrawIndexMode{
-    static constexpr u8 kIndirectDrawIndexModeNonIndexedBase = 0u;
+    static constexpr u8 s_IndirectDrawIndexModeNonIndexedBase = 0u;
     enum Enum : u8{
-        NonIndexed = kIndirectDrawIndexModeNonIndexedBase,
+        NonIndexed = s_IndirectDrawIndexModeNonIndexedBase,
         Indexed,
     };
 };
 
 namespace BufferImageCopyRequiredSize{
-    static constexpr u8 kBufferImageCopyRequiredSizeTouchedBytesBase = 0u;
+    static constexpr u8 s_BufferImageCopyRequiredSizeTouchedBytesBase = 0u;
     enum Enum : u8{
-        TouchedBytes = kBufferImageCopyRequiredSizeTouchedBytesBase,
+        TouchedBytes = s_BufferImageCopyRequiredSizeTouchedBytesBase,
         PaddedSlices,
     };
 };
 
 namespace BufferImageCopyPitchFields{
-    static constexpr u8 kBufferImageCopyPitchFieldsOmitImplicitBase = 0u;
+    static constexpr u8 s_BufferImageCopyPitchFieldsOmitImplicitBase = 0u;
     enum Enum : u8{
-        OmitImplicit = kBufferImageCopyPitchFieldsOmitImplicitBase,
+        OmitImplicit = s_BufferImageCopyPitchFieldsOmitImplicitBase,
         EmitExplicit,
     };
 };

@@ -81,7 +81,7 @@ TEST(ModelAttachment, AppliesOwnerObjectAndJointTransformsAcrossSharedParents){
     world.entity(owner).getComponent<Scene::TransformComponent>().position.x = 10.0f;
     const auto firstParent = MakeSkeleton(context, owner, 4u, 1.0f, 5.0f);
     const auto secondParent = MakeSkeleton(context, owner, 4u, 2.0f, 15.0f);
-    const auto unattached = MakeAttachment(context, owner, Core::ECS::ENTITY_ID_INVALID, Limit<u32>::s_Max, 2.0f);
+    const auto unattached = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, Limit<u32>::s_Max, 2.0f);
     const auto objectParent = MakeAttachment(context, owner, firstParent, Limit<u32>::s_Max, 2.0f);
     const auto firstJoint = MakeAttachment(context, owner, firstParent, s_ExpectedDualCount, 2.0f);
     const auto secondJoint = MakeAttachment(context, owner, firstParent, 0u, 3.0f);
@@ -149,7 +149,7 @@ TEST(ModelAttachment, PreservesOriginalAttachmentTransformWriteOrder){
     auto& world = context.testWorld.world;
     const auto owner = context.makeOwner();
     world.entity(owner).getComponent<Scene::TransformComponent>().position.x = 10.0f;
-    const auto first = MakeAttachment(context, owner, Core::ECS::ENTITY_ID_INVALID, Limit<u32>::s_Max, 2.0f);
+    const auto first = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, Limit<u32>::s_Max, 2.0f);
     const auto second = MakeAttachment(context, owner, first, Limit<u32>::s_Max, 3.0f);
     auto& pose = world.entity(first).addComponent<SkeletonPoseComponent>(context.testWorld.arena);
     pose.parentJoints = { s_SkeletonRootParent };

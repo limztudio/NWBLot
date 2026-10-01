@@ -70,7 +70,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(
         range.bufferRange.byteOffset >= description.byteSize
         || (
-            range.bufferRange.byteSize != BufferRange::AllBytes
+            range.bufferRange.byteSize != BufferRange::s_AllBytes
             && range.bufferRange.byteSize > description.byteSize - range.bufferRange.byteOffset
         )
     )
@@ -155,7 +155,7 @@ struct ResourceRangeBounds{
         outRange = GpuTaskResourceRange{
             .bufferRange = BufferRange(
                 bounds.xBegin,
-                bounds.xEnd == Limit<u64>::s_Max ? BufferRange::AllBytes : bounds.xEnd - bounds.xBegin
+                bounds.xEnd == Limit<u64>::s_Max ? BufferRange::s_AllBytes : bounds.xEnd - bounds.xBegin
             ),
         };
         return true;
@@ -171,11 +171,11 @@ struct ResourceRangeBounds{
         return false;
 
     const u64 mipCount = bounds.xEnd == Limit<u64>::s_Max
-        ? TextureSubresourceSet::AllMipLevels
+        ? TextureSubresourceSet::s_AllMipLevels
         : bounds.xEnd - bounds.xBegin
     ;
     const u64 arrayCount = bounds.yEnd == Limit<u64>::s_Max
-        ? TextureSubresourceSet::AllArraySlices
+        ? TextureSubresourceSet::s_AllArraySlices
         : bounds.yEnd - bounds.yBegin
     ;
     if(
@@ -183,8 +183,8 @@ struct ResourceRangeBounds{
         || arrayCount == 0u
         || mipCount > Limit<MipLevel>::s_Max
         || arrayCount > Limit<ArraySlice>::s_Max
-        || (bounds.xEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::AllMipLevels)
-        || (bounds.yEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::AllArraySlices)
+        || (bounds.xEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::s_AllMipLevels)
+        || (bounds.yEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::s_AllArraySlices)
     )
         return false;
 

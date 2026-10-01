@@ -107,7 +107,7 @@ if(TARGET nwb_asset_builder)
             --configuration "$<CONFIG>"
         COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}"
         DEPENDS
-            nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer
+            nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
             "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
             ${_nwb_testbed_asset_inputs}
         WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"

@@ -41,7 +41,7 @@ struct PipelineOptions{
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> inputs;
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> assetRoots;
     NWB::Core::Assets::AssetString repoRoot;
-    NWB::Core::Assets::AssetString outputDirectory;
+    NWB::Core::Assets::AssetString outputPath;
     NWB::Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
     ACompactString assetType;
@@ -51,7 +51,7 @@ struct PipelineOptions{
         : inputs(arena)
         , assetRoots(arena)
         , repoRoot(arena)
-        , outputDirectory(arena)
+        , outputPath(arena)
         , cacheDirectory(arena)
     {}
 };
@@ -84,7 +84,7 @@ private:
     InteropVector<AInteropString> m_assetRoots;
     AInteropString m_inputList;
     AInteropString m_repoRoot;
-    AInteropString m_outputDirectory;
+    AInteropString m_outputPath;
     AInteropString m_cacheDirectory;
     AInteropString m_configuration;
     AInteropString m_assetType;

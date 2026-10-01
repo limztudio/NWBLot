@@ -93,7 +93,7 @@ void RayTracingOpticalSceneGather::appendRuntime(
 }
 
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, header);
     for(const auto& instance : instances)
         Fnv64AppendValue(hash, instance);

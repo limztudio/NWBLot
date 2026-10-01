@@ -63,9 +63,9 @@ namespace GpuTaskQueueAssignmentReason{
 };
 
 namespace GpuTaskQueueAssignmentModifier{
-    static constexpr u8 kGpuTaskQueueAssignmentModifierNoneBase = 0u;
+    static constexpr u8 s_GpuTaskQueueAssignmentModifierNoneBase = 0u;
     enum Mask : u8{
-        None = kGpuTaskQueueAssignmentModifierNoneBase,
+        None = s_GpuTaskQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryRouting = 1u << 2u,

@@ -218,7 +218,7 @@ TEST(BufferRangeHandoff, SymbolicWholeBufferStateIsClippedToRequestedTail){
     Handoff source(context.arena);
     Handoff result(context.arena);
     context.addState(source, Core::s_EntireBuffer, Core::ResourceStates::ShaderResource);
-    ASSERT_TRUE(result.buildBufferRangeSubset(source, context.buffer.get(), { 192u, Core::BufferRange::AllBytes }));
+    ASSERT_TRUE(result.buildBufferRangeSubset(source, context.buffer.get(), { 192u, Core::BufferRange::s_AllBytes }));
     ASSERT_EQ(Access::stateHandoffBuffers(result).size(), 1u);
     EXPECT_EQ(Access::stateHandoffBuffers(result)[0u].range, Core::BufferRange(192u, 64u));
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner, { 192u, 64u }));

@@ -99,9 +99,9 @@ inline void AttachPipelineBindingState(
 // Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
 
 namespace DescriptorBufferSegmentKind{
-    static constexpr u8 kDescriptorBufferSegmentKindNoneBase = 0;
+    static constexpr u8 s_DescriptorBufferSegmentKindNoneBase = 0;
     enum Enum : u8{
-        None = kDescriptorBufferSegmentKindNoneBase,
+        None = s_DescriptorBufferSegmentKindNoneBase,
         Resource,
         Sampler,
     };

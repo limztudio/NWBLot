@@ -54,7 +54,7 @@ struct DescriptorBufferStartupPrerequisites{
 )noexcept{
     return {
         .descriptorBufferExtensionEnabled = context.extensions.EXT_descriptor_buffer,
-        .bufferDeviceAddressFeatureEnabled = context.extensions.buffer_device_address,
+        .bufferDeviceAddressFeatureEnabled = context.extensions.bufferDeviceAddress,
         .getBufferDeviceAddressAvailable = context.deviceDispatch.vkGetBufferDeviceAddress != nullptr,
         .getDescriptorAvailable = context.deviceDispatch.vkGetDescriptorEXT != nullptr,
         .getDescriptorSetLayoutSizeAvailable = context.deviceDispatch.vkGetDescriptorSetLayoutSizeEXT != nullptr,

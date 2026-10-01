@@ -58,9 +58,9 @@ class Texture;
 
 
 namespace MaterialParameterValueType{
-    static constexpr auto kMaterialParameterValueTypeNoneBase = 0;
+    static constexpr auto s_MaterialParameterValueTypeNoneBase = 0;
     enum Enum : u32{
-        None = kMaterialParameterValueTypeNoneBase,
+        None = s_MaterialParameterValueTypeNoneBase,
         Bool,
         Char,
         UChar,
@@ -74,9 +74,9 @@ namespace MaterialParameterValueType{
 };
 
 namespace MaterialBlockClass{
-    static constexpr auto kMaterialBlockClassNoneBase = 0;
+    static constexpr auto s_MaterialBlockClassNoneBase = 0;
     enum Enum : u32{
-        None = kMaterialBlockClassNoneBase,
+        None = s_MaterialBlockClassNoneBase,
         MaterialConstant,
         MaterialMutable,
     };
@@ -88,9 +88,9 @@ namespace MaterialBlockClass{
 
 
 namespace MaterialResourceKind{
-    static constexpr auto kMaterialResourceKindNoneBase = 0;
+    static constexpr auto s_MaterialResourceKindNoneBase = 0;
     enum Enum : u32{
-        None = kMaterialResourceKindNoneBase,
+        None = s_MaterialResourceKindNoneBase,
         SampledImage2D,
         Sampler,
     };
@@ -103,9 +103,9 @@ namespace MaterialResourceKind{
 
 // Resource fields name an engine/project asset resolved to a heap slot at runtime.
 namespace MaterialResourceSource{
-    static constexpr auto kMaterialResourceSourceNoneBase = 0u;
+    static constexpr auto s_MaterialResourceSourceNoneBase = 0u;
     enum Enum : u32{
-        None = kMaterialResourceSourceNoneBase,
+        None = s_MaterialResourceSourceNoneBase,
         Asset,
     };
 };
@@ -220,10 +220,10 @@ namespace MaterialResourceFixture{
 
 
 namespace MaterialLayoutFieldType{
-    static constexpr auto kMaterialLayoutFieldTypeNoneBase = 0;
-    static constexpr auto kSampledImage2DBase = 37;
+    static constexpr auto s_MaterialLayoutFieldTypeNoneBase = 0;
+    static constexpr auto s_SampledImage2DBase = 37;
     enum Enum : u32{
-        None = kMaterialLayoutFieldTypeNoneBase,
+        None = s_MaterialLayoutFieldTypeNoneBase,
         Bool,
         Bool2,
         Bool3,
@@ -262,7 +262,7 @@ namespace MaterialLayoutFieldType{
         Float4,
         // Resource fields occupy one patched uint heap slot in the typed-byte payload.
         // They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
-        SampledImage2D = kSampledImage2DBase,
+        SampledImage2D = s_SampledImage2DBase,
         Sampler,
     };
 };
@@ -492,7 +492,7 @@ public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
     void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
     void setShadingModelId(const u32 shadingModelId){ m_shadingModelId = shadingModelId; }
-    void setShadowTransmittanceModelId(const u32 shadowTransmittanceModelId){ m_shadowTransmittanceModelId = shadowTransmittanceModelId; }
+    void setSurfaceDispatchId(const u32 surfaceDispatchId){ m_surfaceDispatchId = surfaceDispatchId; }
     void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitAccumulatePixelShader = shaderAsset; }
     void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitOccupancyPixelShader = shaderAsset; }
     void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitExtinctionPixelShader = shaderAsset; }
@@ -514,7 +514,7 @@ public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const{ return m_shaderVariant; }
     [[nodiscard]] const Name& materialInterface()const{ return m_materialInterface; }
     [[nodiscard]] u32 shadingModelId()const{ return m_shadingModelId; }
-    [[nodiscard]] u32 shadowTransmittanceModelId()const{ return m_shadowTransmittanceModelId; }
+    [[nodiscard]] u32 surfaceDispatchId()const{ return m_surfaceDispatchId; }
     [[nodiscard]] u64 typedLayoutHash()const{ return m_typedLayoutHash; }
     [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const{ return m_typedLayoutBlocks; }
     [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const{ return m_typedLayoutFields; }
@@ -542,7 +542,7 @@ private:
     Core::Assets::AssetString m_shaderVariant;
     Name m_materialInterface = NAME_NONE;
     u32 m_shadingModelId = 0u;
-    u32 m_shadowTransmittanceModelId = 0u;
+    u32 m_surfaceDispatchId = 0u;
     u64 m_typedLayoutHash = 0u;
     TypedLayoutBlockVector m_typedLayoutBlocks;
     TypedLayoutFieldVector m_typedLayoutFields;

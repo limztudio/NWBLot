@@ -149,10 +149,10 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     fb->m_desc = desc;
     fb->m_framebufferInfo = FramebufferInfoEx(desc);
 
-    constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
-    const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), kMaxColorAttachments);
-    if(desc.colorAttachments.size() > kMaxColorAttachments)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
+    constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
+    const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), s_MaxColorAttachments);
+    if(desc.colorAttachments.size() > s_MaxColorAttachments)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxColorAttachments, s_MaxColorAttachments);
 
     fb->m_resources.reserve(
         static_cast<usize>(colorAttachmentCount)
@@ -389,10 +389,10 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
     const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
     // Dynamic rendering (VK_KHR_dynamic_rendering)
-    constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
-    VkRenderingAttachmentInfo colorAttachments[kMaxColorAttachments] = {};
+    constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
+    VkRenderingAttachmentInfo colorAttachments[s_MaxColorAttachments] = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
-    NWB_ASSERT(numColorAttachments <= kMaxColorAttachments);
+    NWB_ASSERT(numColorAttachments <= s_MaxColorAttachments);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
         auto* const tex = fbDesc.colorAttachments[i].texture;

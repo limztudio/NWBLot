@@ -429,9 +429,9 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         heap.bindCompute(commandList, *m_rayTracingState.m_surfelTraceBuildArgsPipeline.get());
         commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatch(
-            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_X,
-            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Y,
-            NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Z
+            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_X,
+            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Y,
+            NWB_SURFEL_TRACE_BUILD_ARGS_DISPATCH_GROUP_COUNT_Z
         );
     }
 

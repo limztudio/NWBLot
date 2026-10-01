@@ -186,7 +186,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
         return false;
     if(
         (usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
-        && (!context.extensions.buffer_device_address || !context.deviceDispatch.vkGetBufferDeviceAddress)
+        && (!context.extensions.bufferDeviceAddress || !context.deviceDispatch.vkGetBufferDeviceAddress)
     )
         return false;
 
@@ -265,7 +265,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
         if(desc.isAccelStructStorage)
             usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
     }
-    if(context.extensions.buffer_device_address)
+    if(context.extensions.bufferDeviceAddress)
         usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     return usage;
 }

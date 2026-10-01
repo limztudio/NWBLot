@@ -30,9 +30,9 @@ inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9 (added static materi
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported bits; loadBinary rejects anything outside it.
 namespace MaterialFlag{
-    static constexpr auto kMaterialFlagNoneBase = 0u;
+    static constexpr auto s_MaterialFlagNoneBase = 0u;
     enum Mask : u32{
-        None = kMaterialFlagNoneBase,
+        None = s_MaterialFlagNoneBase,
         Transparent = 1u << 0u,
         TwoSided = 1u << 1u,
         Refractive = 1u << 2u,
@@ -272,7 +272,7 @@ template<typename BlockVector, typename FieldVector>
     if(blocks.empty() && fields.empty())
         return 0u;
 
-    u64 hash = UpdateFnv64TextExact(FNV64_OFFSET_BASIS, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
+    u64 hash = UpdateFnv64TextExact(s_Fnv64OffsetBasis, AStringView("NWB_MATERIAL_TYPED_LAYOUT_V1"));
     const u32 blockCount = static_cast<u32>(blocks.size());
     const u32 fieldCount = static_cast<u32>(fields.size());
     hash = UpdateMaterialTypedLayoutHashValue(hash, blockCount);

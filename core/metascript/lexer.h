@@ -18,9 +18,9 @@ NWB_METASCRIPT_BEGIN
 
 
 namespace TokenType{
-    static constexpr u8 kTokenTypeIdentifierBase = 0;
+    static constexpr u8 s_TokenTypeIdentifierBase = 0;
     enum Enum : u8{
-        Identifier = kTokenTypeIdentifierBase,
+        Identifier = s_TokenTypeIdentifierBase,
         IntegerLiteral,
         DoubleLiteral,
         StringLiteral,

@@ -54,7 +54,7 @@ uint nwbMeshFrameViewHeapSlot(){
 // Reuse the cook-generated material-surface dispatch for GI albedo.
 // The heap-selected context above gives the evaluator the same typed constants and mutable instance storage its raster/shadow invocation reads.
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 #include "gi_trace_common.slangi"
 
@@ -135,14 +135,14 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
     NwbShadowHit surfaceHit;
     surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
     surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
     surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
     surfaceHit.worldNormal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objectShadingNormal), float3(0.0, 0.0, 1.0));
     surfaceHit.worldPosition = ray.Origin + ray.Direction * query.CommittedRayT();
     surfaceHit.rayDirection = ray.Direction;
 
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
 
     closest.hit = true;
     closest.t = query.CommittedRayT();

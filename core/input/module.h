@@ -19,35 +19,35 @@ NWB_CORE_BEGIN
 
 
 namespace InputAction{
-    static constexpr auto kInputActionReleaseBase = 0;
+    static constexpr auto s_InputActionReleaseBase = 0;
     enum Enum : i32{
-        Release = kInputActionReleaseBase,
+        Release = s_InputActionReleaseBase,
         Press,
         Repeat,
     };
 };
 
 namespace InputModifier{
-    static constexpr i32 kModifierShiftBits = 0x0001;
-    static constexpr i32 kModifierControlBits = 0x0002;
-    static constexpr i32 kModifierAltBits = 0x0004;
-    static constexpr i32 kModifierSuperBits = 0x0008;
-    static constexpr i32 kModifierCapsLockBits = 0x0010;
-    static constexpr i32 kModifierNumLockBits = 0x0020;
+    static constexpr i32 s_ModifierShiftBits = 0x0001;
+    static constexpr i32 s_ModifierControlBits = 0x0002;
+    static constexpr i32 s_ModifierAltBits = 0x0004;
+    static constexpr i32 s_ModifierSuperBits = 0x0008;
+    static constexpr i32 s_ModifierCapsLockBits = 0x0010;
+    static constexpr i32 s_ModifierNumLockBits = 0x0020;
     enum Enum : i32{
-        Shift = kModifierShiftBits,
-        Control = kModifierControlBits,
-        Alt = kModifierAltBits,
-        Super = kModifierSuperBits,
-        CapsLock = kModifierCapsLockBits,
-        NumLock = kModifierNumLockBits,
+        Shift = s_ModifierShiftBits,
+        Control = s_ModifierControlBits,
+        Alt = s_ModifierAltBits,
+        Super = s_ModifierSuperBits,
+        CapsLock = s_ModifierCapsLockBits,
+        NumLock = s_ModifierNumLockBits,
     };
 };
 
 namespace MouseButton{
-    static constexpr auto kMouseButtonLeftBase = 0;
+    static constexpr auto s_MouseButtonLeftBase = 0;
     enum Enum : i32{
-        Left = kMouseButtonLeftBase,
+        Left = s_MouseButtonLeftBase,
         Right,
         Middle,
         Button4,
@@ -59,27 +59,27 @@ namespace MouseButton{
 };
 
 namespace Key{
-    static constexpr i32 kKeyUnknownCode = -1;
-    static constexpr i32 kKeySpaceAscii = 32;
-    static constexpr i32 kKeyWorld1Code = 161;
-    static constexpr i32 kKeyLeftShiftCode = 340;
-    static constexpr i32 kKeyKeypad0Code = 320;
-    static constexpr i32 kKeyF1Code = 290;
-    static constexpr i32 kKeyCapsLockCode = 280;
-    static constexpr i32 kKeyEscapeCode = 256;
-    static constexpr i32 kKeyGraveAccentCode = 96;
-    static constexpr i32 kKeyLeftBracketCode = 91;
-    static constexpr i32 kKeyACode = 65;
-    static constexpr i32 kKeyEqualCode = 61;
-    static constexpr i32 kKeySemicolonCode = 59;
-    static constexpr i32 kKeyCommaCode = 44;
-    static constexpr i32 kKeyApostropheCode = 39;
+    static constexpr i32 s_KeyUnknownCode = -1;
+    static constexpr i32 s_KeySpaceAscii = 32;
+    static constexpr i32 s_KeyWorld1Code = 161;
+    static constexpr i32 s_KeyLeftShiftCode = 340;
+    static constexpr i32 s_KeyKeypad0Code = 320;
+    static constexpr i32 s_KeyF1Code = 290;
+    static constexpr i32 s_KeyCapsLockCode = 280;
+    static constexpr i32 s_KeyEscapeCode = 256;
+    static constexpr i32 s_KeyGraveAccentCode = 96;
+    static constexpr i32 s_KeyLeftBracketCode = 91;
+    static constexpr i32 s_KeyACode = 65;
+    static constexpr i32 s_KeyEqualCode = 61;
+    static constexpr i32 s_KeySemicolonCode = 59;
+    static constexpr i32 s_KeyCommaCode = 44;
+    static constexpr i32 s_KeyApostropheCode = 39;
     enum Enum : i32{
-        Unknown = kKeyUnknownCode,
+        Unknown = s_KeyUnknownCode,
 
-        Space = kKeySpaceAscii,
-        Apostrophe = kKeyApostropheCode,
-        Comma = kKeyCommaCode,
+        Space = s_KeySpaceAscii,
+        Apostrophe = s_KeyApostropheCode,
+        Comma = s_KeyCommaCode,
         Minus,
         Period,
         Slash,
@@ -93,9 +93,9 @@ namespace Key{
         Number7,
         Number8,
         Number9,
-        Semicolon = kKeySemicolonCode,
-        Equal = kKeyEqualCode,
-        A = kKeyACode,
+        Semicolon = s_KeySemicolonCode,
+        Equal = s_KeyEqualCode,
+        A = s_KeyACode,
         B,
         C,
         D,
@@ -121,13 +121,13 @@ namespace Key{
         X,
         Y,
         Z,
-        LeftBracket = kKeyLeftBracketCode,
+        LeftBracket = s_KeyLeftBracketCode,
         Backslash,
         RightBracket,
-        GraveAccent = kKeyGraveAccentCode,
+        GraveAccent = s_KeyGraveAccentCode,
         World2,
 
-        Escape = kKeyEscapeCode,
+        Escape = s_KeyEscapeCode,
         Enter,
         Tab,
         Backspace,
@@ -141,12 +141,12 @@ namespace Key{
         PageDown,
         Home,
         End,
-        CapsLock = kKeyCapsLockCode,
+        CapsLock = s_KeyCapsLockCode,
         ScrollLock,
         NumLock,
         PrintScreen,
         Pause,
-        F1 = kKeyF1Code,
+        F1 = s_KeyF1Code,
         F2,
         F3,
         F4,
@@ -171,7 +171,7 @@ namespace Key{
         F23,
         F24,
         F25,
-        Keypad0 = kKeyKeypad0Code,
+        Keypad0 = s_KeyKeypad0Code,
         Keypad1,
         Keypad2,
         Keypad3,
@@ -188,7 +188,7 @@ namespace Key{
         KeypadAdd,
         KeypadEnter,
         KeypadEqual,
-        LeftShift = kKeyLeftShiftCode,
+        LeftShift = s_KeyLeftShiftCode,
         LeftControl,
         LeftAlt,
         LeftSuper,

@@ -18,10 +18,10 @@ NWB_CORE_BEGIN
 
 
 namespace BlendFactor{
-    static constexpr u8 kBlendFactorZeroBase = 1;
-    static constexpr u8 kBlendFactorConstantColorBase = 14;
+    static constexpr u8 s_BlendFactorZeroBase = 1;
+    static constexpr u8 s_BlendFactorConstantColorBase = 14;
     enum Enum : u8{
-        Zero = kBlendFactorZeroBase,
+        Zero = s_BlendFactorZeroBase,
         One,
         SrcColor,
         InvSrcColor,
@@ -32,7 +32,7 @@ namespace BlendFactor{
         DstColor,
         InvDstColor,
         SrcAlphaSaturate,
-        ConstantColor = kBlendFactorConstantColorBase,
+        ConstantColor = s_BlendFactorConstantColorBase,
         InvConstantColor,
         Src1Color,
         InvSrc1Color,
@@ -42,9 +42,9 @@ namespace BlendFactor{
 };
 
 namespace BlendOp{
-    static constexpr u8 kBlendOpAddBase = 1;
+    static constexpr u8 s_BlendOpAddBase = 1;
     enum Enum : u8{
-        Add = kBlendOpAddBase,
+        Add = s_BlendOpAddBase,
        Subtract,
        ReverseSubtract,
        Min,
@@ -53,9 +53,9 @@ namespace BlendOp{
 };
 
 namespace ColorMask{
-    static constexpr u8 kColorMaskNoneBase = 0;
+    static constexpr u8 s_ColorMaskNoneBase = 0;
     enum Mask : u8{
-        None = kColorMaskNoneBase,
+        None = s_ColorMaskNoneBase,
 
         Red = 1 << 0,
         Green = 1 << 1,
@@ -223,9 +223,9 @@ struct RasterState{
 
 
 namespace StencilOp{
-    static constexpr u8 kStencilOpKeepBase = 1;
+    static constexpr u8 s_StencilOpKeepBase = 1;
     enum Enum : u8{
-        Keep = kStencilOpKeepBase,
+        Keep = s_StencilOpKeepBase,
         Zero,
         Replace,
         IncrementAndClamp,
@@ -237,9 +237,9 @@ namespace StencilOp{
 };
 
 namespace ComparisonFunc{
-    static constexpr u8 kComparisonFuncNeverBase = 1;
+    static constexpr u8 s_ComparisonFuncNeverBase = 1;
     enum Enum : u8{
-        Never = kComparisonFuncNeverBase,
+        Never = s_ComparisonFuncNeverBase,
         Less,
         Equal,
         LessOrEqual,

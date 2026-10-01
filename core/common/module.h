@@ -239,9 +239,9 @@ public:
 };
 #elif defined(NWB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
-    static constexpr u8 kLinuxFrameBackendNoneBase = 0;
+    static constexpr u8 s_LinuxFrameBackendNoneBase = 0;
     enum Enum : u8{
-        None = kLinuxFrameBackendNoneBase,
+        None = s_LinuxFrameBackendNoneBase,
         X11,
         Wayland,
     };

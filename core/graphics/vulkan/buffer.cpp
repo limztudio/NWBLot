@@ -309,7 +309,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         return nullptr;
     }
     if(d.isShaderBindingTable){
-        if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.buffer_device_address){
+        if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.bufferDeviceAddress){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             return nullptr;

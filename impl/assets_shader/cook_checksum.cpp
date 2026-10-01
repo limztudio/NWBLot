@@ -115,7 +115,7 @@ bool ShaderCook::computeDependencyChecksum(
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
 
-    outChecksum = FNV64_OFFSET_BASIS;
+    outChecksum = s_Fnv64OffsetBasis;
 
     if(dependencyRootAliases.size() == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
@@ -236,7 +236,7 @@ bool ShaderCook::computeSourceChecksum(
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';
 
-    outChecksum = FNV64_OFFSET_BASIS;
+    outChecksum = s_Fnv64OffsetBasis;
 
     const auto appendChecksumLine = [&outChecksum, &newlineByte](const AStringView text){
         outChecksum = UpdateFnv64TextExact(outChecksum, text);

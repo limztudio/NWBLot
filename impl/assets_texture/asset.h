@@ -20,9 +20,9 @@ NWB_IMPL_BEGIN
 
 
 namespace TextureColorSpace{
-    static constexpr u8 kTextureColorSpaceLinearBase = 0u;
+    static constexpr u8 s_TextureColorSpaceLinearBase = 0u;
     enum Enum : u8{
-        Linear = kTextureColorSpaceLinearBase,
+        Linear = s_TextureColorSpaceLinearBase,
         Srgb,
     };
 };

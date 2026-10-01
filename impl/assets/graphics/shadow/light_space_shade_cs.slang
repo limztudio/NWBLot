@@ -9,7 +9,7 @@
 #include "light_space_scene.slangi"
 #include "light_space_interpolation.slangi"
 #include "shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 #include "shadow_integrate.slangi"
 #if NWB_LIGHT_SPACE_CSG_SHADE
 #include "csg_shadow_shade.slangi"
@@ -111,13 +111,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 objectDirection = nwbSwBvhTransformVector(instance, towardLight);
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;
-        hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+        hit.surfaceDispatchId = material.surfaceDispatchId;
         hit.materialConstantByteOffset = material.materialConstantByteOffset;
         hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
         hit.worldNormal = nwbSwShadowTransformNormal(instance, normal);
         hit.worldPosition = world;
         hit.rayDirection = towardLight;
-        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+        const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
         const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometric), towardLight);
         const half smoothCosI = nwbShadowCosineToRay(hit.worldNormal, towardLight);
         const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));

@@ -40,7 +40,7 @@ namespace __hidden_csg_frame_state{
     if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
         return false;
 
-    u64 contentHash = FNV64_OFFSET_BASIS;
+    u64 contentHash = s_Fnv64OffsetBasis;
     auto cutterView = world.view<CsgCutterComponent>();
     cutterView.each(
         [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){

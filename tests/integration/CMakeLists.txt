@@ -105,7 +105,7 @@ if(TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
         COMMAND
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/pipeline_cli_tests.py"
-            --dependency-computer "$<TARGET_FILE:nwb_dependeny_computer>"
+            --dependency-computer "$<TARGET_FILE:nwb_dependency_computer>"
             --asset-builder "$<TARGET_FILE:nwb_asset_builder>"
             --asset-gatherer "$<TARGET_FILE:nwb_asset_gatherer>"
             --pipeline-launcher "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
@@ -116,7 +116,7 @@ endif()
 
 if(Python3_Interpreter_FOUND)
     set(nwb_terminal_cli_arguments)
-    foreach(nwb_terminal_pipeline IN ITEMS nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer)
+    foreach(nwb_terminal_pipeline IN ITEMS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer)
         if(TARGET ${nwb_terminal_pipeline})
             list(APPEND nwb_terminal_cli_arguments --pipeline "$<TARGET_FILE:${nwb_terminal_pipeline}>")
         endif()

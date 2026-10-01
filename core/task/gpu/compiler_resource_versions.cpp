@@ -70,12 +70,12 @@ namespace __hidden_gpu_task_resource_versions{
         const TextureSubresourceSet& resolved = outRange.textureSubresources;
         return requested.baseMipLevel == resolved.baseMipLevel
             && (
-                requested.numMipLevels == TextureSubresourceSet::AllMipLevels
+                requested.numMipLevels == TextureSubresourceSet::s_AllMipLevels
                 || requested.numMipLevels == resolved.numMipLevels
             )
             && requested.baseArraySlice == resolved.baseArraySlice
             && (
-                requested.numArraySlices == TextureSubresourceSet::AllArraySlices
+                requested.numArraySlices == TextureSubresourceSet::s_AllArraySlices
                 || requested.numArraySlices == resolved.numArraySlices
             )
         ;
@@ -88,7 +88,7 @@ namespace __hidden_gpu_task_resource_versions{
 
         const BufferRange& resolved = outRange.bufferRange;
         return requested.byteOffset == resolved.byteOffset
-            && (requested.byteSize == BufferRange::AllBytes || requested.byteSize == resolved.byteSize)
+            && (requested.byteSize == BufferRange::s_AllBytes || requested.byteSize == resolved.byteSize)
         ;
     }
     case GpuGraphResourceType::AccelStruct:

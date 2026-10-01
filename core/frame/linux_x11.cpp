@@ -386,8 +386,8 @@ static void ResetFrameData(Common::LinuxFrame& frameData){
 
 
 bool InitX11Frame(Frame& frame){
-    const tchar* AppName = frame.windowTitleOrDefault().get();
-    constexpr long EventMask =
+    const tchar* windowTitle = frame.windowTitleOrDefault().get();
+    constexpr long s_WindowEventMask =
         ExposureMask
         | FocusChangeMask
         | StructureNotifyMask
@@ -460,8 +460,8 @@ bool InitX11Frame(Frame& frame){
     Bool detectableAutoRepeat = False;
     s_DetectableAutoRepeat = XkbSetDetectableAutoRepeat(GetX11Display(frameData), True, &detectableAutoRepeat) != False && detectableAutoRepeat != False;
 
-    XSelectInput(GetX11Display(frameData), GetX11Window(frameData), EventMask);
-    XStoreName(GetX11Display(frameData), GetX11Window(frameData), AppName);
+    XSelectInput(GetX11Display(frameData), GetX11Window(frameData), s_WindowEventMask);
+    XStoreName(GetX11Display(frameData), GetX11Window(frameData), windowTitle);
 
     // Tag the top-level window with the process id so smoke teardown can locate
     // the exact window for graceful WM_DELETE_WINDOW close on headless XWayland,

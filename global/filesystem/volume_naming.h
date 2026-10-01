@@ -32,7 +32,7 @@
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
     NWB_ASSERT(!segmentIndexText.empty());
 
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     hash = UpdateFnv64TextExact(hash, volumeName);
     hash = UpdateFnv64TextExact(hash, AStringView("_"));
     hash = UpdateFnv64TextExact(hash, segmentIndexText);

@@ -96,7 +96,7 @@ LIT_OPT = "opt"
 LIT_REPO_ROOT = "--repo-root"
 LIT_CACHE_DIRECTORY = "--cache-directory"
 LIT_CUSTOM_ARTIFACTS = "custom artifacts"
-LIT_DEPENDENY_COMPUTER_EXE = "dependeny_computer.exe"
+LIT_DEPENDENCY_COMPUTER_EXE = "dependency_computer.exe"
 LIT_ASSET_BUILDER_EXE = "asset_builder.exe"
 LIT_ASSET_GATHERER_EXE = "asset_gatherer.exe"
 LIT_CONFIGURE = "configure"
@@ -678,7 +678,7 @@ class PipelineLauncherTests(unittest.TestCase):
             LIT_OUTPUT_DIRECTORY, str(self.output), LIT_CACHE_DIRECTORY, str(self.cache),
         ]
         self.tool_paths = {
-            "nwb_dependeny_computer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_DEPENDENY_COMPUTER_EXE,
+            "nwb_dependency_computer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_DEPENDENCY_COMPUTER_EXE,
             LIT_NWB_ASSET_BUILDER: self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_BUILDER_EXE,
             "nwb_asset_gatherer": self.root / LIT_CUSTOM_ARTIFACTS / LIT_ASSET_GATHERER_EXE,
         }
@@ -783,7 +783,7 @@ class PipelineLauncherTests(unittest.TestCase):
         printed = "\n".join(str(call.args[0]) for call in output.call_args_list)
         self.assertIn("NWB_BUILD_PIPELINE=ON", printed)
         self.assertIn("--target nwb_pipeline", printed)
-        for executable in (LIT_DEPENDENY_COMPUTER_EXE, LIT_ASSET_BUILDER_EXE, LIT_ASSET_GATHERER_EXE):
+        for executable in (LIT_DEPENDENCY_COMPUTER_EXE, LIT_ASSET_BUILDER_EXE, LIT_ASSET_GATHERER_EXE):
             self.assertIn(executable, printed)
         self.assertIn("--configuration opt", printed)
 

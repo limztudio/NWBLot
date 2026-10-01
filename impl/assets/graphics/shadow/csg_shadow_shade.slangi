@@ -78,13 +78,13 @@ bool nwbCsgShadowCapEvent(
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instance);
     NwbShadowHit hit;
     hit.meshInstanceIndex = material.meshInstanceIndex;
-    hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    hit.surfaceDispatchId = material.surfaceDispatchId;
     hit.materialConstantByteOffset = material.materialConstantByteOffset;
     hit.uv0 = float2(0.0);
     hit.worldNormal = normal;
     hit.worldPosition = world;
     hit.rayDirection = -rayDirection;
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
     const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
     const half transmission = nwbShadowFresnelTransmittedFraction(surface.refractionIor, nwbShadowCosineToRay(normal, rayDirection));
     if(!all(isfinite(world)) || !all(isfinite(float3(absorption))) || !isfinite(float(transmission)))

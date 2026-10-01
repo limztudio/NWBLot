@@ -76,9 +76,9 @@ struct PendingOpacityMicromapBuildCommit{
 };
 
 namespace TrackedCommandBufferArenaState{
-    static constexpr u8 kTrackedCommandBufferArenaStateUntrackedBase = 0u;
+    static constexpr u8 s_TrackedCommandBufferArenaStateUntrackedBase = 0u;
     enum Enum : u8{
-        Untracked = kTrackedCommandBufferArenaStateUntrackedBase,
+        Untracked = s_TrackedCommandBufferArenaStateUntrackedBase,
         Leased,
         Reusable,
         Pending,

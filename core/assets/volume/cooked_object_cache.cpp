@@ -105,7 +105,7 @@ static AssetVolumeObjectFileHeader BuildObjectFileHeader(
     header.payloadSize = static_cast<u64>(payload.size());
     header.payloadHash = ComputeFnv64Bytes(payload.data(), payload.size());
     const u64 configurationHash = ComputeFnv64Text(configurationSafeName);
-    u64 cookKeyHash = FNV64_OFFSET_BASIS;
+    u64 cookKeyHash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(cookKeyHash, s_ObjectCookKeyVersion);
     Fnv64AppendValue(cookKeyHash, s_ObjectFileVersion);
     Fnv64AppendValue(cookKeyHash, configurationHash);

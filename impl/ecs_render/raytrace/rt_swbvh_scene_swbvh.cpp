@@ -91,7 +91,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     bool staticScene = true;
     bool contentComplete = true;
     bool captureSceneTrusted = true;
-    u64 captureSceneIdentity = FNV64_OFFSET_BASIS;
+    u64 captureSceneIdentity = s_Fnv64OffsetBasis;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
     ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
@@ -228,7 +228,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(
-                materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
+                materialInfo->surfaceDispatchId != Limit<u32>::s_Max
                 && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector)
             )
                 return false;
@@ -245,9 +245,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
+        if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
             contentComplete = false;
-        if(!materialInfo || (materialInfo->transparent && materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max))
+        if(!materialInfo || (materialInfo->transparent && materialInfo->surfaceDispatchId == Limit<u32>::s_Max))
             opticalScene.markIncomplete();
         instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();

@@ -671,7 +671,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 return false;
             // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.
             csgRange.shadingModelId = materialInfo->shadingModelId;
-            csgRange.surfaceDispatchId = materialInfo->shadowTransmittanceModelId;
+            csgRange.surfaceDispatchId = materialInfo->surfaceDispatchId;
             csgRange.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
             csgRange.meshInstanceIndex = instanceIndex;
             NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());

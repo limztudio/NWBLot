@@ -6,9 +6,9 @@ target_sources(nwb_pipeline_command_line PRIVATE
 target_link_libraries(nwb_pipeline_command_line PUBLIC nwb_assets_cook nwb_logclient nwb::cli11_headers)
 target_compile_definitions(nwb_pipeline_command_line PRIVATE NWB_COOK=1)
 
-add_subdirectory(dependeny_computer)
+add_subdirectory(dependency_computer)
 add_subdirectory(asset_builder)
 add_subdirectory(asset_gatherer)
 
-add_custom_target(nwb_pipeline DEPENDS nwb_dependeny_computer nwb_asset_builder nwb_asset_gatherer)
+add_custom_target(nwb_pipeline DEPENDS nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer)
 

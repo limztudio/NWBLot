@@ -23,11 +23,11 @@ namespace ECSDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 ENTITY_INDEX_BITS = 22;
-inline constexpr u32 ENTITY_GENERATION_BITS = 10;
-inline constexpr u32 ENTITY_INDEX_MASK = (1u << ENTITY_INDEX_BITS) - 1u;
-inline constexpr u32 ENTITY_GENERATION_MASK = (1u << ENTITY_GENERATION_BITS) - 1u;
-inline constexpr u32 ENTITY_INVALID_INDEX = ENTITY_INDEX_MASK;
+inline constexpr u32 s_EntityIndexBits = 22;
+inline constexpr u32 s_EntityGenerationBits = 10;
+inline constexpr u32 s_EntityIndexMask = (1u << s_EntityIndexBits) - 1u;
+inline constexpr u32 s_EntityGenerationMask = (1u << s_EntityGenerationBits) - 1u;
+inline constexpr u32 s_EntityInvalidIndex = s_EntityIndexMask;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -57,19 +57,19 @@ struct EntityID{
     {}
     inline constexpr EntityID(u32 index, u32 generation)
         : id(
-            ((generation & ECSDetail::ENTITY_GENERATION_MASK) << ECSDetail::ENTITY_INDEX_BITS)
-            | (index & ECSDetail::ENTITY_INDEX_MASK)
+            ((generation & ECSDetail::s_EntityGenerationMask) << ECSDetail::s_EntityIndexBits)
+            | (index & ECSDetail::s_EntityIndexMask)
         ){}
 
-    inline constexpr u32 index()const{ return id & ECSDetail::ENTITY_INDEX_MASK; }
-    inline constexpr u32 generation()const{ return (id >> ECSDetail::ENTITY_INDEX_BITS) & ECSDetail::ENTITY_GENERATION_MASK; }
-    inline constexpr bool valid()const{ return index() != ECSDetail::ENTITY_INVALID_INDEX; }
+    inline constexpr u32 index()const{ return id & ECSDetail::s_EntityIndexMask; }
+    inline constexpr u32 generation()const{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }
+    inline constexpr bool valid()const{ return index() != ECSDetail::s_EntityInvalidIndex; }
 };
 inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs){ return lhs.id == rhs.id; }
 inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs){ return lhs.id != rhs.id; }
 inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs){ return lhs.id < rhs.id; }
 
-inline constexpr EntityID ENTITY_ID_INVALID = EntityID{};
+inline constexpr EntityID s_InvalidEntityId = EntityID{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

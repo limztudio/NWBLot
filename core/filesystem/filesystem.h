@@ -26,9 +26,9 @@ static constexpr usize s_ByteElementSize = 1;
 interface IFilesystem;
 
 namespace FileSeekOrigin{
-    static constexpr u8 kFileSeekOriginBeginBase = 0;
+    static constexpr u8 s_FileSeekOriginBeginBase = 0;
     enum Enum : u8{
-        Begin = kFileSeekOriginBeginBase,
+        Begin = s_FileSeekOriginBeginBase,
         Current,
         End
     };

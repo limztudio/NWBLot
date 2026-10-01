@@ -248,7 +248,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
 
 
 struct SceneCameraView{
-    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     TransformComponent* transform = nullptr;
     CameraComponent* camera = nullptr;
     CameraProjection projection;

@@ -36,7 +36,7 @@ static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/b
 
 
 // Sentinel id for surface-less materials; never emitted as a dispatch case.
-static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
+static constexpr u32 s_NoSurfaceDispatchId = Limit<u32>::s_Max;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +75,7 @@ bool AssignMaterialShadingModelIdsImpl(
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
-    // Transmittance id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI
+    // Surface dispatch id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI
     // hits the neutral fallback, never an unrelated hook.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
@@ -87,23 +87,23 @@ bool AssignMaterialShadingModelIdsImpl(
 
     uniqueSurfaces.erase(Unique(uniqueSurfaces.begin(), uniqueSurfaces.end()), uniqueSurfaces.end());
     if(uniqueSurfaces.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique shadow transmittance surfaces"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique material surfaces"));
         return false;
     }
 
     for(MaterialCookEntry& entry : materialEntries){
         if(entry.surfaceSource.empty()){
-            entry.shadowTransmittanceModelId = s_ShadowTransmittanceNoSurfaceModelId;
+            entry.surfaceDispatchId = s_NoSurfaceDispatchId;
             continue;
         }
 
         const AStringView surface(entry.surfaceSource);
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
         if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shadow transmittance id for '{}'"), StringConvert(entry.virtualPath.c_str()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(entry.virtualPath.c_str()));
             return false;
         }
-        entry.shadowTransmittanceModelId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
+        entry.surfaceDispatchId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
     }
     return true;
 }
@@ -230,23 +230,23 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// shadow transmittance dispatch (per-material surface id + generated dispatch module)
-static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSurface";
-static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
-static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
+// Surface dispatch (per-material surface id + generated dispatch module)
+static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
+static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
+static constexpr AStringView s_ShadowSurfaceWrapperPrefix = "nwbShadowSurfaceWrapper";
 
 // Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the
 // one TU that concatenates multiple `.bind` files). The project-owned `.surface` fragment stays global so its guarded
 // helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
-static constexpr AStringView s_ShadowTransmittanceBindNamespacePrefix = "nwbShadowBindModel";
+static constexpr AStringView s_ShadowSurfaceBindNamespacePrefix = "nwbShadowBindModel";
 
-static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
+static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/surface_dispatch.slangi";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static Path BuildShadowTransmittanceIncludeRoot(
+static Path BuildShadowSurfaceIncludeRoot(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     ScratchArena& scratchArena
@@ -259,7 +259,7 @@ static Path BuildShadowTransmittanceIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShadowTransmittanceBindEntryLookup = HashMap<
+using ShadowSurfaceBindEntryLookup = HashMap<
     Name,
     const MaterialBindEntry*,
     Hasher<Name>,
@@ -267,7 +267,7 @@ using ShadowTransmittanceBindEntryLookup = HashMap<
     ScratchArena
 >;
 
-using ShadowTransmittanceBindNamespaceLookup = HashMap<
+using ShadowSurfaceBindNamespaceLookup = HashMap<
     Name,
     u32,
     Hasher<Name>,
@@ -275,17 +275,17 @@ using ShadowTransmittanceBindNamespaceLookup = HashMap<
     ScratchArena
 >;
 
-using ShadowTransmittanceBindAliasVector = Vector<ScratchString, ScratchArena>;
+using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendShadowTransmittanceBindAlias(
+static void AppendShadowSurfaceBindAlias(
     const AStringView symbol,
     const AStringView bindNamespace,
     ScratchHashSet<ScratchString>& inOutSeenSymbols,
-    ShadowTransmittanceBindAliasVector& outAliasSymbols,
+    ShadowSurfaceBindAliasVector& outAliasSymbols,
     CookString& inOutSource,
     ScratchArena& scratchArena
 ){
@@ -305,11 +305,11 @@ static void AppendShadowTransmittanceBindAlias(
     outAliasSymbols.push_back(Move(aliasSymbol));
 }
 
-static bool AppendShadowTransmittanceBindAliases(
+static bool AppendShadowSurfaceBindAliases(
     const MaterialBindEntry& bindEntry,
     const AStringView bindNamespace,
     ScratchHashSet<ScratchString>& inOutSeenSymbols,
-    ShadowTransmittanceBindAliasVector& outAliasSymbols,
+    ShadowSurfaceBindAliasVector& outAliasSymbols,
     CookString& inOutSource,
     ScratchArena& scratchArena
 ){
@@ -324,7 +324,7 @@ static bool AppendShadowTransmittanceBindAliases(
         ScratchString suffix("INTERFACE_HASH_", scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
-        AppendShadowTransmittanceBindAlias(
+        AppendShadowSurfaceBindAlias(
             AStringView(symbol),
             bindNamespace,
             inOutSeenSymbols,
@@ -345,7 +345,7 @@ static bool AppendShadowTransmittanceBindAliases(
     };
     for(const AStringView suffix : layoutSymbols){
         const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
-        AppendShadowTransmittanceBindAlias(
+        AppendShadowSurfaceBindAlias(
             AStringView(symbol),
             bindNamespace,
             inOutSeenSymbols,
@@ -356,7 +356,7 @@ static bool AppendShadowTransmittanceBindAliases(
     }
 
     for(const MaterialBindStruct& bindStruct : bindEntry.structs){
-        AppendShadowTransmittanceBindAlias(
+        AppendShadowSurfaceBindAlias(
             AStringView(bindStruct.name),
             bindNamespace,
             inOutSeenSymbols,
@@ -369,7 +369,7 @@ static bool AppendShadowTransmittanceBindAliases(
     for(const MaterialBindInstance& instance : bindEntry.instances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
         if(!bindStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: interface '{}' instance '{}' has unknown type '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'")
                 , StringConvert(bindEntry.virtualPath)
                 , StringConvert(instance.name)
                 , StringConvert(instance.type)
@@ -385,7 +385,7 @@ static bool AppendShadowTransmittanceBindAliases(
                 { instanceName },
                 suffix
             );
-            AppendShadowTransmittanceBindAlias(
+            AppendShadowSurfaceBindAlias(
                 AStringView(symbol),
                 bindNamespace,
                 inOutSeenSymbols,
@@ -396,7 +396,7 @@ static bool AppendShadowTransmittanceBindAliases(
         }
 
         const ScratchString blockAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName });
-        AppendShadowTransmittanceBindAlias(
+        AppendShadowSurfaceBindAlias(
             AStringView(blockAccessor),
             bindNamespace,
             inOutSeenSymbols,
@@ -414,7 +414,7 @@ static bool AppendShadowTransmittanceBindAliases(
                     { instanceName, fieldName },
                     suffix
                 );
-                AppendShadowTransmittanceBindAlias(
+                AppendShadowSurfaceBindAlias(
                     AStringView(symbol),
                     bindNamespace,
                     inOutSeenSymbols,
@@ -428,7 +428,7 @@ static bool AppendShadowTransmittanceBindAliases(
                 scratchArena,
                 { instanceName, fieldName }
             );
-            AppendShadowTransmittanceBindAlias(
+            AppendShadowSurfaceBindAlias(
                 AStringView(fieldAccessor),
                 bindNamespace,
                 inOutSeenSymbols,
@@ -442,8 +442,8 @@ static bool AppendShadowTransmittanceBindAliases(
     return true;
 }
 
-static void AppendShadowTransmittanceBindAliasUndefines(
-    const ShadowTransmittanceBindAliasVector& aliasSymbols,
+static void AppendShadowSurfaceBindAliasUndefines(
+    const ShadowSurfaceBindAliasVector& aliasSymbols,
     CookString& inOutSource
 ){
     for(usize index = aliasSymbols.size(); index > 0u; ){
@@ -455,22 +455,22 @@ static void AppendShadowTransmittanceBindAliasUndefines(
     }
 }
 
-static bool BuildShadowTransmittanceBindEntryLookup(
+static bool BuildShadowSurfaceBindEntryLookup(
     const CookVector<MaterialBindEntry>& materialBindEntries,
-    ShadowTransmittanceBindEntryLookup& outLookup
+    ShadowSurfaceBindEntryLookup& outLookup
 ){
     outLookup.clear();
     outLookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
         const Name interfaceName(AStringView(bindEntry.virtualPath));
         if(!interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: material bind interface path '{}' is invalid")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid")
                 , StringConvert(bindEntry.virtualPath)
             );
             return false;
         }
         if(!outLookup.emplace(interfaceName, &bindEntry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
             return false;
         }
     }
@@ -482,7 +482,7 @@ static bool BuildShadowTransmittanceBindEntryLookup(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EmitShadowTransmittanceDispatchModuleImpl(
+bool EmitShadowSurfaceDispatchModuleImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CookVector<MaterialBindEntry>& materialBindEntries,
@@ -491,11 +491,11 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     ScratchArena& scratchArena
 ){
     outIncludeRoot.clear();
-    outIncludeRoot = BuildShadowTransmittanceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow transmittance dispatch"))
+    outIncludeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow surface dispatch"))
         return false;
 
-    // Build a dense shadowTransmittanceModelId -> (surface source, .bind interface) table from the (already
+    // Build a dense surfaceDispatchId -> (surface source, .bind interface) table from the (already
     // assigned) materials. Each unique surface appears at exactly one id; materials sharing a surface share the
     // slot. The interface is carried alongside because the surface hook reads its typed `.bind` accessors by
     // fixed name -- materials sharing a surface therefore share the interface.
@@ -505,8 +505,8 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         if(entry.surfaceSource.empty())
             continue;
         anySurface = true;
-        if(entry.shadowTransmittanceModelId > maxId)
-            maxId = entry.shadowTransmittanceModelId;
+        if(entry.surfaceDispatchId > maxId)
+            maxId = entry.surfaceDispatchId;
     }
 
     Vector<AStringView, ScratchArena> surfaceById(scratchArena);
@@ -520,29 +520,29 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
             continue;
 
         const AStringView surface(entry.surfaceSource);
-        AStringView& surfaceSlot = surfaceById[entry.shadowTransmittanceModelId];
+        AStringView& surfaceSlot = surfaceById[entry.surfaceDispatchId];
         if(!surfaceSlot.empty() && surfaceSlot != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple surface sources"), entry.shadowTransmittanceModelId);
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple surface sources"), entry.surfaceDispatchId);
             return false;
         }
         surfaceSlot = surface;
 
         const AStringView interfaceName(entry.materialInterface);
-        AStringView& interfaceSlot = interfaceById[entry.shadowTransmittanceModelId];
+        AStringView& interfaceSlot = interfaceById[entry.surfaceDispatchId];
         if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} maps to multiple material interfaces"), entry.shadowTransmittanceModelId);
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple material interfaces"), entry.surfaceDispatchId);
             return false;
         }
         interfaceSlot = interfaceName;
     }
 
-    ShadowTransmittanceBindEntryLookup bindEntryLookup(
+    ShadowSurfaceBindEntryLookup bindEntryLookup(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),
         scratchArena
     );
-    if(!BuildShadowTransmittanceBindEntryLookup(materialBindEntries, bindEntryLookup))
+    if(!BuildShadowSurfaceBindEntryLookup(materialBindEntries, bindEntryLookup))
         return false;
 
     Vector<const MaterialBindEntry*, ScratchArena> bindEntryById(scratchArena);
@@ -552,7 +552,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         bindNamespaceIdById.resize(surfaceById.size());
     }
 
-    ShadowTransmittanceBindNamespaceLookup bindNamespaceLookup(
+    ShadowSurfaceBindNamespaceLookup bindNamespaceLookup(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),
@@ -566,7 +566,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         const Name interfaceName(interfaceById[id]);
         const auto bindEntryIt = bindEntryLookup.find(interfaceName);
         if(bindEntryIt == bindEntryLookup.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} references unknown material interface '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'")
                 , id
                 , StringConvert(interfaceById[id])
             );
@@ -586,8 +586,8 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     CookArena& arena = materialEntries.get_allocator().arena();
     CookString source(arena);
     source += "// Generated by AssetBuilder from material `surface` declarations. Do not edit.\n";
-    source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n";
-    source += "#define NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n\n";
+    source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n";
+    source += "#define NWB_GRAPHICS_SHADOW_GENERATED_SURFACE_DISPATCH_SLANGI\n\n";
 
     // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting
     // it here would force an unresolvable virtual engine/ include path.
@@ -600,7 +600,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         EqualTo<ScratchString>(),
         scratchArena
     };
-    ShadowTransmittanceBindAliasVector bindAliasSymbols(scratchArena);
+    ShadowSurfaceBindAliasVector bindAliasSymbols(scratchArena);
     ScratchString bindNamespace(scratchArena);
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
@@ -612,7 +612,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         char bindNamespaceIdText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView bindNamespaceIdView = FormatDecimal(bindNamespaceId, bindNamespaceIdText);
         bindNamespace.clear();
-        bindNamespace += s_ShadowTransmittanceBindNamespacePrefix;
+        bindNamespace += s_ShadowSurfaceBindNamespacePrefix;
         bindNamespace += bindNamespaceIdView;
         if(bindNamespaceId == static_cast<u32>(id)){
             source += "namespace ";
@@ -621,7 +621,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
             source += interfaceById[id];
             source += ".bind\"\n}\n";
         }
-        if(!AppendShadowTransmittanceBindAliases(
+        if(!AppendShadowSurfaceBindAliases(
             *bindEntryById[id],
             AStringView(bindNamespace),
             bindAliasSeenSymbols,
@@ -631,32 +631,32 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         ))
             return false;
         source += "#define ";
-        source += s_ShadowTransmittanceSurfaceMacro;
+        source += s_ShadowSurfaceFunctionMacro;
         source += ' ';
-        source += s_ShadowTransmittanceModelPrefix;
+        source += s_ShadowSurfaceModelPrefix;
         source += idView;
         source += "\n#include \"";
         source += surfaceById[id];
         source += "\"\n#undef ";
-        source += s_ShadowTransmittanceSurfaceMacro;
+        source += s_ShadowSurfaceFunctionMacro;
         source += "\n";
-        AppendShadowTransmittanceBindAliasUndefines(bindAliasSymbols, source);
+        AppendShadowSurfaceBindAliasUndefines(bindAliasSymbols, source);
         source += "NwbMeshSurface ";
-        source += s_ShadowTransmittanceWrapperPrefix;
+        source += s_ShadowSurfaceWrapperPrefix;
         source += idView;
         source += "(NwbShadowHit hit){\n";
         source += "    nwbShadowSetMaterialContext(hit);\n";
         source += "    NwbMeshSurfaceInputs in = nwbShadowBuildSurfaceInputs(hit);\n";
         source += "    nwbLoadMeshSurfaceInputs(in);\n";
         source += "    return ";
-        source += s_ShadowTransmittanceModelPrefix;
+        source += s_ShadowSurfaceModelPrefix;
         source += idView;
         source += "();\n";
         source += "}\n\n";
     }
 
-    source += "NwbMeshSurface nwbShadowDispatchSurface(uint shadingModel, NwbShadowHit hit){\n";
-    source += "    switch(shadingModel){\n";
+    source += "NwbMeshSurface nwbShadowDispatchSurface(uint surfaceDispatchId, NwbShadowHit hit){\n";
+    source += "    switch(surfaceDispatchId){\n";
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
@@ -666,7 +666,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "    case ";
         source += idView;
         source += "u: return ";
-        source += s_ShadowTransmittanceWrapperPrefix;
+        source += s_ShadowSurfaceWrapperPrefix;
         source += idView;
         source += "(hit);\n";
     }
@@ -677,17 +677,17 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     source += "    }\n";
     source += "}\n\n#endif\n";
 
-    const Path outputPath = outIncludeRoot / s_ShadowTransmittanceModuleSubPath.data();
+    const Path outputPath = outIncludeRoot / s_ShadowSurfaceModuleSubPath.data();
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include parent '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parent_path())
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to write generated include '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;

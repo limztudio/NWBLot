@@ -327,7 +327,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_shaderVariant.clear();
     m_materialInterface = NAME_NONE;
     m_shadingModelId = 0u;
-    m_shadowTransmittanceModelId = 0u;
+    m_surfaceDispatchId = 0u;
     m_typedLayoutHash = 0u;
     m_typedLayoutBlocks.clear();
     m_typedLayoutFields.clear();
@@ -449,8 +449,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    if(!ReadPOD(binary, cursor, m_shadowTransmittanceModelId)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing shadow transmittance model id"));
+    if(!ReadPOD(binary, cursor, m_surfaceDispatchId)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing surface dispatch id"));
         return false;
     }
 

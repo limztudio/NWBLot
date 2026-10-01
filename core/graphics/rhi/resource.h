@@ -71,9 +71,9 @@ namespace CpuAccessMode{
 // Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes
 // concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
-    static constexpr u8 kResourceQueueSharingExclusiveBase = 0;
+    static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
     enum Mask : u8{
-        Exclusive = kResourceQueueSharingExclusiveBase,
+        Exclusive = s_ResourceQueueSharingExclusiveBase,
         Graphics = 1 << 0,
         AsyncCompute = 1 << 1,
         Transfer = 1 << 2,
@@ -118,9 +118,9 @@ struct ResourceQueueAdmissionSnapshot{
 };
 
 namespace ResourceStates{
-    static constexpr auto kResourceStatesUnknownBase = 0;
+    static constexpr auto s_ResourceStatesUnknownBase = 0;
     enum Mask : u32{
-        Unknown = kResourceStatesUnknownBase,
+        Unknown = s_ResourceStatesUnknownBase,
         Common = 1 << 0,
         ConstantBuffer = 1 << 1,
         VertexBuffer = 1 << 2,
@@ -209,17 +209,17 @@ struct TextureDesc{
 };
 
 struct TextureSlice{
-    static constexpr u32 AllDimensions = Limit<u32>::s_Max;
+    static constexpr u32 s_AllDimensions = Limit<u32>::s_Max;
 
     u32 x = 0;
     u32 y = 0;
     u32 z = 0;
 
-    // AllDimensions means the entire dimension is part of the region.
+    // s_AllDimensions means the entire dimension is part of the region.
     // resolve() will translate these values into actual dimensions.
-    u32 width = AllDimensions;
-    u32 height = AllDimensions;
-    u32 depth = AllDimensions;
+    u32 width = s_AllDimensions;
+    u32 height = s_AllDimensions;
+    u32 depth = s_AllDimensions;
 
     MipLevel mipLevel = 0;
     ArraySlice arraySlice = 0;
@@ -231,22 +231,22 @@ struct TextureSlice{
     constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }
     constexpr TextureSlice& setHeight(u32 value){ height = value; return *this; }
     constexpr TextureSlice& setDepth(u32 value){ depth = value; return *this; }
-    constexpr TextureSlice& setSize(u32 vx = AllDimensions, u32 vy = AllDimensions, u32 vz = AllDimensions){ width = vx; height = vy; depth = vz; return *this; }
+    constexpr TextureSlice& setSize(u32 vx = s_AllDimensions, u32 vy = s_AllDimensions, u32 vz = s_AllDimensions){ width = vx; height = vy; depth = vz; return *this; }
     constexpr TextureSlice& setMipLevel(MipLevel level){ mipLevel = level; return *this; }
     constexpr TextureSlice& setArraySlice(ArraySlice slice){ arraySlice = slice; return *this; }
 };
 
 namespace TextureSubresourceMipResolve{
-    static constexpr u8 kTextureSubresourceMipResolveRangeBase = 0u;
+    static constexpr u8 s_TextureSubresourceMipResolveRangeBase = 0u;
     enum Enum : u8{
-        Range = kTextureSubresourceMipResolveRangeBase,
+        Range = s_TextureSubresourceMipResolveRangeBase,
         Single,
     };
 };
 
 struct TextureSubresourceSet{
-    static constexpr auto AllMipLevels = static_cast<MipLevel>(-1);
-    static constexpr auto AllArraySlices = static_cast<ArraySlice>(-1);
+    static constexpr auto s_AllMipLevels = static_cast<MipLevel>(-1);
+    static constexpr auto s_AllArraySlices = static_cast<ArraySlice>(-1);
     static constexpr usize s_ByteSize = 16u;
 
     MipLevel baseMipLevel = 0;
@@ -286,11 +286,11 @@ struct TextureSubresourceSet{
     }
 
     [[nodiscard]] constexpr u64 mipEnd()const noexcept{
-        return rangeEnd(baseMipLevel, numMipLevels, AllMipLevels);
+        return rangeEnd(baseMipLevel, numMipLevels, s_AllMipLevels);
     }
 
     [[nodiscard]] constexpr u64 arrayEnd()const noexcept{
-        return rangeEnd(baseArraySlice, numArraySlices, AllArraySlices);
+        return rangeEnd(baseArraySlice, numArraySlices, s_AllArraySlices);
     }
 
     [[nodiscard]] constexpr bool contains(const TextureSubresourceSet& inner)const noexcept{
@@ -319,7 +319,7 @@ inline bool operator==(const TextureSubresourceSet& lhs, const TextureSubresourc
 }
 inline bool operator!=(const TextureSubresourceSet& lhs, const TextureSubresourceSet& rhs)noexcept{ return !(lhs == rhs); }
 
-inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::AllMipLevels, 0, TextureSubresourceSet::AllArraySlices);
+inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubresourceSet::s_AllMipLevels, 0, TextureSubresourceSet::s_AllArraySlices);
 
 typedef GraphicsBackend::Handle<Texture> TextureHandle;
 
@@ -420,8 +420,8 @@ struct BufferDesc{
 };
 
 struct BufferRange{
-    // AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
-    static constexpr u64 AllBytes = Limit<u64>::s_Max;
+    // s_AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
+    static constexpr u64 s_AllBytes = Limit<u64>::s_Max;
     static constexpr usize s_ByteSize = 16u;
 
     u64 byteOffset = 0;
@@ -435,9 +435,9 @@ struct BufferRange{
 
     [[nodiscard]] BufferRange resolve(const BufferDesc& desc)const;
     [[nodiscard]] constexpr bool hasExtent()const noexcept{
-        return byteSize != 0u && byteOffset < AllBytes && (byteSize == AllBytes || byteSize <= AllBytes - byteOffset);
+        return byteSize != 0u && byteOffset < s_AllBytes && (byteSize == s_AllBytes || byteSize <= s_AllBytes - byteOffset);
     }
-    [[nodiscard]] constexpr u64 end()const noexcept{ return byteSize == AllBytes ? AllBytes : byteOffset + byteSize; }
+    [[nodiscard]] constexpr u64 end()const noexcept{ return byteSize == s_AllBytes ? s_AllBytes : byteOffset + byteSize; }
     [[nodiscard]] constexpr bool overlaps(const BufferRange& other)const noexcept{
         return hasExtent() && other.hasExtent() && byteOffset < other.end() && other.byteOffset < end();
     }
@@ -445,14 +445,14 @@ struct BufferRange{
         return hasExtent() && other.hasExtent() && byteOffset <= other.byteOffset && end() >= other.end();
     }
     [[nodiscard]] BufferRange intersect(const BufferRange& other)const noexcept;
-    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == AllBytes || byteSize == desc.byteSize); }
+    [[nodiscard]] constexpr bool isEntireBuffer(const BufferDesc& desc)const{ return (!byteOffset) && (byteSize == s_AllBytes || byteSize == desc.byteSize); }
     constexpr bool operator==(const BufferRange& other)const{ return byteOffset == other.byteOffset && byteSize == other.byteSize; }
 
     constexpr BufferRange& setByteOffset(u64 value){ byteOffset = value; return *this; }
     constexpr BufferRange& setByteSize(u64 value){ byteSize = value; return *this; }
 };
 
-inline constexpr BufferRange s_EntireBuffer = BufferRange(0, BufferRange::AllBytes);
+inline constexpr BufferRange s_EntireBuffer = BufferRange(0, BufferRange::s_AllBytes);
 
 typedef GraphicsBackend::Handle<Buffer> BufferHandle;
 

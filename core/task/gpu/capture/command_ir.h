@@ -21,9 +21,9 @@ NWB_CORE_BEGIN
 
 // Command capture is opt-in; native recording is the default.
 namespace GpuCommandIrOpcode{
-    static constexpr u8 kGpuCommandIrOpcodeCopyBufferBase = 0u;
+    static constexpr u8 s_GpuCommandIrOpcodeCopyBufferBase = 0u;
     enum Enum : u8{
-        CopyBuffer = kGpuCommandIrOpcodeCopyBufferBase,
+        CopyBuffer = s_GpuCommandIrOpcodeCopyBufferBase,
         CopyTexture,
         ClearBuffer,
         ClearTexture,
@@ -36,9 +36,9 @@ namespace GpuCommandIrOpcode{
 };
 
 namespace GpuCommandIrWireOpcode{
-    static constexpr auto kGpuCommandIrWireOpcodeSetGraphicsStateBase = 0u;
+    static constexpr auto s_GpuCommandIrWireOpcodeSetGraphicsStateBase = 0u;
     enum Enum : u16{
-        SetGraphicsState = kGpuCommandIrWireOpcodeSetGraphicsStateBase,
+        SetGraphicsState = s_GpuCommandIrWireOpcodeSetGraphicsStateBase,
         Draw,
         DrawIndexed,
         DrawIndirect,
@@ -106,9 +106,9 @@ struct GpuCommandIrTextureSlice{
     u32 x = 0u;
     u32 y = 0u;
     u32 z = 0u;
-    u32 width = TextureSlice::AllDimensions;
-    u32 height = TextureSlice::AllDimensions;
-    u32 depth = TextureSlice::AllDimensions;
+    u32 width = TextureSlice::s_AllDimensions;
+    u32 height = TextureSlice::s_AllDimensions;
+    u32 depth = TextureSlice::s_AllDimensions;
     u32 mipLevel = 0u;
     u32 arraySlice = 0u;
 };
@@ -175,9 +175,9 @@ struct GpuCommandIrClearBufferRecord{
 };
 
 namespace GpuCommandIrClearTextureFlag{
-    static constexpr u8 kGpuCommandIrClearTextureFlagNoneBase = 0u;
+    static constexpr u8 s_GpuCommandIrClearTextureFlagNoneBase = 0u;
     enum Mask : u8{
-        None = kGpuCommandIrClearTextureFlagNoneBase,
+        None = s_GpuCommandIrClearTextureFlagNoneBase,
         ClearDepth = 1u << 0u,
         ClearStencil = 1u << 1u,
     };

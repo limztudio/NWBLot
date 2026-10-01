@@ -329,7 +329,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
         return false;
     }
-    if(m_context.extensions.buffer_device_address){
+    if(m_context.extensions.bufferDeviceAddress){
         VkBufferDeviceAddressInfo addressInfo{};
         addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
         addressInfo.buffer = buffer.m_buffer;

@@ -307,7 +307,7 @@ bool VulkanAllocator::initialize(){
     allocatorInfo.instance = m_context.instance;
     allocatorInfo.vulkanApiVersion = s_MinimumVersion;
     allocatorInfo.pAllocationCallbacks = m_context.allocationCallbacks;
-    if(m_context.extensions.buffer_device_address)
+    if(m_context.extensions.bufferDeviceAddress)
         allocatorInfo.flags |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
     VmaVulkanFunctions vulkanFunctions = __hidden_vulkan_allocator::BuildVmaVulkanFunctions(m_context);

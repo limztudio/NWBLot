@@ -90,7 +90,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
     const u64 laneValue = nameHash.qwords[lane];
     for(u32 byteIndex = 0; byteIndex < sizeof(laneValue); ++byteIndex){
         hash ^= static_cast<u8>((laneValue >> (byteIndex * NameDetail::s_NameHashByteBitCount)) & NameDetail::s_NameHashByteMask);
-        hash *= FNV64_PRIME;
+        hash *= s_Fnv64Prime;
     }
 
     return hash;
@@ -155,7 +155,7 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringVi
     static constexpr char s_VirtualPathPrefix[] = "nwb/shader/archive/path";
     for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
         u64 laneHash = UpdateFnv64(
-            FNV64_OFFSET_BASIS,
+            s_Fnv64OffsetBasis,
             reinterpret_cast<const u8*>(s_VirtualPathPrefix),
             sizeof(s_VirtualPathPrefix) - 1
         );

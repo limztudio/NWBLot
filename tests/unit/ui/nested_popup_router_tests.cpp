@@ -20,7 +20,7 @@ using namespace NWB;
 using namespace NWB::Impl::Ui;
 
 
-HitTarget Base(){
+HitTarget BaseHitTarget(){
     HitTarget target;
     target.id = { 1u };
     target.rectangle = { 4.0f, 4.0f, 20.0f, 18.0f };
@@ -90,7 +90,7 @@ public:
 protected:
     [[nodiscard]] bool install(const PopupScope* scopes, const usize count, const u64 generation, const bool navigation = false){
         Array<HitTarget, 1u + 3u * s_InputMaxPopups> targets{};
-        targets[0u] = Base();
+        targets[0u] = BaseHitTarget();
         for(usize index = 0u; index < count; ++index){
             const u32 order = static_cast<u32>(1u + index * 3u);
             targets[order] = Barrier(scopes[index], order);
@@ -445,7 +445,7 @@ TEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRest
     owner.owner = host.id;
     owner.ownerDeclarationGeneration = host.declarationGeneration;
     owner.control = host.control;
-    const HitTarget targets[]{ Base(), host, owner };
+    const HitTarget targets[]{ BaseHitTarget(), host, owner };
     ASSERT_TRUE(m_router.commitTargets(targets, 3u, 2u, &scope, 1u));
     m_router.invalidateTarget(host.id);
     EXPECT_EQ(m_router.targets().size(), 1u);
@@ -454,7 +454,7 @@ TEST_F(UiNestedPopupRouterTests, RetiringAnAlreadyRemovedPopupOwnerPartStillRest
     EXPECT_FALSE(m_router.focus().valid());
     m_router.invalidateTarget(owner.id);
     EXPECT_EQ(m_router.popupCount(), 0u);
-    EXPECT_EQ(m_router.focus(), Base().id);
+    EXPECT_EQ(m_router.focus(), BaseHitTarget().id);
     EXPECT_EQ(m_router.targets().size(), 1u);
 }
 

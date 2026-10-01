@@ -131,7 +131,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
             0u,
             1u,
             0u,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         ),
     };
     const Graphics::GpuTaskResourceRange computeRange{
@@ -139,7 +139,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
             1u,
             1u,
             0u,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         ),
     };
     const Graphics::GpuTaskResourceRange broadRange{
@@ -148,9 +148,9 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     const Graphics::GpuTaskResourceRange initialTailRange{
         .textureSubresources = Graphics::TextureSubresourceSet(
             s_ExpectedDualCount,
-            Graphics::TextureSubresourceSet::AllMipLevels,
+            Graphics::TextureSubresourceSet::s_AllMipLevels,
             0u,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         ),
     };
     const Graphics::GpuTaskResourceUse transferUse{

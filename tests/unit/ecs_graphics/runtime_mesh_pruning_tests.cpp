@@ -342,7 +342,7 @@ TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCur
         EXPECT_FALSE(BuildSkinnedRuntimeMeshDesc(entity, requestedHandle, selectedInstance, true, true, description));
         EXPECT_FALSE(description.valid());
         EXPECT_EQ(description.meshKey, NAME_NONE);
-        EXPECT_EQ(description.entity, Core::ECS::ENTITY_ID_INVALID);
+        EXPECT_EQ(description.entity, Core::ECS::s_InvalidEntityId);
         EXPECT_EQ(description.version, 0u);
         EXPECT_FALSE(description.dynamicMeshletBoundsFresh);
         EXPECT_FALSE(description.dynamicMeshletConesFresh);

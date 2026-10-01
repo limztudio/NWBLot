@@ -248,7 +248,7 @@ TEST(CoincidentOpticalVolumes, InvalidCandidatesCannotSuppressEachOtherOrValidGe
         invalidCases[index] = MakeCandidate(static_cast<u32>(index) + 100u);
         invalidCases[index].priority = 100;
     }
-    invalidCases[0].entity = Core::ECS::ENTITY_ID_INVALID;
+    invalidCases[0].entity = Core::ECS::s_InvalidEntityId;
     invalidCases[1].mesh.reset();
     invalidCases[2].material.reset();
     invalidCases[3].position.x = Limit<f32>::s_QuietNaN;
@@ -357,7 +357,7 @@ TEST(CoincidentOpticalVolumes, ResetEmptyAndSingleCandidateClearPriorSuppression
     context.selection.select(&candidates[1], 1u, context.scratch);
     EXPECT_FALSE(context.selection.isSuppressed(candidates[0].entity));
     EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
-    EXPECT_FALSE(context.selection.isSuppressed(Core::ECS::ENTITY_ID_INVALID));
+    EXPECT_FALSE(context.selection.isSuppressed(Core::ECS::s_InvalidEntityId));
 }
 
 TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){

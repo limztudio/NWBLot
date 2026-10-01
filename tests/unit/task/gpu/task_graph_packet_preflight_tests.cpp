@@ -241,7 +241,7 @@ TEST(GpuPacketPreflight, BufferConflictsRejectOverlapAndWrappedRangesWithoutChan
             .state = Graphics::ResourceStates::CopySource,
             .ownerQueue = {},
             .releaseDestinationQueue = {},
-            .range = Graphics::BufferRange(tailOffset, Graphics::BufferRange::AllBytes),
+            .range = Graphics::BufferRange(tailOffset, Graphics::BufferRange::s_AllBytes),
         });
         EXPECT_TRUE(Validation(context.states, context.validationScratch).validate());
         states.push_back({

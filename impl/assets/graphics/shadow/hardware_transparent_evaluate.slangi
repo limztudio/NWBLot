@@ -27,7 +27,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 #include "../bindless/bindless_heap_mesh.slangi"
 #include "shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 #include "shadow_integrate.slangi"
 
 
@@ -112,14 +112,14 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
 
     NwbShadowHit hit;
     hit.meshInstanceIndex = material.meshInstanceIndex;
-    hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    hit.surfaceDispatchId = material.surfaceDispatchId;
     hit.materialConstantByteOffset = material.materialConstantByteOffset;
     hit.uv0 = a0.uv0 * bary.x + a1.uv0 * bary.y + a2.uv0 * bary.z;
     // Inverse transpose preserves outward orientation under nonuniform and mirrored instance scales.
     hit.worldNormal = nwbSafeNormalize(nwbRotateVectorByQuaternion(objectNormal / instance.scale.xyz, instance.rotation), float3(0.0, 0.0, 1.0));
     hit.worldPosition = ray.Origin + ray.Direction * crossing.distance;
     hit.rayDirection = ray.Direction;
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
     const half smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
     const float3 worldGeometricNormal = nwbRotateVectorByQuaternion(geometricNormal / instance.scale.xyz, instance.rotation);
     const half cosine = lerp(

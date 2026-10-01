@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr tchar SERVER_NAME[] = NWB_TEXT("Server");
+inline constexpr tchar s_ServerName[] = NWB_TEXT("Server");
 inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 
@@ -32,16 +32,16 @@ struct PendingCrashUpload{
 
 using CrashUploadQueue = ParallelQueue<PendingCrashUpload, LogArena>;
 
-class Server final : public BaseUpdateOrdinary<Server, s_ServerUpdateIntervalSeconds, SERVER_NAME>{
-    template<typename, const tchar*> friend class Base;
-    template<typename, f32, const tchar*> friend class BaseUpdateOrdinary;
+class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>{
+    template<typename, const tchar*> friend class LoggerWorkerBase;
+    template<typename, f32, const tchar*> friend class IntervalLoggerWorkerBase;
 
-    using BaseType = Base<Server, SERVER_NAME>;
-    using UpdateBaseType = BaseUpdateOrdinary<Server, s_ServerUpdateIntervalSeconds, SERVER_NAME>;
+    using BaseType = LoggerWorkerBase<Server, s_ServerName>;
+    using UpdateBaseType = IntervalLoggerWorkerBase<Server, s_ServerUpdateIntervalSeconds, s_ServerName>;
 
 
 private:
-    static MHD_Result requestCallback(void* cls, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* upload_data, size_t* upload_data_size, void** con_cls);
+    static MHD_Result requestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress);
     static void crashIngestUpdate(Server* self);
 
 
@@ -79,7 +79,7 @@ private:
 
 private:
     MHD_Daemon* m_daemon;
-    ProcessedMessageFile m_processedMsgFile;
+    ProcessedMessageFile m_processedMessageFile;
     CrashIngestConfig m_crashIngestConfig;
     TelemetryIngestConfig m_telemetryIngestConfig;
     AString<LogArena> m_crashUploadToken;

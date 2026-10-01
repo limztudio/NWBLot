@@ -42,7 +42,7 @@ static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay che
 struct SkinnedMeshBindingComponent{
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skin> skin;
-    Core::ECS::EntityID skeletonEntity = Core::ECS::ENTITY_ID_INVALID;
+    Core::ECS::EntityID skeletonEntity = Core::ECS::s_InvalidEntityId;
     RuntimeMeshHandle runtimeMesh;
 };
 

@@ -269,15 +269,15 @@ TEST(GpuTaskGraphResourceFragments, SymbolicBufferTailRemainsAfterFiniteRemainde
     TrackedStates states(scratchArena);
     states.reserve(s_ExpectedDualCount);
     TrackedResourceStateHistory history(states, s_ExpectedDualCount, 1u, scratchArena);
-    AppendBufferState(states, history, s_Buffer, 0u, Graphics::BufferRange::AllBytes);
+    AppendBufferState(states, history, s_Buffer, 0u, Graphics::BufferRange::s_AllBytes);
     AppendBufferState(states, history, s_Buffer, 16u, 16u);
     RequestedRanges requested(scratchArena);
-    requested.push_back(BufferRange(0u, Graphics::BufferRange::AllBytes));
+    requested.push_back(BufferRange(0u, Graphics::BufferRange::s_AllBytes));
     StateFragments fragments(scratchArena);
     const Graphics::GpuTaskGraphResourceView resource = ResourceView(s_Buffer, Graphics::GpuGraphResourceType::Buffer);
     const ExpectedBufferFragment expected[] = {
         { 0u, 0u, 16u },
-        { 0u, 32u, Graphics::BufferRange::AllBytes },
+        { 0u, 32u, Graphics::BufferRange::s_AllBytes },
         { 1u, 16u, 16u },
     };
 
@@ -482,12 +482,12 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
             .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
         };
         ASSERT_TRUE(history.append(state));
-        state.range.bufferRange = Graphics::BufferRange(16u, Graphics::BufferRange::AllBytes);
+        state.range.bufferRange = Graphics::BufferRange(16u, Graphics::BufferRange::s_AllBytes);
         state.range.textureSubresources = Graphics::TextureSubresourceSet(
             1u,
-            Graphics::TextureSubresourceSet::AllMipLevels,
+            Graphics::TextureSubresourceSet::s_AllMipLevels,
             s_ExpectedDualCount,
-            Graphics::TextureSubresourceSet::AllArraySlices
+            Graphics::TextureSubresourceSet::s_AllArraySlices
         );
         state.task.index = 1u;
         ASSERT_TRUE(history.append(state));
@@ -499,11 +499,11 @@ TEST(GpuTaskGraphResourceFragments, LatestCoveredRangeNormalizesInactiveDimensio
         requested.push_back(Graphics::GpuTaskResourceRange{
             .textureSubresources = Graphics::TextureSubresourceSet(
                 3u,
-                type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::AllMipLevels : 1u,
+                type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::s_AllMipLevels : 1u,
                 4u,
-                type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::AllArraySlices : 1u
+                type == Graphics::GpuGraphResourceType::Texture ? Graphics::TextureSubresourceSet::s_AllArraySlices : 1u
             ),
-            .bufferRange = Graphics::BufferRange(32u, type == Graphics::GpuGraphResourceType::Buffer ? Graphics::BufferRange::AllBytes : 8u),
+            .bufferRange = Graphics::BufferRange(32u, type == Graphics::GpuGraphResourceType::Buffer ? Graphics::BufferRange::s_AllBytes : 8u),
         });
         StateFragments fragments(scratchArena);
         fragments.reserve(s_ExpectedDualCount);

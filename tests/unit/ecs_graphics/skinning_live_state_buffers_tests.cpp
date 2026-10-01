@@ -170,7 +170,7 @@ TEST(SkinningLiveStateBuffers, FiltersMissingInstancesInvalidHandlesAndIncomplet
         const i32 boundsFlags = instance.localBounds.minBounds.w;
         switch(failure){
         case 0u: instance.handle.reset(); break;
-        case 1u: instance.entity = Core::ECS::ENTITY_ID_INVALID; break;
+        case 1u: instance.entity = Core::ECS::s_InvalidEntityId; break;
         case s_ExpectedDualCount: instance.sourceName = NAME_NONE; break;
         case 3u: instance.dirtyFlags = RuntimeMeshDirtyFlag::GpuUploadDirty; break;
         case 4u: instance.restPositionBuffer = nullptr; break;

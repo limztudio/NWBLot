@@ -2501,7 +2501,7 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
-TEST(AssetsGraphics, ShadowTransmittanceDispatchIsolatesOverlappingBindApis){
+TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -2559,7 +2559,7 @@ TEST(AssetsGraphics, ShadowTransmittanceDispatchIsolatesOverlappingBindApis){
     EXPECT_TRUE(cooked);
     if(cooked){
         const Path generatedDispatchPath =
-            root / s_CACHE / s_TESTS / "shadow_modules" / "shadow" / "generated" / "transmittance_dispatch.slangi"
+            root / s_CACHE / s_TESTS / "shadow_modules" / "shadow" / "generated" / "surface_dispatch.slangi"
         ;
         NWB::Impl::ShaderCook::CookString generatedDispatchSource(testArena.arena);
         EXPECT_TRUE(ReadTextFile(generatedDispatchPath, generatedDispatchSource));

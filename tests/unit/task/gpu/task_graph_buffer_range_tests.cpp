@@ -177,7 +177,7 @@ TEST(GpuTaskGraphBufferRange, IndependentIntervalsKeepSeparateInitialStates){
     const Graphics::GpuTaskResourceUse tailUse = BufferUse(
         buffer,
         32u,
-        Graphics::BufferRange::AllBytes,
+        Graphics::BufferRange::s_AllBytes,
         Graphics::ResourceStates::UnorderedAccess
     );
     const Graphics::GpuTaskId first = AddRangeTask(graph, Name("tests/buffer_range/first"), &firstUse, 1u);
@@ -328,7 +328,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     const Graphics::GpuTaskResourceUse wholeUse = BufferUse(
         buffer,
         0u,
-        Graphics::BufferRange::AllBytes,
+        Graphics::BufferRange::s_AllBytes,
         Graphics::ResourceStates::CopyDest
     );
     const Graphics::GpuTaskResourceUse middleUse = BufferUse(buffer, 32u, 32u, Graphics::ResourceStates::UnorderedAccess);
@@ -345,7 +345,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     ASSERT_TRUE(exportView.valid());
     ASSERT_EQ(exportView.plan->sourceCount, 3u);
     EXPECT_FALSE(exportView.plan->producerTask.valid());
-    const Graphics::BufferRange ranges[] = { { 0u, 32u }, { 64u, Graphics::BufferRange::AllBytes }, { 32u, 32u } };
+    const Graphics::BufferRange ranges[] = { { 0u, 32u }, { 64u, Graphics::BufferRange::s_AllBytes }, { 32u, 32u } };
     for(usize index = 0u; index < LengthOf(ranges); ++index){
         const Graphics::GpuTaskId producer = index == s_ExpectedDualCount ? middle : whole;
         const Graphics::GpuCompiledTaskView taskView = plan.findTask(producer);
@@ -446,10 +446,10 @@ TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingByt
     const Graphics::BufferHandle buffer(object, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
     const Graphics::BufferRange ranges[] = {
         { 0u, 0u },
-        { 64u, Graphics::BufferRange::AllBytes },
+        { 64u, Graphics::BufferRange::s_AllBytes },
         { 48u, 32u },
         { Limit<u64>::s_Max - 3u, 4u },
-        { 32u, Graphics::BufferRange::AllBytes },
+        { 32u, Graphics::BufferRange::s_AllBytes },
     };
     for(usize index = 0u; index < LengthOf(ranges); ++index){
         Graphics::GpuTaskGraph graph(testArena.arena);

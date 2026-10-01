@@ -56,10 +56,10 @@ uint nwbMeshFrameViewHeapSlot(){
 
 // The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
 // helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
-// shadowTransmittanceModelId -- the SAME dispatch the SW caustic kernel + the shadow trace evaluate, so a glass's
+// surfaceDispatchId -- the SAME dispatch the SW caustic kernel + the shadow trace evaluate, so a glass's
 // optical params (ior / transmission) agree across all three.
 #include "../shadow/shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
 
 // The fixed-point splat conversion (nwbCausticFluxToFixedPoint) the deposit shares with the SW path. NOT the full
 // transport (caustic_trace.slangi) -- only the raygen needs the bounce loop, so the closest-hit/miss stay free of

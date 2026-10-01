@@ -23,7 +23,7 @@ u64 ComputeSceneLightingContentHash(
     const ECSRenderDetail::SceneLightGpuData* lights,
     const u32 lightCount){
     NWB_ASSERT(lightCount == 0u || lights);
-    u64 hash = FNV64_OFFSET_BASIS;
+    u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, shading.cameraPositionLightCount);
     Fnv64AppendValue(hash, lightCount);
     for(u32 index = 0u; index < lightCount; ++index){

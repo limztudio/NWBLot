@@ -351,7 +351,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     if(!dispatchHashBuild && !dispatchSpawn && !dispatchTraceBuildArgs && !dispatchTrace && !dispatchResolve && !dispatchRemaining)
         return true;
 
-    // Rebuild occupancy before spawning into empty cells.
+    // Rebuild bucket lists before spawning uncovered surface representatives.
     if(!graphOwnsCellHeadClear){
         Core::Buffer* cellHead = m_rayTracingState.m_surfelCellHeadBuffer.get();
         commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
@@ -379,7 +379,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     if(!dispatchSpawn && !dispatchTraceBuildArgs && !dispatchTrace && !dispatchResolve && !dispatchRemaining)
         return true;
 
-    // Spawn claims only empty hash cells.
+    // Spawn retains compatible surfaces and inserts uncovered candidates into bounded bucket lists.
     if(dispatchSpawn){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, m_graphics.getDevice(), commandList);
         if(!graphEntryStatesOwned){
@@ -388,6 +388,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             commandList.setBufferState(m_rayTracingState.m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(m_rayTracingState.m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(m_rayTracingState.m_surfelGuidePoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
         }
         if(!graphOwnsHashBuild)
             commandList.setBufferState(m_rayTracingState.m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);

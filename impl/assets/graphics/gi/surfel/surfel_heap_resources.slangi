@@ -58,12 +58,18 @@ ConstantBuffer<NwbSurfelConstants, Std140DataLayout> g_NwbHeapSurfelConstantBuff
 ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapSurfelMaterialContextSlotBuffers[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+#if defined(NWB_SURFEL_SPAWN_COHERENT_ACCESS)
+globallycoherent
+#endif
 RWStructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelWritablePools[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWStructuredBuffer<float4, Std430DataLayout> g_NwbHeapSurfelWritableGuidePools[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelReadOnlyPools[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+#if defined(NWB_SURFEL_SPAWN_COHERENT_ACCESS)
+globallycoherent
+#endif
 RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapSurfelWritableUintBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<uint, Std430DataLayout> g_NwbHeapSurfelReadOnlyUintBuffers[];

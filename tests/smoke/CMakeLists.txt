@@ -1382,6 +1382,26 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--expect-log-message" "GiTestSmokeProject: shutdown"
         )
 
+        # Diagnostic material reads the resolved GI alpha on two perpendicular faces in the same spatial cell.
+        # Keep this opt-in fixture separate from the unchanged formal surfel-GI baseline scene.
+        nwb_add_window_capture_smoke(
+            nwb_gi_coverage_probe_capture_smoke
+            gi_coverage_probe_capture.bmp
+            "$<TARGET_FILE:nwb_gi_test_smoke>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB GI Test"
+            "--settle-seconds" "12"
+            "--application-arg=--gpudbg"
+            "--timeout" "75"
+            "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"
+            "--expect-log-message" "GiTestSmokeProject: shutdown"
+            "--expect-surfel-coverage-probe"
+        )
+        set_tests_properties(nwb_gi_coverage_probe_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1"
+            TIMEOUT 90
+        )
+
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)
         unset(_nwb_skinning_culling_runtime_root)

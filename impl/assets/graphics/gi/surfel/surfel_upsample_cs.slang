@@ -4,11 +4,12 @@
 
 // Reduced-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses
 // creases like the Cornell corner). Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
-// Output: rgb = HDR irradiance (no [0,1] clamp), a = coverage (0 falls back to hemiAmbient).
+// Output: rgb = normalized HDR irradiance (no [0,1] clamp), a = continuous ambient-blend coverage.
 
 
 #include "surfel_heap_resources.slangi"
 #include "surfel_gbuffer.slangi"
+#include "surfel_coverage.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,17 +79,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int2 baseTexel = int2(floor(src));
     const float2 lerpFrac = src - float2(baseTexel);
 
-    float3 sum = float3(0.0, 0.0, 0.0);
-    // Bilinear and edge-stop weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
-    half weightSum = half(0.0h);
+    float3 irradianceSum = float3(0.0, 0.0, 0.0);
+    float compatibleWeightSum = 0.0;
+    float coveredWeightSum = 0.0;
     [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
         [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
             // The resolve target is RGBA16F. Keep its irradiance/coverage payload native-half while it is only
             // transported through this filter; geometry and the weighted accumulation remain FP32 below.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
-            if(tapValue.a < half(NWB_SURFEL_UPSAMPLE_COVERAGE_MIN))
-                continue;   // This reduced-grid texel has no surfel coverage.
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
             const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
@@ -96,20 +95,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
                 continue;   // tap's geometry is background
             const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));
-            if(dot(tapNormal, centerNormal) < NWB_SURFEL_UPSAMPLE_NORMAL_GATE)
+            if(!nwbSurfelUpsampleNormalCompatible(dot(tapNormal, centerNormal)))
                 continue;   // different surface (crease) -> would leak GI across the edge
             const half3 tapWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz);
             const float3 tapWorld = float3(tapWorldSample);
             const float3 d = tapWorld - centerWorld;
-            const half bilinearWeight = (i == 0 ? half(1.0 - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? half(1.0 - lerpFrac.y) : half(lerpFrac.y));
-            const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
-            sum += float(weight) * float3(tapValue.rgb);
-            weightSum += weight;
+            const float bilinearWeight = (i == 0 ? 1.0 - lerpFrac.x : lerpFrac.x) * (j == 0 ? 1.0 - lerpFrac.y : lerpFrac.y);
+            const float weight = nwbSurfelUpsampleGeometryWeight(bilinearWeight, dot(d, d), invTwoSigmaWorldSq);
+            const float coveredWeight = nwbSurfelUpsampleCoveredWeight(weight, float(tapValue.a));
+            // Uncovered taps still count toward the compatible surface's weight, so coverage fades across a gap.
+            // Their zero irradiance does not dilute the normalized estimate or leak light across a crease.
+            compatibleWeightSum += weight;
+            coveredWeightSum += coveredWeight;
+            irradianceSum += coveredWeight * float3(tapValue.rgb);
         }
     }
 
-    // If all four reduced-grid taps lack coverage or belong to another surface, retain the ambient fallback.
-    g_NwbSurfelUpsampleOutput[pixel] = (weightSum > half(0.0h)) ? float4(sum / float(weightSum), 1.0) : float4(0.0, 0.0, 0.0, 0.0);
+    g_NwbSurfelUpsampleOutput[pixel] = nwbSurfelUpsampleFinalize(irradianceSum, coveredWeightSum, compatibleWeightSum);
 }
 
 

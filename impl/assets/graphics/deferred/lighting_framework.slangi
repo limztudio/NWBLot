@@ -69,12 +69,12 @@ bool nwbBxdfRequiresLinearOutput(){
 // Resolved surfel irradiance texture (rgb = indirect, a = coverage). Lighting reads this, not the RW pool: no
 // frames-in-flight race. Cleared to 0 when GI is off, so disabled GI is a hemiAmbient no-op.
 
-// Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
-// covered it (a < 0.5) fall back to the hemiAmbient ambient term. The resolve texture is 1:1 with the screen, so use a
-// point Load; a bilinear tap would blend the coverage flag + irradiance across the covered/uncovered boundary.
+// Indirect irradiance for the OPAQUE deferred path: blend the normalized surfel field with hemiAmbient by its
+// continuous coverage. The resolve texture is 1:1 with the screen, so sample exactly this pixel; upsample already
+// filtered coverage while respecting normal and world-distance edges.
 half3 nwbBxdfResolvedIndirect(const int2 pixel, float3 normalVector){
     const half4 resolved = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
-    return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
+    return lerp(nwbGiHemiAmbient(normalVector), half3(resolved.rgb), saturate(resolved.a));
 }
 
 // NwbBxdfSurface (the BXDF parameter type) is shared with the transparent / AVBOIT accumulate path; it lives

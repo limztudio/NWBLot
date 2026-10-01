@@ -33,6 +33,7 @@
 #include "surfel_heap_resources.slangi"
 #include "surfel_hash.slangi"
 #include "surfel_sh.slangi"
+#include "surfel_coverage.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,9 +43,11 @@ bool nwbSurfelGatherField(
     const float3 worldPosition,
     const float3 normal,
     const uint poolCapacity,
-    out half3 outIrradiance
+    out half3 outIrradiance,
+    out half outCoverage
 ){
     outIrradiance = half3(0.0h);
+    outCoverage = half(0.0h);
 
     const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cameraPositionCellSize.w;
     const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
@@ -67,19 +70,26 @@ bool nwbSurfelGatherField(
             uint id = rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT];
             uint walk = 0u;
             [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
-                const NwbSurfel surfel = NWB_SURFEL_GATHER_FIELD_POOL[id];
-                if(surfel.alive != 0u && surfel.sampleCount != 0u){
-                    const float dist = length(biasedPosition - surfel.position);
-                    const half normalWeight = half(saturate(dot(normal, surfel.normal)));
-                    const half distanceWeight = half(saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN)));
-                    const half confidence = half(saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
+                const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
+                const uint sampleCount = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleCount;
+                if(NWB_SURFEL_GATHER_FIELD_POOL[id].alive != 0u && sampleCount != 0u){
+                    const float dist = length(biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position);
+                    const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
+                    const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));
+                    const half confidence = half(saturate(float(sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
                     const half weight = normalWeight * distanceWeight * confidence;
-                    // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
-                    // gates leakage while the SH reconstruction retains the surfel's directional response.
-                    irradianceSum += nwbSurfelShReconstruct(half4(surfel.shR), half4(surfel.shG), half4(surfel.shB), normal) * weight;
+                    // Different faces now share buckets. Avoid fetching and reconstructing their SH when the exact
+                    // rounded gather weight is zero; retain the original order and weights of all contributors.
+                    if(weight > half(0.0h)){
+                        irradianceSum += nwbSurfelShReconstruct(
+                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shR),
+                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shG),
+                            half4(NWB_SURFEL_GATHER_FIELD_POOL[id].shB), normal
+                        ) * weight;
+                    }
                     totalWeight += weight;
                 }
-                id = surfel.nextInCell;
+                id = nextInCell;
                 ++walk;
             }
         }
@@ -87,8 +97,22 @@ bool nwbSurfelGatherField(
 
     if(totalWeight < half(NWB_SURFEL_GATHER_WEIGHT_EPSILON))
         return false;
+    // Keep the field's normalized irradiance for bounce tracing. Coverage separately fades its visible contribution
+    // near the edge of a surfel's support, where dividing by a tiny weight would otherwise cause a hard cutoff.
     outIrradiance = irradianceSum / totalWeight;
+    outCoverage = half(nwbSurfelGatherCoverage(float(totalWeight)));
     return true;
+}
+
+// Bounce tracing uses the normalized previous-frame field, not its screen-space ambient-blend confidence.
+bool nwbSurfelGatherField(
+    const float3 worldPosition,
+    const float3 normal,
+    const uint poolCapacity,
+    out half3 outIrradiance
+){
+    half ignoredCoverage;
+    return nwbSurfelGatherField(worldPosition, normal, poolCapacity, outIrradiance, ignoredCoverage);
 }
 
 

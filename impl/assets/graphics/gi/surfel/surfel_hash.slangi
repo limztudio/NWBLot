@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// World-space surfel hash: 3x3x3 walk is exhaustive (cell = 2x max radius). Collisions only add zero-weight
-// candidates; walks are capped. Cell-invalid + max-walk constants shared with C++.
+// World-space surfel hash: gather visits the neighbourhood implied by the support radius and cell spacing.
+// Buckets retain bounded lists so hash collisions and distinct surfaces can coexist.
 
 
 #include "surfel_binding_slots.h"

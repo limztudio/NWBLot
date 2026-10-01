@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_COVERAGE_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_COVERAGE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Scalar coverage math shared by the surfel resolve, edge-aware upsample, and native tests. Irradiance remains
+// normalized; alpha separately controls the blend with ambient at the end of deferred lighting.
+
+
+#include "surfel_binding_slots.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float nwbSurfelCoverageClamp01(const float value){
+    return value <= 0.0 ? 0.0 : (value >= 1.0 ? 1.0 : value);
+}
+
+float nwbSurfelGatherCoverage(const float totalWeight){
+    return nwbSurfelCoverageClamp01(totalWeight / NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT);
+}
+
+bool nwbSurfelUpsampleNormalCompatible(const float normalDot){
+    return normalDot >= NWB_SURFEL_UPSAMPLE_NORMAL_GATE;
+}
+
+float nwbSurfelUpsampleGeometryWeight(const float bilinearWeight, const float worldDistanceSquared, const float invTwoSigmaWorldSq){
+    return bilinearWeight * exp(-worldDistanceSquared * invTwoSigmaWorldSq);
+}
+
+float nwbSurfelUpsampleCoveredWeight(const float geometryWeight, const float tapCoverage){
+    return geometryWeight * nwbSurfelCoverageClamp01(tapCoverage);
+}
+
+float4 nwbSurfelUpsampleFinalize(const float3 weightedIrradianceSum, const float coveredWeightSum, const float compatibleWeightSum){
+    float3 irradiance = float3(0.0);
+    if(coveredWeightSum > 0.0)
+        irradiance = weightedIrradianceSum / coveredWeightSum;
+    float coverage = 0.0;
+    if(compatibleWeightSum > 0.0)
+        coverage = nwbSurfelCoverageClamp01(coveredWeightSum / compatibleWeightSum);
+    return float4(irradiance, coverage);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

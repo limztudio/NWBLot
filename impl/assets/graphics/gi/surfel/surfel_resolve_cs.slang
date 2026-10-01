@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolve surfel irradiance at reduced resolution; alpha marks coverage for the ambient fallback.
+// Resolve surfel irradiance at reduced resolution; alpha carries continuous coverage for the ambient blend.
 // Pool access is compute-only, so deferred lighting reads the resolved texture.
 
 
@@ -45,14 +45,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = float3(worldPositionSample);
     const float3 normal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
 
-    float3 gi;
     half3 halfGi;
-    if(nwbSurfelGather(worldPosition, normal, halfGi)){
-        gi = float3(halfGi);
-        g_NwbSurfelResolveOutput[halfPixel] = float4(gi, 1.0);
-    }
-    else
-        g_NwbSurfelResolveOutput[halfPixel] = float4(0.0, 0.0, 0.0, 0.0);
+    half coverage;
+    nwbSurfelGather(worldPosition, normal, halfGi, coverage);
+    g_NwbSurfelResolveOutput[halfPixel] = float4(float3(halfGi), float(coverage));
 }
 
 

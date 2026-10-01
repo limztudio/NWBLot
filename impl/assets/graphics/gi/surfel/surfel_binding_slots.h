@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// No surfel pass owns local bindings; one surfel per hash bucket.
+// No surfel pass owns local bindings; hash buckets contain bounded lists of surface representatives.
 
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 
@@ -22,12 +22,15 @@
 #define NWB_SURFEL_RADIUS_MIN 1e-4f
 #define NWB_SURFEL_GATHER_WEIGHT_EPSILON 1e-4f
 #define NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT 8.0f
+#define NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT 0.25f
+// Keep independent faces and separated parallel surfaces from suppressing each other's spawn candidates.
+#define NWB_SURFEL_SPAWN_NORMAL_GATE 0.9f
+#define NWB_SURFEL_SPAWN_SUPPORT_SCALE 0.75f
 #define NWB_SURFEL_SEED_CELL_EXTENT 1
 #define NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT 2u
 #define NWB_SURFEL_UPSAMPLE_WORLD_SPACING_MIN 1e-4f
 #define NWB_SURFEL_UPSAMPLE_WORLD_SIGMA_SCALE 3.0f
 #define NWB_SURFEL_UPSAMPLE_TAP_SIDE 2
-#define NWB_SURFEL_UPSAMPLE_COVERAGE_MIN 0.5f
 
 // Five float4 lanes.
 #define NWB_SURFEL_CONSTANTS_FLOAT4_COUNT 5u

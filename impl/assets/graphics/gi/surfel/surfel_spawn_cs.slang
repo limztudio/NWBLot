@@ -2,13 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel spawn: one thread per screen tile claims its EMPTY hash cell (atomic INVALID -> PENDING; losers skip) and
-// bump-allocates one surfel. One surfel per bucket keeps the gather walk deterministic. Background tiles skipped.
+// Surfel spawn: screen tiles retain compatible surface representatives or insert into a bounded hash-bucket list.
+// A one-shot bucket claim serializes insertion; contenders retry in later frames instead of spinning on the GPU.
 
 
+#define NWB_SURFEL_SPAWN_COHERENT_ACCESS
 #include "surfel_runtime.slangi"
+#undef NWB_SURFEL_SPAWN_COHERENT_ACCESS
 #include "surfel_hash.slangi"
 #include "surfel_gbuffer.slangi"
+#include "surfel_spawn_policy.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,6 +22,49 @@
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
+#define g_NwbSurfelSeedPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.snapshotPoolHeapSlot]
+#define g_NwbSurfelSeedCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.snapshotCellHeadHeapSlot]
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbSurfelFindSpawnCoverage(
+    uint id,
+    const uint poolCapacity,
+    const int3 cell,
+    const float cellSize,
+    const float3 worldPosition,
+    const float3 worldNormal,
+    const float normalBias,
+    out uint walk
+){
+    walk = 0u;
+    [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
+        ++walk;
+        const float3 position = g_NwbSurfelPool[id].position;
+        const float3 normal = g_NwbSurfelPool[id].normal;
+        const float3 delta = worldPosition - position;
+        const float planeDistance = max(abs(dot(delta, normal)), abs(dot(delta, worldNormal)));
+        if(g_NwbSurfelPool[id].alive != 0u && nwbSurfelSpawnCoversCandidate(
+            all(nwbSurfelCellCoord(position, cellSize) == cell),
+            dot(worldNormal, normal),
+            dot(delta, delta),
+            planeDistance,
+            g_NwbSurfelPool[id].radius,
+            normalBias
+        ))
+            return id;
+        id = g_NwbSurfelPool[id].nextInCell;
+    }
+    return NWB_SURFEL_CELL_INVALID;
+}
+
+// Every caller owns the bucket claim. Release initialized record data before making the real head visible.
+void nwbSurfelPublishSpawnHead(const uint bucket, const uint head){
+    DeviceMemoryBarrier();
+    InterlockedExchange(g_NwbSurfelCellHead[bucket], head);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,30 +97,41 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const float defaultRadius = g_NwbSurfelConstants.coverageRadiusBiasHyst.y;
+    const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
 
-    // Collision-aware keep-alive: walk the bucket list for THIS tile's cell and refresh it (head-only refresh would
-    // starve collided cells into flicker). id < poolCapacity terminates on INVALID / PENDING.
     const int3 myCell = nwbSurfelCellCoord(worldPosition, cellSize);
     const uint bucket = nwbSurfelHashCell(myCell, cellCount);
-    {
-        uint id = g_NwbSurfelCellHead[bucket];
-        uint walk = 0u;
-        [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
-            if(all(nwbSurfelCellCoord(g_NwbSurfelPool[id].position, cellSize) == myCell)){
-                g_NwbSurfelPool[id].lastSeenFrame = frameIndex;   // keep-alive (many tiles -> same node -> same value, benign)
-                return;
-            }
-            id = g_NwbSurfelPool[id].nextInCell;
-            ++walk;
-        }
+    uint oldHead;
+    InterlockedOr(g_NwbSurfelCellHead[bucket], 0u, oldHead);
+    if(oldHead >= poolCapacity && oldHead != NWB_SURFEL_CELL_INVALID)
+        return;   // PENDING belongs to another insertion; never acquire PENDING -> PENDING.
+
+    // Pair the atomic head observation with the publisher's barrier before reading its immutable record fields.
+    // Covered candidates stop contending, allowing other faces in the same bucket to acquire a later frame's claim.
+    DeviceMemoryBarrier();
+    uint walk;
+    uint covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, cellSize, worldPosition, worldNormal, normalBias, walk);
+    if(covered != NWB_SURFEL_CELL_INVALID){
+        InterlockedExchange(g_NwbSurfelPool[covered].lastSeenFrame, frameIndex);
+        return;
     }
 
-    // Atomic INVALID -> PENDING claim so one tile wins a contended empty bucket; losers (occupied or mid-claim) bail
-    // without touching counters.
+    // Claim either an empty or occupied bucket once. A changed head means another candidate made progress.
     uint previous = NWB_SURFEL_CELL_INVALID;
-    InterlockedCompareExchange(g_NwbSurfelCellHead[bucket], NWB_SURFEL_CELL_INVALID, NWB_SURFEL_CELL_PENDING, previous);
-    if(previous != NWB_SURFEL_CELL_INVALID)
+    InterlockedCompareExchange(g_NwbSurfelCellHead[bucket], oldHead, NWB_SURFEL_CELL_PENDING, previous);
+    if(previous != oldHead)
         return;
+    DeviceMemoryBarrier();
+    covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, cellSize, worldPosition, worldNormal, normalBias, walk);
+    if(covered != NWB_SURFEL_CELL_INVALID){
+        InterlockedExchange(g_NwbSurfelPool[covered].lastSeenFrame, frameIndex);
+        nwbSurfelPublishSpawnHead(bucket, oldHead);
+        return;
+    }
+    if(walk >= NWB_SURFEL_MAX_WALK){
+        nwbSurfelPublishSpawnHead(bucket, oldHead);   // Keep every admitted node reachable by the bounded gather.
+        return;
+    }
 
     // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never
     // overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
@@ -107,14 +164,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
     if(!allocated){
-        g_NwbSurfelCellHead[bucket] = NWB_SURFEL_CELL_INVALID;   // pool full -> release the claim
+        nwbSurfelPublishSpawnHead(bucket, oldHead);   // Pool full: preserve all existing surfaces in the bucket.
         return;
     }
 
-    // Spatial seed stops recycled surfels flashing dark: fresh surfels (sampleCount 0) are gather-skipped, so seed SH
-    // from ESTABLISHED neighbours (sampleCount >= 2, never a this-frame spawn: no torn read, no seed-from-seed),
-    // normal + distance weighted (SH average stays a valid field). First trace refines at weight 1/2.
-    // Neighbour SH is previous-frame stable (pass 4 before this pass-3 spawn): race-free.
+    // Seed only from the immutable frame-start snapshot. Live neighbours may be locked or newly published by other
+    // spawn groups; the snapshot also prevents seed-from-seed feedback. Exclude records expiring in this frame.
     half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);
@@ -123,11 +178,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(int dy = -NWB_SURFEL_SEED_CELL_EXTENT; dy <= NWB_SURFEL_SEED_CELL_EXTENT; ++dy)
     for(int dx = -NWB_SURFEL_SEED_CELL_EXTENT; dx <= NWB_SURFEL_SEED_CELL_EXTENT; ++dx){
         const uint seedBucket = nwbSurfelHashCell(myCell + int3(dx, dy, dz), cellCount);
-        uint seedId = g_NwbSurfelCellHead[seedBucket];
+        uint seedId = g_NwbSurfelSeedCellHead[seedBucket];
         uint seedWalk = 0u;
         [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
-            const NwbSurfel neighbour = g_NwbSurfelPool[seedId];
-            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT){
+            const NwbSurfel neighbour = g_NwbSurfelSeedPool[seedId];
+            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT
+                && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)){
                 const float dist = length(worldPosition - neighbour.position);
                 // Seed weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
                 const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
@@ -149,7 +205,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     surfel.position = worldPosition;
     surfel.radius = defaultRadius;
     surfel.normal = worldNormal;
-    surfel.nextInCell = NWB_SURFEL_CELL_INVALID;   // sole member of this cell's list
+    surfel.nextInCell = oldHead;
     surfel.shR = float4(seedShR * seedNorm);
     surfel.shG = float4(seedShG * seedNorm);
     surfel.shB = float4(seedShB * seedNorm);
@@ -162,7 +218,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane)
         g_NwbSurfelGuidePool[slot * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + guideLane] = float4(NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
     g_NwbSurfelPool[slot] = surfel;
-    g_NwbSurfelCellHead[bucket] = slot;   // publish the real slot (replaces the PENDING sentinel), linking it into the cell
+    nwbSurfelPublishSpawnHead(bucket, slot);
 }
 
 

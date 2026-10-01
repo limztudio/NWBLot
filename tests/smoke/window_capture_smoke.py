@@ -650,6 +650,45 @@ def read_bmp_24_rows(path):
     return width, height, rows_rgb
 
 
+def validate_surfel_coverage_probe(path):
+    """Check the interior of both same-cell, perpendicular faces in the opt-in GI scene."""
+    width, height, rows = read_bmp_24_rows(path)
+    # The cube is fixed in the 1280x900 smoke camera. Fractional ROIs tolerate framebuffer scaling and avoid
+    # silhouette pixels, where normal/depth filtering should deliberately reduce coverage.
+    regions = {
+        "front": (0.80, 0.42, 0.92, 0.55),
+        "side": (0.735, 0.42, 0.770, 0.55),
+    }
+    observed = {}
+    for face, (left, top, right, bottom) in regions.items():
+        x0, x1 = int(left * width), int(right * width)
+        y0, y1 = int(top * height), int(bottom * height)
+        pixels = 0
+        covered = 0
+        for row in rows[y0:y1]:
+            for red, green, blue in row[x0:x1]:
+                if red + green < 100:
+                    continue
+                if face == "front" and blue > 40:
+                    continue
+                if face == "side" and (blue < 140 or blue < max(red, green) * 0.65):
+                    continue
+                pixels += 1
+                if red > green + 20:
+                    covered += 1
+        observed[face] = (covered, pixels)
+
+    minimum = {"front": 1000, "side": 300}
+    for face, (covered, pixels) in observed.items():
+        if pixels < minimum[face] or covered < pixels * 0.80:
+            raise SmokeFailure(
+                "surfel coverage probe did not cover the perpendicular faces "
+                f"(front={observed['front'][0]}/{observed['front'][1]}, "
+                f"side={observed['side'][0]}/{observed['side'][1]})"
+            )
+    return observed
+
+
 def analyze_rgb_rows(rows_rgb):
     first_pixel = None
     total_pixels = 0
@@ -2395,6 +2434,11 @@ def parse_args(argv):
         help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",
     )
     parser.add_argument(
+        "--expect-surfel-coverage-probe",
+        action=LIT_STORE_TRUE,
+        help="Assert that the closed GI scene's perpendicular same-cell probe faces receive surfel coverage.",
+    )
+    parser.add_argument(
         "--software-vulkan",
         choices=("auto", LIT_ON, LIT_OFF),
         default=LIT_OFF,
@@ -2484,6 +2528,13 @@ def main(argv):
                 f"{status}; sampled texture hues "
                 f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; "
                 f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}"
+            )
+        if args.expect_surfel_coverage_probe:
+            probe = validate_surfel_coverage_probe(args.output)
+            status = (
+                f"{status}; surfel coverage probe "
+                f"front={probe['front'][0]}/{probe['front'][1]}, "
+                f"side={probe['side'][0]}/{probe['side'][1]}"
             )
         write_status(status)
         return 0

@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_SPAWN_POLICY_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_SPAWN_POLICY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "surfel_binding_slots.h"
+
+
+// Scalar policy shared by the GPU candidate walk and numerical tests. A spatial cell may need several surfaces;
+// an existing representative suppresses a candidate only when its orientation, support, and surface plane agree.
+bool nwbSurfelSpawnCoversCandidate(
+    const bool sameCell,
+    const float normalAlignment,
+    const float distanceSquared,
+    const float planeDistance,
+    const float radius,
+    const float normalBias
+){
+    const float supportRadius = radius * NWB_SURFEL_SPAWN_SUPPORT_SCALE;
+    return sameCell
+        && normalAlignment >= NWB_SURFEL_SPAWN_NORMAL_GATE
+        && distanceSquared <= supportRadius * supportRadius
+        && planeDistance <= normalBias;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

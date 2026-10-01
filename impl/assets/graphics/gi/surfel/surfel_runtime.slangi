@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bindings shared by every pass that reads or updates the live surfel field. Snapshot resources remain trace-specific
-// so the trace's read-only previous-frame contract stays explicit at its use site.
+// Bindings shared by every pass that reads or updates the live surfel field. Spawn seeding and trace bounce gathering
+// select their immutable previous-frame snapshot explicitly at their use sites.
 
 
 #include "surfel_heap_resources.slangi"

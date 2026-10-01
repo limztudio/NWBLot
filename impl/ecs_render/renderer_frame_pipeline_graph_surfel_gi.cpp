@@ -159,7 +159,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     resourceUses.reserve(s_SurfelResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
-    spawnResourceUses.reserve(8u);
+    spawnResourceUses.reserve(10u);
     traceBuildArgsResourceUses.reserve(3u);
     traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     resolveResourceUses.reserve(6u);
@@ -581,6 +581,8 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         spawnResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
         spawnResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
         spawnResourceUses.push_back(ReadWriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));
+        spawnResourceUses.push_back(ReadUse(surfelPoolSnapshot, Core::ResourceStates::ShaderResource));
+        spawnResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
         Core::GpuTaskDesc spawnDesc;
         spawnDesc
             .setIdentity(Name("render.surfel_gi.spawn"))

@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 struct NwbSurfelConstantsGpu{
     Float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
-    Float4 coverageRadiusBiasHyst;  // x = reserved (coverage sum dropped for one-surfel-per-cell), y = default radius, z = normal bias, w = accumulation cap
+    Float4 coverageRadiusBiasHyst;  // x = reserved, y = default radius, z = normal bias, w = accumulation cap
     Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
     Float4 screenHeightPad;         // x = screen height, y = resolve factor, zw = pad
 };

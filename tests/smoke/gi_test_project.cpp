@@ -61,6 +61,7 @@ static constexpr GiTestMeshRef s_BoxMesh{"project/meshes/cube_hard_edges"};
 static constexpr GiTestMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr GiTestMaterialRef s_ComplexDiffuseMaterial{"project/smoke/gi/materials/diffuse"};
 static constexpr GiTestMaterialRef s_ComplexIndirectMaterial{"project/smoke/gi/materials/indirect"};
+static constexpr GiTestMaterialRef s_CoverageProbeMaterial{"project/smoke/gi/materials/coverage_probe"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 // Box geometry: a 4x4 unit open-top box centered at the origin. Each wall/floor is a scaled plane.
@@ -204,7 +205,8 @@ public:
 public:
     virtual bool onStartup()override{
         m_resolveSwitchEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_RESOLVE_SWITCH");
-        m_complexSceneEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COMPLEX_SCENE");
+        m_coverageViewEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COVERAGE_VIEW");
+        m_complexSceneEnabled = m_coverageViewEnabled || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COMPLEX_SCENE");
         if(m_complexSceneEnabled){
             NWB::Tests::Smoke::SmokeEnvironmentString settleValue(m_context.objectArena);
             if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_GI_SMOKE_MIN_SETTLE_SECONDS", settleValue)){
@@ -532,6 +534,19 @@ private:
             std::size(s_ComplexSceneBoxes), std::size(s_ComplexBouncePatches), std::size(s_ComplexFrontEnclosureBoxes),
             placedBodyCount, s_ComplexRandomBodySeed
         );
+        if(m_coverageViewEnabled){
+            // Adjacent -X and -Z faces span the same 0.6 m spatial cell near the cube's front-left edge.
+            // Their different normals need separate surfels. Keeping this above the short seeded bodies makes
+            // both faces visible while the closed-room scene still exercises ordinary GI around the probe.
+            const auto probe = CreateTintedStaticMeshEntity(
+                *m_world, m_context.objectArena, s_BoxMesh, s_CoverageProbeMaterial,
+                s_SmokeSurfaceMaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
+                Float4(0.95f, 1.48f, -2.65f, 0.0f), Float4(0.60f, 0.30f, 0.30f, 0.0f)
+            );
+            if(!probe.valid())
+                return false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
+        }
         return true;
     }
 
@@ -584,6 +599,7 @@ private:
     bool m_rendererBaselineCapturePaused = false;
     bool m_resolveSwitchEnabled = false;
     bool m_complexSceneEnabled = false;
+    bool m_coverageViewEnabled = false;
     f32 m_complexMinSettleSeconds = 0.0f;
     Timer m_complexSceneStartTime = {};
     bool m_complexSceneTimingStarted = false;

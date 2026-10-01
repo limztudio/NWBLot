@@ -57,7 +57,7 @@ bool InputRouter::stagePopups(const PopupScope* scopes, const usize count){
         if(
             !scope.token.valid() || !__hidden_ui_router_popup::Area(scope.bounds) || !__hidden_ui_router_popup::Area(scope.viewport)
             || scope.layer == 0u || (index != 0u && scope.layer <= scopes[index - 1u].layer)
-            || (scope.dismissTab && (!scope.tabAnchor.valid() || scope.tabAnchorDeclarationGeneration == 0u))
+            || (scope.dismissFocusTraversal && (!scope.focusAnchor.valid() || scope.focusAnchorDeclarationGeneration == 0u))
             || scope.bounds.x < scope.viewport.x || scope.bounds.y < scope.viewport.y
             || scope.bounds.x + scope.bounds.width > scope.viewport.x + scope.viewport.width
             || scope.bounds.y + scope.bounds.height > scope.viewport.y + scope.viewport.height

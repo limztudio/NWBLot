@@ -19,7 +19,7 @@ using namespace UiEditActionTestSupport;
 TEST_F(UiEditActionHostTests, SubmitObservesItsExactPositionBeforeLaterCopiedNativeText){
     ASSERT_TRUE(activateActions());
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
     m_host.collectNative();
     EXPECT_EQ(m_model.text(), "0");
@@ -44,7 +44,7 @@ TEST_F(UiEditActionHostTests, CanonicalizingSubmitPreservesLaterCopiedCommitWhil
     const u64 external = m_model.externalRevision();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
     m_host.collectNative();
     EXPECT_EQ(m_model.text(), "0");
@@ -70,9 +70,9 @@ TEST_F(UiEditActionHostTests, CanonicalizingSubmitPreservesLaterCopiedCommitWhil
 TEST_F(UiEditActionHostTests, SeveralSubmitsInOneBatchEachObserveTheirOwnDraft){
     ASSERT_TRUE(activateActions());
     ASSERT_TRUE(replaceNative("12"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("3"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("4"));
     ASSERT_TRUE(actionFrame());
     ASSERT_EQ(m_actions.records.size(), 2u);
@@ -85,9 +85,9 @@ TEST_F(UiEditActionHostTests, SeveralSubmitsInOneBatchEachObserveTheirOwnDraft){
 TEST_F(UiEditActionHostTests, CancelRestoresLastSubmittedDraftAndFencesRemainingOldOwnerText){
     ASSERT_TRUE(activateActions());
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(commitNative("9"));
     const TextInputSessionToken oldSession = m_textInput.activeSession();
     ASSERT_TRUE(actionFrame());
@@ -161,9 +161,9 @@ TEST_F(UiEditActionHostTests, BlurThenRefocusSameWidgetRetainsNewEpochCharacterA
 TEST_F(UiEditActionHostTests, OldEpochCancelDoesNotClearLaterRefocusOrApplyItsRetiredBlur){
     ASSERT_TRUE(activateActions());
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(focusOther());
     ASSERT_TRUE(focusEditor());
     ASSERT_TRUE(m_host.character('8'));
@@ -196,18 +196,18 @@ TEST_F(UiEditActionHostTests, NewlyFocusedPointerSelectionUsesTheNewFocusEpoch){
 TEST_F(UiEditActionHostTests, ActivePreeditOwnsEnterAndFirstEscapeBeforeNumericCancel){
     ASSERT_TRUE(activateActions());
     ASSERT_EQ(m_textInput.preedit("\xEA\xB0\x80", 3u, 3u), TextInputAdmission::Accepted);
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_model.composition().active);
     EXPECT_FALSE(m_result.submitted);
     EXPECT_TRUE(m_actions.records.empty());
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(actionFrame());
     EXPECT_FALSE(m_model.composition().active);
     EXPECT_FALSE(m_result.cancelled);
     EXPECT_TRUE(m_result.focused);
     EXPECT_TRUE(m_actions.records.empty());
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_result.cancelled);
     EXPECT_FALSE(m_result.focused);
@@ -221,7 +221,7 @@ TEST_F(UiEditActionHostTests, FailedSubmitStopsLaterEventsAndKeepsPreviouslyAcce
     const usize targets = m_context.input().targets().size();
     m_actions.failSubmit = true;
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
     EXPECT_FALSE(actionFrame());
     EXPECT_FALSE(m_result.valid);
@@ -238,7 +238,7 @@ TEST_F(UiEditActionHostTests, HostResetReentryRejectsBeforeDestroyingBorrowedEnt
     const usize targets = m_context.input().targets().size();
     m_actions.resetHost = &m_host;
     ASSERT_TRUE(replaceNative("42"));
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(commitNative("7"));
     EXPECT_FALSE(actionFrame());
     EXPECT_FALSE(m_result.valid);

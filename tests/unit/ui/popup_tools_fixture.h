@@ -191,7 +191,7 @@ protected:
         return send({ InputEventType::PointerMove, point }).hover == anchor(parent);
     }
 
-    void press(const InputKey::Enum key, const bool shift = false){
+    void press(const Core::Key::Enum key, const bool shift = false){
         InputEvent event;
         event.type = InputEventType::KeyDown;
         event.key = key;

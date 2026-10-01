@@ -8,6 +8,7 @@
 #include "combo_fixture.h"
 
 #include <impl/ecs_ui/toolkit/edit/commands.h>
+#include <impl/ecs_ui/toolkit/input/bindings.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,10 +34,9 @@ namespace NumericEventKind{
 
 struct NumericEvent{
     AString<Core::Alloc::GlobalArena> text;
-    EditKey::Enum key = EditKey::None;
+    InputCommandIntent intent;
     EditAction::Enum action = EditAction::Submit;
     NumericEventKind::Enum kind = NumericEventKind::Text;
-    bool control = false;
 
     explicit NumericEvent(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -46,6 +46,7 @@ public:
     explicit NumericHost(Core::Alloc::GlobalArena& arena)
         : m_arena(arena)
         , m_events(arena)
+        , m_bindings(arena)
         , displayed(arena)
     {}
     virtual ~NumericHost()override = default;
@@ -58,15 +59,14 @@ public:
         m_events.push_back(Move(event));
     }
 
-    void key(const EditKey::Enum key, const bool control = false){
+    void key(const i32 key, const bool control = false){
         NumericEvent event(m_arena);
         event.kind = NumericEventKind::Key;
-        event.key = key;
-        event.control = control;
+        event.intent = m_bindings.resolve(key, control ? Core::InputModifier::Control : 0);
         m_events.push_back(Move(event));
     }
 
-    void replace(const AStringView value){ key(EditKey::A, true); text(value); }
+    void replace(const AStringView value){ key(Core::Key::A, true); text(value); }
 
     void preedit(const AStringView value){
         NumericEvent event(m_arena);
@@ -126,7 +126,7 @@ public:
                 }
             }
             else if(options.enabled && event.kind == NumericEventKind::Key){
-                const auto command = ApplyEditCommand(draft, TranslateEditCommand({ event.key, event.control }), options.readOnly);
+                const auto command = ApplyEditCommand(draft, TranslateEditCommand(event.intent, false), options.readOnly);
                 result.submitted |= command.submitted;
                 result.cancelled |= command.cancelled;
                 if(command.submitted || command.cancelled){
@@ -169,6 +169,7 @@ public:
 private:
     Core::Alloc::GlobalArena& m_arena;
     PaintVector<NumericEvent> m_events;
+    InputBindings m_bindings;
 
 
 public:

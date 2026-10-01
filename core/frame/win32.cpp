@@ -376,6 +376,17 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         )
             return lifecycleResult;
 
+        const bool ordinaryText = uMsg == WM_CHAR || uMsg == WM_SYSCHAR || (uMsg == WM_UNICHAR && wParam != UNICODE_NOCHAR);
+        const i32 textScancode = ordinaryText ? TranslateScancode(lParam) : 0;
+        // Text without a producing scan code is explicit native text, independent of a physical shortcut.
+        if(ordinaryText && textScancode != 0 && frame->input().keyboardTextBlocked(textScancode)){
+            if(auto* textInput = frame->tryTextInput()){
+                if(!ResetWin32FallbackCharInput(*textInput))
+                    NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 suppressed text-input character reset failed"));
+            }
+            return 0;
+        }
+
         if(auto* textInput = frame->tryTextInput()){
             isize forwardedLParam = lParam;
             if(ResolveWin32TextInputContextMessage(*textInput, uMsg, wParam, lParam, forwardedLParam))

@@ -93,7 +93,7 @@ TEST_F(UiEditWordSelectionTests, RightHalfAtHardLineEndDoesNotSelectNewline){
     Ui::EditModel multiline(m_arena, {}, Ui::EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("one\ntwo"));
     ASSERT_TRUE(frame(multiline));
-    ASSERT_TRUE(key(Ui::InputKey::Tab));
+    ASSERT_TRUE(key(Core::Key::Tab));
     ASSERT_TRUE(frame(multiline));
     const Ui::Point point{ m_placement.textOrigin.x + 29.0f, m_placement.textOrigin.y + 5.0f };
     ASSERT_TRUE(clickAt(point, 1000u));

@@ -91,6 +91,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         m_context.abandonFrame();
         m_editHost.reset();
+        m_blockCommandChars = false;
         m_ui.reset();
         return;
     }
@@ -99,6 +100,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         m_context.abandonFrame();
         m_editHost.reset();
+        m_blockCommandChars = false;
     }
 }
 
@@ -127,6 +129,7 @@ void UiLayerSystem::synchronizeInput(){
     if(!collectRoots()){
         m_context.resetInput();
         m_editHost.reset();
+        m_blockCommandChars = false;
         return;
     }
     if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
@@ -139,6 +142,7 @@ void UiLayerSystem::synchronizeInput(){
         else if(status == Core::PresentationReceiptStatus::Rejected){
             m_context.abandonFrame();
             m_editHost.reset();
+            m_blockCommandChars = false;
         }
     }
     m_editHost.synchronizeFocus();

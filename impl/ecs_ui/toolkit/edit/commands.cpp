@@ -57,45 +57,40 @@ static bool EraseWord(EditModel& model, const bool forward){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke, const EditTextMode::Enum mode){
-    EditCommandRequest request{ EditCommand::None, stroke.shift, stroke.repeat };
-    if(stroke.alt || stroke.key == EditKey::None || stroke.key > EditKey::Escape || mode > EditTextMode::Multiline)
+EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const bool repeat, const EditTextMode::Enum mode){
+    EditCommandRequest request{ EditCommand::None, intent.extend, repeat };
+    if(!intent.edit || mode > EditTextMode::Multiline)
         return request;
-    switch(stroke.key){
-    case EditKey::Left: request.command = stroke.control ? EditCommand::WordLeft : EditCommand::Left; break;
-    case EditKey::Right: request.command = stroke.control ? EditCommand::WordRight : EditCommand::Right; break;
-    case EditKey::Home:
-        request.command = stroke.control && mode == EditTextMode::Multiline ? EditCommand::DocumentHome : EditCommand::Home;
+    switch(intent.command){
+    case InputCommand::Left: request.command = EditCommand::Left; break;
+    case InputCommand::Right: request.command = EditCommand::Right; break;
+    case InputCommand::Home: request.command = EditCommand::Home; break;
+    case InputCommand::End: request.command = EditCommand::End; break;
+    case InputCommand::WordLeft: request.command = EditCommand::WordLeft; break;
+    case InputCommand::WordRight: request.command = EditCommand::WordRight; break;
+    case InputCommand::DocumentHome:
+        request.command = mode == EditTextMode::Multiline ? EditCommand::DocumentHome : EditCommand::Home;
         break;
-    case EditKey::End:
-        request.command = stroke.control && mode == EditTextMode::Multiline ? EditCommand::DocumentEnd : EditCommand::End;
+    case InputCommand::DocumentEnd:
+        request.command = mode == EditTextMode::Multiline ? EditCommand::DocumentEnd : EditCommand::End;
         break;
-    case EditKey::Backspace: request.command = stroke.control ? EditCommand::WordBackspace : EditCommand::Backspace; break;
-    case EditKey::Delete:
-        request.command = stroke.shift && !stroke.control ? EditCommand::Cut
-            : stroke.control ? EditCommand::WordDelete : EditCommand::Delete;
+    case InputCommand::Backspace: request.command = EditCommand::Backspace; break;
+    case InputCommand::Delete: request.command = EditCommand::Delete; break;
+    case InputCommand::WordBackspace: request.command = EditCommand::WordBackspace; break;
+    case InputCommand::WordDelete: request.command = EditCommand::WordDelete; break;
+    case InputCommand::SelectAll: request.command = EditCommand::SelectAll; break;
+    case InputCommand::Copy: request.command = EditCommand::Copy; break;
+    case InputCommand::Cut: request.command = EditCommand::Cut; break;
+    case InputCommand::Paste: request.command = EditCommand::Paste; break;
+    case InputCommand::Undo: request.command = EditCommand::Undo; break;
+    case InputCommand::Redo: request.command = EditCommand::Redo; break;
+    case InputCommand::Accept:
+        request.command = mode == EditTextMode::Multiline ? EditCommand::Newline : EditCommand::Submit;
         break;
-    case EditKey::Insert:
-        request.command = stroke.control && !stroke.shift ? EditCommand::Copy
-            : stroke.shift && !stroke.control ? EditCommand::Paste : EditCommand::None;
-        break;
-    case EditKey::Enter:
-        request.command = mode == EditTextMode::Multiline && !stroke.control ? EditCommand::Newline : EditCommand::Submit;
-        break;
-    case EditKey::Escape: request.command = EditCommand::Cancel; break;
-    default:
-        if(!stroke.control)
-            break;
-        switch(stroke.key){
-        case EditKey::A: request.command = EditCommand::SelectAll; break;
-        case EditKey::C: request.command = EditCommand::Copy; break;
-        case EditKey::X: request.command = EditCommand::Cut; break;
-        case EditKey::V: request.command = EditCommand::Paste; break;
-        case EditKey::Z: request.command = stroke.shift ? EditCommand::Redo : EditCommand::Undo; break;
-        case EditKey::Y: request.command = EditCommand::Redo; break;
-        default: break;
-        }
-        break;
+    case InputCommand::Submit: request.command = EditCommand::Submit; break;
+    case InputCommand::Cancel: request.command = EditCommand::Cancel; break;
+    case InputCommand::Newline: request.command = EditCommand::Newline; break;
+    default: break;
     }
     return request;
 }

@@ -216,7 +216,7 @@ static void StopKeyRepeat(WaylandContext& context)noexcept{
 }
 
 static void DispatchTextInput(InputDispatcher& input, const WaylandContext& context, u32 keycode, i32 mods){
-    if(!context.xkbState)
+    if(input.keyboardTextBlocked() || !context.xkbState)
         return;
 
     const u32 unicode = xkb_state_key_get_utf32(context.xkbState, keycode);

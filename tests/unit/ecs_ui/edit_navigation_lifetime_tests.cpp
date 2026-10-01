@@ -21,7 +21,7 @@ protected:
     [[nodiscard]] bool seedPreferredColumn(const Ui::EditBoxOptions& options = {}){
         if(
             !m_navigationModel.setText("abcdef\nx\nabcdef") || !m_navigationModel.setSelection(5u, 5u)
-            || !activateNavigation(options) || !key(Ui::InputKey::Down) || !navigationFrame(options)
+            || !activateNavigation(options) || !key(Core::Key::Down) || !navigationFrame(options)
         )
             return false;
         m_resolver.records.clear();
@@ -46,7 +46,7 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     m_resolver.records.clear();
     m_actions.records.clear();
 
-    const Ui::InputKey::Enum keys[]{ Ui::InputKey::Up, Ui::InputKey::Down, Ui::InputKey::PageUp, Ui::InputKey::PageDown };
+    const Core::Key::Enum keys[]{ Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown };
     for(const auto value : keys)
         ASSERT_TRUE(key(value));
     ASSERT_TRUE(navigationFrame());
@@ -55,8 +55,8 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     EXPECT_TRUE(m_navigation.matches(preferred));
     EXPECT_TRUE(m_actions.records.empty());
 
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Escape));
+    ASSERT_TRUE(key(Core::Key::Down));
     ASSERT_TRUE(navigationFrame());
     EXPECT_FALSE(m_navigationModel.composition().active);
     EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
@@ -83,7 +83,7 @@ TEST_F(UiEditNavigationLifetimeTests, ReadOnlyAllowsVerticalSelectionWithoutNati
     const u64 external = m_navigationModel.externalRevision();
     EXPECT_FALSE(m_textInput.activeSession().valid());
 
-    ASSERT_TRUE(key(Ui::InputKey::Down, true));
+    ASSERT_TRUE(key(Core::Key::Down, true));
     ASSERT_TRUE(navigationFrame(readOnly));
     EXPECT_TRUE(m_result.focused);
     EXPECT_TRUE(m_result.selectionChanged);
@@ -108,7 +108,7 @@ TEST_F(UiEditNavigationLifetimeTests, DisableDiscardsQueuedNavigationAndResetsOn
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Down));
     ASSERT_TRUE(commitNative("late"));
     EXPECT_TRUE(m_navigation.matches(preferred));
     EXPECT_TRUE(before.matches(m_navigationModel));
@@ -139,10 +139,10 @@ TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPosit
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     UiEditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
-    ASSERT_TRUE(key(Ui::InputKey::Up));
+    ASSERT_TRUE(key(Core::Key::Up));
     ASSERT_TRUE(focusOther());
     ASSERT_TRUE(focusNavigation());
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Down));
     EXPECT_TRUE(before.matches(m_navigationModel));
     EXPECT_TRUE(m_navigation.matches(preferred));
 
@@ -177,7 +177,7 @@ TEST_F(UiEditNavigationLifetimeTests, BlurPreservesDraftBeforeFreshFocusEpochNav
     ASSERT_TRUE(commitNative("!"));
     ASSERT_TRUE(focusOther());
     ASSERT_TRUE(focusNavigation());
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Down));
     EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
     EXPECT_TRUE(m_navigation.matches(preferred));
     EXPECT_TRUE(m_actions.records.empty());
@@ -212,7 +212,7 @@ TEST_F(UiEditNavigationLifetimeTests, OrdinaryCancelRetiresPreferredColumnWhileP
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     EXPECT_TRUE(m_navigation.matches(preferred));
     EXPECT_TRUE(before.matches(m_navigationModel));
 
@@ -236,11 +236,11 @@ TEST_F(UiEditNavigationLifetimeTests, OldEpochCancelPreservesDraftAndLaterRefocu
     const TextInputSessionToken oldSession = m_textInput.activeSession();
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const u64 revision = m_navigationModel.revision();
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(commitNative("late"));
     ASSERT_TRUE(focusOther());
     ASSERT_TRUE(focusNavigation());
-    ASSERT_TRUE(key(Ui::InputKey::Up));
+    ASSERT_TRUE(key(Core::Key::Up));
     EXPECT_TRUE(m_navigation.matches(preferred));
     EXPECT_EQ(m_navigationModel.caret(), 8u);
 
@@ -330,7 +330,7 @@ TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNav
     const Ui::EditNavigationSnapshot replacementPreferred = replacementNavigation.snapshot();
     UiEditModelSnapshot replacementBefore(m_arena);
     replacementBefore.capture(replacement);
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Down));
     EXPECT_TRUE(m_navigation.matches(originalPreferred));
     EXPECT_TRUE(replacementNavigation.matches(replacementPreferred));
 
@@ -344,7 +344,7 @@ TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNav
     EXPECT_FALSE(replacementNavigation.matches(replacementPreferred));
     EXPECT_TRUE(m_resolver.records.empty());
     EXPECT_EQ(m_actions.count(Ui::EditAction::Abandon), 1u);
-    ASSERT_TRUE(key(Ui::InputKey::Down));
+    ASSERT_TRUE(key(Core::Key::Down));
     ASSERT_TRUE(prepareNavigationModel(replacement, replacementNavigation));
     ASSERT_TRUE(commit());
     EXPECT_EQ(replacement.caret(), 4u);

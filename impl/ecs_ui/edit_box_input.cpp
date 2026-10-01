@@ -16,47 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_edit_box_input{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Ui::EditKey::Enum EditKey(const Ui::InputKey::Enum key){
-    switch(key){
-    case Ui::InputKey::Left: return Ui::EditKey::Left;
-    case Ui::InputKey::Right: return Ui::EditKey::Right;
-    case Ui::InputKey::Home: return Ui::EditKey::Home;
-    case Ui::InputKey::End: return Ui::EditKey::End;
-    case Ui::InputKey::Backspace: return Ui::EditKey::Backspace;
-    case Ui::InputKey::Delete: return Ui::EditKey::Delete;
-    case Ui::InputKey::Insert: return Ui::EditKey::Insert;
-    case Ui::InputKey::A: return Ui::EditKey::A;
-    case Ui::InputKey::C: return Ui::EditKey::C;
-    case Ui::InputKey::X: return Ui::EditKey::X;
-    case Ui::InputKey::V: return Ui::EditKey::V;
-    case Ui::InputKey::Z: return Ui::EditKey::Z;
-    case Ui::InputKey::Y: return Ui::EditKey::Y;
-    case Ui::InputKey::Enter: return Ui::EditKey::Enter;
-    case Ui::InputKey::Escape: return Ui::EditKey::Escape;
-    case Ui::InputKey::Up: return Ui::EditKey::Up;
-    case Ui::InputKey::Down: return Ui::EditKey::Down;
-    case Ui::InputKey::PageUp: return Ui::EditKey::PageUp;
-    case Ui::InputKey::PageDown: return Ui::EditKey::PageDown;
-    default: return Ui::EditKey::None;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void UiEditBoxHost::collectNative(){
     if(rejectBorrowedMutation())
         return;
@@ -117,23 +76,23 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         }
         return;
     }
-    if(input.type == Ui::InputEventType::KeyDown){
+    if(input.type == Ui::InputEventType::CommandDown){
         m_clickTracker.cancel();
         Entry* entry = find(m_context.input().focus());
-        if(!entry || !hasTextFocus())
+        if(!input.edit || !entry || !hasTextFocus() || !m_context.input().canEditCommand(input))
             return;
         Event event(m_arena);
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
-        event.key = { __hidden_ui_edit_box_input::EditKey(input.key), input.control, input.shift, input.alt, input.repeat };
-        Ui::EditNavigationDirection::Enum direction;
-        const bool navigation = Ui::TranslateEditNavigation(event.key, direction);
-        if(navigation){
+        const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
+        event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
+        event.navigation = Ui::TranslateEditNavigation(intent, event.navigationDirection);
+        if(event.navigation){
             if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
                 return;
             event.navigationViewportHeight = entry->displayed.placement.content.height;
         }
-        else if(Ui::TranslateEditCommand(event.key, entry->displayed.textMode).command == Ui::EditCommand::None)
+        else if(event.command.command == Ui::EditCommand::None)
             return;
         if(!append(Move(event)))
             return;

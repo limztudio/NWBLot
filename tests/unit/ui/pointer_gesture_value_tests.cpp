@@ -228,12 +228,12 @@ TEST_F(UiPointerGestureValueTests, SeveralCompletedPressesRetainTheirOwnPublishe
 TEST_F(UiPointerGestureValueTests, CoalescedMoveUsesItsUpdateSequenceAmongOrderedControlActions){
     ASSERT_TRUE(publish());
     focusHost();
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = InputKey::Right }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = InputKey::Right }));
+    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = Core::Key::Right }));
+    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = Core::Key::Right }));
     ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }));
     ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 50.0f, 30.0f } }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = InputKey::Left }));
-    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = InputKey::Left }));
+    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyDown, .key = Core::Key::Left }));
+    ASSERT_TRUE(m_router.queue({ .type = InputEventType::KeyUp, .key = Core::Key::Left }));
     ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 80.0f, 30.0f } }));
     const InputRoutingResult result = m_router.process();
     EXPECT_TRUE(result.pointerConsumed);

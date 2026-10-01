@@ -42,9 +42,9 @@ public:
 
 protected:
     [[nodiscard]] InputRoutingResult send(const InputEvent& event);
-    [[nodiscard]] InputRoutingResult keyDown(InputKey::Enum key, bool repeat = false);
-    [[nodiscard]] InputRoutingResult keyUp(InputKey::Enum key);
-    void press(InputKey::Enum key);
+    [[nodiscard]] InputRoutingResult keyDown(Core::Key::Enum key, bool repeat = false);
+    [[nodiscard]] InputRoutingResult keyUp(Core::Key::Enum key);
+    void press(Core::Key::Enum key);
     void focusTarget(usize index = 0u);
     [[nodiscard]] bool publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
     [[nodiscard]] bool take(ControlAction& action, usize index = 0u);

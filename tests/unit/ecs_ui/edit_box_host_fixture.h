@@ -218,21 +218,22 @@ protected:
     [[nodiscard]] bool dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        if(!m_context.input().queue(event))
+        Ui::InputEvent normalized;
+        if(!m_context.input().queue(event, &normalized))
             return false;
         const Ui::InputRoutingResult result = m_context.input().process();
-        m_host.input(event, previousCapture);
+        m_host.input(normalized, previousCapture);
         m_host.synchronizeFocus();
         return !result.activationOverflow && !result.gestureOverflow;
     }
 
-    [[nodiscard]] bool key(Ui::InputKey::Enum value, bool shift = false, bool control = false){
+    [[nodiscard]] bool key(Core::Key::Enum value, bool shift = false, bool control = false){
         return dispatch({ .type = Ui::InputEventType::KeyDown, .key = value, .shift = shift, .control = control })
             && dispatch({ .type = Ui::InputEventType::KeyUp, .key = value, .shift = shift, .control = control });
     }
 
     [[nodiscard]] bool activate(){
-        return frame(m_model) && key(Ui::InputKey::Tab) && frame(m_model) && m_textInput.activeSession().valid();
+        return frame(m_model) && key(Core::Key::Tab) && frame(m_model) && m_textInput.activeSession().valid();
     }
 
     [[nodiscard]] bool emptyFrame(){

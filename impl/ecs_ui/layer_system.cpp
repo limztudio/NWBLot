@@ -127,6 +127,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
 
 void UiLayerSystem::invalidateResources(){
     m_resourcesReady = false;
+    m_blockCommandChars = false;
     m_frameDelta.clear();
     m_editHost.reset();
     m_context.abandonFrame();
@@ -158,6 +159,7 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    m_blockCommandChars = false;
     m_frameDelta.clear();
     m_context.abandonFrame();
     m_editHost.reset();

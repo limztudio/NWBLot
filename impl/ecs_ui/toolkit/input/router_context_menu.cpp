@@ -50,9 +50,9 @@ void InputRouter::reconcileContextMenus(){
     }
     if(!currentContextMenuOwner(m_secondaryOwner))
         m_secondaryOwner = {};
-    for(auto& owner : m_contextMenuKeyOwners){
-        if(!currentContextMenuOwner(owner))
-            owner = {};
+    for(auto& source : m_commandSources){
+        if(!currentContextMenuOwner(source.contextOwner))
+            source.contextOwner = {};
     }
 }
 
@@ -70,12 +70,12 @@ void InputRouter::appendContextMenu(
 }
 
 bool InputRouter::routeContextMenuKey(
-    const InputEvent& event, const HitTarget* focused, const bool alreadyPressed, InputRoutingResult& result){
-    const bool trigger = event.key == InputKey::Menu || (event.key == InputKey::F10 && event.shift && !event.control && !event.alt);
+    const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result){
+    const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;
     if(!alreadyPressed && !event.repeat){
-        m_contextMenuKeyOwners[event.key == InputKey::Menu ? 0u : 1u] = {
+        source.contextOwner = {
             focused->id, focused->declarationGeneration, focused->popup, focused->control
         };
         appendContextMenu(*focused, { focused->rectangle.x, focused->rectangle.y + focused->rectangle.height }, true, result);

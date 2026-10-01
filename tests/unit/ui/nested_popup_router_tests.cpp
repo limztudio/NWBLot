@@ -105,7 +105,7 @@ protected:
         return m_router.process();
     }
 
-    void key(const InputKey::Enum key, const bool shift = false){
+    void key(const Core::Key::Enum key, const bool shift = false){
         EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = key, .shift = shift }).keyboardConsumed);
         EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = key, .shift = shift }).keyboardConsumed);
     }
@@ -117,7 +117,7 @@ protected:
 
     void focusBase(){
         ASSERT_TRUE(install(nullptr, 0u, 1u));
-        key(InputKey::Tab);
+        key(Core::Key::Tab);
         ASSERT_EQ(m_router.focus().value, 1u);
     }
 
@@ -143,13 +143,13 @@ TEST_F(UiNestedPopupRouterTests, ChildMayExtendOutsideParentWhileFocusAndPointer
     EXPECT_EQ(m_router.focus().value, 201u);
     EXPECT_EQ(m_router.hitTest({ 175.0f, 125.0f }).value, 201u);
     EXPECT_FALSE(m_router.hitTest({ 35.0f, 35.0f }).valid());
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     EXPECT_EQ(m_router.focus().value, 202u);
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     EXPECT_EQ(m_router.focus().value, 201u);
-    key(InputKey::Tab, true);
+    key(Core::Key::Tab, true);
     EXPECT_EQ(m_router.focus().value, 202u);
-    key(InputKey::Enter);
+    key(Core::Key::Enter);
     EXPECT_TRUE(m_router.consumeActivation({ 202u }));
     EXPECT_FALSE(m_router.consumeActivation({ 101u }));
 }
@@ -158,48 +158,48 @@ TEST_F(UiNestedPopupRouterTests, EscapeDismissesOnlyChildThenRestoresChosenParen
     focusBase();
     const PopupScope parent = Scope(100u, 1u);
     ASSERT_TRUE(install(&parent, 1u, 2u));
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     ASSERT_EQ(m_router.focus().value, 102u);
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope scopes[]{ parent, child };
     ASSERT_TRUE(install(scopes, 2u, 3u));
     ASSERT_EQ(m_router.focus().value, 201u);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Escape }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
     EXPECT_TRUE(m_router.consumePopupDismissal(child.token, reason));
-    EXPECT_EQ(reason, PopupDismissReason::Escape);
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token, reason));
     EXPECT_FALSE(m_router.focus().valid());
     ASSERT_TRUE(install(&parent, 1u, 4u));
     EXPECT_EQ(m_router.focus().value, 102u);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Escape, .repeat = true }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape, .repeat = true }).keyboardConsumed);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token, reason));
     EXPECT_EQ(m_router.focus().value, 102u);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Escape }).keyboardConsumed);
-    key(InputKey::Escape);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
+    key(Core::Key::Escape);
     EXPECT_TRUE(m_router.consumePopupDismissal(parent.token, reason));
-    EXPECT_EQ(reason, PopupDismissReason::Escape);
+    EXPECT_EQ(reason, PopupDismissReason::Cancel);
 }
 
 TEST_F(UiNestedPopupRouterTests, OptedInChildTabLeavesItsParentOpenAndAdvancesParentFocus){
     focusBase();
     const PopupScope parent = Scope(100u, 1u);
     ASSERT_TRUE(install(&parent, 1u, 2u));
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     ASSERT_EQ(m_router.focus().value, 102u);
     PopupScope child = Scope(200u, 2u, parent.token);
-    child.dismissTab = true;
-    child.tabAnchor = { 102u };
-    child.tabAnchorDeclarationGeneration = 10u;
+    child.dismissFocusTraversal = true;
+    child.focusAnchor = { 102u };
+    child.focusAnchorDeclarationGeneration = 10u;
     const PopupScope scopes[]{ parent, child };
     ASSERT_TRUE(install(scopes, 2u, 3u));
     ASSERT_EQ(m_router.focus().value, 201u);
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     EXPECT_EQ(m_router.focus().value, 202u);
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
     EXPECT_TRUE(m_router.consumePopupDismissal(child.token, reason));
-    EXPECT_EQ(reason, PopupDismissReason::Tab);
+    EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
     EXPECT_FALSE(m_router.consumePopupDismissal(parent.token, reason));
     ASSERT_TRUE(install(&parent, 1u, 4u));
     EXPECT_EQ(m_router.popupCount(), 1u);
@@ -252,7 +252,7 @@ TEST_F(UiNestedPopupRouterTests, ClosingAncestorPreservesUnrelatedTopChainAndIts
     const PopupScope unrelated = Scope(400u, 4u);
     const PopupScope scopes[]{ parent, child, grandchild, unrelated };
     ASSERT_TRUE(install(scopes, 4u, 2u));
-    key(InputKey::Enter);
+    key(Core::Key::Enter);
     ASSERT_EQ(m_router.actions().size(), 1u);
     m_router.closePopup(parent.token);
     EXPECT_EQ(m_router.focus().value, 401u);
@@ -274,8 +274,8 @@ TEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcro
     const PopupScope child = Scope(200u, 2u, parent.token);
     const PopupScope scopes[]{ parent, child };
     ASSERT_TRUE(install(scopes, 2u, 2u, true));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Down }).keyboardConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Menu }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Down }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Menu }).keyboardConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 175.0f, 125.0f } }).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::SecondaryDown, .position = { 175.0f, 125.0f } }).pointerConsumed);
     ASSERT_EQ(m_router.capture().value, 201u);
@@ -291,16 +291,16 @@ TEST_F(UiNestedPopupRouterTests, RetiringAncestorCancelsDescendantIntentionsAcro
     ContextMenuAction context;
     EXPECT_FALSE(m_router.consumeContextMenu({ 201u }, 10u, context));
     ASSERT_TRUE(install(scopes, 2u, 3u, true));
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Down, .repeat = true }).keyboardConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Menu }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Down, .repeat = true }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Menu }).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_FALSE(m_router.consumeContextMenu({ 201u }, 10u, context));
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 175.0f, 125.0f } }).pointerConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::SecondaryUp, .position = { 175.0f, 125.0f } }).pointerConsumed);
     EXPECT_TRUE(m_router.actions().empty());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Down }).keyboardConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Menu }).keyboardConsumed);
-    key(InputKey::Down);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Down }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Menu }).keyboardConsumed);
+    key(Core::Key::Down);
     ControlAction action;
     EXPECT_TRUE(m_router.consumeControlAction({ 201u }, 10u, { 600u, 700u, 800u }, action));
     EXPECT_EQ(action.popup, child.token);

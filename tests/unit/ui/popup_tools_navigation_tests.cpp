@@ -30,17 +30,17 @@ TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceA
     ASSERT_NE(menuHost(), nullptr);
     const WidgetId rows = menuHost()->id;
     ASSERT_EQ(m_context.input().focus(), rows);
-    press(InputKey::End);
+    press(Core::Key::End);
     ASSERT_TRUE(acceptTools(3u, false));
     ASSERT_EQ(m_menu.cursorKey(), 5u);
     ASSERT_FALSE(m_menuResult.activated);
     const u64 oldInputGeneration = m_menu.listState().inputGeneration();
     const u64 oldSourceRevision = menuHost()->control.contentRevision;
 
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     InputEvent heldNavigation;
     heldNavigation.type = InputEventType::KeyDown;
-    heldNavigation.key = InputKey::Down;
+    heldNavigation.key = Core::Key::Down;
     EXPECT_TRUE(send(heldNavigation).keyboardConsumed);
     ASSERT_FALSE(m_context.input().controlActions().empty());
     m_source.count = 4u;
@@ -76,18 +76,18 @@ TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceA
     heldNavigation.repeat = false;
     EXPECT_TRUE(send(heldNavigation).keyboardConsumed);
 
-    press(InputKey::End);
+    press(Core::Key::End);
     ASSERT_TRUE(acceptTools(6u, false));
     EXPECT_EQ(m_menu.cursorKey(), 4u);
     EXPECT_FALSE(m_menuResult.activated);
-    press(InputKey::Home);
+    press(Core::Key::Home);
     ASSERT_TRUE(acceptTools(7u, false));
     EXPECT_EQ(m_menu.cursorKey(), 1u);
     EXPECT_FALSE(m_menuResult.activated);
-    press(InputKey::End);
+    press(Core::Key::End);
     ASSERT_TRUE(acceptTools(8u, false));
     EXPECT_EQ(m_menu.cursorKey(), 4u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptTools(9u, false));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 4u);

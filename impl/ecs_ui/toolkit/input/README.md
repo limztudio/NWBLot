@@ -2,13 +2,13 @@
 
 The UI input domain owns platform-neutral hit testing and interaction state. It has no ImGui dependency. Native window focus, mouse capture, IME, clipboard, and native selection belong to the OS service boundary. The ECS UI adapter borrows available services and translates supported events into this domain; the router does not implement native service protocols.
 
-`input.h` declares value types and bounds. `router.h` exposes the single-owner router. `router.cpp` owns queues, committed target publication, action lifetimes, and cancellation; `router_pointer.cpp` and `router_keyboard.cpp` own pointer and keyboard transitions separately. `router_gesture.cpp` owns copied pointer-gesture records and consumption, and `router_context_menu.cpp` owns copied secondary-button/keyboard menu triggers. The caller supplies a `Core::Alloc::GlobalArena` that outlives the router and its consumers.
+`input.h` declares value types and bounds. `router.h` exposes the single-owner router. `router.cpp` owns queues, committed target publication, action lifetimes, and cancellation; `router_pointer.cpp` and `router_keyboard.cpp` own pointer and command transitions separately. `commands.h` defines device-independent intentions; `bindings.h/.cpp` validates keyboard profiles and `bindings_defaults.cpp` supplies the engine defaults. `router_sources.cpp` resolves input and pins each held source to its original mapping. `router_gesture.cpp` owns copied pointer-gesture records and consumption, and `router_context_menu.cpp` owns copied secondary-button/keyboard menu triggers. The caller supplies a `Core::Alloc::GlobalArena` that outlives the router and its consumers.
 
 ## Events and ownership
 
-The router accepts logical-coordinate pointer movement and wheel deltas, primary/secondary-button down/up, pointer leave/capture loss, key down/up, and window focus changes. Normalized keys cover focus and activation (Tab, Enter, Space, Escape), caret and selection editing (Left/Right, Home/End, Backspace/Delete), clipboard/history shortcut letters (A/C/X/V/Z/Y), vertical result navigation (Up/Down/PageUp/PageDown), and context-menu keys (Menu/F10), with Shift/Control/Alt modifiers. The ECS edit adapter translates native keys and character delivery into text commands; composition and clipboard protocols stay with the borrowed OS services. The ECS adapter retains native key ownership separately, including keys outside this normalized set, so a held press/repeat/up sequence keeps its original custom or scene owner across focus transfer.
+The router accepts logical-coordinate pointer movement and wheel deltas, primary/secondary-button down/up, pointer leave/capture loss, physical key down/up, semantic command down/up, and window focus changes. Physical keys use the full `Core::Key` range with Shift/Control/Alt/Super modifiers. Keyboard profiles resolve those events to commands; external adapters supply commands directly. Native character delivery remains separate from command routing, and composition and clipboard protocols stay with the borrowed OS services. The ECS adapter retains native scene/UI key ownership across a held press/repeat/release sequence.
 
-Call `queue(event)` and then `process()` before offering a native event to another input owner. The ECS adapter processes each event immediately, so the first click over a UI target is consumed even before that target has keyboard focus. `process()` drains admitted events once and preserves already accepted actions across later calls.
+Call `queue(event, &resolved)` and then `process()` before offering a native event to another input owner. The ECS adapter processes each event immediately, so the first click over a UI target is consumed even before that target has keyboard focus. `queue()` copies the resolved command into `resolved` only on successful admission. An editor adapter must use that snapshot instead of translating the physical key again. `process()` drains admitted events once and preserves already accepted actions across later calls.
 
 `InputRoutingResult` reports event consumption, ongoing pointer/keyboard ownership, hover, focus, logical capture, activation overflow, and gesture overflow. `hitTest(point)` returns the top enabled target at that logical position. `wouldConsumePointer(point)` also recognizes an ongoing UI primary or secondary sequence and supports adapter routing of wheel or other buttons without making them primary activation events.
 
@@ -16,7 +16,34 @@ Hit targets contain a widget ID, declaration generation, rectangle, clip, paint 
 
 A primary press over a target starts logical capture and assigns keyboard focus when the target is focusable. A release activates only the same captured declaration when it remains activatable and is still the top target at the release position. Dragging outside does not activate. A scene-owned press does not transfer into a control when the pointer later enters it. Capture removal cancels activation but retains UI ownership until that primary sequence releases.
 
-Tab and Shift+Tab traverse enabled, visible, focusable declarations in publication order and wrap. Ordinary user and modal popups trap traversal inside the top scope. An automatic combo popup opts into Tab exit: traversal within its children does not wrap, and crossing either boundary closes the combo and advances from its field in the parent scope after acceptance. Enter and Space activate on their first key-down. Native repeats and duplicate activation key-downs are consumed without adding another action. Tab may repeat navigation. Escape dismisses the top popup according to policy or clears ordinary focus/capture; editors first handle composition cancellation. Held releases retain their original owner. `ownsKey(key)` reports a normalized key whose down was consumed, including after focus moves elsewhere; adapters use it to prevent a held supported key's repeats from changing owners before release.
+`FocusNext` and `FocusPrevious` traverse enabled, visible, focusable declarations in publication order and wrap. Ordinary user and modal popups trap traversal inside the top scope. An automatic combo popup permits traversal exit: crossing either child boundary closes it and advances from its field in the parent scope after acceptance. `Accept`, `Submit`, and `Activate` activate eligible controls on the first press; repeated or duplicate activation presses do not add another action. Navigation commands may repeat. `Cancel` dismisses the top popup according to policy or clears ordinary focus/capture; editors first handle composition cancellation.
+
+## Configurable bindings and external devices
+
+`InputRouter::setBindings(bindings, count)` atomically replaces the keyboard profile. An empty profile removes every default shortcut. `restoreDefaultBindings()` reinstalls the engine profile. A binding names a physical key, required modifiers, ignored modifiers, command, selection policy, whether it can address an editor, and an explicit `allowText` policy. Required and ignored modifier bits must be disjoint. Unspecified modifiers must be absent; CapsLock and NumLock do not affect matching. Ambiguous chords, unsupported keys or modifier bits, malformed commands and profiles exceeding 256 bindings are rejected without changing the active profile.
+
+The default profile retains Tab/Shift+Tab traversal, Enter acceptance, Ctrl+Enter submission, Space activation, Escape cancellation, arrows/Home/End/Page navigation, word movement/deletion, clipboard/history shortcuts, and Menu/Shift+F10 context-menu requests. Shift extends selection on the default movement bindings. Alt editing combinations remain available to native input, including AltGr. Consumed commands suppress their ordinary key-produced character on Win32, X11, and Wayland unless the binding sets `allowText = true`. The default Space binding explicitly permits text, so it still enters a space while an editor is focused; a custom printable `Activate` binding suppresses its character by default. IME composition/commit and compositor text-input callbacks remain owned by native text services.
+
+`UiLayerSystem::setInputBindings()` and `restoreDefaultInputBindings()` expose the same profile boundary at the ECS host. Applications may load profiles from their settings store; the toolkit owns copied bindings and requires no file format.
+
+```cpp
+const Ui::InputKeyBinding profile[] = {
+    { .key = Core::Key::W, .command = Ui::InputCommand::Up },
+    { .key = Core::Key::S, .command = Ui::InputCommand::Down },
+    { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
+};
+const bool accepted = uiLayer.setInputBindings(profile, sizeof(profile) / sizeof(profile[0u]));
+```
+
+External input uses `UiLayerSystem::commandInput(source, command, phase, extend)`. For example, a gamepad adapter sends `FocusNext`, `Down`, `Accept`, or `Cancel` using `Core::InputAction::Press`, `Repeat`, and `Release`. Supply stable, nonzero device and control identities; device zero is reserved for native keyboard events. The adapter determines repeat timing and serializes delivery on the UI thread. `extend` requests selection extension independently of keyboard modifiers. `commandInput()` returns whether the UI consumed the event, allowing the adapter to retain scene/UI ownership through release.
+
+```cpp
+const Ui::InputSource nextControl{ .device = 1u, .control = 4u };
+const bool pressed = uiLayer.commandInput(nextControl, Ui::InputCommand::FocusNext, Core::InputAction::Press);
+const bool released = uiLayer.commandInput(nextControl, Ui::InputCommand::None, Core::InputAction::Release);
+```
+
+Each held source pins its command, selection/edit intent, and `allowText` policy on its first press. Rebinding or changing modifiers during the hold takes effect on the next press. Independent devices and controls retain independent ownership, even when they produce the same command. The accepted source widget, delegated host, declaration, popup and control lifetimes fence repeated edits/navigation. Retiring an owner permanently retires that held intention; restoring a matching declaration cannot revive it. A source first pressed without UI ownership cannot acquire it on repeat after focus changes. `ownsKey(key)` and `ownsSource(source)` report consumed holds until release. Window focus loss cancels ownership, and commands received while unfocused cannot navigate or activate the UI. After focus returns, a source pressed while unfocused requires release and a fresh press.
 
 ## Hover and context-menu intentions
 
@@ -42,7 +69,7 @@ The router prunes gestures when their declaration disappears, changes kind/lifet
 
 A prepared CPU layout is not an input layout. The owning context pairs hit targets with the same frozen draw generation. The host publishes that generation only after its exact output has been accepted and successfully presented. GPU retries reuse frozen paint and do not rerun callbacks or drain accepted actions into a newer CPU frame. Input continues using the previous committed layout during preparation and GPU work.
 
-An `InputActionId` contains the stable widget ID, declaration generation, committed layout generation, and a monotonically increasing sequence. `InputAction` also records pointer or keyboard origin. It retains neither callbacks nor source pointers. `consumeActivation(id)` removes at most one action whose target still matches the current declaration lifetime. Changing, removing, hiding, or disabling a target prunes its stale actions.
+An `InputActionId` contains the stable widget ID, declaration generation, committed layout generation, and a monotonically increasing sequence. `InputAction` also records pointer, keyboard, or external command origin. It retains neither callbacks nor source pointers. `consumeActivation(id)` removes at most one action whose target still matches the current declaration lifetime. Changing, removing, hiding, or disabling a target prunes its stale actions.
 
 Cancellation has distinct meanings:
 
@@ -68,13 +95,13 @@ Thumb gestures copy the accepted maximum with their track and thumb rectangles. 
 
 ## Keyboard delegation from editors
 
-An enabled text editor can explicitly bind `keyboardOwner`, `keyboardOwnerDeclarationGeneration` and `keyboardControl` to an accepted navigable host in the same popup and paint layer. Up/Down/PageUp/PageDown and Enter then enqueue ordered control intentions while focus remains with the editor. Home/End, Left/Right and Space retain editor behavior. The editor host still handles Enter and IME composition; a composite control must gate its copied Submit intention on a noncomposing editor submission.
+An enabled text editor can explicitly bind `keyboardOwner`, `keyboardOwnerDeclarationGeneration` and `keyboardControl` to an accepted navigable host in the same popup and paint layer. The `Up`, `Down`, `PageUp`, `PageDown`, `Accept` and `Submit` commands then enqueue ordered control intentions while focus remains with the editor. Home/End, Left/Right and Space retain editor behavior. The editor host still handles Enter and IME composition; a composite control must gate its copied Submit intention on a noncomposing editor submission.
 
 Delegated actions and held keys copy both the source editor and destination host lifetimes. Removing, disabling, rebinding or replacing either one permanently retires the original held intention; restoring an old binding cannot revive it. Publication validates the complete binding atomically. Composition can remove delegation while leaving the editor enabled for native text services.
 
 ## Bounds and failure behavior
 
-The router admits at most 4,096 targets, 256 queued events, 256 pending activations, 256 pointer gesture records, 256 control actions and 256 context-menu actions. Its two target/lookup buffers and event/action vectors reserve those bounds from the owner arena when constructed. Sorted lookup tables avoid quadratic duplicate detection during publication.
+The router admits at most 4,096 targets, 256 queued events, 256 pending activations, 256 pointer gesture records, 256 control actions and 256 context-menu actions. Profiles and held sources are independently bounded at 256 entries. Source vectors begin with a small owner-arena reserve and grow within that bound; the target/lookup buffers and event/action vectors reserve their bounds when constructed. Sorted lookup tables avoid quadratic duplicate detection during publication.
 
 `queue()` rejects malformed or excess events before insertion. The host must handle a rejected event; the ECS adapter invalidates input rather than retaining potentially stuck state. An activation or context-menu request at its full action queue is dropped and reported through `activationOverflow`; freeing a slot later does not replay the dropped event. A full gesture queue similarly drops the new gesture and reports `gestureOverflow`. Accepted action/gesture sequences remain unique across cancellation and reset.
 

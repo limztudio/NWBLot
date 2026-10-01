@@ -30,11 +30,10 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
     if(m_borrowRejected)
         return false;
     const bool composing = model.composition().active;
-    if(event.kind == UiEditBoxEventKind::Key){
-        Ui::EditNavigationDirection::Enum direction;
-        if(Ui::TranslateEditNavigation(event.key, direction))
-            return navigation ? applyNavigation(model, event, *navigation, direction) : true;
-        const auto command = Ui::ApplyEditCommand(model, Ui::TranslateEditCommand(event.key, model.textMode()), options.readOnly);
+    if(event.kind == UiEditBoxEventKind::Command){
+        if(event.navigation)
+            return navigation ? applyNavigation(model, event, *navigation, event.navigationDirection) : true;
+        const auto command = Ui::ApplyEditCommand(model, event.command, options.readOnly);
         result.submitted |= command.submitted;
         result.cancelled |= command.cancelled;
         if(actions && (command.submitted || command.cancelled)){
@@ -53,7 +52,7 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
                     entry.focused = false;
             }
             if(cancelFocus){
-                if(!m_context.input().dismissPopup(Ui::PopupDismissReason::Escape))
+                if(!m_context.input().dismissPopup(Ui::PopupDismissReason::Cancel))
                     m_context.input().clearFocus();
             }
         }

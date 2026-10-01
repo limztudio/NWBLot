@@ -92,7 +92,13 @@ public:
 
 
 public:
+    // Main-thread profile replacement copies bindings; an empty profile disables every default shortcut.
+    [[nodiscard]] bool setInputBindings(const Ui::InputKeyBinding* bindings, usize count);
+    void restoreDefaultInputBindings();
+    // Projects map device controls to UI commands; each nonzero device/control pair identifies one held sequence.
+    [[nodiscard]] bool commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, i32 phase, bool extend = false);
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
+    [[nodiscard]] virtual bool blocksKeyboardText()const override{ return m_blockCommandChars; }
     virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
@@ -108,7 +114,7 @@ public:
 private:
     [[nodiscard]] bool collectRoots();
     void synchronizeInput();
-    void routeInput(const Ui::InputEvent& event);
+    void routeInput(const Ui::InputEvent& event, bool* consumed = nullptr, bool* blockText = nullptr);
     void synchronizeNativeInput();
     [[nodiscard]] bool loadFonts(Core::Alloc::ScratchArena& scratchArena);
 
@@ -135,11 +141,12 @@ private:
     UiFrameDelta m_frameDelta;
     Ui::DisplayMetrics m_display;
     Ui::Point m_pointer;
-    // One bounded native-key owner per held sequence; normalized navigation keys additionally use the CPU router.
+    // Native-key ownership survives focus transfer; the CPU router retains each resolved held intention.
     Array<u8, 512u> m_nativeKeyOwners{};
     u32 m_pressedButtons = 0u;
     u8 m_pointerOwner = 0u;
     bool m_blockNativeChars = false;
+    bool m_blockCommandChars = false;
     u64 m_frameGeneration = 0u;
     u32 m_width = 0u;
     u32 m_height = 0u;

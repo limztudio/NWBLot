@@ -106,7 +106,7 @@ protected:
     [[nodiscard]] WidgetId thumb()const;
     [[nodiscard]] Point trackPoint(f64 normalized, const SliderState& state)const;
     [[nodiscard]] Point thumbPoint()const;
-    void press(InputKey::Enum key, bool repeat = false);
+    void press(Core::Key::Enum key, bool repeat = false);
     [[nodiscard]] SliderAcceptedFrame accepted()const;
     void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;

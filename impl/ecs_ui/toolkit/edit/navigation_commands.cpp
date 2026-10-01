@@ -14,15 +14,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TranslateEditNavigation(const EditKeyStroke& stroke, EditNavigationDirection::Enum& output){
-    if(stroke.alt || stroke.control)
+bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output){
+    if(!intent.edit)
         return false;
     EditNavigationDirection::Enum direction;
-    switch(stroke.key){
-    case EditKey::Up: direction = EditNavigationDirection::Up; break;
-    case EditKey::Down: direction = EditNavigationDirection::Down; break;
-    case EditKey::PageUp: direction = EditNavigationDirection::PageUp; break;
-    case EditKey::PageDown: direction = EditNavigationDirection::PageDown; break;
+    switch(intent.command){
+    case InputCommand::Up: direction = EditNavigationDirection::Up; break;
+    case InputCommand::Down: direction = EditNavigationDirection::Down; break;
+    case InputCommand::PageUp: direction = EditNavigationDirection::PageUp; break;
+    case InputCommand::PageDown: direction = EditNavigationDirection::PageDown; break;
     default: return false;
     }
     output = direction;

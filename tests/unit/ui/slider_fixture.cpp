@@ -181,7 +181,7 @@ Point SliderFixture::thumbPoint()const{
     return SliderCenter(m_state.placement().thumb);
 }
 
-void SliderFixture::press(const InputKey::Enum key, const bool repeat){
+void SliderFixture::press(const Core::Key::Enum key, const bool repeat){
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = key;

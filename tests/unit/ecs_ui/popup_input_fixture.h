@@ -353,21 +353,25 @@ protected:
     [[nodiscard]] Ui::InputRoutingResult dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        EXPECT_TRUE(m_context.input().queue(event));
+        Ui::InputEvent normalized;
+        const bool queued = m_context.input().queue(event, &normalized);
+        EXPECT_TRUE(queued);
+        if(!queued)
+            return {};
         const Ui::InputRoutingResult result = m_context.input().process();
-        m_host.input(event, previousCapture);
+        m_host.input(normalized, previousCapture);
         m_host.synchronizeFocus();
         return result;
     }
 
-    void key(const Ui::InputKey::Enum value, const bool control = false){
+    void key(const Core::Key::Enum value, const bool control = false){
         EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyDown, .position = {}, .key = value, .control = control }).keyboardConsumed);
         EXPECT_TRUE(dispatch({ .type = Ui::InputEventType::KeyUp, .position = {}, .key = value, .control = control }).keyboardConsumed);
     }
 
     void focusBase(){
         ASSERT_TRUE(frame());
-        key(Ui::InputKey::Tab);
+        key(Core::Key::Tab);
         ASSERT_EQ(m_context.input().focus(), m_baseWidget.id);
         ASSERT_TRUE(frame());
         ASSERT_TRUE(m_textInput.activeSession().valid());

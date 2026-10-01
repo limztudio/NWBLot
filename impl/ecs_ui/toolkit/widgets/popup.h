@@ -29,7 +29,7 @@ struct PopupOptions{
     f32 gap = 4.0f;
     bool modal = false;
     bool dismissOutside = true;
-    bool dismissEscape = true;
+    bool dismissCancel = true;
     bool autofocus = true;
 };
 

@@ -157,9 +157,15 @@ void InputRouter::reconcileControlActions(){
             ++index;
     }
     // Losing an initial-down owner is terminal for that held key even if its token later returns.
-    for(auto& owner : m_controlKeyOwners){
-        if(!currentControlKeyOwner(owner))
-            owner = {};
+    for(auto& source : m_commandSources){
+        if(!currentControlKeyOwner(source.controlOwner))
+            source.controlOwner = {};
+        const HitTarget* focused = findTarget(source.focusOwner.target, source.focusOwner.declarationGeneration);
+        if(
+            !focused || !focused->textEditable || !isInteractive(*focused)
+            || focused->popup != source.focusOwner.popup || focused->control != source.focusOwner.control
+        )
+            source.focusOwner = {};
     }
 }
 
@@ -207,31 +213,35 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
 }
 
 bool InputRouter::routeControlKey(
-    const InputEvent& event, const HitTarget& host, const HitTarget& source, const bool alreadyPressed,
+    const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, const bool alreadyPressed,
     InputRoutingResult& result){
     ControlActionKind::Enum kind;
-    switch(event.key){
-    case InputKey::Left:
+    switch(event.command){
+    case InputCommand::Left:
+    case InputCommand::WordLeft:
         if(!host.horizontalNavigation)
             return false;
         kind = ControlActionKind::Left;
         break;
-    case InputKey::Right:
+    case InputCommand::Right:
+    case InputCommand::WordRight:
         if(!host.horizontalNavigation)
             return false;
         kind = ControlActionKind::Right;
         break;
-    case InputKey::Up: kind = ControlActionKind::Up; break;
-    case InputKey::Down: kind = ControlActionKind::Down; break;
-    case InputKey::PageUp: kind = ControlActionKind::PageUp; break;
-    case InputKey::PageDown: kind = ControlActionKind::PageDown; break;
-    case InputKey::Home: kind = ControlActionKind::Home; break;
-    case InputKey::End: kind = ControlActionKind::End; break;
-    case InputKey::Enter:
-    case InputKey::Space: kind = ControlActionKind::Submit; break;
+    case InputCommand::Up: kind = ControlActionKind::Up; break;
+    case InputCommand::Down: kind = ControlActionKind::Down; break;
+    case InputCommand::PageUp: kind = ControlActionKind::PageUp; break;
+    case InputCommand::PageDown: kind = ControlActionKind::PageDown; break;
+    case InputCommand::DocumentHome:
+    case InputCommand::Home: kind = ControlActionKind::Home; break;
+    case InputCommand::DocumentEnd:
+    case InputCommand::End: kind = ControlActionKind::End; break;
+    case InputCommand::Accept:
+    case InputCommand::Submit:
+    case InputCommand::Activate: kind = ControlActionKind::Submit; break;
     default: return false;
     }
-    auto& owner = m_controlKeyOwners[static_cast<usize>(event.key) - 1u];
     if(!alreadyPressed && !event.repeat)
         owner = { host.id, host.declarationGeneration, host.popup, host.control,
             source.id, source.declarationGeneration, source.control,

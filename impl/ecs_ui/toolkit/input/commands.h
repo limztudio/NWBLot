@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace InputCommand{
+    enum Enum : u8{
+        None, FocusNext, FocusPrevious, Activate, Accept, Submit, Cancel, Left, Right, Up, Down, PageUp, PageDown, Home, End,
+        WordLeft, WordRight, DocumentHome, DocumentEnd, Backspace, Delete, WordBackspace, WordDelete, SelectAll, Copy, Cut,
+        Paste, Undo, Redo, Newline, ContextMenu
+    };
+};
+
+// Device zero identifies native keyboard controls; adapters supply their own nonzero device identity.
+struct InputSource{
+    u64 device = 0u;
+    u64 control = 0u;
+
+    [[nodiscard]] bool valid()const{ return control != 0u; }
+    friend bool operator==(const InputSource& lhs, const InputSource& rhs) = default;
+};
+
+struct InputCommandIntent{
+    InputCommand::Enum command = InputCommand::None;
+    bool extend = false;
+    bool edit = true;
+    bool allowText = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

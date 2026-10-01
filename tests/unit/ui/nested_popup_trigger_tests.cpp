@@ -200,13 +200,13 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildSearchPointerOpensExplicitQuerySc
     EXPECT_EQ(target(rowsId())->control.contentGeneration, m_searchSource.view.generation);
     EXPECT_EQ(target(comboRow(1u)), nullptr);
     ASSERT_NE(target(comboRow(2u)), nullptr);
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptChildSearch(4u));
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 2u);
     EXPECT_EQ(m_search.combo().selectedKey(), 0u);
     EXPECT_EQ(m_context.input().focus(), queryId());
     m_host.submitted = true;
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptChildSearch(5u));
     EXPECT_TRUE(m_searchResult.combo.committed);
     EXPECT_TRUE(m_searchResult.combo.closed);
@@ -237,12 +237,12 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildSecondaryAndMenuTriggersCommitSta
     EXPECT_EQ(target(menuRows())->layer, 3u);
     EXPECT_EQ(target(anchorId())->popup, child);
     EXPECT_EQ(m_context.input().focus(), menuRows());
-    press(InputKey::Down);
-    press(InputKey::Down);
+    press(Core::Key::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptChildMenu(3u));
     EXPECT_EQ(m_menu.cursorKey(), 4u);
     EXPECT_FALSE(m_menuResult.activated);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptChildMenu(4u));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 4u);
@@ -252,7 +252,7 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildSecondaryAndMenuTriggersCommitSta
     EXPECT_EQ(target(menuRows()), nullptr);
     EXPECT_EQ(m_context.input().focus(), anchorId());
 
-    press(InputKey::Menu);
+    press(Core::Key::Menu);
     ASSERT_TRUE(acceptChildMenu(5u));
     EXPECT_TRUE(m_menuResult.opened);
     EXPECT_TRUE(m_menu.isOpen());
@@ -260,10 +260,10 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildSecondaryAndMenuTriggersCommitSta
     EXPECT_NE(target(menuRows())->popup.openGeneration, firstMenu.openGeneration);
     EXPECT_EQ(target(menuRows())->popup.instanceGeneration, firstMenu.instanceGeneration);
     EXPECT_EQ(target(anchorId())->popup, child);
-    press(InputKey::End);
+    press(Core::Key::End);
     ASSERT_TRUE(acceptChildMenu(6u));
     EXPECT_EQ(m_menu.cursorKey(), 5u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptChildMenu(7u));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 5u);

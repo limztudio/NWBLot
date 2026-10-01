@@ -63,7 +63,7 @@ TEST_F(UiNumericEditBuilderTests, AHostWithoutOrderedActionsRejectsTypedEditors)
 TEST_F(UiNumericEditBuilderTests, SubmitCommitsAtItsPositionBeforeLaterText){
     useHost();
     m_host.replace("42");
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     m_host.text("7");
     ASSERT_TRUE(beginNumeric(1u));
     const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
@@ -83,9 +83,9 @@ TEST_F(UiNumericEditBuilderTests, SubmitCommitsAtItsPositionBeforeLaterText){
 TEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetiredText){
     useHost();
     m_host.replace("42");
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     m_host.text("7");
-    m_host.key(EditKey::Escape);
+    m_host.key(Core::Key::Escape);
     m_host.text("9");
     ASSERT_TRUE(beginNumeric(1u));
     const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
@@ -102,8 +102,8 @@ TEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetir
 TEST_F(UiNumericEditBuilderTests, SuccessfulSubmitKeepsLexicalBytesSelectionAndHistory){
     useHost();
     m_host.replace(" 0042 ");
-    m_host.key(EditKey::Home);
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Home);
+    m_host.key(Core::Key::Enter);
     ASSERT_TRUE(beginNumeric(1u));
     const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
@@ -121,7 +121,7 @@ TEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejectio
     useHost();
     ASSERT_TRUE(m_integer.setValue(12));
     m_host.replace("-");
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     ASSERT_TRUE(beginNumeric(1u));
     const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
     ASSERT_TRUE(result.edit.valid && result.numeric.valid);
@@ -167,7 +167,7 @@ TEST_F(UiNumericEditBuilderTests, InvalidBlurRestoresCurrentCommittedValueBefore
 TEST_F(UiNumericEditBuilderTests, FloatClampUsesTheBoundsOfTheOrderedAction){
     useHost();
     m_host.replace("12.5");
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     FloatEditOptions options;
     options.bounds = { -10.0, 10.0, NumericBoundsPolicy::Clamp };
     ASSERT_TRUE(beginNumeric(1u));
@@ -196,7 +196,7 @@ TEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAc
     EXPECT_EQ(m_integer.value(), 0);
     EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
     ASSERT_TRUE(acceptNumeric());
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     ASSERT_TRUE(beginNumeric(3u));
     const auto committed = m_builder.integerEdit("integer", m_integer, m_integerState, options);
     ASSERT_TRUE(committed.edit.valid && committed.numeric.valid);
@@ -211,7 +211,7 @@ TEST_F(UiNumericEditBuilderTests, ReadOnlySubmitDoesNotCommitOrAdvanceNumericRev
     ASSERT_TRUE(m_integer.setValue(12));
     ASSERT_TRUE(m_integer.setDraft("42"));
     const u64 revision = m_integer.revision();
-    m_host.key(EditKey::Enter);
+    m_host.key(Core::Key::Enter);
     IntegerEditOptions options;
     options.edit.readOnly = true;
     ASSERT_TRUE(beginNumeric(1u));
@@ -267,8 +267,8 @@ TEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape){
     ASSERT_TRUE(m_integer.setValue(12));
     ASSERT_TRUE(m_integer.setDraft("42"));
     m_host.preedit("7");
-    m_host.key(EditKey::Enter);
-    m_host.key(EditKey::Escape);
+    m_host.key(Core::Key::Enter);
+    m_host.key(Core::Key::Escape);
     ASSERT_TRUE(beginNumeric(1u));
     const auto first = m_builder.integerEdit("integer", m_integer, m_integerState);
     ASSERT_TRUE(first.edit.valid && first.numeric.valid);
@@ -278,7 +278,7 @@ TEST_F(UiNumericEditBuilderTests, PreeditOwnsEnterAndTheFirstEscape){
     EXPECT_EQ(m_integer.value(), 12);
     EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
     ASSERT_TRUE(acceptNumeric());
-    m_host.key(EditKey::Escape);
+    m_host.key(Core::Key::Escape);
     ASSERT_TRUE(beginNumeric(2u));
     const auto second = m_builder.integerEdit("integer", m_integer, m_integerState);
     ASSERT_TRUE(second.edit.valid && second.numeric.valid);

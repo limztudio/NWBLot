@@ -199,7 +199,7 @@ protected:
         return send(event).pointerConsumed;
     }
 
-    void key(const InputKey::Enum value, const bool repeat = false){
+    void key(const Core::Key::Enum value, const bool repeat = false){
         InputEvent event;
         event.type = InputEventType::KeyDown;
         event.key = value;
@@ -306,8 +306,8 @@ TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesTo
     ASSERT_TRUE(accept(1u));
     EXPECT_EQ(m_state.selectedKey(), 50000u);
     ASSERT_NE(target(row(50000u)), nullptr);
-    key(InputKey::Tab);
-    key(InputKey::End);
+    key(Core::Key::Tab);
+    key(Core::Key::End);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 100000u);
     EXPECT_FALSE(m_result.activated);
@@ -378,10 +378,10 @@ TEST_F(UiListBuilderTests, SourceRevisionFencesHeldCaptureAndRestoresHostFocusAt
 TEST_F(UiListBuilderTests, HeldNavigationCannotMutateAnAcceptedReorderedDataset){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     InputEvent event;
     event.type = InputEventType::KeyDown;
-    event.key = InputKey::Down;
+    event.key = Core::Key::Down;
     EXPECT_TRUE(send(event).keyboardConsumed);
     m_source.reverse = true;
     ++m_source.contentRevision;
@@ -479,8 +479,8 @@ TEST_F(UiListBuilderTests, EmptyDatasetBuildsOnlyItsHostAndProvidesOneKeyboardSt
     EXPECT_EQ(m_source.textCalls, 0u);
     EXPECT_EQ(m_context.input().targets().size(), 2u);
     EXPECT_FALSE(m_state.placement().scrollbarVisible);
-    key(InputKey::Tab);
-    key(InputKey::Down);
+    key(Core::Key::Tab);
+    key(Core::Key::Down);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 0u);
     EXPECT_FALSE(m_result.activated);
@@ -570,7 +570,7 @@ TEST_F(UiListBuilderTests, TinyPositiveRowHeightWithSmallDatasetBoundsPageSizeBy
 TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    key(InputKey::Tab);
+    key(Core::Key::Tab);
     EXPECT_EQ(m_context.input().focus(), host());
     PopupState lowerPopup;
     PopupState upperPopup;
@@ -587,7 +587,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(3u, lowerPopup, lowerState, &upperPopup, &upperState));
     ASSERT_TRUE(m_context.commitFrame(3u));
     EXPECT_EQ(m_context.input().focus(), id("list", "upper"));
-    key(InputKey::Down);
+    key(Core::Key::Down);
     ASSERT_TRUE(preparePopups(4u, lowerPopup, lowerState, &upperPopup, &upperState));
     EXPECT_EQ(upperState.selectedKey(), 4u);
     EXPECT_EQ(lowerState.selectedKey(), 2u);
@@ -597,7 +597,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(5u, lowerPopup, lowerState, &upperPopup, &upperState));
     ASSERT_TRUE(m_context.commitFrame(5u));
     EXPECT_EQ(m_context.input().focus(), lowerHost);
-    key(InputKey::Down);
+    key(Core::Key::Down);
     ASSERT_TRUE(preparePopups(6u, lowerPopup, lowerState, &upperPopup, &upperState));
     EXPECT_EQ(lowerState.selectedKey(), 3u);
     ASSERT_TRUE(m_context.commitFrame(6u));
@@ -605,7 +605,7 @@ TEST_F(UiListBuilderTests, PopupListsAutofocusAndRestoreEachCoveredListHost){
     ASSERT_TRUE(preparePopups(7u, lowerPopup, lowerState));
     ASSERT_TRUE(m_context.commitFrame(7u));
     EXPECT_EQ(m_context.input().focus(), host());
-    key(InputKey::Down);
+    key(Core::Key::Down);
     ASSERT_TRUE(prepare(8u));
     EXPECT_EQ(m_state.selectedKey(), 2u);
 }

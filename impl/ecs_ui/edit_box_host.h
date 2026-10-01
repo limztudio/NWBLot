@@ -55,7 +55,7 @@ struct UiEditBoxGeometry{
 };
 
 namespace UiEditBoxEventKind{
-    enum Enum : u8{ Key, Character, Native, Selection, PastePrimary, Blur, Focus };
+    enum Enum : u8{ Command, Character, Native, Selection, PastePrimary, Blur, Focus };
 };
 
 // The event-thread bridge owns snapshots and events. Application models are lent only by the current declaration.
@@ -97,7 +97,8 @@ private:
     struct Event{
         UiTextEditOwner owner;
         Core::TextInputEvent native;
-        Ui::EditKeyStroke key;
+        Ui::EditCommandRequest command;
+        Ui::EditNavigationDirection::Enum navigationDirection = Ui::EditNavigationDirection::Up;
         usize position = 0u;
         usize wordPosition = 0u;
         u64 geometryRevision = 0u;
@@ -109,7 +110,8 @@ private:
         usize surroundingAnchor = 0u;
         usize surroundingCaret = 0u;
         f32 navigationViewportHeight = 0.0f;
-        UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Key;
+        UiEditBoxEventKind::Enum kind = UiEditBoxEventKind::Command;
+        bool navigation = false;
         bool extend = false;
         bool dragging = false;
         bool completed = false;

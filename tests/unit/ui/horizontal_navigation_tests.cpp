@@ -23,17 +23,17 @@ namespace UiHorizontalNavigationTests{
 TEST_F(HorizontalNavigationFixture, OptedInHostPublishesOrderedHorizontalAndExistingKeyIntentions){
     ASSERT_TRUE(publish());
     focusTarget();
-    EXPECT_TRUE(keyDown(InputKey::Left).keyboardConsumed);
-    EXPECT_TRUE(keyDown(InputKey::Left, true).keyboardConsumed);
-    press(InputKey::Right);
-    press(InputKey::Down);
-    press(InputKey::PageUp);
-    press(InputKey::Home);
-    press(InputKey::End);
-    EXPECT_TRUE(keyDown(InputKey::Enter).keyboardConsumed);
-    EXPECT_TRUE(keyDown(InputKey::Enter, true).keyboardConsumed);
-    EXPECT_TRUE(keyUp(InputKey::Enter).keyboardConsumed);
-    EXPECT_TRUE(keyUp(InputKey::Left).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
+    press(Core::Key::Right);
+    press(Core::Key::Down);
+    press(Core::Key::PageUp);
+    press(Core::Key::Home);
+    press(Core::Key::End);
+    EXPECT_TRUE(keyDown(Core::Key::Enter).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Enter, true).keyboardConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Enter).keyboardConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     const Array<ControlActionKind::Enum, 8u> kinds{
         ControlActionKind::Left, ControlActionKind::Left, ControlActionKind::Right, ControlActionKind::Down,
         ControlActionKind::PageUp, ControlActionKind::Home, ControlActionKind::End, ControlActionKind::Submit
@@ -71,11 +71,11 @@ TEST_F(HorizontalNavigationFixture, LegacyNavigableHostKeepsHorizontalKeysLocalA
     m_targets[0u] = host;
     ASSERT_TRUE(publish(1u));
     focusTarget();
-    press(InputKey::Left);
-    press(InputKey::Right);
+    press(Core::Key::Left);
+    press(Core::Key::Right);
     EXPECT_TRUE(m_router.controlActions().empty());
-    press(InputKey::Up);
-    press(InputKey::Down);
+    press(Core::Key::Up);
+    press(Core::Key::Down);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Up);
@@ -88,18 +88,18 @@ TEST_F(HorizontalNavigationFixture, CapabilityUsesAcceptedCopiedTargetsUntilSucc
     ASSERT_TRUE(publish());
     focusTarget();
     m_targets[0u].horizontalNavigation = false;
-    press(InputKey::Left);
+    press(Core::Key::Left);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     EXPECT_TRUE(m_router.targets()[0u].horizontalNavigation);
     const u64 sequence = m_router.controlActions()[0u].id.sequence;
     ASSERT_TRUE(publish());
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     EXPECT_TRUE(m_router.controlActions().empty());
     m_targets[0u].horizontalNavigation = true;
     ASSERT_TRUE(publish());
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Right);
@@ -111,20 +111,20 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorRetainsCaretKeysWhileVertical
     bindEditor();
     ASSERT_TRUE(publish(3u));
     focusTarget(2u);
-    const Array<InputKey::Enum, 6u> localKeys{
-        InputKey::Left, InputKey::Right, InputKey::Home, InputKey::End, InputKey::Space, InputKey::Backspace
+    const Array<Core::Key::Enum, 6u> localKeys{
+        Core::Key::Left, Core::Key::Right, Core::Key::Home, Core::Key::End, Core::Key::Space, Core::Key::Backspace
     };
     for(const auto key : localKeys){
         press(key);
         EXPECT_TRUE(m_router.controlActions().empty());
     }
-    EXPECT_TRUE(keyDown(InputKey::Left).keyboardConsumed);
-    EXPECT_TRUE(keyDown(InputKey::Left, true).keyboardConsumed);
-    EXPECT_TRUE(m_router.ownsKey(InputKey::Left));
+    EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
+    EXPECT_TRUE(m_router.ownsKey(Core::Key::Left));
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(keyUp(InputKey::Left).keyboardConsumed);
-    const Array<InputKey::Enum, 5u> keys{
-        InputKey::Up, InputKey::Down, InputKey::PageUp, InputKey::PageDown, InputKey::Enter
+    EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
+    const Array<Core::Key::Enum, 5u> keys{
+        Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown, Core::Key::Enter
     };
     const Array<ControlActionKind::Enum, 5u> kinds{
         ControlActionKind::Up, ControlActionKind::Down, ControlActionKind::PageUp,
@@ -147,7 +147,7 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorRetainsCaretKeysWhileVertical
 TEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcceptedFocusAndHeldAction){
     ASSERT_TRUE(publish());
     focusTarget();
-    EXPECT_TRUE(keyDown(InputKey::Right).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Right).keyboardConsumed);
     const HitTarget accepted = m_targets[0u];
     for(usize variant = 0u; variant < 4u; ++variant){
         m_targets[0u] = accepted;
@@ -165,23 +165,23 @@ TEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcc
         EXPECT_EQ(m_router.focus(), accepted.id);
         ASSERT_EQ(m_router.controlActions().size(), 1u);
         EXPECT_TRUE(m_router.targets()[0u].horizontalNavigation);
-        EXPECT_TRUE(m_router.ownsKey(InputKey::Right));
+        EXPECT_TRUE(m_router.ownsKey(Core::Key::Right));
     }
     m_targets[0u] = accepted;
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.control, accepted.control);
-    EXPECT_TRUE(keyDown(InputKey::Right, true).keyboardConsumed);
+    EXPECT_TRUE(keyDown(Core::Key::Right, true).keyboardConsumed);
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Right);
-    EXPECT_TRUE(keyUp(InputKey::Right).keyboardConsumed);
+    EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
 }
 
 TEST_F(HorizontalNavigationFixture, OwnedPartsRejectHorizontalCapabilityWithoutReplacingAcceptedActions){
     ASSERT_TRUE(publish());
     focusTarget();
-    press(InputKey::Right);
+    press(Core::Key::Right);
     m_targets[2u] = Part(m_targets[0u]);
     m_targets[2u].horizontalNavigation = true;
     EXPECT_FALSE(publish(3u));

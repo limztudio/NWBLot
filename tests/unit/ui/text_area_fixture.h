@@ -8,6 +8,7 @@
 #include "combo_fixture.h"
 
 #include <impl/ecs_ui/toolkit/widgets/text_area.h>
+#include <impl/ecs_ui/toolkit/input/bindings.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +34,7 @@ namespace AreaEventKind{
 
 struct AreaEvent{
     AString<Core::Alloc::GlobalArena> text;
-    EditKeyStroke stroke;
+    InputCommandIntent intent;
     usize anchor = 0u;
     usize caret = 0u;
     EditAction::Enum action = EditAction::Submit;
@@ -73,6 +74,7 @@ public:
         , m_arena(arena)
         , m_context(context)
         , m_events(arena)
+        , m_bindings(arena)
     {}
     virtual ~TextAreaHost()override = default;
 
@@ -84,10 +86,11 @@ public:
         m_events.push_back(Move(event));
     }
 
-    void key(const EditKey::Enum value, const bool control = false, const bool shift = false){
+    void key(const i32 value, const bool control = false, const bool shift = false){
         AreaEvent event(m_arena);
         event.kind = AreaEventKind::Key;
-        event.stroke = { value, control, shift };
+        const i32 modifiers = (control ? Core::InputModifier::Control : 0) | (shift ? Core::InputModifier::Shift : 0);
+        event.intent = m_bindings.resolve(value, modifiers);
         m_events.push_back(Move(event));
     }
 
@@ -151,7 +154,7 @@ public:
                 result.valid = model.setSelection(event.anchor, event.caret);
             else if(options.enabled && event.kind == AreaEventKind::Key){
                 EditNavigationDirection::Enum direction;
-                vertical = TranslateEditNavigation(event.stroke, direction);
+                vertical = TranslateEditNavigation(event.intent, direction);
                 if(vertical && !model.composition().active){
                     resolutions.emplace_back(m_arena);
                     AreaResolution& call = resolutions.back();
@@ -160,12 +163,12 @@ public:
                     call.direction = direction;
                     call.preferred = navigation.snapshot();
                     call.result = resolver.resolve(model, direction, call.preferred, viewportHeight);
-                    const usize targetAnchor = event.stroke.shift ? model.anchor() : call.result.committedByte;
+                    const usize targetAnchor = event.intent.extend ? model.anchor() : call.result.committedByte;
                     result.valid = call.result.resolved && model.setSelection(targetAnchor, call.result.committedByte)
                         && navigation.setPreferredX(call.result.preferredX);
                 }
                 else if(!vertical){
-                    const EditCommandRequest request = TranslateEditCommand(event.stroke, model.textMode());
+                    const EditCommandRequest request = TranslateEditCommand(event.intent, false, model.textMode());
                     const auto command = ApplyEditCommand(model, request, options.readOnly);
                     if(command.submitted || command.cancelled){
                         const auto action = command.submitted ? EditAction::Submit : EditAction::Cancel;
@@ -258,6 +261,7 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     const Context& m_context;
     PaintVector<AreaEvent> m_events;
+    InputBindings m_bindings;
 };
 
 

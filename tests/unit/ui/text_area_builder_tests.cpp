@@ -193,7 +193,7 @@ TEST_F(UiTextAreaBuilderTests, OrderedHostUsesTheRealResolverAfterEarlierInserte
     ASSERT_TRUE(m_model.setText("aa\naaaa\nxx"));
     ASSERT_TRUE(m_model.setSelection(1u, 1u));
     m_host.text("a");
-    m_host.key(EditKey::Down);
+    m_host.key(Core::Key::Down);
     m_host.text("!");
     ASSERT_TRUE(frameArea(1u));
     ASSERT_EQ(m_host.resolutions.size(), 1u);
@@ -222,8 +222,8 @@ TEST_F(UiTextAreaBuilderTests, BorrowedPreferredColumnSurvivesShortLineThenRetur
     ASSERT_TRUE(reference.caretGeometry().caretRect(reference.displayCaret(), caret));
     m_host.seedColumn = true;
     m_host.seededColumn = caret.x;
-    m_host.key(EditKey::Down);
-    m_host.key(EditKey::Down);
+    m_host.key(Core::Key::Down);
+    m_host.key(Core::Key::Down);
     ASSERT_TRUE(frameArea(1u));
     ASSERT_EQ(m_host.resolutions.size(), 2u);
     EXPECT_EQ(m_host.resolutions[0u].result.committedByte, 8u);

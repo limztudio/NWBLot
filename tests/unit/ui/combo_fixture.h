@@ -171,7 +171,7 @@ protected:
         return MakeWidgetPartId(MakeWidgetId(list(combo), "rows"), key);
     }
 
-    void press(const InputKey::Enum value, const bool repeat = false){
+    void press(const Core::Key::Enum value, const bool repeat = false){
         InputEvent event;
         event.type = InputEventType::KeyDown;
         event.key = value;

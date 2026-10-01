@@ -35,7 +35,7 @@ protected:
         const usize targets = m_context.input().targets().size();
         m_resolver.forceResult = true;
         m_resolver.forcedResult = target;
-        ASSERT_TRUE(key(Ui::InputKey::Down));
+        ASSERT_TRUE(key(Core::Key::Down));
         ASSERT_TRUE(commitNative("!"));
         ASSERT_FALSE(prepareNavigation());
         EXPECT_FALSE(m_result.valid);
@@ -97,7 +97,7 @@ protected:
             callbackModel.capture(m_navigationModel);
             callbackNavigation = m_navigation.snapshot();
         };
-        ASSERT_TRUE(key(Ui::InputKey::Down));
+        ASSERT_TRUE(key(Core::Key::Down));
         ASSERT_TRUE(commitNative("!"));
         ASSERT_FALSE(prepareNavigation());
         EXPECT_FALSE(m_result.valid);

@@ -43,7 +43,7 @@ bool UiEditBoxHost::applyNavigation(Ui::EditModel& model, const Event& event, Na
     const auto boundary = LowerBound(boundaries.begin(), boundaries.end(), target.committedByte);
     if(boundary == boundaries.end() || *boundary != target.committedByte)
         return false;
-    if(!model.setSelection(event.key.shift ? expected.anchor : target.committedByte, target.committedByte))
+    if(!model.setSelection(event.command.extend ? expected.anchor : target.committedByte, target.committedByte))
         return false;
     if(!navigation.state.setPreferredX(target.preferredX))
         TerminateInvariant();

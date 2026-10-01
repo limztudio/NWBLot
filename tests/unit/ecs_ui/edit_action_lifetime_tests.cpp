@@ -115,8 +115,8 @@ TEST_F(UiEditActionHostTests, ReadOnlyTransitionRestoresBeforeSnapshotAndKeepsSe
     EXPECT_TRUE(m_result.abandoned);
     EXPECT_TRUE(m_result.focused);
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    ASSERT_TRUE(key(Ui::InputKey::A, false, true));
-    ASSERT_TRUE(key(Ui::InputKey::C, false, true));
+    ASSERT_TRUE(key(Core::Key::A, false, true));
+    ASSERT_TRUE(key(Core::Key::C, false, true));
     ASSERT_TRUE(actionFrame(readOnly));
     EXPECT_EQ(m_model.selectedText(), "0");
     ASSERT_TRUE(m_clipboard.pump());
@@ -132,7 +132,7 @@ TEST_F(UiEditActionHostTests, ReadOnlySubmitIsReportedToSinkWithoutMutatingItsCo
     readOnly.readOnly = true;
     ASSERT_TRUE(actionFrame(readOnly));
     m_actions.clear();
-    ASSERT_TRUE(key(Ui::InputKey::Enter));
+    ASSERT_TRUE(key(Core::Key::Enter));
     ASSERT_TRUE(actionFrame(readOnly));
     EXPECT_TRUE(m_result.submitted);
     ASSERT_EQ(m_actions.records.size(), 1u);
@@ -162,7 +162,7 @@ TEST_F(UiEditActionHostTests, FocusTransferCancelsPendingPasteBeforeOrderedBlurC
     ASSERT_TRUE(activateActions());
     m_clipboard.document.assign("old paste");
     m_clipboard.delayed = true;
-    ASSERT_TRUE(key(Ui::InputKey::V, false, true));
+    ASSERT_TRUE(key(Core::Key::V, false, true));
     ASSERT_TRUE(actionFrame());
     ASSERT_TRUE(m_clipboard.pump());
     const ClipboardRequestToken request = m_clipboard.startedToken;
@@ -182,13 +182,13 @@ TEST_F(UiEditActionHostTests, FocusTransferCancelsPendingPasteBeforeOrderedBlurC
 TEST_F(UiEditActionHostTests, CancelRestorationFencesNativeSessionAndDelayedClipboardCompletion){
     ASSERT_TRUE(activateActions());
     m_clipboard.delayed = true;
-    ASSERT_TRUE(key(Ui::InputKey::V, false, true));
+    ASSERT_TRUE(key(Core::Key::V, false, true));
     ASSERT_TRUE(actionFrame());
     ASSERT_TRUE(m_clipboard.pump());
     const ClipboardRequestToken request = m_clipboard.startedToken;
     ASSERT_TRUE(request.valid());
     const TextInputSessionToken oldSession = m_textInput.activeSession();
-    ASSERT_TRUE(key(Ui::InputKey::Escape));
+    ASSERT_TRUE(key(Core::Key::Escape));
     ASSERT_TRUE(actionFrame());
     EXPECT_EQ(m_model.text(), "0");
     EXPECT_TRUE(m_result.cancelled);

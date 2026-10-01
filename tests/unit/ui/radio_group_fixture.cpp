@@ -260,7 +260,7 @@ Point RadioGroupFixture::choicePoint(const u64 keyValue)const{
     return item ? RadioCenter(item->rectangle) : Point{};
 }
 
-void RadioGroupFixture::press(const InputKey::Enum keyValue, const bool repeat){
+void RadioGroupFixture::press(const Core::Key::Enum keyValue, const bool repeat){
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = keyValue;

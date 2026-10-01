@@ -43,6 +43,11 @@ void InputDispatcher::setMousePositionScale(f32 x, f32 y){
 }
 
 void InputDispatcher::windowFocusUpdate(const bool focused){
+    if(!focused){
+        ++m_keyboardTextPolicyEpoch;
+        m_keyboardTextPolicies.fill(false);
+        m_keyboardTextBlocked = false;
+    }
     if(m_windowFocused == focused)
         return;
     m_windowFocused = focused;
@@ -68,14 +73,36 @@ void InputDispatcher::pointerCaptureLost(){
 }
 
 void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
+    const bool captureText = action == InputAction::Press || action == InputAction::Repeat;
+    const bool hasScancode = scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size();
+    if(captureText){
+        m_keyboardTextBlocked = false;
+        if(hasScancode)
+            m_keyboardTextPolicies[static_cast<usize>(scancode)] = false;
+    }
     if(key == Key::Unknown)
         return;
+    const u64 policyEpoch = m_keyboardTextPolicyEpoch;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
         const bool consumed = handler.keyboardUpdate(key, scancode, action, mods);
+        if(captureText && consumed){
+            const bool blocked = handler.blocksKeyboardText();
+            if(policyEpoch == m_keyboardTextPolicyEpoch){
+                m_keyboardTextBlocked = m_windowFocused && blocked;
+                if(hasScancode)
+                    m_keyboardTextPolicies[static_cast<usize>(scancode)] = m_keyboardTextBlocked;
+            }
+        }
         // Releases reach every owner so a changed UI focus cannot leave scene input held.
         return action != InputAction::Release && consumed;
     });
+}
+
+bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const{
+    if(scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size())
+        return m_keyboardTextPolicies[static_cast<usize>(scancode)];
+    return m_keyboardTextBlocked;
 }
 
 void InputDispatcher::keyboardCharInput(u32 unicode, i32 mods){

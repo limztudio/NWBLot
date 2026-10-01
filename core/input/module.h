@@ -125,6 +125,7 @@ namespace Key{
         Backslash,
         RightBracket,
         GraveAccent = s_KeyGraveAccentCode,
+        World1 = s_KeyWorld1Code,
         World2,
 
         Escape = s_KeyEscapeCode,
@@ -200,6 +201,8 @@ namespace Key{
     };
 };
 
+static_assert(Key::World1 == 161 && Key::World2 == 162);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -214,6 +217,8 @@ public:
     virtual void pointerLeave(){}
     virtual void pointerCaptureLost(){}
     virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
+    // Queried immediately from the consuming press/repeat handler before native ordinary text is admitted.
+    [[nodiscard]] virtual bool blocksKeyboardText()const{ return false; }
     virtual bool keyboardCharInput(u32, i32){ return false; }
     virtual bool mousePosUpdate(f64, f64){ return false; }
     virtual bool mouseButtonUpdate(i32, i32, i32){ return false; }
@@ -260,6 +265,8 @@ public:
     void pointerCaptureLost();
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
+    // Releases preserve queued character policy; a supplied native scancode selects its captured press/repeat policy.
+    [[nodiscard]] bool keyboardTextBlocked(i32 scancode = -1)const;
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);
     void mouseButtonUpdate(i32 button, i32 action, i32 mods);
@@ -295,6 +302,9 @@ private:
     HandlerMutationVector m_pendingHandlerMutations;
     usize m_pendingHandlerRemovalCount = 0;
     u32 m_dispatchDepth = 0;
+    u64 m_keyboardTextPolicyEpoch = 0u;
+    Array<bool, 512u> m_keyboardTextPolicies{};
+    bool m_keyboardTextBlocked = false;
     bool m_windowFocused = true;
     f32 m_mousePositionScaleX = 1.f;
     f32 m_mousePositionScaleY = 1.f;

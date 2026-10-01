@@ -6,6 +6,7 @@
 
 
 #include "model.h"
+#include "../input/commands.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,31 +17,6 @@ NWB_IMPL_UI_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace EditKey{
-    enum Enum : u8{
-        None,
-        Left,
-        Right,
-        Home,
-        End,
-        Backspace,
-        Delete,
-        A,
-        C,
-        X,
-        V,
-        Z,
-        Y,
-        Enter,
-        Insert,
-        Escape,
-        Up,
-        Down,
-        PageUp,
-        PageDown,
-    };
-};
 
 namespace EditCommand{
     enum Enum : u8{
@@ -79,14 +55,6 @@ namespace EditClipboardAction{
     };
 };
 
-struct EditKeyStroke{
-    EditKey::Enum key = EditKey::None;
-    bool control = false;
-    bool shift = false;
-    bool alt = false;
-    bool repeat = false;
-};
-
 struct EditCommandRequest{
     EditCommand::Enum command = EditCommand::None;
     bool extend = false;
@@ -103,9 +71,10 @@ struct EditCommandResult{
     bool cancelled = false;
 };
 
-// Filter native-consumed key events before translation. Alt combinations stay with the OS, including AltGr.
-// Multiline Enter inserts LF; Ctrl+Enter submits. Multiline Ctrl+Home/End use document movement.
-[[nodiscard]] EditCommandRequest TranslateEditCommand(const EditKeyStroke& stroke, EditTextMode::Enum mode = EditTextMode::SingleLine);
+// Bindings or device adapters supply admitted editing intent; native-consumed input is filtered before translation.
+// Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
+[[nodiscard]] EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, bool repeat,
+    EditTextMode::Enum mode = EditTextMode::SingleLine);
 // Active preedit owns editing keys and Enter. Escape first cancels preedit without cancelling the widget.
 // Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
 [[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, bool readOnly = false);

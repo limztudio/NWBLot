@@ -25,6 +25,7 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame_delta.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skin_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/layer_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_input_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layer_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/layer_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layer_system_frame.cpp"

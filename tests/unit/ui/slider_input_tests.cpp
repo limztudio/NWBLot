@@ -26,37 +26,37 @@ class UiSliderInputTests : public SliderFixture{};
 
 TEST_F(UiSliderInputTests, DirectionKeysAndPagesUseTheOneHostAndSaturateAtExactEndpoints){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     const ControlToken token = target(host())->control;
-    press(InputKey::Right);
-    press(InputKey::Up);
+    press(Core::Key::Right);
+    press(Core::Key::Up);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
     EXPECT_EQ(target(host())->control, token);
-    press(InputKey::Left);
-    press(InputKey::Down);
+    press(Core::Key::Left);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(3u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
-    press(InputKey::PageUp);
+    press(Core::Key::PageUp);
     ASSERT_TRUE(accept(4u));
     EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    press(InputKey::PageDown);
+    press(Core::Key::PageDown);
     ASSERT_TRUE(accept(5u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
-    press(InputKey::End);
+    press(Core::Key::End);
     ASSERT_TRUE(accept(6u));
     EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    press(InputKey::Home);
+    press(Core::Key::Home);
     ASSERT_TRUE(accept(7u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
 }
 
 TEST_F(UiSliderInputTests, AcceptedKeyRepeatsRemainAddressedToTheSurvivingControlLifetime){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     InputEvent key;
     key.type = InputEventType::KeyDown;
-    key.key = InputKey::Right;
+    key.key = Core::Key::Right;
     EXPECT_TRUE(send(key).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
@@ -91,8 +91,8 @@ TEST_F(UiSliderInputTests, OffCenterThumbPressHasNoJumpAndZeroDeltaDoesNotOverwr
     const f64 baseline = 0.1;
     ASSERT_TRUE(m_state.setValue(baseline));
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Right);
+    press(Core::Key::Tab);
+    press(Core::Key::Right);
     const Rect thumbBounds = m_state.placement().thumb;
     const Point origin{ thumbBounds.x + 3.0f, thumbBounds.y + thumbBounds.height * 0.5f };
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
@@ -140,7 +140,7 @@ TEST_F(UiSliderInputTests, LatestCoalescedMoveAfterAKeyAppliesAfterTheCopiedKeyS
     const f64 travel = m_state.placement().centerTravel.width;
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 30.0f, origin.y } }).pointerConsumed);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_NEAR(m_state.value(), 0.25 + 60.0 / travel, 0.00000001);
@@ -153,7 +153,7 @@ TEST_F(UiSliderInputTests, AKeyAfterTheLatestCoalescedMoveAppliesToTheDraggedVal
     const f64 travel = m_state.placement().centerTravel.width;
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(2u));
     EXPECT_NEAR(m_state.value(), 0.25 + 60.0 / travel + 0.125, 0.00000001);
 }
@@ -195,7 +195,7 @@ TEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRo
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 80.0f, origin.y } }).pointerConsumed);
@@ -209,8 +209,8 @@ TEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRo
 
 TEST_F(UiSliderInputTests, EnterAndWheelDoNotChangeTheSliderOrCreateActivationActions){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Enter);
+    press(Core::Key::Tab);
+    press(Core::Key::Enter);
     InputEvent wheel;
     wheel.type = InputEventType::PointerWheel;
     wheel.position = thumbPoint();

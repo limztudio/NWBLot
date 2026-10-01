@@ -64,13 +64,13 @@ TEST_F(UiSearchComboBuilderTests, TabMovesFromQueryToResultsThenExitsWithoutComm
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(3u));
     ASSERT_EQ(m_search.combo().listState().cursorKey(), 2u);
     ASSERT_EQ(m_context.input().focus(), query());
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     EXPECT_EQ(m_context.input().focus(), list());
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     ASSERT_TRUE(acceptSearch(4u));
     EXPECT_TRUE(m_searchResult.combo.closed);
     EXPECT_FALSE(m_searchResult.combo.committed);
@@ -86,8 +86,8 @@ TEST_F(UiSearchComboBuilderTests, ReverseTabFromQueryCancelsPreeditAndKeepsTheCo
     ASSERT_TRUE(m_search.query().beginComposition());
     ASSERT_TRUE(m_search.query().updateComposition("preedit", 0u, 7u));
     ASSERT_TRUE(m_search.query().composition().active);
-    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab, .shift = true };
-    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab, .shift = true };
+    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab, .shift = true };
+    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab, .shift = true };
     EXPECT_TRUE(send(reverseDown).keyboardConsumed);
     EXPECT_TRUE(send(reverseUp).keyboardConsumed);
     ASSERT_TRUE(acceptSearch(3u));
@@ -103,8 +103,8 @@ TEST_F(UiSearchComboBuilderTests, ClosedArrowOpensUsingTheFilteredLifetimeAndKee
     m_search.combo().select(1u);
     ASSERT_TRUE(m_search.query().setText("Second"));
     ASSERT_TRUE(acceptSearch(1u));
-    press(InputKey::Tab);
-    press(InputKey::Down);
+    press(Core::Key::Tab);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(2u));
     EXPECT_TRUE(m_searchResult.combo.opened);
     EXPECT_FALSE(m_searchResult.combo.committed);
@@ -117,15 +117,15 @@ TEST_F(UiSearchComboBuilderTests, EnterIntentionRequiresTheNativeEditHostSubmiss
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(3u));
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptSearch(4u));
     EXPECT_FALSE(m_searchResult.combo.committed);
     EXPECT_TRUE(m_search.combo().isOpen());
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
     m_host.submitted = true;
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptSearch(5u));
     EXPECT_TRUE(m_searchResult.combo.committed);
     EXPECT_TRUE(m_searchResult.combo.selectionChanged);
@@ -138,9 +138,9 @@ TEST_F(UiSearchComboBuilderTests, DownEnterDownCommitsAtTheAcceptedEnterPosition
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
-    press(InputKey::Enter);
-    press(InputKey::Down);
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
+    press(Core::Key::Down);
     m_host.submitted = true;
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_TRUE(m_searchResult.combo.committed);
@@ -153,8 +153,8 @@ TEST_F(UiSearchComboBuilderTests, EnterThenDownCannotMoveTheSelectionPastTheSubm
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Enter);
-    press(InputKey::Down);
+    press(Core::Key::Enter);
+    press(Core::Key::Down);
     m_host.submitted = true;
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_TRUE(m_searchResult.combo.committed);
@@ -168,7 +168,7 @@ TEST_F(UiSearchComboBuilderTests, ChangedQueryFiltersRowsAndDiscardsNavigationFr
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
     const ControlToken previous = target(list())->control;
-    press(InputKey::Down);
+    press(Core::Key::Down);
     m_host.text("Second");
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_TRUE(m_searchResult.queryChanged);
@@ -180,10 +180,10 @@ TEST_F(UiSearchComboBuilderTests, ChangedQueryFiltersRowsAndDiscardsNavigationFr
     EXPECT_NE(target(row(2u)), nullptr);
     EXPECT_FALSE(m_searchResult.combo.committed);
     EXPECT_EQ(m_context.input().focus(), query());
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(4u));
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 2u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     m_host.submitted = true;
     ASSERT_TRUE(acceptSearch(5u));
     EXPECT_TRUE(m_searchResult.combo.committed);
@@ -197,7 +197,7 @@ TEST_F(UiSearchComboBuilderTests, EmptyFilteredViewCannotCommitAndDoesNotClearTh
     ASSERT_TRUE(openSearch(2u));
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 0u);
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     m_host.submitted = true;
     ASSERT_TRUE(acceptSearch(3u));
     EXPECT_FALSE(m_searchResult.combo.committed);
@@ -209,8 +209,8 @@ TEST_F(UiSearchComboBuilderTests, PreeditDisablesDelegationAndCannotCommitQueued
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
-    press(InputKey::Enter);
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
     m_host.preedit = true;
     m_host.submitted = true;
     ASSERT_TRUE(acceptSearch(3u));
@@ -222,8 +222,8 @@ TEST_F(UiSearchComboBuilderTests, PreeditDisablesDelegationAndCannotCommitQueued
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
     EXPECT_EQ(m_search.combo().listState().cursorKey(), 1u);
     EXPECT_EQ(m_context.input().focus(), query());
-    press(InputKey::Down);
-    press(InputKey::Enter);
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
     EXPECT_TRUE(m_context.input().controlActions().empty());
 }
 
@@ -245,7 +245,7 @@ TEST_F(UiSearchComboBuilderTests, HostCancellationClosesThePopupWithoutSelecting
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(3u));
     m_host.cancelled = true;
     ASSERT_TRUE(acceptSearch(4u));
@@ -402,7 +402,7 @@ TEST_F(UiSearchComboBuilderTests, OmissionRetiresTheQueryAndCannotReopenItsOldPo
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));
     ASSERT_TRUE(openSearch(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));
     ASSERT_TRUE(m_builder.label("label", "Search hidden"));
@@ -429,7 +429,7 @@ TEST_F(UiSearchComboBuilderTests, PlainToSearchSwitchRetiresTheOldPopupAndReopen
     EXPECT_EQ(m_context.input().focus(), list());
     const PopupToken oldPopup = target(popup())->popup;
     const u64 oldDeclaration = target(host())->declarationGeneration;
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptSearch(2u));
     EXPECT_TRUE(m_searchResult.combo.closed);
     EXPECT_FALSE(m_searchResult.combo.committed);
@@ -451,8 +451,8 @@ TEST_F(UiSearchComboBuilderTests, SearchToPlainSwitchRetiresTheEditorAndCannotRe
     ASSERT_TRUE(acceptSearch(1u));
     EXPECT_EQ(m_context.input().focus(), query());
     const PopupToken oldPopup = target(popup())->popup;
-    press(InputKey::Down);
-    press(InputKey::Enter);
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
     ASSERT_FALSE(m_context.input().controlActions().empty());
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));

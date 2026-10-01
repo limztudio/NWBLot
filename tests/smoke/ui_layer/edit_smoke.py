@@ -256,12 +256,13 @@ class EditRun:
                     selection=True, extent=(800, 600))
 
 
-def run(args):
+def run(args, *, run_type=EditRun, input_bindings=False):
     if not args.executable.is_file():
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
     environment = build_launch_environment(args)
     environment.update({"NWB_UI_LAYER_EDIT": "1", "NWB_UI_LAYER_INTERACTIVE": "0",
+        "NWB_UI_LAYER_INPUT_BINDINGS_SMOKE": "1" if input_bindings else "0",
         "NWB_UI_LAYER_WINDOW": "0", "NWB_UI_LAYER_WINDOW_SKIN": "0", "NWB_UI_LAYER_POPUP": "0", "NWB_UI_LAYER_POPUP_SKIN": "0",
         "NWB_UI_LAYER_LIST": "0", "NWB_UI_LAYER_LIST_SKIN": "0"})
     if platform.system() == "Linux":
@@ -282,7 +283,7 @@ def run(args):
             raise SmokeFailure("custom edit fixture did not appear")
         backend.prepare_window(handle)
         wait_for_log_message(log_directory, log_baseline, log_pattern, "UiEditSmoke: display", min(args.timeout, 15.0))
-        edit_run = EditRun(args, backend, handle, application, log_directory, log_baseline, log_pattern)
+        edit_run = run_type(args, backend, handle, application, log_directory, log_baseline, log_pattern)
         edit_run.execute()
     finally:
         try:

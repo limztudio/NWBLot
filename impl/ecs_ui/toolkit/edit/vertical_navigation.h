@@ -79,7 +79,7 @@ public:
         const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
 };
 
-[[nodiscard]] bool TranslateEditNavigation(const EditKeyStroke& stroke, EditNavigationDirection::Enum& output);
+[[nodiscard]] bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

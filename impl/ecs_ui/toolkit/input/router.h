@@ -6,6 +6,7 @@
 
 
 #include "input.h"
+#include "bindings.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,6 +57,20 @@ private:
         ControlToken control;
     };
 
+    struct BoundSource{
+        InputSource source;
+        InputCommandIntent intent;
+    };
+
+    struct CommandSource{
+        InputSource source;
+        ControlKeyOwner controlOwner{};
+        ContextMenuOwner contextOwner{};
+        ContextMenuOwner focusOwner{};
+        bool consumed = false;
+        bool delegated = false;
+    };
+
     struct HoverIdentity{
         WidgetId owner;
         u64 declarationGeneration = 0u;
@@ -69,7 +84,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool queue(const InputEvent& event);
+    // The optional output copies the resolved intent admitted with this event; failures preserve it.
+    [[nodiscard]] bool queue(const InputEvent& event, InputEvent* resolved = nullptr);
+    [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);
+    void restoreDefaultBindings();
+    [[nodiscard]] const InputBindings& bindings()const{ return m_bindings; }
     // Drain events exactly once against the current committed layout; pending actions survive subsequent process calls.
     [[nodiscard]] InputRoutingResult process();
     // Failure preserves the committed layout and all interaction state; generations increase until reset.
@@ -126,15 +145,17 @@ public:
             return m_secondarySequenceConsumed;
         return hasPopup() || m_hover.valid();
     }
-    [[nodiscard]] bool wantsKeyboard()const{ return hasPopup() || m_focus.valid() || m_consumedKeys != 0u; }
-    [[nodiscard]] bool ownsKey(InputKey::Enum key)const{
-        if(key == InputKey::None || key > InputKey::F10)
-            return false;
-        return (m_consumedKeys & (1u << (static_cast<u8>(key) - 1u))) != 0u;
-    }
+    [[nodiscard]] bool wantsKeyboard()const;
+    [[nodiscard]] bool ownsKey(i32 key)const;
+    [[nodiscard]] bool ownsSource(const InputSource& source)const;
+    // Held commands cannot switch editors or begin editing after their delegated owner has retired.
+    [[nodiscard]] bool canEditCommand(const InputEvent& event)const;
 
 
 private:
+    [[nodiscard]] bool resolveSourceEvent(const InputEvent& event, InputEvent& resolved);
+    [[nodiscard]] CommandSource* findCommandSource(const InputSource& source);
+    [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;
     [[nodiscard]] bool isInteractive(const HitTarget& target)const;
     [[nodiscard]] bool validControlTargets()const;
@@ -148,7 +169,7 @@ private:
     void reconcileContextMenus();
     void appendContextMenu(const HitTarget& target, const Point& position, bool keyboard, InputRoutingResult& result);
     [[nodiscard]] bool routeContextMenuKey(
-        const InputEvent& event, const HitTarget* focused, bool alreadyPressed, InputRoutingResult& result
+        const InputEvent& event, const HitTarget* focused, CommandSource& source, bool alreadyPressed, InputRoutingResult& result
     );
     void routeSecondary(const InputEvent& event, InputRoutingResult& result);
     void appendControlAction(
@@ -156,7 +177,8 @@ private:
         InputRoutingResult& result, f64 deltaX = 0.0
     );
     [[nodiscard]] bool routeControlKey(
-        const InputEvent& event, const HitTarget& host, const HitTarget& source, bool alreadyPressed, InputRoutingResult& result
+        const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner,
+        bool alreadyPressed, InputRoutingResult& result
     );
     void routeWheel(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool allowedByPopup(const HitTarget& target)const;
@@ -178,12 +200,15 @@ private:
     void updatePointerGesture(const Point& position, bool completed);
     void reconcilePointerGestures();
     void routePointer(const InputEvent& event, InputRoutingResult& result);
-    void routeKeyboard(const InputEvent& event, InputRoutingResult& result);
+    void routeCommand(const InputEvent& event, InputRoutingResult& result);
     [[nodiscard]] bool moveFocus(bool reverse);
-    [[nodiscard]] bool moveFocusOnTab(bool reverse);
+    [[nodiscard]] bool moveFocusForTraversal(bool reverse);
 
 
 private:
+    InputBindings m_bindings;
+    InputVector<BoundSource> m_boundSources;
+    InputVector<CommandSource> m_commandSources;
     InputVector<HitTarget> m_targets;
     InputVector<HitTarget> m_stagedTargets;
     InputVector<TargetLookup> m_lookup;
@@ -218,10 +243,6 @@ private:
     bool m_secondarySequenceConsumed = false;
     ContextMenuOwner m_secondaryOwner;
     bool m_windowFocused = true;
-    u32 m_pressedKeys = 0u;
-    u32 m_consumedKeys = 0u;
-    Array<ControlKeyOwner, 32u> m_controlKeyOwners{};
-    Array<ContextMenuOwner, 2u> m_contextMenuKeyOwners{};
 };
 
 

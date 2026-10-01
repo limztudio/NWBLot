@@ -52,7 +52,7 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     scope.viewport = placement.viewport;
     scope.modal = options.modal;
     scope.dismissOutside = options.dismissOutside;
-    scope.dismissEscape = options.dismissEscape;
+    scope.dismissCancel = options.dismissCancel;
     scope.autofocus = options.autofocus;
     NotNull<BuilderScopeFrame*> next = m_scope;
     if(!nested)

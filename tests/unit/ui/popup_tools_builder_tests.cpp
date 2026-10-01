@@ -59,7 +59,7 @@ TEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTarge
         EXPECT_FALSE(accepted.popup.valid());
         EXPECT_EQ(accepted.layer, 0u);
     }
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     EXPECT_EQ(m_context.input().focus(), anchor());
 }
 
@@ -327,12 +327,12 @@ TEST_F(UiPopupToolsBuilderTests, OrdinaryPrimaryActivationDoesNotOpenAnAttachedC
 TEST_F(UiPopupToolsBuilderTests, KeyboardPreviewSkipsDisabledCommandsAndEnterCommitsItsStableKey){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(openBySecondary(2u));
-    press(InputKey::Down);
-    press(InputKey::Down);
+    press(Core::Key::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_EQ(m_menu.cursorKey(), 4u);
     EXPECT_FALSE(m_menuResult.activated);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptTools(4u, false));
     EXPECT_TRUE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 4u);
@@ -393,7 +393,7 @@ TEST_F(UiPopupToolsBuilderTests, EmptyMenuRemainsOpenAndCannotProduceACommand){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(openBySecondary(2u));
     EXPECT_EQ(m_menu.cursorKey(), 0u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(acceptTools(3u, false));
     EXPECT_FALSE(m_menuResult.activated);
     EXPECT_EQ(m_menuResult.key, 0u);

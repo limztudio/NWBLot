@@ -1,5 +1,6 @@
 nwb_declare_gtest_executable(nwb_ecs_ui_tests)
 target_sources(nwb_ecs_ui_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/configurable_edit_input_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_delta_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skin_selection_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/selection_deletion_tests.cpp"

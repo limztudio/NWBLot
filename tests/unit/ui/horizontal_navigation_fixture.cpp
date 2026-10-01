@@ -81,15 +81,15 @@ InputRoutingResult HorizontalNavigationFixture::send(const InputEvent& event){
     return m_router.process();
 }
 
-InputRoutingResult HorizontalNavigationFixture::keyDown(const InputKey::Enum key, const bool repeat){
+InputRoutingResult HorizontalNavigationFixture::keyDown(const Core::Key::Enum key, const bool repeat){
     return send({ .type = InputEventType::KeyDown, .key = key, .repeat = repeat });
 }
 
-InputRoutingResult HorizontalNavigationFixture::keyUp(const InputKey::Enum key){
+InputRoutingResult HorizontalNavigationFixture::keyUp(const Core::Key::Enum key){
     return send({ .type = InputEventType::KeyUp, .key = key });
 }
 
-void HorizontalNavigationFixture::press(const InputKey::Enum key){
+void HorizontalNavigationFixture::press(const Core::Key::Enum key){
     EXPECT_TRUE(keyDown(key).keyboardConsumed);
     EXPECT_TRUE(keyUp(key).keyboardConsumed);
 }

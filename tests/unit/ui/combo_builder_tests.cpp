@@ -130,10 +130,10 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     m_state.open();
     ASSERT_TRUE(acceptNeighbors(1u));
     ASSERT_EQ(m_context.input().focus(), list());
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(acceptNeighbors(2u));
     ASSERT_EQ(m_state.listState().cursorKey(), 2u);
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     ASSERT_TRUE(acceptNeighbors(3u));
     EXPECT_TRUE(m_result.closed);
     EXPECT_FALSE(m_result.committed);
@@ -143,8 +143,8 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     m_state.open();
     ASSERT_TRUE(acceptNeighbors(4u));
     ASSERT_EQ(m_context.input().focus(), list());
-    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab, .shift = true };
-    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab, .shift = true };
+    const InputEvent reverseDown{ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab, .shift = true };
+    const InputEvent reverseUp{ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab, .shift = true };
     EXPECT_TRUE(send(reverseDown).keyboardConsumed);
     EXPECT_TRUE(send(reverseUp).keyboardConsumed);
     ASSERT_TRUE(acceptNeighbors(5u));
@@ -158,7 +158,7 @@ TEST_F(UiComboBuilderTests, TabExitsAnEmptyComboWithoutASelectionOrActivation){
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
     ASSERT_EQ(m_state.selectedKey(), 0u);
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     ASSERT_TRUE(accept(3u));
     EXPECT_TRUE(m_result.closed);
     EXPECT_FALSE(m_result.committed);
@@ -186,10 +186,10 @@ TEST_F(UiComboBuilderTests, OutsideDismissalConsumesTheWholePointerSequence){
 TEST_F(UiComboBuilderTests, OpeningSubmitHeldAcrossFocusTransferCannotCommitItsRepeat){
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     InputEvent event;
     event.type = InputEventType::KeyDown;
-    event.key = InputKey::Enter;
+    event.key = Core::Key::Enter;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
     ASSERT_TRUE(m_state.isOpen());
@@ -204,7 +204,7 @@ TEST_F(UiComboBuilderTests, OpeningSubmitHeldAcrossFocusTransferCannotCommitItsR
     event.type = InputEventType::KeyUp;
     event.repeat = false;
     EXPECT_TRUE(send(event).keyboardConsumed);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(accept(4u));
     EXPECT_TRUE(m_result.committed);
     EXPECT_FALSE(m_result.selectionChanged);
@@ -236,7 +236,7 @@ TEST_F(UiComboBuilderTests, EmptySourceShowsPlaceholderAndSubmitCannotCommitAKey
     ASSERT_TRUE(openByPointer(2u));
     EXPECT_EQ(m_source.textCalls, 0u);
     EXPECT_EQ(m_state.listState().cursorKey(), 0u);
-    press(InputKey::Enter);
+    press(Core::Key::Enter);
     ASSERT_TRUE(accept(3u));
     EXPECT_FALSE(m_result.committed);
     EXPECT_FALSE(m_result.selectionChanged);
@@ -249,17 +249,17 @@ TEST_F(UiComboBuilderTests, NavigationSkipsDisabledRowsAndCannotWrapTheBoundary)
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.listState().cursorKey(), 3u);
     EXPECT_EQ(m_state.selectedKey(), 1u);
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(4u));
     EXPECT_EQ(m_state.listState().cursorKey(), 3u);
-    press(InputKey::Up);
+    press(Core::Key::Up);
     ASSERT_TRUE(accept(5u));
     EXPECT_EQ(m_state.listState().cursorKey(), 1u);
-    press(InputKey::Up);
+    press(Core::Key::Up);
     ASSERT_TRUE(accept(6u));
     EXPECT_EQ(m_state.listState().cursorKey(), 1u);
 }
@@ -367,7 +367,7 @@ TEST_F(UiComboBuilderTests, NativeFocusLossCancelsPreviewAndDoesNotRestoreFocusO
     m_state.select(1u);
     ASSERT_TRUE(accept(1u));
     ASSERT_TRUE(openByPointer(2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(3u));
     InputEvent focusLost;
     focusLost.type = InputEventType::FocusLost;
@@ -442,7 +442,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     const u64 oldDeclaration = target(host())->declarationGeneration;
     InputEvent held;
     held.type = InputEventType::KeyDown;
-    held.key = InputKey::Down;
+    held.key = Core::Key::Down;
     EXPECT_TRUE(send(held).keyboardConsumed);
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }));
@@ -460,7 +460,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     EXPECT_EQ(m_state.listState().cursorKey(), 1u);
     ASSERT_NE(target(host()), nullptr);
     EXPECT_NE(target(host())->declarationGeneration, oldDeclaration);
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     EXPECT_EQ(m_context.input().focus(), host());
     held.repeat = true;
     EXPECT_TRUE(send(held).keyboardConsumed);
@@ -470,7 +470,7 @@ TEST_F(UiComboBuilderTests, OmissionRetiresThePopupAndHeldNavigationCannotOpenIt
     held.type = InputEventType::KeyUp;
     held.repeat = false;
     EXPECT_TRUE(send(held).keyboardConsumed);
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(6u));
     EXPECT_TRUE(m_state.isOpen());
     EXPECT_TRUE(m_result.opened);

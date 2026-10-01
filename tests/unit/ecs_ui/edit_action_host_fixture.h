@@ -88,7 +88,7 @@ protected:
     }
 
     [[nodiscard]] bool activateActions(){
-        if(!actionFrame() || !key(Ui::InputKey::Tab) || !actionFrame() || !m_textInput.activeSession().valid())
+        if(!actionFrame() || !key(Core::Key::Tab) || !actionFrame() || !m_textInput.activeSession().valid())
             return false;
         m_actions.clear();
         return true;
@@ -99,15 +99,15 @@ protected:
     }
 
     [[nodiscard]] bool replaceNative(const AStringView text){
-        return key(Ui::InputKey::A, false, true) && commitNative(text);
+        return key(Core::Key::A, false, true) && commitNative(text);
     }
 
     [[nodiscard]] bool focusOther(){
-        return key(Ui::InputKey::Tab) && m_context.input().focus() == m_otherWidget.id;
+        return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id;
     }
 
     [[nodiscard]] bool focusEditor(){
-        return key(Ui::InputKey::Tab) && m_context.input().focus() == m_widget.id;
+        return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 
     [[nodiscard]] usize actionCount(const Ui::EditAction::Enum action)const{

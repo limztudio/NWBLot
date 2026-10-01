@@ -86,7 +86,7 @@ protected:
         ASSERT_EQ(m_context.input().focus(), parentHost());
         InputEvent held;
         held.type = InputEventType::KeyDown;
-        held.key = InputKey::Right;
+        held.key = Core::Key::Right;
         ASSERT_TRUE(send(held).keyboardConsumed);
         const RadioGroupSnapshot before = m_state.snapshot();
         m_source.resetCounters();

@@ -43,7 +43,7 @@ TEST_F(UiPopupInputTests, NestedPreeditEscapeCancelsCompositionThenDismissesOnly
     ASSERT_EQ(m_textInput.preedit("한"), TextInputAdmission::Accepted);
     ASSERT_TRUE(nestedFrame());
     ASSERT_TRUE(m_childModel.composition().active);
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     ASSERT_TRUE(nestedFrame());
     EXPECT_FALSE(m_childModel.composition().active);
     EXPECT_FALSE(m_childResult.cancelled);
@@ -51,7 +51,7 @@ TEST_F(UiPopupInputTests, NestedPreeditEscapeCancelsCompositionThenDismissesOnly
     EXPECT_FALSE(m_childModel.canUndo());
     EXPECT_TRUE(m_childState.isOpen());
     EXPECT_TRUE(m_popupState.isOpen());
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     ASSERT_TRUE(nestedFrame());
     EXPECT_TRUE(m_childResult.cancelled);
     EXPECT_FALSE(m_textInput.activeSession().valid());
@@ -71,7 +71,7 @@ TEST_F(UiPopupInputTests, AncestorReopeningFencesQueuedChildNativeAndClipboardIn
     m_childState.open();
     ASSERT_TRUE(nestedFrame());
     ASSERT_TRUE(nestedFrame());
-    key(Ui::InputKey::V, true);
+    key(Core::Key::V, true);
     ASSERT_TRUE(nestedFrame());
     const TextInputSessionToken childSession = m_textInput.activeSession();
     ASSERT_TRUE(childSession.valid());

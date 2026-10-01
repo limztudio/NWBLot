@@ -156,6 +156,24 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         fonts,
         Impl::UiLayerPresentation::Standalone
     );
+    if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_INPUT_BINDINGS_SMOKE")){
+        Impl::Ui::InputBindings defaults(context.objectArena);
+        Impl::Ui::InputBindings::BindingVector bindings(context.objectArena);
+        bindings.reserve(defaults.bindings().size() + 4u);
+        for(const auto& binding : defaults.bindings()){
+            if(binding.key != Core::Key::Tab)
+                bindings.push_back(binding);
+        }
+        bindings.push_back({ .key = Core::Key::Q, .command = Impl::Ui::InputCommand::Activate });
+        bindings.push_back({ .key = Core::Key::W, .command = Impl::Ui::InputCommand::Left });
+        bindings.push_back({ .key = Core::Key::R, .command = Impl::Ui::InputCommand::FocusNext });
+        bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
+        if(!layer.setInputBindings(bindings.data(), bindings.size())){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound"));
+    }
     if(ReadSmokeEnvironmentFlag("NWB_UI_IR_REPLAY")){
         layer.setGpuCommandRecordingMode(Impl::Ui::GpuCommandRecordingMode::CommandIrReplay);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: command IR replay enabled"));

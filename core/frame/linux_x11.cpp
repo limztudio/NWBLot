@@ -199,6 +199,9 @@ static void DispatchKeyEvent(
     if(dispatchPhysical && keyEvent.keycode)
         frame.input().keyboardUpdate(key, static_cast<i32>(keyEvent.keycode), action, mods);
     if(dispatchText && action != InputAction::Release){
+        // Forwarded XIM commits bypass the ordinary physical key policy.
+        if(dispatchPhysical && frame.input().keyboardTextBlocked(static_cast<i32>(keyEvent.keycode)))
+            return;
         ITextInputService* const textInput = frame.tryTextInput();
         if(!textInput || !DispatchX11TextInputKey(*textInput, translatedEvent))
             DispatchTextInput(frame.input(), translatedEvent, mods);

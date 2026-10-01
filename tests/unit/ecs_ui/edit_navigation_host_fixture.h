@@ -225,7 +225,7 @@ protected:
 
     [[nodiscard]] bool activateNavigation(const Ui::EditBoxOptions& options = {},
         const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }){
-        return navigationFrame(options, bounds) && key(Ui::InputKey::Tab) && navigationFrame(options, bounds)
+        return navigationFrame(options, bounds) && key(Core::Key::Tab) && navigationFrame(options, bounds)
             && m_context.input().focus() == m_widget.id;
     }
 
@@ -242,11 +242,11 @@ protected:
     }
 
     [[nodiscard]] bool focusOther(){
-        return key(Ui::InputKey::Tab) && m_context.input().focus() == m_otherWidget.id;
+        return key(Core::Key::Tab) && m_context.input().focus() == m_otherWidget.id;
     }
 
     [[nodiscard]] bool focusNavigation(){
-        return key(Ui::InputKey::Tab) && m_context.input().focus() == m_widget.id;
+        return key(Core::Key::Tab) && m_context.input().focus() == m_widget.id;
     }
 
 

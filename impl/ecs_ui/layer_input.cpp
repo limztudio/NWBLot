@@ -33,40 +33,6 @@ inline constexpr u8 s_Custom = 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Ui::InputKey::Enum TranslateKey(const i32 key){
-    switch(key){
-    case Core::Key::Tab: return Ui::InputKey::Tab;
-    case Core::Key::Enter:
-    case Core::Key::KeypadEnter: return Ui::InputKey::Enter;
-    case Core::Key::Space: return Ui::InputKey::Space;
-    case Core::Key::Escape: return Ui::InputKey::Escape;
-    case Core::Key::Left: return Ui::InputKey::Left;
-    case Core::Key::Right: return Ui::InputKey::Right;
-    case Core::Key::Home: return Ui::InputKey::Home;
-    case Core::Key::End: return Ui::InputKey::End;
-    case Core::Key::Backspace: return Ui::InputKey::Backspace;
-    case Core::Key::Delete: return Ui::InputKey::Delete;
-    case Core::Key::Insert: return Ui::InputKey::Insert;
-    case Core::Key::A: return Ui::InputKey::A;
-    case Core::Key::C: return Ui::InputKey::C;
-    case Core::Key::X: return Ui::InputKey::X;
-    case Core::Key::V: return Ui::InputKey::V;
-    case Core::Key::Z: return Ui::InputKey::Z;
-    case Core::Key::Y: return Ui::InputKey::Y;
-    case Core::Key::Up: return Ui::InputKey::Up;
-    case Core::Key::Down: return Ui::InputKey::Down;
-    case Core::Key::PageUp: return Ui::InputKey::PageUp;
-    case Core::Key::PageDown: return Ui::InputKey::PageDown;
-    case Core::Key::Menu: return Ui::InputKey::Menu;
-    case Core::Key::F10: return Ui::InputKey::F10;
-    default: return Ui::InputKey::None;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -75,36 +41,30 @@ Ui::InputKey::Enum TranslateKey(const i32 key){
 
 bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
+    if(!Ui::InputBindings::validKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
+        return false;
     synchronizeNativeInput();
-    const Ui::InputKey::Enum translated = __hidden_layer_input::TranslateKey(key);
-    const usize slot = key >= -1 && key < 511 ? static_cast<usize>(key + 1) : m_nativeKeyOwners.size();
-    const u8 storedOwner = slot < m_nativeKeyOwners.size() ? m_nativeKeyOwners[slot] : 0u;
+    const usize slot = static_cast<usize>(key + 1);
+    const u8 storedOwner = m_nativeKeyOwners[slot];
     const bool held = storedOwner != 0u;
     const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : __hidden_layer_input::s_Scene;
-    const bool customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(translated);
-    bool releaseRouter = true;
-    if(translated == Ui::InputKey::Enter && action == Core::InputAction::Release){
-        const i32 otherKey = key == Core::Key::Enter ? Core::Key::KeypadEnter : Core::Key::Enter;
-        const u8 otherOwner = m_nativeKeyOwners[static_cast<usize>(otherKey + 1)];
-        releaseRouter = otherOwner == 0u;
-    }
-    if(
-        translated != Ui::InputKey::None
-        && (action == Core::InputAction::Release ? releaseRouter : customOwned || !held)
-    ){
+    const bool customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(key);
+    if(action != Core::InputAction::Release)
+        m_blockCommandChars = false;
+    if(action == Core::InputAction::Release || customOwned || !held){
         Ui::InputEvent event;
         event.type = action == Core::InputAction::Release ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
-        event.key = translated;
+        event.key = key;
         event.shift = (mods & Core::InputModifier::Shift) != 0;
         event.control = (mods & Core::InputModifier::Control) != 0;
         event.alt = (mods & Core::InputModifier::Alt) != 0;
+        event.super = (mods & Core::InputModifier::Super) != 0;
         event.repeat = action == Core::InputAction::Repeat || held;
-        routeInput(event);
+        routeInput(event, nullptr, action == Core::InputAction::Release ? nullptr : &m_blockCommandChars);
     }
-    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(translated)
+    const u8 owner = held ? previousOwner : m_context.input().hasPopup() || m_context.input().focus().valid() || m_context.input().ownsKey(key)
         ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
-    if(slot < m_nativeKeyOwners.size())
-        m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
+    m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
     if(action != Core::InputAction::Release)
         m_blockNativeChars = owner == __hidden_layer_input::s_Custom;
     return owner == __hidden_layer_input::s_Custom;
@@ -119,14 +79,6 @@ bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
         return m_editHost.character(unicode);
     }
     if(m_blockNativeChars || m_context.input().hasPopup() || m_context.input().focus().valid())
-        return true;
-    const auto& input = m_context.input();
-    if(
-        (unicode == 32u && input.ownsKey(Ui::InputKey::Space))
-        || ((unicode == 10u || unicode == 13u) && input.ownsKey(Ui::InputKey::Enter))
-        || (unicode == 9u && input.ownsKey(Ui::InputKey::Tab))
-        || (unicode == 27u && input.ownsKey(Ui::InputKey::Escape))
-    )
         return true;
     return false;
 }
@@ -233,6 +185,7 @@ void UiLayerSystem::windowFocusUpdate(const bool focused){
         m_pressedButtons = 0u;
         m_pointerOwner = __hidden_layer_input::s_Scene;
         m_blockNativeChars = false;
+        m_blockCommandChars = false;
         m_nativeKeyOwners.fill(0u);
     }
 }
@@ -267,18 +220,31 @@ bool UiLayerSystem::wantsTextInput()const{
     return m_resourcesReady && m_editHost.wantsTextInput();
 }
 
-void UiLayerSystem::routeInput(const Ui::InputEvent& event){
+void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool* blockText){
+    if(consumed)
+        *consumed = false;
+    if(blockText)
+        *blockText = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
-    if(!m_context.input().queue(event)){
+    Ui::InputEvent normalized;
+    if(!m_context.input().queue(event, &normalized)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         m_context.resetInput();
         m_editHost.reset();
+        m_blockCommandChars = false;
         return;
     }
     const Ui::InputRoutingResult result = m_context.input().process();
-    m_editHost.input(event, previousCapture);
+    m_editHost.input(normalized, previousCapture);
     m_editHost.synchronizeFocus();
+    if(consumed)
+        *consumed = result.keyboardConsumed;
+    if(blockText){
+        // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
+        *blockText = normalized.type == Ui::InputEventType::CommandDown && normalized.command != Ui::InputCommand::None
+            && !normalized.allowText;
+    }
     if(result.activationOverflow)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
     if(result.gestureOverflow)

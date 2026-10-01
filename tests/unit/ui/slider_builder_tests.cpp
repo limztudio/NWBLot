@@ -61,8 +61,8 @@ TEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileIt
     const SliderPlacement& placement = m_state.placement();
     EXPECT_FLOAT_EQ(placement.thumb.x + placement.thumb.width * 0.5f,
         placement.centerTravel.x + placement.centerTravel.width);
-    press(InputKey::Tab);
-    press(InputKey::Home);
+    press(Core::Key::Tab);
+    press(Core::Key::Home);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
     EXPECT_TRUE(m_state.result().valueChanged);
@@ -80,8 +80,8 @@ TEST_F(UiSliderBuilderTests, IdleFramesPreserveSignedZeroBitsAndDoNotInventChang
 
 TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQueuedInput){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Right);
+    press(Core::Key::Tab);
+    press(Core::Key::Right);
     SliderOptions disabled = options();
     disabled.enabled = false;
     ASSERT_TRUE(accept(2u, disabled));
@@ -143,8 +143,8 @@ TEST_F(UiSliderBuilderTests, FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPa
 
 TEST_F(UiSliderBuilderTests, NextSuccessfulIdleFrameClearsThePreviousChangeDiagnostic){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Right);
+    press(Core::Key::Tab);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(2u));
     EXPECT_TRUE(m_state.result().valueChanged);
     EXPECT_TRUE(m_state.result().focused);

@@ -106,34 +106,34 @@ TEST_F(UiRadioGroupBuilderTests, ReleaseOutsideAndDisabledChoiceCannotActivate){
 
 TEST_F(UiRadioGroupBuilderTests, HorizontalAndVerticalKeysShareTheHostAndSkipDisabledChoices){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     const u64 token = m_state.inputGeneration();
-    press(InputKey::Right);
-    press(InputKey::Down);
+    press(Core::Key::Right);
+    press(Core::Key::Down);
     ASSERT_TRUE(accept(2u));
     EXPECT_EQ(m_state.selectedKey(), 40u);
     EXPECT_TRUE(m_result.selectionChanged);
     EXPECT_FALSE(m_result.activated);
     EXPECT_EQ(m_state.inputGeneration(), token);
-    press(InputKey::End);
-    press(InputKey::Right);
+    press(Core::Key::End);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 10u);
-    press(InputKey::Left);
+    press(Core::Key::Left);
     ASSERT_TRUE(accept(4u));
     EXPECT_EQ(m_state.selectedKey(), 50u);
-    press(InputKey::Home);
-    press(InputKey::Up);
+    press(Core::Key::Home);
+    press(Core::Key::Up);
     ASSERT_TRUE(accept(5u));
     EXPECT_EQ(m_state.selectedKey(), 50u);
 }
 
 TEST_F(UiRadioGroupBuilderTests, HeldSubmitActivatesOnceWhileAnUnchangedChoiceStaysSelected){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     InputEvent event;
     event.type = InputEventType::KeyDown;
-    event.key = InputKey::Enter;
+    event.key = Core::Key::Enter;
     EXPECT_TRUE(send(event).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_TRUE(m_result.activated);
@@ -144,7 +144,7 @@ TEST_F(UiRadioGroupBuilderTests, HeldSubmitActivatesOnceWhileAnUnchangedChoiceSt
     EXPECT_FALSE(m_result.activated);
     event.type = InputEventType::KeyUp;
     EXPECT_TRUE(send(event).keyboardConsumed);
-    press(InputKey::Space);
+    press(Core::Key::Space);
     ASSERT_TRUE(accept(4u));
     EXPECT_TRUE(m_result.activated);
     EXPECT_FALSE(m_result.selectionChanged);
@@ -166,8 +166,8 @@ TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMa
 
 TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Right);
+    press(Core::Key::Tab);
+    press(Core::Key::Right);
     RadioGroupOptions options;
     options.enabled = false;
     ASSERT_TRUE(accept(2u, options));
@@ -237,15 +237,15 @@ TEST_F(UiRadioGroupBuilderTests, DuplicateStableKeysRejectBeforeAnyLabelBorrow){
 
 TEST_F(UiRadioGroupBuilderTests, SourceRevisionFencesQueuedKeysAndReorderKeepsStableSelection){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
-    press(InputKey::Right);
+    press(Core::Key::Tab);
+    press(Core::Key::Right);
     m_source.m_reverse = true;
     ++m_source.m_contentRevision;
     ASSERT_TRUE(accept(2u));
     EXPECT_EQ(m_state.selectedKey(), 10u);
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_EQ(m_state.placement().rows[4u].key, 10u);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(m_state.selectedKey(), 50u);
     EXPECT_TRUE(m_result.selectionChanged);

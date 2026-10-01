@@ -131,7 +131,7 @@ protected:
     [[nodiscard]] WidgetId host()const;
     [[nodiscard]] const RadioGroupChoicePlacement* choice(u64 key, const RadioGroupState& state)const;
     [[nodiscard]] Point choicePoint(u64 key)const;
-    void press(InputKey::Enum key, bool repeat = false);
+    void press(Core::Key::Enum key, bool repeat = false);
     [[nodiscard]] RadioAcceptedFrame accepted()const;
     void expectAccepted(const RadioAcceptedFrame& saved, bool focus = true, bool popupScopes = true)const;
     [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;

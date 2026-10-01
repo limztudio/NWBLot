@@ -44,7 +44,7 @@ using namespace NWB::Impl::Ui;
     return target;
 }
 
-[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const InputKey::Enum key,
+[[nodiscard]] static InputEvent Key(const InputEventType::Enum type, const Core::Key::Enum key,
     const bool repeat = false){
     InputEvent event;
     event.type = type;
@@ -87,7 +87,7 @@ protected:
         return m_router.process();
     }
 
-    void press(const InputKey::Enum key){
+    void press(const Core::Key::Enum key){
         EXPECT_TRUE(send(Key(InputEventType::KeyDown, key)).keyboardConsumed);
         EXPECT_TRUE(send(Key(InputEventType::KeyUp, key)).keyboardConsumed);
     }
@@ -130,9 +130,9 @@ protected:
 TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutALegacyActivation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    press(InputKey::Down);
-    press(InputKey::Enter);
-    press(InputKey::Up);
+    press(Core::Key::Down);
+    press(Core::Key::Enter);
+    press(Core::Key::Up);
     ControlAction down;
     ControlAction submit;
     ControlAction up;
@@ -153,12 +153,12 @@ TEST_F(UiKeyboardOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandi
     focus();
     m_targets[1u].pageRows = 17u;
     m_targets[1u].rectangle.height = 180.0f;
-    press(InputKey::PageDown);
+    press(Core::Key::PageDown);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.pageRows, 5u);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
-    press(InputKey::PageDown);
+    press(Core::Key::PageDown);
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.pageRows, 17u);
     EXPECT_EQ(action.id.layoutGeneration, 2u);
@@ -190,7 +190,7 @@ TEST_F(UiKeyboardOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwa
     bind(m_targets[1u]);
     m_targets[0u].keyboardOwner = {};
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.id.layoutGeneration, 1u);
@@ -224,17 +224,17 @@ TEST_F(UiKeyboardOwnerTests, SelfDelegationAndCompetingNavigationHostsAreRejecte
 TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitialOwnerPermanently){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     bind(m_targets[2u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     bind(m_targets[1u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, InputKey::Down)).keyboardConsumed);
-    press(InputKey::Down);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
+    press(Core::Key::Down);
     ControlAction action;
     EXPECT_TRUE(take(action));
 }
@@ -242,42 +242,42 @@ TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitia
 TEST_F(UiKeyboardOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     m_targets[1u].focusOnCommit = true;
     ASSERT_TRUE(m_router.commitTargets(&m_targets[1u], 2u, 3u));
     EXPECT_EQ(m_router.focus(), m_targets[1u].id);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
 }
 
 TEST_F(UiKeyboardOwnerTests, RemovingTheBindingFencesHeldNavigationWhileOrdinaryEditingContinues){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     clearBinding();
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_TRUE(m_router.controlActions().empty());
-    press(InputKey::Left);
+    press(Core::Key::Left);
     bind(m_targets[1u]);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
 }
 
 TEST_F(UiKeyboardOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedActions){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ++m_targets[0u].declarationGeneration;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_TRUE(m_router.controlActions().empty());
     focus();
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ++m_targets[0u].control.instanceGeneration;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 3u));
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -286,15 +286,15 @@ TEST_F(UiKeyboardOwnerTests, ReplacedEditorDeclarationOrModelTokenRetiresCopiedA
 TEST_F(UiKeyboardOwnerTests, FenceControlRetiresTheDelegateWithoutStealingEditorFocus){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ControlToken replacement = m_targets[1u].control;
     ++replacement.contentRevision;
     m_router.fenceControl(m_targets[1u].id, m_targets[1u].declarationGeneration, replacement);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Down, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, InputKey::Down)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
 }
 
 TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCrossLayers){
@@ -313,7 +313,7 @@ TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCros
     Array<HitTarget, 4u> targets{ barrier, m_targets[0u], m_targets[1u], m_targets[2u] };
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u, &scope, 1u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    press(InputKey::Down);
+    press(Core::Key::Down);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.popup, scope.token);
@@ -327,14 +327,14 @@ TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCros
 TEST_F(UiKeyboardOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Enter)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
-    EXPECT_TRUE(send(Key(InputEventType::KeyDown, InputKey::Enter, true)).keyboardConsumed);
+    EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
     EXPECT_FALSE(take(action));
-    EXPECT_TRUE(send(Key(InputEventType::KeyUp, InputKey::Enter)).keyboardConsumed);
-    press(InputKey::Enter);
+    EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
+    press(Core::Key::Enter);
     EXPECT_TRUE(take(action));
 }
 

@@ -60,7 +60,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelFencesQueuedNativeAndLocalIntentionsB
     const usize anchor = m_popupModel.anchor();
     const usize caret = m_popupModel.caret();
     ASSERT_EQ(m_textInput.commit(oldSession, "late"), TextInputAdmission::Accepted);
-    key(Ui::InputKey::Backspace);
+    key(Core::Key::Backspace);
     EXPECT_EQ(m_popupModel.text(), "popup");
     m_popupState.close();
     m_popupState.open();
@@ -83,7 +83,7 @@ TEST_F(UiPopupInputTests, ReopenedSameModelFencesQueuedNativeAndLocalIntentionsB
 
 TEST_F(UiPopupInputTests, ReopenedSameModelRejectsAnAlreadyCompletedPasteFromThePriorPopupLifetime){
     focusPopup();
-    key(Ui::InputKey::V, true);
+    key(Core::Key::V, true);
     ASSERT_TRUE(frame());
     ASSERT_TRUE(m_clipboard.pump());
     const ClipboardRequestToken oldRequest = m_clipboard.startedToken;
@@ -110,7 +110,7 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     EXPECT_EQ(m_popupModel.composition().text, "한");
     EXPECT_EQ(m_popupModel.text(), "popup");
     EXPECT_FALSE(m_popupModel.canUndo());
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     ASSERT_TRUE(frame());
     EXPECT_FALSE(m_popupModel.composition().active);
@@ -121,7 +121,7 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     Ui::PopupDismissReason::Enum reason = Ui::PopupDismissReason::None;
     EXPECT_FALSE(m_context.input().consumePopupDismissal(m_token, reason));
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     ASSERT_TRUE(frame());
     EXPECT_TRUE(m_popupResult.cancelled);
     EXPECT_TRUE(m_context.input().hasPopup());
@@ -144,7 +144,7 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
 TEST_F(UiPopupInputTests, PlainEscapeCancelsPopupEditAndRestartsBaseSessionOnlyAfterAcceptedRemoval){
     focusPopup();
     const TextInputSessionToken popupSession = m_textInput.activeSession();
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
     EXPECT_EQ(m_textInput.activeSession(), popupSession);
     ASSERT_TRUE(frame());
@@ -179,10 +179,11 @@ TEST_F(UiPopupInputTests, NativeFocusLossCancelsSessionAndRemovalDoesNotRestoreA
     EXPECT_EQ(m_baseModel.text(), "base");
     EXPECT_EQ(m_popupModel.text(), "popup");
     ASSERT_TRUE(m_textInput.setFocused(true));
+    EXPECT_FALSE(dispatch({ .type = Ui::InputEventType::FocusGained }).focus.valid());
     ASSERT_TRUE(frame());
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_textInput.activeSession().valid());
-    key(Ui::InputKey::Tab);
+    key(Core::Key::Tab);
     ASSERT_TRUE(frame());
     EXPECT_EQ(m_context.input().focus(), m_baseWidget.id);
     EXPECT_TRUE(m_textInput.activeSession().valid());
@@ -228,17 +229,17 @@ TEST_F(UiPopupInputTests, DeferredEditorKeepsPreeditSeparateAndGatesEnterUntilCo
     ASSERT_TRUE(prepareDeferred() && commit());
     ASSERT_TRUE(prepareDeferred() && commit());
     ASSERT_EQ(m_textInput.preedit("한"), TextInputAdmission::Accepted);
-    key(Ui::InputKey::Enter);
+    key(Core::Key::Enter);
     ASSERT_TRUE(prepareDeferred() && commit());
     EXPECT_TRUE(m_popupModel.composition().active);
     EXPECT_EQ(m_popupModel.text(), "popup");
     EXPECT_FALSE(m_popupResult.submitted);
-    key(Ui::InputKey::Escape);
+    key(Core::Key::Escape);
     ASSERT_TRUE(prepareDeferred() && commit());
     EXPECT_FALSE(m_popupModel.composition().active);
     EXPECT_FALSE(m_popupResult.cancelled);
     EXPECT_TRUE(m_context.input().hasPopup());
-    key(Ui::InputKey::Enter);
+    key(Core::Key::Enter);
     ASSERT_TRUE(prepareDeferred() && commit());
     EXPECT_TRUE(m_popupResult.submitted);
 }
@@ -247,7 +248,7 @@ TEST_F(UiPopupInputTests, DeferredEditorRejectsCompletedPasteFromPriorPopupLifet
     m_popupState.open();
     ASSERT_TRUE(prepareDeferred() && commit());
     ASSERT_TRUE(prepareDeferred() && commit());
-    key(Ui::InputKey::V, true);
+    key(Core::Key::V, true);
     ASSERT_TRUE(prepareDeferred() && commit());
     ASSERT_TRUE(m_clipboard.pump());
     const auto old = m_clipboard.startedToken;

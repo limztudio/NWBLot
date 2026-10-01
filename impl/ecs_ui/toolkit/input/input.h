@@ -5,10 +5,13 @@
 #pragma once
 
 
+#include "commands.h"
 #include "../id.h"
 #include "../paint.h"
 #include "popup.h"
 #include "control.h"
+
+#include <core/input/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,21 +26,12 @@ NWB_IMPL_UI_BEGIN
 namespace InputEventType{
     enum Enum : u8{
         PointerMove, PrimaryDown, PrimaryUp, KeyDown, KeyUp, FocusLost, PointerLeave, PointerCaptureLost, FocusGained, PointerWheel,
-        SecondaryDown, SecondaryUp
+        SecondaryDown, SecondaryUp, CommandDown, CommandUp
     };
 };
-
-namespace InputKey{
-    enum Enum : u8{
-        None, Tab, Enter, Space, Escape, Left, Right, Home, End, Backspace, Delete, A, C, X, V, Z, Y, Up, Down, PageUp, PageDown,
-        Menu, Insert, F10
-    };
-};
-
-static_assert(static_cast<u8>(InputKey::F10) <= 32u);
 
 namespace InputActionSource{
-    enum Enum : u8{ Pointer, Keyboard };
+    enum Enum : u8{ Pointer, Keyboard, Command };
 };
 
 namespace PointerGestureState{
@@ -47,7 +41,7 @@ namespace PointerGestureState{
 struct InputEvent{
     InputEventType::Enum type = InputEventType::PointerMove;
     Point position{};
-    InputKey::Enum key = InputKey::None;
+    i32 key = Core::Key::Unknown;
     bool shift = false;
     bool repeat = false;
     bool control = false;
@@ -56,9 +50,15 @@ struct InputEvent{
     f64 scrollY = 0.0;
     // Optional monotonic timestamp at native ingress; zero leaves pointer clicks ungrouped.
     u64 timestampMs = 0u;
+    InputSource source{};
+    InputCommand::Enum command = InputCommand::None;
+    bool extend = false;
+    bool edit = true;
+    bool super = false;
+    bool allowText = false;
 };
 
-// Rectangle and clip use the same logical coordinates as painting; publication order provides the default Tab order.
+// Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.
 struct HitTarget{
     WidgetId id;
     Rect rectangle;
@@ -173,6 +173,7 @@ struct InputRoutingResult{
 
 inline constexpr usize s_InputMaxTargets = 4096u;
 inline constexpr usize s_InputMaxEvents = 256u;
+inline constexpr usize s_InputMaxSources = 256u;
 inline constexpr usize s_InputMaxActions = 256u;
 inline constexpr usize s_InputMaxPointerGestures = 256u;
 inline constexpr usize s_InputMaxControlActions = 256u;

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_ui/toolkit/edit/vertical_navigation.h>
+#include <impl/ecs_ui/toolkit/input/bindings.h>
 
 #include <global/bit.h>
 
@@ -104,15 +105,28 @@ TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIn
     EXPECT_TRUE(state.matches(state.snapshot()));
 }
 
-TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedKeysLeaveDirectionOutputUntouched){
-    const EditKeyStroke keys[]{
-        { EditKey::Up, true }, { EditKey::Down, false, false, true },
-        { EditKey::PageUp, true, true }, { EditKey::PageDown, false, true, true },
-        { EditKey::None }, { EditKey::Enter }, { EditKey::Left }, { static_cast<EditKey::Enum>(255u) }
+TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsLeaveDirectionOutputUntouched){
+    Core::Alloc::GlobalArena arena(Name("tests/ui/edit/navigation"));
+    InputBindings bindings(arena);
+    const InputKeyBinding chords[]{
+        { Core::Key::Up, Core::InputModifier::Control }, { Core::Key::Down, Core::InputModifier::Alt },
+        { Core::Key::PageUp, Core::InputModifier::Control | Core::InputModifier::Shift },
+        { Core::Key::PageDown, Core::InputModifier::Shift | Core::InputModifier::Alt },
+        { Core::Key::Unknown }, { Core::Key::Enter }, { Core::Key::Left }, { static_cast<i32>(Core::Key::Menu) + 1 }
     };
-    for(const auto& key : keys){
+    for(const auto& chord : chords){
         EditNavigationDirection::Enum output = EditNavigationDirection::PageDown;
-        EXPECT_FALSE(TranslateEditNavigation(key, output));
+        EXPECT_FALSE(TranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers), output));
+        EXPECT_EQ(output, EditNavigationDirection::PageDown);
+    }
+    const InputCommandIntent rejected[]{
+        { InputCommand::Up, true, false }, { InputCommand::Down, false, false },
+        { InputCommand::PageUp, false, false }, { InputCommand::PageDown, true, false },
+        { InputCommand::FocusNext }, { static_cast<InputCommand::Enum>(255u), true }
+    };
+    for(const InputCommandIntent& intent : rejected){
+        EditNavigationDirection::Enum output = EditNavigationDirection::PageDown;
+        EXPECT_FALSE(TranslateEditNavigation(intent, output));
         EXPECT_EQ(output, EditNavigationDirection::PageDown);
     }
 }

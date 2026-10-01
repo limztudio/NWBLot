@@ -28,7 +28,7 @@ TEST_F(UiSliderLifetimeTests, IdenticalPublicValueIntentRetiresAlreadyCopiedKeyb
     ASSERT_TRUE(accept(1u));
     const Point origin = thumbPoint();
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 50.0f, origin.y } }).pointerConsumed);
     const u64 token = m_state.inputGeneration();
     ASSERT_TRUE(m_state.setValue(0.25));
@@ -58,10 +58,10 @@ TEST_F(UiSliderLifetimeTests, PublicValueAwayAndBackDuringTheLoanRejectsTheCandi
 
 TEST_F(UiSliderLifetimeTests, ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCopiedRepeat){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     InputEvent held;
     held.type = InputEventType::KeyDown;
-    held.key = InputKey::Right;
+    held.key = Core::Key::Right;
     EXPECT_TRUE(send(held).keyboardConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
@@ -77,7 +77,7 @@ TEST_F(UiSliderLifetimeTests, ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCop
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     held.type = InputEventType::KeyUp;
     EXPECT_TRUE(send(held).keyboardConsumed);
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ASSERT_TRUE(accept(5u, coarse));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.625);
 }
@@ -158,9 +158,9 @@ TEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiv
 
 TEST_F(UiSliderLifetimeTests, LaterDeferredCallbackRejectsTheSliderCandidateAndPreservesItsExplicitApplicationValue){
     ASSERT_TRUE(accept(1u));
-    press(InputKey::Tab);
+    press(Core::Key::Tab);
     const SliderAcceptedFrame displayed = accepted();
-    press(InputKey::Right);
+    press(Core::Key::Right);
     ASSERT_TRUE(declare(2u));
     m_laterSource.arm(SliderCallbackMutation::SetValue, &m_state);
     ASSERT_TRUE(sibling());

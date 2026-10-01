@@ -49,7 +49,10 @@ bool Contains(const Rect& rectangle, const Point& position){
 
 
 InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
-    : m_targets(arena)
+    : m_bindings(arena)
+    , m_boundSources(arena)
+    , m_commandSources(arena)
+    , m_targets(arena)
     , m_stagedTargets(arena)
     , m_lookup(arena)
     , m_stagedLookup(arena)
@@ -62,6 +65,8 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     , m_stagedPopups(arena)
     , m_popupDismissals(arena)
 {
+    m_boundSources.reserve(16u);
+    m_commandSources.reserve(16u);
     m_targets.reserve(s_InputMaxTargets);
     m_stagedTargets.reserve(s_InputMaxTargets);
     m_lookup.reserve(s_InputMaxTargets);
@@ -76,8 +81,8 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     m_popupDismissals.reserve(s_InputMaxPopups);
 }
 
-bool InputRouter::queue(const InputEvent& event){
-    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::SecondaryUp)
+bool InputRouter::queue(const InputEvent& event, InputEvent* const resolved){
+    if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::CommandUp)
         return false;
     if(
         (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel
@@ -87,12 +92,12 @@ bool InputRouter::queue(const InputEvent& event){
         return false;
     if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
         return false;
-    if(
-        (event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
-        && (event.key == InputKey::None || event.key > InputKey::F10)
-    )
+    InputEvent candidate;
+    if(!resolveSourceEvent(event, candidate))
         return false;
-    m_events.push_back(event);
+    m_events.push_back(candidate);
+    if(resolved)
+        *resolved = candidate;
     return true;
 }
 
@@ -105,15 +110,15 @@ InputRoutingResult InputRouter::process(){
             routeSecondary(event, result);
         else if(event.type == InputEventType::PointerWheel)
             routeWheel(event, result);
-        else if(event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp)
-            routeKeyboard(event, result);
+        else if(event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp)
+            routeCommand(event, result);
         else if(event.type == InputEventType::FocusLost){
             if(m_focusLossGeneration == Limit<u64>::s_Max)
                 TerminateInvariant();
             ++m_focusLossGeneration;
             m_windowFocused = false;
             result.pointerConsumed |= hasPopup() || m_capture.valid() || m_pointerSequenceConsumed || m_secondarySequenceConsumed;
-            result.keyboardConsumed |= hasPopup() || m_focus.valid() || m_consumedKeys != 0u;
+            result.keyboardConsumed |= wantsKeyboard();
             cancelPopupFocus();
             cancelInteraction();
         }
@@ -179,11 +184,11 @@ bool InputRouter::commitTargets(
         }
         if(!owner)
             return false;
-        if(popup.scope.dismissTab){
+        if(popup.scope.dismissFocusTraversal){
             bool anchor = false;
             for(const auto& target : m_stagedTargets){
-                anchor |= target.id == popup.scope.tabAnchor
-                    && target.declarationGeneration == popup.scope.tabAnchorDeclarationGeneration
+                anchor |= target.id == popup.scope.focusAnchor
+                    && target.declarationGeneration == popup.scope.focusAnchorDeclarationGeneration
                     && target.popup == popup.scope.parent && target.focusable && target.enabled && !target.owner.valid();
             }
             if(!anchor)
@@ -256,6 +261,7 @@ void InputRouter::clearFocus(){
 
 void InputRouter::reset(){
     m_events.clear();
+    m_boundSources.clear();
     m_targets.clear();
     m_stagedTargets.clear();
     m_lookup.clear();
@@ -445,10 +451,7 @@ void InputRouter::cancelInteraction(){
     m_secondaryDown = false;
     m_secondarySequenceConsumed = false;
     m_secondaryOwner = {};
-    m_pressedKeys = 0u;
-    m_consumedKeys = 0u;
-    m_controlKeyOwners.fill({});
-    m_contextMenuKeyOwners.fill({});
+    m_commandSources.clear();
 }
 
 void InputRouter::appendActivation(const HitTarget& target, const InputActionSource::Enum source, InputRoutingResult& result){

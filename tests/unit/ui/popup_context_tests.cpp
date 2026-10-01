@@ -151,8 +151,8 @@ protected:
     [[nodiscard]] PopupFrame focusBase(){
         const PopupFrame frame = prepare(1u);
         EXPECT_TRUE(m_context.commitFrame(1u));
-        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
-        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
+        EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
         EXPECT_EQ(m_context.input().focus(), frame.base.id);
         return frame;
     }
@@ -457,8 +457,8 @@ TEST_F(UiPopupContextTests, AutofocusDisabledChangesFocusOnlyAtAcceptanceAndTabE
     EXPECT_TRUE(m_context.input().hasPopup());
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(m_context.input().wantsKeyboard());
-    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = InputKey::Tab }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
+    EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Tab }).keyboardConsumed);
     EXPECT_EQ(m_context.input().focus(), candidate.child.id);
 }
 

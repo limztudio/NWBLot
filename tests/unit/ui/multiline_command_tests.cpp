@@ -24,37 +24,32 @@ using MultilineCommandTests = MultilineFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(MultilineCommandTests, TranslationPreservesDefaultSingleLineIdentityAndAddsMultilineIntents){
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter }).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter, false, true }).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Home, true }).command, EditCommand::Home);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::End, true }).command, EditCommand::End);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter }, EditTextMode::Multiline).command, EditCommand::Newline);
-    const EditCommandRequest shifted = TranslateEditCommand({ EditKey::Enter, false, true, false, true }, EditTextMode::Multiline);
+TEST_F(MultilineCommandTests, ModeSpecificIntentRejectsMalformedModesAndPreservesExtendedNewlineRepeats){
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept }, false).command, EditCommand::Submit);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentHome }, false).command, EditCommand::Home);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentEnd }, false).command, EditCommand::End);
+    const EditCommandRequest shifted = TranslateEditCommand({ InputCommand::Accept, true }, true, EditTextMode::Multiline);
     EXPECT_EQ(shifted.command, EditCommand::Newline);
     EXPECT_TRUE(shifted.extend);
     EXPECT_TRUE(shifted.repeat);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter, true }, EditTextMode::Multiline).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter, true, true }, EditTextMode::Multiline).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Home, true }, EditTextMode::Multiline).command, EditCommand::DocumentHome);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::End, true }, EditTextMode::Multiline).command, EditCommand::DocumentEnd);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Home }, EditTextMode::Multiline).command, EditCommand::Home);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::End }, EditTextMode::Multiline).command, EditCommand::End);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter, false, false, true }, EditTextMode::Multiline).command, EditCommand::None);
-    EXPECT_EQ(TranslateEditCommand({ EditKey::Enter }, static_cast<EditTextMode::Enum>(255u)).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::Submit }, false, EditTextMode::Multiline).command, EditCommand::Submit);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentHome }, false, EditTextMode::Multiline).command, EditCommand::DocumentHome);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentEnd }, false, EditTextMode::Multiline).command, EditCommand::DocumentEnd);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept, false, false }, false, EditTextMode::Multiline).command, EditCommand::None);
+    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept }, false, static_cast<EditTextMode::Enum>(255u)).command, EditCommand::None);
 }
 
-TEST_F(MultilineCommandTests, EnterAndRepeatsInsertOneLfPerCommandAsUndoableEdits){
+TEST_F(MultilineCommandTests, AcceptAndRepeatsInsertOneLfPerCommandAsUndoableEdits){
     ASSERT_TRUE(m_model.setText("ab"));
     ASSERT_TRUE(m_model.setSelection(1u, 1u));
-    const EditCommandResult inserted = ApplyEditCommand(m_model, TranslateEditCommand({ EditKey::Enter }, m_model.textMode()));
+    const EditCommandResult inserted = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Accept }, false, m_model.textMode()));
     EXPECT_TRUE(inserted.handled);
     EXPECT_TRUE(inserted.textChanged);
     EXPECT_TRUE(inserted.selectionChanged);
     EXPECT_FALSE(inserted.submitted);
     EXPECT_EQ(m_model.text(), "a\nb");
     const EditCommandResult repeated = ApplyEditCommand(m_model,
-        TranslateEditCommand({ EditKey::Enter, false, false, false, true }, m_model.textMode()));
+        TranslateEditCommand({ InputCommand::Accept }, true, m_model.textMode()));
     EXPECT_TRUE(repeated.textChanged);
     EXPECT_FALSE(repeated.submitted);
     EXPECT_EQ(m_model.text(), "a\n\nb");
@@ -68,11 +63,11 @@ TEST_F(MultilineCommandTests, EnterAndRepeatsInsertOneLfPerCommandAsUndoableEdit
     EXPECT_EQ(m_model.text(), "a\n\nb");
 }
 
-TEST_F(MultilineCommandTests, ShiftEnterReplacesTheSelectedCrossLineRange){
+TEST_F(MultilineCommandTests, ExtendedAcceptReplacesTheSelectedCrossLineRange){
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(m_model.setSelection(4u, 1u));
     const EditCommandResult result = ApplyEditCommand(m_model,
-        TranslateEditCommand({ EditKey::Enter, false, true }, m_model.textMode()));
+        TranslateEditCommand({ InputCommand::Accept, true }, false, m_model.textMode()));
     EXPECT_TRUE(result.textChanged);
     EXPECT_FALSE(result.submitted);
     EXPECT_EQ(m_model.text(), "a\nd");
@@ -83,18 +78,18 @@ TEST_F(MultilineCommandTests, ShiftEnterReplacesTheSelectedCrossLineRange){
     EXPECT_EQ(m_model.caret(), 1u);
 }
 
-TEST_F(MultilineCommandTests, CtrlEnterReportsSubmitWithoutEditingAndSuppressesRepeats){
+TEST_F(MultilineCommandTests, SubmitIntentReportsWithoutEditingAndSuppressesRepeats){
     ASSERT_TRUE(m_model.setText("a\nb"));
     const MultilineSnapshot before(m_arena, m_model);
     const EditCommandResult submitted = ApplyEditCommand(m_model,
-        TranslateEditCommand({ EditKey::Enter, true }, m_model.textMode()));
+        TranslateEditCommand({ InputCommand::Submit }, false, m_model.textMode()));
     EXPECT_TRUE(submitted.handled);
     EXPECT_TRUE(submitted.submitted);
     EXPECT_FALSE(submitted.textChanged);
     EXPECT_FALSE(submitted.selectionChanged);
     before.expectUnchanged(m_model);
     const EditCommandResult repeated = ApplyEditCommand(m_model,
-        TranslateEditCommand({ EditKey::Enter, true, false, false, true }, m_model.textMode()));
+        TranslateEditCommand({ InputCommand::Submit }, true, m_model.textMode()));
     EXPECT_TRUE(repeated.handled);
     EXPECT_FALSE(repeated.submitted);
     before.expectUnchanged(m_model);

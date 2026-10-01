@@ -150,8 +150,8 @@ TEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport)
     ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
     const u64 revision = m_state.revision();
     const u64 selectionGeneration = m_model.selectionGeneration();
-    m_host.key(EditKey::C, true);
-    m_host.key(EditKey::Enter, true);
+    m_host.key(Core::Key::C, true);
+    m_host.key(Core::Key::Enter, true);
     ASSERT_TRUE(frameArea(2u, smallOptions()));
     EXPECT_TRUE(m_result.submitted);
     EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);

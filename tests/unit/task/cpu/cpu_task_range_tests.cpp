@@ -4,7 +4,6 @@
 
 #include <core/task/cpu/scheduler.h>
 #include <global/terminal_entry.h>
-
 #include <global/termination.h>
 #include <global/timer.h>
 

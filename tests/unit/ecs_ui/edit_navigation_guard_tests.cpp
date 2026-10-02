@@ -3,7 +3,6 @@
 
 
 #include "edit_navigation_host_fixture.h"
-
 #include "../ui/multiline_fixture.h"
 
 

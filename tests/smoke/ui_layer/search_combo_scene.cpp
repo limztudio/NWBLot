@@ -5,9 +5,7 @@
 #include "search_combo_scene.h"
 
 #include "smoke_geometry.h"
-
 #include "edit_selection_probe.h"
-
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>

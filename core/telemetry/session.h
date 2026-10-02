@@ -28,7 +28,6 @@ class CaptureSessionCaptureScope;
 
 
 class CaptureSession final : NoCopy{
-private:
     friend class CaptureSessionCaptureScope;
 
 

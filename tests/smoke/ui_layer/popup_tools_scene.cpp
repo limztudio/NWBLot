@@ -5,7 +5,6 @@
 #include "popup_tools_scene.h"
 
 #include "smoke_geometry.h"
-
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>

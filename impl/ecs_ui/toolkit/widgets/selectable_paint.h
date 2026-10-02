@@ -6,7 +6,6 @@
 
 
 #include "list_style.h"
-
 #include "../text/service.h"
 
 

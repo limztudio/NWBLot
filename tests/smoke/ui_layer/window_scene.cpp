@@ -5,7 +5,6 @@
 #include "window_scene.h"
 
 #include "smoke_geometry.h"
-
 #include "../smoke_environment.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>

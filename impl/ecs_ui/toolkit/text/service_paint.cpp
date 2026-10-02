@@ -3,7 +3,6 @@
 
 
 #include "service.h"
-
 #include "atlas.h"
 #include "glyph_visibility.h"
 

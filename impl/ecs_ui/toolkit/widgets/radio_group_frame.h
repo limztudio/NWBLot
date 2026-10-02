@@ -8,7 +8,6 @@
 #include "radio_group.h"
 #include "radio_group_style.h"
 #include "radio_group_layout.h"
-
 #include "../text/layout.h"
 
 

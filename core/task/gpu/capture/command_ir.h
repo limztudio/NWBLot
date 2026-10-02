@@ -412,13 +412,14 @@ class GpuCommandIrCapture;
 
 // A checkpoint identifies an exact prefix of one capture and one recording attempt.
 class GpuCommandIrCaptureCheckpoint final{
+    friend class GpuCommandIrCapture;
+
+
 public:
     GpuCommandIrCaptureCheckpoint() = default;
 
 
 private:
-    friend class GpuCommandIrCapture;
-
     u64 m_ownerIdentity = 0u;
     u64 m_resetEpoch = 0u;
     u64 m_prefixSerial = 0u;
@@ -434,6 +435,9 @@ private:
 
 // Caller-arena-owned immutable exported bytes; capture reset and graph teardown cannot change them.
 class GpuCommandIrOwnedStream final : NoCopy{
+    friend class GpuCommandIrCapture;
+
+
 public:
     explicit GpuCommandIrOwnedStream(GraphicsArena& arena);
     ~GpuCommandIrOwnedStream()noexcept;
@@ -446,8 +450,6 @@ public:
 
 
 private:
-    friend class GpuCommandIrCapture;
-
     GraphicsArena& m_arena;
     GraphicsBytes m_bytes;
     GpuCommandIrRasterOwnerTable* m_rasterOwners = nullptr;

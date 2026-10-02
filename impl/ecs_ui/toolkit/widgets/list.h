@@ -7,7 +7,6 @@
 
 #include "scroll.h"
 #include "style.h"
-
 #include "../input/input.h"
 
 

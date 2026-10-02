@@ -4,7 +4,6 @@
 
 #include "text_area_snapshot.h"
 #include "text_area_scene.h"
-
 #include "smoke_geometry.h"
 
 #include <core/common/log.h>

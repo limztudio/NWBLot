@@ -3,9 +3,7 @@
 
 
 #include "numeric_edit_scene.h"
-
 #include "edit_selection_probe.h"
-
 #include "smoke_geometry.h"
 
 #include <core/common/log.h>

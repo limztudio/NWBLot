@@ -4,7 +4,6 @@
 
 #include "texture_image_snapshot.h"
 #include "texture_image_scene.h"
-
 #include "smoke_geometry.h"
 
 #include <core/common/log.h>

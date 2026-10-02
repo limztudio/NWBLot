@@ -4,7 +4,6 @@
 
 #include "project.h"
 #include "world.h"
-
 #include "../framebuffer_capture.h"
 
 #include <core/common/log.h>

@@ -117,7 +117,7 @@ bool ShaderCook::computeDependencyChecksum(
 
     outChecksum = s_Fnv64OffsetBasis;
 
-    if(dependencyRootAliases.empty()){
+    if(dependencyRootAliases.size() == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
         return false;
     }

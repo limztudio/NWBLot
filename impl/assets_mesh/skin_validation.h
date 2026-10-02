@@ -43,7 +43,7 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     if(skeletonJointCount == 0u)
         return true;
 
-    for(u32 influenceIndex = 0; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
+    for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(joint < skeletonJointCount)
             continue;

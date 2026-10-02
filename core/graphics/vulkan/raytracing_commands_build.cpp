@@ -522,7 +522,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     usize totalOpacityMicromapUsageCount = 0u;
     bool hasOpacityMicromap = false;
-    for(usize i = 0; i < numGeometries; ++i){
+    for(usize i = 0u; i < numGeometries; ++i){
         opacityMicromapUsageOffsets[i] = Limit<usize>::s_Max;
         if(pGeometries[i].geometryType != RayTracingGeometryType::Triangles)
             continue;
@@ -574,7 +574,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     };
 
     usize transformCount = 0;
-    for(usize i = 0; i < numGeometries; ++i){
+    for(usize i = 0u; i < numGeometries; ++i){
         const RayTracingGeometryDesc& geometryDesc = pGeometries[i];
         if(geometryDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geometryDesc.geometryData.triangles;
@@ -794,7 +794,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     ))
         return;
 
-    for(usize i = 0; i < numGeometries; ++i){
+    for(usize i = 0u; i < numGeometries; ++i){
         if(opacityMicromapUsageOffsets[i] == Limit<usize>::s_Max)
             continue;
 
@@ -840,7 +840,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
 
         usize transformIndex = 0;
-        for(usize i = 0; i < numGeometries; ++i){
+        for(usize i = 0u; i < numGeometries; ++i){
             if(!pGeometries[i].useTransform)
                 continue;
 
@@ -909,7 +909,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(taskScheduler().isParallelEnabled() && numGeometries >= s_ParallelGeometryThreshold)
         taskScheduler().parallelFor(static_cast<usize>(0), numGeometries, s_GeometryGrainSize, buildGeometry);
     else{
-        for(usize i = 0; i < numGeometries; ++i)
+        for(usize i = 0u; i < numGeometries; ++i)
             buildGeometry(i);
     }
 
@@ -996,7 +996,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(transformBuffer)
         m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(transformBuffer));
 
-    for(usize i = 0; i < numGeometries; ++i){
+    for(usize i = 0u; i < numGeometries; ++i){
         const RayTracingGeometryDesc& geomDesc = pGeometries[i];
         if(geomDesc.geometryType == RayTracingGeometryType::Triangles){
             const RayTracingGeometryTriangles& triangles = geomDesc.geometryData.triangles;

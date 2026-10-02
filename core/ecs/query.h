@@ -204,7 +204,7 @@ public:
         if(!m_valid)
             return;
 
-        for(usize i = 0; i < m_count; ++i)
+        for(usize i = 0u; i < m_count; ++i)
             applyFunc(func, i);
     }
 

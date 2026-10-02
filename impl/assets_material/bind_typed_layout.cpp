@@ -51,7 +51,7 @@ static_assert(IsTriviallyCopyable_V<MaterialTypedValueData>, "MaterialTypedValue
 static bool SplitMaterialParameterCall(const AStringView text, AStringView& outType, AStringView& outArgs){
     const AStringView trimmed = TrimView(text);
     usize openParen = Limit<usize>::s_Max;
-    for(usize i = 0; i < trimmed.size(); ++i){
+    for(usize i = 0u; i < trimmed.size(); ++i){
         if(trimmed[i] == '('){
             openParen = i;
             break;
@@ -354,7 +354,7 @@ static bool BuildMaterialTypedValueData(
     if(tokenCount != componentCount)
         return false;
 
-    for(u32 i = 0; i < tokenCount; ++i){
+    for(u32 i = 0u; i < tokenCount; ++i){
         u32 parsedValue = 0u;
         if(!ParseMaterialParameterToken(tokens[i], valueType, parsedValue))
             return false;

@@ -46,7 +46,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     u32 pushConstantByteSize = 0;
     usize descriptorSetLayoutCount = 0;
 
-    for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()); ++i){
+    for(u32 i = 0u; i < static_cast<u32>(bindingLayouts.size()); ++i){
         auto* layout = bindingLayouts[i].get();
         if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
@@ -150,7 +150,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     const u32 totalSets = maxSetIndex + 1u;
     descriptorSetLayouts.reserve(totalSets);
-    for(u32 setIndex = 0; setIndex < totalSets; ++setIndex)
+    for(u32 setIndex = 0u; setIndex < totalSets; ++setIndex)
         descriptorSetLayouts.push_back(VK_NULL_HANDLE);
 
     for(const auto& bindingLayout : bindingLayouts){
@@ -163,7 +163,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
             return false;
         }
         const u32 base = bindlessDesc->descriptorSetIndex;
-        for(usize localSetIndex = 0; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
+        for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);
             if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}")
@@ -176,7 +176,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         }
     }
 
-    for(u32 setIndex = 0; setIndex < totalSets; ++setIndex){
+    for(u32 setIndex = 0u; setIndex < totalSets; ++setIndex){
         if(descriptorSetLayouts[setIndex] == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing")
                 , operationName

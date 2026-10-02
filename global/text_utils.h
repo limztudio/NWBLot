@@ -275,7 +275,7 @@ template<typename CharT>
     if(text.size() != expected.size())
         return false;
 
-    for(usize i = 0; i < text.size(); ++i){
+    for(usize i = 0u; i < text.size(); ++i){
         if(ToAsciiLower(text[i]) != ToAsciiLower(expected[i]))
             return false;
     }
@@ -569,7 +569,7 @@ inline bool SplitText(const BasicStringView<CharT> line, const CharT delimiter, 
     outParts.clear();
 
     usize begin = 0;
-    for(usize i = 0; i <= line.size(); ++i){
+    for(usize i = 0u; i <= line.size(); ++i){
         const bool atEnd = i == line.size();
         if(!atEnd && line[i] != delimiter)
             continue;

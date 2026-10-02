@@ -405,7 +405,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    for(u32 i = 0; i < shaderCount; ++i){
+    for(u32 i = 0u; i < shaderCount; ++i){
         Core::ShaderType::Enum shaderType = Core::ShaderType::Invalid;
         NameHash shaderNameHash = {};
         if(!ReadPOD(binary, cursor, shaderType) || !ReadPOD(binary, cursor, shaderNameHash)){

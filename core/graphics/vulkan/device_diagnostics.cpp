@@ -210,7 +210,7 @@ void Device::captureDeviceLoss(const AStringView context){
                         }
                     }
 
-                    for(u32 i = 0; i < faultCounts.addressInfoCount; ++i){
+                    for(u32 i = 0u; i < faultCounts.addressInfoCount; ++i){
                         const VkDeviceFaultAddressInfoEXT& addressInfo = addressInfos[i];
                         report.details.append(StringFormat(m_gpuCrashReportArena, "fault address 0x{:x} (type {}, precision 0x{:x})\n"
                             , static_cast<u64>(addressInfo.reportedAddress)
@@ -219,7 +219,7 @@ void Device::captureDeviceLoss(const AStringView context){
                         ));
                     }
 
-                    for(u32 i = 0; i < faultCounts.vendorInfoCount; ++i){
+                    for(u32 i = 0u; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
                         const AStringView vendorDescription(vendorInfo.description, NWB_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
                         report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"

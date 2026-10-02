@@ -409,7 +409,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
 
     outAdapters.clear();
     outAdapters.reserve(deviceCount);
-    for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
+    for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
         outAdapters.emplace_back(m_arena);
 
     auto fillAdapterInfo = [&](usize i){
@@ -421,7 +421,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
         m_cpuScheduler.parallelFor(static_cast<usize>(0), static_cast<usize>(deviceCount), fillAdapterInfo);
     else{
-        for(usize i = 0; i < static_cast<usize>(deviceCount); ++i)
+        for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
             fillAdapterInfo(i);
     }
 

@@ -149,7 +149,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
     FileMap loadedFiles(0, Hasher<Name>(), EqualTo<Name>(), m_arena);
     loadedFiles.reserve(static_cast<usize>(header.fileCount));
     u64 cursor = 0;
-    for(u64 i = 0; i < header.fileCount; ++i){
+    for(u64 i = 0u; i < header.fileCount; ++i){
         if(header.indexBytes - cursor < sizeof(FilesystemVolumeDetail::VolumeIndexEntryDisk)){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "truncated metadata index entry");
             return false;

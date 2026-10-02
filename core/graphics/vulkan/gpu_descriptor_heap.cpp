@@ -521,7 +521,7 @@ void GpuDescriptorHeap::resetStateForShutdownLocked()noexcept{
     m_resourceDescriptorTextures.clear();
     m_samplerDescriptorResources.clear();
     m_accelStructBufferBindingOffset = 0u;
-    for(u32 i = 0; i < GpuDescriptorClass::kCount; ++i)
+    for(u32 i = 0u; i < GpuDescriptorClass::kCount; ++i)
         m_classBufferOffset[i] = 0u;
 
     m_resourceLayout = nullptr;

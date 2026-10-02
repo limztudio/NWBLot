@@ -66,7 +66,8 @@ bool Queue::coversTimerQueryPrerequisite(
         if(coveredBy(localWaits[waitIndex].semaphore, localWaits[waitIndex].value))
             return true;
     }
-    for(usize waitIndex = 0u; waitIndex < m_waitSemaphores.size(); ++waitIndex){
+    const usize waitSemaphoreCount = m_waitSemaphores.size();
+    for(usize waitIndex = 0u; waitIndex < waitSemaphoreCount; ++waitIndex){
         if(coveredBy(m_waitSemaphores[waitIndex], m_waitSemaphoreValues[waitIndex]))
             return true;
     }
@@ -156,7 +157,7 @@ u64 Queue::submit(
         return m_lastSubmittedID;
     }
     if(hasCommands){
-        for(usize i = 0; i < numCmd; ++i){
+        for(usize i = 0u; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
             const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
             for(usize previous = 0u; previous < i; ++previous){
@@ -250,7 +251,7 @@ u64 Queue::submit(
         descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
 
     if(hasCommands){
-        for(usize i = 0; i < numCmd; ++i){
+        for(usize i = 0u; i < numCmd; ++i){
             CommandList* const cmdList = ppCmd[i];
             TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
             if(
@@ -305,7 +306,7 @@ u64 Queue::submit(
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
     waitInfos.reserve(localWaitCount + m_waitSemaphores.size());
-    for(usize i = 0; i < localWaitCount; ++i){
+    for(usize i = 0u; i < localWaitCount; ++i){
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             return m_lastSubmittedID;
@@ -317,7 +318,8 @@ u64 Queue::submit(
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         waitInfos.push_back(waitInfo);
     }
-    for(usize i = 0; i < m_waitSemaphores.size(); ++i){
+    const usize waitSemaphoreCount = m_waitSemaphores.size();
+    for(usize i = 0u; i < waitSemaphoreCount; ++i){
         VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         waitInfo.semaphore = m_waitSemaphores[i];
         waitInfo.value = m_waitSemaphoreValues[i];
@@ -336,7 +338,8 @@ u64 Queue::submit(
         signalInfos.push_back(signalInfo);
     }
 
-    for(usize i = 0; i < m_signalSemaphores.size(); ++i){
+    const usize signalSemaphoreCount = m_signalSemaphores.size();
+    for(usize i = 0u; i < signalSemaphoreCount; ++i){
         VkSemaphoreSubmitInfo signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         signalInfo.semaphore = m_signalSemaphores[i];
         signalInfo.value = m_signalSemaphoreValues[i];

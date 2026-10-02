@@ -168,7 +168,7 @@ NWB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
     NWB_ASSERT(outputStride >= sizeof(OutputT));
 
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
-    for(usize i = 0; i < vectorCount; ++i){
+    for(usize i = 0u; i < vectorCount; ++i){
         const SIMDVector value = LoadFloat(*StridePointer(inputStream, inputStride, i));
         StoreFloat(transform(value, transposedMatrix), *StridePointer(outputStream, outputStride, i));
     }

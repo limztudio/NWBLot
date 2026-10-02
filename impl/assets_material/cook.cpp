@@ -542,7 +542,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, material.stageShaderCount());
 
     const Material::StageShaderArray& stageShaders = material.stageShaders();
-    for(usize shaderIndex = 0; shaderIndex < stageShaders.size(); ++shaderIndex){
+    for(usize shaderIndex = 0u; shaderIndex < stageShaders.size(); ++shaderIndex){
         const Core::Assets::AssetRef<Shader>& shaderAsset = stageShaders[shaderIndex];
         if(!shaderAsset.valid())
             continue;

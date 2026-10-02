@@ -273,7 +273,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         OpacityMicromapUsageVector opacityMicromapUsageCounts(scratchArena);
 
         usize totalOpacityMicromapUsageCount = 0u;
-        for(usize i = 0; i < geometryCount; ++i){
+        for(usize i = 0u; i < geometryCount; ++i){
             opacityMicromapUsageOffsets[i] = Limit<usize>::s_Max;
             if(desc.bottomLevelGeometries[i].geometryType != RayTracingGeometryType::Triangles)
                 continue;
@@ -373,7 +373,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         }
         opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
 
-        for(usize i = 0; i < geometryCount; ++i){
+        for(usize i = 0u; i < geometryCount; ++i){
             if(
                 !VulkanDetail::FillBlasGeometryForSizeQuery(
                     m_context,
@@ -429,7 +429,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
             }
         }
 
-        for(usize i = 0; i < geometryCount; ++i){
+        for(usize i = 0u; i < geometryCount; ++i){
             if(opacityMicromapUsageOffsets[i] == Limit<usize>::s_Max)
                 continue;
 

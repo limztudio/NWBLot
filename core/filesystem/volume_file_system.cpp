@@ -135,7 +135,8 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
         m_segmentSize = discoveredHeader.segmentSize;
 
-        for(usize segmentIndex = 0; segmentIndex < m_segmentPaths.size(); ++segmentIndex){
+        const usize segmentPathCount = m_segmentPaths.size();
+        for(usize segmentIndex = 0u; segmentIndex < segmentPathCount; ++segmentIndex){
             const Path& segmentPath = m_segmentPaths[segmentIndex];
             const u64 segmentFileSize = FileSize(segmentPath, errorCode);
             if(errorCode || segmentFileSize == 0){
@@ -147,7 +148,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 return false;
             }
 
-            const bool isLastSegment = segmentIndex + 1u == m_segmentPaths.size();
+            const bool isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
                 NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
                     , StringConvert(m_volumeName)
@@ -624,7 +625,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
     m_segmentPaths.clear();
 
-    for(usize segmentIndex = 0;; ++segmentIndex){
+    for(usize segmentIndex = 0u;; ++segmentIndex){
         const Path hashedSegmentPath = ::MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 
         const bool exists = FileExists(hashedSegmentPath, errorCode);

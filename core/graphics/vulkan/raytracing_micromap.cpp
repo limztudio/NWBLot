@@ -76,7 +76,7 @@ bool BuildOpacityMicromapUsageCounts(
     outUsageCounts.clear();
     outUsageCounts.reserve(counts.size());
 
-    for(usize i = 0; i < counts.size(); ++i){
+    for(usize i = 0u; i < counts.size(); ++i){
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
         const VkOpacityMicromapFormatEXT format = ConvertOpacityMicromapFormat(count.format);
         if(format == VK_OPACITY_MICROMAP_FORMAT_MAX_ENUM_KHR){

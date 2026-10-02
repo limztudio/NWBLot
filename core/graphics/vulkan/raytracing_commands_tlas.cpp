@@ -121,7 +121,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     if(!VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, vkBuildFlags, NWB_TEXT("build TLAS")))
         return;
     const bool allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
-    for(usize i = 0; i < numInstances; ++i){
+    for(usize i = 0u; i < numInstances; ++i){
         auto* blas = pInstances[i].bottomLevelAS;
         if(!blas){
             if(allowEmptyInstances)
@@ -236,7 +236,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     if(taskScheduler().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
         taskScheduler().parallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
     else{
-        for(usize i = 0; i < numInstances; ++i)
+        for(usize i = 0u; i < numInstances; ++i)
             buildVkInstance(i);
     }
 
@@ -252,7 +252,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     ))
         return;
 
-    for(usize i = 0; i < numInstances; ++i)
+    for(usize i = 0u; i < numInstances; ++i)
         retainResource(pInstances[i].bottomLevelAS);
 
     m_currentCmdBuf->m_referencedStagingBuffers.push_back(Move(instanceBuffer));

@@ -390,7 +390,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
     Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
-    for(u32 i = 0; i < propertyCount; ++i){
+    for(u32 i = 0u; i < propertyCount; ++i){
         properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
         properties[i].pNext = nullptr;
     }
@@ -414,7 +414,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     if(taskScheduler().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
         taskScheduler().parallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
     else{
-        for(usize i = 0; i < propertyCount; ++i)
+        for(usize i = 0u; i < propertyCount; ++i)
             fillMatMulFormat(i);
     }
 

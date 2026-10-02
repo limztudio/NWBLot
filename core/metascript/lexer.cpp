@@ -292,7 +292,7 @@ Token Lexer::makeToken(TokenType::Enum type, usize length){
     tok.line = m_line;
     tok.column = m_column;
 
-    for(usize i = 0; i < length; ++i)
+    for(usize i = 0u; i < length; ++i)
         advance();
 
     return tok;

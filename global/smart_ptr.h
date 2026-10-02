@@ -204,7 +204,7 @@ struct ArenaDeleter<T[], POOL>{
         : m_pool(other.m_pool), m_size(other.m_size){}
 
     void operator()(T* p)const noexcept{
-        for(usize i = 0; i < m_size; ++i)
+        for(usize i = 0u; i < m_size; ++i)
             p[i].~T();
         m_pool->template deallocate<T>(p, m_size);
     }
@@ -233,7 +233,7 @@ struct EmptyDeleter<T[]>{
     EmptyDeleter(const EmptyDeleter<U[]>&, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<U*, T*>::value>::type* = 0)noexcept{}
 
     void operator()(T* p)const noexcept{
-        for(usize i = 0; i < m_size; ++i)
+        for(usize i = 0u; i < m_size; ++i)
             p[i].~T();
     }
 };

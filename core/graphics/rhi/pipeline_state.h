@@ -120,7 +120,7 @@ constexpr bool operator==(const BlendState& lhs, const BlendState& rhs)noexcept{
     if(lhs.alphaToCoverageEnable != rhs.alphaToCoverageEnable)
         return false;
 
-    for(u32 i = 0; i < s_MaxRenderTargets; ++i){
+    for(u32 i = 0u; i < s_MaxRenderTargets; ++i){
         if(lhs.targets[i] != rhs.targets[i])
             return false;
     }
@@ -207,7 +207,7 @@ struct RasterState{
         if(!x || !y)
             return *this;
         const usize samplePositionCount = count < s_MaxProgrammableSamplePositions ? count : s_MaxProgrammableSamplePositions;
-        for(usize i = 0; i < samplePositionCount; ++i){
+        for(usize i = 0u; i < samplePositionCount; ++i){
             samplePositionsX[i] = x[i];
             samplePositionsY[i] = y[i];
         }

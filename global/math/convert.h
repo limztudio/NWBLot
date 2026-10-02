@@ -263,7 +263,7 @@ NWB_INLINE Half* ConvertFloatBufferToHalf(Half* outHalfBuffer, const f32* floatB
 #if defined(NWB_HAS_F16C)
     return HalfConvertDetail::FloatBufferToHalfF16C(outHalfBuffer, floatBuffer, count);
 #else
-    for(usize i = 0; i < count; ++i)
+    for(usize i = 0u; i < count; ++i)
         outHalfBuffer[i] = ConvertFloatToHalf(floatBuffer[i]);
     return outHalfBuffer;
 #endif
@@ -273,7 +273,7 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 #if defined(NWB_HAS_F16C)
     return HalfConvertDetail::HalfBufferToFloatF16C(outFloatBuffer, halfBuffer, count);
 #else
-    for(usize i = 0; i < count; ++i)
+    for(usize i = 0u; i < count; ++i)
         outFloatBuffer[i] = ConvertHalfToFloat(halfBuffer[i]);
     return outFloatBuffer;
 #endif

@@ -175,7 +175,7 @@ bool Frame::init(){
 
     Common::LinuxFrameBackend::Enum backendOrder[FrameDetail::s_LinuxBackendOrderCapacity] = {};
     const usize backendCount = FrameDetail::BuildBackendOrder(backendOrder);
-    for(usize i = 0; i < backendCount; ++i){
+    for(usize i = 0u; i < backendCount; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.setBackend(backend);

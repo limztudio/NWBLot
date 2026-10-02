@@ -488,7 +488,7 @@ static void OnToplevelConfigure(void* data, xdg_toplevel* toplevel, i32 width, i
     if(states && states->data && states->size >= sizeof(u32)){
         const auto* state = static_cast<const u32*>(states->data);
         const usize stateCount = states->size / sizeof(u32);
-        for(usize i = 0; i < stateCount; ++i){
+        for(usize i = 0u; i < stateCount; ++i){
             if(state[i] == XDG_TOPLEVEL_STATE_ACTIVATED){
                 activated = true;
                 break;
@@ -1093,7 +1093,7 @@ bool InitWaylandFrame(Frame& frame){
         return false;
     }
 
-    for(u32 i = 0; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
+    for(u32 i = 0u; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
         if(!RoundtripDisplay(context->display, NWB_TEXT("initial configure roundtrip"))){
             CleanupWaylandFrame(frame);
             return false;

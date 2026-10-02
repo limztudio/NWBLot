@@ -562,7 +562,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
     const usize colorFormatCount = fbinfo.colorFormats.size();
     outBlendAttachments.clear();
     outBlendAttachments.reserve(colorFormatCount);
-    for(usize i = 0; i < colorFormatCount; ++i)
+    for(usize i = 0u; i < colorFormatCount; ++i)
         outBlendAttachments.push_back(ConvertBlendState(blendState.targets[i]));
 
     auto colorBlending = MakeVkStruct<VkPipelineColorBlendStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO);

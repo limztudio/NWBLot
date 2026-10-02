@@ -117,7 +117,7 @@ template<typename VisitTriangle>
 ){
     if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
-    for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
+    for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];
         if(face.num_indices < s_TriangleIndexCount)
             continue;

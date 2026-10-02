@@ -299,7 +299,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
         if(taskScheduler().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
             taskScheduler().parallelFor(static_cast<usize>(0), numConstants, fillConstant);
         else{
-            for(usize i = 0; i < numConstants; ++i)
+            for(usize i = 0u; i < numConstants; ++i)
                 fillConstant(i);
         }
     }
@@ -364,7 +364,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     );
     bindingInfos.reserve(attributeCount);
 
-    for(u32 i = 0; i < attributeCount; ++i){
+    for(u32 i = 0u; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
         if(ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
@@ -486,7 +486,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     if(taskScheduler().isParallelEnabled() && attributeCount >= s_ParallelInputLayoutThreshold)
         taskScheduler().parallelFor(static_cast<usize>(0), attributeCount, s_InputLayoutGrainSize, fillVkAttribute);
     else{
-        for(usize i = 0; i < attributeCount; ++i)
+        for(usize i = 0u; i < attributeCount; ++i)
             fillVkAttribute(i);
     }
 

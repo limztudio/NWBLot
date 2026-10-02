@@ -82,7 +82,7 @@ template<typename Run>
     utf8Args.reserve(argCount);
     utf8Argv.reserve(argCount + 1u);
 
-    for(usize i = 0; i < argCount; ++i){
+    for(usize i = 0u; i < argCount; ++i){
         if(argv == nullptr || argv[i] == nullptr){
             utf8Args.emplace_back(arena);
             utf8Argv.push_back(nullptr);

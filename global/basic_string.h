@@ -92,7 +92,7 @@ template<usize N>
 struct ConstString{
     char data[N];
     constexpr ConstString(const char(&str)[N]){
-        for(usize i = 0; i < N; ++i)
+        for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
     constexpr operator AStringView()const{ return AStringView(data, N - 1u); }
@@ -102,7 +102,7 @@ template<usize N>
 struct ConstWString{
     wchar data[N];
     constexpr ConstWString(const wchar(&str)[N]){
-        for(usize i = 0; i < N; ++i)
+        for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
     constexpr operator WStringView()const{ return WStringView(data, N - 1u); }
@@ -232,7 +232,7 @@ inline void WriteWideCodePoint(Out& out, u32 codePoint){
 
 template<typename Out>
 inline void WriteWStringAsUtf8(Out& out, const WStringView src){
-    for(usize i = 0; i < src.size(); ++i){
+    for(usize i = 0u; i < src.size(); ++i){
         u32 codePoint = static_cast<u32>(src[i]);
 
 #if WCHAR_MAX <= 0xFFFF

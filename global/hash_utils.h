@@ -34,7 +34,7 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
     if(bytes == nullptr || byteCount == 0)
         return hash;
 
-    for(usize i = 0; i < byteCount; ++i){
+    for(usize i = 0u; i < byteCount; ++i){
         hash ^= static_cast<u64>(bytes[i]);
         hash *= s_Fnv64Prime;
     }
@@ -208,7 +208,7 @@ inline void AppendFixedHexImpl(const u64 value, const u32 nibbleCount, StringT& 
         return;
 
     using CharT = typename StringT::value_type;
-    for(u32 nibbleIndex = 0; nibbleIndex < nibbleCount; ++nibbleIndex){
+    for(u32 nibbleIndex = 0u; nibbleIndex < nibbleCount; ++nibbleIndex){
         const u32 shift = (nibbleCount - 1u - nibbleIndex) * s_HexNibbleBits;
         const usize nibble = static_cast<usize>((value >> shift) & s_HexNibbleMask);
         outText.push_back(HexDigit<CharT>(nibble));

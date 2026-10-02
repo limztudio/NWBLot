@@ -73,7 +73,7 @@ inline bool operator==(const FramebufferInfo& lhs, const FramebufferInfo& rhs){
         return false;
     if(lhs.colorFormats.size() != rhs.colorFormats.size())
         return false;
-    for(usize i = 0; i < lhs.colorFormats.size(); ++i){
+    for(usize i = 0u; i < lhs.colorFormats.size(); ++i){
         if(lhs.colorFormats[i] != rhs.colorFormats[i])
             return false;
     }

@@ -158,7 +158,7 @@ inline bool FindTextureColorAttachmentClearTarget(
     TextureAttachmentClearTarget& outTarget
 ){
     u32 colorAttachmentIndex = 0u;
-    for(usize i = 0; i < fbDesc.colorAttachments.size(); ++i){
+    for(usize i = 0u; i < fbDesc.colorAttachments.size(); ++i){
         const FramebufferAttachment& attachment = fbDesc.colorAttachments[i];
         if(!attachment.texture)
             continue;
@@ -784,7 +784,7 @@ inline bool BuildTextureStencilClearPattern(const Format::Enum format, const u8 
 
 inline void FillTextureClearBytes(void* bytes, const usize byteCount, const u8* pattern, const u32 patternSize){
     u8* outBytes = static_cast<u8*>(bytes);
-    for(usize offset = 0; offset < byteCount; offset += patternSize)
+    for(usize offset = 0u; offset < byteCount; offset += patternSize)
         NWB_MEMCPY(outBytes + offset, byteCount - offset, pattern, patternSize);
 }
 

@@ -62,7 +62,7 @@ static bool ParseVariantField(
     if(variantValue->isList()){
         const auto& list = variantValue->asList();
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
-        for(usize i = 0; i < list.size(); ++i){
+        for(usize i = 0u; i < list.size(); ++i){
             if(!list[i].isString()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' list elements must be strings")
                     , PathToString<tchar>(nwbFilePath)
@@ -74,7 +74,7 @@ static bool ParseVariantField(
         }
 
         rawVariant.reserve(rawVariantSize);
-        for(usize i = 0; i < list.size(); ++i){
+        for(usize i = 0u; i < list.size(); ++i){
             if(i > 0)
                 rawVariant += ';';
             const Core::Metascript::MStringView variantText = list[i].asString();

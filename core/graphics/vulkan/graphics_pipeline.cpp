@@ -159,7 +159,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
         + (desc.depthAttachment.texture ? 1u : 0u)
         + (desc.shadingRateAttachment.texture ? 1u : 0u)
     );
-    for(u32 i = 0; i < colorAttachmentCount; ++i){
+    for(u32 i = 0u; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture)
             fb->m_resources.emplace_back(desc.colorAttachments[i].texture, TextureHandle::deleter_type(&m_context.objectArena));
     }

@@ -150,7 +150,8 @@ void SystemScheduler::execute(World& world, f32 delta){
 
     // Keep world/system data alive if publishing a later node throws after earlier work has started.
     ScopeExit drainSubmitted([&]()noexcept{ tasks.drain(); });
-    for(usize systemIndex = 0u; systemIndex < m_allSystems.size(); ++systemIndex){
+    const usize systemCount = m_allSystems.size();
+    for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
         dependencies.clear();
         for(const usize predecessor : m_dependencies[systemIndex])
             dependencies.push_back(handles[predecessor]);

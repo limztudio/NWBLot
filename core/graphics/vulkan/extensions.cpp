@@ -409,7 +409,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return true;
     };
 
-    for(usize i = 0; i < numDescs; ++i){
+    for(usize i = 0u; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer){
             rejectCommandRecording(s_OperationName, NWB_TEXT("a source or destination buffer is null"));
@@ -579,7 +579,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return;
 
     m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(numDescs), vkConvertDescs.data());
-    for(usize i = 0; i < numDescs; ++i){
+    for(usize i = 0u; i < numDescs; ++i){
         retainResource(convertDescs[i].src.buffer);
         retainResource(convertDescs[i].dst.buffer);
     }

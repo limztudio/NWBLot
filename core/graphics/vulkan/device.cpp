@@ -261,13 +261,13 @@ Device::Device(const DeviceDesc& desc)
     m_context.rayTracingInvocationReorderFeatureEnabled = desc.rayTracingInvocationReorderFeatureEnabled;
     m_context.rayTracingInvocationReorderExtFeatureEnabled = desc.rayTracingInvocationReorderExtFeatureEnabled;
 
-    for(usize i = 0; i < desc.numInstanceExtensions; ++i){
+    for(usize i = 0u; i < desc.numInstanceExtensions; ++i){
         const AStringView ext = desc.instanceExtensions[i];
         if(ext == VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
             m_context.extensions.EXT_debug_utils = true;
     }
 
-    for(usize i = 0; i < desc.numDeviceExtensions; ++i){
+    for(usize i = 0u; i < desc.numDeviceExtensions; ++i){
         const AStringView ext = desc.deviceExtensions[i];
         if(ext == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)
             m_context.extensions.KHR_synchronization2 = true;

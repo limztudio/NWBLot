@@ -176,7 +176,7 @@ static constexpr usize s_NumFormatMappings = LengthOf(s_FormatMappings);
 
 
 VkFormat ConvertFormat(Format::Enum format){
-    for(usize i = 0; i < s_NumFormatMappings; ++i){
+    for(usize i = 0u; i < s_NumFormatMappings; ++i){
         if(s_FormatMappings[i].format == format)
             return s_FormatMappings[i].vkFormat;
     }

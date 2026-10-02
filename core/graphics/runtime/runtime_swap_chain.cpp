@@ -91,7 +91,7 @@ bool GraphicsRuntime::backBufferResized(){
     const u32 backBufferCount = getBackBufferCount();
     m_swapChainFramebuffers.clear();
     m_swapChainFramebuffers.reserve(backBufferCount);
-    for(u32 index = 0; index < backBufferCount; ++index){
+    for(u32 index = 0u; index < backBufferCount; ++index){
         FramebufferHandle framebuffer = getDevice().createFramebuffer(
             FramebufferDesc().addColorAttachment(getBackBuffer(index))
         );

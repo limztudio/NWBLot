@@ -88,7 +88,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
     NWB_ASSERT_MSG(lane < NameDetail::s_HashLaneCount, NWB_TEXT("ShaderArchive: invalid hash lane"));
 
     const u64 laneValue = nameHash.qwords[lane];
-    for(u32 byteIndex = 0; byteIndex < sizeof(laneValue); ++byteIndex){
+    for(u32 byteIndex = 0u; byteIndex < sizeof(laneValue); ++byteIndex){
         hash ^= static_cast<u8>((laneValue >> (byteIndex * NameDetail::s_NameHashByteBitCount)) & NameDetail::s_NameHashByteMask);
         hash *= s_Fnv64Prime;
     }
@@ -153,7 +153,7 @@ Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringVi
 
     NameHash derivedHash = {};
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
-    for(u32 lane = 0; lane < NameDetail::s_HashLaneCount; ++lane){
+    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         u64 laneHash = UpdateFnv64(
             s_Fnv64OffsetBasis,
             reinterpret_cast<const u8*>(s_VirtualPathPrefix.data()),
@@ -184,7 +184,7 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
     Sort(sortedRecords.begin(), sortedRecords.end(), [](const Record* lhs, const Record* rhs){ return __hidden_shader_archive::LessRecordPointer(MakeNotNull(lhs), MakeNotNull(rhs)); });
 
     usize variantTextBinaryBytes = 0;
-    for(usize i = 0; i < sortedRecords.size(); ++i){
+    for(usize i = 0u; i < sortedRecords.size(); ++i){
         const Record& record = *sortedRecords[i];
         if(!__hidden_shader_archive::ValidateRecord(record))
             return false;
@@ -276,7 +276,7 @@ bool ShaderArchive::deserializeIndex(const GraphicsBytes& binary, GraphicsVector
     GraphicsVector<Record> parsedRecords(outRecords.get_allocator());
     parsedRecords.reserve(header.recordCount);
     const Record* previousRecord = nullptr;
-    for(u32 i = 0; i < header.recordCount; ++i){
+    for(u32 i = 0u; i < header.recordCount; ++i){
         __hidden_shader_archive::RecordHeaderDisk recordHeader{};
         if(!ReadPOD(binary, cursor, recordHeader)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::deserializeIndex failed: missing record header at index {}"), i);

@@ -647,7 +647,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
             arguments.push_back(AStringView(ownedArguments.back()));
         }
 
-        for(u32 i = 0; i < request.defineCount; ++i){
+        for(u32 i = 0u; i < request.defineCount; ++i){
             const ShaderCook::ShaderMacroDefinition& define = request.defines[i];
             ownedArguments.emplace_back("-D", argumentArena);
             __hidden_slang_compiler::ScratchString& defineArgument = ownedArguments.back();

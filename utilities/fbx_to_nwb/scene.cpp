@@ -129,7 +129,7 @@ UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool i
         return instances;
 
     instances.reserve(scene->nodes.count);
-    for(usize i = 0; i < scene->nodes.count; ++i){
+    for(usize i = 0u; i < scene->nodes.count; ++i){
         ufbx_node* node = scene->nodes.data[i];
         if(!node || !node->mesh)
             continue;

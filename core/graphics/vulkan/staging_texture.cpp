@@ -81,7 +81,7 @@ inline bool BuildStagingTextureLayout(
     outMipLayouts.reserve(desc.mipLevels);
 
     u64 arrayByteSize = 0;
-    for(u32 mip = 0; mip < desc.mipLevels; ++mip){
+    for(u32 mip = 0u; mip < desc.mipLevels; ++mip){
         VulkanDetail::StagingTextureMipLayout layout;
         u64 mipSize = 0;
         if(!BuildStagingTextureMipLayout(desc, formatLayout, mip, layout, mipSize)){

@@ -211,7 +211,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         return true;
     };
 
-    for(usize segmentIndex = 0;; ++segmentIndex){
+    for(usize segmentIndex = 0u;; ++segmentIndex){
         const Path currentPath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
         const bool exists = FileExists(currentPath, errorCode);
         if(errorCode){
@@ -284,7 +284,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
         return false;
     }
 
-    for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
+    for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
         const Path sourcePath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
         const Path destinationPath = ::MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
@@ -305,7 +305,7 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
 static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     ErrorCode errorCode;
 
-    for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
+    for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
         const Path segmentPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
         errorCode.clear();
         if(!RemoveFile(segmentPath, errorCode)){
@@ -369,7 +369,7 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
         return false;
     }
 
-    for(usize segmentIndex = 0;; ++segmentIndex){
+    for(usize segmentIndex = 0u;; ++segmentIndex){
         const Path hashedPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
 
         const bool exists = FileExists(hashedPath, errorCode);

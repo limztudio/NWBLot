@@ -156,7 +156,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
     }
     outJointPalette.reserve(jointCount);
 
-    for(usize jointIndex = 0; jointIndex < jointCount; ++jointIndex){
+    for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         const SIMDMatrix inverseBindMatrix = hasInverseBindMatrices
             ? LoadFloat(instance.inverseBindMatrices[jointIndex])
             : SIMDMatrix{}

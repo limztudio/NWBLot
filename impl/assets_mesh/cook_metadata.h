@@ -185,7 +185,7 @@ bool MeshCookMetadata::ParseMetadataF32TupleWithLabel(
     }
 
     const auto& list = value.asList();
-    for(usize i = 0; i < ComponentCount; ++i){
+    for(usize i = 0u; i < ComponentCount; ++i){
         const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(list[i], outValues[i]);
         if(failure == MetadataF32ValueFailure::None)
             continue;
@@ -230,7 +230,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
 
     const auto& list = field->asList();
     outValues.reserve(list.size());
-    for(usize i = 0; i < list.size(); ++i){
+    for(usize i = 0u; i < list.size(); ++i){
         alignas(s_MetadataTupleAlignment) f32 tuple[ComponentCount] = {};
         if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple, scratchArena)){
             outValues.clear();
@@ -271,7 +271,7 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(
 ){
     if(value.isList()){
         const auto& list = value.asList();
-        for(usize i = 0; i < list.size(); ++i){
+        for(usize i = 0u; i < list.size(); ++i){
             const ScratchString childLabel = MakeIndexedLabel(scratchArena, label, i);
             if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, outIndices, scratchArena))
                 return false;

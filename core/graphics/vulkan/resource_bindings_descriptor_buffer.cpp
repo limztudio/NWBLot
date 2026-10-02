@@ -311,7 +311,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
         return result;
     }
 
-    for(usize i = 0; i < segment.freeRanges.size(); ++i){
+    for(usize i = 0u; i < segment.freeRanges.size(); ++i){
         FreeRange range = segment.freeRanges[i];
         if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
             continue;

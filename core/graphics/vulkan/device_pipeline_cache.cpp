@@ -80,7 +80,7 @@ static bool RetrievePipelineCacheData(
 
     outData.clear();
 
-    for(usize attempt = 0; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
+    for(usize attempt = 0u; attempt < s_PipelineCacheDataMaxAttempts; ++attempt){
         size_t cacheSize = 0;
         VkResult res = deviceDispatch.vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
         if(res != VK_SUCCESS){

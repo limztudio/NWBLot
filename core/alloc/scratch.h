@@ -154,7 +154,7 @@ public:
     explicit ScratchArena(const Name& allocationLog, usize initSize = s_DefaultInitialChunkBytes)
         : Base(allocationLog)
     {
-        for(usize i = 0; i < LengthOf(m_bucket); ++i){
+        for(usize i = 0u; i < LengthOf(m_bucket); ++i){
             auto& bucket = m_bucket[i];
             bucket.active = nullptr;
             bucket.cached = nullptr;

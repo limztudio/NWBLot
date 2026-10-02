@@ -86,7 +86,7 @@ public:
         if(textSize > s_MaxLength)
             return false;
 
-        for(usize i = 0; i < textSize; ++i){
+        for(usize i = 0u; i < textSize; ++i){
             if(text[i] == value_type{}){
                 clear();
                 return false;
@@ -118,7 +118,7 @@ public:
             return false;
 
         const u8 oldSize = m_size;
-        for(usize i = 0; i < textSize; ++i){
+        for(usize i = 0u; i < textSize; ++i){
             if(text[i] == value_type{}){
                 m_storage[oldSize] = value_type{};
                 return false;

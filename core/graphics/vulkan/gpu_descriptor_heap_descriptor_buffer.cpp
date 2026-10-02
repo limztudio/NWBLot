@@ -476,7 +476,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         }
         outBlock = block;
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
-        for(u32 c = 0; c < classCount; ++c){
+        for(u32 c = 0u; c < classCount; ++c){
             const GpuDescriptorClass::Enum cls = classes[c];
             const auto it = bindingOffsets.find(getRegisterSlot(cls));
             if(it == bindingOffsets.end()){

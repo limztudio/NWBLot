@@ -456,7 +456,7 @@ bool BlendState::RenderTarget::usesConstantColor()const{
 
 bool BlendState::usesConstantColor(u32 numTargets)const{
     NWB_ASSERT(numTargets <= s_MaxRenderTargets);
-    for(u32 rt = 0; rt < numTargets; ++rt){
+    for(u32 rt = 0u; rt < numTargets; ++rt){
         if(targets[rt].usesConstantColor())
             return true;
     }
@@ -502,7 +502,7 @@ bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment,
 
 FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     const usize colorAttachmentCount = desc.colorAttachments.size();
-    for(usize i = 0; i < colorAttachmentCount; ++i){
+    for(usize i = 0u; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
         const Format::Enum attachmentFormat = attachment.format == Format::UNKNOWN && attachment.texture
             ? attachment.texture->getCreationDescription().format

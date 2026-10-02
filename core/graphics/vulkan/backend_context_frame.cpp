@@ -383,7 +383,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
     VkSemaphoreCreateInfo semInfo = {};
     semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-    for(usize i = 0; i < count; ++i){
+    for(usize i = 0u; i < count; ++i){
         VkSemaphore sem = VK_NULL_HANDLE;
         res = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
         if(res != VK_SUCCESS){

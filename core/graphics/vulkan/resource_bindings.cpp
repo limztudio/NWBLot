@@ -162,7 +162,7 @@ bool BuildPipelineRenderingInfo(
 ){
     outColorFormats.clear();
     outColorFormats.reserve(fbinfo.colorFormats.size());
-    for(u32 i = 0; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
+    for(u32 i = 0u; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
@@ -468,7 +468,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     auto* layout = NewArenaObject<BindingLayout>(m_context.objectArena, m_context);
     layout->m_desc = desc;
 
-    for(usize i = 0; i < desc.bindings.size(); ++i){
+    for(usize i = 0u; i < desc.bindings.size(); ++i){
         const auto& item = desc.bindings[i];
         if(item.type == ResourceType::None)
             continue;
@@ -531,7 +531,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     registerSpaceSlots.reserve(desc.registerSpaces.size());
 
     const u32 maxCapacity = VulkanDetail::NormalizeBindlessDescriptorCapacity(desc.maxCapacity);
-    for(usize i = 0; i < desc.registerSpaces.size(); ++i){
+    for(usize i = 0u; i < desc.registerSpaces.size(); ++i){
         const auto& item = desc.registerSpaces[i];
         if(
             !VulkanDetail::IsBindlessRegisterSpaceType(item.type)

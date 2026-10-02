@@ -32,13 +32,6 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void CheckPacketQueries(const usize taskCount){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -130,9 +123,9 @@ static void CheckPacketQueries(const usize taskCount){
         if(iteration != 0u && sequenceNanoseconds < minimumSequenceNanoseconds)
             minimumSequenceNanoseconds = sequenceNanoseconds;
     }
-    RecordUnsignedProperty("packet_query_task_count", taskCount);
-    RecordUnsignedProperty("packet_order_query_ns", minimumOrderNanoseconds);
-    RecordUnsignedProperty("packet_sequence_query_ns", minimumSequenceNanoseconds);
+    RecordUnsignedTestProperty("packet_query_task_count", taskCount);
+    RecordUnsignedTestProperty("packet_order_query_ns", minimumOrderNanoseconds);
+    RecordUnsignedTestProperty("packet_sequence_query_ns", minimumSequenceNanoseconds);
 }
 
 

@@ -419,13 +419,6 @@ TEST(MaterialTextureImport, ExistingTexturesRequireNoStorageBeyondReservedOrdere
     }
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkTextureImports(
     const usize uniqueCount,
     const usize requestCount,
@@ -481,14 +474,14 @@ static void BenchmarkTextureImports(
     EXPECT_EQ(view.resourceCount(), uniqueCount + unrelatedCount);
     for(usize index = 0u; index < resources.size(); ++index)
         EXPECT_EQ(view.textureForResource(resources[index]), requests[index].get());
-    RecordUnsignedProperty("material_texture_import_ns", elapsed);
-    RecordUnsignedProperty("material_texture_import_iterations", iterations);
-    RecordUnsignedProperty("material_texture_import_request_count", requestCount);
-    RecordUnsignedProperty("material_texture_import_unique_count", uniqueCount);
-    RecordUnsignedProperty("material_texture_import_unrelated_count", unrelatedCount);
-    RecordUnsignedProperty("material_texture_import_initially_missing", preimportRequested ? 0u : uniqueCount);
-    RecordUnsignedProperty("material_texture_import_scratch_peak_bytes", peak);
-    RecordUnsignedProperty("material_texture_import_scratch_reserved_bytes", reserved);
+    Tests::RecordUnsignedTestProperty("material_texture_import_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("material_texture_import_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("material_texture_import_request_count", requestCount);
+    Tests::RecordUnsignedTestProperty("material_texture_import_unique_count", uniqueCount);
+    Tests::RecordUnsignedTestProperty("material_texture_import_unrelated_count", unrelatedCount);
+    Tests::RecordUnsignedTestProperty("material_texture_import_initially_missing", preimportRequested ? 0u : uniqueCount);
+    Tests::RecordUnsignedTestProperty("material_texture_import_scratch_peak_bytes", peak);
+    Tests::RecordUnsignedTestProperty("material_texture_import_scratch_reserved_bytes", reserved);
 }
 
 TEST(MaterialTextureImportBenchmark, DISABLED_Unique1){

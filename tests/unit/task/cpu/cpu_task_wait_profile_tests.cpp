@@ -8,6 +8,7 @@
 #include <global/termination.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -60,19 +61,11 @@ private:
 };
 
 
-void RecordUnsigned(const AStringView key, const u64 value){
-    constexpr usize s_TextCapacity = 32u;
-    char text[s_TextCapacity] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void RecordSample(const u32 sample, const u64 nanoseconds, const u64 checksum){
     if(sample < s_Warmups)
         return;
-    RecordUnsigned(s_SampleKeys[sample - s_Warmups], nanoseconds);
-    RecordUnsigned("checksum", checksum);
+    NWB::Tests::RecordUnsignedTestProperty(s_SampleKeys[sample - s_Warmups], nanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("checksum", checksum);
 }
 
 [[nodiscard]] u64 Work(u64 value)noexcept{
@@ -95,9 +88,9 @@ void ProfileWaiters(Alloc::ScratchArena& scratch, const u32 workers, const u32 w
     config.workerCount = workers;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
-    RecordUnsigned("worker_count", workers);
-    RecordUnsigned("scope_waiters", waiterCount);
-    RecordUnsigned("ready_tasks", s_TaskCount);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", workers);
+    NWB::Tests::RecordUnsignedTestProperty("scope_waiters", waiterCount);
+    NWB::Tests::RecordUnsignedTestProperty("ready_tasks", s_TaskCount);
     for(u32 sample = 0u; sample < s_Warmups + s_Samples; ++sample){
         for(u64& value : output)
             value = 0u;
@@ -170,10 +163,10 @@ void ProfileContributions(Alloc::ScratchArena& scratch, const u32 workers, const
     Atomic<u32> continuations{ 0u };
     Atomic<u32> leaves{ 0u };
     CpuTaskScheduler scheduler(Config(workers));
-    RecordUnsigned("worker_count", workers);
-    RecordUnsigned("root_prerequisites", roots);
-    RecordUnsigned("continuation_chain", chain);
-    RecordUnsigned("join_mode", joinMode);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", workers);
+    NWB::Tests::RecordUnsignedTestProperty("root_prerequisites", roots);
+    NWB::Tests::RecordUnsignedTestProperty("continuation_chain", chain);
+    NWB::Tests::RecordUnsignedTestProperty("join_mode", joinMode);
     for(u32 sample = 0u; sample < s_Warmups + s_Samples; ++sample){
         for(u32& value : visits)
             value = 0u;

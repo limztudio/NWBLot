@@ -4,6 +4,8 @@
 
 #include "list_scene.h"
 
+#include "smoke_geometry.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -33,25 +35,6 @@ namespace __hidden_ui_list_smoke{
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 340.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 32.0f, 312.0f, 140.0f, 36.0f };
 static constexpr f32 s_RowHeight = 24.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
-
-[[nodiscard]] bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
-
-void LogRect(const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: geometry sequence={} {}={},{},{},{}")
-        , sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,8 +151,8 @@ void UiListSmokeScene::observeState(){
     if(
         m_sequence != 0u && !m_displayChanged && current == m_lastValues
         && placement.offset == m_lastPlacement.offset
-        && __hidden_ui_list_smoke::SameRect(placement.bounds, m_lastPlacement.bounds)
-        && __hidden_ui_list_smoke::SameRect(placement.thumb, m_lastPlacement.thumb)
+        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
+        && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
     )
         return;
     ++m_sequence;
@@ -180,12 +163,12 @@ void UiListSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
         , current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("list"), placement.bounds);
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("viewport"), placement.viewport);
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("track"), placement.track);
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("selected_row"), selectedRow());
-    __hidden_ui_list_smoke::LogRect(m_sequence, NWB_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("selected_row"), selectedRow());
+    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
 }
 
 void UiListSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -196,7 +179,7 @@ void UiListSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 20.0f, y, 14.0f, 12.0f },
-                __hidden_ui_list_smoke::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

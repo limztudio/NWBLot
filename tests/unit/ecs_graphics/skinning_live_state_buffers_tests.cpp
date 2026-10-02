@@ -9,6 +9,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -342,16 +343,11 @@ static void BenchmarkCollection(const usize instanceCount, const usize repeatCou
     }
     EXPECT_EQ(outputCount, repeatCount * (shared ? 1u : instanceCount) * s_BuffersPerInstance);
     EXPECT_EQ(outputArena.memoryStats().usedBytes, 0u);
-    char elapsedText[32u] = {};
-    char repeatText[32u] = {};
-    char outputText[32u] = {};
-    char scratchPeakText[32u] = {};
-    char scratchReservedText[32u] = {};
-    testing::Test::RecordProperty("live_buffers_ns", FormatDecimal(elapsed, elapsedText).data());
-    testing::Test::RecordProperty("live_buffers_repeat_count", FormatDecimal(repeatCount, repeatText).data());
-    testing::Test::RecordProperty("live_buffers_output_count", FormatDecimal(outputCount, outputText).data());
-    testing::Test::RecordProperty("live_buffers_scratch_peak_bytes", FormatDecimal(scratchPeak, scratchPeakText).data());
-    testing::Test::RecordProperty("live_buffers_scratch_reserved_bytes", FormatDecimal(scratchReserved, scratchReservedText).data());
+    Tests::RecordUnsignedTestProperty("live_buffers_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("live_buffers_repeat_count", repeatCount);
+    Tests::RecordUnsignedTestProperty("live_buffers_output_count", outputCount);
+    Tests::RecordUnsignedTestProperty("live_buffers_scratch_peak_bytes", scratchPeak);
+    Tests::RecordUnsignedTestProperty("live_buffers_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(SkinningLiveStateBuffers, DISABLED_BenchmarkSingleInstance){

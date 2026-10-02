@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -82,15 +83,13 @@ namespace __hidden_allocator_churn_tests{
 TEST(GlobalArenaTests, UnalignedAllocationChurnPreservesPayloadAndAccounting){
     NWB::Core::Alloc::GlobalArena arena("GlobalArenaTests.UnalignedAllocationChurn");
     const u64 elapsedNanoseconds = __hidden_allocator_churn_tests::VerifyAllocationChurn(arena, 1u);
-    char durationText[32u] = {};
-    RecordProperty("allocation_churn_ns", FormatDecimal(elapsedNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("allocation_churn_ns", elapsedNanoseconds);
 }
 
 TEST(GlobalArenaTests, AlignedAllocationChurnPreservesPayloadAndAccounting){
     NWB::Core::Alloc::GlobalArena arena("GlobalArenaTests.AlignedAllocationChurn");
     const u64 elapsedNanoseconds = __hidden_allocator_churn_tests::VerifyAllocationChurn(arena, 256u);
-    char durationText[32u] = {};
-    RecordProperty("allocation_churn_ns", FormatDecimal(elapsedNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("allocation_churn_ns", elapsedNanoseconds);
 }
 
 

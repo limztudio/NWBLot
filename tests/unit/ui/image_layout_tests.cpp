@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/image.h>
 
 #include <gtest/gtest.h>
@@ -38,16 +40,9 @@ static void ExpectMetrics(const ImageMetrics& actual, const ImageMetrics& expect
     EXPECT_EQ(BitCast<u32>(actual.contentSize.y), BitCast<u32>(expected.contentSize.y));
 }
 
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
-    EXPECT_EQ(BitCast<u32>(actual.y), BitCast<u32>(expected.y));
-    EXPECT_EQ(BitCast<u32>(actual.width), BitCast<u32>(expected.width));
-    EXPECT_EQ(BitCast<u32>(actual.height), BitCast<u32>(expected.height));
-}
-
 static void ExpectPlacement(const ImagePlacement& actual, const ImagePlacement& expected){
-    ExpectRect(actual.bounds, expected.bounds);
-    ExpectRect(actual.clip, expected.clip);
+    UiWidgetTests::ExpectRectExact(actual.bounds, expected.bounds);
+    UiWidgetTests::ExpectRectExact(actual.clip, expected.clip);
 }
 
 
@@ -86,11 +81,11 @@ TEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins
     const Rect bounds{ -100.0f, -50.0f, 200.0f, 100.0f };
     ImagePlacement placement;
     ASSERT_TRUE(ImageLayout::Place(bounds, { 150.0f, 0.0f, 20.0f, 20.0f }, placement));
-    ExpectRect(placement.bounds, bounds);
-    ExpectRect(placement.clip, { 150.0f, 0.0f, 0.0f, 20.0f });
+    UiWidgetTests::ExpectRectExact(placement.bounds, bounds);
+    UiWidgetTests::ExpectRectExact(placement.clip, { 150.0f, 0.0f, 0.0f, 20.0f });
     ASSERT_TRUE(ImageLayout::Place({ -10.0f, -20.0f, 0.0f, 0.0f }, bounds, placement));
-    ExpectRect(placement.bounds, { -10.0f, -20.0f, 0.0f, 0.0f });
-    ExpectRect(placement.clip, placement.bounds);
+    UiWidgetTests::ExpectRectExact(placement.bounds, { -10.0f, -20.0f, 0.0f, 0.0f });
+    UiWidgetTests::ExpectRectExact(placement.clip, placement.bounds);
 }
 
 TEST(UiImageLayoutTests, SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainValid){
@@ -98,12 +93,12 @@ TEST(UiImageLayoutTests, SubnormalPositiveBoundsAndExtremeFiniteEndpointsRemainV
     const Rect small{ 0.0f, 0.0f, tiny, tiny };
     ImagePlacement placement;
     ASSERT_TRUE(ImageLayout::Place(small, small, placement));
-    ExpectRect(placement.bounds, small);
-    ExpectRect(placement.clip, small);
+    UiWidgetTests::ExpectRectExact(placement.bounds, small);
+    UiWidgetTests::ExpectRectExact(placement.clip, small);
     const Rect large{ -Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f };
     ASSERT_TRUE(ImageLayout::Place(large, large, placement));
-    ExpectRect(placement.bounds, large);
-    ExpectRect(placement.clip, large);
+    UiWidgetTests::ExpectRectExact(placement.bounds, large);
+    UiWidgetTests::ExpectRectExact(placement.clip, large);
 }
 
 TEST(UiImageLayoutTests, InvalidLayoutSizesTintsAndDensityPreservePreviouslyMeasuredMetrics){

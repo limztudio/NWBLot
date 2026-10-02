@@ -43,13 +43,6 @@ namespace TerminalDependencyScenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void CheckTerminalDependencies(
     const usize readerCount,
     const TerminalDependencyScenario::Enum scenario,
@@ -238,11 +231,11 @@ static void CheckTerminalDependencies(
         }
     }
     if(benchmark){
-        RecordUnsignedProperty("reader_count", readerCount);
-        RecordUnsignedProperty("compile_ns", minimumCompileNanoseconds);
-        RecordUnsignedProperty("resource_state_planning_ns", minimumResourcePlanningNanoseconds);
-        RecordUnsignedProperty("packet_dependency_planning_ns", minimumDependencyPlanningNanoseconds);
-        RecordUnsignedProperty("scratch_peak_bytes", scratchArena.memoryStats().peakUsedBytes);
+        RecordUnsignedTestProperty("reader_count", readerCount);
+        RecordUnsignedTestProperty("compile_ns", minimumCompileNanoseconds);
+        RecordUnsignedTestProperty("resource_state_planning_ns", minimumResourcePlanningNanoseconds);
+        RecordUnsignedTestProperty("packet_dependency_planning_ns", minimumDependencyPlanningNanoseconds);
+        RecordUnsignedTestProperty("scratch_peak_bytes", scratchArena.memoryStats().peakUsedBytes);
     }
 }
 

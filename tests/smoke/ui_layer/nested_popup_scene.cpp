@@ -4,6 +4,8 @@
 
 #include "nested_popup_scene.h"
 
+#include "smoke_geometry.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -41,19 +43,6 @@ static constexpr Array<TStringView, 26u> s_RectNames{
     NWB_TEXT("search_popup"), NWB_TEXT("search_query"), NWB_TEXT("search_row2"), NWB_TEXT("menu_anchor"),
     NWB_TEXT("menu"), NWB_TEXT("menu_row2")
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
-
-[[nodiscard]] static bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,7 +274,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
                 : target.popup.instanceGeneration == m_parent.instanceGeneration() ? 1u : 3u;
         }
         for(usize index = 0u; index < m_rectangles.size(); ++index){
-            if(__hidden_ui_nested_popup_smoke::SameRect(target.rectangle, m_rectangles[index])){
+            if(SameSmokeRect(target.rectangle, m_rectangles[index])){
                 m_focusCode = static_cast<u32>(index + 1u);
                 break;
             }
@@ -294,7 +283,7 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
     const auto current = values();
     bool geometryChanged = false;
     for(usize index = 0u; index < m_rectangles.size(); ++index)
-        geometryChanged |= !__hidden_ui_nested_popup_smoke::SameRect(m_rectangles[index], m_lastRectangles[index]);
+        geometryChanged |= !SameSmokeRect(m_rectangles[index], m_lastRectangles[index]);
     if(m_sequence != 0u && !m_displayChanged && !geometryChanged && current == m_lastValues)
         return;
     ++m_sequence;
@@ -307,13 +296,8 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
         , current[14], current[15], current[16], current[17], current[18], current[19], current[20]
         , current[21], current[22], current[23], current[24], current[25], current[26], current[27], current[28]
     );
-    for(usize index = 0u; index < m_rectangles.size(); ++index){
-        const Rect& rectangle = m_rectangles[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: geometry sequence={} {}={},{},{},{}")
-            , m_sequence, __hidden_ui_nested_popup_smoke::s_RectNames[index]
-            , rectangle.x, rectangle.y, rectangle.width, rectangle.height
-        );
-    }
+    for(usize index = 0u; index < m_rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiNestedPopupSmoke"), m_sequence, __hidden_ui_nested_popup_smoke::s_RectNames[index], m_rectangles[index]);
 }
 
 void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -324,7 +308,7 @@ void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
-                __hidden_ui_nested_popup_smoke::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

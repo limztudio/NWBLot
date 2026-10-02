@@ -89,14 +89,10 @@ static bool ReturnsAfterFailedBuilderCall(const AStringView text, const AStringV
     return tail == s_RETURN || tail.substr(0u, 12u) == s_RETURN_FALSE;
 }
 
-static TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
-}
-
 
 TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString swTraceSource;
     AString hwTraceSource;
@@ -148,7 +144,7 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 // Boolean GI occlusion: same geometric-blocking acceptance as closest, without attribute/material work.
 TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString commonSource;
     AString swSource;
@@ -174,7 +170,7 @@ TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction
 // Trace dispatch must declare the sampled textures captured during material preflight.
 TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString deferredLightingTaskGraphSource;
     AString shadowVisibilityTaskGraphSource;
@@ -293,7 +289,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
 
 TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAreIncomplete){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString graphicsPrefixTaskGraphSource;
     AString deferredLightingTaskGraphSource;

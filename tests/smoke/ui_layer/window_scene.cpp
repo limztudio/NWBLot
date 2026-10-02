@@ -4,6 +4,8 @@
 
 #include "window_scene.h"
 
+#include "smoke_geometry.h"
+
 #include "../smoke_environment.h"
 
 #include <impl/ecs_ui/toolkit/builder.h>
@@ -45,12 +47,6 @@ static constexpr f32 s_Gap = 4.0f;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] Impl::Ui::Color Encode(const f32 value){
-    const u32 rounded = static_cast<u32>(Max(0.0f, value) + 0.5f);
-    return { static_cast<f32>(rounded & 15u) / 15.0f, static_cast<f32>((rounded >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((rounded >> 8u) & 15u) / 15.0f, 1.0f };
-}
 
 [[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics){
     const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
@@ -177,7 +173,7 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     const f32 markerY = context.display.logicalHeight - 20.0f;
     for(usize index = 0u; index < LengthOf(values); ++index)
         context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f },
-            __hidden_ui_window_smoke::Encode(values[index]));
+            EncodeSmokeColor(values[index]));
     context.paint.pushClip(WindowLayout::Visible(m_window, metrics));
     context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + 4.0f, 10.0f, 10.0f },
         __hidden_ui_window_smoke::s_TitleAnchor);

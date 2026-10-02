@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/slider.h>
 #include <impl/ecs_ui/toolkit/widgets/slider_style.h>
 
@@ -26,13 +28,6 @@ namespace __hidden_ui_slider_layout_tests{
 using namespace Impl::Ui;
 
 
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
 static void ExpectMetrics(const SliderMetrics& actual, const SliderMetrics& expected){
     EXPECT_FLOAT_EQ(actual.padding.left, expected.padding.left);
     EXPECT_FLOAT_EQ(actual.padding.top, expected.padding.top);
@@ -46,12 +41,12 @@ static void ExpectMetrics(const SliderMetrics& actual, const SliderMetrics& expe
 }
 
 static void ExpectPlacement(const SliderPlacement& actual, const SliderPlacement& expected){
-    ExpectRect(actual.bounds, expected.bounds);
-    ExpectRect(actual.clip, expected.clip);
-    ExpectRect(actual.travelBounds, expected.travelBounds);
-    ExpectRect(actual.track, expected.track);
-    ExpectRect(actual.centerTravel, expected.centerTravel);
-    ExpectRect(actual.thumb, expected.thumb);
+    UiWidgetTests::ExpectRect(actual.bounds, expected.bounds);
+    UiWidgetTests::ExpectRect(actual.clip, expected.clip);
+    UiWidgetTests::ExpectRect(actual.travelBounds, expected.travelBounds);
+    UiWidgetTests::ExpectRect(actual.track, expected.track);
+    UiWidgetTests::ExpectRect(actual.centerTravel, expected.centerTravel);
+    UiWidgetTests::ExpectRect(actual.thumb, expected.thumb);
     EXPECT_FLOAT_EQ(actual.thumbExtent.x, expected.thumbExtent.x);
     EXPECT_FLOAT_EQ(actual.thumbExtent.y, expected.thumbExtent.y);
 }
@@ -71,8 +66,8 @@ TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
     EXPECT_FLOAT_EQ(first.thumb.x, first.travelBounds.x);
     EXPECT_FLOAT_EQ(last.thumb.x + last.thumb.width, last.travelBounds.x + last.travelBounds.width);
     EXPECT_FLOAT_EQ(last.thumb.x, 222.0f);
-    ExpectRect(first.track, last.track);
-    ExpectRect(first.centerTravel, last.centerTravel);
+    UiWidgetTests::ExpectRect(first.track, last.track);
+    UiWidgetTests::ExpectRect(first.centerTravel, last.centerTravel);
 }
 
 TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){
@@ -83,11 +78,11 @@ TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeo
     SliderPlacement clipped;
     ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.25, full));
     ASSERT_TRUE(SliderLayout::Place(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, metrics, 0.25, clipped));
-    ExpectRect(clipped.clip, { 50.0f, 25.0f, 100.0f, 10.0f });
-    ExpectRect(clipped.travelBounds, full.travelBounds);
-    ExpectRect(clipped.centerTravel, full.centerTravel);
-    ExpectRect(clipped.track, full.track);
-    ExpectRect(clipped.thumb, full.thumb);
+    UiWidgetTests::ExpectRect(clipped.clip, { 50.0f, 25.0f, 100.0f, 10.0f });
+    UiWidgetTests::ExpectRect(clipped.travelBounds, full.travelBounds);
+    UiWidgetTests::ExpectRect(clipped.centerTravel, full.centerTravel);
+    UiWidgetTests::ExpectRect(clipped.track, full.track);
+    UiWidgetTests::ExpectRect(clipped.thumb, full.thumb);
 }
 
 TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely){
@@ -96,8 +91,8 @@ TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafel
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 12.0f };
     SliderPlacement placement;
     ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.5, placement));
-    ExpectRect(placement.travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
-    ExpectRect(placement.thumb, placement.travelBounds);
+    UiWidgetTests::ExpectRect(placement.travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
+    UiWidgetTests::ExpectRect(placement.thumb, placement.travelBounds);
     EXPECT_FLOAT_EQ(placement.thumbExtent.x, 12.0f);
     EXPECT_FLOAT_EQ(placement.thumbExtent.y, 4.0f);
     EXPECT_FLOAT_EQ(placement.centerTravel.width, 0.0f);

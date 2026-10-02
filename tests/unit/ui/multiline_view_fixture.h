@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/edit_box.h>
 
 #include <tests/common/font_fixture.h>
@@ -32,6 +34,7 @@ namespace UiMultilineViewTests{
 
 using namespace Impl;
 using namespace Impl::Ui;
+using namespace UiWidgetTests;
 
 class FixtureShaper final : public ITextShaper{
 public:
@@ -72,19 +75,12 @@ private:
     Core::Alloc::GlobalArena& m_arena;
 };
 
-inline void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
 inline void ExpectPlacement(const EditBoxPlacement& actual, const EditBoxPlacement& expected){
-    ExpectRect(actual.bounds, expected.bounds);
-    ExpectRect(actual.frameClip, expected.frameClip);
-    ExpectRect(actual.content, expected.content);
-    ExpectRect(actual.clip, expected.clip);
-    ExpectRect(actual.caret, expected.caret);
+    NWB::UiWidgetTests::ExpectRect(actual.bounds, expected.bounds);
+    NWB::UiWidgetTests::ExpectRect(actual.frameClip, expected.frameClip);
+    NWB::UiWidgetTests::ExpectRect(actual.content, expected.content);
+    NWB::UiWidgetTests::ExpectRect(actual.clip, expected.clip);
+    NWB::UiWidgetTests::ExpectRect(actual.caret, expected.caret);
     EXPECT_FLOAT_EQ(actual.textOrigin.x, expected.textOrigin.x);
     EXPECT_FLOAT_EQ(actual.textOrigin.y, expected.textOrigin.y);
     EXPECT_FLOAT_EQ(actual.scroll, expected.scroll);

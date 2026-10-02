@@ -35,13 +35,6 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 using namespace TelemetryTestDetail;
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char buffer[32u] = {};
-    const AStringView formatted = FormatDecimal(value, buffer);
-    buffer[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), buffer);
-}
-
 struct StatisticsFixture{
     Telemetry::FrameGraphNodeDescs nodes;
     Telemetry::FrameGraphEdgeDescs edges;
@@ -197,9 +190,9 @@ void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
     }
     testing::Test::RecordProperty("packet_count", packetCount);
     testing::Test::RecordProperty("owner_count", ownerCount);
-    RecordUnsignedProperty("builder_ns", appendNanoseconds);
-    RecordUnsignedProperty("encode_ns", encodeNanoseconds);
-    RecordUnsignedProperty("decode_ns", decodeNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("builder_ns", appendNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("encode_ns", encodeNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("decode_ns", decodeNanoseconds);
 }
 
 TEST(Telemetry, PacketStatisticsInterleavedOwnersRoundTrip){

@@ -9,6 +9,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -513,13 +514,6 @@ TEST(TaskGraphImportIndex, LargeResetAndReverseRefillClearTypedAndGenericIdentit
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkImports(const usize count, const usize cycles, const usize lookupPasses){
     ImportContext context;
     context.prepare(count);
@@ -642,23 +636,23 @@ static void BenchmarkImports(const usize count, const usize cycles, const usize 
         }
     }
     const ArenaMemoryStats memory = context.graphArena.memoryStats();
-    RecordUnsignedProperty("graph_import_count", count);
-    RecordUnsignedProperty("graph_import_cycles", cycles);
-    RecordUnsignedProperty("graph_import_lookup_passes", lookupPasses);
-    RecordUnsignedProperty("graph_import_generic_ns", genericNanoseconds);
-    RecordUnsignedProperty("graph_import_generic_repeat_ns", genericRepeatNanoseconds);
-    RecordUnsignedProperty("graph_import_typed_ns", typedNanoseconds);
-    RecordUnsignedProperty("graph_import_typed_repeat_ns", typedRepeatNanoseconds);
-    RecordUnsignedProperty("graph_import_sets_ns", setNanoseconds);
-    RecordUnsignedProperty("graph_import_sets_repeat_ns", setRepeatNanoseconds);
-    RecordUnsignedProperty("graph_import_lookup_ns", lookupNanoseconds);
-    RecordUnsignedProperty("graph_import_reset_ns", resetNanoseconds);
-    RecordUnsignedProperty("graph_import_refill_ns", refillNanoseconds);
-    RecordUnsignedProperty("graph_import_arena_used_bytes", memory.usedBytes);
-    RecordUnsignedProperty("graph_import_arena_peak_bytes", memory.peakUsedBytes);
-    RecordUnsignedProperty("graph_import_arena_reserved_bytes", memory.reservedBytes);
-    RecordUnsignedProperty("graph_import_arena_allocation_count", memory.allocationCount);
-    RecordUnsignedProperty("graph_import_arena_deallocation_count", memory.deallocationCount);
+    Tests::RecordUnsignedTestProperty("graph_import_count", count);
+    Tests::RecordUnsignedTestProperty("graph_import_cycles", cycles);
+    Tests::RecordUnsignedTestProperty("graph_import_lookup_passes", lookupPasses);
+    Tests::RecordUnsignedTestProperty("graph_import_generic_ns", genericNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_generic_repeat_ns", genericRepeatNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_typed_ns", typedNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_typed_repeat_ns", typedRepeatNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_sets_ns", setNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_sets_repeat_ns", setRepeatNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_lookup_ns", lookupNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_reset_ns", resetNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_refill_ns", refillNanoseconds);
+    Tests::RecordUnsignedTestProperty("graph_import_arena_used_bytes", memory.usedBytes);
+    Tests::RecordUnsignedTestProperty("graph_import_arena_peak_bytes", memory.peakUsedBytes);
+    Tests::RecordUnsignedTestProperty("graph_import_arena_reserved_bytes", memory.reservedBytes);
+    Tests::RecordUnsignedTestProperty("graph_import_arena_allocation_count", memory.allocationCount);
+    Tests::RecordUnsignedTestProperty("graph_import_arena_deallocation_count", memory.deallocationCount);
 }
 
 TEST(TaskGraphImportIndexBenchmark, DISABLED_Resources1){

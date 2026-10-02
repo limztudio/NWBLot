@@ -247,13 +247,6 @@ void CheckIndexedScores(const Shape::Enum shape){
 }
 
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -281,11 +274,11 @@ void BenchmarkPartialDag(const usize taskCount, const Shape::Enum shape){
         scratchBytes = scratch.memoryStats().peakUsedBytes;
     }
     Sort(samples, samples + LengthOf(samples));
-    RecordUnsignedProperty("median_assignment_ns", samples[LengthOf(samples) / 2u]);
-    RecordUnsignedProperty("minimum_assignment_ns", samples[0u]);
-    RecordUnsignedProperty("scratch_bytes", scratchBytes);
-    RecordUnsignedProperty("task_count", taskCount);
-    RecordUnsignedProperty("edge_count", analysis.schedulingEdges().size());
+    RecordUnsignedTestProperty("median_assignment_ns", samples[LengthOf(samples) / 2u]);
+    RecordUnsignedTestProperty("minimum_assignment_ns", samples[0u]);
+    RecordUnsignedTestProperty("scratch_bytes", scratchBytes);
+    RecordUnsignedTestProperty("task_count", taskCount);
+    RecordUnsignedTestProperty("edge_count", analysis.schedulingEdges().size());
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         const auto* assignment = assignments.find(view.taskAt(taskIndex).id);
         ASSERT_NE(assignment, nullptr);

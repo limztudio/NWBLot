@@ -283,13 +283,6 @@ template<typename Callback>
     return true;
 }
 
-void RecordUnsigned(const AStringView key, const u64 value){
-    char buffer[s_NumberBufferBytes] = {};
-    const AStringView text = FormatDecimal(value, buffer);
-    buffer[text.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), buffer);
-}
-
 template<typename Callback>
 void BenchmarkCallbacks(TestArena& testArena, Graphics::Alloc::ScratchArena& scratch, const usize callbackCount){
     CallbackGraph fixture(testArena, scratch);
@@ -341,12 +334,12 @@ void BenchmarkCallbacks(TestArena& testArena, Graphics::Alloc::ScratchArena& scr
                     ? s_IndexedSampleKeys[sample - s_Warmups]
                     : s_ScalarSampleKeys[sample - s_Warmups]
                 ;
-                RecordUnsigned(key, elapsed);
+                RecordUnsignedTestProperty(key, elapsed);
             }
         }
     }
-    RecordUnsigned("callback_count", callbackCount);
-    RecordUnsigned("checksum", expectedChecksum);
+    RecordUnsignedTestProperty("callback_count", callbackCount);
+    RecordUnsignedTestProperty("checksum", expectedChecksum);
 }
 
 

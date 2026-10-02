@@ -6,6 +6,7 @@
 #include <core/common/module.h>
 
 #include <tests/common/ecs_test_world.h>
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 #include <global/atomic.h>
@@ -396,8 +397,7 @@ TEST(Ecs, RepeatedComponentLookupWorkload){
         }
     }
     const u64 lookupNanoseconds = DurationInNS<u64>(TimerNow(), lookupBegin);
-    char durationText[32u] = {};
-    RecordProperty("lookup_ns", FormatDecimal(lookupNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("lookup_ns", lookupNanoseconds);
 
     EXPECT_EQ(positionSum, expectedPositionSum * s_RoundCount);
     EXPECT_EQ(velocitySum, expectedVelocitySum * s_RoundCount);

@@ -6,6 +6,8 @@
 
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -152,16 +154,10 @@ static void CheckDenseDependencies(const usize taskCount, const Scenario::Enum s
     }
     else{
         Sort(samples.begin(), samples.end());
-        const auto record = [](const AStringView key, const u64 value){
-            char text[32u] = {};
-            const AStringView formatted = FormatDecimal(value, text);
-            text[formatted.size()] = '\0';
-            testing::Test::RecordProperty(AInteropString(key), text);
-        };
-        record("median_analysis_ns", samples[s_Samples / 2u]);
-        record("scratch_bytes", peakScratch);
-        record("task_count", taskCount);
-        record("raw_edge_count", pairCount);
+        RecordUnsignedTestProperty("median_analysis_ns", samples[s_Samples / 2u]);
+        RecordUnsignedTestProperty("scratch_bytes", peakScratch);
+        RecordUnsignedTestProperty("task_count", taskCount);
+        RecordUnsignedTestProperty("raw_edge_count", pairCount);
     }
 }
 

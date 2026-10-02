@@ -20,24 +20,7 @@ namespace UiPaintImageTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui_paint_image_fixture{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
+using namespace UiWidgetTests;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -129,7 +112,7 @@ void ExpectSameImagePaint(const DrawSnapshot& actual, const DrawSnapshot& expect
         EXPECT_EQ(a.sdfChannel, e.sdfChannel);
         EXPECT_EQ(a.layer, e.layer);
         EXPECT_EQ(a.textureImageIndex, e.textureImageIndex);
-        __hidden_ui_paint_image_fixture::ExpectRect(a.clip, e.clip);
+        ExpectRect(a.clip, e.clip);
     }
 }
 

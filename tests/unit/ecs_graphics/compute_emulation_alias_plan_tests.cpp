@@ -686,13 +686,6 @@ namespace AliasWorkload{
     };
 };
 
-static void RecordMetric(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 template<typename Plan>
 void MeasurePlan(
     AliasPlanContext& context,
@@ -721,10 +714,10 @@ void MeasurePlan(
     EXPECT_EQ(captures, expectedCapture ? iterations : 0u);
     EXPECT_EQ(matches, expectedCapture ? iterations : 0u);
     EXPECT_EQ(plan.drawItems.size(), expectedCapture ? context.m_regular.computeDrawItems.size() : 0u);
-    RecordMetric(metrics.capture, captureTime);
-    RecordMetric(metrics.matches, matchesTime);
-    RecordMetric(metrics.planPeak, planArena.memoryStats().peakUsedBytes);
-    RecordMetric(metrics.scratchPeak, scratchPeak);
+    Tests::RecordUnsignedTestProperty(metrics.capture, captureTime);
+    Tests::RecordUnsignedTestProperty(metrics.matches, matchesTime);
+    Tests::RecordUnsignedTestProperty(metrics.planPeak, planArena.memoryStats().peakUsedBytes);
+    Tests::RecordUnsignedTestProperty(metrics.scratchPeak, scratchPeak);
 }
 
 static void BenchmarkAliasPlans(const usize count, const usize iterations, const AliasWorkload::Enum workload){
@@ -755,9 +748,9 @@ static void BenchmarkAliasPlans(const usize count, const usize iterations, const
     MeasurePlan<ReceiverPlan>(
         context, s_ReceiverMetrics, iterations, workload != AliasWorkload::LatePointer && workload != AliasWorkload::LateIntersection
     );
-    RecordMetric("alias_draw_count", count);
-    RecordMetric("alias_iterations", iterations);
-    RecordMetric("alias_workload", static_cast<u64>(workload));
+    Tests::RecordUnsignedTestProperty("alias_draw_count", count);
+    Tests::RecordUnsignedTestProperty("alias_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("alias_workload", static_cast<u64>(workload));
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_Unique1){
@@ -811,10 +804,10 @@ TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_MutatedCsgIntersection1024){
         scratchPeak = Max(scratchPeak, scratch.memoryStats().peakUsedBytes);
     }
     EXPECT_EQ(matches, 0u);
-    RecordMetric("alias_receiver_matches_ns", elapsed);
-    RecordMetric("alias_receiver_scratch_peak_bytes", scratchPeak);
-    RecordMetric("alias_draw_count", 1024u);
-    RecordMetric("alias_iterations", s_Iterations);
+    Tests::RecordUnsignedTestProperty("alias_receiver_matches_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("alias_receiver_scratch_peak_bytes", scratchPeak);
+    Tests::RecordUnsignedTestProperty("alias_draw_count", 1024u);
+    Tests::RecordUnsignedTestProperty("alias_iterations", s_Iterations);
 }
 
 

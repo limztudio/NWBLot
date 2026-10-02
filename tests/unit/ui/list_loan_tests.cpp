@@ -109,17 +109,6 @@ struct AcceptedState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class UiListLoanTests : public WidgetFixture{
 public:
     UiListLoanTests()
@@ -170,8 +159,8 @@ protected:
             EXPECT_EQ(after.owner, before.owner);
             EXPECT_EQ(after.ownerDeclarationGeneration, before.ownerDeclarationGeneration);
             EXPECT_EQ(after.enabled, before.enabled);
-            ExpectRect(after.rectangle, before.rectangle);
-            ExpectRect(after.clip, before.clip);
+            NWB::UiWidgetTests::ExpectRect(after.rectangle, before.rectangle);
+            NWB::UiWidgetTests::ExpectRect(after.clip, before.clip);
         }
     }
 

@@ -35,13 +35,6 @@ using TaskGraphTestUtils::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void CheckOwnershipStatistics(const usize resourceCount, const bool benchmark){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -88,12 +81,12 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
             if(iteration != 0u)
                 minimumAnalysisNanoseconds = Min(minimumAnalysisNanoseconds, DurationInNS<u64>(TimerNow(), begin));
         }
-        RecordUnsignedProperty("ownership_analysis_ns", minimumAnalysisNanoseconds);
+        RecordUnsignedTestProperty("ownership_analysis_ns", minimumAnalysisNanoseconds);
         Core::Alloc::ScratchArena analysisScratch(s_TaskGraphScratchArena);
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         const Graphics::GpuTaskGraphCompiler compiler;
         ASSERT_TRUE(compiler.analyze(declarations, compilation.analysis, analysisScratch));
-        RecordUnsignedProperty(
+        RecordUnsignedTestProperty(
             "ownership_analysis_scratch_bytes", analysisScratch.memoryStats().peakUsedBytes
         );
     }
@@ -149,9 +142,9 @@ static void CheckOwnershipStatistics(const usize resourceCount, const bool bench
         EXPECT_EQ(compute.outgoingRepeatedOwnershipTransferSignatureCount, resourceCount);
     }
     if(benchmark){
-        RecordUnsignedProperty("ownership_resource_count", resourceCount);
-        RecordUnsignedProperty("ownership_compile_ns", minimumCompileNanoseconds);
-        RecordUnsignedProperty("ownership_queue_queries_ns", minimumQueryNanoseconds);
+        RecordUnsignedTestProperty("ownership_resource_count", resourceCount);
+        RecordUnsignedTestProperty("ownership_compile_ns", minimumCompileNanoseconds);
+        RecordUnsignedTestProperty("ownership_queue_queries_ns", minimumQueryNanoseconds);
     }
     compilation.compiledGraph.reset();
     {

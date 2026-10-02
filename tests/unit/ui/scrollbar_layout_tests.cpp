@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/scrollbar.h>
 
 #include <global/simplemath.h>
@@ -26,20 +28,9 @@ namespace __hidden_ui_scrollbar_layout_tests{
 
 using namespace Impl::Ui;
 
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(
-        actual.x, expected.x);
-        EXPECT_FLOAT_EQ(actual.y, expected.y
-    );
-    EXPECT_FLOAT_EQ(
-        actual.width, expected.width);
-        EXPECT_FLOAT_EQ(actual.height, expected.height
-    );
-}
-
 static void ExpectBar(const ScrollbarPlacement& actual, const ScrollbarPlacement& expected){
-    ExpectRect(actual.track, expected.track);
-    ExpectRect(actual.thumb, expected.thumb);
+    UiWidgetTests::ExpectRect(actual.track, expected.track);
+    UiWidgetTests::ExpectRect(actual.thumb, expected.thumb);
     EXPECT_DOUBLE_EQ(actual.contentExtent, expected.contentExtent);
     EXPECT_DOUBLE_EQ(actual.viewportExtent, expected.viewportExtent);
     EXPECT_DOUBLE_EQ(actual.maximum, expected.maximum);
@@ -48,19 +39,19 @@ static void ExpectBar(const ScrollbarPlacement& actual, const ScrollbarPlacement
 }
 
 static void ExpectPlacement(const ScrollViewportPlacement& actual, const ScrollViewportPlacement& expected){
-    ExpectRect(actual.viewport, expected.viewport);
-    ExpectRect(actual.contentClip, expected.contentClip);
-    ExpectRect(actual.corner, expected.corner);
+    UiWidgetTests::ExpectRect(actual.viewport, expected.viewport);
+    UiWidgetTests::ExpectRect(actual.contentClip, expected.contentClip);
+    UiWidgetTests::ExpectRect(actual.corner, expected.corner);
     ExpectBar(actual.horizontal, expected.horizontal);
     ExpectBar(actual.vertical, expected.vertical);
 }
 
 static void ExpectReservedGeometry(const ScrollViewportPlacement& actual, const ScrollViewportPlacement& expected){
-    ExpectRect(actual.viewport, expected.viewport);
-    ExpectRect(actual.contentClip, expected.contentClip);
-    ExpectRect(actual.corner, expected.corner);
-    ExpectRect(actual.horizontal.track, expected.horizontal.track);
-    ExpectRect(actual.vertical.track, expected.vertical.track);
+    UiWidgetTests::ExpectRect(actual.viewport, expected.viewport);
+    UiWidgetTests::ExpectRect(actual.contentClip, expected.contentClip);
+    UiWidgetTests::ExpectRect(actual.corner, expected.corner);
+    UiWidgetTests::ExpectRect(actual.horizontal.track, expected.horizontal.track);
+    UiWidgetTests::ExpectRect(actual.vertical.track, expected.vertical.track);
     EXPECT_FLOAT_EQ(
         actual.horizontal.thumb.width, expected.horizontal.thumb.width);
         EXPECT_FLOAT_EQ(actual.horizontal.thumb.height, expected.horizontal.thumb.height
@@ -90,11 +81,11 @@ TEST(UiScrollbarLayoutTests, FittingContentKeepsPaddedViewportAndClampsStoredOff
         bounds, bounds, { 8.0f, 6.0f, 4.0f, 14.0f },
         { 100.0f, 80.0f }, 2.0f, { 40.0f, 60.0f }, 12.0f, 16.0f, placement
     ));
-    ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
-    ExpectRect(placement.contentClip, placement.viewport);
-    ExpectRect(placement.corner, {});
-    ExpectRect(placement.horizontal.track, {});
-    ExpectRect(placement.vertical.track, {});
+    UiWidgetTests::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
+    UiWidgetTests::ExpectRect(placement.contentClip, placement.viewport);
+    UiWidgetTests::ExpectRect(placement.corner, {});
+    UiWidgetTests::ExpectRect(placement.horizontal.track, {});
+    UiWidgetTests::ExpectRect(placement.vertical.track, {});
     EXPECT_DOUBLE_EQ(placement.horizontal.contentExtent, 102.0);
     EXPECT_DOUBLE_EQ(placement.vertical.contentExtent, 80.0);
     EXPECT_DOUBLE_EQ(placement.horizontal.viewportExtent, 188.0);
@@ -109,7 +100,7 @@ TEST(UiScrollbarLayoutTests, ExactContentFitDoesNotReserveEitherBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 99.0f, 80.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, bounds);
+    UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 0.0);
@@ -120,7 +111,7 @@ TEST(UiScrollbarLayoutTests, HorizontalExtentIncludesCaretWidth){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 100.0f, 40.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 68.0f });
+    UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 68.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 1.0);
@@ -130,10 +121,10 @@ TEST(UiScrollbarLayoutTests, VerticalReservationCanRequireHorizontalBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 89.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
-    ExpectRect(placement.horizontal.track, { 0.0f, 88.0f, 88.0f, 12.0f });
-    ExpectRect(placement.vertical.track, { 88.0f, 0.0f, 12.0f, 88.0f });
-    ExpectRect(placement.corner, { 88.0f, 88.0f, 12.0f, 12.0f });
+    UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
+    UiWidgetTests::ExpectRect(placement.horizontal.track, { 0.0f, 88.0f, 88.0f, 12.0f });
+    UiWidgetTests::ExpectRect(placement.vertical.track, { 88.0f, 0.0f, 12.0f, 88.0f });
+    UiWidgetTests::ExpectRect(placement.corner, { 88.0f, 88.0f, 12.0f, 12.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_TRUE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 2.0);
@@ -144,7 +135,7 @@ TEST(UiScrollbarLayoutTests, HorizontalReservationCanRequireVerticalBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 90.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
+    UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_TRUE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 112.0);
@@ -155,11 +146,11 @@ TEST(UiScrollbarLayoutTests, ExactFitAfterOtherAxisReservationDoesNotAddBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 87.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 100.0f });
+    UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 100.0f });
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_TRUE(placement.vertical.visible);
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 88.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
-    ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 88.0f });
+    UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 88.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
 }
@@ -175,8 +166,8 @@ TEST(UiScrollbarLayoutTests, SmallerContentRemovesReservationsAndClampsBothAxes)
         bounds, bounds, {}, { 49.0f, 40.0f }, 1.0f,
         { 200.0f, 150.0f }, 12.0f, 16.0f, placement
     ));
-    ExpectRect(placement.viewport, bounds);
-    ExpectRect(placement.corner, {});
+    UiWidgetTests::ExpectRect(placement.viewport, bounds);
+    UiWidgetTests::ExpectRect(placement.corner, {});
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 0.0);
@@ -190,13 +181,13 @@ TEST(UiScrollbarLayoutTests, MinimumThumbIsClampedToEachTrackEvenWithRemainingSc
         bounds, bounds, {}, { 999.0f, 900.0f }, 1.0f,
         { 400.0f, 300.0f }, 12.0f, 1000.0f, placement
     ));
-    ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
-    ExpectRect(placement.vertical.thumb, placement.vertical.track);
+    UiWidgetTests::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
+    UiWidgetTests::ExpectRect(placement.vertical.thumb, placement.vertical.track);
     EXPECT_GT(placement.horizontal.maximum, 0.0);
     EXPECT_GT(placement.vertical.maximum, 0.0);
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ Limit<f32>::s_Max, Limit<f32>::s_Max }, placement));
-    ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
-    ExpectRect(placement.vertical.thumb, placement.vertical.track);
+    UiWidgetTests::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
+    UiWidgetTests::ExpectRect(placement.vertical.thumb, placement.vertical.track);
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, placement.horizontal.maximum);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, placement.vertical.maximum);
 }
@@ -218,7 +209,7 @@ TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrolla
         bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f,
         { 350.0f, 100.0f }, 0.0f, 16.0f, placement
     ));
-    ExpectRect(placement.viewport, bounds);
+    UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 300.0);
@@ -228,8 +219,8 @@ TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrolla
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 40.0f, 50.0f }, placement));
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 40.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 50.0);
-    ExpectRect(placement.horizontal.thumb, {});
-    ExpectRect(placement.vertical.thumb, {});
+    UiWidgetTests::ExpectRect(placement.horizontal.thumb, {});
+    UiWidgetTests::ExpectRect(placement.vertical.thumb, {});
 }
 
 TEST(UiScrollbarLayoutTests, InheritedClipChangesOnlyContentClip){
@@ -244,7 +235,7 @@ TEST(UiScrollbarLayoutTests, InheritedClipChangesOnlyContentClip){
         bounds, { 50.0f, 60.0f, 40.0f, 20.0f }, {},
         { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f, clipped
     ));
-    ExpectRect(clipped.contentClip, { 50.0f, 60.0f, 40.0f, 20.0f });
+    UiWidgetTests::ExpectRect(clipped.contentClip, { 50.0f, 60.0f, 40.0f, 20.0f });
     reference.contentClip = clipped.contentClip;
     ExpectPlacement(clipped, reference);
 }
@@ -274,8 +265,8 @@ TEST(UiScrollbarLayoutTests, ExcessivePaddingCollapsesViewportWithoutNegativeTra
         bounds, bounds, { 200.0f, 120.0f, 200.0f, 120.0f },
         { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f, placement
     ));
-    ExpectRect(placement.viewport, { 110.0f, 100.0f, 0.0f, 0.0f });
-    ExpectRect(placement.corner, {});
+    UiWidgetTests::ExpectRect(placement.viewport, { 110.0f, 100.0f, 0.0f, 0.0f });
+    UiWidgetTests::ExpectRect(placement.corner, {});
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 400.0);
@@ -291,10 +282,10 @@ TEST(UiScrollbarLayoutTests, TinyBoundsClampBarThicknessAndKeepZeroLengthTracksH
         bounds, bounds, {}, { 99.0f, 100.0f }, 1.0f,
         { 10.0f, 20.0f }, Limit<f32>::s_Max, Limit<f32>::s_Max, placement
     ));
-    ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 0.0f });
-    ExpectRect(placement.corner, bounds);
-    ExpectRect(placement.horizontal.track, {});
-    ExpectRect(placement.vertical.track, {});
+    UiWidgetTests::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 0.0f });
+    UiWidgetTests::ExpectRect(placement.corner, bounds);
+    UiWidgetTests::ExpectRect(placement.horizontal.track, {});
+    UiWidgetTests::ExpectRect(placement.vertical.track, {});
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 100.0);
@@ -311,7 +302,7 @@ TEST(UiScrollbarLayoutTests, OneCollapsedAxisKeepsOtherAxisExtentWithoutVisibleT
         bounds, bounds, {}, { 99.0f, 200.0f }, 1.0f,
         { 10.0f, 20.0f }, 12.0f, 16.0f, placement
     ));
-    ExpectRect(placement.viewport, bounds);
+    UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 100.0);
@@ -325,10 +316,10 @@ TEST(UiScrollbarLayoutTests, FractionalGeometryKeepsAsymmetricPaddingAndBothRese
         bounds, bounds, { 0.25f, 0.5f, 0.75f, 1.25f },
         { 199.0f, 160.0f }, 1.0f, {}, 3.5f, 0.0f, placement
     ));
-    ExpectRect(placement.viewport, { -12.25f, 8.75f, 96.0f, 75.0f });
-    ExpectRect(placement.horizontal.track, { -12.25f, 83.75f, 96.0f, 3.5f });
-    ExpectRect(placement.vertical.track, { 83.75f, 8.75f, 3.5f, 75.0f });
-    ExpectRect(placement.corner, { 83.75f, 83.75f, 3.5f, 3.5f });
+    UiWidgetTests::ExpectRect(placement.viewport, { -12.25f, 8.75f, 96.0f, 75.0f });
+    UiWidgetTests::ExpectRect(placement.horizontal.track, { -12.25f, 83.75f, 96.0f, 3.5f });
+    UiWidgetTests::ExpectRect(placement.vertical.track, { 83.75f, 8.75f, 3.5f, 75.0f });
+    UiWidgetTests::ExpectRect(placement.corner, { 83.75f, 83.75f, 3.5f, 3.5f });
     EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 104.0);
     EXPECT_DOUBLE_EQ(placement.vertical.maximum, 85.0);
 }
@@ -359,12 +350,12 @@ TEST(UiScrollbarLayoutTests, UpdateOffsetsMovesThumbsAtStartMiddleAndEndWithoutR
     const ScrollViewportPlacement initial = placement;
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 150.0f, 150.0f }, placement));
     ExpectReservedGeometry(placement, initial);
-    ExpectRect(placement.horizontal.thumb, { 47.5f, 120.0f, 25.0f, 12.0f });
-    ExpectRect(placement.vertical.thumb, { 110.0f, 57.5f, 12.0f, 25.0f });
+    UiWidgetTests::ExpectRect(placement.horizontal.thumb, { 47.5f, 120.0f, 25.0f, 12.0f });
+    UiWidgetTests::ExpectRect(placement.vertical.thumb, { 110.0f, 57.5f, 12.0f, 25.0f });
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 1000.0f, 1000.0f }, placement));
     ExpectReservedGeometry(placement, initial);
-    ExpectRect(placement.horizontal.thumb, { 85.0f, 120.0f, 25.0f, 12.0f });
-    ExpectRect(placement.vertical.thumb, { 110.0f, 95.0f, 12.0f, 25.0f });
+    UiWidgetTests::ExpectRect(placement.horizontal.thumb, { 85.0f, 120.0f, 25.0f, 12.0f });
+    UiWidgetTests::ExpectRect(placement.vertical.thumb, { 110.0f, 95.0f, 12.0f, 25.0f });
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({}, placement));
     ExpectPlacement(placement, initial);
 }

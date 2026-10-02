@@ -45,13 +45,6 @@ constexpr Graphics::GpuTaskTimingFeedbackPolicy s_TimingPolicy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void CheckDistinctDurationRoutes(const usize taskCount){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -136,8 +129,8 @@ void CheckDistinctDurationRoutes(const usize taskCount){
         if(iteration != 0u)
             minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
     }
-    RecordUnsignedProperty("timing_distinct_routes_ns", minimumNanoseconds);
-    RecordUnsignedProperty("timing_graph_scratch_bytes", scratch.memoryStats().peakUsedBytes);
+    RecordUnsignedTestProperty("timing_distinct_routes_ns", minimumNanoseconds);
+    RecordUnsignedTestProperty("timing_graph_scratch_bytes", scratch.memoryStats().peakUsedBytes);
 }
 
 

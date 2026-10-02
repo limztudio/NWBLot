@@ -12,6 +12,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -113,18 +114,13 @@ static void MeasureValidation(ModelInputs& inputs, const usize iterations){
 
     const usize objectCount = inputs.model.skeletonObjects().size()
         + inputs.model.staticMeshObjects().size() + inputs.model.skinnedMeshObjects().size();
-    char durationText[32u] = {};
-    char iterationsText[32u] = {};
-    char objectsText[32u] = {};
     char allocationsText[32u] = {};
-    char reservedText[32u] = {};
-    char peakText[32u] = {};
     testing::Test::RecordProperty("model_validation_scope", "validation_with_reused_caller_scratch");
-    testing::Test::RecordProperty("model_validation_scratch_reserved_bytes", FormatDecimal(afterScratch.reservedBytes, reservedText).data());
-    testing::Test::RecordProperty("model_validation_scratch_peak_bytes", FormatDecimal(afterScratch.peakUsedBytes, peakText).data());
-    testing::Test::RecordProperty("model_validation_ns", FormatDecimal(elapsed, durationText).data());
-    testing::Test::RecordProperty("model_validation_iterations", FormatDecimal(iterations, iterationsText).data());
-    testing::Test::RecordProperty("model_object_count", FormatDecimal(objectCount, objectsText).data());
+    Tests::RecordUnsignedTestProperty("model_validation_scratch_reserved_bytes", afterScratch.reservedBytes);
+    Tests::RecordUnsignedTestProperty("model_validation_scratch_peak_bytes", afterScratch.peakUsedBytes);
+    Tests::RecordUnsignedTestProperty("model_validation_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("model_validation_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("model_object_count", objectCount);
     testing::Test::RecordProperty(
         "model_validation_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
     );

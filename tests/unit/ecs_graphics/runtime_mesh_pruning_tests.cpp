@@ -15,6 +15,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -611,13 +612,6 @@ TEST(RuntimeMeshPruning, MembershipStopsAtItsLastRequestedIdentityWithoutRetaini
     EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkPruning(const usize bindingCount, const usize cachedCount, const usize iterations, const bool shared){
     PruneContext context;
     context.entities.reserve(bindingCount);
@@ -652,14 +646,14 @@ static void BenchmarkPruning(const usize bindingCount, const usize cachedCount, 
     }
     EXPECT_EQ(retainedCount, cachedCount * iterations);
     EXPECT_TRUE(context.retired.empty());
-    RecordUnsignedProperty("runtime_prune_ns", elapsed);
-    RecordUnsignedProperty("runtime_prune_iterations", iterations);
-    RecordUnsignedProperty("runtime_prune_binding_count", bindingCount);
-    RecordUnsignedProperty("runtime_prune_cached_count", cachedCount);
-    RecordUnsignedProperty("runtime_prune_resolve_count", context.firstProvider.m_resolveCalls + context.secondProvider.m_resolveCalls);
-    RecordUnsignedProperty("runtime_prune_identity_count", context.firstProvider.m_identityCalls + context.secondProvider.m_identityCalls);
-    RecordUnsignedProperty("runtime_prune_scratch_peak_bytes", scratchPeak);
-    RecordUnsignedProperty("runtime_prune_scratch_reserved_bytes", scratchReserved);
+    Tests::RecordUnsignedTestProperty("runtime_prune_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("runtime_prune_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("runtime_prune_binding_count", bindingCount);
+    Tests::RecordUnsignedTestProperty("runtime_prune_cached_count", cachedCount);
+    Tests::RecordUnsignedTestProperty("runtime_prune_resolve_count", context.firstProvider.m_resolveCalls + context.secondProvider.m_resolveCalls);
+    Tests::RecordUnsignedTestProperty("runtime_prune_identity_count", context.firstProvider.m_identityCalls + context.secondProvider.m_identityCalls);
+    Tests::RecordUnsignedTestProperty("runtime_prune_scratch_peak_bytes", scratchPeak);
+    Tests::RecordUnsignedTestProperty("runtime_prune_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(RuntimeMeshPruningBenchmark, DISABLED_SingleLiveBinding){

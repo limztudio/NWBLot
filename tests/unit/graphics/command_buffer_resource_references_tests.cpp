@@ -363,20 +363,13 @@ static void BenchmarkReferences(const usize bufferCount, const usize textureCoun
         EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
 
     const ArenaMemoryStats stats = context.testArena.arena.memoryStats();
-    char coldText[32u] = {};
-    char repeatedText[32u] = {};
-    char countText[32u] = {};
-    char clearText[32u] = {};
-    char recycleText[32u] = {};
-    char peakText[32u] = {};
-    char usedText[32u] = {};
-    testing::Test::RecordProperty("references_cold_ns", FormatDecimal(coldNanoseconds, coldText).data());
-    testing::Test::RecordProperty("references_repeat_ns", FormatDecimal(repeatedNanoseconds, repeatedText).data());
-    testing::Test::RecordProperty("references_repeat_count", FormatDecimal(repeatCount, countText).data());
-    testing::Test::RecordProperty("references_clear_ns", FormatDecimal(clearNanoseconds, clearText).data());
-    testing::Test::RecordProperty("references_recycle_ns", FormatDecimal(recycleNanoseconds, recycleText).data());
-    testing::Test::RecordProperty("references_peak_used_bytes", FormatDecimal(stats.peakUsedBytes - initialStats.usedBytes, peakText).data());
-    testing::Test::RecordProperty("references_retained_bytes", FormatDecimal(stats.usedBytes - initialStats.usedBytes, usedText).data());
+    NWB::Tests::RecordUnsignedTestProperty("references_cold_ns", coldNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("references_repeat_ns", repeatedNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("references_repeat_count", repeatCount);
+    NWB::Tests::RecordUnsignedTestProperty("references_clear_ns", clearNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("references_recycle_ns", recycleNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("references_peak_used_bytes", stats.peakUsedBytes - initialStats.usedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("references_retained_bytes", stats.usedBytes - initialStats.usedBytes);
 }
 
 TEST(CommandBufferResourceReferences, DISABLED_BenchmarkLargeRepeatedRecording){

@@ -94,6 +94,8 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
 
 TEST(GpuTaskGraph, CompilerOwnershipTransferDefenseRejectsMalformedSharingBeforeSameFamilyNoOp){
     TestArena testArena;
+    // NOTE: tests/unit/task/gpu/ is one level deeper than RepoRootOf callers (tests/<a>/<b>/),
+    // so climb one extra parent here instead of sharing the helper.
     const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
         .parent_path()
         .parent_path()

@@ -9,6 +9,7 @@
 #include <global/thread.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -98,8 +99,7 @@ TEST(GlobalArenaTests, SharedOwnerAllocationChurnPreservesPayloadAndAccounting){
         EXPECT_EQ(result.stats.reservedBytes, 0u);
         EXPECT_GE(result.stats.peakUsedBytes, s_AllocationBytes);
     }
-    char durationText[32u] = {};
-    RecordProperty("shared_owner_churn_ns", FormatDecimal(elapsedNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("shared_owner_churn_ns", elapsedNanoseconds);
 }
 
 

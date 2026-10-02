@@ -33,13 +33,6 @@ namespace __hidden_task_graph_submission_validation_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void ExpectWaitStatistics(
     const Graphics::GpuPhysicalQueueId queue,
     const Graphics::QueueSubmissionToken* const tokens,
@@ -96,7 +89,7 @@ void BenchmarkClusteredWaits(const usize count){
         if(iteration != 0u)
             minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
     }
-    RecordUnsignedProperty("wait_statistics_ns", minimumNanoseconds);
+    RecordUnsignedTestProperty("wait_statistics_ns", minimumNanoseconds);
 }
 
 [[nodiscard]] bool ValidatePacketOwnership(
@@ -211,7 +204,7 @@ void CheckInitialOwnershipFanIn(const usize count, const bool benchmark){
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
     EXPECT_EQ(testArena.arena.memoryStats().usedBytes, before.usedBytes);
     if(benchmark)
-        RecordUnsignedProperty("ownership_validation_ns", minimumNanoseconds);
+        RecordUnsignedTestProperty("ownership_validation_ns", minimumNanoseconds);
     const Graphics::GpuTaskGraphResourceView firstResource = reads.declarations.resourceAt(uses.front().resource.index);
     ASSERT_EQ(firstResource.initialOwnerHandoffSourceCount, 1u);
     const Graphics::GpuTaskGraphInitialOwnerHandoffSourceView& firstSource = firstResource.initialOwnerHandoffSources[0u];

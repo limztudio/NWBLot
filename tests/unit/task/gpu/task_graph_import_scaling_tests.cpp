@@ -56,13 +56,6 @@ namespace ImportScenario{
     return Graphics::ComputePipelineHandle(pipeline, Graphics::ComputePipelineHandle::deleter_type(&arena), AdoptRef);
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void CheckImportScaling(const usize importCount, const ImportScenario::Enum scenario){
     TaskGraphTestUtils::TestArena testArena;
     Graphics::GraphicsAllocator allocator(testArena.arena);
@@ -168,9 +161,9 @@ static void CheckImportScaling(const usize importCount, const ImportScenario::En
             }
         }
     }
-    RecordUnsignedProperty("import_count", importCount);
-    RecordUnsignedProperty("append_ns", minimumAppendNanoseconds);
-    RecordUnsignedProperty("reimport_ns", minimumReimportNanoseconds);
+    RecordUnsignedTestProperty("import_count", importCount);
+    RecordUnsignedTestProperty("append_ns", minimumAppendNanoseconds);
+    RecordUnsignedTestProperty("reimport_ns", minimumReimportNanoseconds);
 }
 
 

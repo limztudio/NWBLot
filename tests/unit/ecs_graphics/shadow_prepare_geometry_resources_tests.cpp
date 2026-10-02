@@ -367,13 +367,6 @@ TEST(ShadowPrepareGeometryResources, ScratchUsageTracksUniqueRequestsInsteadOfBu
 }
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkSelection(
     const usize uniqueMeshCount,
     const usize buildCount,
@@ -435,16 +428,16 @@ static void BenchmarkSelection(
     EXPECT_EQ(totalBlasInputs, uniqueMeshCount * s_ExpectedDualCount * iterations);
     EXPECT_EQ(totalRemaining, uniqueMeshCount * iterations);
     EXPECT_EQ(totalPrepared, buildCount * iterations);
-    RecordUnsignedProperty("shadow_membership_total_ns", totalNanoseconds);
-    RecordUnsignedProperty("shadow_membership_build_ns", buildNanoseconds);
-    RecordUnsignedProperty("shadow_membership_partition_ns", partitionNanoseconds);
-    RecordUnsignedProperty("shadow_membership_mesh_lookup_ns", meshLookupNanoseconds);
-    RecordUnsignedProperty("shadow_membership_iterations", iterations);
-    RecordUnsignedProperty("shadow_membership_unique_mesh_count", uniqueMeshCount);
-    RecordUnsignedProperty("shadow_membership_build_count", buildCount);
-    RecordUnsignedProperty("shadow_membership_unrelated_buffer_count", unrelatedBufferCount);
-    RecordUnsignedProperty("shadow_membership_scratch_peak_bytes", scratchPeak);
-    RecordUnsignedProperty("shadow_membership_scratch_reserved_bytes", scratchReserved);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_total_ns", totalNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_build_ns", buildNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_partition_ns", partitionNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_mesh_lookup_ns", meshLookupNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_iterations", iterations);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_unique_mesh_count", uniqueMeshCount);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_build_count", buildCount);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_unrelated_buffer_count", unrelatedBufferCount);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_scratch_peak_bytes", scratchPeak);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_membership_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(ShadowPrepareGeometryResourcesBenchmark, DISABLED_Unique1){

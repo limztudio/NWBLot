@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -104,13 +105,6 @@ static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount
     }
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkNormalization(const usize count, const bool useAliases, const usize iterations = 3u){
     ModelMetadata metadata;
     AddIndexedObjects(metadata, count, count, useAliases);
@@ -131,13 +125,13 @@ static void BenchmarkNormalization(const usize count, const bool useAliases, con
     const ArenaMemoryStats currentScratch = metadata.scratchArena.memoryStats();
     EXPECT_EQ(currentScratch.usedBytes, warmScratch.usedBytes);
     EXPECT_EQ(currentScratch.reservedBytes, warmScratch.reservedBytes);
-    RecordUnsignedProperty("model_parse_ns", elapsed);
-    RecordUnsignedProperty("model_parse_iterations", iterations);
-    RecordUnsignedProperty("model_skeleton_count", count);
-    RecordUnsignedProperty("model_skinned_mesh_count", count);
-    RecordUnsignedProperty("model_parse_heap_allocations", after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty("model_parse_scratch_reserved_bytes", currentScratch.reservedBytes);
-    RecordUnsignedProperty("model_parse_scratch_used_bytes", currentScratch.usedBytes);
+    Tests::RecordUnsignedTestProperty("model_parse_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("model_parse_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("model_skeleton_count", count);
+    Tests::RecordUnsignedTestProperty("model_skinned_mesh_count", count);
+    Tests::RecordUnsignedTestProperty("model_parse_heap_allocations", after.allocationCount - before.allocationCount);
+    Tests::RecordUnsignedTestProperty("model_parse_scratch_reserved_bytes", currentScratch.reservedBytes);
+    Tests::RecordUnsignedTestProperty("model_parse_scratch_used_bytes", currentScratch.usedBytes);
     testing::Test::RecordProperty("model_skeleton_reference_mode", useAliases ? "asset_alias" : "object_name");
 }
 

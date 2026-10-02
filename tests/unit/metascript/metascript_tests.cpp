@@ -300,8 +300,7 @@ TEST(Metascript, LargeListAppendPreservesValues){
             list += value;
     }
     const u64 appendNanoseconds = DurationInNS<u64>(TimerNow(), appendBegin);
-    char durationText[32u] = {};
-    RecordProperty("list_append_ns", FormatDecimal(appendNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("list_append_ns", appendNanoseconds);
     ASSERT_EQ(list.asList().size(), s_ValueCount);
     for(usize index = 0u; index < s_ValueCount; ++index)
         EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
@@ -320,8 +319,7 @@ TEST(Metascript, ParsesLargeNumericList){
     const Timer parseBegin = TimerNow();
     const bool parsed = document.parse(ViewOf(source));
     const u64 parseNanoseconds = DurationInNS<u64>(TimerNow(), parseBegin);
-    char durationText[32u] = {};
-    RecordProperty("list_parse_ns", FormatDecimal(parseNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("list_parse_ns", parseNanoseconds);
     ASSERT_TRUE(parsed);
     const Value* const values = document.asset().findField(LiteralView("values"));
     ASSERT_NE(values, nullptr);

@@ -5,6 +5,8 @@
 #include "texture_image_snapshot.h"
 #include "texture_image_scene.h"
 
+#include "smoke_geometry.h"
+
 #include <core/common/log.h>
 
 
@@ -40,14 +42,7 @@ static constexpr Array<TStringView, 17u> s_RectNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
 
-[[nodiscard]] static Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,7 +79,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
         for(usize index = 2u; index < current.rectangles.size(); ++index){
             if(index == 8u || index == 14u || index == 15u || current.rectangles[index].width == 0.0f)
                 continue;
-            if(SameRect(target.rectangle, current.rectangles[index]))
+            if(SameSmokeRect(target.rectangle, current.rectangles[index]))
                 ++imageTargets;
         }
     }
@@ -107,7 +102,7 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
         || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = current.values != m_snapshot.values || current.generations != m_snapshot.generations;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        changed |= !SameRect(current.rectangles[index], m_snapshot.rectangles[index]);
+        changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return;
     current.sequence = m_snapshot.sequence + 1u;
@@ -128,12 +123,8 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
         , current.sequence, current.generations[0], current.generations[1], current.generations[2]
         , static_cast<u32>(m_replacement->identity().name() == m_default->identity().name())
     );
-    for(usize index = 0u; index < current.rectangles.size(); ++index){
-        const Rect& rectangle = current.rectangles[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextureImageSmoke: geometry sequence={} {}={},{},{},{}")
-            , current.sequence, s_RectNames[index], rectangle.x, rectangle.y, rectangle.width, rectangle.height
-        );
-    }
+    for(usize index = 0u; index < current.rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -143,13 +134,13 @@ void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
     for(const u64 value : m_snapshot.values){
         for(u32 part = 0u; part < 2u; ++part){
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
-                Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }
     for(u32 part = 0u; part < 2u; ++part){
         context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
-            Encode(m_snapshot.sequence >> (part * 12u)));
+            EncodeSmokeColor(m_snapshot.sequence >> (part * 12u)));
         ++marker;
     }
 }

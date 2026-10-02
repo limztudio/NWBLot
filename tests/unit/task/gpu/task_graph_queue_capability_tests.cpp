@@ -75,13 +75,6 @@ void ExpectSameAssignment(const Graphics::GpuTaskQueueAssignment& actual, const 
     EXPECT_EQ(actual.score.ownershipTransfers, expected.score.ownershipTransfers);
 }
 
-void RecordUnsigned(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
     TestArena arena;
     Graphics::GpuTaskGraph graph(arena.arena);
@@ -104,7 +97,7 @@ void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
         const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
         ASSERT_TRUE(assigned);
         if(sample != 0u)
-            RecordUnsigned(s_SampleKeys[sample - 1u], elapsed);
+            RecordUnsignedTestProperty(s_SampleKeys[sample - 1u], elapsed);
         scratchBytes = scratch.memoryStats().peakUsedBytes;
         for(usize index = 0u; index < taskCount; ++index){
             const auto task = view.taskAt(index).id;
@@ -115,9 +108,9 @@ void BenchmarkCapabilityRoute(const usize taskCount, const usize queueCount){
             ExpectSameAssignment(*actual, *reference);
         }
     }
-    RecordUnsigned("task_count", taskCount);
-    RecordUnsigned("queue_count", queueCount);
-    RecordUnsigned("scratch_bytes", scratchBytes);
+    RecordUnsignedTestProperty("task_count", taskCount);
+    RecordUnsignedTestProperty("queue_count", queueCount);
+    RecordUnsignedTestProperty("scratch_bytes", scratchBytes);
 }
 
 TEST(GpuTaskGraph, UnusedQueueCapabilitiesPreserveSingleRouteDiagnostics){

@@ -112,13 +112,6 @@ struct HandoffContext{
     }
 };
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkHandoffValidation(const usize stateCount, const bool permanent){
     HandoffContext context;
     context.addResources(stateCount);
@@ -150,11 +143,11 @@ static void BenchmarkHandoffValidation(const usize stateCount, const bool perman
         scratchPeakBytes = Max(scratchPeakBytes, scratch.memoryStats().peakUsedBytes);
         EXPECT_EQ(scratch.memoryStats().usedBytes, 0u);
     }
-    RecordUnsignedProperty("validation_ns", validationNanoseconds);
-    RecordUnsignedProperty("permanent_query_ns", queryNanoseconds);
+    RecordUnsignedTestProperty("validation_ns", validationNanoseconds);
+    RecordUnsignedTestProperty("permanent_query_ns", queryNanoseconds);
     testing::Test::RecordProperty("state_count_per_type", static_cast<i32>(stateCount));
     testing::Test::RecordProperty("repetitions", static_cast<i32>(s_BenchmarkRepetitions));
-    RecordUnsignedProperty("scratch_peak_bytes", scratchPeakBytes);
+    RecordUnsignedTestProperty("scratch_peak_bytes", scratchPeakBytes);
 }
 
 

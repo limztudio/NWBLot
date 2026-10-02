@@ -226,16 +226,10 @@ static void MeasureAnalysis(const Graphics::GpuTaskGraph& graph, Graphics::GpuTa
         scratchBytes = scratch.memoryStats().peakUsedBytes;
     }
     Sort(samples, samples + LengthOf(samples));
-    const auto record = [](const AStringView name, const u64 value){
-        char text[32u] = {};
-        const AStringView formatted = FormatDecimal(value, text);
-        text[formatted.size()] = '\0';
-        testing::Test::RecordProperty(AInteropString(name), text);
-    };
-    record("median_analysis_ns", samples[LengthOf(samples) / 2u]);
-    record("minimum_analysis_ns", samples[0u]);
-    record("scratch_bytes", scratchBytes);
-    record("task_count", view.taskCount());
+    Tests::RecordUnsignedTestProperty("median_analysis_ns", samples[LengthOf(samples) / 2u]);
+    Tests::RecordUnsignedTestProperty("minimum_analysis_ns", samples[0u]);
+    Tests::RecordUnsignedTestProperty("scratch_bytes", scratchBytes);
+    Tests::RecordUnsignedTestProperty("task_count", view.taskCount());
 }
 
 static void BenchmarkShortcutChain(const usize taskCount){

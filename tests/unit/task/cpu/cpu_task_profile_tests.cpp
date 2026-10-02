@@ -8,6 +8,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -50,27 +51,20 @@ inline constexpr AStringView s_SampleKeys[s_SampleCount] = {
     return value;
 }
 
-void RecordUnsigned(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void RecordSample(const u32 sample, const u64 nanoseconds, const u64 checksum){
     if(sample < s_WarmupCount)
         return;
-    RecordUnsigned(s_SampleKeys[sample - s_WarmupCount], nanoseconds);
-    RecordUnsigned("checksum", checksum);
+    NWB::Tests::RecordUnsignedTestProperty(s_SampleKeys[sample - s_WarmupCount], nanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("checksum", checksum);
 }
 
 void RecordWorkers(const CpuTaskScheduler& scheduler){
     const CpuTaskSchedulerStatistics statistics = scheduler.statistics();
-    RecordUnsigned("worker_count", scheduler.workerThreadCount());
-    RecordUnsigned("placement_failures", statistics.placementFailures);
-    RecordUnsigned("performance_workers", statistics.performanceWorkers);
-    RecordUnsigned("efficiency_workers", statistics.efficiencyWorkers);
-    RecordUnsigned("unclassified_workers", statistics.unclassifiedWorkers);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", scheduler.workerThreadCount());
+    NWB::Tests::RecordUnsignedTestProperty("placement_failures", statistics.placementFailures);
+    NWB::Tests::RecordUnsignedTestProperty("performance_workers", statistics.performanceWorkers);
+    NWB::Tests::RecordUnsignedTestProperty("efficiency_workers", statistics.efficiencyWorkers);
+    NWB::Tests::RecordUnsignedTestProperty("unclassified_workers", statistics.unclassifiedWorkers);
 }
 
 void ProfileRanges(
@@ -87,9 +81,9 @@ void ProfileRanges(
             expected[index] += Work(static_cast<u64>(index) + repetition + 1u, rounds);
     }
     CpuTaskScheduler scheduler(WorkerConfig(workers));
-    RecordUnsigned("elements", count);
-    RecordUnsigned("repetitions", repetitions);
-    RecordUnsigned("rounds_per_element", rounds);
+    NWB::Tests::RecordUnsignedTestProperty("elements", count);
+    NWB::Tests::RecordUnsignedTestProperty("repetitions", repetitions);
+    NWB::Tests::RecordUnsignedTestProperty("rounds_per_element", rounds);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         for(u64& value : output)
             value = 0u;
@@ -122,8 +116,8 @@ void ProfileNestedRanges(Alloc::ScratchArena& scratch, const u32 workers){
             expected[index] += Work(static_cast<u64>(index) + repetition + 1u, 8u);
     }
     CpuTaskScheduler scheduler(WorkerConfig(workers));
-    RecordUnsigned("elements", output.size());
-    RecordUnsigned("repetitions", s_Repetitions);
+    NWB::Tests::RecordUnsignedTestProperty("elements", output.size());
+    NWB::Tests::RecordUnsignedTestProperty("repetitions", s_Repetitions);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         for(u64& value : output)
             value = 0u;
@@ -153,9 +147,9 @@ void ProfileReadyPrefix(const usize unrelatedCount){
     u32 unrelatedInvocations = 0u;
     u32 joinedInvocations = 0u;
     CpuTaskScheduler scheduler(0u);
-    RecordUnsigned("worker_count", 0u);
-    RecordUnsigned("unrelated_ready_tasks", unrelatedCount);
-    RecordUnsigned("scope_tasks", s_ScopeCount);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", 0u);
+    NWB::Tests::RecordUnsignedTestProperty("unrelated_ready_tasks", unrelatedCount);
+    NWB::Tests::RecordUnsignedTestProperty("scope_tasks", s_ScopeCount);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         unrelatedInvocations = 0u;
         joinedInvocations = 0u;
@@ -184,9 +178,9 @@ void ProfileNestedFanIn(Alloc::ScratchArena& scratch, const usize chainLength){
     bool accepted = false;
     u64 nanoseconds = 0u;
     CpuTaskScheduler scheduler(0u);
-    RecordUnsigned("worker_count", 0u);
-    RecordUnsigned("dependent_chain_length", chainLength);
-    RecordUnsigned("nested_fanin", s_FanIn);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", 0u);
+    NWB::Tests::RecordUnsignedTestProperty("dependent_chain_length", chainLength);
+    NWB::Tests::RecordUnsignedTestProperty("nested_fanin", s_FanIn);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         invocations = 0u;
         accepted = false;
@@ -226,9 +220,9 @@ void ProfileIndividualTasks(Alloc::ScratchArena& scratch, const u32 workers, con
         expected[index] = Work(static_cast<u64>(index) + 1u + predecessor, s_Rounds);
     }
     CpuTaskScheduler scheduler(WorkerConfig(workers));
-    RecordUnsigned("elements", s_TaskCount);
-    RecordUnsigned("dependency_chain", dependencyChain ? 1u : 0u);
-    RecordUnsigned("rounds_per_task", s_Rounds);
+    NWB::Tests::RecordUnsignedTestProperty("elements", s_TaskCount);
+    NWB::Tests::RecordUnsignedTestProperty("dependency_chain", dependencyChain ? 1u : 0u);
+    NWB::Tests::RecordUnsignedTestProperty("rounds_per_task", s_Rounds);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         for(u64& value : output)
             value = 0u;
@@ -268,9 +262,9 @@ void ProfileCompletedScopeJoins(const bool submitBeforeJoining){
         ASSERT_TRUE(task.valid());
         scheduler.wait(task);
     }
-    RecordUnsigned("worker_count", 0u);
-    RecordUnsigned("joins", s_Joins);
-    RecordUnsigned("completed_scope", submitBeforeJoining ? 1u : 0u);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", 0u);
+    NWB::Tests::RecordUnsignedTestProperty("joins", s_Joins);
+    NWB::Tests::RecordUnsignedTestProperty("completed_scope", submitBeforeJoining ? 1u : 0u);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         const Timer begin = TimerNow();
         for(u32 repetition = 0u; repetition < s_Joins; ++repetition)
@@ -291,9 +285,9 @@ void ProfilePositiveScopeGraph(Alloc::ScratchArena& scratch, const u32 workers, 
     Atomic<u32> continuations{ 0u };
     Atomic<u32> leaves{ 0u };
     CpuTaskScheduler scheduler(WorkerConfig(workers));
-    RecordUnsigned("root_prerequisites", s_Roots);
-    RecordUnsigned("continuation_chain", chainLength);
-    RecordUnsigned("scoped_join", scopedJoin ? 1u : 0u);
+    NWB::Tests::RecordUnsignedTestProperty("root_prerequisites", s_Roots);
+    NWB::Tests::RecordUnsignedTestProperty("continuation_chain", chainLength);
+    NWB::Tests::RecordUnsignedTestProperty("scoped_join", scopedJoin ? 1u : 0u);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         for(u32& value : visits)
             value = 0u;
@@ -406,10 +400,10 @@ TEST(CpuTaskProfile, DISABLED_UnrelatedScopeJoin){
     constexpr usize s_ScopeCount = 32u;
     Alloc::ScratchArena scratch("tests/task/cpu/profile_scope_join");
     Vector<CpuTaskHandle, Alloc::ScratchArena> roots(s_RootCount, CpuTaskHandle{}, scratch);
-    RecordUnsigned("worker_count", 0u);
-    RecordUnsigned("unrelated_roots", s_RootCount);
-    RecordUnsigned("unrelated_chain", s_ChainCount);
-    RecordUnsigned("scope_tasks", s_ScopeCount);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", 0u);
+    NWB::Tests::RecordUnsignedTestProperty("unrelated_roots", s_RootCount);
+    NWB::Tests::RecordUnsignedTestProperty("unrelated_chain", s_ChainCount);
+    NWB::Tests::RecordUnsignedTestProperty("scope_tasks", s_ScopeCount);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         u32 unrelatedInvocations = 0u;
         u32 joinedInvocations = 0u;
@@ -446,9 +440,9 @@ TEST(CpuTaskProfile, DISABLED_CanceledHistoryLookups){
     constexpr usize s_LookupCount = 512u;
     Alloc::ScratchArena scratch("tests/task/cpu/profile_canceled_history");
     Vector<CpuTaskHandle, Alloc::ScratchArena> history(s_HistoryCount, CpuTaskHandle{}, scratch);
-    RecordUnsigned("worker_count", 0u);
-    RecordUnsigned("canceled_history", s_HistoryCount);
-    RecordUnsigned("lookups", s_LookupCount);
+    NWB::Tests::RecordUnsignedTestProperty("worker_count", 0u);
+    NWB::Tests::RecordUnsignedTestProperty("canceled_history", s_HistoryCount);
+    NWB::Tests::RecordUnsignedTestProperty("lookups", s_LookupCount);
     for(u32 sample = 0u; sample < s_WarmupCount + s_SampleCount; ++sample){
         u32 invocations = 0u;
         CpuTaskScheduler scheduler(0u);

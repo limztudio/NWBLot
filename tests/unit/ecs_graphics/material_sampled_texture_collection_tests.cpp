@@ -459,13 +459,6 @@ TEST(MaterialSampledTextureCollection, UnexpectedResolverUnwindReleasesPendingHa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkCollection(
     const usize uniqueTextures,
     const usize drawCount,
@@ -525,13 +518,13 @@ static void BenchmarkCollection(
     }
     EXPECT_TRUE(success);
     EXPECT_EQ(observedCount, uniqueTextures * iterations);
-    RecordUnsignedProperty("material_texture_collection_ns", elapsed);
-    RecordUnsignedProperty("material_texture_unique_count", uniqueTextures);
-    RecordUnsignedProperty("material_texture_draw_count", drawCount);
-    RecordUnsignedProperty("material_texture_iterations", iterations);
-    RecordUnsignedProperty("material_texture_reference_count", drawCount * s_ExpectedDualCount * (hybrid ? s_ExpectedDualCount : 1u) * iterations);
-    RecordUnsignedProperty("material_texture_scratch_peak_bytes", scratchPeak);
-    RecordUnsignedProperty("material_texture_scratch_reserved_bytes", scratchReserved);
+    Tests::RecordUnsignedTestProperty("material_texture_collection_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("material_texture_unique_count", uniqueTextures);
+    Tests::RecordUnsignedTestProperty("material_texture_draw_count", drawCount);
+    Tests::RecordUnsignedTestProperty("material_texture_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("material_texture_reference_count", drawCount * s_ExpectedDualCount * (hybrid ? s_ExpectedDualCount : 1u) * iterations);
+    Tests::RecordUnsignedTestProperty("material_texture_scratch_peak_bytes", scratchPeak);
+    Tests::RecordUnsignedTestProperty("material_texture_scratch_reserved_bytes", scratchReserved);
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_PassSingleTexture){

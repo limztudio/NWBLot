@@ -165,20 +165,13 @@ static void MeasureGatherWorkload(const usize meshCount, const usize repetitions
     ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, buffers));
 
     const ArenaMemoryStats gatherMemory = gatherScratchArena.memoryStats();
-    char reservedText[32u] = {};
-    char peakText[32u] = {};
-    testing::Test::RecordProperty("geometry_scratch_reserved_bytes", FormatDecimal(gatherMemory.reservedBytes, reservedText).data());
-    testing::Test::RecordProperty("geometry_scratch_peak_bytes", FormatDecimal(gatherMemory.peakUsedBytes, peakText).data());
-    char coldDurationText[32u] = {};
-    char warmDurationText[32u] = {};
-    char gatherCountText[32u] = {};
-    char bufferCountText[32u] = {};
-    char drawCountText[32u] = {};
-    testing::Test::RecordProperty("geometry_cold_gather_ns", FormatDecimal(coldNanoseconds, coldDurationText).data());
-    testing::Test::RecordProperty("geometry_warm_gather_total_ns", FormatDecimal(warmNanoseconds, warmDurationText).data());
-    testing::Test::RecordProperty("geometry_warm_gather_count", FormatDecimal(warmGatherCount, gatherCountText).data());
-    testing::Test::RecordProperty("geometry_unique_buffer_count", FormatDecimal(buffers.size(), bufferCountText).data());
-    testing::Test::RecordProperty("geometry_draw_count", FormatDecimal(drawItems.meshDrawItems.size(), drawCountText).data());
+    NWB::Tests::RecordUnsignedTestProperty("geometry_scratch_reserved_bytes", gatherMemory.reservedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("geometry_scratch_peak_bytes", gatherMemory.peakUsedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("geometry_cold_gather_ns", coldNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("geometry_warm_gather_total_ns", warmNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("geometry_warm_gather_count", warmGatherCount);
+    NWB::Tests::RecordUnsignedTestProperty("geometry_unique_buffer_count", buffers.size());
+    NWB::Tests::RecordUnsignedTestProperty("geometry_draw_count", drawItems.meshDrawItems.size());
 }
 
 

@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -288,17 +289,12 @@ static void BenchmarkAttachments(const usize parentCount, const usize attachment
     for(const auto attached : attachedObjects)
         EXPECT_FLOAT_EQ(world.entity(attached).getComponent<Scene::TransformComponent>().position.x, static_cast<f32>(jointCount));
 
-    char elapsedText[32u] = {};
-    char iterationsText[32u] = {};
-    char parentsText[32u] = {};
-    char attachmentsText[32u] = {};
-    char jointsText[32u] = {};
     char allocationsText[32u] = {};
-    testing::Test::RecordProperty("model_attachment_ns", FormatDecimal(elapsed, elapsedText).data());
-    testing::Test::RecordProperty("model_attachment_iterations", FormatDecimal(iterations, iterationsText).data());
-    testing::Test::RecordProperty("model_attachment_parent_count", FormatDecimal(parentCount, parentsText).data());
-    testing::Test::RecordProperty("model_attachment_count", FormatDecimal(attachmentCount, attachmentsText).data());
-    testing::Test::RecordProperty("model_attachment_joint_count", FormatDecimal(jointCount, jointsText).data());
+    Tests::RecordUnsignedTestProperty("model_attachment_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("model_attachment_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("model_attachment_parent_count", parentCount);
+    Tests::RecordUnsignedTestProperty("model_attachment_count", attachmentCount);
+    Tests::RecordUnsignedTestProperty("model_attachment_joint_count", jointCount);
     testing::Test::RecordProperty(
         "model_attachment_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
     );

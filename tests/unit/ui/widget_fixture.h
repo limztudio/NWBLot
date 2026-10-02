@@ -32,6 +32,21 @@ namespace UiWidgetTests{
 using namespace Impl;
 using namespace Impl::Ui;
 
+inline void ExpectRect(const Rect& actual, const Rect& expected){
+    EXPECT_FLOAT_EQ(actual.x, expected.x);
+    EXPECT_FLOAT_EQ(actual.y, expected.y);
+    EXPECT_FLOAT_EQ(actual.width, expected.width);
+    EXPECT_FLOAT_EQ(actual.height, expected.height);
+}
+
+inline void ExpectRectExact(const Rect& actual, const Rect& expected){
+    EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
+    EXPECT_EQ(BitCast<u32>(actual.y), BitCast<u32>(expected.y));
+    EXPECT_EQ(BitCast<u32>(actual.width), BitCast<u32>(expected.width));
+    EXPECT_EQ(BitCast<u32>(actual.height), BitCast<u32>(expected.height));
+}
+
+
 class WidgetFixture : public testing::Test{
 public:
     WidgetFixture()

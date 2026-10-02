@@ -9,6 +9,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -98,13 +99,6 @@ template<usize Count>
     return true;
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
     constexpr Array<usize, 5u> s_CallCounts{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     constexpr Array<AStringView, 5u> s_UsedKeys{
@@ -116,13 +110,13 @@ static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
         "scratch_reserved_after_8", "scratch_reserved_after_16",
     };
     for(usize index = 0u; index < samples.size(); ++index){
-        RecordUnsignedProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
-        RecordUnsignedProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
+        NWB::Tests::RecordUnsignedTestProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
+        NWB::Tests::RecordUnsignedTestProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
     }
-    RecordUnsignedProperty("scratch_reuse_ns", samples.back().elapsed);
-    RecordUnsignedProperty("scratch_reuse_calls", s_CallCounts.back());
-    RecordUnsignedProperty("scratch_reuse_peak_bytes", samples.back().memory.peakUsedBytes);
-    RecordUnsignedProperty("scratch_heap_allocations_after_first",
+    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_ns", samples.back().elapsed);
+    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_calls", s_CallCounts.back());
+    NWB::Tests::RecordUnsignedTestProperty("scratch_reuse_peak_bytes", samples.back().memory.peakUsedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("scratch_heap_allocations_after_first",
         samples.back().heap.allocationCount - samples.front().heap.allocationCount);
 }
 
@@ -569,7 +563,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
     for(const u64 value : caller)
         EXPECT_EQ(value, 0x76543210u);
     RecordSeries(samples);
-    RecordUnsignedProperty("scratch_collection_count", 4096u);
+    NWB::Tests::RecordUnsignedTestProperty("scratch_collection_count", 4096u);
 }
 
 TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
@@ -596,7 +590,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
     }
     EXPECT_TRUE(valid);
     RecordSeries(samples);
-    RecordUnsignedProperty("scratch_batch_allocations", LengthOf(s_Requests) * 128u);
+    NWB::Tests::RecordUnsignedTestProperty("scratch_batch_allocations", LengthOf(s_Requests) * 128u);
 }
 
 

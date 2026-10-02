@@ -4,6 +4,8 @@
 
 #include "combo_scene.h"
 
+#include "smoke_geometry.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -33,25 +35,6 @@ namespace __hidden_ui_combo_smoke{
 static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 160.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
 static constexpr f32 s_RowHeight = 24.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
-
-[[nodiscard]] bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
-
-void LogRect(const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: geometry sequence={} {}={},{},{},{}")
-        , sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -207,10 +190,10 @@ void UiComboSmokeScene::observeState(){
     if(
         m_sequence != 0u && !m_displayChanged && current == m_lastValues
         && placement.offset == m_lastPlacement.offset
-        && __hidden_ui_combo_smoke::SameRect(placement.bounds, m_lastPlacement.bounds)
-        && __hidden_ui_combo_smoke::SameRect(placement.thumb, m_lastPlacement.thumb)
-        && __hidden_ui_combo_smoke::SameRect(popup.bounds, m_lastPopup.bounds)
-        && __hidden_ui_combo_smoke::SameRect(bounds, m_lastBounds)
+        && SameSmokeRect(placement.bounds, m_lastPlacement.bounds)
+        && SameSmokeRect(placement.thumb, m_lastPlacement.thumb)
+        && SameSmokeRect(popup.bounds, m_lastPopup.bounds)
+        && SameSmokeRect(bounds, m_lastBounds)
     )
         return;
     ++m_sequence;
@@ -223,14 +206,14 @@ void UiComboSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
     );
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("trigger"), bounds);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("popup"), popup.bounds);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("list"), placement.bounds);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("viewport"), placement.viewport);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("track"), placement.track);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("cursor_row"), cursorRow());
-    __hidden_ui_combo_smoke::LogRect(m_sequence, NWB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("trigger"), bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("popup"), popup.bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("cursor_row"), cursorRow());
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
 }
 
 void UiComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -241,7 +224,7 @@ void UiComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 16.0f, y, 12.0f, 12.0f },
-                __hidden_ui_combo_smoke::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

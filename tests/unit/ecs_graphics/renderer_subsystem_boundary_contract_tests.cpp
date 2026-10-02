@@ -205,18 +205,13 @@ static bool ConstructorParameterTypesMatch(
 }
 
 
-static TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TEST(EcsGraphics, ShaderSystemOwnsOnlyItsNarrowConstructionBoundary){
     TestArena testArena;
     AString headerSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ECS_RENDER / "shader" / "shader_system.h", headerSource));
+    ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / s_IMPL / s_ECS_RENDER / "shader" / "shader_system.h", headerSource));
     const AStringView header(headerSource.data(), headerSource.size());
     const AString compactHeaderStorage = CompactSource(header);
     const AStringView compactHeader(compactHeaderStorage.data(), compactHeaderStorage.size());
@@ -238,7 +233,7 @@ TEST(EcsGraphics, ShaderSystemOwnsOnlyItsNarrowConstructionBoundary){
 TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
     TestArena testArena;
     AString headerSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ECS_RENDER / s_MESH / s_MESH_SYSTEM_H, headerSource));
+    ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / s_IMPL / s_ECS_RENDER / s_MESH / s_MESH_SYSTEM_H, headerSource));
     const AStringView header(headerSource.data(), headerSource.size());
     const AString compactHeaderStorage = CompactSource(header);
     const AStringView compactHeader(compactHeaderStorage.data(), compactHeaderStorage.size());
@@ -261,7 +256,7 @@ TEST(EcsGraphics, MeshSystemOwnsOnlyItsNarrowConstructionBoundary){
 
 TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString stateHeaderSource;
     AString stateSystemSource;
     AString meshHeaderSource;
@@ -341,7 +336,7 @@ TEST(EcsGraphics, MeshOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString meshRayTracingSnapshots;
     ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_MESH / "mesh_raytracing_snapshots.cpp", meshRayTracingSnapshots));
     AString softShadowPipelines;
@@ -451,7 +446,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
 
 TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString softShadowPipelines;
     ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RT_SOFTSHADOW_PIPELINES_CPP, softShadowPipelines));
     AString stateHeaderSource;
@@ -622,7 +617,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString stateHeaderSource;
     AString stateSystemSource;
     AString pipelineTypesSystemSource;
@@ -751,7 +746,7 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString materialHeaderSource;
     AString materialDrawTypesSource;
     AString materialPassSource;
@@ -810,7 +805,7 @@ TEST(EcsGraphics, MaterialDrawItemsRetainResourcesWithoutMeshStatePrivilege){
 
 TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString materialHeaderSource;
     AString materialPipelineSource;
     AString materialResourcesSource;
@@ -846,7 +841,7 @@ TEST(EcsGraphics, MaterialDomainOwnsTheSharedMaterialPassLayout){
 
 TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString avboitStateHeaderSource;
     AString avboitPrivateSource;
     AString avboitSystemSource;
@@ -905,7 +900,7 @@ TEST(EcsGraphics, AvboitOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString stateHeaderSource;
     AString stateSystemSource;
     AString deferredSystemSource;
@@ -984,7 +979,7 @@ TEST(EcsGraphics, DeferredOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString stateHeaderSource;
     AString stateSystemSource;
     AString csgFrameStateSource;
@@ -1093,7 +1088,7 @@ TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
 
 TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString avboitHeaderSource;
     AString avboitSystemSource;
     AString avboitResourcesSource;
@@ -1148,7 +1143,7 @@ TEST(EcsGraphics, AvboitDoesNotDependOnDeferredPrivateState){
 
 TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredStatePrivilege){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString resourceImports;
     ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / "graph_resource_import_builder.cpp", resourceImports));
     AString snapshotQueries;
@@ -1360,7 +1355,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 
 TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString opaqueUploads;
     ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / "opaque_upload_chain_builder.cpp", opaqueUploads));
     AString transparentIntervals;
@@ -1681,7 +1676,7 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
 
 TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString meshHeaderSource;
     AString meshSystemSource;
     AString materialHeaderSource;
@@ -1809,7 +1804,7 @@ TEST(EcsGraphics, RootInvalidatesFeatureResourcesThroughDomainSystems){
 
 TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString sceneUploads;
     AString sceneUploadHeader;
     AString rayTracingFrameResources;
@@ -1919,7 +1914,7 @@ TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
 
 TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString resourceImports;
     ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / "graph_resource_import_builder.cpp", resourceImports));
     AString hardwareCaustics;
@@ -2083,7 +2078,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
 
 TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString pipelineHeaderSource;
     AString deferredStateSource;
     AString deferredHeaderSource;
@@ -2169,7 +2164,7 @@ TEST(EcsGraphics, RootOwnsTheCrossDomainFrameTargetAggregate){
 TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
     TestArena testArena;
     AString headerSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_H, headerSource));
+    ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_H, headerSource));
     const AString compactHeaderStorage = CompactSource(AStringView(headerSource.data(), headerSource.size()));
     const AStringView compactHeader(compactHeaderStorage.data(), compactHeaderStorage.size());
 
@@ -2180,7 +2175,7 @@ TEST(EcsGraphics, FramePipelineDoesNotPrivilegeNarrowShaderOrMeshSystems){
 
 TEST(EcsGraphics, KernelDoesNotOwnRootOrAllDomainUmbrellas){
     TestArena testArena;
-    const TestPath rendererDirectory = RepoRoot(testArena) / "impl" / "ecs_render";
+    const TestPath rendererDirectory = NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "impl" / "ecs_render";
     AString pipelineHeaderSource;
     AString cmakeSource;
     ASSERT_TRUE(ReadTextFile(rendererDirectory / s_RENDERER_FRAME_PIPELINE_H, pipelineHeaderSource));
@@ -2274,7 +2269,7 @@ TEST(EcsGraphics, KernelDoesNotOwnRootOrAllDomainUmbrellas){
 
 TEST(EcsGraphics, RendererCMakeListsIncludesEverySourceFileOnce){
     TestArena testArena;
-    const TestPath rendererDirectory = RepoRoot(testArena) / "impl" / "ecs_render";
+    const TestPath rendererDirectory = NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "impl" / "ecs_render";
     AString cmakeSource;
     ASSERT_TRUE(ReadTextFile(rendererDirectory / s_CMAKELISTS_TXT, cmakeSource));
     const AStringView cmake(cmakeSource.data(), cmakeSource.size());
@@ -2311,7 +2306,7 @@ TEST(EcsGraphics, RendererCMakeListsIncludesEverySourceFileOnce){
 
 TEST(EcsGraphics, RootFrameGraphUsesRayTracingContractsInsteadOfDomainState){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     AString shadowPrepareSource;
     AString shadowVisibilitySource;
     AString causticsSource;

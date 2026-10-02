@@ -10,6 +10,7 @@
 
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -146,8 +147,7 @@ void MeasureCameraSelection(const usize cameraCount, const bool useActiveCamera)
     const ArenaMemoryStats afterHeap = HeapBackingMemoryStats();
     EXPECT_EQ(afterHeap.allocationCount, beforeHeap.allocationCount);
     Sort(samples.begin(), samples.end());
-    char elapsedText[32u]{};
-    testing::Test::RecordProperty("median_ns", FormatDecimal(samples[s_SampleCount / 2u], elapsedText).data());
+    NWB::Tests::RecordUnsignedTestProperty("median_ns", samples[s_SampleCount / 2u]);
     testing::Test::RecordProperty("camera_count", static_cast<int>(cameraCount));
     testing::Test::RecordProperty("iterations_per_sample", static_cast<int>(iterations));
     testing::Test::RecordProperty("measured_samples", static_cast<int>(s_SampleCount));

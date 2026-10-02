@@ -7,6 +7,7 @@
 #include <tests/common/capturing_logger.h>
 #include <global/text_utils.h>
 #include <global/timer.h>
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -268,11 +269,6 @@ TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan)
     EXPECT_EQ(repeated.reservedBytes, single.reservedBytes);
 }
 
-void RecordProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    testing::Test::RecordProperty(AInteropString(key), FormatDecimal(value, text).data());
-}
-
 void BenchmarkGather(const u32 planCount, const u32 iterations, const bool shared){
     Core::Alloc::GlobalArena inputArena(Name("tests/skinning_graph_uses/input"));
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans(inputArena);
@@ -303,13 +299,13 @@ void BenchmarkGather(const u32 planCount, const u32 iterations, const bool share
     }
     EXPECT_TRUE(succeeded);
     EXPECT_EQ(outputCount, static_cast<u64>(iterations) * (shared ? 1u : planCount) * 28u);
-    RecordProperty("skinning_uses_ns", elapsed);
-    RecordProperty("skinning_uses_iterations", iterations);
-    RecordProperty("skinning_uses_plan_count", planCount);
-    RecordProperty("skinning_uses_output_count", outputCount);
-    RecordProperty("skinning_uses_peak_bytes", peakBytes);
-    RecordProperty("skinning_uses_reserved_bytes", reservedBytes);
-    RecordProperty("skinning_uses_allocations", allocationCount);
+    Tests::RecordUnsignedTestProperty("skinning_uses_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("skinning_uses_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("skinning_uses_plan_count", planCount);
+    Tests::RecordUnsignedTestProperty("skinning_uses_output_count", outputCount);
+    Tests::RecordUnsignedTestProperty("skinning_uses_peak_bytes", peakBytes);
+    Tests::RecordUnsignedTestProperty("skinning_uses_reserved_bytes", reservedBytes);
+    Tests::RecordUnsignedTestProperty("skinning_uses_allocations", allocationCount);
 }
 
 TEST(SkinningGraphResourceUsesBenchmark, DISABLED_SingleDispatchPlan){

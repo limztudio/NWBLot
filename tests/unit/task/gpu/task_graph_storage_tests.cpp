@@ -87,10 +87,8 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
         const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
         const ArenaMemoryStats memoryAfter = testArena.arena.memoryStats();
         const u64 allocations = memoryAfter.allocationCount - memoryBefore.allocationCount;
-        char durationText[32u] = {};
-        char allocationText[32u] = {};
-        RecordProperty(pass == 0u ? "declaration_ns" : "reused_declaration_ns", FormatDecimal(nanoseconds, durationText).data());
-        RecordProperty(pass == 0u ? "declaration_allocations" : "reused_declaration_allocations", FormatDecimal(allocations, allocationText).data());
+        Tests::RecordUnsignedTestProperty(pass == 0u ? "declaration_ns" : "reused_declaration_ns", nanoseconds);
+        Tests::RecordUnsignedTestProperty(pass == 0u ? "declaration_allocations" : "reused_declaration_allocations", allocations);
         ASSERT_TRUE(accepted);
         if(pass != 0u){
             EXPECT_EQ(memoryAfter.allocationCount, memoryBefore.allocationCount);
@@ -163,8 +161,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
         accepted = accepted && resource.valid() && resourceSet.valid() && pipeline.valid() && completion.valid() && upload.valid();
     }
     const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-    char valueText[32u] = {};
-    RecordProperty("mixed_declaration_ns", FormatDecimal(nanoseconds, valueText).data());
+    NWB::Tests::RecordUnsignedTestProperty("mixed_declaration_ns", nanoseconds);
     ASSERT_TRUE(accepted);
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);

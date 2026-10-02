@@ -28,10 +28,6 @@ struct VulkanAdapterCapabilityTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<VulkanAdapterCapabilityTestArenaTag>;
 
 
-static TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
-}
-
 static VulkanDetail::PhysicalDeviceFeatureSupport FullySupportedFeatures(){
     VulkanDetail::PhysicalDeviceFeatureSupport support;
     VkPhysicalDeviceFeatures& core = support.features.features;
@@ -160,7 +156,7 @@ TEST(VulkanAdapterSelection, PreflightsFullFeatureContractBeforeDiscretePreferen
     TestArena testArena;
     AString adapterSource;
     ASSERT_TRUE(ReadTextFile(
-        RepoRoot(testArena) / "core" / "graphics" / "vulkan" / "backend_context_adapter.cpp",
+        NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "core" / "graphics" / "vulkan" / "backend_context_adapter.cpp",
         adapterSource
     ));
     const AStringView source(adapterSource.data(), adapterSource.size());
@@ -183,7 +179,7 @@ TEST(VulkanQueueFamilySelection, UsesExactSurfaceSupportInsteadOfGenericWin32Pre
     TestArena testArena;
     AString adapterSource;
     ASSERT_TRUE(ReadTextFile(
-        RepoRoot(testArena) / "core" / "graphics" / "vulkan" / "backend_context_adapter.cpp",
+        NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "core" / "graphics" / "vulkan" / "backend_context_adapter.cpp",
         adapterSource
     ));
     const AStringView source(adapterSource.data(), adapterSource.size());

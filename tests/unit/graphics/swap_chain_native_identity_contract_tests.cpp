@@ -47,17 +47,12 @@ struct SwapchainNativeIdentityContractTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<SwapchainNativeIdentityContractTestArenaTag>;
 
 
-static TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TEST(SwapChainPresentation, SwapchainImageUsageMatchesPresentationAndOptionalReadbackConsumers){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString surfaceSource;
     ASSERT_TRUE(ReadTextFile(
@@ -137,7 +132,7 @@ TEST(SwapChainPresentation, SwapchainImageUsageMatchesPresentationAndOptionalRea
 
 TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceBeforePublication){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString surfaceSource;
     ASSERT_TRUE(ReadTextFile(
@@ -356,7 +351,7 @@ TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceB
 // without being mislabeled as a task-graph queue.
 TEST(SwapChainPresentation, CanonicalNativeQueueRegistryPrecedesPhysicalSchedulerProjection){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString moduleHeader;
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "module.h", moduleHeader));
@@ -482,7 +477,7 @@ TEST(SwapChainPresentation, CanonicalNativeQueueRegistryPrecedesPhysicalSchedule
 // covers present-only native states before entering Vulkan.
 TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHostAccess){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString nativeStateHeader;
     ASSERT_TRUE(ReadTextFile(
@@ -687,7 +682,7 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
 // locks for the canonical queue join. Exact identity is revalidated before a semaphore can be replaced.
 TEST(SwapChainPresentation, PresentationSignalRetirementJoinsWithoutQueuePresentationLockInversion){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString contextHeaderSource;
     AString frameSource;
@@ -772,7 +767,7 @@ TEST(SwapChainPresentation, PresentationSignalRetirementJoinsWithoutQueuePresent
 // validation precedes native acceptance, and the accepted-submit commit path is invariant-only and logger-free.
 TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPublication){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString backendHeaderSource;
     AString lifecycleSource;
@@ -1024,7 +1019,7 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
 // to active recordings. Both the chunk commit and the concrete presentation resolution remain allocation-free.
 TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeAcceptance){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString backendHeaderSource;
     AString ownerLookupSource;
@@ -1213,7 +1208,7 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
 // VK_ERROR_DEVICE_LOST may authorize teardown without a successful device-idle join or collect loss diagnostics.
 TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString backendHeaderSource;
     AString deviceSource;
@@ -1281,7 +1276,7 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
 // may release WSI objects, but resize must never create a replacement on the lost VkDevice.
 TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstance){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString backendHeader;
     ASSERT_TRUE(ReadTextFile(
@@ -1464,7 +1459,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
 // headless public fixture cannot enter without exposing a production mutation seam.
 TEST(SwapChainPresentation, NativeTextureRetirementBracketsNativeDestructionAndClearsViews){
     TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
 
     AString surfaceSource;
     ASSERT_TRUE(ReadTextFile(

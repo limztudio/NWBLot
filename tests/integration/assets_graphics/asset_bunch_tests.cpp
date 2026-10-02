@@ -12,6 +12,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -108,13 +109,6 @@ static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const M
     return fixture.document.parse(AStringView(source));
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkDeclarationExpansion(const usize assetCount, const usize iterations){
     BunchFixture fixture;
     AString<Metascript::MetaArena> source(fixture.metadataArena);
@@ -179,13 +173,13 @@ static void BenchmarkDeclarationExpansion(const usize assetCount, const usize it
     }
     output.clear();
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    RecordUnsignedProperty("bunch_expand_ns", elapsed);
-    RecordUnsignedProperty("bunch_expand_iterations", iterations);
-    RecordUnsignedProperty("bunch_declaration_count", fixture.document.declarations().size());
-    RecordUnsignedProperty("bunch_export_count", assetCount);
-    RecordUnsignedProperty("bunch_reference_count", assetCount * s_ExpectedDualCount);
-    RecordUnsignedProperty("bunch_heap_allocations", afterHeap.allocationCount - beforeHeap.allocationCount);
-    RecordUnsignedProperty("bunch_scratch_reserved_bytes", fixture.scratchArena.memoryStats().reservedBytes);
+    Tests::RecordUnsignedTestProperty("bunch_expand_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("bunch_expand_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("bunch_declaration_count", fixture.document.declarations().size());
+    Tests::RecordUnsignedTestProperty("bunch_export_count", assetCount);
+    Tests::RecordUnsignedTestProperty("bunch_reference_count", assetCount * s_ExpectedDualCount);
+    Tests::RecordUnsignedTestProperty("bunch_heap_allocations", afterHeap.allocationCount - beforeHeap.allocationCount);
+    Tests::RecordUnsignedTestProperty("bunch_scratch_reserved_bytes", fixture.scratchArena.memoryStats().reservedBytes);
 }
 
 

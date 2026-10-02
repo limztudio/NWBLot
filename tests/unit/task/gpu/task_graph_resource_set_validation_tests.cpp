@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -77,13 +78,6 @@ struct ResourceSetContext{
         ;
     }
 };
-
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
 
 static void ExpectUnchangedDeclaration(const ResourceSetContext& context, const u64 revision, const usize setCount){
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
@@ -288,15 +282,15 @@ static void BenchmarkResourceSets(const usize memberCount, const usize contextCo
     const ArenaMemoryStats afterReuse = HeapBackingMemoryStats();
     EXPECT_TRUE(reused);
     EXPECT_EQ(afterReuse.allocationCount, beforeReuse.allocationCount);
-    RecordUnsignedProperty("resource_set_member_count", memberCount);
-    RecordUnsignedProperty("resource_set_first_import_count", contextCount);
-    RecordUnsignedProperty("resource_set_first_import_ns", firstElapsed);
-    RecordUnsignedProperty("resource_set_first_heap_allocations", afterFirst.allocationCount - beforeFirst.allocationCount);
-    RecordUnsignedProperty("resource_set_first_heap_used_bytes", afterFirst.usedBytes - beforeFirst.usedBytes);
-    RecordUnsignedProperty("resource_set_first_heap_reserved_bytes", afterFirst.reservedBytes - beforeFirst.reservedBytes);
-    RecordUnsignedProperty("resource_set_reuse_count", contextCount * s_ReuseCount);
-    RecordUnsignedProperty("resource_set_reuse_ns", reuseElapsed);
-    RecordUnsignedProperty("resource_set_reuse_heap_allocations", afterReuse.allocationCount - beforeReuse.allocationCount);
+    RecordUnsignedTestProperty("resource_set_member_count", memberCount);
+    RecordUnsignedTestProperty("resource_set_first_import_count", contextCount);
+    RecordUnsignedTestProperty("resource_set_first_import_ns", firstElapsed);
+    RecordUnsignedTestProperty("resource_set_first_heap_allocations", afterFirst.allocationCount - beforeFirst.allocationCount);
+    RecordUnsignedTestProperty("resource_set_first_heap_used_bytes", afterFirst.usedBytes - beforeFirst.usedBytes);
+    RecordUnsignedTestProperty("resource_set_first_heap_reserved_bytes", afterFirst.reservedBytes - beforeFirst.reservedBytes);
+    RecordUnsignedTestProperty("resource_set_reuse_count", contextCount * s_ReuseCount);
+    RecordUnsignedTestProperty("resource_set_reuse_ns", reuseElapsed);
+    RecordUnsignedTestProperty("resource_set_reuse_heap_allocations", afterReuse.allocationCount - beforeReuse.allocationCount);
 }
 
 TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused1){

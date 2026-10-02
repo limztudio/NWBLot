@@ -47,7 +47,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()
+        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__)
             / "__build_obj" / "build_input_tests";
         ErrorCode error;
         ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty", error));
@@ -166,10 +166,8 @@ TEST_F(BuildInputSelection, DISABLED_BenchmarkExplicitAndDirectoryInputs){
     ASSERT_TRUE(select());
     const u64 directoryNanoseconds = DurationInNS<u64>(TimerNow(), directoryBegin);
     ASSERT_EQ(m_files.size(), s_FileCount);
-    char explicitText[32u] = {};
-    char directoryText[32u] = {};
-    RecordProperty("explicit_inputs_ns", FormatDecimal(explicitNanoseconds, explicitText).data());
-    RecordProperty("directory_inputs_ns", FormatDecimal(directoryNanoseconds, directoryText).data());
+    NWB::Tests::RecordUnsignedTestProperty("explicit_inputs_ns", explicitNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("directory_inputs_ns", directoryNanoseconds);
 }
 
 

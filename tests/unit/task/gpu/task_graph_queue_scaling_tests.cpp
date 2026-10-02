@@ -43,13 +43,6 @@ namespace Scenario{
 };
 
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 void CheckAutomaticPlacement(
     const usize taskCount,
     const Scenario::Enum scenario,
@@ -110,8 +103,8 @@ void CheckAutomaticPlacement(
             minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
         scratchBytes = scratch.memoryStats().peakUsedBytes;
     }
-    RecordUnsignedProperty(durationProperty, minimumNanoseconds);
-    RecordUnsignedProperty(scratchProperty, scratchBytes);
+    RecordUnsignedTestProperty(durationProperty, minimumNanoseconds);
+    RecordUnsignedTestProperty(scratchProperty, scratchBytes);
 
     for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
         const Graphics::GpuTaskId task = view.taskAt(taskIndex).id;

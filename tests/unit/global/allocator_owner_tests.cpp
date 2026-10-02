@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 
 #include <cerrno>
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 #include <tbb/scalable_allocator.h>
 
@@ -420,8 +421,7 @@ TEST(AllocationOwners, ConcurrentSharedOwnerChurnPreservesTotals){
     EXPECT_EQ(after.allocationCount - before.allocationCount, s_ThreadCount * s_AllocationCount);
     EXPECT_EQ(after.deallocationCount - before.deallocationCount, s_ThreadCount * s_AllocationCount);
     EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, u64{ 128u }));
-    char durationText[32u] = {};
-    RecordProperty("shared_owner_churn_ns", FormatDecimal(elapsed, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("shared_owner_churn_ns", elapsed);
 }
 
 

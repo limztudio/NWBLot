@@ -51,7 +51,7 @@ protected:
     virtual void SetUp()override{
         Assets::AssetString caseKey(m_testArena.arena);
         AppendHexU32(static_cast<u32>(ComputeFnv64Text(AStringView(testing::UnitTest::GetInstance()->current_test_info()->name()))), caseKey);
-        m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()
+        m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__)
             / "__build_obj" / "g" / caseKey;
         m_options.outputDirectory = PathToString(m_testArena.arena, m_root / "out");
         m_options.configuration = "tests";
@@ -148,8 +148,7 @@ TEST_F(GatherInputs, DISABLED_BenchmarkDuplicatePayloads){
     const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
     ASSERT_TRUE(gathered);
     verifyPayloads(s_AssetCount, s_PayloadBytes, 1u);
-    char timingText[32u] = {};
-    RecordProperty("gather_ns", FormatDecimal(elapsed, timingText).data());
+    NWB::Tests::RecordUnsignedTestProperty("gather_ns", elapsed);
 }
 
 

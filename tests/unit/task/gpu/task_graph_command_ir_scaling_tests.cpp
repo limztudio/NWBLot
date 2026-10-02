@@ -31,13 +31,6 @@ namespace __hidden_task_graph_command_ir_scaling_tests{
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
-void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 [[nodiscard]] bool AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){
     for(usize index = begin; index < end; ++index){
         const Graphics::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
@@ -123,15 +116,15 @@ void BenchmarkCapture(const usize count){
     EXPECT_EQ(after.allocationCount, firstCapture.allocationCount);
     EXPECT_EQ(after.usedBytes, firstCapture.usedBytes);
 
-    RecordUnsignedProperty("record_count", count);
-    RecordUnsignedProperty("encoded_bytes", encodedBytes);
-    RecordUnsignedProperty("capture_ns", captureNanoseconds);
-    RecordUnsignedProperty("rollback_ns", rollbackNanoseconds);
-    RecordUnsignedProperty("refill_ns", refillNanoseconds);
-    RecordUnsignedProperty("reset_ns", resetNanoseconds);
-    RecordUnsignedProperty("reused_capture_ns", reuseNanoseconds);
-    RecordUnsignedProperty("capture_allocations", firstCapture.allocationCount - initial.allocationCount);
-    RecordUnsignedProperty("reuse_allocations", after.allocationCount - firstCapture.allocationCount);
+    RecordUnsignedTestProperty("record_count", count);
+    RecordUnsignedTestProperty("encoded_bytes", encodedBytes);
+    RecordUnsignedTestProperty("capture_ns", captureNanoseconds);
+    RecordUnsignedTestProperty("rollback_ns", rollbackNanoseconds);
+    RecordUnsignedTestProperty("refill_ns", refillNanoseconds);
+    RecordUnsignedTestProperty("reset_ns", resetNanoseconds);
+    RecordUnsignedTestProperty("reused_capture_ns", reuseNanoseconds);
+    RecordUnsignedTestProperty("capture_allocations", firstCapture.allocationCount - initial.allocationCount);
+    RecordUnsignedTestProperty("reuse_allocations", after.allocationCount - firstCapture.allocationCount);
 }
 
 

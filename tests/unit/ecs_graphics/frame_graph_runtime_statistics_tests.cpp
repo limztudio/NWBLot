@@ -280,13 +280,7 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
 
 TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntimeTelemetry){
     NWB::Tests::TestArena<> testArena;
-    const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .lexically_normal()
-    ;
+    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
     NWB::Tests::TestAString source;
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp",

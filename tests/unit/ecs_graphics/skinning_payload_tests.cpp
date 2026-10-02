@@ -478,8 +478,7 @@ TEST(SkinningPayload, RepeatedRuntimePayloadWorkload){
     EXPECT_EQ(activeBuildCount, s_BuildCount);
     EXPECT_FLOAT_EQ(translationSum, static_cast<f32>(s_BuildCount * (s_BuildCount - 1u) / s_ExpectedDualCount));
     EXPECT_EQ(payload.jointMatrices.size(), s_JointCount);
-    char durationText[32] = {};
-    RecordProperty("skin_payload_ns", FormatDecimal(elapsedNanoseconds, durationText).data());
+    NWB::Tests::RecordUnsignedTestProperty("skin_payload_ns", elapsedNanoseconds);
     RecordProperty("influence_count", static_cast<int>(s_InfluenceCount));
     RecordProperty("joint_count", static_cast<int>(s_JointCount));
     RecordProperty("build_count", static_cast<int>(s_BuildCount));

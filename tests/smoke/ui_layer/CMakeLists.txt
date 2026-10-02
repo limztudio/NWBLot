@@ -45,6 +45,7 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/text_samples.h"
     "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.h"
+    "${CMAKE_CURRENT_LIST_DIR}/smoke_geometry.h"
     "${CMAKE_CURRENT_LIST_DIR}/window_scene.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/window_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/edit_scene.cpp"

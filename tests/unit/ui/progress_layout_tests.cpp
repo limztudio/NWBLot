@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/progress.h>
 
 #include <gtest/gtest.h>
@@ -50,13 +52,6 @@ static void ExpectPadding(const Insets& actual, const Insets& expected){
     EXPECT_EQ(BitCast<u32>(actual.bottom), BitCast<u32>(expected.bottom));
 }
 
-static void ExpectRect(const Rect& actual, const Rect& expected){
-    EXPECT_EQ(BitCast<u32>(actual.x), BitCast<u32>(expected.x));
-    EXPECT_EQ(BitCast<u32>(actual.y), BitCast<u32>(expected.y));
-    EXPECT_EQ(BitCast<u32>(actual.width), BitCast<u32>(expected.width));
-    EXPECT_EQ(BitCast<u32>(actual.height), BitCast<u32>(expected.height));
-}
-
 static void ExpectMetrics(const ProgressMetrics& actual, const ProgressMetrics& expected){
     ExpectPadding(actual.padding, expected.padding);
     ExpectPoint(actual.fillMinimum, expected.fillMinimum);
@@ -64,11 +59,11 @@ static void ExpectMetrics(const ProgressMetrics& actual, const ProgressMetrics& 
 }
 
 static void ExpectPlacement(const ProgressPlacement& actual, const ProgressPlacement& expected){
-    ExpectRect(actual.bounds, expected.bounds);
-    ExpectRect(actual.clip, expected.clip);
-    ExpectRect(actual.content, expected.content);
-    ExpectRect(actual.fillReveal, expected.fillReveal);
-    ExpectRect(actual.fillCanvas, expected.fillCanvas);
+    UiWidgetTests::ExpectRectExact(actual.bounds, expected.bounds);
+    UiWidgetTests::ExpectRectExact(actual.clip, expected.clip);
+    UiWidgetTests::ExpectRectExact(actual.content, expected.content);
+    UiWidgetTests::ExpectRectExact(actual.fillReveal, expected.fillReveal);
+    UiWidgetTests::ExpectRectExact(actual.fillCanvas, expected.fillCanvas);
 }
 
 
@@ -107,10 +102,10 @@ TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){
     ProgressPlacement full;
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.0, zero));
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 1.0, full));
-    ExpectRect(zero.fillReveal, { 18.0f, 28.0f, 0.0f, 16.0f });
-    ExpectRect(zero.fillCanvas, zero.fillReveal);
-    ExpectRect(full.fillReveal, full.content);
-    ExpectRect(full.fillCanvas, full.content);
+    UiWidgetTests::ExpectRectExact(zero.fillReveal, { 18.0f, 28.0f, 0.0f, 16.0f });
+    UiWidgetTests::ExpectRectExact(zero.fillCanvas, zero.fillReveal);
+    UiWidgetTests::ExpectRectExact(full.fillReveal, full.content);
+    UiWidgetTests::ExpectRectExact(full.fillCanvas, full.content);
     EXPECT_EQ(BitCast<u32>(full.fillReveal.x + full.fillReveal.width), BitCast<u32>(full.content.x + full.content.width));
 }
 
@@ -127,8 +122,8 @@ TEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually){
             EXPECT_FLOAT_EQ(placement.fillCanvas.width, 0.0f);
         }
         else{
-            ExpectRect(placement.fillReveal, placement.content);
-            ExpectRect(placement.fillCanvas, placement.content);
+            UiWidgetTests::ExpectRectExact(placement.fillReveal, placement.content);
+            UiWidgetTests::ExpectRectExact(placement.fillCanvas, placement.content);
         }
     }
 }
@@ -141,7 +136,7 @@ TEST(UiProgressLayoutTests, SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanva
     ProgressPlacement placement;
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.01, placement));
     EXPECT_FLOAT_EQ(placement.fillReveal.width, 1.84f);
-    ExpectRect(placement.fillCanvas, { 18.0f, 28.0f, 12.0f, 16.0f });
+    UiWidgetTests::ExpectRectExact(placement.fillCanvas, { 18.0f, 28.0f, 12.0f, 16.0f });
     EXPECT_GT(placement.fillCanvas.width, placement.fillReveal.width);
     EXPECT_LT(placement.fillCanvas.width, placement.content.width);
 }
@@ -153,9 +148,9 @@ TEST(UiProgressLayoutTests, AMinimumCanvasNeverExtendsPastContentNarrowerThanThe
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 32.0f };
     ProgressPlacement placement;
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.5, placement));
-    ExpectRect(placement.content, { 18.0f, 28.0f, 4.0f, 16.0f });
-    ExpectRect(placement.fillReveal, { 18.0f, 28.0f, 2.0f, 16.0f });
-    ExpectRect(placement.fillCanvas, placement.content);
+    UiWidgetTests::ExpectRectExact(placement.content, { 18.0f, 28.0f, 4.0f, 16.0f });
+    UiWidgetTests::ExpectRectExact(placement.fillReveal, { 18.0f, 28.0f, 2.0f, 16.0f });
+    UiWidgetTests::ExpectRectExact(placement.fillCanvas, placement.content);
 }
 
 TEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas){
@@ -167,10 +162,10 @@ TEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressA
     ProgressPlacement clipped;
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.25, full));
     ASSERT_TRUE(ProgressLayout::Place(bounds, { 40.0f, 24.0f, 60.0f, 12.0f }, metrics, 0.25, clipped));
-    ExpectRect(clipped.clip, { 40.0f, 24.0f, 60.0f, 12.0f });
-    ExpectRect(clipped.content, full.content);
-    ExpectRect(clipped.fillReveal, full.fillReveal);
-    ExpectRect(clipped.fillCanvas, full.fillCanvas);
+    UiWidgetTests::ExpectRectExact(clipped.clip, { 40.0f, 24.0f, 60.0f, 12.0f });
+    UiWidgetTests::ExpectRectExact(clipped.content, full.content);
+    UiWidgetTests::ExpectRectExact(clipped.fillReveal, full.fillReveal);
+    UiWidgetTests::ExpectRectExact(clipped.fillCanvas, full.fillCanvas);
 }
 
 TEST(UiProgressLayoutTests, ACompletelyDisjointClipProducesValidEmptyVisibility){
@@ -211,7 +206,7 @@ TEST(UiProgressLayoutTests, PositiveSubnormalAndUnrepresentableRevealEdgesRemain
         ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, fraction, placement));
         EXPECT_FLOAT_EQ(placement.fillReveal.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.fillCanvas.width, 0.0f);
-        ExpectRect(placement.content, { 18.0f, 28.0f, 184.0f, 16.0f });
+        UiWidgetTests::ExpectRectExact(placement.content, { 18.0f, 28.0f, 184.0f, 16.0f });
     }
 }
 
@@ -223,7 +218,7 @@ TEST(UiProgressLayoutTests, RepresentableFloatSubnormalRevealIsPreservedAtTheOri
     const f32 leastPositive = BitCast<f32>(u32{ 1u });
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, leastPositive, placement));
     EXPECT_EQ(BitCast<u32>(placement.fillReveal.width), u32{ 1u });
-    ExpectRect(placement.fillCanvas, placement.fillReveal);
+    UiWidgetTests::ExpectRectExact(placement.fillCanvas, placement.fillReveal);
 }
 
 TEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid){
@@ -236,9 +231,9 @@ TEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid){
     ExpectPoint(metrics.contentSize, {});
     ProgressPlacement placement;
     ASSERT_TRUE(ProgressLayout::Place({}, {}, metrics, 1.0, placement));
-    ExpectRect(placement.content, {});
-    ExpectRect(placement.fillReveal, {});
-    ExpectRect(placement.fillCanvas, {});
+    UiWidgetTests::ExpectRectExact(placement.content, {});
+    UiWidgetTests::ExpectRectExact(placement.fillReveal, {});
+    UiWidgetTests::ExpectRectExact(placement.fillCanvas, {});
 }
 
 TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsPreserveAllPreviouslyMeasuredMetrics){
@@ -372,9 +367,9 @@ TEST(UiProgressLayoutTests, FiniteExtremeCoordinatesRetainValidExactFullEndpoint
     const Rect bounds{ -Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 32.0f };
     ProgressPlacement placement;
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 1.0, placement));
-    ExpectRect(placement.content, bounds);
-    ExpectRect(placement.fillReveal, bounds);
-    ExpectRect(placement.fillCanvas, bounds);
+    UiWidgetTests::ExpectRectExact(placement.content, bounds);
+    UiWidgetTests::ExpectRectExact(placement.fillReveal, bounds);
+    UiWidgetTests::ExpectRectExact(placement.fillCanvas, bounds);
     ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.5, placement));
     EXPECT_FLOAT_EQ(placement.fillReveal.width, Limit<f32>::s_Max * 0.5f);
     EXPECT_FLOAT_EQ(placement.fillReveal.x, -Limit<f32>::s_Max);

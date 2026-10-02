@@ -2,6 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/widgets/radio_group.h>
 #include <impl/ecs_ui/toolkit/widgets/radio_group_style.h>
 
@@ -36,13 +38,6 @@ using namespace Impl::Ui;
     return choices;
 }
 
-static void ExpectRectangle(const Rect& actual, const Rect& expected){
-    EXPECT_FLOAT_EQ(actual.x, expected.x);
-    EXPECT_FLOAT_EQ(actual.y, expected.y);
-    EXPECT_FLOAT_EQ(actual.width, expected.width);
-    EXPECT_FLOAT_EQ(actual.height, expected.height);
-}
-
 static void ExpectMetrics(const RadioGroupMetrics& actual, const RadioGroupMetrics& expected){
     EXPECT_FLOAT_EQ(actual.rowHeight, expected.rowHeight);
     EXPECT_FLOAT_EQ(actual.indicatorExtent, expected.indicatorExtent);
@@ -59,18 +54,18 @@ static void ExpectMetrics(const RadioGroupMetrics& actual, const RadioGroupMetri
 }
 
 static void ExpectPlacement(const RadioGroupPlacement& actual, const RadioGroupPlacement& expected){
-    ExpectRectangle(actual.bounds, expected.bounds);
-    ExpectRectangle(actual.clip, expected.clip);
-    ExpectRectangle(actual.content, expected.content);
+    UiWidgetTests::ExpectRect(actual.bounds, expected.bounds);
+    UiWidgetTests::ExpectRect(actual.clip, expected.clip);
+    UiWidgetTests::ExpectRect(actual.content, expected.content);
     EXPECT_EQ(actual.count, expected.count);
     for(u32 index = 0u; index < s_RadioGroupMaxChoices; ++index){
         EXPECT_EQ(actual.rows[index].key, expected.rows[index].key);
         EXPECT_EQ(actual.rows[index].enabled, expected.rows[index].enabled);
-        ExpectRectangle(actual.rows[index].rectangle, expected.rows[index].rectangle);
-        ExpectRectangle(actual.rows[index].clip, expected.rows[index].clip);
-        ExpectRectangle(actual.rows[index].indicator, expected.rows[index].indicator);
-        ExpectRectangle(actual.rows[index].mark, expected.rows[index].mark);
-        ExpectRectangle(actual.rows[index].textClip, expected.rows[index].textClip);
+        UiWidgetTests::ExpectRect(actual.rows[index].rectangle, expected.rows[index].rectangle);
+        UiWidgetTests::ExpectRect(actual.rows[index].clip, expected.rows[index].clip);
+        UiWidgetTests::ExpectRect(actual.rows[index].indicator, expected.rows[index].indicator);
+        UiWidgetTests::ExpectRect(actual.rows[index].mark, expected.rows[index].mark);
+        UiWidgetTests::ExpectRect(actual.rows[index].textClip, expected.rows[index].textClip);
     }
 }
 
@@ -86,10 +81,10 @@ TEST(UiRadioGroupLayoutTests, InheritedClipRestrictsEachRowAndItsLabel){
     ASSERT_TRUE(RadioGroupLayout::Place(
         { 10.0f, 20.0f, 140.0f, 112.0f }, { 30.0f, 30.0f, 70.0f, 80.0f }, choices, metrics, placement
     ));
-    ExpectRectangle(placement.clip, { 30.0f, 30.0f, 70.0f, 80.0f });
-    ExpectRectangle(placement.rows[0u].clip, { 30.0f, 30.0f, 70.0f, 26.0f });
-    ExpectRectangle(placement.rows[0u].textClip, { 46.0f, 30.0f, 54.0f, 26.0f });
-    ExpectRectangle(placement.rows[2u].clip, { 30.0f, 96.0f, 70.0f, 14.0f });
+    UiWidgetTests::ExpectRect(placement.clip, { 30.0f, 30.0f, 70.0f, 80.0f });
+    UiWidgetTests::ExpectRect(placement.rows[0u].clip, { 30.0f, 30.0f, 70.0f, 26.0f });
+    UiWidgetTests::ExpectRect(placement.rows[0u].textClip, { 46.0f, 30.0f, 54.0f, 26.0f });
+    UiWidgetTests::ExpectRect(placement.rows[2u].clip, { 30.0f, 96.0f, 70.0f, 14.0f });
 }
 
 TEST(UiRadioGroupLayoutTests, FullChoiceBoundProducesAllRowsWithoutVirtualization){
@@ -116,7 +111,7 @@ TEST(UiRadioGroupLayoutTests, EmptyGroupHasOnlyPaddingAndNoChoiceGeometry){
     RadioGroupPlacement placement;
     ASSERT_TRUE(RadioGroupLayout::Place({ 0.0f, 0.0f, 8.0f, 8.0f }, { 0.0f, 0.0f, 8.0f, 8.0f }, choices, metrics, placement));
     EXPECT_EQ(placement.count, 0u);
-    ExpectRectangle(placement.content, { 4.0f, 4.0f, 0.0f, 0.0f });
+    UiWidgetTests::ExpectRect(placement.content, { 4.0f, 4.0f, 0.0f, 0.0f });
     EXPECT_EQ(placement.rows[0u].key, 0u);
 }
 
@@ -128,7 +123,7 @@ TEST(UiRadioGroupLayoutTests, NarrowBoundsShrinkTheIndicatorAndLeaveAnEmptyLabel
     ASSERT_TRUE(RadioGroupLayout::Place(
         { 0.0f, 0.0f, 20.0f, 40.0f }, { 0.0f, 0.0f, 20.0f, 40.0f }, choices, metrics, placement
     ));
-    ExpectRectangle(placement.rows[0u].indicator, { 4.0f, 14.0f, 12.0f, 12.0f });
+    UiWidgetTests::ExpectRect(placement.rows[0u].indicator, { 4.0f, 14.0f, 12.0f, 12.0f });
     EXPECT_FLOAT_EQ(placement.rows[0u].mark.width, 4.8f);
     EXPECT_FLOAT_EQ(placement.rows[0u].textClip.width, 0.0f);
 }

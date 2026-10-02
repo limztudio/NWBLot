@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "widget_fixture.h"
+
 #include <impl/ecs_ui/toolkit/paint.h>
 #include <impl/ecs_ui/toolkit/images/image_source.h>
 

@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -193,13 +194,10 @@ static void BenchmarkSkeletonBuild(const usize jointCount, const usize iteration
     for(usize jointIndex = 1u; jointIndex < jointCount; ++jointIndex)
         EXPECT_EQ(inputs.skeleton.joints()[jointIndex].parentIndex, jointIndex - 1u);
 
-    char elapsedText[32u] = {};
-    char iterationsText[32u] = {};
-    char jointsText[32u] = {};
     char allocationsText[32u] = {};
-    testing::Test::RecordProperty("skeleton_build_ns", FormatDecimal(elapsed, elapsedText).data());
-    testing::Test::RecordProperty("skeleton_build_iterations", FormatDecimal(iterations, iterationsText).data());
-    testing::Test::RecordProperty("skeleton_joint_count", FormatDecimal(jointCount, jointsText).data());
+    Tests::RecordUnsignedTestProperty("skeleton_build_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("skeleton_build_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("skeleton_joint_count", jointCount);
     testing::Test::RecordProperty(
         "skeleton_build_backing_allocations", FormatDecimal(after.allocationCount - before.allocationCount, allocationsText).data()
     );

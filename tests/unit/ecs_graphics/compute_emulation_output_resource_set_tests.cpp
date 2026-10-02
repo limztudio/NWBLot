@@ -410,13 +410,6 @@ TEST(ComputeEmulationOutputResourceSet, RepeatedRequestsRetainOnlyGraphOwnedHand
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkOutputResourceSets(
     const usize uniqueCount,
     const usize requestCount,
@@ -473,15 +466,15 @@ static void BenchmarkOutputResourceSets(
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), unrelatedCount + uniqueCount);
     EXPECT_EQ(view.resourceSetCount(), expectedSuccess ? 1u : 0u);
-    RecordUnsignedProperty("compute_output_set_first_ns", firstNanoseconds);
-    RecordUnsignedProperty("compute_output_set_repeat_ns", repeatNanoseconds);
-    RecordUnsignedProperty("compute_output_set_iterations", iterations);
-    RecordUnsignedProperty("compute_output_set_requests", requestCount);
-    RecordUnsignedProperty("compute_output_set_unique", uniqueCount);
-    RecordUnsignedProperty("compute_output_set_unrelated", unrelatedCount);
-    RecordUnsignedProperty("compute_output_set_initially_missing", preimportRequested ? 0u : uniqueCount);
-    RecordUnsignedProperty("compute_output_set_scratch_peak_bytes", peak);
-    RecordUnsignedProperty("compute_output_set_scratch_reserved_bytes", reserved);
+    Tests::RecordUnsignedTestProperty("compute_output_set_first_ns", firstNanoseconds);
+    Tests::RecordUnsignedTestProperty("compute_output_set_repeat_ns", repeatNanoseconds);
+    Tests::RecordUnsignedTestProperty("compute_output_set_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("compute_output_set_requests", requestCount);
+    Tests::RecordUnsignedTestProperty("compute_output_set_unique", uniqueCount);
+    Tests::RecordUnsignedTestProperty("compute_output_set_unrelated", unrelatedCount);
+    Tests::RecordUnsignedTestProperty("compute_output_set_initially_missing", preimportRequested ? 0u : uniqueCount);
+    Tests::RecordUnsignedTestProperty("compute_output_set_scratch_peak_bytes", peak);
+    Tests::RecordUnsignedTestProperty("compute_output_set_scratch_reserved_bytes", reserved);
 }
 
 TEST(ComputeEmulationOutputResourceSetBenchmark, DISABLED_Unique1){

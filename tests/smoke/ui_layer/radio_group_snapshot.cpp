@@ -3,6 +3,8 @@
 
 
 #include "radio_group_snapshot.h"
+
+#include "smoke_geometry.h"
 #include "radio_group_scene.h"
 
 #include <core/common/log.h>
@@ -48,15 +50,6 @@ static constexpr Array<TStringView, 41u> s_RectNames{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
-
-[[nodiscard]] static Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
 
 static void CopyChoices(UiRadioGroupSnapshot& snapshot, const Impl::Ui::RadioGroupPlacement& placement, const u32 offset){
     for(u32 index = 0u; index < placement.count; ++index){
@@ -141,7 +134,7 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
         || current.display.pixelScaleY != previous.pixelScaleY;
     bool changed = current.values != m_snapshot.values;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        changed |= !SameRect(current.rectangles[index], m_snapshot.rectangles[index]);
+        changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     if(m_snapshot.sequence != 0u && !changed && !displayChanged)
         return;
     current.sequence = m_snapshot.sequence + 1u;
@@ -159,12 +152,8 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
         , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15], value[16]
         , value[17], value[18], value[19], value[20], value[21]
     );
-    for(usize index = 0u; index < current.rectangles.size(); ++index){
-        const Rect& rectangle = current.rectangles[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: geometry sequence={} {}={},{},{},{}")
-            , current.sequence, s_RectNames[index], rectangle.x, rectangle.y, rectangle.width, rectangle.height
-        );
-    }
+    for(usize index = 0u; index < current.rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiRadioGroupSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -174,7 +163,7 @@ void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 12.0f, y, 8.0f, 8.0f },
-                __hidden_ui_radio_group_snapshot::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

@@ -7,6 +7,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -340,24 +341,15 @@ static void BenchmarkHistory(const u32 keyCount, const u32 repeatCount){
     EXPECT_EQ(storeFrames, static_cast<u64>(keyCount) * repeatCount * (repeatCount + 1u));
     EXPECT_EQ(snapshotSamples, storeSamples);
     EXPECT_EQ(snapshotFrames, storeFrames);
-    char recordText[32u] = {};
-    char updateText[32u] = {};
-    char snapshotText[32u] = {};
-    char snapshotRepeatText[32u] = {};
-    char storeLookupText[32u] = {};
-    char snapshotLookupText[32u] = {};
-    char repeatText[32u] = {};
-    char storeBytesText[32u] = {};
-    char snapshotBytesText[32u] = {};
-    testing::Test::RecordProperty("history_record_ns", FormatDecimal(recordNanoseconds, recordText).data());
-    testing::Test::RecordProperty("history_update_ns", FormatDecimal(updateNanoseconds, updateText).data());
-    testing::Test::RecordProperty("history_snapshot_ns", FormatDecimal(snapshotNanoseconds, snapshotText).data());
-    testing::Test::RecordProperty("history_snapshot_repeat_ns", FormatDecimal(snapshotRepeatNanoseconds, snapshotRepeatText).data());
-    testing::Test::RecordProperty("history_store_lookup_ns", FormatDecimal(storeLookupNanoseconds, storeLookupText).data());
-    testing::Test::RecordProperty("history_snapshot_lookup_ns", FormatDecimal(snapshotLookupNanoseconds, snapshotLookupText).data());
-    testing::Test::RecordProperty("history_repeat_count", FormatDecimal(repeatCount, repeatText).data());
-    testing::Test::RecordProperty("history_store_used_bytes", FormatDecimal(storeArena.memoryStats().usedBytes, storeBytesText).data());
-    testing::Test::RecordProperty("history_snapshot_used_bytes", FormatDecimal(snapshotArena.memoryStats().usedBytes, snapshotBytesText).data());
+    NWB::Tests::RecordUnsignedTestProperty("history_record_ns", recordNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_update_ns", updateNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_ns", snapshotNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_repeat_ns", snapshotRepeatNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_store_lookup_ns", storeLookupNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_lookup_ns", snapshotLookupNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("history_repeat_count", repeatCount);
+    NWB::Tests::RecordUnsignedTestProperty("history_store_used_bytes", storeArena.memoryStats().usedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("history_snapshot_used_bytes", snapshotArena.memoryStats().usedBytes);
 }
 
 TEST(GpuTaskTimingHistory, DISABLED_BenchmarkSmallHistory){

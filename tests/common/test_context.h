@@ -10,6 +10,8 @@
 
 #include <global/global.h>
 
+#include <gtest/gtest.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -123,6 +125,20 @@ inline TestVector<u32> MakeQuadTriangleIndices(){
     indices.push_back(2u);
     indices.push_back(3u);
     return indices;
+}
+
+inline constexpr usize s_TestPropertyNumberBufferBytes = 32u;
+
+inline void RecordUnsignedTestProperty(const AStringView key, const u64 value){
+    char text[s_TestPropertyNumberBufferBytes] = {};
+    const AStringView formatted = FormatDecimal(value, text);
+    text[formatted.size()] = '\0';
+    testing::Test::RecordProperty(AInteropString(key), text);
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const char* const sourceFile){
+    return ::Path<ArenaT>(arena, sourceFile).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
 
 

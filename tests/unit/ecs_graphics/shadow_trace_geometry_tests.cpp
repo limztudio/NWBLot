@@ -384,18 +384,12 @@ static void BenchmarkFreeze(const usize meshCount, const usize warmCount, const 
         EXPECT_EQ(prepared.initialState, Core::ResourceStates::ShaderResource);
     }
     const ArenaMemoryStats scratchStats = context.freezeArena.memoryStats();
-    char coldText[32u] = {};
-    char warmText[32u] = {};
-    char countText[32u] = {};
-    char meshText[32u] = {};
-    char reservedText[32u] = {};
-    char peakText[32u] = {};
-    testing::Test::RecordProperty("shadow_geometry_cold_ns", FormatDecimal(coldNanoseconds, coldText).data());
-    testing::Test::RecordProperty("shadow_geometry_warm_ns", FormatDecimal(warmNanoseconds, warmText).data());
-    testing::Test::RecordProperty("shadow_geometry_warm_count", FormatDecimal(warmCount, countText).data());
-    testing::Test::RecordProperty("shadow_geometry_mesh_count", FormatDecimal(meshCount, meshText).data());
-    testing::Test::RecordProperty("shadow_geometry_scratch_reserved_bytes", FormatDecimal(scratchStats.reservedBytes, reservedText).data());
-    testing::Test::RecordProperty("shadow_geometry_scratch_peak_bytes", FormatDecimal(scratchStats.peakUsedBytes, peakText).data());
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_cold_ns", coldNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_warm_ns", warmNanoseconds);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_warm_count", warmCount);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_mesh_count", meshCount);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_scratch_reserved_bytes", scratchStats.reservedBytes);
+    NWB::Tests::RecordUnsignedTestProperty("shadow_geometry_scratch_peak_bytes", scratchStats.peakUsedBytes);
 }
 
 TEST(ShadowTraceGeometry, DISABLED_BenchmarkLargeHybridFreeze){

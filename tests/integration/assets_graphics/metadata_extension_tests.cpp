@@ -13,6 +13,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -140,13 +141,6 @@ static_assert(IsNothrowDestructible_V<ParsedMetadataExtension>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 [[nodiscard]] static bool WriteFixtureFile(const NWB::Path& path, const AStringView text){
     GlobalFilesystemDetail::OutputFileStream file(path, GlobalFilesystemDetail::OutputFileStream::binary);
     file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
@@ -161,7 +155,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const AssetString caseName = StringFormat(fixtureArena, "pairs_{}", pairCount);
-    const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()
+    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__)
         / "__build_obj" / "metadata_extension_tests" / caseName;
     DiscoveredNwbFileVector files(fixtureArena);
     files.reserve(pairCount * s_ExpectedDualCount);
@@ -229,16 +223,16 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
     const ArenaMemoryStats after = parseArena.memoryStats();
     EXPECT_EQ(logger.errorCount(), 0u);
     EXPECT_GT(liveBytes, 0u);
-    RecordUnsignedProperty("metadata_parse_ns", elapsedNanoseconds);
-    RecordUnsignedProperty("metadata_file_count", files.size());
-    RecordUnsignedProperty("metadata_registered_buckets", registeredBucketCount);
-    RecordUnsignedProperty("metadata_parse_iterations", iterations);
-    RecordUnsignedProperty("metadata_parse_allocations", after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty("metadata_parse_reallocations", after.reallocationCount - before.reallocationCount);
-    RecordUnsignedProperty("metadata_parse_deallocations", after.deallocationCount - before.deallocationCount);
-    RecordUnsignedProperty("metadata_retained_live_bytes", liveBytes);
-    RecordUnsignedProperty("metadata_peak_used_bytes", after.peakUsedBytes);
-    RecordUnsignedProperty("metadata_final_used_bytes", after.usedBytes);
+    Tests::RecordUnsignedTestProperty("metadata_parse_ns", elapsedNanoseconds);
+    Tests::RecordUnsignedTestProperty("metadata_file_count", files.size());
+    Tests::RecordUnsignedTestProperty("metadata_registered_buckets", registeredBucketCount);
+    Tests::RecordUnsignedTestProperty("metadata_parse_iterations", iterations);
+    Tests::RecordUnsignedTestProperty("metadata_parse_allocations", after.allocationCount - before.allocationCount);
+    Tests::RecordUnsignedTestProperty("metadata_parse_reallocations", after.reallocationCount - before.reallocationCount);
+    Tests::RecordUnsignedTestProperty("metadata_parse_deallocations", after.deallocationCount - before.deallocationCount);
+    Tests::RecordUnsignedTestProperty("metadata_retained_live_bytes", liveBytes);
+    Tests::RecordUnsignedTestProperty("metadata_peak_used_bytes", after.peakUsedBytes);
+    Tests::RecordUnsignedTestProperty("metadata_final_used_bytes", after.usedBytes);
 }
 
 
@@ -488,7 +482,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
     CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
-    const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()
+    const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__)
         / "__build_obj" / "metadata_registry_storage";
     ErrorCode error;
     ASSERT_TRUE(EnsureDirectories(root, error));

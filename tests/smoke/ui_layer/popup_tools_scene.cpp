@@ -4,6 +4,8 @@
 
 #include "popup_tools_scene.h"
 
+#include "smoke_geometry.h"
+
 #include "../smoke_environment.h"
 
 #include <core/common/log.h>
@@ -34,25 +36,6 @@ static constexpr Impl::Ui::Rect s_Panel{ 24.0f, 24.0f, 400.0f, 200.0f };
 static constexpr Impl::Ui::Rect s_Anchor{ 32.0f, 64.0f, 220.0f, 36.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 456.0f, 32.0f, 130.0f, 36.0f };
 static constexpr f32 s_RowHeight = 28.0f;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
-
-[[nodiscard]] bool SameRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
-    return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
-}
-
-void LogRect(const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: geometry sequence={} {}={},{},{},{}")
-        , sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,9 +167,9 @@ void UiPopupToolsSmokeScene::observeState(){
     const auto& sentinel = m_sentinelState.placement.bounds;
     if(
         m_sequence != 0u && !m_displayChanged && current == m_lastValues
-        && __hidden_ui_popup_tools_smoke::SameRect(menu.bounds, m_lastMenu.bounds)
-        && __hidden_ui_popup_tools_smoke::SameRect(tooltip.bounds, m_lastTooltip.bounds)
-        && __hidden_ui_popup_tools_smoke::SameRect(sentinel, m_lastSentinel)
+        && SameSmokeRect(menu.bounds, m_lastMenu.bounds)
+        && SameSmokeRect(tooltip.bounds, m_lastTooltip.bounds)
+        && SameSmokeRect(sentinel, m_lastSentinel)
     )
         return;
     ++m_sequence;
@@ -199,19 +182,19 @@ void UiPopupToolsSmokeScene::observeState(){
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14]
     );
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("menu"), menu.bounds);
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("menu"), menu.bounds);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
     const auto& list = m_menu.listState().placement();
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("list"), list.bounds);
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("viewport"), list.viewport);
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("first"), rowBounds(1u));
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("second"), rowBounds(2u));
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("last"), rowBounds(5u));
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("sentinel"), sentinel);
-    __hidden_ui_popup_tools_smoke::LogRect(m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("list"), list.bounds);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("viewport"), list.viewport);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("first"), rowBounds(1u));
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("second"), rowBounds(2u));
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("last"), rowBounds(5u));
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("sentinel"), sentinel);
+    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
 }
 
 void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
@@ -222,7 +205,7 @@ void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         for(u32 part = 0u; part < 2u; ++part){
             const usize marker = index * 2u + part;
             context.paint.fillRect({ 12.0f + static_cast<f32>(marker) * 16.0f, y, 12.0f, 12.0f },
-                __hidden_ui_popup_tools_smoke::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
         }
     }
 }

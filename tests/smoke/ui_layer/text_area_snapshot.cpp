@@ -5,6 +5,8 @@
 #include "text_area_snapshot.h"
 #include "text_area_scene.h"
 
+#include "smoke_geometry.h"
+
 #include <core/common/log.h>
 
 #include <global/bit.h>
@@ -41,21 +43,7 @@ static constexpr TStringView s_RectNames[]{ NWB_TEXT("bounds"), NWB_TEXT("conten
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 TextHash(const AStringView text){
-    u32 hash = 2166136261u;
-    for(const char value : text)
-        hash = (hash ^ static_cast<u8>(value)) * 16777619u;
-    return hash;
-}
 
-[[nodiscard]] static bool SameRect(const Impl::Ui::Rect& first, const Impl::Ui::Rect& second){
-    return first.x == second.x && first.y == second.y && first.width == second.width && first.height == second.height;
-}
-
-[[nodiscard]] static Impl::Ui::Color Encode(const u64 value){
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,10 +99,10 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     const bool coherent = Abs(placement.caret.x - placement.textOrigin.x - localCaret.x) < 0.02f
         && Abs(placement.caret.y - placement.textOrigin.y - localCaret.y) < 0.02f
         && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
-        && SameRect(placement.content, scrollbars.viewport) && SameRect(placement.clip, scrollbars.contentClip)
+        && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
         && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;
     const auto& navigation = m_state.navigation();
-    current.values = { static_cast<u64>(m_model.text().size()), TextHash(m_model.text()), static_cast<u64>(m_model.anchor()),
+    current.values = { static_cast<u64>(m_model.text().size()), HashSmokeText(m_model.text()), static_cast<u64>(m_model.anchor()),
         static_cast<u64>(m_model.caret()), static_cast<u64>(m_state.focused()), static_cast<u64>(m_enabled),
         static_cast<u64>(m_readOnly), static_cast<u64>(m_compact), static_cast<u64>(m_longDocument),
         static_cast<u64>(navigation.hasPreferredX()), BitCast<u32>(navigation.preferredX()), m_submits, m_cancels, m_blurs,
@@ -126,9 +114,9 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         || current.maximum.x != m_snapshot.maximum.x || current.maximum.y != m_snapshot.maximum.y
         || current.measure.x != m_snapshot.measure.x || current.measure.y != m_snapshot.measure.y || current.lineHeight != m_snapshot.lineHeight;
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        changed |= !SameRect(current.rectangles[index], m_snapshot.rectangles[index]);
+        changed |= !SameSmokeRect(current.rectangles[index], m_snapshot.rectangles[index]);
     for(usize index = 0u; index < current.selections.size(); ++index)
-        changed |= !SameRect(current.selections[index], m_snapshot.selections[index]);
+        changed |= !SameSmokeRect(current.selections[index], m_snapshot.selections[index]);
     const auto& previous = m_snapshot.display;
     const bool displayChanged = context.display.logicalWidth != previous.logicalWidth
         || context.display.logicalHeight != previous.logicalHeight || context.display.pixelScaleX != previous.pixelScaleX
@@ -152,12 +140,8 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
         , current.sequence, current.scroll.x, current.scroll.y, current.measure.x, current.measure.y
         , current.lineHeight, current.selectionCount, current.maximum.x, current.maximum.y
     );
-    for(usize index = 0u; index < current.rectangles.size(); ++index){
-        const Rect& rectangle = current.rectangles[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} {}={},{},{},{}")
-            , current.sequence, s_RectNames[index], rectangle.x, rectangle.y, rectangle.width, rectangle.height
-        );
-    }
+    for(usize index = 0u; index < current.rectangles.size(); ++index)
+        LogSmokeRect(NWB_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
     for(u32 index = 0u; index < current.selectionCount; ++index){
         const Rect& rectangle = current.selections[index];
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}")
@@ -175,7 +159,7 @@ void UiTextAreaSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
         const u32 parts = index == 1u || index == 10u || (index >= 18u && index <= 20u) ? 3u : 2u;
         for(u32 part = 0u; part < parts; ++part){
             context.paint.fillRect({ 8.0f + static_cast<f32>(marker) * 8.0f, y, 6.0f, 10.0f },
-                __hidden_ui_text_area_snapshot::Encode(value >> (part * 12u)));
+                EncodeSmokeColor(value >> (part * 12u)));
             ++marker;
         }
     }

@@ -43,13 +43,6 @@ namespace Scenario{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scenario, const bool benchmark){
     SCOPED_TRACE(taskCount);
     SCOPED_TRACE(scenario);
@@ -137,10 +130,10 @@ static void CheckTelemetryEdges(const usize taskCount, const Scenario::Enum scen
     }
     EXPECT_EQ(dependencyIndex, analysis.edges().size());
     if(benchmark){
-        RecordUnsignedProperty("telemetry_task_count", taskCount);
-        RecordUnsignedProperty("telemetry_edge_count", edges.size());
-        RecordUnsignedProperty("telemetry_export_ns", minimumNanoseconds);
-        RecordUnsignedProperty("telemetry_scratch_peak_bytes", peakScratchBytes);
+        RecordUnsignedTestProperty("telemetry_task_count", taskCount);
+        RecordUnsignedTestProperty("telemetry_edge_count", edges.size());
+        RecordUnsignedTestProperty("telemetry_export_ns", minimumNanoseconds);
+        RecordUnsignedTestProperty("telemetry_scratch_peak_bytes", peakScratchBytes);
     }
 }
 

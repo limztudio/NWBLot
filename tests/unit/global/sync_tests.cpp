@@ -26,11 +26,6 @@ struct SyncTestArenaTag{};
 using TestArena = NWB::Tests::TestArena<SyncTestArenaTag>;
 
 
-static TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -40,7 +35,7 @@ static_assert(noexcept(MachinePause(1)));
 TEST(GlobalSync, WindowsArm64UsesProcessorYieldIntrinsic){
     TestArena testArena;
     AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "global" / "sync.h", source));
+    ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "global" / "sync.h", source));
 
     const AStringView sourceView(source.data(), source.size());
     const usize branchBegin = sourceView.find("#if defined(NWB_PLATFORM_WINDOWS) && defined(_M_ARM64)");

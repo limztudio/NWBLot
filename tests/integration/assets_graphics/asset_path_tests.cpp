@@ -10,6 +10,7 @@
 #include <global/text_utils.h>
 #include <global/timer.h>
 
+#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
 
@@ -88,13 +89,6 @@ static void PrepareWorkload(
         && AStringView(output) == AStringView(fixture.expectedDerived);
 }
 
-static void RecordUnsignedProperty(const AStringView key, const u64 value){
-    char text[32u] = {};
-    const AStringView formatted = FormatDecimal(value, text);
-    text[formatted.size()] = '\0';
-    testing::Test::RecordProperty(AInteropString(key), text);
-}
-
 static void BenchmarkDerivedPath(
     const usize directoryCount,
     const AStringView directoryToken,
@@ -137,14 +131,14 @@ static void BenchmarkDerivedPath(
     for(usize index = 0u; index < 64u; ++index)
         EXPECT_EQ(sentinel[index], static_cast<u8>(index + 37u));
     for(usize index = 0u; index < samples.size(); ++index){
-        RecordUnsignedProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
-        RecordUnsignedProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
-        RecordUnsignedProperty(s_ElapsedKeys[index], samples[index].elapsed);
+        Tests::RecordUnsignedTestProperty(s_UsedKeys[index], samples[index].memory.usedBytes);
+        Tests::RecordUnsignedTestProperty(s_ReservedKeys[index], samples[index].memory.reservedBytes);
+        Tests::RecordUnsignedTestProperty(s_ElapsedKeys[index], samples[index].elapsed);
     }
-    RecordUnsignedProperty("path_build_ns", elapsed);
-    RecordUnsignedProperty("path_build_calls", s_CallCounts.back());
-    RecordUnsignedProperty("path_output_bytes", fixture.expectedDerived.size());
-    RecordUnsignedProperty("scratch_peak_bytes", samples.back().memory.peakUsedBytes);
+    Tests::RecordUnsignedTestProperty("path_build_ns", elapsed);
+    Tests::RecordUnsignedTestProperty("path_build_calls", s_CallCounts.back());
+    Tests::RecordUnsignedTestProperty("path_output_bytes", fixture.expectedDerived.size());
+    Tests::RecordUnsignedTestProperty("scratch_peak_bytes", samples.back().memory.peakUsedBytes);
     scratchArena.deallocate(sentinel, 1u, 64u);
 }
 

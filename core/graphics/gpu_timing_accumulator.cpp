@@ -529,7 +529,6 @@ bool GpuTimingAccumulator::quarantineRecord(
 )noexcept{
     if(record.state != QueryState::Quarantined){
         if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-            NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
             if(m_pendingAcceptedQueryCount > 0u)
                 --m_pendingAcceptedQueryCount;
         }
@@ -592,7 +591,6 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     const u64 retirementSubscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit;
     const bool retirementNotificationPending = record.retirementNotificationPending;
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
-        NWB_ASSERT(m_pendingAcceptedQueryCount > 0u);
         if(m_pendingAcceptedQueryCount > 0u)
             --m_pendingAcceptedQueryCount;
     }

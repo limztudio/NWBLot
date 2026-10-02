@@ -308,8 +308,6 @@ bool ProjectTestbed::onStartup(){
     );
     if(!directionalLight.valid() || !pointLight.valid())
         return false;
-    NWB_ASSERT(directionalLight.valid());
-    NWB_ASSERT(pointLight.valid());
 
     if(!createDefaultScene())
         return false;

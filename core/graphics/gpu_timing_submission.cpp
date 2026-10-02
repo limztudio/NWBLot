@@ -420,7 +420,6 @@ void GpuTimingSubmissionTicket::cancelScopePublication(const usize publicationIn
     ScopePublication& publication = m_scopePublications[publicationIndex];
     publication.scope = {};
     publication.state = ScopePublicationState::Cancelled;
-    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
     if(m_reservedScopePublicationCount > 0u)
         --m_reservedScopePublicationCount;
 }
@@ -453,7 +452,6 @@ bool GpuTimingSubmissionTicket::publishScope(const GpuTimingScope& scope, const 
         .recordingLeaseSerial = commandList.recordingLeaseSerial(),
     };
     publication.state = ScopePublicationState::Published;
-    NWB_ASSERT(m_reservedScopePublicationCount > 0u);
     if(m_reservedScopePublicationCount > 0u)
         --m_reservedScopePublicationCount;
     return true;

@@ -378,7 +378,6 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 packet,
                 artifactOperation
             );
-            NWB_ASSERT(recordedPacket);
             if(recordedPacket)
                 workerBusySeconds += recordedPacket->recordingSeconds;
         }

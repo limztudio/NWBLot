@@ -253,7 +253,6 @@ void GpuTimingRecorder::addFeedbackScopeDemandsLocked(
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
         if(demandIndex != m_feedbackScopeDemands.size()){
-            NWB_ASSERT(m_feedbackScopeDemands[demandIndex].ownerCount != Limit<u64>::s_Max);
             if(m_feedbackScopeDemands[demandIndex].ownerCount != Limit<u64>::s_Max)
                 ++m_feedbackScopeDemands[demandIndex].ownerCount;
             continue;

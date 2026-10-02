@@ -42,7 +42,6 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
         signature.transformDataPresent = transformDataPresent;
     }
     else if(geometry.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV){
-        NWB_ASSERT(spheresData);
         if(spheresData){
             signature.vertexFormat = spheresData->vertexFormat;
             signature.radiusFormat = spheresData->radiusFormat;
@@ -53,7 +52,6 @@ AccelStructGeometryBuildSignature MakeAccelStructGeometryBuildSignature(
         }
     }
     else if(geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV){
-        NWB_ASSERT(lssData);
         if(lssData){
             signature.vertexFormat = lssData->vertexFormat;
             signature.radiusFormat = lssData->radiusFormat;

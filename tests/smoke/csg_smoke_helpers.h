@@ -38,7 +38,7 @@ inline void AssignCsgCutterParameters(Impl::CsgCutterComponent& cutter, const Pa
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
-inline void AssignCsgCutterTransform(
+inline void AssignCsgCutterTransform( // beginner: Runs pure-SIMD affine/inverse core, Stores cutter matrices once.
     Impl::CsgCutterComponent& cutter,
     const SIMDVector center,
     const SIMDVector rotation

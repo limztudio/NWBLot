@@ -127,7 +127,7 @@ static_assert(
 
 
 template<typename ScratchArenaT>
-[[nodiscard]] inline bool RebuildTangentFrames(
+[[nodiscard]] inline bool RebuildTangentFrames( // beginner: Streams Float# vertex storage through pure-SIMD frame cores; Loads/Stores live only here.
     ScratchArenaT& scratchArena,
     TangentFrameRebuildVertex* vertices,
     const usize vertexCount,

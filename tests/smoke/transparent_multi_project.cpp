@@ -219,7 +219,7 @@ public:
     return Vector3Rotate(basePosition, sceneRotation);
 }
 
-static void ApplyTransparentSceneTransform(
+static void ApplyTransparentSceneTransform( // beginner: Runs pure-SIMD rotate/normalize core, Stores ECS transform once.
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
     const SIMDVector basePosition,
@@ -240,7 +240,7 @@ static void ApplyTransparentSceneTransform(
     return QuaternionRotationRollPitchYaw(time * 0.32f, time, time * 0.16f);
 }
 
-static void ApplyTransparentCsgSceneTransform(
+static void ApplyTransparentCsgSceneTransform( // beginner: Runs pure-SIMD scene core, Stores ECS/cutter storage once.
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID receiverEntity,
     const NWB::Core::ECS::EntityID cutterEntity,

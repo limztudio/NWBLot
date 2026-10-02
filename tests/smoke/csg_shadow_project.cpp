@@ -220,7 +220,7 @@ private:
     }
 
     template<typename ParameterT>
-    void addAnalyticCutter(
+    void addAnalyticCutter( // beginner: Runs pure-SIMD inverse core, Stores cutter matrices once.
         const u32 groupIndex,
         const Name shapeType,
         const ParameterT& parameters,

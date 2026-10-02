@@ -120,7 +120,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane){
+inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane){ // beginner: Loads projection storage once into SIMD lanes.
     outProjectionParams = LoadFloat(projection.projectionParams);
     outAspectRatio = VectorReplicate(projection.aspectRatio);
     outTanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
@@ -186,7 +186,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     return true;
 }
 
-[[nodiscard]] inline bool TryBuildCameraProjection(
+[[nodiscard]] inline bool TryBuildCameraProjection( // beginner: Runs pure-SIMD TryBuildCameraProjectionValues core, Stores CameraProjection once.
     const SIMDVector verticalFovRadians,
     const SIMDVector nearPlane,
     const SIMDVector farPlane,

@@ -69,7 +69,7 @@ void BuildSceneViewBasisVectors(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneViewBasis BuildDefaultSceneViewBasis(){
+SceneViewBasis BuildDefaultSceneViewBasis(){ // beginner: Stores pure-SIMD basis-vector core into SceneViewBasis storage once.
     SceneViewBasis basis;
     SIMDVector right;
     SIMDVector up;
@@ -82,7 +82,7 @@ SceneViewBasis BuildDefaultSceneViewBasis(){
     return basis;
 }
 
-SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector rotation){
+SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector rotation){ // beginner: Stores pure-SIMD basis-vector core plus position lane into storage once.
     SceneViewBasis basis;
     SIMDVector right;
     SIMDVector up;

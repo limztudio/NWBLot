@@ -41,6 +41,10 @@ SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTange
     return VectorSelect(normalizedTangent, sign, s_SIMDMaskW);
 }
 
+SIMDVector CsgDeformWallBuilder::UpAxisVec(){
+    return VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+}
+
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
     // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise; the complement runs on lanes too.
     const SIMDVector blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
@@ -74,7 +78,7 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
     }
     else{
         // SIMD lanes own the fallback store; per-lane scalar writes stay out of the normalize path.
-        StoreFloat(VectorSelect(LoadFloat(vertex.normal), LoadFloat(s_UpAxis), s_SIMDMask3), vertex.normal);
+        StoreFloat(VectorSelect(LoadFloat(vertex.normal), CsgDeformWallBuilder::UpAxisVec(), s_SIMDMask3), vertex.normal);
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));

@@ -28,6 +28,7 @@ public:
     [[nodiscard]] static SIMDVector NormalizeDirectionVec(SIMDVector direction);
     [[nodiscard]] static SIMDVector KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec);
     [[nodiscard]] static SIMDVector TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec);
+    [[nodiscard]] static SIMDVector UpAxisVec();
     // Beginner boundaries: the only places that Load/Store deform storage; math stays on the cores above.
     [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight);
     [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex);

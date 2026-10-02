@@ -31,35 +31,30 @@ namespace __hidden_coincident_volumes{
 using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
-[[nodiscard]] bool ValidCandidate(const Candidate& candidate){
-    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
-        return false;
-    if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
-        return false;
+[[nodiscard]] bool ValidCandidateLanes(SIMDVector positionVec, SIMDVector rotationVec, SIMDVector scaleVec){
     if(
-        !VectorIsFinite(LoadFloat(candidate.position), VectorComponentMask::s_XYZ)
-        || !VectorIsFinite(LoadFloat(candidate.rotation), VectorComponentMask::s_XYZW)
-        || !VectorIsFinite(LoadFloat(candidate.scale), VectorComponentMask::s_XYZ)
+        !VectorIsFinite(positionVec, VectorComponentMask::s_XYZ)
+        || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW)
+        || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ)
     )
         return false;
     // SIMD lanes own the zero/nonzero classification; scalar lane compares stay out of the validity path.
-    const SIMDVector scaleVec = LoadFloat(candidate.scale);
-    const SIMDVector rotationVec = LoadFloat(candidate.rotation);
     const bool scaleNonzero = (VectorMoveMask(VectorEqual(scaleVec, VectorZero())) & VectorComponentMask::s_XYZ) == 0u;
     const bool rotationNonzero = (VectorMoveMask(VectorNotEqual(rotationVec, VectorZero())) & VectorComponentMask::s_XYZW) != 0u;
     return scaleNonzero && rotationNonzero
     ;
 }
 
+[[nodiscard]] bool ValidCandidate(const Candidate& candidate){ // beginner: Loads candidate storage once, validates on lanes.
+    if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
+        return false;
+    if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
+        return false;
+    return ValidCandidateLanes(LoadFloat(candidate.position), LoadFloat(candidate.rotation), LoadFloat(candidate.scale));
+}
+
 struct CandidateHasher{
-    usize operator()(const CandidatePointer candidate)const{
-        usize hash = Hasher<Name>{}(candidate->mesh.name());
-        HashCombine(hash, candidate->material.name());
-        HashCombine(hash, candidate->group);
-        // SIMD loads own the lane gathers feeding the scalar hash folds.
-        const SIMDVector positionLanes = LoadFloat(candidate->position);
-        const SIMDVector rotationLanes = LoadFloat(candidate->rotation);
-        const SIMDVector scaleLanes = LoadFloat(candidate->scale);
+    usize hashTransformLanes(SIMDVector positionLanes, SIMDVector rotationLanes, SIMDVector scaleLanes, usize hash)const{
         HashCombineFloat(hash, VectorGetX(positionLanes));
         HashCombineFloat(hash, VectorGetY(positionLanes));
         HashCombineFloat(hash, VectorGetZ(positionLanes));
@@ -70,6 +65,15 @@ struct CandidateHasher{
         HashCombineFloat(hash, VectorGetX(scaleLanes));
         HashCombineFloat(hash, VectorGetY(scaleLanes));
         HashCombineFloat(hash, VectorGetZ(scaleLanes));
+        return hash;
+    }
+
+    usize operator()(const CandidatePointer candidate)const{ // beginner: Loads transform storage once, folds lanes into the hash.
+        usize hash = Hasher<Name>{}(candidate->mesh.name());
+        HashCombine(hash, candidate->material.name());
+        HashCombine(hash, candidate->group);
+        // SIMD loads own the lane gathers feeding the scalar hash folds.
+        hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
         if(candidate->group == NAME_NONE){
             HashCombine(hash, candidate->boundaryMode);
             HashCombine(hash, candidate->mediumPriority);
@@ -81,13 +85,17 @@ struct CandidateHasher{
 };
 
 struct CandidateEqual{
-    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
+    bool equalTransformLanes(SIMDVector lhsPosition, SIMDVector lhsRotation, SIMDVector lhsScale, SIMDVector rhsPosition, SIMDVector rhsRotation, SIMDVector rhsScale)const{
+        return Vector3Equal(lhsPosition, rhsPosition)
+            && Vector4Equal(lhsRotation, rhsRotation)
+            && Vector3Equal(lhsScale, rhsScale);
+    }
+
+    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{ // beginner: Loads both transforms once, compares on lanes.
         // SIMD lane compares own the transform equality; scalar lane compares stay out of the dedup path.
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
-            || !Vector3Equal(LoadFloat(lhs->position), LoadFloat(rhs->position))
-            || !Vector4Equal(LoadFloat(lhs->rotation), LoadFloat(rhs->rotation))
-            || !Vector3Equal(LoadFloat(lhs->scale), LoadFloat(rhs->scale))
+            || !equalTransformLanes(LoadFloat(lhs->position), LoadFloat(lhs->rotation), LoadFloat(lhs->scale), LoadFloat(rhs->position), LoadFloat(rhs->rotation), LoadFloat(rhs->scale))
         )
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.

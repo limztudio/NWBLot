@@ -153,7 +153,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, cons
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-NWB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
+NWB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams storage through pure-SIMD transform lanes; Loads/Stores live only in this loop.
     OutputT* outputStream,
     usize outputStride,
     const InputT* inputStream,

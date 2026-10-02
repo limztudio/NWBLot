@@ -120,11 +120,11 @@ TEST_F(UiComboBuilderTests, TabExitsAnExplicitlyOpenedComboRelativeToItsFieldWit
     const auto acceptNeighbors = [this](const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 240.0f }))
             return false;
-        const bool beforeActivated = m_builder.button("before", "Before");
+        if(m_builder.button("before", "Before"))
+            return false;
         m_result = m_builder.comboBox("combo", m_source, m_state, Options());
-        const bool afterActivated = m_builder.button("after", "After");
-        static_cast<void>(beforeActivated);
-        static_cast<void>(afterActivated);
+        if(m_builder.button("after", "After"))
+            return false;
         return m_result.valid && finishPanel() && m_context.commitFrame(generation);
     };
     m_state.open();

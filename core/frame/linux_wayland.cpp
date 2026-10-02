@@ -215,8 +215,8 @@ static void StopKeyRepeat(WaylandContext& context)noexcept{
     context.repeatScancode = 0;
 }
 
-static void DispatchTextInput(InputDispatcher& input, const WaylandContext& context, u32 keycode, i32 mods){
-    if(input.keyboardTextBlocked() || !context.xkbState)
+static void DispatchTextInput(InputDispatcher& input, const WaylandContext& context, u32 keycode, i32 scancode, i32 mods){
+    if(input.keyboardTextBlocked(scancode) || !context.xkbState)
         return;
 
     const u32 unicode = xkb_state_key_get_utf32(context.xkbState, keycode);
@@ -756,7 +756,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
 
         const i32 mods = TranslateModifiers(context);
         context.frame->input().keyboardUpdate(translatedKey, static_cast<i32>(key), InputAction::Press, mods);
-        DispatchTextInput(context.frame->input(), context, keycode, mods);
+        DispatchTextInput(context.frame->input(), context, keycode, static_cast<i32>(key), mods);
 
         if(
             context.repeatRate > 0
@@ -986,7 +986,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
     do{
         const i32 mods = TranslateModifiers(context);
         context.frame->input().keyboardUpdate(context.repeatKey, context.repeatScancode, InputAction::Repeat, mods);
-        DispatchTextInput(context.frame->input(), context, context.repeatKeycode, mods);
+        DispatchTextInput(context.frame->input(), context, context.repeatKeycode, context.repeatScancode, mods);
 
         if(stepMs <= 0){
             StopKeyRepeat(context);

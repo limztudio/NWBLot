@@ -133,7 +133,7 @@ private:
 
         virtual void clear()override{
             m_readBuffer.clear();
-            drainPending([](T& message){ static_cast<void>(message); });
+            drainPending([](T&){});
         }
 
 

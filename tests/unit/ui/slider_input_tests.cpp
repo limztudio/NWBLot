@@ -183,7 +183,7 @@ TEST_F(UiSliderInputTests, CaptureLossCancelsPendingMotionAndRetainsTheLastAppli
     ASSERT_TRUE(accept(2u));
     const u64 retained = BitCast<u64>(m_state.value());
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 80.0f, origin.y } }).pointerConsumed);
-    static_cast<void>(send({ InputEventType::PointerCaptureLost }));
+    EXPECT_TRUE(send({ InputEventType::PointerCaptureLost }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_EQ(BitCast<u64>(m_state.value()), retained);
     EXPECT_FALSE(m_state.result().valueChanged);
@@ -199,8 +199,8 @@ TEST_F(UiSliderInputTests, FocusLossRetiresPendingDragAndHeldNavigationWithoutRo
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 80.0f, origin.y } }).pointerConsumed);
-    static_cast<void>(send({ InputEventType::FocusLost }));
-    static_cast<void>(send({ InputEventType::FocusGained }));
+    EXPECT_TRUE(send({ InputEventType::FocusLost }).pointerConsumed);
+    EXPECT_FALSE(send({ InputEventType::FocusGained }).pointerConsumed);
     ASSERT_TRUE(accept(3u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     EXPECT_FALSE(m_state.result().dragging);
@@ -215,7 +215,7 @@ TEST_F(UiSliderInputTests, EnterAndWheelDoNotChangeTheSliderOrCreateActivationAc
     wheel.type = InputEventType::PointerWheel;
     wheel.position = thumbPoint();
     wheel.scrollY = 3.0;
-    static_cast<void>(send(wheel));
+    EXPECT_TRUE(send(wheel).pointerConsumed);
     ASSERT_TRUE(accept(2u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
     EXPECT_FALSE(m_state.result().valueChanged);

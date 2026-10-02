@@ -147,7 +147,8 @@ bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.beginPopup("progress_parent", m_parent, parent))
         return !ui.failed();
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    static_cast<void>(ui.button("parent_action", "Parent action", button));
+    if(ui.button("parent_action", "Parent action", button))
+        m_parent.close();
     if(!ui.progress("parent_value", 0.25))
         return false;
     PopupOptions child;
@@ -156,7 +157,8 @@ bool UiProgressSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(ui.beginPopup("progress_child", m_child, child)){
         if(!ui.progress("child_value", 0.75))
             return false;
-        static_cast<void>(ui.button("child_action", "Child action", button));
+        if(ui.button("child_action", "Child action", button))
+            m_child.close();
         if(!ui.endPopup())
             return false;
     }

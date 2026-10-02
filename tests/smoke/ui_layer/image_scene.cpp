@@ -165,7 +165,8 @@ bool UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
     if(!ui.beginPopup("image_parent", m_parent, parent))
         return !ui.failed();
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    static_cast<void>(ui.button("parent_action", "Parent action", button));
+    if(ui.button("parent_action", "Parent action", button))
+        m_parent.close();
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 40.0f };
@@ -178,7 +179,8 @@ bool UiImageSmokeScene::paintPopups(Impl::Ui::Builder& ui, const f32 right){
         options.tint = { 0.5f, 1.0f, 0.5f, 0.75f };
         if(!ui.image("child_value", Name("radio.mark"), options))
             return false;
-        static_cast<void>(ui.button("child_action", "Child action", button));
+        if(ui.button("child_action", "Child action", button))
+            m_child.close();
         if(!ui.endPopup())
             return false;
     }

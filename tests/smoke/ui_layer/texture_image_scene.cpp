@@ -250,7 +250,8 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
     if(!ui.beginPopup("texture_image_parent", m_parent, parent))
         return !ui.failed();
     const WidgetOptions button{ { LayoutSizePolicy::Stretch, 1.0f }, { LayoutSizePolicy::Fixed, 28.0f } };
-    static_cast<void>(ui.button("parent_action", "Parent action", button));
+    if(ui.button("parent_action", "Parent action", button))
+        m_parent.close();
     ImageOptions options;
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     options.height = { LayoutSizePolicy::Fixed, 64.0f };
@@ -267,7 +268,8 @@ bool UiTextureImageSmokeScene::paintPopups(Impl::UiPaintContext& context, const 
         if(!ui.image("child_source", source, options))
             return false;
         source.reset();
-        static_cast<void>(ui.button("child_action", "Child action", button));
+        if(ui.button("child_action", "Child action", button))
+            m_child.close();
         if(!ui.endPopup())
             return false;
     }

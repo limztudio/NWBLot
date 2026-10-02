@@ -26,7 +26,8 @@ void TestbedUiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f
     ui.style().fontSize = 14.0f;
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
     bool valid = ui.label("title", "Multiline text area", caption);
-    static_cast<void>(ui.checkbox("read_only", "Read only", m_readOnly, caption));
+    if(ui.checkbox("read_only", "Read only", m_readOnly, caption))
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: text area read only={}"), m_readOnly);
     TextAreaOptions options;
     options.readOnly = m_readOnly;
     const EditBoxResult result = ui.textArea("document", m_document, m_state, options);

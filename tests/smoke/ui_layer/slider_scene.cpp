@@ -28,10 +28,10 @@ UiSliderSmokeScene::UiSliderSmokeScene(Core::Alloc::GlobalArena& arena, Core::In
     : m_input(input)
 {
     static_cast<void>(arena);
-    static_cast<void>(m_state.setValue(0.25));
-    static_cast<void>(m_disabled.setValue(0.75));
-    static_cast<void>(m_constant.setValue(0.5));
-    static_cast<void>(m_popupSlider.setValue(0.5));
+    NWB_FATAL_ASSERT(m_state.setValue(0.25));
+    NWB_FATAL_ASSERT(m_disabled.setValue(0.75));
+    NWB_FATAL_ASSERT(m_constant.setValue(0.5));
+    NWB_FATAL_ASSERT(m_popupSlider.setValue(0.5));
     m_input.addHandlerToBack(*this);
 }
 

@@ -21,6 +21,7 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
+#include <global/termination.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
 
@@ -242,6 +243,12 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
     , m_frameDispatchPlans(arena)
     , m_frameLiveBuffers(arena)
+    , m_frameTaskGraph(arena)
+    , m_frameTaskGraphAnalysis(arena)
+    , m_frameTaskGraphQueueAssignments(arena)
+    , m_frameCompiledGraph(arena)
+    , m_frameRecordedGraph(arena)
+    , m_frameSubmissionTransaction(arena)
     , m_acceptedSkinningState(arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
@@ -361,7 +368,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    Core::GpuTaskGraph graph(m_arena);
+    // Compiler artifacts are reused member storage reset per submission; render() never constructs graph objects.
+    resetFrameTaskGraph();
+    Core::GpuTaskGraph& graph = m_frameTaskGraph;
     Core::GpuTaskId terminalTask;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
     // Dispatch plans are reused member storage; only capacity growth may allocate, never per-frame creation.
@@ -913,11 +922,11 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
     terminalTask = finalizerTask;
 
-    Core::GpuTaskGraphAnalysis analysis(m_arena);
-    Core::GpuTaskGraphQueueAssignments assignments(m_arena);
-    Core::GpuCompiledGraph compiledGraph(m_arena);
-    Core::GpuRecordedGraph recordedGraph(m_arena);
-    Core::GpuGraphSubmissionTransaction transaction(m_arena);
+    Core::GpuTaskGraphAnalysis& analysis = m_frameTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments& assignments = m_frameTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph& compiledGraph = m_frameCompiledGraph;
+    Core::GpuRecordedGraph& recordedGraph = m_frameRecordedGraph;
+    Core::GpuGraphSubmissionTransaction& transaction = m_frameSubmissionTransaction;
     Core::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
     const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
@@ -1097,7 +1106,33 @@ void MeshSkinningSystem::pruneRuntimeResources(){
     }
 }
 
+void MeshSkinningSystem::resetFrameTaskGraph(){
+    const Core::GpuCompiledGraph::ReadView planAccess(m_frameCompiledGraph);
+    if(planAccess.valid()){
+        const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
+        if(
+            recordingAttemptGeneration != 0u
+            && !m_frameSubmissionTransaction.discardUnaccepted(
+                m_frameTaskGraph,
+                m_frameCompiledGraph,
+                recordingAttemptGeneration
+            )
+        ){
+            NWB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
+            TerminateInvariant();
+        }
+        m_frameSubmissionTransaction.reset(m_frameCompiledGraph);
+        m_frameRecordedGraph.reset(m_frameCompiledGraph);
+    }
+
+    m_frameTaskGraph.reset();
+    m_frameTaskGraphAnalysis.reset();
+    m_frameTaskGraphQueueAssignments.reset();
+    m_frameCompiledGraph.reset();
+}
+
 void MeshSkinningSystem::invalidateResources(){
+    resetFrameTaskGraph();
     m_acceptedSkinningState.reset();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());

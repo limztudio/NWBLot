@@ -13,6 +13,8 @@
 #include <core/ecs/system.h>
 #include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/persistent_state.h>
 #include <core/task/gpu/types.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
@@ -288,6 +290,8 @@ private:
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
+    // Resets reused frame graph storage so the next render() redeclares into clean members.
+    void resetFrameTaskGraph();
 
 
 private:
@@ -303,6 +307,14 @@ private:
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDispatchPlans;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;
+    // Frame graph compiler artifacts. Declared once with the system and reset per submission
+    // so render() only redeclares into reused storage instead of constructing graph objects.
+    Core::GpuTaskGraph m_frameTaskGraph;
+    Core::GpuTaskGraphAnalysis m_frameTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_frameTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_frameCompiledGraph;
+    Core::GpuRecordedGraph m_frameRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_frameSubmissionTransaction;
     // The graph-runtime cache retains only accepted live skinning resources between graph generations.
     Core::GpuPersistentResourceStateCache m_acceptedSkinningState;
     Core::BindingLayoutHandle m_skinningBindingLayout;

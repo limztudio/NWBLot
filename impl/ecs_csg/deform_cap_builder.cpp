@@ -154,7 +154,8 @@ bool CsgDeformCapBuilder::CapNormal(
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return false;
     const SIMDVector normalized = Vector3Normalize(areaVec);
-    const SIMDVector packed = VectorSet(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), s_UpAxis.w);
+    // SIMD lanes own the xyz/w pack; scalar lane extraction stays out of the cap-normal path.
+    const SIMDVector packed = VectorSelect(normalized, LoadFloat(s_UpAxis), s_SIMDMaskW);
     StoreFloat(packed, outNormal);
     return true;
 }

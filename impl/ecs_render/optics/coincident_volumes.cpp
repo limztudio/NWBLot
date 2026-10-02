@@ -42,8 +42,12 @@ using CandidatePointer = NotNull<const Candidate*>;
         || !VectorIsFinite(LoadFloat(candidate.scale), VectorComponentMask::s_XYZ)
     )
         return false;
-    return candidate.scale.x != 0.f && candidate.scale.y != 0.f && candidate.scale.z != 0.f
-        && (candidate.rotation.x != 0.f || candidate.rotation.y != 0.f || candidate.rotation.z != 0.f || candidate.rotation.w != 0.f)
+    // SIMD lanes own the zero/nonzero classification; scalar lane compares stay out of the validity path.
+    const SIMDVector scaleVec = LoadFloat(candidate.scale);
+    const SIMDVector rotationVec = LoadFloat(candidate.rotation);
+    const bool scaleNonzero = (VectorMoveMask(VectorEqual(scaleVec, VectorZero())) & VectorComponentMask::s_XYZ) == 0u;
+    const bool rotationNonzero = (VectorMoveMask(VectorNotEqual(rotationVec, VectorZero())) & VectorComponentMask::s_XYZW) != 0u;
+    return scaleNonzero && rotationNonzero
     ;
 }
 
@@ -52,12 +56,20 @@ struct CandidateHasher{
         usize hash = Hasher<Name>{}(candidate->mesh.name());
         HashCombine(hash, candidate->material.name());
         HashCombine(hash, candidate->group);
-        for(const f32 value : {
-            candidate->position.x, candidate->position.y, candidate->position.z,
-            candidate->rotation.x, candidate->rotation.y, candidate->rotation.z, candidate->rotation.w,
-            candidate->scale.x, candidate->scale.y, candidate->scale.z
-        })
-            HashCombineFloat(hash, value);
+        // SIMD loads own the lane gathers feeding the scalar hash folds.
+        const SIMDVector positionLanes = LoadFloat(candidate->position);
+        const SIMDVector rotationLanes = LoadFloat(candidate->rotation);
+        const SIMDVector scaleLanes = LoadFloat(candidate->scale);
+        HashCombineFloat(hash, VectorGetX(positionLanes));
+        HashCombineFloat(hash, VectorGetY(positionLanes));
+        HashCombineFloat(hash, VectorGetZ(positionLanes));
+        HashCombineFloat(hash, VectorGetX(rotationLanes));
+        HashCombineFloat(hash, VectorGetY(rotationLanes));
+        HashCombineFloat(hash, VectorGetZ(rotationLanes));
+        HashCombineFloat(hash, VectorGetW(rotationLanes));
+        HashCombineFloat(hash, VectorGetX(scaleLanes));
+        HashCombineFloat(hash, VectorGetY(scaleLanes));
+        HashCombineFloat(hash, VectorGetZ(scaleLanes));
         if(candidate->group == NAME_NONE){
             HashCombine(hash, candidate->boundaryMode);
             HashCombine(hash, candidate->mediumPriority);
@@ -70,12 +82,12 @@ struct CandidateHasher{
 
 struct CandidateEqual{
     bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
+        // SIMD lane compares own the transform equality; scalar lane compares stay out of the dedup path.
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
-            || lhs->position.x != rhs->position.x || lhs->position.y != rhs->position.y || lhs->position.z != rhs->position.z
-            || lhs->rotation.x != rhs->rotation.x || lhs->rotation.y != rhs->rotation.y
-            || lhs->rotation.z != rhs->rotation.z || lhs->rotation.w != rhs->rotation.w
-            || lhs->scale.x != rhs->scale.x || lhs->scale.y != rhs->scale.y || lhs->scale.z != rhs->scale.z
+            || !Vector3Equal(LoadFloat(lhs->position), LoadFloat(rhs->position))
+            || !Vector4Equal(LoadFloat(lhs->rotation), LoadFloat(rhs->rotation))
+            || !Vector3Equal(LoadFloat(lhs->scale), LoadFloat(rhs->scale))
         )
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
@@ -168,9 +180,10 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.mutableTypedBytes = mutableBytes->data();
         candidate.mutableTypedByteCount = mutableBytes->size();
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
-            candidate.position = Float3U(transformPtr->position.x, transformPtr->position.y, transformPtr->position.z);
-            candidate.rotation = Float4U(transformPtr->rotation.x, transformPtr->rotation.y, transformPtr->rotation.z, transformPtr->rotation.w);
-            candidate.scale = Float3U(transformPtr->scale.x, transformPtr->scale.y, transformPtr->scale.z);
+            // SIMD lanes own the aligned transform copies; scalar lane extraction stays out of the gather path.
+            StoreFloat(LoadFloat(transformPtr->position), candidate.position);
+            StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);
+            StoreFloat(LoadFloat(transformPtr->scale), candidate.scale);
         }
         candidates.push_back(candidate);
     }

@@ -116,46 +116,66 @@ bool ComputeOpticalWorldBounds(
     const Float3U& localMax,
     Float3U& outMin,
     Float3U& outMax)noexcept{
+    // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one
+    // lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
     // A float affine coordinate uses three products and three additions. Gamma(8) additionally covers the final
     // float bound conversion and margin arithmetic. The tiny absolute term covers flushed subnormal intermediates.
     constexpr f64 s_UnitRoundoff = 0x1p-24;
     constexpr f64 s_TransformError = (8.0 * s_UnitRoundoff) / (1.0 - 8.0 * s_UnitRoundoff);
     constexpr f64 s_UnderflowMargin = 8.0 * 0x1p-126;
-    for(usize axis = 0u; axis < 3u; ++axis){
-        if(!IsFinite(localMin.raw[axis]) || !IsFinite(localMax.raw[axis]) || localMin.raw[axis] > localMax.raw[axis])
+    const SIMDVector localMinVec = LoadFloat(localMin);
+    const SIMDVector localMaxVec = LoadFloat(localMax);
+    if(!VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ))
+        return false;
+    if(!Vector3LessOrEqual(localMinVec, localMaxVec))
+        return false;
+    const SIMDVector row0 = LoadFloat(objectToWorld.rows[0u]);
+    const SIMDVector row1 = LoadFloat(objectToWorld.rows[1u]);
+    const SIMDVector row2 = LoadFloat(objectToWorld.rows[2u]);
+    if(!VectorIsFinite(row0, VectorComponentMask::s_XYZW) || !VectorIsFinite(row1, VectorComponentMask::s_XYZW) || !VectorIsFinite(row2, VectorComponentMask::s_XYZW))
+        return false;
+    SIMDVector laneMin = VectorReplicate(Limit<f32>::s_Infinity);
+    SIMDVector laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
+    SIMDVector laneMagnitude = VectorZero();
+    for(u32 corner = 0u; corner < 8u; ++corner){
+        const SIMDVector selectX = ((corner & 1u) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVector selectY = ((corner & 2u) != 0u) ? localMaxVec : localMinVec;
+        const SIMDVector selectZ = ((corner & 4u) != 0u) ? localMaxVec : localMinVec;
+        SIMDVector point = VectorSelect(selectX, selectY, s_SIMDMaskY);
+        point = VectorSelect(point, selectZ, s_SIMDMaskZ);
+        const SIMDVector x = VectorSplatX(point);
+        const SIMDVector y = VectorSplatY(point);
+        const SIMDVector z = VectorSplatZ(point);
+        SIMDVector transformed = VectorMultiply(VectorSplatX(row0), x);
+        transformed = VectorMultiplyAdd(VectorSplatY(row0), y, transformed);
+        transformed = VectorMultiplyAdd(VectorSplatZ(row0), z, transformed);
+        SIMDVector transformed1 = VectorMultiply(VectorSplatX(row1), x);
+        transformed1 = VectorMultiplyAdd(VectorSplatY(row1), y, transformed1);
+        transformed1 = VectorMultiplyAdd(VectorSplatZ(row1), z, transformed1);
+        SIMDVector transformed2 = VectorMultiply(VectorSplatX(row2), x);
+        transformed2 = VectorMultiplyAdd(VectorSplatY(row2), y, transformed2);
+        transformed2 = VectorMultiplyAdd(VectorSplatZ(row2), z, transformed2);
+        SIMDVector cornerVec = VectorSelect(transformed, transformed1, s_SIMDMaskY);
+        cornerVec = VectorSelect(cornerVec, transformed2, s_SIMDMaskZ);
+        // Float34U rows pack translation in W lanes (_14/_24/_34); W lane itself stays zero.
+        cornerVec = VectorAdd(cornerVec, VectorSet(VectorGetW(row0), VectorGetW(row1), VectorGetW(row2), 0.0f));
+        if(!VectorIsFinite(cornerVec, VectorComponentMask::s_XYZ))
             return false;
+        laneMin = VectorMin(laneMin, cornerVec);
+        laneMax = VectorMax(laneMax, cornerVec);
+        laneMagnitude = VectorMax(laneMagnitude, VectorAbs(cornerVec));
     }
-    Float3U minimum{};
-    Float3U maximum{};
-    for(usize row = 0u; row < 3u; ++row){
-        if(!IsFinite(objectToWorld.m[row][3u]))
-            return false;
-        f64 low = objectToWorld.m[row][3u];
-        f64 high = low;
-        f64 magnitude = Abs(low);
-        for(usize column = 0u; column < 3u; ++column){
-            if(!IsFinite(objectToWorld.m[row][column]))
-                return false;
-            const f64 coefficient = objectToWorld.m[row][column];
-            const f64 first = coefficient * static_cast<f64>(localMin.raw[column]);
-            const f64 second = coefficient * static_cast<f64>(localMax.raw[column]);
-            low += Min(first, second);
-            high += Max(first, second);
-            magnitude += Max(Abs(first), Abs(second));
-        }
-        const f64 margin = s_TransformError * magnitude + s_UnderflowMargin;
-        minimum.raw[row] = static_cast<f32>(low - margin);
-        maximum.raw[row] = static_cast<f32>(high + margin);
-        if(!IsFinite(minimum.raw[row]) || !IsFinite(maximum.raw[row]))
-            return false;
-    }
-    outMin = minimum;
-    outMax = maximum;
+    const SIMDVector magnitudeSum = VectorAdd(VectorAdd(VectorSplatX(laneMagnitude), VectorSplatY(laneMagnitude)), VectorSplatZ(laneMagnitude));
+    const SIMDVector marginVec = VectorAdd(VectorMultiply(VectorReplicate(static_cast<f32>(s_TransformError)), magnitudeSum), VectorReplicate(static_cast<f32>(s_UnderflowMargin)));
+    const SIMDVector minimum = VectorSubtract(laneMin, marginVec);
+    const SIMDVector maximum = VectorAdd(laneMax, marginVec);
+    if(!VectorIsFinite(minimum, VectorComponentMask::s_XYZ) || !VectorIsFinite(maximum, VectorComponentMask::s_XYZ))
+        return false;
+    StoreFloat(minimum, outMin);
+    StoreFloat(maximum, outMax);
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_END

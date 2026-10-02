@@ -73,9 +73,8 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
         StoreFloat(normalized, vertex.normal);
     }
     else{
-        vertex.normal.x = s_UpAxis.x;
-        vertex.normal.y = s_UpAxis.y;
-        vertex.normal.z = s_UpAxis.z;
+        // SIMD lanes own the fallback store; per-lane scalar writes stay out of the normalize path.
+        StoreFloat(VectorSelect(LoadFloat(vertex.normal), LoadFloat(s_UpAxis), s_SIMDMask3), vertex.normal);
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));

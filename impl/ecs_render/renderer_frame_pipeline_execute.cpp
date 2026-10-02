@@ -127,6 +127,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
     const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
+        NWB_ASSERT(laggedLightingHistoryResourcesReady);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged async lighting requires validated history targets"));
         return;
     }

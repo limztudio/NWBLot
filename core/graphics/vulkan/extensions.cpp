@@ -363,23 +363,23 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     Vector<usize, Alloc::ScratchArena> dstSizes(numDescs, scratchArena);
 
     const auto addRequiredBufferState = [&requiredBufferStates](
-        Buffer* const buffer,
+        Buffer& buffer,
         const ResourceStates::Mask requiredState
     ) -> bool{
         for(BufferStateEntry& state : requiredBufferStates){
-            if(state.buffer == buffer){
+            if(state.buffer == &buffer){
                 state.state |= requiredState;
                 return true;
             }
-            if(buffer->m_buffer != VK_NULL_HANDLE && state.buffer->m_buffer == buffer->m_buffer)
+            if(buffer.m_buffer != VK_NULL_HANDLE && state.buffer->m_buffer == buffer.m_buffer)
                 return false;
         }
-        requiredBufferStates.push_back(BufferStateEntry{ buffer, requiredState });
+        requiredBufferStates.push_back(BufferStateEntry{ &buffer, requiredState });
         return true;
     };
 
     const auto getCheckedDeviceRange = [](
-        Buffer* const buffer,
+        Buffer& buffer,
         const u64 offset,
         const usize declaredByteSize,
         const usize requiredByteSize,
@@ -388,12 +388,12 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         if(declaredByteSize == 0u || requiredByteSize == 0u || declaredByteSize < requiredByteSize)
             return false;
         if(
-            !VulkanDetail::IsBufferRangeInBounds(buffer->getCreationDescription(), offset, declaredByteSize)
-            || !VulkanDetail::IsBufferRangeInBounds(buffer->getCreationDescription(), offset, requiredByteSize)
+            !VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, declaredByteSize)
+            || !VulkanDetail::IsBufferRangeInBounds(buffer.getCreationDescription(), offset, requiredByteSize)
         )
             return false;
 
-        const VkDeviceAddress baseAddress = buffer->getGpuVirtualAddress();
+        const VkDeviceAddress baseAddress = buffer.getGpuVirtualAddress();
         if(baseAddress == 0u || baseAddress > Limit<u64>::s_Max - offset)
             return false;
 
@@ -487,14 +487,14 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         DeviceAddressRange dstRange;
         if(
             !getCheckedDeviceRange(
-                convertDesc.src.buffer,
+                *convertDesc.src.buffer,
                 convertDesc.src.offset,
                 convertDesc.src.size,
                 srcByteSize,
                 srcRange
             )
             || !getCheckedDeviceRange(
-                convertDesc.dst.buffer,
+                *convertDesc.dst.buffer,
                 convertDesc.dst.offset,
                 convertDesc.dst.size,
                 dstByteSize,
@@ -529,8 +529,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         accessedRanges.push_back(dstRange);
 
         if(
-            !addRequiredBufferState(convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput)
-            || !addRequiredBufferState(convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput)
+            !addRequiredBufferState(*convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput)
+            || !addRequiredBufferState(*convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput)
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
             return;

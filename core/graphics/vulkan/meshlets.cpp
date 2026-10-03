@@ -123,10 +123,10 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     }
 
     if(desc.AS)
-        appendPipelineShaderStage(desc.AS.get(), VK_SHADER_STAGE_TASK_BIT_EXT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.AS, VK_SHADER_STAGE_TASK_BIT_EXT, specInfos, shaderStages);
 
     if(desc.MS)
-        appendPipelineShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.MS, VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
         DestroyArenaObject(m_context.objectArena, pso);
@@ -134,12 +134,12 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     }
 
     if(desc.PS)
-        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.PS, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("meshlet pipeline"),
-        pso,
+        *pso,
         scratchArena
     ))
         return nullptr;
@@ -164,7 +164,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("meshlet pipeline"),
-        pso,
+        *pso,
         fixedState
     ))
         return nullptr;
@@ -178,7 +178,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
-    if(!createPipelineOrDestroy(NWB_TEXT("meshlet pipeline"), pso, pipelineInfo))
+    if(!createPipelineOrDestroy(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
         return nullptr;
 
     return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);

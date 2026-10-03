@@ -198,11 +198,11 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     specInfos.reserve(maxShaderStages);
     pso->m_shaderGroups.reserve(desc.shaders.size() + desc.hitGroups.size());
 
-    auto addShaderSpecialization = [&](Shader* s, VkPipelineShaderStageCreateInfo& stageInfo){
-        if(s->m_specializationEntries.empty())
+    auto addShaderSpecialization = [&](Shader& s, VkPipelineShaderStageCreateInfo& stageInfo){
+        if(s.m_specializationEntries.empty())
             return;
 
-        specInfos.push_back(s->makeSpecializationInfo());
+        specInfos.push_back(s.makeSpecializationInfo());
         stageInfo.pSpecializationInfo = &specInfos.back();
     };
 
@@ -230,7 +230,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         default:
             continue;
         }
-        addShaderSpecialization(s, stageInfo);
+        addShaderSpecialization(*s, stageInfo);
 
         auto group = VulkanDetail::MakeVkStruct<VkRayTracingShaderGroupCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR);
         group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
@@ -264,7 +264,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(s, stageInfo);
+            addShaderSpecialization(*s, stageInfo);
             group.closestHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -274,7 +274,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(s, stageInfo);
+            addShaderSpecialization(*s, stageInfo);
             group.anyHitShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -284,7 +284,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
             stageInfo.stage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
             stageInfo.module = s->m_shaderModule;
             stageInfo.pName = s->m_entryPointName.data();
-            addShaderSpecialization(s, stageInfo);
+            addShaderSpecialization(*s, stageInfo);
             group.intersectionShader = static_cast<u32>(stages.size());
             stages.push_back(stageInfo);
         }
@@ -330,7 +330,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     if(!configurePipelineBindingsOrDestroy(
         desc.globalBindingLayouts,
         NWB_TEXT("ray tracing pipeline"),
-        pso,
+        *pso,
         scratchArena
     ))
         return nullptr;

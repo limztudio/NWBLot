@@ -258,7 +258,9 @@ MeshSkinningSystem::MeshSkinningSystem(
     m_runtimeMeshRegistry.registerRuntimeMeshProvider(*this);
 }
 
-MeshSkinningSystem::~MeshSkinningSystem(){
+MeshSkinningSystem::~MeshSkinningSystem()noexcept{
+    // Resolve frame payloads before transaction and plan members begin destruction.
+    resetFrameTaskGraph();
     m_runtimeMeshRegistry.unregisterRuntimeMeshProvider(*this);
 }
 
@@ -1107,22 +1109,24 @@ void MeshSkinningSystem::pruneRuntimeResources(){
 }
 
 void MeshSkinningSystem::resetFrameTaskGraph(){
-    const Core::GpuCompiledGraph::ReadView planAccess(m_frameCompiledGraph);
-    if(planAccess.valid()){
-        const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
-        if(
-            recordingAttemptGeneration != 0u
-            && !m_frameSubmissionTransaction.discardUnaccepted(
-                m_frameTaskGraph,
-                m_frameCompiledGraph,
-                recordingAttemptGeneration
-            )
-        ){
-            NWB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
-            TerminateInvariant();
+    {
+        const Core::GpuCompiledGraph::ReadView planAccess(m_frameCompiledGraph);
+        if(planAccess.valid()){
+            const u64 recordingAttemptGeneration = m_frameRecordedGraph.recordingAttemptGeneration();
+            if(
+                recordingAttemptGeneration != 0u
+                && !m_frameSubmissionTransaction.discardUnaccepted(
+                    m_frameTaskGraph,
+                    m_frameCompiledGraph,
+                    recordingAttemptGeneration
+                )
+            ){
+                NWB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
+                TerminateInvariant();
+            }
+            m_frameSubmissionTransaction.reset(m_frameCompiledGraph);
+            m_frameRecordedGraph.reset(m_frameCompiledGraph);
         }
-        m_frameSubmissionTransaction.reset(m_frameCompiledGraph);
-        m_frameRecordedGraph.reset(m_frameCompiledGraph);
     }
 
     m_frameTaskGraph.reset();

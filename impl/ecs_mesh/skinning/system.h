@@ -229,7 +229,7 @@ public:
         IRuntimeMeshRegistry& runtimeMeshRegistry,
         ShaderPathResolveCallback shaderPathResolver
     );
-    virtual ~MeshSkinningSystem()override;
+    virtual ~MeshSkinningSystem()noexcept override;
 
 
 public:

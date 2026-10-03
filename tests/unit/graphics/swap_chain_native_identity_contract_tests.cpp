@@ -1102,7 +1102,7 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
     const usize firstNativeSubmission = deviceQueue.find("const u64 submittedID = queue->submit(", firstWorkspaceLock);
     const usize firstFinalization = deviceQueue.find("finalizeSubmissionCommandListResourcesLocked(", firstNativeSubmission);
     const usize firstWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", firstFinalization);
-    const usize firstDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", firstWorkspaceUnlock);
+    const usize firstDeviceLossCapture = deviceQueue.find("captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);", firstWorkspaceUnlock);
     const usize secondWorkspaceLock = deviceQueue.find(
         "UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);",
         graphSubmissionBegin
@@ -1111,7 +1111,7 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
     const usize secondFinalization = deviceQueue.find("finalizeSubmissionCommandListResourcesLocked(", secondNativeSubmission);
     const usize hookResolution = deviceQueue.find("hookResolution.resolve(submissionToken);", secondFinalization);
     const usize secondWorkspaceUnlock = deviceQueue.find("submissionWorkspaceLock.unlock();", hookResolution);
-    const usize secondDeviceLossCapture = deviceQueue.find("captureDeviceLoss(\"queue submit\");", secondWorkspaceUnlock);
+    const usize secondDeviceLossCapture = deviceQueue.find("captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);", secondWorkspaceUnlock);
     ASSERT_NE(firstWorkspaceLock, AStringView::npos);
     ASSERT_NE(firstNativeSubmission, AStringView::npos);
     ASSERT_NE(firstFinalization, AStringView::npos);
@@ -1263,10 +1263,15 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     EXPECT_EQ(destructor.find("captureDeviceLoss("), AStringView::npos);
     EXPECT_EQ(destructor.find(s_NWB_LOGGER.data()), AStringView::npos);
 
-    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(\"acquire next image\")"), AStringView::npos);
-    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(\"present\", &presentationLock)"), AStringView::npos);
+    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(VulkanArenaScope::s_AcquireNextImageContext)"), AStringView::npos);
+    EXPECT_NE(presentation.find("captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentContext, &presentationLock)"), AStringView::npos);
+    EXPECT_NE(presentation.find("if(!device || !device->isDeviceLost())"), AStringView::npos);
+    EXPECT_NE(
+        presentation.find("captureDeviceLossAfterUnlock(VulkanArenaScope::s_UnconsumedPresentationSignalIdleContext, &presentationLock)"),
+        AStringView::npos
+    );
     EXPECT_NE(presentation.find("m_rhiDevice->quarantineDevice();"), AStringView::npos);
-    EXPECT_EQ(presentation.find("captureDeviceLoss(\"present semaphore idle\")"), AStringView::npos);
+    EXPECT_EQ(presentation.find("captureDeviceLoss(VulkanArenaScope::s_UnconsumedPresentationSignalIdleContext)"), AStringView::npos);
     EXPECT_NE(submissionLifecycle.find("if(submissionsBlocked())"), AStringView::npos);
     EXPECT_NE(submissionLifecycle.find("bool Device::beginLifecycleDrain()noexcept{"), AStringView::npos);
 }

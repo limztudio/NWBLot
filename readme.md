@@ -115,8 +115,6 @@ Texture cooking and runtime format selection account for device format support, 
 
 Third-party packages are vendored as flat top-level directories under `3rd_parties/`. Each package records its source and version in `nwb_update.txt`. See [Third-Party Packages](https://github.com/limztudio/NWBLot/wiki/Third-Party-Packages) before updating a dependency.
 
-Read [`.helper/standard.md`](.helper/standard.md) before changing project code. Use the project wrappers defined under `global/`; in particular, `BitCast` from `global/bit.h` is the project wrapper for `std::bit_cast`.
-
 ## Documentation
 
 Start with the [NWBLot Wiki](https://github.com/limztudio/NWBLot/wiki), then use [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture), [Asset Flow](https://github.com/limztudio/NWBLot/wiki/Asset-Flow), [Runtime and ECS](https://github.com/limztudio/NWBLot/wiki/Runtime-and-ECS), and [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for the corresponding subsystem.

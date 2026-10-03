@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, LaunchSettings
+from launcher.models import LaunchSettings
 from launcher.constants import (
     CMAKE_BUILD_FLAG,
     CMAKE_CONFIG_FLAG,

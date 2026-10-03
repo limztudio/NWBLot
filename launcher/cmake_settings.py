@@ -13,7 +13,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, CMakeTargetInfo, LaunchSettings
+from launcher.models import CMakeTargetInfo, LaunchSettings
 from launcher.constants import (
     ARCH_X64,
     ARG_JOIN_SEPARATOR,

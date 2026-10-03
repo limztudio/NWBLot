@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, RepoLauncher
+from launcher.models import RepoLauncher
 from launcher.constants import (
     ARG_ARCH,
     ARG_BUILD_DIR,

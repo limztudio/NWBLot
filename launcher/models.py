@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""LauncherModels: Immutable launcher data models (settings, targets, sessions)."""
+"""Immutable launcher data models (settings, targets, sessions)."""
 
 from __future__ import annotations
 
@@ -40,12 +40,3 @@ class ProfileSession:
     log_port: int
     logserver_executable: Path
     process: Optional[subprocess.Popen]
-
-
-class LauncherModels:
-    """Immutable launcher data models (settings, targets, sessions). Grouping alias for the model types."""
-
-    LaunchSettings = LaunchSettings
-    CMakeTargetInfo = CMakeTargetInfo
-    RepoLauncher = RepoLauncher
-    ProfileSession = ProfileSession

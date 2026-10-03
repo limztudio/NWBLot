@@ -8,7 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, LaunchSettings, ProfileSession
+from launcher.models import LaunchSettings, ProfileSession
 from launcher.constants import (
     CWD_PREFIX,
     EMPTY_STRING,

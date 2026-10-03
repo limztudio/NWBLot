@@ -6,7 +6,7 @@ package root re-exports the public surface for ``import launcher`` /
 ``ROOT_LAUNCHER.*`` call sites.
 
 Domains:
-- launcher.models (LauncherModels): immutable data models.
+- launcher.models: immutable data models.
 - launcher.discovery (LauncherDiscovery): repo launcher discovery/routing.
 - launcher.host (HostProbe): platform/arch probing and path layout.
 - launcher.cmake_settings (CmakeSettings): CMake settings/cache/File API.
@@ -23,7 +23,6 @@ from launcher.constants import *  # noqa: F401,F403
 from launcher.models import (  # noqa: F401
     CMakeTargetInfo,
     LaunchSettings,
-    LauncherModels,
     ProfileSession,
     RepoLauncher,
 )
@@ -451,6 +450,5 @@ __all__ = [
     'ProfileSessionController',
     'DispatchRouter',
     'LauncherCli',
-    'LauncherModels',
     'repository_windows_process',
 ]

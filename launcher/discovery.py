@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, RepoLauncher
+from launcher.models import RepoLauncher
 from launcher.constants import (
     COMMAND_HELP_LONG,
     COMMAND_HELP_SHORT,

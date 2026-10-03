@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-from launcher.models import LauncherModels, LaunchSettings, ProfileSession
+from launcher.models import LaunchSettings, ProfileSession
 from launcher import repository_windows_process
 from launcher.constants import (
     APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,

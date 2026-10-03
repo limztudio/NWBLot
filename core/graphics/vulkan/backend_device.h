@@ -518,13 +518,13 @@ private:
     [[nodiscard]] bool configurePipelineBindingsOrDestroy(
         const BindingLayoutVector& bindingLayouts,
         TStringView operationName,
-        PipelineT* pipeline,
+        PipelineT& pipeline,
         Alloc::ScratchArena& scratchArena
     )const{
-        if(configurePipelineBindings(bindingLayouts, operationName, *pipeline, scratchArena))
+        if(configurePipelineBindings(bindingLayouts, operationName, pipeline, scratchArena))
             return true;
 
-        DestroyArenaObject(m_context.objectArena, pipeline);
+        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
@@ -535,7 +535,7 @@ private:
         const VkDynamicState* dynamicStates,
         const u32 dynamicStateCount,
         TStringView operationName,
-        PipelineT* pipeline,
+        PipelineT& pipeline,
         VulkanDetail::GraphicsPipelineFixedState& outState
     )const{
         if(VulkanDetail::BuildGraphicsPipelineFixedState(
@@ -549,39 +549,39 @@ private:
         ))
             return true;
 
-        DestroyArenaObject(m_context.objectArena, pipeline);
+        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
     [[nodiscard]] bool createPipelineOrDestroy(
         TStringView operationName,
-        PipelineT* pipeline,
+        PipelineT& pipeline,
         const VkComputePipelineCreateInfo& pipelineInfo
     )const{
-        const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        const VkResult res = m_context.deviceDispatch.vkCreateComputePipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pipeline);
+        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
     [[nodiscard]] bool createPipelineOrDestroy(
         TStringView operationName,
-        PipelineT* pipeline,
+        PipelineT& pipeline,
         const VkGraphicsPipelineCreateInfo& pipelineInfo
     )const{
-        const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline->m_pipeline);
+        const VkResult res = m_context.deviceDispatch.vkCreateGraphicsPipelines(m_context.device, m_context.pipelineCache, 1, &pipelineInfo, m_context.allocationCallbacks, &pipeline.m_pipeline);
         if(res == VK_SUCCESS)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, pipeline);
+        DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     void appendPipelineShaderStage(
-        Shader* shader,
+        Shader& shader,
         VkShaderStageFlagBits stage,
         PipelineSpecializationInfoVector& specializationInfos,
         PipelineShaderStageVector& shaderStages

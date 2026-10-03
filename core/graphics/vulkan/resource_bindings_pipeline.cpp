@@ -243,19 +243,19 @@ bool Device::configurePipelineBindings(
 
 
 void Device::appendPipelineShaderStage(
-    Shader* shader,
+    Shader& shader,
     const VkShaderStageFlagBits stage,
     PipelineSpecializationInfoVector& specializationInfos,
     PipelineShaderStageVector& shaderStages
 )const{
-    auto* s = shader;
+    Shader& s = shader;
     auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
     stageInfo.stage = stage;
-    stageInfo.module = s->m_shaderModule;
-    stageInfo.pName = s->m_entryPointName.data();
+    stageInfo.module = s.m_shaderModule;
+    stageInfo.pName = s.m_entryPointName.data();
 
-    if(!s->m_specializationEntries.empty()){
-        specializationInfos.push_back(s->makeSpecializationInfo());
+    if(!s.m_specializationEntries.empty()){
+        specializationInfos.push_back(s.makeSpecializationInfo());
         stageInfo.pSpecializationInfo = &specializationInfos.back();
     }
 

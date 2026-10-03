@@ -286,15 +286,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     specInfos.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
 
     if(desc.VS)
-        appendPipelineShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.VS, VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);
     if(desc.HS)
-        appendPipelineShaderStage(desc.HS.get(), VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.HS, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, specInfos, shaderStages);
     if(desc.DS)
-        appendPipelineShaderStage(desc.DS.get(), VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.DS, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, specInfos, shaderStages);
     if(desc.GS)
-        appendPipelineShaderStage(desc.GS.get(), VK_SHADER_STAGE_GEOMETRY_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.GS, VK_SHADER_STAGE_GEOMETRY_BIT, specInfos, shaderStages);
     if(desc.PS)
-        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(*desc.PS, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
@@ -305,7 +305,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("graphics pipeline"),
-        pso,
+        *pso,
         scratchArena
     ))
         return nullptr;
@@ -353,7 +353,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("graphics pipeline"),
-        pso,
+        *pso,
         fixedState
     ))
         return nullptr;
@@ -369,7 +369,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if(!createPipelineOrDestroy(NWB_TEXT("graphics pipeline"), pso, pipelineInfo))
+    if(!createPipelineOrDestroy(NWB_TEXT("graphics pipeline"), *pso, pipelineInfo))
         return nullptr;
 
     return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);

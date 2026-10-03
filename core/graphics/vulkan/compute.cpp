@@ -71,7 +71,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
         NWB_TEXT("compute pipeline"),
-        pso,
+        *pso,
         scratchArena
     ))
         return nullptr;
@@ -80,7 +80,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
-    if(!createPipelineOrDestroy(NWB_TEXT("compute pipeline"), pso, pipelineInfo))
+    if(!createPipelineOrDestroy(NWB_TEXT("compute pipeline"), *pso, pipelineInfo))
         return nullptr;
 
     return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);

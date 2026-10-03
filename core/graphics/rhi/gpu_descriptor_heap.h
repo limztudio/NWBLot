@@ -35,18 +35,13 @@ namespace GpuDescriptorClass{
         UniformBuffer,      // ConstantBuffer        -> UNIFORM_BUFFER
         AccelStruct,        // RayTracingAccelStruct -> ACCELERATION_STRUCTURE_KHR (see note below)
         Sampler,            // Sampler               -> SAMPLER (separate index namespace)
-        // Keep this appended so the class tags above remain stable across the C++/shader handle ABI. It is a
-        // distinct descriptor array because Texture2D and Texture2DArray have different shader types even though
-        // both write VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE descriptors.
+        // Texture2DArray uses a distinct shader descriptor array from Texture2D although both use sampled-image descriptors.
         SampledImage2DArray,// Texture2DArray_SRV     -> SAMPLED_IMAGE
-        // Keep appended for the same stable handle ABI reason. Texture3D requires its own shader-side array even
-        // though Vulkan encodes it with the same sampled-image descriptor type.
+        // Texture3D requires its own shader descriptor array despite using the same sampled-image descriptor type.
         SampledImage3D,     // Texture3D_SRV          -> SAMPLED_IMAGE
-        // Keep appended to preserve the stable tags above. A uint Texture2DArray has a distinct shader image type
-        // from the floating-point Texture2DArray table, so it must occupy its own descriptor-array binding.
+        // A uint Texture2DArray has a distinct shader image type from the floating-point Texture2DArray descriptor array.
         SampledImage2DArrayUint, // Texture2DArray<uint>_SRV -> SAMPLED_IMAGE
-        // Keep appended to preserve the stable handle ABI above. Cubemaps require a cube image view and therefore
-        // cannot share the Texture2D sampled-image declaration.
+        // Cubemaps require a cube image view and a distinct shader descriptor array from Texture2D.
         SampledImageCube,        // TextureCube_SRV -> SAMPLED_IMAGE
 
         kCount

@@ -340,17 +340,17 @@ bool BackendContext::createSwapChainResources(){
         return false;
     }
 
-    // Compatibility fallback list is swap-chain lifetime state; create it here so present() only reopens it.
-    resetCompatibilityPresentCommandList();
+    // Direct presentation list is swap-chain lifetime state; create it here so present() only reopens it.
+    resetDirectPresentCommandList();
     {
         const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-        if(!primaryGraphicsQueue.valid() || !ensureCompatibilityPresentCommandList(primaryGraphicsQueue)){
+        if(!primaryGraphicsQueue.valid() || !ensureDirectPresentCommandList(primaryGraphicsQueue)){
             clearSemaphores(m_presentSemaphores);
             clearAcquireSyncSlots();
-            resetCompatibilityPresentCommandList();
+            resetDirectPresentCommandList();
             if(!destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after compatibility-list creation failure."));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the compatibility presentation command list."));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
             return false;
         }
     }

@@ -123,7 +123,9 @@ static TrueType outlines use conservative shaping bounds. Non-tricky CFF and fon
 with bitmap/color extent tables use transformed unscaled FreeType outline control
 boxes, including native font/subfont matrices. These bounds do not replace shaping
 ink, advance measurement or selection geometry. Tricky faces and unavailable bounds
-remain conservative candidates.
+remain conservative candidates when the glyph retains a valid native face. A glyph
+with neither explicit coverage bounds nor a valid native face is invalid; painting
+rejects it before raster preparation changes the coverage cache.
 
 Painting reads `PaintBuilder::currentClip()` and validates candidates before atlas
 preparation. Coverage bounds include scale rounding and the raster fringe; baked SDF

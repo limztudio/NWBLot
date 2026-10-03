@@ -36,7 +36,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         command_ir
         renderer_baseline
         async_shadow_m4
-        hybrid_shadow_boundary
+        hardware_shadow_boundary
         frame_lagged_async_lighting
         transfer_queue
     )
@@ -50,10 +50,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
     endforeach()
     add_test(
-        NAME nwb_hybrid_shadow_boundary_launcher_unit
+        NAME nwb_hardware_shadow_boundary_launcher_unit
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_SOURCE_DIR}/tests/ab/hybrid_shadow_boundary/launch.py"
+            "${CMAKE_SOURCE_DIR}/tests/ab/hardware_shadow_boundary/launch.py"
             "--self-test"
     )
 endif()

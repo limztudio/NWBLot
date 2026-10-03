@@ -21,6 +21,7 @@ public:
     virtual bool indexOf(u64 key, u64& index)const override;
     virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
     virtual StringView text(u64 index)const override;
+    [[nodiscard]] virtual bool enabled(u64 index)const override{ return index < rowCount(); }
 
 
 private:

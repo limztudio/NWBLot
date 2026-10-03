@@ -37,37 +37,18 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(TextInputSelection, LegacyCallsKeepTheCaretBasisWhileSelectionUsesOuterEdges){
-    NWB::Tests::TestArena arena;
-    SelectionTextInput service(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
-    ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, 0u, TextInputDeletionBasis::Selection),
-        TextInputAdmission::Accepted);
-    TextInputEvent event(arena.arena);
-    ASSERT_EQ(service.poll(begun.token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Caret);
-    const u64 revision = event.surroundingRevision;
-    ASSERT_EQ(service.poll(begun.token, event), TextInputPollResult::Event);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-    EXPECT_EQ(event.surroundingRevision, revision);
-    EXPECT_EQ(event.deleteBeforeBytes, 2u);
-    EXPECT_EQ(event.deleteAfterBytes, 1u);
-}
-
 TEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits){
     NWB::Tests::TestArena arena;
     SelectionTextInput service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     const auto begun = service.begin({ {}, "abcDEFghi", 6u, 3u });
     ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 4u, 0u, 0u, TextInputDeletionBasis::Selection),
+    const u64 revision = service.surroundingRevision(begun.token);
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 4u, 0u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 4u, 0u, TextInputDeletionBasis::Selection),
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 4u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 3u, 3u, 0u, TextInputDeletionBasis::Selection),
+    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 3u, 3u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::Accepted);
     TextInputEvent event(arena.arena);
     ASSERT_EQ(service.poll(begun.token, event), TextInputPollResult::Event);
@@ -77,7 +58,7 @@ TEST(TextInputSelection, ReverseSelectionHasTheSameOuterByteLimits){
     EXPECT_EQ(service.poll(begun.token, event), TextInputPollResult::Pending);
 }
 
-TEST(TextInputSelection, UnknownBasisAndStaleRevisionDoNotQueueAnyEvent){
+TEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent){
     NWB::Tests::TestArena arena;
     SelectionTextInput service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
@@ -85,13 +66,24 @@ TEST(TextInputSelection, UnknownBasisAndStaleRevisionDoNotQueueAnyEvent){
     ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
     const u64 revision = service.surroundingRevision(begun.token);
     ASSERT_EQ(service.updateSurrounding(begun.token, "abcDEFghi", 3u, 6u), TextInputAdmission::Accepted);
+    const u64 currentRevision = service.surroundingRevision(begun.token);
     EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 0u, 0u, static_cast<TextInputDeletionBasis::Enum>(255u)),
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, 0u, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
+    constexpr TextInputDeletionBasis::Enum invalidBasis = static_cast<TextInputDeletionBasis::Enum>(255u);
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 0u, currentRevision, invalidBasis), TextInputAdmission::InvalidRange);
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(begun.token, event), TextInputPollResult::Pending);
     EXPECT_EQ(service.activeSession(), begun.token);
+    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, currentRevision, TextInputDeletionBasis::Selection),
+        TextInputAdmission::Accepted);
+    ASSERT_EQ(service.poll(begun.token, event), TextInputPollResult::Event);
+    EXPECT_EQ(event.surroundingRevision, currentRevision);
+    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
+    EXPECT_EQ(event.deleteBeforeBytes, 2u);
+    EXPECT_EQ(event.deleteAfterBytes, 1u);
+    EXPECT_EQ(service.poll(begun.token, event), TextInputPollResult::Pending);
 }
 
 TEST(TextInputSelection, OuterUtf8EndpointsMustRemainScalarBoundaries){
@@ -100,11 +92,12 @@ TEST(TextInputSelection, OuterUtf8EndpointsMustRemainScalarBoundaries){
     ASSERT_TRUE(service.setFocused(true));
     const auto begun = service.begin({ {}, "a한DEF글z", 4u, 7u });
     ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 1u, 0u, 0u, TextInputDeletionBasis::Selection),
+    const u64 revision = service.surroundingRevision(begun.token);
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 1u, 0u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 1u, 0u, TextInputDeletionBasis::Selection),
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 1u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 3u, 3u, 0u, TextInputDeletionBasis::Selection),
+    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 3u, 3u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::Accepted);
     TextInputEvent event(arena.arena);
     ASSERT_EQ(service.poll(begun.token, event), TextInputPollResult::Event);
@@ -122,15 +115,16 @@ TEST(TextInputSelection, PollCopiesTheBasisAndNonDeletionEventsResetAReusedOutpu
         ASSERT_TRUE(service.setFocused(true));
         const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
         ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
+        const u64 revision = service.surroundingRevision(begun.token);
         token = begun.token;
-        ASSERT_EQ(service.emitDeleteSurrounding(token, 2u, 1u, 0u, TextInputDeletionBasis::Selection),
+        ASSERT_EQ(service.emitDeleteSurrounding(token, 2u, 1u, revision, TextInputDeletionBasis::Selection),
             TextInputAdmission::Accepted);
         ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
         EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
         ASSERT_EQ(service.emitCommit(token, "X"), TextInputAdmission::Accepted);
         ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
         EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Caret);
-        ASSERT_EQ(service.emitDeleteSurrounding(token, 0u, 0u, 0u, TextInputDeletionBasis::Selection),
+        ASSERT_EQ(service.emitDeleteSurrounding(token, 0u, 0u, revision, TextInputDeletionBasis::Selection),
             TextInputAdmission::Accepted);
         ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
         ASSERT_TRUE(service.end(token));
@@ -148,8 +142,9 @@ TEST(TextInputSelection, DeletionPreservesThePreeditCommitOrderingBarrier){
     ASSERT_TRUE(service.setFocused(true));
     const auto begun = service.begin({ {}, "abcDEFghi", 3u, 6u });
     ASSERT_EQ(begun.admission, TextInputAdmission::Accepted);
+    const u64 revision = service.surroundingRevision(begun.token);
     ASSERT_EQ(service.emitPreedit(begun.token, {}, 0u, 0u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, 0u, TextInputDeletionBasis::Selection),
+    ASSERT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, revision, TextInputDeletionBasis::Selection),
         TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitCommit(begun.token, "X"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(begun.token, "next", 0u, 4u), TextInputAdmission::Accepted);

@@ -6,7 +6,7 @@
 #include "packet_runtime_initial_state_validation.h"
 #include "task_graph.h"
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/vulkan/buffer_resource_detail.h>
 #include <core/graphics/vulkan/texture_resource_detail.h>

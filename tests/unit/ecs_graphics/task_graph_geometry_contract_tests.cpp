@@ -339,20 +339,20 @@ TEST(EcsGraphics, RayTracingMaterialAndSoftwareInputsExposeRawViews){
     const AStringView skinningRuntimeCache(skinningRuntimeCacheSource.data(), skinningRuntimeCacheSource.size());
     EXPECT_TRUE(ContainsText(
         meshResources,
-        "NWB_TEXT(\"position\"),\n"
+        "RendererArenaScope::s_PositionBufferLabel,\n"
         "        true,\n"
         "        rtSupported"
     ));
     EXPECT_TRUE(ContainsText(meshResources, "indexFlags.canHaveRawViews = true;"));
     EXPECT_TRUE(ContainsText(
         skinningRuntimeCache,
-        "NWB_TEXT(\"skinned position\"),\n"
+        "__hidden_runtime_cache_resources::s_SkinnedPositionLabel,\n"
         "        true,\n"
         "        rtSupported"
     ));
     EXPECT_TRUE(ContainsText(
         skinningRuntimeCache,
-        "NWB_TEXT(\"rt triangle index\"),\n"
+        "__hidden_runtime_cache_resources::s_RtTriangleIndexLabel,\n"
         "            true,\n"
         "            rtSupported"
     ));

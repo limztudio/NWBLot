@@ -58,8 +58,8 @@ protected:
         TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte, bool caretVisible = true
     );
     [[nodiscard]] TextInputAdmission::Enum emitDeleteSurrounding(
-        TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision = 0u,
-        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
+        TextInputSessionToken token, usize beforeBytes, usize afterBytes, u64 revision,
+        TextInputDeletionBasis::Enum basis
     );
     [[nodiscard]] bool cancelSession(TextInputSessionToken token, TextInputCancelReason::Enum reason);
     [[nodiscard]] Alloc::GlobalArena& arena()const noexcept{ return m_arena; }

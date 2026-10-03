@@ -5,9 +5,11 @@
 #pragma once
 
 
-#include "format.h"
+#include "../global.h"
 
 #include <core/assets/module.h>
+
+#include <global/texture_payload.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,11 +84,11 @@ public:
         const u32 height,
         MipLevelVector&& mipLevels,
         Core::Assets::AssetBytes&& payloadBytes,
-        const TextureDimension::Enum dimension = TextureDimension::Texture2D,
-        const u32 depth = 1u,
-        const TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4,
-        const TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque,
-        const u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8
+        const TextureDimension::Enum dimension,
+        const u32 depth,
+        const TexturePayloadFormat::Enum payloadFormat,
+        const TextureAlphaMode::Enum alphaMode,
+        const u8 alphaConstantUnorm8
     ){
         m_colorSpace = colorSpace;
         m_hasAlpha = hasAlpha;
@@ -95,14 +97,7 @@ public:
         m_dimension = dimension;
         m_depth = depth;
         m_payloadFormat = payloadFormat;
-        // Preserve the pre-HDR call shape: callers that pass only hasAlpha for
-        // a regular LDR UASTC texture get its alpha stored in the primary blocks.
-        m_alphaMode = payloadFormat == TexturePayloadFormat::UastcLdr4x4
-            && hasAlpha
-            && alphaMode == TextureAlphaMode::Opaque
-            ? TextureAlphaMode::EmbeddedLdr
-            : alphaMode
-        ;
+        m_alphaMode = alphaMode;
         m_alphaConstantUnorm8 = alphaConstantUnorm8;
         m_mipLevels = Move(mipLevels);
         m_payloadBytes = Move(payloadBytes);
@@ -119,8 +114,6 @@ public:
     [[nodiscard]] u8 alphaConstantUnorm8()const{ return m_alphaConstantUnorm8; }
     [[nodiscard]] const MipLevelVector& mipLevels()const{ return m_mipLevels; }
     [[nodiscard]] const Core::Assets::AssetBytes& payloadBytes()const{ return m_payloadBytes; }
-    // Preserved for UASTC callers. HDR alpha data, when present, follows the RGB UASTC HDR stream in payloadBytes().
-    [[nodiscard]] const Core::Assets::AssetBytes& uastcBlocks()const{ return m_payloadBytes; }
     [[nodiscard]] u64 primaryPayloadByteCount()const{
         if(m_mipLevels.empty())
             return 0u;

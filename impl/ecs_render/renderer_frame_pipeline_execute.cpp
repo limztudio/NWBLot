@@ -14,7 +14,7 @@
 #include <impl/ecs_render/shared/renderer_scene_private.h>
 #include <impl/ecs_scene/components.h>
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/task/gpu/scheduler.h>
 

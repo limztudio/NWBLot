@@ -4,7 +4,7 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/rhi/queue_sharing.h>
 #include <core/graphics/vulkan/command_validation.h>
 #include <core/task/gpu/task_graph.h>

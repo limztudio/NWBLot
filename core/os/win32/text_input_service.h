@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// IMM32 compatibility backend; this does not implement TSF reconversion or surrounding-text deletion.
+// IMM32 text-input backend; this does not implement TSF reconversion or surrounding-text deletion.
 class Win32TextInputService final : public QueuedTextInputService{
 public:
     Win32TextInputService(Alloc::GlobalArena& arena, NotNull<void*> nativeWindowHandle);

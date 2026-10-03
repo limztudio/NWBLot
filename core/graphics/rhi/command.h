@@ -340,7 +340,7 @@ public:
         BufferRange range = s_EntireBuffer
     )const;
     // Copies a valid state snapshot without exposing backend tracker storage.
-    // Packet recording uses this to retain graph-owned producer seeds while legacy consumers still request their own final handoff.
+    // Packet recording retains graph-owned producer seeds while individual command-list consumers request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
     // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
     // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.

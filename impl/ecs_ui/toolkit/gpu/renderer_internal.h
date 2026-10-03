@@ -14,7 +14,7 @@
 #include <impl/assets_texture/loader.h>
 #include <impl/ecs_ui/toolkit/text/glyph_page.h>
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/task/gpu/presentation_contributor.h>
 #include <core/task/gpu/task_graph.h>
 

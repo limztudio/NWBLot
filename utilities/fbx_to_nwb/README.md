@@ -106,6 +106,8 @@ are imported by default; use `--ignore-colors` to force the
 | `skeleton` | One skeleton `.nwb` file. | A skinned source only. |
 | `skin` | One skin `.nwb` file with mesh and skeleton references. | A skinned source only; referenced assets are not written. |
 
+`--asset-type` accepts the five values in this table. The `asset_bunch` metadata declaration is a source-language construct; use `bunch` for the CLI output type.
+
 For model, skin, and separate-package output, generated asset paths
 are derived from the output path. For example, an output of
 `assets/characters/hero.nwb` uses `project/characters/hero` as the default

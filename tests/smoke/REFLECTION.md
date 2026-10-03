@@ -308,8 +308,8 @@ The probe has a 64-scope cap, so the benchmark must require all expected scopes
 rather than silently accepting missing timings. Decode opt/fin scope hashes with
 the matching `.namesym` file using `tests/ab/gpu_timing_parse.py`.
 
-Timing-file records retain the legacy `avg/min/max/samples` fields, whose sample
-count is the number of folded publication windows. They also expose `total_ms`
+Timing-file records expose `avg/min/max/samples` for publication-window statistics;
+the sample count is the number of folded publication windows. They also expose `total_ms`
 (summed GPU duration), `gpu_samples` (actual timed samples), and `sample_avg_ms`
 (`total_ms / gpu_samples`). These raw fields allow normalization by known timed
 work instead of treating asynchronous publication cadence as a frame rate. A

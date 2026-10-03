@@ -207,43 +207,10 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureHdrTestMipLevels(TestArena&
     return mipLevels;
 }
 
-#if defined(NWB_FINAL)
-static void AppendLegacyTextureV1Binary(
-    NWB::Core::Assets::AssetBytes& outBinary,
-    const NWB::Impl::Texture::MipLevelVector& mipLevels,
-    const NWB::Core::Assets::AssetBytes& uastcBlocks
-){
-    outBinary.clear();
-    outBinary.reserve(40u + mipLevels.size() * 32u + uastcBlocks.size());
-
-    AppendPOD(outBinary, NWB::Impl::TextureBinaryPayload::s_TextureMagic);
-    AppendPOD(outBinary, 1u);
-    AppendPOD(outBinary, static_cast<u32>(NWB::Impl::TextureColorSpace::Srgb));
-    AppendPOD(outBinary, 7u);
-    AppendPOD(outBinary, 5u);
-    AppendPOD(outBinary, static_cast<u32>(mipLevels.size()));
-    AppendPOD(outBinary, 1u);
-    AppendPOD(outBinary, 0u);
-    AppendPOD(outBinary, static_cast<u64>(uastcBlocks.size()));
-
-    for(const NWB::Impl::TextureMipLevel& mip : mipLevels){
-        AppendPOD(outBinary, mip.width);
-        AppendPOD(outBinary, mip.height);
-        AppendPOD(outBinary, mip.blockCountX);
-        AppendPOD(outBinary, mip.blockCountY);
-        AppendPOD(outBinary, mip.offsetBytes);
-        AppendPOD(outBinary, mip.sizeBytes);
-    }
-    for(const u8 byte : uastcBlocks)
-        AppendPOD(outBinary, byte);
-}
-#endif
-
-
 TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
     u32 mipCount = 0u;
-    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
-        NWB::Impl::TextureDimension::Texture2D,
+    EXPECT_TRUE(TextureFormat::ComputeCompleteMipCount(
+        TextureDimension::Texture2D,
         7u,
         5u,
         1u,
@@ -251,8 +218,8 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
     ));
     EXPECT_EQ(mipCount, 3u);
 
-    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
-        NWB::Impl::TextureDimension::TextureCube,
+    EXPECT_TRUE(TextureFormat::ComputeCompleteMipCount(
+        TextureDimension::TextureCube,
         s_ExpectedDualCount,
         s_ExpectedDualCount,
         1u,
@@ -260,8 +227,8 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
     ));
     EXPECT_EQ(mipCount, s_ExpectedDualCount);
 
-    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
-        NWB::Impl::TextureDimension::Texture3D,
+    EXPECT_TRUE(TextureFormat::ComputeCompleteMipCount(
+        TextureDimension::Texture3D,
         4u,
         s_ExpectedDualCount,
         3u,
@@ -272,13 +239,13 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
     u32 blocksX = 0u;
     u32 blocksY = 0u;
     u64 planeByteCount = 0u;
-    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputePlaneBlockLayout(7u, 5u, blocksX, blocksY, planeByteCount));
+    EXPECT_TRUE(TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u, blocksX, blocksY, planeByteCount));
     EXPECT_EQ(blocksX, s_ExpectedDualCount);
     EXPECT_EQ(blocksY, s_ExpectedDualCount);
     EXPECT_EQ(planeByteCount, 64u);
 
-    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeMipPlaneBlockLayout(
-        NWB::Impl::TexturePayloadFormat::UastcHdr4x4,
+    EXPECT_TRUE(TextureFormat::ComputeMipPlaneBlockLayout(
+        TexturePayloadFormat::UastcHdr4x4,
         4u,
         s_ExpectedDualCount,
         blocksX,
@@ -291,7 +258,7 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
 }
 
 
-TEST(AssetsGraphics, TextureCodecRoundTripPreservesV2UastcLdrMipPayload){
+TEST(AssetsGraphics, TextureCodecRoundTripPreservesCurrentUastcLdrMipPayload){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -303,28 +270,35 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV2UastcLdrMipPayload){
         7u,
         5u,
         MakeTextureTestMipLevels(testArena),
-        MakeTextureTestUastcPayload(testArena)
+        MakeTextureTestUastcPayload(testArena),
+        TextureDimension::Texture2D,
+        1u,
+        TexturePayloadFormat::UastcLdr4x4,
+        TextureAlphaMode::EmbeddedLdr,
+        TextureFormat::s_OpaqueAlphaUnorm8
     );
     ASSERT_TRUE(texture.validatePayload());
 
     NWB::Impl::TextureAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
-    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 96u);
+    ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 96u);
     usize headerCursor = 0u;
-    NWB::Impl::TextureBinaryPayload::HeaderBinaryV2 header;
+    NWB::Impl::TextureBinaryPayload::HeaderBinary header;
     ASSERT_TRUE(ReadPOD(binary, headerCursor, header));
     EXPECT_EQ(header.magic, NWB::Impl::TextureBinaryPayload::s_TextureMagic);
-    EXPECT_EQ(header.version, NWB::Impl::TextureBinaryPayload::s_TextureVersionV2);
+    EXPECT_EQ(header.version, NWB::Impl::TextureBinaryPayload::s_TextureVersion);
     EXPECT_EQ(header.colorSpace, static_cast<u32>(NWB::Impl::TextureColorSpace::Srgb));
-    EXPECT_EQ(header.dimension, static_cast<u32>(NWB::Impl::TextureDimension::Texture2D));
+    EXPECT_EQ(header.dimension, static_cast<u32>(TextureDimension::Texture2D));
     EXPECT_EQ(header.width, 7u);
     EXPECT_EQ(header.height, 5u);
     EXPECT_EQ(header.depth, 1u);
     EXPECT_EQ(header.mipCount, 3u);
-    EXPECT_EQ(header.hasAlpha, 1u);
-    EXPECT_EQ(header.reserved, 0u);
-    EXPECT_EQ(header.uastcByteCount, 96u);
+    EXPECT_EQ(header.alphaInfo, static_cast<u32>(TextureAlphaMode::EmbeddedLdr)
+        | (TextureFormat::s_OpaqueAlphaUnorm8 << NWB::Impl::TextureBinaryPayload::s_AlphaInfoConstantShift)
+    );
+    EXPECT_EQ(header.payloadFormat, static_cast<u32>(TexturePayloadFormat::UastcLdr4x4));
+    EXPECT_EQ(header.payloadByteCount, 96u);
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     ASSERT_TRUE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset));
@@ -332,21 +306,21 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV2UastcLdrMipPayload){
 
     const NWB::Impl::Texture& loadedTexture = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
     EXPECT_EQ(loadedTexture.colorSpace(), NWB::Impl::TextureColorSpace::Srgb);
-    EXPECT_EQ(loadedTexture.payloadFormat(), NWB::Impl::TexturePayloadFormat::UastcLdr4x4);
-    EXPECT_EQ(loadedTexture.alphaMode(), NWB::Impl::TextureAlphaMode::EmbeddedLdr);
+    EXPECT_EQ(loadedTexture.payloadFormat(), TexturePayloadFormat::UastcLdr4x4);
+    EXPECT_EQ(loadedTexture.alphaMode(), TextureAlphaMode::EmbeddedLdr);
     EXPECT_TRUE(loadedTexture.hasAlpha());
     EXPECT_EQ(loadedTexture.width(), 7u);
     EXPECT_EQ(loadedTexture.height(), 5u);
-    EXPECT_EQ(loadedTexture.dimension(), NWB::Impl::TextureDimension::Texture2D);
+    EXPECT_EQ(loadedTexture.dimension(), TextureDimension::Texture2D);
     EXPECT_EQ(loadedTexture.depth(), 1u);
     ASSERT_EQ(loadedTexture.mipLevels().size(), 3u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].sliceCount, 1u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].sizeBytes, 64u);
     EXPECT_EQ(loadedTexture.mipLevels()[1u].offsetBytes, 64u);
     EXPECT_EQ(loadedTexture.mipLevels()[s_ThirdElementIndex].offsetBytes, 80u);
-    ASSERT_EQ(loadedTexture.uastcBlocks().size(), 96u);
-    for(usize index = 0u; index < loadedTexture.uastcBlocks().size(); ++index)
-        EXPECT_EQ(loadedTexture.uastcBlocks()[index], static_cast<u8>(index));
+    ASSERT_EQ(loadedTexture.payloadBytes().size(), 96u);
+    for(usize index = 0u; index < loadedTexture.payloadBytes().size(); ++index)
+        EXPECT_EQ(loadedTexture.payloadBytes()[index], static_cast<u8>(index));
 
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -364,10 +338,11 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
         s_ExpectedDualCount,
         MakeTextureHdrTestMipLevels(testArena),
         MakeTextureTestHdrPayload(testArena),
-        NWB::Impl::TextureDimension::Texture2D,
+        TextureDimension::Texture2D,
         1u,
-        NWB::Impl::TexturePayloadFormat::UastcHdr4x4,
-        NWB::Impl::TextureAlphaMode::SeparateUastcLdr4x4
+        TexturePayloadFormat::UastcHdr4x4,
+        TextureAlphaMode::SeparateUastcLdr4x4,
+        TextureFormat::s_OpaqueAlphaUnorm8
     );
     ASSERT_TRUE(texture.validatePayload());
 
@@ -380,10 +355,10 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
     NWB::Impl::TextureBinaryPayload::HeaderBinary header;
     ASSERT_TRUE(ReadPOD(binary, headerCursor, header));
     EXPECT_EQ(header.version, NWB::Impl::TextureBinaryPayload::s_TextureVersion);
-    EXPECT_EQ(header.payloadFormat, static_cast<u32>(NWB::Impl::TexturePayloadFormat::UastcHdr4x4));
+    EXPECT_EQ(header.payloadFormat, static_cast<u32>(TexturePayloadFormat::UastcHdr4x4));
     EXPECT_EQ(
         header.alphaInfo,
-        static_cast<u32>(NWB::Impl::TextureAlphaMode::SeparateUastcLdr4x4)
+        static_cast<u32>(TextureAlphaMode::SeparateUastcLdr4x4)
             | (255u << NWB::Impl::TextureBinaryPayload::s_AlphaInfoConstantShift)
     );
     EXPECT_EQ(header.payloadByteCount, 96u);
@@ -394,8 +369,8 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
 
     const NWB::Impl::Texture& loadedTexture = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
     EXPECT_EQ(loadedTexture.colorSpace(), NWB::Impl::TextureColorSpace::Linear);
-    EXPECT_EQ(loadedTexture.payloadFormat(), NWB::Impl::TexturePayloadFormat::UastcHdr4x4);
-    EXPECT_EQ(loadedTexture.alphaMode(), NWB::Impl::TextureAlphaMode::SeparateUastcLdr4x4);
+    EXPECT_EQ(loadedTexture.payloadFormat(), TexturePayloadFormat::UastcHdr4x4);
+    EXPECT_EQ(loadedTexture.alphaMode(), TextureAlphaMode::SeparateUastcLdr4x4);
     EXPECT_EQ(loadedTexture.alphaConstantUnorm8(), 255u);
     EXPECT_TRUE(loadedTexture.hasAlpha());
     ASSERT_EQ(loadedTexture.mipLevels().size(), 3u);
@@ -430,25 +405,28 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
             s_ExpectedDualCount,
             MakeTextureCubeTestMipLevels(testArena),
             MakeTextureTestUastcPayload(testArena, 192u, 0x40u),
-            NWB::Impl::TextureDimension::TextureCube,
-            1u
+            TextureDimension::TextureCube,
+            1u,
+            TexturePayloadFormat::UastcLdr4x4,
+            TextureAlphaMode::Opaque,
+            TextureFormat::s_OpaqueAlphaUnorm8
         );
         ASSERT_TRUE(cube.validatePayload());
 
         NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(cube, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + s_ExpectedDualCount * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + s_ExpectedDualCount * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, cube.virtualPath(), binary, loadedAsset));
         ASSERT_NE(loadedAsset.get(), nullptr);
         const NWB::Impl::Texture& loadedCube = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
-        EXPECT_EQ(loadedCube.dimension(), NWB::Impl::TextureDimension::TextureCube);
+        EXPECT_EQ(loadedCube.dimension(), TextureDimension::TextureCube);
         EXPECT_EQ(loadedCube.depth(), 1u);
         ASSERT_EQ(loadedCube.mipLevels().size(), s_ExpectedDualCount);
         EXPECT_EQ(loadedCube.mipLevels()[0u].sliceCount, 6u);
         EXPECT_EQ(loadedCube.mipLevels()[1u].sliceCount, 6u);
-        EXPECT_EQ(loadedCube.uastcBlocks().size(), 192u);
+        EXPECT_EQ(loadedCube.payloadBytes().size(), 192u);
     }
 
     {
@@ -460,50 +438,96 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
             s_ExpectedDualCount,
             MakeTextureVolumeTestMipLevels(testArena),
             MakeTextureTestUastcPayload(testArena, 80u, 0x80u),
-            NWB::Impl::TextureDimension::Texture3D,
-            3u
+            TextureDimension::Texture3D,
+            3u,
+            TexturePayloadFormat::UastcLdr4x4,
+            TextureAlphaMode::EmbeddedLdr,
+            TextureFormat::s_OpaqueAlphaUnorm8
         );
         ASSERT_TRUE(volume.validatePayload());
 
         NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(volume, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 80u);
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 80u);
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, volume.virtualPath(), binary, loadedAsset));
         ASSERT_NE(loadedAsset.get(), nullptr);
         const NWB::Impl::Texture& loadedVolume = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
-        EXPECT_EQ(loadedVolume.dimension(), NWB::Impl::TextureDimension::Texture3D);
+        EXPECT_EQ(loadedVolume.dimension(), TextureDimension::Texture3D);
         EXPECT_EQ(loadedVolume.depth(), 3u);
         ASSERT_EQ(loadedVolume.mipLevels().size(), 3u);
         EXPECT_EQ(loadedVolume.mipLevels()[0u].sliceCount, 3u);
         EXPECT_EQ(loadedVolume.mipLevels()[1u].sliceCount, 1u);
         EXPECT_EQ(loadedVolume.mipLevels()[s_ThirdElementIndex].sliceCount, 1u);
-        EXPECT_EQ(loadedVolume.uastcBlocks().size(), 80u);
+        EXPECT_EQ(loadedVolume.payloadBytes().size(), 80u);
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, TextureCodecRejectsLegacyV1Binary){
-#if defined(NWB_FINAL)
+TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+    );
 
     TestArena testArena;
-    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    const NWB::Impl::Texture::MipLevelVector mipLevels = MakeTextureTestMipLevels(testArena);
-    const NWB::Core::Assets::AssetBytes uastcBlocks = MakeTextureTestUastcPayload(testArena);
-    AppendLegacyTextureV1Binary(binary, mipLevels, uastcBlocks);
-    ASSERT_EQ(binary.size(), 40u + 3u * 32u + 96u);
-
+    NWB::Impl::Texture texture(testArena.arena, Name("project/textures/version_admission"));
+    texture.setPayload(
+        NWB::Impl::TextureColorSpace::Srgb,
+        true,
+        7u,
+        5u,
+        MakeTextureTestMipLevels(testArena),
+        MakeTextureTestUastcPayload(testArena),
+        TextureDimension::Texture2D,
+        1u,
+        TexturePayloadFormat::UastcLdr4x4,
+        TextureAlphaMode::EmbeddedLdr,
+        TextureFormat::s_OpaqueAlphaUnorm8
+    );
     NWB::Impl::TextureAssetCodec codec;
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_FALSE(codec.deserialize(testArena.arena, Name("project/textures/legacy"), binary, loadedAsset));
-    EXPECT_EQ(loadedAsset.get(), nullptr);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    ASSERT_TRUE(codec.serialize(texture, binary));
+    for(const u32 version : { 0u, 1u, 2u, NWB::Impl::TextureBinaryPayload::s_TextureVersion + 1u }){
+        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset)) << version;
+        EXPECT_EQ(loadedAsset.get(), nullptr);
+    }
+    EXPECT_EQ(logger.errorCount(), 4u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
-#else
-#endif
+
+    const u32 currentVersion = NWB::Impl::TextureBinaryPayload::s_TextureVersion;
+    NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    EXPECT_TRUE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset));
+}
+
+TEST(AssetsGraphics, TexturePayloadRejectsMismatchedExplicitAlphaMode){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+    );
+
+    TestArena testArena;
+    NWB::Impl::Texture texture(testArena.arena, Name("project/textures/invalid_alpha_mode"));
+    texture.setPayload(
+        NWB::Impl::TextureColorSpace::Srgb,
+        true,
+        7u,
+        5u,
+        MakeTextureTestMipLevels(testArena),
+        MakeTextureTestUastcPayload(testArena),
+        TextureDimension::Texture2D,
+        1u,
+        TexturePayloadFormat::UastcLdr4x4,
+        TextureAlphaMode::Opaque,
+        TextureFormat::s_OpaqueAlphaUnorm8
+    );
+    EXPECT_FALSE(texture.validatePayload());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("inconsistent alpha metadata")));
 }
 
 TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
@@ -544,7 +568,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     EXPECT_EQ(texture.width(), 7u);
     EXPECT_EQ(texture.height(), 5u);
     ASSERT_EQ(texture.mipLevels().size(), 3u);
-    EXPECT_EQ(texture.uastcBlocks().size(), 96u);
+    EXPECT_EQ(texture.payloadBytes().size(), 96u);
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
@@ -583,8 +607,8 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
 
     const NWB::Impl::Texture& texture = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
     EXPECT_EQ(texture.colorSpace(), NWB::Impl::TextureColorSpace::Linear);
-    EXPECT_EQ(texture.payloadFormat(), NWB::Impl::TexturePayloadFormat::UastcHdr4x4);
-    EXPECT_EQ(texture.alphaMode(), NWB::Impl::TextureAlphaMode::SeparateUastcLdr4x4);
+    EXPECT_EQ(texture.payloadFormat(), TexturePayloadFormat::UastcHdr4x4);
+    EXPECT_EQ(texture.alphaMode(), TextureAlphaMode::SeparateUastcLdr4x4);
     EXPECT_EQ(texture.alphaConstantUnorm8(), 255u);
     EXPECT_TRUE(texture.hasAlpha());
     EXPECT_EQ(texture.width(), 4u);
@@ -636,7 +660,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     ));
     ASSERT_NE(cubeAsset.get(), nullptr);
     const NWB::Impl::Texture& cube = static_cast<const NWB::Impl::Texture&>(*cubeAsset);
-    EXPECT_EQ(cube.dimension(), NWB::Impl::TextureDimension::TextureCube);
+    EXPECT_EQ(cube.dimension(), TextureDimension::TextureCube);
     EXPECT_EQ(cube.depth(), 1u);
     ASSERT_EQ(cube.mipLevels().size(), s_ExpectedDualCount);
     EXPECT_EQ(cube.mipLevels()[0u].sliceCount, 6u);
@@ -651,11 +675,11 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     ));
     ASSERT_NE(volumeAsset.get(), nullptr);
     const NWB::Impl::Texture& volume = static_cast<const NWB::Impl::Texture&>(*volumeAsset);
-    EXPECT_EQ(volume.dimension(), NWB::Impl::TextureDimension::Texture3D);
+    EXPECT_EQ(volume.dimension(), TextureDimension::Texture3D);
     EXPECT_EQ(volume.depth(), 3u);
     ASSERT_EQ(volume.mipLevels().size(), 3u);
     EXPECT_EQ(volume.mipLevels()[0u].sliceCount, 3u);
-    EXPECT_EQ(volume.uastcBlocks().size(), 80u);
+    EXPECT_EQ(volume.payloadBytes().size(), 80u);
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));

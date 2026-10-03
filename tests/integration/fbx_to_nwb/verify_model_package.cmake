@@ -5,6 +5,44 @@ set(bunch_output "${OUTPUT_DIR}/wedge_bunch.nwb")
 set(model_output "${OUTPUT_DIR}/wedge.nwb")
 set(mesh_output "${OUTPUT_DIR}/wedge/mesh.nwb")
 
+# Removed CLI aliases fail without replacing the destination, and the canonical spelling recovers.
+foreach(asset_type_alias IN ITEMS asset_bunch asset-bunch)
+    set(alias_output "${OUTPUT_DIR}/rejected_${asset_type_alias}.nwb")
+    set(destination_before "asset type rejection must preserve this destination")
+    file(WRITE "${alias_output}" "${destination_before}")
+    execute_process(
+        COMMAND "${FBX_TO_NWB_EXE}" "${INPUT_FBX}"
+            --output "${alias_output}" --asset-type "${asset_type_alias}"
+            --mesh first --normal-mode smooth --preserve-space --yes --force
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE stdout
+        ERROR_VARIABLE stderr
+    )
+    if(result EQUAL 0)
+        message(FATAL_ERROR "fbx_to_nwb accepted removed asset type ${asset_type_alias}")
+    endif()
+    require_match("${stdout}${stderr}" "Asset type must be bunch, mesh, model, skeleton, or skin"
+        "Removed asset type ${asset_type_alias} did not report its canonical alternatives:\n${stdout}\n${stderr}")
+    file(READ "${alias_output}" destination_after)
+    if(NOT destination_after STREQUAL destination_before)
+        message(FATAL_ERROR "Rejected asset type ${asset_type_alias} replaced the destination")
+    endif()
+    execute_process(
+        COMMAND "${FBX_TO_NWB_EXE}" "${INPUT_FBX}"
+            --output "${alias_output}" --asset-type bunch
+            --mesh first --normal-mode smooth --preserve-space --yes --force
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE stdout
+        ERROR_VARIABLE stderr
+    )
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "fbx_to_nwb canonical bunch recovery failed:\n${stdout}\n${stderr}")
+    endif()
+    require_crlf_text_file("${alias_output}" "canonical bunch recovery")
+    file(READ "${alias_output}" recovered_text)
+    require_match("${recovered_text}" "asset_bunch bunch = \\[" "Canonical bunch recovery omitted asset bunch metadata")
+endforeach()
+
 execute_process(
     COMMAND
         "${FBX_TO_NWB_EXE}"

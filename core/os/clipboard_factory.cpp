@@ -35,12 +35,10 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual ClipboardStatus::Enum readNativeText(ClipboardChannel::Enum, AString<Alloc::GlobalArena>&)override{
-        return ClipboardStatus::Unsupported;
-    }
-
-    [[nodiscard]] virtual ClipboardStatus::Enum writeNativeText(ClipboardChannel::Enum, AStringView)override{
-        return ClipboardStatus::Unsupported;
+    virtual void startNativeRequest(
+        const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView)override{
+        if(!completeNativeRequest(token, ClipboardStatus::Unsupported))
+            NWB_FATAL_ASSERT(false);
     }
 };
 

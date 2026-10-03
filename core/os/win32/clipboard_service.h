@@ -27,13 +27,20 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual ClipboardStatus::Enum readNativeText(ClipboardChannel::Enum channel, AString<Alloc::GlobalArena>& text)override;
-    [[nodiscard]] virtual ClipboardStatus::Enum writeNativeText(ClipboardChannel::Enum channel, AStringView text)override;
+    virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
+    virtual void cancelNativeRequest(ClipboardRequestToken token)override;
+
+
+private:
+    [[nodiscard]] ClipboardStatus::Enum readNativeText(AString<Alloc::GlobalArena>& text);
+    [[nodiscard]] ClipboardStatus::Enum writeNativeText(AStringView text);
 
 
 private:
     NotNull<void*> m_nativeWindowHandle;
+    AString<Alloc::GlobalArena> m_utf8Text;
     WString<Alloc::GlobalArena> m_wideText;
+    ClipboardRequestToken m_nativeToken;
 };
 
 

@@ -105,10 +105,6 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
             && m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
             && m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
         ;
-    case Feature::SamplerFeedback:
-    case Feature::VirtualResources:
-        // Retained unsupported feature ordinal for ABI compatibility.
-        return false;
     case Feature::CooperativeVectorInferencing:
         return
             m_context.extensions.NV_cooperative_vector

@@ -80,6 +80,7 @@ private:
 Win32ClipboardService::Win32ClipboardService(Alloc::GlobalArena& arena, const NotNull<void*> nativeWindowHandle)
     : QueuedClipboardService(arena)
     , m_nativeWindowHandle(nativeWindowHandle)
+    , m_utf8Text(arena)
     , m_wideText(arena)
 {}
 
@@ -87,8 +88,31 @@ ClipboardCapabilities Win32ClipboardService::capabilities(const ClipboardChannel
     return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ .readText = true, .writeText = true } : ClipboardCapabilities{};
 }
 
-ClipboardStatus::Enum Win32ClipboardService::readNativeText(const ClipboardChannel::Enum channel, AString<Alloc::GlobalArena>& text){
-    static_cast<void>(channel);
+void Win32ClipboardService::startNativeRequest(
+    const ClipboardRequestToken token,
+    const ClipboardOperation::Enum operation,
+    const ClipboardChannel::Enum,
+    const AStringView text){
+    m_nativeToken = token;
+    m_utf8Text.clear();
+    const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText
+        ? readNativeText(m_utf8Text)
+        : writeNativeText(text)
+    ;
+    if(m_nativeToken == token){
+        m_nativeToken = {};
+        if(!completeNativeRequest(token, status, m_utf8Text))
+            NWB_FATAL_ASSERT(false);
+    }
+    m_utf8Text.clear();
+}
+
+void Win32ClipboardService::cancelNativeRequest(const ClipboardRequestToken token){
+    if(m_nativeToken == token)
+        m_nativeToken = {};
+}
+
+ClipboardStatus::Enum Win32ClipboardService::readNativeText(AString<Alloc::GlobalArena>& text){
     using namespace __hidden_win32_clipboard;
     if(!OpenClipboard(static_cast<HWND>(m_nativeWindowHandle.get()))){
         NWB_LOGGER_WARNING(NWB_TEXT("Clipboard: OpenClipboard unavailable ({})"), GetLastError());
@@ -158,8 +182,7 @@ ClipboardStatus::Enum Win32ClipboardService::readNativeText(const ClipboardChann
     return ClipboardStatus::Success;
 }
 
-ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const ClipboardChannel::Enum channel, const AStringView text){
-    static_cast<void>(channel);
+ClipboardStatus::Enum Win32ClipboardService::writeNativeText(const AStringView text){
     using namespace __hidden_win32_clipboard;
     m_wideText.clear();
     if(!text.empty()){

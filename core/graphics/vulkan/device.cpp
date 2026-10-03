@@ -235,7 +235,7 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Device creation requires a primary Graphics queue."));
         return;
     }
-    configureLegacyQueueContext();
+    configureQueueSharingContext();
     m_queueRegistryReady = true;
 
     m_context.instanceDispatch.vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);

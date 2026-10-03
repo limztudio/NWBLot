@@ -6,7 +6,7 @@
 #include "compiler_internal.h"
 #include "packet_runtime_internal.h"
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 
 #include <global/limit.h>
 

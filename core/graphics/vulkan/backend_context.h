@@ -179,7 +179,7 @@ public:
     // independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
     bool present(bool& outPresentationAccepted);
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
-    // compatibility transition-submit path in present() active.
+    // direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
     [[nodiscard]] bool confirmFramePresentationSignal(
@@ -224,10 +224,10 @@ private:
     [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot);
     [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle();
     [[nodiscard]] bool createFrameSyncQueries();
-    [[nodiscard]] bool ensureCompatibilityPresentCommandList(const GpuPhysicalQueueId& executionQueue);
-    void resetCompatibilityPresentCommandList()noexcept;
-    [[nodiscard]] bool recordCompatibilityPresentTransition(
-        const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy,
+    [[nodiscard]] bool ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue);
+    void resetDirectPresentCommandList()noexcept;
+    [[nodiscard]] bool recordDirectPresentTransition(
+        const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
         Texture* backbufferTexture
     );
     [[nodiscard]] static bool PrepareFramePresentationSignal(
@@ -313,16 +313,16 @@ private:
     GraphicsVector<VulkanNativeQueueDesc> m_nativeQueues;
     DeviceHandle m_rhiDevice;
     // Exact opt-in same-class transports registered after their class primary. The first entry for each class
-    // keeps the legacy secondary fields above populated, while graph packets use this complete physical registry.
+    // populates the per-class auxiliary family fields above; graph packets use this complete physical registry.
     GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
     u32 m_presentNativeQueueIndex = Limit<u32>::s_Max;
 
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
-    // Swap-chain-lifetime compatibility transition list. Created once with swap-chain resources and
+    // Swap-chain-lifetime direct transition list. Created once with swap-chain resources and
     // reopened per use; present() never creates a command list so the frame path stays allocation-free.
-    CommandListHandle m_compatibilityPresentCommandList;
-    GpuPhysicalQueueId m_compatibilityPresentQueue;
+    CommandListHandle m_directPresentCommandList;
+    GpuPhysicalQueueId m_directPresentQueue;
 
     VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_framePresentationQueue;

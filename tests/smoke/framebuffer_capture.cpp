@@ -6,7 +6,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/rhi/command.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>

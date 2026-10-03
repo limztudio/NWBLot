@@ -316,16 +316,19 @@ class WorkloadPolicyTests(unittest.TestCase):
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.device_material_signature(device)
 
-    def test_current_hardware_route_requires_dispatch_and_preserves_frozen_hybrid_identity(self):
+    def test_current_hardware_route_requires_dispatch_and_rejects_retired_routes(self):
         workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
         marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         for altered in (log_text().replace(marker, ""),
             log_text() + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
-        legacy = benchmark.transparent_multi_log(log_text(LIT_HYBRID), workload, True)
-        self.assertEqual(legacy[LIT_SHADOW_ROUTE], LIT_HYBRID)
-        self.assertNotEqual(legacy[LIT_SHADOW_ROUTE], benchmark.transparent_multi_log(log_text(), workload, True)[LIT_SHADOW_ROUTE])
+        retired = log_text().replace("natural hardware shadow route", "natural hybrid shadow route")
+        retired_route = next(line for line in retired.splitlines() if "natural hybrid shadow route" in line)
+        for altered in (retired, log_text() + "\n" + retired_route):
+            for require_hardware in (False, True):
+                with self.subTest(hardware=require_hardware), self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.transparent_multi_log(altered, workload, require_hardware)
 
     def test_cli_rejects_lower_coverage_and_unbalanced_plans(self):
         common = [LIT_BASELINE_EXECUTABLE, "a", LIT_BASELINE_RUNTIME, LIT_AR, LIT_BASELINE_SOURCE_MANIFEST, LIT_AS_JSON,
@@ -465,15 +468,24 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
                 with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.soft_shadow_log(altered, workload, True)
 
-    def test_shadow_hardware_dispatch_evidence_and_legacy_frozen_route_are_distinct(self):
+    def test_shadow_hardware_dispatch_evidence_is_required_and_retired_routes_are_rejected(self):
         workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
         marker = LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA
         text = soft_shadow_log_text(workload)
         for altered in (text.replace(marker, ""), text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.soft_shadow_log(altered, workload, True)
-        legacy = benchmark.soft_shadow_log(soft_shadow_log_text(workload, LIT_HYBRID), workload, True)
-        self.assertEqual(legacy[LIT_SHADOW_ROUTE], LIT_HYBRID)
+        retired = soft_shadow_log_text(workload, LIT_HYBRID)
+        retired_route = f"ShadowTimingProbe: natural shadow route {LIT_HYBRID}"
+        for altered in (retired, text + "\n" + retired_route):
+            for require_hardware in (False, True):
+                with self.subTest(text=altered, require_hardware=require_hardware), self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.soft_shadow_log(altered, workload, require_hardware)
+        software_text = soft_shadow_log_text(workload, LIT_SOFTWARE)
+        software = benchmark.soft_shadow_log(software_text, workload, False)
+        self.assertEqual(software[LIT_SHADOW_ROUTE], LIT_SOFTWARE)
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.soft_shadow_log(software_text, workload, True)
 
     def test_shadow_logs_require_exact_material_indirect_response(self):
         workload = benchmark.workloads()[LIT_SHADOW_ZERO_EXTENT]
@@ -888,7 +900,7 @@ class CausticMeasurementTests(unittest.TestCase):
                 with self.subTest(preset=preset, changed=changed[-120:]), self.assertRaises(benchmark.SmokeFailure):
                     workload.validate_log(changed, workload, True)
 
-    def test_caustic_current_route_is_strict_and_frozen_legacy_requires_explicit_opt_in(self):
+    def test_caustic_current_route_rejects_retired_and_contradictory_routes(self):
         workload = benchmark.workloads()[LIT_CAUSTIC_POPULATED]
         settings = dict(workload.environment_overrides)
         text = caustic_log_text()
@@ -897,9 +909,10 @@ class CausticMeasurementTests(unittest.TestCase):
             hardware_marker, LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA)
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.caustic.validate_log(legacy, settings)
-        preserved = benchmark.caustic.validate_log(legacy, settings, allow_legacy_shadow_route=True)
-        self.assertEqual(preserved[LIT_SHADOW_ROUTE], LIT_HYBRID)
-        self.assertEqual(workload.validate_log(legacy, workload, True)[LIT_SHADOW_ROUTE], LIT_HYBRID)
+        retired_route = next(line for line in legacy.splitlines() if "natural hybrid shadow route" in line)
+        for altered in (legacy, text + "\n" + retired_route):
+            with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
+                workload.validate_log(altered, workload, True)
         for altered in (text.replace(hardware_marker, ""),
             text + "\n" + LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):

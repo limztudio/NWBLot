@@ -8,7 +8,7 @@
 #include "texture_clear_value.h"
 
 #include <core/task/gpu/capture/command_ir.h>
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/rhi/command.h>
 #include <core/graphics/vulkan/texture_clear_contract.h>
 

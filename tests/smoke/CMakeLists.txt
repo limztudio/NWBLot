@@ -1150,10 +1150,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             ENVIRONMENT "NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
 
-        # The legacy hybrid target name now compares hardware transparent shadows against opaque-only hardware shadows. The test-owned A/B
+        # Hardware transparent shadows are compared against opaque-only hardware shadows. The test-owned A/B
         # harness launches this same binary twice, selecting an opaque-only scene for its hardware baseline arm.
-        nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
-        target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
+        nwb_declare_executable(nwb_hardware_shadow_boundary_healthy_benchmark)
+        target_sources(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
@@ -1164,23 +1164,23 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
-        target_compile_definitions(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
-            NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
+        target_compile_definitions(nwb_hardware_shadow_boundary_healthy_benchmark PRIVATE
+            NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK=1
         )
         nwb_configure_runtime_smoke_target(
-            nwb_hybrid_shadow_boundary_healthy_benchmark
+            nwb_hardware_shadow_boundary_healthy_benchmark
             "${_nwb_skinning_culling_runtime_root}"
             nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
-        add_dependencies(nwb_hybrid_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
+        add_dependencies(nwb_hardware_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
 
         nwb_add_window_capture_smoke(
-            nwb_hybrid_shadow_boundary_healthy_capture_smoke
-            hybrid_shadow_boundary_healthy_capture.bmp
-            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"
+            nwb_hardware_shadow_boundary_healthy_capture_smoke
+            hardware_shadow_boundary_healthy_capture.bmp
+            "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"
             "${_nwb_skinning_culling_runtime_root}"
-            "NWB Hybrid Shadow Boundary Benchmark"
+            "NWB Hardware Shadow Boundary Benchmark"
             "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--expect-log-message" "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
             "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
@@ -1209,16 +1209,16 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--reject-log-message" "failed to resolve shader"
             CONFIGURATIONS dbg opt
         )
-        set_tests_properties(nwb_hybrid_shadow_boundary_healthy_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=0;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
+        set_tests_properties(nwb_hardware_shadow_boundary_healthy_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=0;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
 
         nwb_add_window_capture_smoke(
-            nwb_hybrid_shadow_boundary_opaque_capture_smoke
-            hybrid_shadow_boundary_opaque_capture.bmp
-            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"
+            nwb_hardware_shadow_boundary_opaque_capture_smoke
+            hardware_shadow_boundary_opaque_capture.bmp
+            "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"
             "${_nwb_skinning_culling_runtime_root}"
-            "NWB Hybrid Shadow Boundary Benchmark"
+            "NWB Hardware Shadow Boundary Benchmark"
             "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--expect-log-message" "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
             "--expect-log-message" "StressTestSmokeProject: RayQuery-capable hardware shadow route available"
@@ -1246,8 +1246,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--reject-log-message" "failed to resolve shader"
             CONFIGURATIONS dbg opt
         )
-        set_tests_properties(nwb_hybrid_shadow_boundary_opaque_capture_smoke PROPERTIES
-            ENVIRONMENT "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
+        set_tests_properties(nwb_hardware_shadow_boundary_opaque_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
 
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime

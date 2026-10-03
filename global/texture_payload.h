@@ -232,23 +232,6 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     return true;
 }
 
-[[nodiscard]] inline bool ComputePlaneBlockLayout(
-    const u32 width,
-    const u32 height,
-    u32& outBlocksX,
-    u32& outBlocksY,
-    u64& outPlaneByteCount
-){
-    return ComputeMipPlaneBlockLayout(
-        TexturePayloadFormat::UastcLdr4x4,
-        width,
-        height,
-        outBlocksX,
-        outBlocksY,
-        outPlaneByteCount
-    );
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

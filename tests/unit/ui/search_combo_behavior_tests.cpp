@@ -67,6 +67,7 @@ public:
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "match"; }
+    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count; }
 
 
 public:
@@ -124,6 +125,7 @@ public:
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "full row"; }
+    [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count; }
 
     [[nodiscard]] virtual bool filter(const AStringView query)override{
         ++filterCalls;

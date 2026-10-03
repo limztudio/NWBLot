@@ -78,11 +78,6 @@ AString OutputAssetTypeErrorText(){
     return MakeOptionsErrorText<AString>("Asset type must be ", OutputAssetTypeOptionsText());
 }
 
-static constexpr NamedEnumCase<OutputAssetType::Enum> s_OutputAssetTypeAliases[] = {
-    { s_AssetBunchAliasUnderscore, OutputAssetType::Bunch },
-    { s_AssetBunchAliasDash, OutputAssetType::Bunch },
-};
-
 static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
     return ::ParseNormalizedEnumText<OutputAssetType::Enum, AStringView (*)(OutputAssetType::Enum)>(
         value,
@@ -90,9 +85,7 @@ static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetTyp
         OutputAssetTypeText,
         s_OutputAssetTypeValues,
         LengthOf(s_OutputAssetTypeValues),
-        OutputAssetType::Bunch,
-        s_OutputAssetTypeAliases,
-        LengthOf(s_OutputAssetTypeAliases)
+        OutputAssetType::Bunch
     );
 }
 

@@ -9,7 +9,7 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/gpu_timing.h>
 
 

@@ -32,7 +32,7 @@ namespace QueuePresentWaitDisposition{
     };
 };
 
-namespace CompatibilityPresentTransitionPolicy{
+namespace DirectPresentTransitionPolicy{
     enum Enum : u8{
         Invalid,
         TransitionFromUnknown,
@@ -90,16 +90,16 @@ inline QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(con
     }
 }
 
-// A never-presented acquired image has no reusable native layout. Its compatibility command list must transition
+// A never-presented acquired image has no reusable native layout. Its direct command list must transition
 // from Unknown directly instead of seeding the descriptor's retained Present state as if WSI had established it.
-inline CompatibilityPresentTransitionPolicy::Enum ResolveCompatibilityPresentTransitionPolicy(
+inline DirectPresentTransitionPolicy::Enum ResolveDirectPresentTransitionPolicy(
     const ResourceStates::Mask nativeInitialState
 )noexcept{
     if(nativeInitialState == ResourceStates::Unknown)
-        return CompatibilityPresentTransitionPolicy::TransitionFromUnknown;
+        return DirectPresentTransitionPolicy::TransitionFromUnknown;
     if(nativeInitialState == ResourceStates::Present)
-        return CompatibilityPresentTransitionPolicy::PreservePresent;
-    return CompatibilityPresentTransitionPolicy::Invalid;
+        return DirectPresentTransitionPolicy::PreservePresent;
+    return DirectPresentTransitionPolicy::Invalid;
 }
 
 // Acquisition signals on the primary Graphics transport; a secondary transport needs an explicit sharing-contract

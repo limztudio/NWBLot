@@ -55,12 +55,7 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         mipBinaries.push_back(binaryMip);
     }
 
-    const bool writeLegacyLdrHeader = texture.payloadFormat() == TexturePayloadFormat::UastcLdr4x4;
-    const usize headerByteCount = writeLegacyLdrHeader
-        ? sizeof(TextureBinaryPayload::HeaderBinaryV2)
-        : sizeof(TextureBinaryPayload::HeaderBinary)
-    ;
-    usize reserveBytes = headerByteCount;
+    usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
     if(
         !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary))
         || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())
@@ -72,33 +67,19 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    if(writeLegacyLdrHeader){
-        TextureBinaryPayload::HeaderBinaryV2 header;
-        header.colorSpace = static_cast<u32>(texture.colorSpace());
-        header.dimension = static_cast<u32>(texture.dimension());
-        header.width = texture.width();
-        header.height = texture.height();
-        header.depth = texture.depth();
-        header.mipCount = static_cast<u32>(mipBinaries.size());
-        header.hasAlpha = texture.hasAlpha() ? 1u : 0u;
-        header.uastcByteCount = static_cast<u64>(texture.payloadBytes().size());
-        AppendPOD(outBinary, header);
-    }
-    else{
-        TextureBinaryPayload::HeaderBinary header;
-        header.colorSpace = static_cast<u32>(texture.colorSpace());
-        header.dimension = static_cast<u32>(texture.dimension());
-        header.width = texture.width();
-        header.height = texture.height();
-        header.depth = texture.depth();
-        header.mipCount = static_cast<u32>(mipBinaries.size());
-        header.alphaInfo = static_cast<u32>(texture.alphaMode())
-            | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift)
-        ;
-        header.payloadFormat = static_cast<u32>(texture.payloadFormat());
-        header.payloadByteCount = static_cast<u64>(texture.payloadBytes().size());
-        AppendPOD(outBinary, header);
-    }
+    TextureBinaryPayload::HeaderBinary header;
+    header.colorSpace = static_cast<u32>(texture.colorSpace());
+    header.dimension = static_cast<u32>(texture.dimension());
+    header.width = texture.width();
+    header.height = texture.height();
+    header.depth = texture.depth();
+    header.mipCount = static_cast<u32>(mipBinaries.size());
+    header.alphaInfo = static_cast<u32>(texture.alphaMode())
+        | (static_cast<u32>(texture.alphaConstantUnorm8()) << TextureBinaryPayload::s_AlphaInfoConstantShift)
+    ;
+    header.payloadFormat = static_cast<u32>(texture.payloadFormat());
+    header.payloadByteCount = static_cast<u64>(texture.payloadBytes().size());
+    AppendPOD(outBinary, header);
     if(!Core::Assets::AppendVectorPayload(
         outBinary,
         mipBinaries,

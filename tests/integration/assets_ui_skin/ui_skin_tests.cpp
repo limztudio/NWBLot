@@ -648,7 +648,11 @@ TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){
             variant == 2u ? 31u : 32u,
             Move(mips),
             Move(payload),
-            variant == 3u ? TextureDimension::TextureCube : TextureDimension::Texture2D
+            variant == 3u ? TextureDimension::TextureCube : TextureDimension::Texture2D,
+            1u,
+            TexturePayloadFormat::UastcLdr4x4,
+            TextureAlphaMode::EmbeddedLdr,
+            TextureFormat::s_OpaqueAlphaUnorm8
         );
         EXPECT_FALSE(skin.validateTexture(texture)) << variant;
     }

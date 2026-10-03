@@ -286,13 +286,15 @@ TEST(TextGlyphVisibilityTests, UnrepresentableCoverageGeometryPreservesTheOutput
     UiWidgetTests::ExpectRect(rectangle, original);
 }
 
-TEST(TextGlyphVisibilityTests, UnknownLegacyInkRemainsAConservativeCandidate){
+TEST(TextGlyphVisibilityTests, MissingNativeFaceAndCoverageBoundsRejectsUnknownInk){
     PlacedGlyph glyph;
     glyph.position = { 10000.0f, 10000.0f };
     const Rect clip{ 0.0f, 0.0f, 100.0f, 100.0f };
-    EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Visible);
+    EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invalid);
     glyph.ink = { -1.0f, -2.0f, 3.0f, 4.0f };
-    EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Visible);
+    EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invalid);
+    glyph.coverage = { glyph.ink, true };
+    EXPECT_EQ(TextGlyphVisibility::candidate(glyph, nullptr, 16.0f, 16.0f, {}, clip), TextGlyphIntersection::Invisible);
 }
 
 TEST(TextGlyphVisibilityTests, KnownNativeBoundsCanCullWithoutHarfBuzzInkOrFaceMetadata){

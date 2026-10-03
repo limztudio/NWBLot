@@ -49,7 +49,7 @@ struct VulkanNativeQueueDesc{
     u32 queueIndex = Limit<u32>::s_Max;
 };
 
-// One canonical native queue for the RHI scheduler. `primaryForClass` only serves legacy CommandQueue callers;
+// One canonical native queue for the RHI scheduler. `primaryForClass` selects the class-based CommandQueue route;
 // graph packets use the Device-assigned physical ID.
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;

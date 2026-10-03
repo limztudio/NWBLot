@@ -257,8 +257,8 @@ const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;
 [[nodiscard]] u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept;
 
-// Combined depth/stencil copies address one aspect plane at a time. Automatic keeps existing callers
-// source-compatible; a combined format requires an explicit Depth or Stencil selection.
+// Combined depth/stencil copies address one aspect plane at a time. Automatic infers single-aspect formats;
+// a combined format requires an explicit Depth or Stencil selection.
 namespace TextureUploadAspect{
     enum Enum : u8{
         Automatic,

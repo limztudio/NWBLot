@@ -506,19 +506,11 @@ template<typename EnumT, typename ViewT = AStringView>
     const ViewT value,
     EnumT& outValue,
     const NamedEnumCase<EnumT>* cases,
-    const usize caseCount,
-    const NamedEnumCase<EnumT>* aliasCases = nullptr,
-    const usize aliasCaseCount = 0u
+    const usize caseCount
 ){
     for(usize i = 0u; i < caseCount; ++i){
         if(value == ViewT(cases[i].text.data(), cases[i].text.size())){
             outValue = cases[i].value;
-            return true;
-        }
-    }
-    for(usize i = 0u; i < aliasCaseCount; ++i){
-        if(value == ViewT(aliasCases[i].text.data(), aliasCases[i].text.size())){
-            outValue = aliasCases[i].value;
             return true;
         }
     }
@@ -532,9 +524,7 @@ template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
     TextFunction textFunction,
     const EnumT* values,
     const usize valueCount,
-    const EnumT fallback,
-    const NamedEnumCase<EnumT>* aliases = nullptr,
-    const usize aliasCount = 0u
+    const EnumT fallback
 ){
     for(usize i = 0u; i < valueCount; ++i){
         if(value == textFunction(values[i])){
@@ -542,9 +532,6 @@ template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
             return true;
         }
     }
-    if(ParseNamedEnumText<EnumT, ViewT>(value, outValue, nullptr, 0u, aliases, aliasCount))
-        return true;
-
     outValue = fallback;
     return false;
 }

@@ -10,8 +10,7 @@ The runner collects renderer GPU timestamp envelopes, verifies the arm-specific 
 captures both native windows, and writes a device-local report. ``--self-test`` exercises parsing
 and report evaluation without a Vulkan device or visible window.
 
-Legacy hybrid executable, CLI, and report identifiers remain stable for existing automation; both current arms
-use hardware ray traversal, and only the healthy arm includes transparent volume shadows.
+Both arms use hardware ray traversal, and only the healthy arm includes transparent volume shadows.
 """
 
 from __future__ import annotations
@@ -69,7 +68,7 @@ LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA = "RendererSystem: dispatched hardwar
 LIT_STRESSTESTSMOKEPROJECT_ENABLED_NATURAL = "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"
 LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA = "RendererSystem: dispatched software shadow traversal"
 LIT_BASELINE = "baseline"
-LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER = "hybrid-shadow benchmark logserver"
+LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER = "hardware-shadow benchmark logserver"
 LIT_UTF_8 = "utf-8"
 LIT_NAME = "name"
 LIT_PASSED = "passed"
@@ -78,13 +77,13 @@ LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU = "optional hardware transparent fram
 LIT_PASS = "pass"
 LIT_FAIL = "fail"
 LIT_SCHEMA = "schema"
-LIT_NWB_HYBRID_SHADOW_BOUNDARY_V2 = "nwb.hybrid_shadow_boundary.v2"
+LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1 = "nwb.hardware_shadow_boundary.v1"
 LIT_GENERATED_UTC = "generated_utc"
 LIT_VERDICT = "verdict"
 LIT_GATES = "gates"
-LIT_FRAME_HYBRID_DELTA_PERCENT = "frame_hybrid_delta_percent"
+LIT_FRAME_TRANSPARENT_DELTA_PERCENT = "frame_transparent_delta_percent"
 LIT_SCOPE_COMPARISONS = "scope_comparisons"
-LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN = "maximum_hybrid_frame_regression_percent"
+LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN = "maximum_transparent_frame_regression_percent"
 LIT_COLLECTION_ERROR = "collection_error"
 LIT_SELF_TEST = "--self-test"
 LIT_STORE_TRUE = "store_true"
@@ -92,7 +91,7 @@ LIT_BASELINE_EXECUTABLE = "baseline_executable"
 LIT_WARMUP_SECONDS = "--warmup-seconds"
 LIT_MEASURE_SECONDS = "--measure-seconds"
 LIT_STARTUP_TIMEOUT = "--startup-timeout"
-LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN_2 = "--maximum-hybrid-frame-regression-percent"
+LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2 = "--maximum-transparent-frame-regression-percent"
 LIT_VALIDATION_ERROR = "Validation Error"
 LIT_APP_STOP = "app-stop"
 LIT_CLEANUP_NONE = "cleanup-none"
@@ -276,7 +275,7 @@ def run_single_arm(
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment["NWB_STRESS_TEST_SPIN_ANGLE"] = f"{args.frozen_yaw:.8g}"
     environment["NWB_STRESS_CHARACTERS_PER_CLASS"] = "5"
-    environment["NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE"] = "1" if mode == LIT_BASELINE else "0"
+    environment["NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE"] = "1" if mode == LIT_BASELINE else "0"
 
     logserver_process = None
     app_process = None
@@ -294,7 +293,7 @@ def run_single_arm(
             launch_args, executable, environment
         )
         if not log_directory:
-            raise SmokeFailure("hybrid-shadow runner could not select a runtime-log directory")
+            raise SmokeFailure("hardware-shadow runner could not select a runtime-log directory")
         app_process = launch_testbed(launch_args, executable, environment, log_port)
 
         skip_reason = wait_for_log_message(
@@ -326,12 +325,12 @@ def run_single_arm(
             log_directory,
             log_baseline,
             log_pattern,
-            LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER,
+            LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER,
         )
         logserver_process = None
     finally:
         terminate_process(app_process, f"{mode} benchmark", window)
-        terminate_process(logserver_process, LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER)
+        terminate_process(logserver_process, LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER)
 
     require_normal_process_exit(app_exit_code, app_exit_tail, "testbed")
     if not log_text:
@@ -395,7 +394,7 @@ def comparison_scope_payload(
     return {
         LIT_HEALTHY: asdict(healthy_summary) if healthy_summary else None,
         LIT_BASELINE: asdict(baseline_summary) if baseline_summary else None,
-        "hybrid_delta_percent": delta,
+        "transparent_delta_percent": delta,
     }
 
 
@@ -476,8 +475,8 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
             else f"healthy={healthy.runtime_forbidden_log_messages}, baseline={baseline.runtime_forbidden_log_messages}",
         ),
     ]
-    if args.maximum_hybrid_frame_regression_percent is not None:
-        threshold = args.maximum_hybrid_frame_regression_percent
+    if args.maximum_transparent_frame_regression_percent is not None:
+        threshold = args.maximum_transparent_frame_regression_percent
         gates.append(
             gate(
                 LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU,
@@ -499,13 +498,13 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
         frame_sample_count=baseline_frame.sample_count,
     )
     return {
-        LIT_SCHEMA: LIT_NWB_HYBRID_SHADOW_BOUNDARY_V2,
+        LIT_SCHEMA: LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1,
         LIT_GENERATED_UTC: datetime.now(timezone.utc).isoformat(),
         LIT_VERDICT: verdict,
         LIT_GATES: gates,
         LIT_HEALTHY: healthy_payload,
         LIT_BASELINE: baseline_payload,
-        LIT_FRAME_HYBRID_DELTA_PERCENT: frame_delta_percent,
+        LIT_FRAME_TRANSPARENT_DELTA_PERCENT: frame_delta_percent,
         LIT_SCOPE_COMPARISONS: scope_comparisons,
         "parameters": {
             "frozen_yaw": args.frozen_yaw,
@@ -513,7 +512,7 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
             "measure_seconds": args.measure_seconds,
             "minimum_samples": args.minimum_samples,
             "gpu_validation": args.gpu_validation,
-            LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN: args.maximum_hybrid_frame_regression_percent,
+            LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN: args.maximum_transparent_frame_regression_percent,
         },
     }
 
@@ -576,7 +575,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
             lines.append(
                 f"| `{scope}` | {format_scope_value(healthy if isinstance(healthy, Mapping) else None)} | "
                 f"{format_scope_value(baseline if isinstance(baseline, Mapping) else None)} | "
-                f"{format_delta(comparison.get('hybrid_delta_percent'))} |"
+                f"{format_delta(comparison.get('transparent_delta_percent'))} |"
             )
         lines.extend((
             "",
@@ -599,7 +598,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
 
 def make_failure_report(error: SmokeFailure, healthy: Optional[RunResult], baseline: Optional[RunResult]) -> Dict[str, object]:
     return {
-        LIT_SCHEMA: LIT_NWB_HYBRID_SHADOW_BOUNDARY_V2,
+        LIT_SCHEMA: LIT_NWB_HARDWARE_SHADOW_BOUNDARY_V1,
         LIT_GENERATED_UTC: datetime.now(timezone.utc).isoformat(),
         LIT_VERDICT: LIT_FAIL,
         LIT_COLLECTION_ERROR: str(error),
@@ -622,7 +621,7 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser and report checks without Vulkan.")
-    parser.add_argument("--healthy-executable", type=Path, help="Path to nwb_hybrid_shadow_boundary_healthy_benchmark.")
+    parser.add_argument("--healthy-executable", type=Path, help="Path to nwb_hardware_shadow_boundary_healthy_benchmark.")
     parser.add_argument(
         "--baseline-executable",
         dest=LIT_BASELINE_EXECUTABLE,
@@ -642,7 +641,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--window-title",
-        default="NWB Hybrid Shadow Boundary Benchmark",
+        default="NWB Hardware Shadow Boundary Benchmark",
         help="Native window title used for capture and graceful exit.",
     )
     parser.add_argument("--frozen-yaw", type=float, default=0.6, help="Fixed NWB_STRESS_TEST_SPIN_ANGLE in radians.")
@@ -651,8 +650,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument(LIT_STARTUP_TIMEOUT, type=float, default=45.0, help="Timeout for device creation and window visibility.")
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum render.frame timing intervals required per arm.")
     parser.add_argument(
-        LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN_2,
-        dest=LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN,
+        LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2,
+        dest=LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN,
         type=float,
         help="Optional maximum hardware-transparent frame overhead versus the opaque baseline.",
     )
@@ -675,11 +674,11 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     require_positive(parser, LIT_STARTUP_TIMEOUT, args.startup_timeout)
     if args.minimum_samples <= 0:
         parser.error("--minimum-samples must be positive")
-    if args.maximum_hybrid_frame_regression_percent is not None:
+    if args.maximum_transparent_frame_regression_percent is not None:
         require_non_negative(
             parser,
-            LIT_MAXIMUM_HYBRID_FRAME_REGRESSION_PERCEN_2,
-            args.maximum_hybrid_frame_regression_percent,
+            LIT_MAXIMUM_TRANSPARENT_FRAME_REGRESSION_PERCEN_2,
+            args.maximum_transparent_frame_regression_percent,
         )
 
     args.healthy_executable = args.healthy_executable.resolve()
@@ -741,21 +740,21 @@ def run_self_test() -> int:
             except SmokeFailure as error:
                 assert "exit 7" in str(error)
             else:
-                raise AssertionError("hybrid orchestration accepted an abnormal Testbed exit")
+                raise AssertionError("hardware-shadow orchestration accepted an abnormal Testbed exit")
 
         assert events == [
             (LIT_APP_STOP, LIT_HEALTHY_BENCHMARK, 17),
-            (LIT_LOGSERVER_HELPER, LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER),
+            (LIT_LOGSERVER_HELPER, LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER),
             (LIT_CLEANUP_NONE, LIT_HEALTHY_BENCHMARK, 17),
-            (LIT_CLEANUP_NONE, LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER, None),
+            (LIT_CLEANUP_NONE, LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER, None),
         ]
         assert terminate_mock.mock_calls == [
             mock.call(app, LIT_HEALTHY_BENCHMARK, 17),
             mock.call(None, LIT_HEALTHY_BENCHMARK, 17),
-            mock.call(None, LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER),
+            mock.call(None, LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER),
         ]
         shutdown_mock.assert_called_once_with(
-            logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_HYBRID_SHADOW_BENCHMARK_LOGSERVER
+            logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_HARDWARE_SHADOW_BENCHMARK_LOGSERVER
         )
 
         timing = root / "timing.txt"
@@ -767,21 +766,21 @@ def run_self_test() -> int:
         transparent_resolve_token = debug_name_hash_token(TRANSPARENT_RESOLVE_SCOPE)
         warmup_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=4.0000 min=3.0 max=5.0 samples=20\n"
-            f"  {visibility_token}: avg=1.2500 min=1.0 max=1.5 samples=20\n"
-            f"  {opaque_token}: avg=0.5000 min=0.4 max=0.6 samples=20\n"
-            f"  {transparent_trace_token}: avg=0.3000 min=0.2 max=0.4 samples=20\n"
-            f"  {transparent_resolve_token}: avg=0.2000 min=0.1 max=0.3 samples=20\n"
+            f"  {frame_token}: avg=4.0000 min=3.0 max=5.0 samples=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
+            f"  {visibility_token}: avg=1.2500 min=1.0 max=1.5 samples=20 total_ms=25 gpu_samples=40 sample_avg_ms=0.625\n"
+            f"  {opaque_token}: avg=0.5000 min=0.4 max=0.6 samples=20 total_ms=10 gpu_samples=40 sample_avg_ms=0.25\n"
+            f"  {transparent_trace_token}: avg=0.3000 min=0.2 max=0.4 samples=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
+            f"  {transparent_resolve_token}: avg=0.2000 min=0.1 max=0.3 samples=20 total_ms=4 gpu_samples=40 sample_avg_ms=0.1\n"
         )
         measurement_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=5.0000 min=4.0 max=6.0 samples=20\n"
-            f"  {visibility_token}: avg=1.7500 min=1.0 max=2.0 samples=20\n"
-            f"  {opaque_token}: avg=0.6000 min=0.5 max=0.7 samples=20\n"
-            f"  {transparent_trace_token}: avg=0.4000 min=0.3 max=0.5 samples=20\n"
-            f"  {transparent_resolve_token}: avg=0.3000 min=0.2 max=0.4 samples=20\n"
+            f"  {frame_token}: avg=5.0000 min=4.0 max=6.0 samples=20 total_ms=100 gpu_samples=40 sample_avg_ms=2.5\n"
+            f"  {visibility_token}: avg=1.7500 min=1.0 max=2.0 samples=20 total_ms=35 gpu_samples=40 sample_avg_ms=0.875\n"
+            f"  {opaque_token}: avg=0.6000 min=0.5 max=0.7 samples=20 total_ms=12 gpu_samples=40 sample_avg_ms=0.3\n"
+            f"  {transparent_trace_token}: avg=0.4000 min=0.3 max=0.5 samples=20 total_ms=8 gpu_samples=40 sample_avg_ms=0.2\n"
+            f"  {transparent_resolve_token}: avg=0.3000 min=0.2 max=0.4 samples=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
         )
-        timing.write_text(warmup_timing + measurement_timing, encoding=LIT_UTF_8)
+        timing.write_bytes((warmup_timing + measurement_timing).encode(LIT_UTF_8))
         scopes = summarize_scopes(parse_timing_file(timing, timing_symbols))
         measurement_offset = len(warmup_timing.encode(LIT_UTF_8))
         measurement_scopes = summarize_scopes(parse_timing_file(timing, timing_symbols, measurement_offset))
@@ -831,7 +830,7 @@ def run_self_test() -> int:
         )
         args = SimpleNamespace(
             minimum_samples=2,
-            maximum_hybrid_frame_regression_percent=None,
+            maximum_transparent_frame_regression_percent=None,
             frozen_yaw=0.6,
             warmup_seconds=4.0,
             measure_seconds=12.0,
@@ -839,7 +838,7 @@ def run_self_test() -> int:
         )
         report = evaluate_runs(args, healthy, baseline)
         assert report[LIT_VERDICT] == LIT_PASS
-        args.maximum_hybrid_frame_regression_percent = 5.0
+        args.maximum_transparent_frame_regression_percent = 5.0
         threshold_report = evaluate_runs(args, healthy, baseline)
         assert threshold_report[LIT_VERDICT] == LIT_FAIL
         assert threshold_report[LIT_GATES][-1][LIT_NAME] == LIT_OPTIONAL_HARDWARE_TRANSPARENT_FRAME_BU
@@ -894,7 +893,7 @@ def run_self_test() -> int:
         write_markdown_report(markdown, report)
         assert "not a pixel-parity comparison" in markdown.read_text(encoding=LIT_UTF_8)
 
-    print("hybrid-shadow boundary harness self-test passed")
+    print("hardware-shadow boundary harness self-test passed")
     return 0
 
 
@@ -936,11 +935,11 @@ def run(args: argparse.Namespace) -> int:
         if capture_backend:
             capture_backend.close()
 
-    json_path = args.output_dir / "hybrid_shadow_boundary_report.json"
-    markdown_path = args.output_dir / "hybrid_shadow_boundary_report.md"
+    json_path = args.output_dir / "hardware_shadow_boundary_report.json"
+    markdown_path = args.output_dir / "hardware_shadow_boundary_report.md"
     write_json(json_path, report)
     write_markdown_report(markdown_path, report)
-    print(f"Hybrid-shadow boundary report: {markdown_path}")
+    print(f"Hardware-shadow boundary report: {markdown_path}")
     if report[LIT_VERDICT] != LIT_PASS and not args.report_only:
         return 1
     return 0

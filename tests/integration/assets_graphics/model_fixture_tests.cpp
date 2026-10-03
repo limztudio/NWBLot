@@ -353,7 +353,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, ModelBunchRejectsNonAffineFourthTransformRow){
+TEST(AssetsGraphics, ModelBunchRejectsFourRowTransform){
 #if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -370,7 +370,7 @@ model.static_meshes = {
             [1, 0, 0, 0.5],
             [0, 1, 0, 0.125],
             [0, 0, 1, -0.25],
-            [0, 0, 0, 0],
+            [0, 0, 0, 1],
         ],
     },
 };
@@ -386,14 +386,14 @@ asset_bunch bunch = [
     Path outputDirectory(testArena.arena);
     EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
-        "model_bunch_non_affine_fourth_transform_row",
+        "model_bunch_four_row_transform",
         "characters",
         s_MODEL_FIXTURE_NWB.data(),
         testArena,
         root,
         outputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("row 3 must be the affine homogeneous row [0, 0, 0, 1]")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 #endif
 }
 

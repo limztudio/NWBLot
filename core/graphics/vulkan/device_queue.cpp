@@ -149,7 +149,7 @@ bool Device::registerPhysicalQueue(
     return true;
 }
 
-void Device::configureLegacyQueueContext(){
+void Device::configureQueueSharingContext(){
     const Queue* const graphicsQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Graphics)];
     const Queue* const computeQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Compute)];
     const Queue* const transferQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Transfer)];

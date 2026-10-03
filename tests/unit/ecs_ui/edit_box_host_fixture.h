@@ -42,8 +42,7 @@ public:
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
     [[nodiscard]] TextInputAdmission::Enum erase(
-        usize before, usize after, u64 revision = 0u,
-        TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret){
+        usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
     [[nodiscard]] TextInputRect nativeCaret()const{ return caretRect(); }
@@ -75,16 +74,6 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual ClipboardStatus::Enum readNativeText(ClipboardChannel::Enum, AString<Alloc::GlobalArena>& text)override{
-        text = document;
-        return ClipboardStatus::Success;
-    }
-
-    [[nodiscard]] virtual ClipboardStatus::Enum writeNativeText(ClipboardChannel::Enum, const AStringView text)override{
-        document.assign(text.data(), text.size());
-        return ClipboardStatus::Success;
-    }
-
     virtual void startNativeRequest(
         const ClipboardRequestToken token, const ClipboardOperation::Enum operation,
         const ClipboardChannel::Enum channel, const AStringView text)override{
@@ -92,8 +81,8 @@ protected:
         startedOperation = operation;
         startedChannel = channel;
         startedText.assign(text.data(), text.size());
-        if(!delayed)
-            QueuedClipboardService::startNativeRequest(token, operation, channel, text);
+        if(!delayed && !deliver(token, ClipboardStatus::Success, operation == ClipboardOperation::ReadText ? AStringView(document) : AStringView{}))
+            ADD_FAILURE() << "Clipboard completion failed";
     }
 
 

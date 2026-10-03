@@ -24,50 +24,14 @@ namespace TextureBinaryPayload{
 
 
 inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
-inline constexpr u32 s_TextureVersionV2 = 2u;
 inline constexpr u32 s_TextureVersion = 3u;
-inline constexpr usize s_TextureHeaderPrefixBytes = 8u;
-inline constexpr usize s_TextureHeaderV2Bytes = 48u;
 inline constexpr TStringView s_TextureLoadBinaryContext = NWB_TEXT("Texture::loadBinary");
 inline constexpr TStringView s_TextureValidatePayloadContext = NWB_TEXT("Texture::validatePayload");
 inline constexpr TStringView s_TextureAssetKindLabel = NWB_TEXT("texture");
 
-#pragma pack(push, 1)
-struct HeaderPrefix{
-    u32 magic = s_TextureMagic;
-    u32 version = s_TextureVersion;
-};
-#pragma pack(pop)
-static_assert(sizeof(HeaderPrefix) == s_TextureHeaderPrefixBytes, "Texture header prefix layout drifted");
 static constexpr usize s_PackedAlignBytes = 1u;
-static_assert(alignof(HeaderPrefix) == s_PackedAlignBytes, "Texture header prefix must stay packed");
-static_assert(IsStandardLayout_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 
-#pragma pack(push, 1)
-// Existing cooked LDR assets use this layout. Keep it readable so that the V3 runtime can retain the established UASTC contract.
-struct HeaderBinaryV2{
-    u32 magic = s_TextureMagic;
-    u32 version = s_TextureVersionV2;
-    u32 colorSpace = 0u;
-    u32 dimension = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 depth = 0u;
-    u32 mipCount = 0u;
-    u32 hasAlpha = 0u;
-    u32 reserved = 0u;
-    u64 uastcByteCount = 0u;
-};
-#pragma pack(pop)
-static_assert(sizeof(HeaderBinaryV2) == s_TextureHeaderV2Bytes, "Texture V2 header layout drifted");
-static_assert(alignof(HeaderBinaryV2) == s_PackedAlignBytes, "Texture V2 header must stay packed");
-static_assert(IsStandardLayout_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");
-static_assert(IsTriviallyCopyable_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");
-
-// V3 encodes the primary payload type and HDR alpha transport without growing
-// the header. alphaInfo packs its mode in bits 0..7 and the UNORM8 constant
-// alpha in bits 8..15; the high half remains zero for future expansion.
+// alphaInfo stores its mode in bits 0..7 and the UNORM8 constant in bits 8..15; the high half must remain zero.
 #pragma pack(push, 1)
 struct HeaderBinary{
     u32 magic = s_TextureMagic;

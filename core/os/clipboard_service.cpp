@@ -143,30 +143,6 @@ bool QueuedClipboardService::pump(){
     }
 }
 
-ClipboardStatus::Enum QueuedClipboardService::readNativeText(ClipboardChannel::Enum, AString<Alloc::GlobalArena>&){
-    return ClipboardStatus::Unsupported;
-}
-
-ClipboardStatus::Enum QueuedClipboardService::writeNativeText(ClipboardChannel::Enum, AStringView){
-    return ClipboardStatus::Unsupported;
-}
-
-void QueuedClipboardService::startNativeRequest(
-    const ClipboardRequestToken token,
-    const ClipboardOperation::Enum operation,
-    const ClipboardChannel::Enum channel,
-    const AStringView text){
-    Request* const request = findRequest(token);
-    if(!request)
-        return;
-    const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText
-        ? readNativeText(channel, request->text)
-        : writeNativeText(channel, text)
-    ;
-    if(findRequest(token) && !completeNativeRequest(token, status, request->text))
-        TerminateInvariant();
-}
-
 void QueuedClipboardService::cancelNativeRequest(ClipboardRequestToken){}
 
 void QueuedClipboardService::pumpNativeRequests(){}

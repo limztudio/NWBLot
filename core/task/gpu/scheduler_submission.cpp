@@ -6,7 +6,7 @@
 #include "packet_runtime_internal.h"
 #include "task_graph.h"
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/termination.h>

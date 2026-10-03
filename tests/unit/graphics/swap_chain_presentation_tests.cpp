@@ -28,7 +28,7 @@ namespace __hidden_swap_chain_presentation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CompatibilityPresentTransitionPolicy = Core::GraphicsBackend::VulkanDetail::CompatibilityPresentTransitionPolicy;
+namespace DirectPresentTransitionPolicy = Core::GraphicsBackend::VulkanDetail::DirectPresentTransitionPolicy;
 namespace Format = Core::Format;
 namespace QueuePresentWaitDisposition = Core::GraphicsBackend::VulkanDetail::QueuePresentWaitDisposition;
 namespace ResourceStates = Core::ResourceStates;
@@ -41,7 +41,7 @@ using Core::GpuPhysicalQueueInfo;
 using Core::TextureHandle;
 using Core::GraphicsBackend::VulkanDetail::ClassifyQueuePresentWaitDisposition;
 using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
-using Core::GraphicsBackend::VulkanDetail::ResolveCompatibilityPresentTransitionPolicy;
+using Core::GraphicsBackend::VulkanDetail::ResolveDirectPresentTransitionPolicy;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
 using Core::GraphicsBackend::VulkanDetail::SwapChainImagePresentationState;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
@@ -156,26 +156,26 @@ TEST(SwapChainPresentation, RestrictsGraphPresentationSignalsToPrimaryGraphicsTr
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue({}, &primaryGraphicsInfo));
 }
 
-TEST(SwapChainPresentation, CompatibilityPresentTransitionsOnlyAcceptKnownWsiOrigins){
+TEST(SwapChainPresentation, DirectPresentTransitionsOnlyAcceptKnownWsiOrigins){
     EXPECT_EQ(
-        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Unknown),
-        CompatibilityPresentTransitionPolicy::TransitionFromUnknown
+        ResolveDirectPresentTransitionPolicy(ResourceStates::Unknown),
+        DirectPresentTransitionPolicy::TransitionFromUnknown
     );
     EXPECT_EQ(
-        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Present),
-        CompatibilityPresentTransitionPolicy::PreservePresent
+        ResolveDirectPresentTransitionPolicy(ResourceStates::Present),
+        DirectPresentTransitionPolicy::PreservePresent
     );
     EXPECT_EQ(
-        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Common),
-        CompatibilityPresentTransitionPolicy::Invalid
+        ResolveDirectPresentTransitionPolicy(ResourceStates::Common),
+        DirectPresentTransitionPolicy::Invalid
     );
     EXPECT_EQ(
-        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::RenderTarget),
-        CompatibilityPresentTransitionPolicy::Invalid
+        ResolveDirectPresentTransitionPolicy(ResourceStates::RenderTarget),
+        DirectPresentTransitionPolicy::Invalid
     );
     EXPECT_EQ(
-        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Present | ResourceStates::RenderTarget),
-        CompatibilityPresentTransitionPolicy::Invalid
+        ResolveDirectPresentTransitionPolicy(ResourceStates::Present | ResourceStates::RenderTarget),
+        DirectPresentTransitionPolicy::Invalid
     );
 }
 

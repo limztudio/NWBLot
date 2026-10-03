@@ -213,13 +213,16 @@ def valid_log(characters_per_class=10):
 def reflection_record(**changes):
     row = dict(sequence=1, generation=1, frame=10, graphics_frame=10, hardware_ready=1, transport_enabled=1,
         candidates=10, hardware_rays=10, exterior_eligible_rays=0, hardware_queries=0, bootstrap_events=0,
-        transparent_paths=0, unsupported_paths=10)
+        transparent_paths=0, unsupported_paths=10,
+        screen_attempts=0, screen_hits=0, screen_returns=0, screen_iterations=0, screen_limit_misses=0)
     row.update(changes)
     return ("StressReflectionStatistics: sequence={sequence} generation={generation} frame={frame} "
         "graphics_frame={graphics_frame} hardware_ready={hardware_ready} transport_enabled={transport_enabled} "
         "candidates={candidates} hardware_rays={hardware_rays} exterior_eligible_rays={exterior_eligible_rays} "
         "hardware_queries={hardware_queries} bootstrap_events={bootstrap_events} "
-        "transparent_paths={transparent_paths} unsupported_paths={unsupported_paths}").format(**row)
+        "transparent_paths={transparent_paths} unsupported_paths={unsupported_paths} "
+        "screen_attempts={screen_attempts} screen_hits={screen_hits} screen_returns={screen_returns} "
+        "screen_iterations={screen_iterations} screen_limit_misses={screen_limit_misses}").format(**row)
 
 
 def reflection_log(*records):
@@ -627,8 +630,8 @@ class StressReflectionQualityTests(unittest.TestCase):
                 smoke.verify_reflection_quality_settings(bad, args, {})
 
     def test_actual_software_screen_work_is_independent_of_hardware_counters(self):
-        row = reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0)
-        row += " screen_attempts=20 screen_hits=2 screen_returns=4 screen_iterations=640 screen_limit_misses=10"
+        row = reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0,
+            screen_attempts=20, screen_hits=2, screen_returns=4, screen_iterations=640, screen_limit_misses=10)
         text = reflection_log(row)
         optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
         self.assertEqual(optical[LIT_HARDWARE_READY_SAMPLES], 0)
@@ -641,15 +644,25 @@ class StressReflectionQualityTests(unittest.TestCase):
         with self.assertRaisesRegex(smoke.SmokeFailure, "exceeds"):
             smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + "8", args, optical)
 
-    def test_legacy_replay_remains_valid_but_new_diagnostic_acquisition_needs_screen_evidence(self):
-        optical = smoke.parse_runtime_log(reflection_log(reflection_record()), 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
-        self.assertEqual(optical[LIT_SCREEN][LIT_SAMPLE_COUNT], 0)
+    def test_missing_screen_counters_reject_and_complete_current_records_recover(self):
+        current = reflection_record(screen_attempts=1, screen_returns=1, screen_iterations=96)
+        fields = current.split()
+        for field in smoke.REFLECTION_SCREEN_FIELDS:
+            missing = " ".join(value for value in fields if not value.startswith(field + "="))
+            with self.subTest(field=field), self.assertRaisesRegex(smoke.SmokeFailure, "malformed"):
+                smoke.parse_runtime_log(reflection_log(missing), 0, reflection_diagnostics=True)
+        without_screen = " ".join(value for value in fields
+            if not any(value.startswith(field + "=") for field in smoke.REFLECTION_SCREEN_FIELDS))
+        with self.assertRaisesRegex(smoke.SmokeFailure, "malformed"):
+            smoke.parse_runtime_log(reflection_log(without_screen), 0, reflection_diagnostics=True)
+        optical = smoke.parse_runtime_log(reflection_log(current), 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
+        self.assertEqual(optical[LIT_SCREEN][LIT_SAMPLE_COUNT], 1)
         args = SimpleNamespace(reflection_screen_steps=96, reflection_diagnostics=True)
-        with self.assertRaisesRegex(smoke.SmokeFailure, "screen-work"):
-            smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96, args, optical)
+        self.assertTrue(smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + LIT_N_96,
+            args, optical)[LIT_SCREEN_WORK_MEASURED])
 
     def test_malformed_partial_overflow_or_impossible_screen_counters_fail(self):
-        prefix = reflection_record()
+        prefix = reflection_record().split(" " + smoke.REFLECTION_SCREEN_FIELDS[0] + "=")[0]
         tails = (" screen_attempts=1", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=0",
             " screen_attempts=1 screen_hits=2 screen_returns=1 screen_iterations=48 screen_limit_misses=0",
             " screen_attempts=1 screen_hits=0 screen_returns=2 screen_iterations=48 screen_limit_misses=0",

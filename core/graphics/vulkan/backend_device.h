@@ -351,7 +351,7 @@ private:
 
 public:
     // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
-    // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
+    // primary record for class-based callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] const VkPhysicalDeviceLimits& getPhysicalDeviceLimits()const noexcept{ return m_context.physicalDeviceProperties.limits; }
     [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
@@ -482,7 +482,7 @@ private:
         const VulkanPhysicalQueueDesc& desc,
         NativeQueueState& nativeQueue
     );
-    void configureLegacyQueueContext();
+    void configureQueueSharingContext();
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
     void probeCompressedTextureFormats();

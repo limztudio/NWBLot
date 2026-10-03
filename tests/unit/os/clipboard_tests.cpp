@@ -34,18 +34,34 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual ClipboardStatus::Enum readNativeText(ClipboardChannel::Enum, AString<Alloc::GlobalArena>& output)override{
-        ++readCount;
-        if(onRead)
-            onRead();
-        output = text;
-        return readStatus;
+    virtual void startNativeRequest(
+        const ClipboardRequestToken token,
+        const ClipboardOperation::Enum operation,
+        const ClipboardChannel::Enum,
+        const AStringView input)override{
+        m_nativeToken = token;
+        if(operation == ClipboardOperation::ReadText){
+            ++readCount;
+            if(onRead)
+                onRead();
+            if(m_nativeToken != token)
+                return;
+            m_nativeToken = {};
+            if(!completeNativeRequest(token, readStatus, text))
+                NWB_FATAL_ASSERT(false);
+        }
+        else{
+            ++writeCount;
+            text.assign(input.data(), input.size());
+            m_nativeToken = {};
+            if(!completeNativeRequest(token, ClipboardStatus::Success))
+                NWB_FATAL_ASSERT(false);
+        }
     }
 
-    [[nodiscard]] virtual ClipboardStatus::Enum writeNativeText(ClipboardChannel::Enum, const AStringView input)override{
-        ++writeCount;
-        text.assign(input.data(), input.size());
-        return ClipboardStatus::Success;
+    virtual void cancelNativeRequest(const ClipboardRequestToken token)override{
+        if(m_nativeToken == token)
+            m_nativeToken = {};
     }
 
 
@@ -55,6 +71,10 @@ public:
     ClipboardStatus::Enum readStatus = ClipboardStatus::Success;
     usize readCount = 0u;
     usize writeCount = 0u;
+
+
+private:
+    ClipboardRequestToken m_nativeToken;
 };
 
 

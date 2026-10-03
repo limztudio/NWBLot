@@ -12,10 +12,13 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 
+#include <impl/assets_skeleton/cook_matrix.h>
+
 #include <core/assets/binary_payload_io.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
+
 #include <global/binary.h>
 
 
@@ -173,77 +176,9 @@ static constexpr AStringView s_TransformField = "transform";
     const Value* fieldValue = object.findField(s_TransformField);
     if(!fieldValue)
         return true;
-    if(!fieldValue->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a 3x4 affine matrix")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_TransformField)
-        );
-        return false;
-    }
-
-    const auto& rows = fieldValue->asList();
-    if(rows.size() != 3u && rows.size() != 4u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must have 3 or 4 rows")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_TransformField)
-        );
-        return false;
-    }
-
-    if(rows.size() == 4u){
-        const Value& homogeneousRow = rows[3u];
-        if(!homogeneousRow.isList() || homogeneousRow.asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row 3 must have 4 numeric values")
-                , StringConvert(objectKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(s_TransformField)
-            );
-            return false;
-        }
-
-        Float4 homogeneousValues;
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, homogeneousRow.asList()[columnIndex], objectKind, s_TransformField, homogeneousValues.raw[columnIndex]))
-                return false;
-        }
-        if(
-            homogeneousValues.raw[0u] != 0.0f
-            || homogeneousValues.raw[1u] != 0.0f
-            || homogeneousValues.raw[2u] != 0.0f
-            || homogeneousValues.raw[3u] != 1.0f
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row 3 must be the affine homogeneous row [0, 0, 0, 1]")
-                , StringConvert(objectKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(s_TransformField)
-            );
-            return false;
-        }
-    }
-
-    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
-        const Value& row = rows[rowIndex];
-        if(!row.isList() || row.asList().size() != 4u){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row {} must have 4 numeric values")
-                , StringConvert(objectKind)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(s_TransformField)
-                , rowIndex
-            );
-            return false;
-        }
-
-        Float4 rowValues;
-        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues.raw[columnIndex]))
-                return false;
-        }
-        outTransform.rows[rowIndex] = rowValues;
-    }
-
-    return true;
+    return AssetsSkeletonCookDetail::ParseSkeletonJointMatrixValue(
+        nwbFilePath, *fieldValue, objectKind, s_TransformField, outTransform
+    );
 }
 
 template<typename ObjectVectorT, typename ParseObjectFn>
@@ -355,71 +290,6 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     ;
 }
 
-struct SkeletonNameResolution{
-    const ModelSkeletonObject* assetMatch = nullptr;
-    bool isObjectName = false;
-    bool ambiguousAsset = false;
-};
-
-[[nodiscard]] bool NormalizeSkinnedMeshSkeletonObjects(
-    const Path& nwbFilePath,
-    ModelCookEntry& entry,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(entry.skinnedMeshObjects.empty() || entry.skeletonObjects.empty())
-        return true;
-
-    if(entry.skeletonObjects.size() == 1u){
-        const ModelSkeletonObject& skeletonObject = entry.skeletonObjects.front();
-        for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
-            if(
-                object.skeletonObject != skeletonObject.name
-                && skeletonObject.skeleton.valid()
-                && object.skeletonObject == skeletonObject.skeleton.name()
-            )
-                object.skeletonObject = skeletonObject.name;
-        }
-        return true;
-    }
-
-    if(entry.skeletonObjects.size() > Limit<usize>::s_Max / 4u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skeleton name index capacity overflows"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-
-    // At most two identities per skeleton and a 0.5 load factor fit without scratch-backed rehashing.
-    // Object names and asset aliases share a table, but direct object names always take precedence.
-    HashMap<NameHash, SkeletonNameResolution, Core::Alloc::ScratchArena> resolutions(entry.skeletonObjects.size() * 4u, scratchArena);
-    for(const ModelSkeletonObject& skeletonObject : entry.skeletonObjects){
-        resolutions.try_emplace(skeletonObject.name.identityHash()).first.value().isObjectName = true;
-        if(!skeletonObject.skeleton.valid())
-            continue;
-        auto& resolution = resolutions.try_emplace(skeletonObject.skeleton.name().identityHash()).first.value();
-        if(resolution.assetMatch)
-            resolution.ambiguousAsset = true;
-        else
-            resolution.assetMatch = &skeletonObject;
-    }
-
-    for(ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
-        const auto found = resolutions.find(object.skeletonObject.identityHash());
-        if(found == resolutions.end() || found.value().isObjectName)
-            continue;
-        const SkeletonNameResolution& resolution = found.value();
-        if(resolution.ambiguousAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': skinned mesh '{}' skeleton '{}' matches multiple skeleton objects")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(object.name.resolvedText())
-                , StringConvert(object.skeletonObject.resolvedText())
-            );
-            return false;
-        }
-        if(resolution.assetMatch)
-            object.skeletonObject = resolution.assetMatch->name;
-    }
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -481,9 +351,6 @@ bool ParseModelCookMetadata(
             }
         )
     )
-        return false;
-
-    if(!NormalizeSkinnedMeshSkeletonObjects(nwbFilePath, outEntry, scratchArena))
         return false;
 
     Model testModel(outEntry.skeletonObjects.get_allocator().arena(), outEntry.virtualPath);

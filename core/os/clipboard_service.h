@@ -53,13 +53,8 @@ public:
 
 
 protected:
-    [[nodiscard]] virtual ClipboardStatus::Enum readNativeText(ClipboardChannel::Enum channel, AString<Alloc::GlobalArena>& text);
-    [[nodiscard]] virtual ClipboardStatus::Enum writeNativeText(ClipboardChannel::Enum channel, AStringView text);
-
-
-protected:
     // Native events may complete a started token on a later event-thread iteration. No client storage is borrowed.
-    virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text);
+    virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text) = 0;
     virtual void cancelNativeRequest(ClipboardRequestToken token);
     virtual void pumpNativeRequests();
     [[nodiscard]] bool completeNativeRequest(ClipboardRequestToken token, ClipboardStatus::Enum status, AStringView text = {});

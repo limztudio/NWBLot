@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import statistics
 from dataclasses import dataclass
@@ -17,13 +18,15 @@ LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
 
 
+NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
 INTERVAL_RE = re.compile(
-    r"^=== interval:\s+(?P<frames>\d+)\s+frames\s+/\s+(?P<seconds>[-+0-9.eE]+)s\s+===$"
+    r"^=== interval:\s+(?P<frames>[0-9]{1,10})\s+frames\s+/\s+" rf"(?P<seconds>{NUMBER})s\s+===$"
 )
 SCOPE_RE = re.compile(
-    r"^\s{2}(?P<scope>[^:]+):\s+avg=(?P<average>[-+0-9.eE]+)"
-    r"\s+min=(?P<minimum>[-+0-9.eE]+)\s+max=(?P<maximum>[-+0-9.eE]+)"
-    r"\s+samples=(?P<samples>\d+)\s*$"
+    r"^\s{2}(?P<scope>[^:]+):\s+avg=" rf"(?P<average>{NUMBER})"
+    rf"\s+min=(?P<minimum>{NUMBER})\s+max=(?P<maximum>{NUMBER})"
+    r"\s+samples=(?P<samples>[0-9]{1,20})" rf"\s+total_ms=(?P<total>{NUMBER})"
+    r"\s+gpu_samples=(?P<gpu_samples>[0-9]{1,20})" rf"\s+sample_avg_ms=(?P<sample_average>{NUMBER})\s*$"
 )
 
 
@@ -72,22 +75,37 @@ def parse_timing_file(
     intervals: List[Dict[str, float]] = []
     current: Optional[Dict[str, float]] = None
     for raw_line in raw_timing[start_byte_offset:].decode(LIT_UTF_8, errors=LIT_REPLACE).splitlines():
-        if INTERVAL_RE.match(raw_line):
+        header = INTERVAL_RE.fullmatch(raw_line)
+        if header:
+            frames = int(header.group("frames"))
+            seconds = float(header.group("seconds"))
+            if not 0 < frames < 2 ** 32 or not math.isfinite(seconds) or seconds <= 0.0:
+                raise SmokeFailure(f"invalid GPU timing interval in {path}: {raw_line}")
             if current:
                 intervals.append(current)
             current = {}
             continue
-
-        match = SCOPE_RE.match(raw_line)
-        if not match or current is None:
+        if raw_line.startswith("=== interval:"):
+            raise SmokeFailure(f"invalid GPU timing interval in {path}: {raw_line}")
+        if not raw_line.strip():
             continue
+        if current is None:
+            # An offset can cut a report mid-write; begin at the next complete interval.
+            if start_byte_offset:
+                continue
+            raise SmokeFailure(f"GPU timing row precedes its interval in {path}: {raw_line}")
+        match = SCOPE_RE.fullmatch(raw_line)
+        if not match:
+            raise SmokeFailure(f"invalid current GPU timing line in {path}: {raw_line}")
 
         raw_scope = match.group("scope")
         scope = symbols.get(raw_scope, raw_scope)
-        try:
-            current[scope] = float(match.group("average"))
-        except ValueError as error:
-            raise SmokeFailure(f"invalid GPU timing line in {path}: {raw_line}") from error
+        values = tuple(float(match.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
+        if (any(not math.isfinite(value) or value < 0.0 for value in values)
+            or not 0 < int(match.group("samples")) < 2 ** 32 or not 0 < int(match.group("gpu_samples")) < 2 ** 64
+            or values[1] > values[0] or values[0] > values[2] or scope in current):
+            raise SmokeFailure(f"invalid current GPU timing values in {path}: {raw_line}")
+        current[scope] = values[0]
 
     if current:
         intervals.append(current)

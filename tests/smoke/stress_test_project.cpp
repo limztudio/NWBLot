@@ -166,10 +166,10 @@ private:
         return RendererBaselineFixedDelta();
     }
 
-    // The legacy benchmark identifier now compares hardware transparent shadows against an opaque-only scene.
-    [[nodiscard]] static bool hybridShadowOpaqueBaseline(){
-#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
-        static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE");
+    // The benchmark compares hardware transparent shadows against an opaque-only scene.
+    [[nodiscard]] static bool hardwareShadowOpaqueBaseline(){
+#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+        static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
         return s_enabled;
 #else
         return false;
@@ -215,7 +215,7 @@ private:
         // Comparison coordinates stay byte-for-byte equivalent to the old zigzag. The full workload retains unit
         // body scale, .72 spacing within each row and a half-column stagger between the glass and opaque rows.
         const bool transparentMaterialClass = (index % 2u) == 0u;
-        const bool transparent = !hybridShadowOpaqueBaseline() && transparentMaterialClass;
+        const bool transparent = !hardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
         const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
         const f32 x = comparison
@@ -515,7 +515,7 @@ public:
 
         SyncSmokeModelRuntimes(*m_world);
         if(!m_csgScene.initialize(
-            *m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), hybridShadowOpaqueBaseline()
+            *m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), hardwareShadowOpaqueBaseline()
         ))
             return false;
 
@@ -529,7 +529,7 @@ public:
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
-#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
         const bool rayQueryCapable =
             m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
             && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
@@ -542,14 +542,14 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available")
             );
-            if(hybridShadowOpaqueBaseline())
+            if(hardwareShadowOpaqueBaseline())
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
             else
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"));
         }
 #endif
 
-        const u32 transparentCharacterCount = hybridShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
+        const u32 transparentCharacterCount = hardwareShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
             , m_characterOwners.size()
@@ -688,8 +688,8 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
-    return NWB_TEXT("NWB Hybrid Shadow Boundary Benchmark");
+#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+    return NWB_TEXT("NWB Hardware Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
     return NWB_TEXT("NWB Async Shadow M4 Benchmark");
 #else

@@ -5,7 +5,7 @@ Only complete, independently runnable workflows live here. Invoke them through t
 - `python -m launcher async-shadow-m4` validates the dedicated async-compute shadow queue against its synchronous baseline.
 - `python -m launcher command-ir` measures optional command-IR copy-buffer capture/read/replay, including the experimental direct-Vulkan lowerer, against native recording.
 - `python -m launcher frame-lagged-async-lighting` validates the opt-in lighting history lifecycle.
-- `python -m launcher hybrid-shadow-boundary` measures the healthy hybrid transparent-shadow tail against a natural opaque hardware-shadow scene baseline.
+- `python -m launcher hardware-shadow-boundary` measures the healthy hardware transparent-shadow tail against a natural opaque hardware-shadow scene baseline.
 - `python -m launcher renderer-baseline <profile>` captures or compares an immutable current-renderer scene baseline.
 - `python -m launcher transfer-queue` profiles repeated large setup uploads on a real dedicated Transfer family.
 

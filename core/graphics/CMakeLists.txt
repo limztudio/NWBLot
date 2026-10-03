@@ -105,7 +105,6 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resource_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
-    "${CMAKE_CURRENT_LIST_DIR}/backend_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/queue_sharing.h"

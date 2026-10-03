@@ -42,7 +42,7 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)
         return TextInputAdmission::InvalidSession;
-    if(revision != 0u && revision != m_surroundingRevision)
+    if(revision != m_surroundingRevision)
         return TextInputAdmission::InvalidRange;
     if(basis >= TextInputDeletionBasis::kCount)
         return TextInputAdmission::InvalidRange;

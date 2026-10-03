@@ -61,7 +61,7 @@ LIT_ASYNC_SHADOW_M4 = "async_shadow_m4"
 LIT_COMMAND_IR = "command_ir"
 LIT_FRAME_LAGGED_ASYNC_LIGHTING = "frame_lagged_async_lighting"
 LIT_RUN_PY = "run.py"
-LIT_HYBRID_SHADOW_BOUNDARY = "hybrid_shadow_boundary"
+LIT_HARDWARE_SHADOW_BOUNDARY = "hardware_shadow_boundary"
 LIT_TRANSFER_QUEUE = "transfer_queue"
 LIT_UTILITIES = "utilities"
 LIT_TEX_CONV = "tex_conv"
@@ -71,8 +71,8 @@ LIT_COMMAND_IR_2 = "command-ir"
 LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY = "tests/ab/command_ir/launch.py"
 LIT_FRAME_LAGGED_ASYNC_LIGHTING_2 = "frame-lagged-async-lighting"
 LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L = "tests/ab/frame_lagged_async_lighting/launch.py"
-LIT_HYBRID_SHADOW_BOUNDARY_2 = "hybrid-shadow-boundary"
-LIT_TESTS_AB_HYBRID_SHADOW_BOUNDARY_LAUNCH = "tests/ab/hybrid_shadow_boundary/launch.py"
+LIT_HARDWARE_SHADOW_BOUNDARY_2 = "hardware-shadow-boundary"
+LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH = "tests/ab/hardware_shadow_boundary/launch.py"
 LIT_TRANSFER_QUEUE_2 = "transfer-queue"
 LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY = "tests/ab/transfer_queue/launch.py"
 LIT_PIPELINE_LAUNCH_PY = "pipeline/launch.py"
@@ -493,7 +493,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_RUN_PY,
                 root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / "helper.py",
-                root / LIT_TESTS / LIT_AB / LIT_HYBRID_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
+                root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
                 root / LIT_UTILITIES / LIT_LAUNCH_PY,
                 root / LIT_UTILITIES / LIT_TEX_CONV / LIT_LAUNCH_PY,
@@ -509,7 +509,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 LIT_ASYNC_SHADOW_M4_2: Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
                 LIT_COMMAND_IR_2: Path(LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY),
                 LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: Path(LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L),
-                LIT_HYBRID_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HYBRID_SHADOW_BOUNDARY_LAUNCH),
+                LIT_HARDWARE_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH),
                 LIT_TRANSFER_QUEUE_2: Path(LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY),
                 LIT_PIPELINE: Path(LIT_PIPELINE_LAUNCH_PY),
                 LIT_SMOKE: Path(LIT_TESTS_SMOKE_LAUNCH_PY),
@@ -523,7 +523,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 LIT_ASYNC_SHADOW_M4_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
                 LIT_COMMAND_IR_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
                 LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_HYBRID_SHADOW_BOUNDARY_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
+                LIT_HARDWARE_SHADOW_BOUNDARY_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
                 LIT_TRANSFER_QUEUE_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
                 LIT_PIPELINE: (),
                 LIT_SMOKE: (Path(LIT_TESTS_LAUNCH_PY),),
@@ -557,7 +557,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_HYBRID_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
+                root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
                 root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
             )
@@ -581,7 +581,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 LIT_ASYNC_SHADOW_M4_2: Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
                 LIT_COMMAND_IR_2: Path(LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY),
                 LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: Path(LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L),
-                LIT_HYBRID_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HYBRID_SHADOW_BOUNDARY_LAUNCH),
+                LIT_HARDWARE_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH),
                 LIT_TRANSFER_QUEUE_2: Path(LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY),
             },
             {command: discovered.script for command, discovered in ab_launchers.items()},
@@ -903,6 +903,8 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         self.addCleanup(output_patch.stop)
         for owner, operation, options in (
             (launcher, "cmake_command", {"return_value": (LIT_CMAKE_EXECUTABLE,)}),
+            (launcher, LIT_HOST_PLATFORM_NAME, {"return_value": LIT_WINDOWS}),
+            (launcher, "host_arch_name", {"return_value": LIT_ARM64}),
             (launcher, "ensure_file_api_query", {"wraps": launcher.ensure_file_api_query}),
             (launcher.subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
             (launcher.subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
@@ -910,7 +912,7 @@ class LauncherDryRunDomainTests(unittest.TestCase):
             patcher = mock.patch.object(owner, operation, **options)
             result = patcher.start()
             self.addCleanup(patcher.stop)
-            if operation != "cmake_command":
+            if "return_value" not in options:
                 self.addCleanup(result.assert_not_called)
 
     def assert_preview_uses_domain(self, expected_domain, extra_arguments):

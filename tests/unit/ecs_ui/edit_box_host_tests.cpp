@@ -207,7 +207,10 @@ TEST_F(UiEditBoxHostTests, SurroundingDeletionCannotFollowALocalMoveAgainstOldNa
     ASSERT_TRUE(m_model.setText("abcd"));
     ASSERT_TRUE(activate());
     ASSERT_TRUE(key(Core::Key::Left));
-    ASSERT_EQ(m_textInput.erase(1u, 0u), TextInputAdmission::Accepted);
+    ASSERT_EQ(
+        m_textInput.erase(1u, 0u, m_textInput.surroundingRevision(m_textInput.activeSession()), TextInputDeletionBasis::Caret),
+        TextInputAdmission::Accepted
+    );
     m_host.collectNative();
     ASSERT_TRUE(frame(m_model));
     EXPECT_EQ(m_model.text(), "abcd");

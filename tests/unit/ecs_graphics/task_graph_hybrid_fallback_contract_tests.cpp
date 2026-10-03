@@ -43,11 +43,11 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
     const AStringView smokeCmake(smokeCmakeSource.data(), smokeCmakeSource.size());
     const AStringView stressTestProject(stressTestProjectSource.data(), stressTestProjectSource.size());
 
-    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_hybrid_shadow_boundary_fallback_benchmark"));
-    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_hybrid_shadow_boundary_fallback_capture_smoke"));
-    const usize healthyCaptureOffset = smokeCmake.find("            nwb_hybrid_shadow_boundary_healthy_capture_smoke");
+    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_hardware_shadow_boundary_fallback_benchmark"));
+    EXPECT_FALSE(ContainsText(smokeCmake, "nwb_hardware_shadow_boundary_fallback_capture_smoke"));
+    const usize healthyCaptureOffset = smokeCmake.find("            nwb_hardware_shadow_boundary_healthy_capture_smoke");
     const usize opaqueCaptureOffset = smokeCmake.find(
-        "            nwb_hybrid_shadow_boundary_opaque_capture_smoke",
+        "            nwb_hardware_shadow_boundary_opaque_capture_smoke",
         healthyCaptureOffset
     );
     const usize opaqueCaptureEndOffset = smokeCmake.find(
@@ -67,7 +67,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         opaqueCaptureOffset,
         opaqueCaptureEndOffset - opaqueCaptureOffset
     );
-    EXPECT_TRUE(ContainsText(healthyCapture, "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"));
+    EXPECT_TRUE(ContainsText(healthyCapture, "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"));
     EXPECT_TRUE(ContainsText(
         healthyCapture,
         "\"--expect-log-message\" \"StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark\""
@@ -94,7 +94,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         healthyCapture,
         "\"--reject-log-message\" \"RendererSystem: split opaque soft-shadow producer failed\\; retaining all-lit visibility\""
     ));
-    EXPECT_TRUE(ContainsText(healthyCapture, "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=0"));
+    EXPECT_TRUE(ContainsText(healthyCapture, "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=0"));
     EXPECT_TRUE(ContainsText(
         healthyCapture,
         "CONFIGURATIONS dbg opt"
@@ -102,7 +102,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
     EXPECT_FALSE(ContainsText(healthyCapture, "enabled natural opaque hardware-shadow baseline"));
     EXPECT_FALSE(ContainsText(healthyCapture, s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C));
 
-    EXPECT_TRUE(ContainsText(opaqueCapture, "$<TARGET_FILE:nwb_hybrid_shadow_boundary_healthy_benchmark>"));
+    EXPECT_TRUE(ContainsText(opaqueCapture, "$<TARGET_FILE:nwb_hardware_shadow_boundary_healthy_benchmark>"));
     EXPECT_TRUE(ContainsText(
         opaqueCapture,
         "\"--expect-log-message\" \"StressTestSmokeProject: enabled natural opaque hardware-shadow baseline\""
@@ -129,7 +129,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         opaqueCapture,
         "\"--reject-log-message\" \"RendererSystem: split opaque soft-shadow producer failed\\; retaining all-lit visibility\""
     ));
-    EXPECT_TRUE(ContainsText(opaqueCapture, "NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE=1"));
+    EXPECT_TRUE(ContainsText(opaqueCapture, "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1"));
     EXPECT_TRUE(ContainsText(
         opaqueCapture,
         "CONFIGURATIONS dbg opt"
@@ -160,7 +160,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
     EXPECT_FALSE(ContainsText(transparentCapture, s_RENDERERSYSTEM_CREATED_RAYQUERY_SHADOW_C));
 
     const usize opaqueBaselineHelperOffset = stressTestProject.find(
-        "[[nodiscard]] static bool hybridShadowOpaqueBaseline()"
+        "[[nodiscard]] static bool hardwareShadowOpaqueBaseline()"
     );
     const usize opaqueBaselineHelperEndOffset = stressTestProject.find(
         "static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(",
@@ -172,10 +172,10 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         opaqueBaselineHelperOffset,
         opaqueBaselineHelperEndOffset - opaqueBaselineHelperOffset
     );
-    EXPECT_TRUE(ContainsText(opaqueBaselineHelper, "#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)"));
+    EXPECT_TRUE(ContainsText(opaqueBaselineHelper, "#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)"));
     EXPECT_TRUE(ContainsText(
         opaqueBaselineHelper,
-        "ReadSmokeEnvironmentFlag(\"NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE\")"
+        "ReadSmokeEnvironmentFlag(\"NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE\")"
     ));
     EXPECT_TRUE(ContainsText(opaqueBaselineHelper, "return s_enabled;"));
 
@@ -195,12 +195,12 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
     EXPECT_TRUE(ContainsText(createCharacter, s_TransparentMaterialClassText));
     EXPECT_TRUE(ContainsText(
         createCharacter,
-        "const bool transparent = !hybridShadowOpaqueBaseline() && transparentMaterialClass;"
+        "const bool transparent = !hardwareShadowOpaqueBaseline() && transparentMaterialClass;"
     ));
     EXPECT_TRUE(ContainsText(createCharacter, "const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;"));
 
     const usize hybridBenchmarkStartupOffset = stressTestProject.find(
-        "#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)",
+        "#if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)",
         createCharacterEndOffset
     );
     const usize hybridBenchmarkStartupEndOffset = stressTestProject.find(
@@ -223,7 +223,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         hybridBenchmarkStartup,
         "hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"
     ));
-    EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "if(hybridShadowOpaqueBaseline())"));
+    EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "if(hardwareShadowOpaqueBaseline())"));
     EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "enabled natural opaque hardware-shadow baseline"));
     EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "enabled healthy hardware transparent-shadow benchmark"));
     EXPECT_FALSE(ContainsText(hybridBenchmarkStartup, "NWB_FATAL_ASSERT_MSG("));

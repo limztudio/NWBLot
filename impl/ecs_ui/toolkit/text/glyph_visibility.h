@@ -27,7 +27,7 @@ namespace TextGlyphIntersection{
 class TextGlyphVisibility final{
 public:
     [[nodiscard]] static const BakedFontAtlas* selectAtlas(const PlacedGlyph& glyph, f32 physicalSize);
-    // Unknown ink or untrusted native bounds remain Visible so existing shapers retain conservative preparation.
+    // Coverage needs explicit bounds or a valid native face; untrusted native bounds retain conservative preparation.
     [[nodiscard]] static TextGlyphIntersection::Enum candidate(
         const PlacedGlyph& glyph,
         const BakedFontAtlas* selectedAtlas,

@@ -281,33 +281,33 @@ bool BackendContext::present(bool& outPresentationAccepted){
         }
 
         SwapChainImage& swapChainImage = m_swapChainImages[m_swapChainIndex];
-        const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy =
-            VulkanDetail::ResolveCompatibilityPresentTransitionPolicy(
+        const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy =
+            VulkanDetail::ResolveDirectPresentTransitionPolicy(
                 swapChainImage.presentationState.nativeInitialState()
             )
         ;
         const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
         if(
             !swapChainImage.rhiHandle
-            || transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::Invalid
+            || transitionPolicy == VulkanDetail::DirectPresentTransitionPolicy::Invalid
             || !primaryGraphicsQueue.valid()
         ){
             if(!cancelFramePresentationSignalDeferred(nullptr, lifecycleLock)){
                 captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentationSignalCancellationContext);
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after invalid compatibility state."));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after invalid direct presentation state."));
             }
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition preconditions failed."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Direct presentation transition preconditions failed."));
             return false;
         }
 
         // Swap-chain-lifetime list created with swap-chain resources; reopen it here instead of creating per frame.
-        if(!ensureCompatibilityPresentCommandList(primaryGraphicsQueue)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire the compatibility presentation command list."));
+        if(!ensureDirectPresentCommandList(primaryGraphicsQueue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire the direct presentation command list."));
             return false;
         }
-        if(!recordCompatibilityPresentTransition(transitionPolicy, swapChainImage.rhiHandle.get()))
+        if(!recordDirectPresentTransition(transitionPolicy, swapChainImage.rhiHandle.get()))
             return false;
-        CommandList* const compatibilityCommandList = m_compatibilityPresentCommandList.get();
+        CommandList* const directCommandList = m_directPresentCommandList.get();
 
         const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
         if(!presentationSignalHook.valid()){
@@ -315,33 +315,33 @@ bool BackendContext::present(bool& outPresentationAccepted){
                 captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentationSignalCancellationContext);
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after claim rejection."));
             }
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to claim compatibility presentation on the primary Graphics queue."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to claim direct presentation on the primary Graphics queue."));
             return false;
         }
 
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
-        CommandList* const compatibilityCommandLists[] = { compatibilityCommandList };
-        const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandListsInternal(
-            compatibilityCommandLists,
-            LengthOf(compatibilityCommandLists),
+        CommandList* const directCommandLists[] = { directCommandList };
+        const QueueSubmissionToken directToken = m_rhiDevice->executeCommandListsInternal(
+            directCommandLists,
+            LengthOf(directCommandLists),
             primaryGraphicsQueue,
             submitDesc,
             false,
             Device::DeviceLossDiagnosticPolicy::Defer
         );
-        if(!fallbackToken.valid()){
+        if(!directToken.valid()){
             if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after submit rejection."));
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_QueueSubmitContext);
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition/signal submission was rejected."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Direct presentation transition/signal submission was rejected."));
             return false;
         }
-        if(!confirmFramePresentationSignal(presentationSignalHook, fallbackToken)){
+        if(!confirmFramePresentationSignal(presentationSignalHook, directToken)){
             if(!cancelFramePresentationSignalDeferred(&presentationSignalHook, lifecycleLock))
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to cancel presentation synchronization after confirmation rejection."));
             captureDeviceLossAfterUnlock(VulkanArenaScope::s_PresentationSignalCancellationContext);
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Accepted compatibility presentation submission failed signal confirmation/tracking."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Accepted direct presentation submission failed signal confirmation/tracking."));
             return false;
         }
 
@@ -464,70 +464,70 @@ bool BackendContext::present(bool& outPresentationAccepted){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::ensureCompatibilityPresentCommandList(const GpuPhysicalQueueId& executionQueue){
+bool BackendContext::ensureDirectPresentCommandList(const GpuPhysicalQueueId& executionQueue){
     if(!m_rhiDevice || !executionQueue.valid())
         return false;
-    if(m_compatibilityPresentCommandList && m_compatibilityPresentQueue == executionQueue)
+    if(m_directPresentCommandList && m_directPresentQueue == executionQueue)
         return true;
-    resetCompatibilityPresentCommandList();
+    resetDirectPresentCommandList();
     CommandListParameters commandListParams;
     commandListParams.setPhysicalQueue(executionQueue);
-    m_compatibilityPresentCommandList = m_rhiDevice->createCommandList(commandListParams);
-    if(!m_compatibilityPresentCommandList)
+    m_directPresentCommandList = m_rhiDevice->createCommandList(commandListParams);
+    if(!m_directPresentCommandList)
         return false;
-    m_compatibilityPresentQueue = executionQueue;
+    m_directPresentQueue = executionQueue;
     return true;
 }
 
-void BackendContext::resetCompatibilityPresentCommandList()noexcept{
-    m_compatibilityPresentCommandList.reset();
-    m_compatibilityPresentQueue = {};
+void BackendContext::resetDirectPresentCommandList()noexcept{
+    m_directPresentCommandList.reset();
+    m_directPresentQueue = {};
 }
 
-bool BackendContext::recordCompatibilityPresentTransition(
-    const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy,
+bool BackendContext::recordDirectPresentTransition(
+    const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
     Texture* backbufferTexture
 ){
-    CommandList* const compatibilityCommandList = m_compatibilityPresentCommandList.get();
-    if(!compatibilityCommandList || !backbufferTexture)
+    CommandList* const directCommandList = m_directPresentCommandList.get();
+    if(!directCommandList || !backbufferTexture)
         return false;
-    compatibilityCommandList->open();
+    directCommandList->open();
     if(
-        !compatibilityCommandList->hasCommandBuffer()
-        || !compatibilityCommandList->isRecording()
-        || compatibilityCommandList->commandRecordingFailed()
+        !directCommandList->hasCommandBuffer()
+        || !directCommandList->isRecording()
+        || directCommandList->commandRecordingFailed()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the compatibility presentation command list."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the direct presentation command list."));
         return false;
     }
-    if(transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::PreservePresent){
-        compatibilityCommandList->beginTrackingTextureState(
+    if(transitionPolicy == VulkanDetail::DirectPresentTransitionPolicy::PreservePresent){
+        directCommandList->beginTrackingTextureState(
             backbufferTexture,
             s_AllSubresources,
             ResourceStates::Present
         );
     }
-    compatibilityCommandList->setTextureState(
+    directCommandList->setTextureState(
         backbufferTexture,
         s_AllSubresources,
         ResourceStates::Present
     );
-    compatibilityCommandList->commitBarriers();
+    directCommandList->commitBarriers();
     if(
-        !compatibilityCommandList->hasCommandBuffer()
-        || !compatibilityCommandList->isRecording()
-        || compatibilityCommandList->commandRecordingFailed()
+        !directCommandList->hasCommandBuffer()
+        || !directCommandList->isRecording()
+        || directCommandList->commandRecordingFailed()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the compatibility presentation transition."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the direct presentation transition."));
         return false;
     }
-    compatibilityCommandList->close();
+    directCommandList->close();
     if(
-        !compatibilityCommandList->hasCommandBuffer()
-        || compatibilityCommandList->isRecording()
-        || compatibilityCommandList->commandRecordingFailed()
+        !directCommandList->hasCommandBuffer()
+        || directCommandList->isRecording()
+        || directCommandList->commandRecordingFailed()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the compatibility presentation command list."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the direct presentation command list."));
         return false;
     }
     return true;

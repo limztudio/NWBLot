@@ -121,7 +121,7 @@ void WaylandTextInputService::onRegistryGlobal(
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
         return;
-    // Bind v1 for compatibility with the original protocol and its cursor-rectangle commit semantics.
+    // Protocol v1 commits cursor-rectangle updates through its explicit commit request.
     service.m_manager = static_cast<zwp_text_input_manager_v3*>(wl_registry_bind(
         registry, name, &zwp_text_input_manager_v3_interface, 1u
     ));

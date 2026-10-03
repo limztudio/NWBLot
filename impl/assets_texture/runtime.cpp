@@ -261,98 +261,42 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     if(!checkVirtualPath(TextureBinaryPayload::s_TextureLoadBinaryContext))
         return false;
 
-    usize prefixCursor = 0u;
-    TextureBinaryPayload::HeaderPrefix headerPrefix;
+    usize cursor = 0u;
+    TextureBinaryPayload::HeaderBinary header;
     if(!Core::Assets::ReadMagicHeaderPayload(
         binary,
-        prefixCursor,
-        headerPrefix,
+        cursor,
+        header,
         TextureBinaryPayload::s_TextureMagic,
         TextureBinaryPayload::s_TextureLoadBinaryContext,
         TextureBinaryPayload::s_TextureAssetKindLabel
     ))
         return false;
-    if(
-        headerPrefix.version != TextureBinaryPayload::s_TextureVersionV2
-        && headerPrefix.version != TextureBinaryPayload::s_TextureVersion
-    ){
+    if(header.version != TextureBinaryPayload::s_TextureVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
         return false;
     }
+    if(
+        (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u
+        || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
+        return false;
+    }
 
-    usize cursor = 0u;
-    u32 colorSpace = 0u;
-    u32 dimensionValue = 0u;
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 depth = 0u;
-    u32 mipCount = 0u;
-    TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-    u64 payloadByteCount64 = 0u;
-    if(headerPrefix.version == TextureBinaryPayload::s_TextureVersionV2){
-        TextureBinaryPayload::HeaderBinaryV2 header;
-        if(!Core::Assets::ReadMagicHeaderPayload(
-            binary,
-            cursor,
-            header,
-            TextureBinaryPayload::s_TextureMagic,
-            TextureBinaryPayload::s_TextureLoadBinaryContext,
-            TextureBinaryPayload::s_TextureAssetKindLabel
-        ))
-            return false;
-        if(
-            header.version != TextureBinaryPayload::s_TextureVersionV2
-            || header.hasAlpha > 1u
-            || header.reserved != 0u
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid V2 texture payload flags"));
-            return false;
-        }
-        colorSpace = header.colorSpace;
-        dimensionValue = header.dimension;
-        width = header.width;
-        height = header.height;
-        depth = header.depth;
-        mipCount = header.mipCount;
-        payloadFormat = TexturePayloadFormat::UastcLdr4x4;
-        alphaMode = header.hasAlpha != 0u ? TextureAlphaMode::EmbeddedLdr : TextureAlphaMode::Opaque;
-        payloadByteCount64 = header.uastcByteCount;
-    }
-    else{
-        TextureBinaryPayload::HeaderBinary header;
-        if(!Core::Assets::ReadMagicHeaderPayload(
-            binary,
-            cursor,
-            header,
-            TextureBinaryPayload::s_TextureMagic,
-            TextureBinaryPayload::s_TextureLoadBinaryContext,
-            TextureBinaryPayload::s_TextureAssetKindLabel
-        ))
-            return false;
-        if(
-            header.version != TextureBinaryPayload::s_TextureVersion
-            || (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u
-            || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid V3 texture payload flags"));
-            return false;
-        }
-        colorSpace = header.colorSpace;
-        dimensionValue = header.dimension;
-        width = header.width;
-        height = header.height;
-        depth = header.depth;
-        mipCount = header.mipCount;
-        payloadFormat = static_cast<TexturePayloadFormat::Enum>(header.payloadFormat);
-        alphaMode = static_cast<TextureAlphaMode::Enum>(header.alphaInfo & TextureBinaryPayload::s_AlphaInfoModeMask);
-        alphaConstantUnorm8 = static_cast<u8>(
-            (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoConstantMask)
-            >> TextureBinaryPayload::s_AlphaInfoConstantShift
-        );
-        payloadByteCount64 = header.payloadByteCount;
-    }
+    const u32 colorSpace = header.colorSpace;
+    const u32 dimensionValue = header.dimension;
+    const u32 width = header.width;
+    const u32 height = header.height;
+    const u32 depth = header.depth;
+    const u32 mipCount = header.mipCount;
+    const TexturePayloadFormat::Enum payloadFormat = static_cast<TexturePayloadFormat::Enum>(header.payloadFormat);
+    const TextureAlphaMode::Enum alphaMode = static_cast<TextureAlphaMode::Enum>(header.alphaInfo & TextureBinaryPayload::s_AlphaInfoModeMask);
+    const u8 alphaConstantUnorm8 = static_cast<u8>(
+        (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoConstantMask)
+        >> TextureBinaryPayload::s_AlphaInfoConstantShift
+    );
+    const u64 payloadByteCount64 = header.payloadByteCount;
 
     const TextureDimension::Enum dimension = static_cast<TextureDimension::Enum>(dimensionValue);
     if(

@@ -38,15 +38,11 @@ namespace Feature{
         RayTracingClusters,
         RayTracingOpacityMicromap,
         RayTracingPipeline,
-        // Deprecated unsupported compatibility slot. Keep this ordinal stable for external Feature users.
-        SamplerFeedback,
         ShaderExecutionReordering,
         ShaderSpecializations,
         SinglePassStereo,
         Spheres,
         VariableRateShading,
-        // Deprecated unsupported compatibility slot. Keep this ordinal stable for external Feature users.
-        VirtualResources,
         WaveLaneCountMinMax,
         CooperativeVectorInferencing,
         CooperativeVectorTraining,

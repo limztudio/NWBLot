@@ -6,7 +6,7 @@
 
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 
 #include <global/scope_exit.h>
 

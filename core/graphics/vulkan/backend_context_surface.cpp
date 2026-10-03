@@ -111,7 +111,7 @@ bool BackendContext::prepareSwapChainImageRevocation(){
 
 void BackendContext::commitPreparedSwapChainDestruction()noexcept{
     m_swapChainState.swapChainReadbackAvailable = false;
-    resetCompatibilityPresentCommandList();
+    resetDirectPresentCommandList();
 
     {
         NothrowScopedLock presentationLock(m_framePresentationMutex);

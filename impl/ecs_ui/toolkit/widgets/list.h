@@ -31,7 +31,7 @@ interface IListDataSource{
     [[nodiscard]] virtual bool findEnabled(u64 start, bool reverse, u64& index)const = 0;
     // Text may be temporary until the next source call; the list shapes/copies it before that call.
     [[nodiscard]] virtual StringView text(u64 index)const = 0;
-    [[nodiscard]] virtual bool enabled(u64)const{ return true; }
+    [[nodiscard]] virtual bool enabled(u64 index)const = 0;
 };
 
 struct ListOptions{

@@ -214,7 +214,7 @@ def parse_reflection_diagnostics(lines, requested):
     enabled_index = lines.index(REFLECTION_ENABLED)
     shutdown_index = lines.index(SHUTDOWN)
     pattern = re.escape(REFLECTION_SAMPLE) + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_FIELDS)
-    pattern += r"(?: " + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_SCREEN_FIELDS) + r")?"
+    pattern += " " + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_SCREEN_FIELDS)
     sums = dict.fromkeys(REFLECTION_COUNTERS, 0)
     screen_sums = dict.fromkeys(REFLECTION_SCREEN_FIELDS, 0)
     screen_samples = 0
@@ -230,20 +230,19 @@ def parse_reflection_diagnostics(lines, requested):
         if not match:
             raise SmokeFailure("malformed accepted reflection diagnostic sample")
         row = dict(zip(REFLECTION_FIELDS, map(int, match.groups()[:len(REFLECTION_FIELDS)])))
-        if match.groups()[len(REFLECTION_FIELDS)] is not None:
-            screen = dict(zip(REFLECTION_SCREEN_FIELDS, map(int, match.groups()[len(REFLECTION_FIELDS):])))
-            for field, value in screen.items():
-                if value >= 2 ** (64 if field == LIT_SCREEN_ITERATIONS else 32):
-                    raise SmokeFailure("screen reflection counter exceeds its unsigned field bounds")
-            attempts = screen[LIT_SCREEN_ATTEMPTS]
-            if (screen[LIT_SCREEN_HITS] > screen[LIT_SCREEN_RETURNS] or screen[LIT_SCREEN_RETURNS] > attempts
-                    or screen[LIT_SCREEN_LIMIT_MISSES] > attempts or screen[LIT_SCREEN_ITERATIONS] > attempts * 256):
-                raise SmokeFailure("screen reflection counters exceed their attempted ray population or maximum budget")
-            screen_samples += 1
-            for field in REFLECTION_SCREEN_FIELDS:
-                screen_sums[field] += screen[field]
-            maximum_frame_average_iterations = max(maximum_frame_average_iterations,
-                screen[LIT_SCREEN_ITERATIONS] / attempts if attempts else 0.0)
+        screen = dict(zip(REFLECTION_SCREEN_FIELDS, map(int, match.groups()[len(REFLECTION_FIELDS):])))
+        for field, value in screen.items():
+            if value >= 2 ** (64 if field == LIT_SCREEN_ITERATIONS else 32):
+                raise SmokeFailure("screen reflection counter exceeds its unsigned field bounds")
+        attempts = screen[LIT_SCREEN_ATTEMPTS]
+        if (screen[LIT_SCREEN_HITS] > screen[LIT_SCREEN_RETURNS] or screen[LIT_SCREEN_RETURNS] > attempts
+                or screen[LIT_SCREEN_LIMIT_MISSES] > attempts or screen[LIT_SCREEN_ITERATIONS] > attempts * 256):
+            raise SmokeFailure("screen reflection counters exceed their attempted ray population or maximum budget")
+        screen_samples += 1
+        for field in REFLECTION_SCREEN_FIELDS:
+            screen_sums[field] += screen[field]
+        maximum_frame_average_iterations = max(maximum_frame_average_iterations,
+            screen[LIT_SCREEN_ITERATIONS] / attempts if attempts else 0.0)
         for field, value in row.items():
             bits = 64 if field in (LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME) else 32
             if value >= 2 ** bits or (field in (LIT_SEQUENCE, LIT_GENERATION) and value == 0):

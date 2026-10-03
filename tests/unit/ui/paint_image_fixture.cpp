@@ -207,7 +207,11 @@ SharedImageSource PaintImageFixture::makeImage(const StringView path, const u8 s
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(static_cast<u32>(seed) + index * 17u);
     Texture texture(m_arena, Name(path));
-    texture.setPayload(TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes));
+    texture.setPayload(
+        TextureColorSpace::Srgb, true, width, height, Move(mips), Move(bytes),
+        TextureDimension::Texture2D, 1u, TexturePayloadFormat::UastcLdr4x4,
+        TextureAlphaMode::EmbeddedLdr, TextureFormat::s_OpaqueAlphaUnorm8
+    );
     return MakeImageSource(m_arena, texture);
 }
 

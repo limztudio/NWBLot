@@ -30,7 +30,6 @@ static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = NWB_TEXT("tar
 static constexpr AStringView s_SHARED = "shared";
 static constexpr AStringView s_RIG_A = "rig_a";
 static constexpr AStringView s_RIG_B = "rig_b";
-static constexpr AStringView s_UNKNOWN_MESH = "unknown_mesh";
 static constexpr AStringView s_RIG = "rig";
 static constexpr AStringView s_BODY = "body";
 
@@ -74,7 +73,7 @@ struct ModelMetadata{
         return ParseModelCookMetadata(Name("tests/model_cook_normalization/model"), path, asset, entry, scratchArena);
     }
 
-    void verifyNormalizedMeshes()const{
+    void verifyObjectReferences()const{
         ASSERT_EQ(entry.skinnedMeshObjects.size(), expectedSkeletons.size());
         for(const ModelSkinnedMeshObject& object : entry.skinnedMeshObjects){
             const auto expected = expectedSkeletons.find(object.name);
@@ -90,7 +89,7 @@ struct ModelMetadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount, const usize meshCount, const bool useAliases){
+static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount, const usize meshCount){
     for(usize index = 0u; index < skeletonCount; ++index){
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
         const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_normalization/skeleton_{}", index);
@@ -100,16 +99,15 @@ static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount
         const usize skeletonIndex = (index * 73u) % skeletonCount;
         const auto meshName = StringFormat(metadata.metadataArena, "mesh_{}", index);
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", skeletonIndex);
-        const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_normalization/skeleton_{}", skeletonIndex);
-        metadata.addSkinnedMesh(meshName, useAliases ? AStringView(assetName) : AStringView(objectName), objectName);
+        metadata.addSkinnedMesh(meshName, objectName, objectName);
     }
 }
 
-static void BenchmarkNormalization(const usize count, const bool useAliases, const usize iterations = 3u){
+static void BenchmarkObjectReferences(const usize count, const usize iterations = 3u){
     ModelMetadata metadata;
-    AddIndexedObjects(metadata, count, count, useAliases);
+    AddIndexedObjects(metadata, count, count);
     ASSERT_TRUE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     const ArenaMemoryStats warmScratch = metadata.scratchArena.memoryStats();
     const ArenaMemoryStats before = HeapBackingMemoryStats();
     usize accepted = 0u;
@@ -121,7 +119,7 @@ static void BenchmarkNormalization(const usize count, const bool useAliases, con
     const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
     const ArenaMemoryStats after = HeapBackingMemoryStats();
     ASSERT_EQ(accepted, iterations);
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     const ArenaMemoryStats currentScratch = metadata.scratchArena.memoryStats();
     EXPECT_EQ(currentScratch.usedBytes, warmScratch.usedBytes);
     EXPECT_EQ(currentScratch.reservedBytes, warmScratch.reservedBytes);
@@ -132,81 +130,77 @@ static void BenchmarkNormalization(const usize count, const bool useAliases, con
     Tests::RecordUnsignedTestProperty("model_parse_heap_allocations", after.allocationCount - before.allocationCount);
     Tests::RecordUnsignedTestProperty("model_parse_scratch_reserved_bytes", currentScratch.reservedBytes);
     Tests::RecordUnsignedTestProperty("model_parse_scratch_used_bytes", currentScratch.usedBytes);
-    testing::Test::RecordProperty("model_skeleton_reference_mode", useAliases ? "asset_alias" : "object_name");
+    testing::Test::RecordProperty("model_skeleton_reference_mode", "object_name");
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ModelCookNormalization, DirectObjectNamesTakePrecedenceOverAmbiguousAssetAliases){
+TEST(ModelCookMetadata, LocalObjectNamesStayDistinctFromCollidingAssetIdentities){
     ModelMetadata metadata;
     metadata.addSkeleton(s_SHARED, "tests/model_cook_normalization/direct");
     metadata.addSkeleton("other_a", "SHARED");
     metadata.addSkeleton("other_b", s_SHARED);
-    metadata.addSkeleton("unique_rig", "Tests/Model_Cook_Normalization/Unique");
     metadata.addSkinnedMesh("direct_mesh", "ShArEd", s_SHARED);
-    metadata.addSkinnedMesh("alias_mesh", "tests/model_cook_normalization/unique", "unique_rig");
     metadata.addSkinnedMesh("other_direct_mesh", "OTHER_A", "other_a");
     ASSERT_TRUE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
-    EXPECT_EQ(metadata.entry.skeletonObjects.size(), 4u);
+    metadata.verifyObjectReferences();
 }
 
-TEST(ModelCookNormalization, ResolvesRepeatedAliasesWithoutChangingMetadataOrObjectOrder){
-    ModelMetadata metadata;
-    AddIndexedObjects(metadata, 33u, 257u, true);
-    ASSERT_TRUE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
-    const Value* meshes = metadata.asset.findField(s_SKINNED_MESHES);
-    ASSERT_NE(meshes, nullptr);
-    usize index = 0u;
-    for(const auto& [objectName, object] : meshes->asMap()){
-        ASSERT_LT(index, metadata.entry.skinnedMeshObjects.size());
-        const auto& normalized = metadata.entry.skinnedMeshObjects[index++];
-        EXPECT_EQ(normalized.name, Name(AStringView(objectName)));
-        const Value* skeleton = object.findField(s_SKELETON);
-        ASSERT_NE(skeleton, nullptr);
-        EXPECT_NE(Name(skeleton->asString()), normalized.skeletonObject);
+TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    for(const usize skeletonCount : { 1u, 33u }){
+        ModelMetadata metadata;
+        AddIndexedObjects(metadata, skeletonCount, 257u);
+        ASSERT_TRUE(metadata.parse());
+        metadata.verifyObjectReferences();
+        const AStringView assetPath = "tests/model_cook_normalization/skeleton_0";
+        metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString(assetPath);
+        metadata.expectedSkeletons.at(Name("mesh_0")) = Name(assetPath);
+        EXPECT_FALSE(metadata.parse());
+        metadata.verifyObjectReferences();
+        EXPECT_EQ(metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).asString(), assetPath);
+        metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString("rig_0");
+        metadata.expectedSkeletons.at(Name("mesh_0")) = Name("rig_0");
+        ASSERT_TRUE(metadata.parse());
+        metadata.verifyObjectReferences();
     }
-    ASSERT_TRUE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
 }
 
-TEST(ModelCookNormalization, AmbiguousAliasesFailBeforeMissingTargetValidationAndReparseCleanly){
+TEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
     metadata.addSkeleton(s_RIG_A, "tests/model_cook_normalization/shared");
     metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_NORMALIZATION/SHARED");
-    metadata.addSkinnedMesh(s_UNKNOWN_MESH, "missing_rig", "missing_rig");
-    metadata.addSkinnedMesh("ambiguous_mesh", "tests/model_cook_normalization/shared", s_RIG_A);
+    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_normalization/shared", "tests/model_cook_normalization/shared");
     EXPECT_FALSE(metadata.parse());
-    EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
-    EXPECT_FALSE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
-    metadata.asset.field(s_SKINNED_MESHES).field(s_UNKNOWN_MESH).field(s_SKELETON).setString(s_RIG_B);
-    metadata.asset.field(s_SKINNED_MESHES).field("ambiguous_mesh").field(s_SKELETON).setString(s_RIG_A);
-    metadata.expectedSkeletons.at(Name(s_UNKNOWN_MESH)) = Name(s_RIG_B);
+    metadata.verifyObjectReferences();
+    EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
+    metadata.asset.field(s_SKINNED_MESHES).field(s_BODY).field(s_SKELETON).setString(s_RIG_A);
+    metadata.expectedSkeletons.at(Name(s_BODY)) = Name(s_RIG_A);
     ASSERT_TRUE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
-TEST(ModelCookNormalization, UnknownAliasesRemainUnchangedForPayloadValidation){
+TEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
     metadata.addSkeleton(s_RIG, "tests/model_cook_normalization/known");
     metadata.addSkinnedMesh(s_BODY, "tests/model_cook_normalization/unknown", "tests/model_cook_normalization/unknown");
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
-    EXPECT_FALSE(logger.sawErrorContaining(NWB_TEXT("matches multiple skeleton objects")));
 }
 
-TEST(ModelCookNormalization, CanonicalDuplicateObjectNamesRemainValidatorErrors){
+TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
@@ -214,12 +208,12 @@ TEST(ModelCookNormalization, CanonicalDuplicateObjectNamesRemainValidatorErrors)
     metadata.addSkeleton("RIG", "tests/model_cook_normalization/second");
     metadata.addSkinnedMesh(s_BODY, "RiG", s_RIG);
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("name is duplicated in the model")));
 }
 
-TEST(ModelCookNormalization, HandlesStaticOnlyAndMissingSkeletonCollections){
+TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
@@ -229,34 +223,54 @@ TEST(ModelCookNormalization, HandlesStaticOnlyAndMissingSkeletonCollections){
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     metadata.addSkinnedMesh(s_BODY, "missing", "missing");
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyNormalizedMeshes();
+    metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
 }
 
+TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndThreeRowsRecover){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    ModelMetadata metadata;
+    Value& object = metadata.asset.field("static_meshes").field("prop");
+    object.field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
+    Value& transform = object.field("transform");
+    transform.makeList();
+    for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
+        Value row(metadata.metadataArena);
+        row.makeList();
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
+            row.append(Value(static_cast<i64>(rowIndex == columnIndex ? 1 : 0), metadata.metadataArena));
+        transform.append(Move(row));
+    }
+    transform.asList()[0u].asList()[3u].setDouble(0.5);
+    ASSERT_TRUE(metadata.parse());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
+
+    Value homogeneousRow(metadata.metadataArena);
+    homogeneousRow.makeList();
+    for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex)
+        homogeneousRow.append(Value(static_cast<i64>(columnIndex == 3u ? 1 : 0), metadata.metadataArena));
+    transform.append(Move(homogeneousRow));
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.staticMeshObjects.empty());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
+
+    transform.asList().pop_back();
+    ASSERT_TRUE(metadata.parse());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
+    EXPECT_EQ(logger.errorCount(), 1u);
+}
+
 // Metadata construction and result checks stay outside the timed public cook-metadata parsing operation.
-TEST(ModelCookNormalization, DISABLED_AliasBenchmarkSingleObject){
-    BenchmarkNormalization(1u, true, 1024u);
+TEST(ModelCookMetadata, DISABLED_DirectBenchmarkSingleObject){
+    BenchmarkObjectReferences(1u, 1024u);
 }
 
-TEST(ModelCookNormalization, DISABLED_DirectBenchmarkSingleObject){
-    BenchmarkNormalization(1u, false, 1024u);
-}
-
-TEST(ModelCookNormalization, DISABLED_AliasBenchmark256Objects){
-    BenchmarkNormalization(256u, true);
-}
-
-TEST(ModelCookNormalization, DISABLED_AliasBenchmark1024Objects){
-    BenchmarkNormalization(1024u, true);
-}
-
-TEST(ModelCookNormalization, DISABLED_AliasBenchmark4096Objects){
-    BenchmarkNormalization(4096u, true);
-}
-
-TEST(ModelCookNormalization, DISABLED_DirectBenchmark4096Objects){
-    BenchmarkNormalization(4096u, false);
+TEST(ModelCookMetadata, DISABLED_DirectBenchmark4096Objects){
+    BenchmarkObjectReferences(4096u);
 }
 
 

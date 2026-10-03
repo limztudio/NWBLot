@@ -3,15 +3,14 @@
 
 From the repository root:
 
-    python -m launcher hybrid-shadow-boundary
+    python -m launcher hardware-shadow-boundary
 
 The launcher builds one fixed-yaw stress-scene executable and runs it twice: the normal hardware transparent-shadow arm and
 a test-owned opaque-only scene baseline that naturally uses hardware shadows without a transparent shadow tail.
-The legacy hybrid target and launcher identifiers remain stable for existing automation.
-It writes timestamped artifacts beneath ``.cozter/out/ab-results/hybrid-shadow-boundary``.
+It writes timestamped artifacts beneath ``.cozter/out/ab-results/hardware-shadow-boundary``.
 Pass options for ``run.py`` after ``--``, for example:
 
-    python -m launcher hybrid-shadow-boundary -- --measure-seconds 30
+    python -m launcher hardware-shadow-boundary -- --measure-seconds 30
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ LIT_OPT = "opt"
 LIT_COZTER = ".cozter"
 LIT_OUT = "out"
 LIT_AB_RESULTS = "ab-results"
-LIT_HYBRID_SHADOW_BOUNDARY = "hybrid-shadow-boundary"
+LIT_HARDWARE_SHADOW_BOUNDARY = "hardware-shadow-boundary"
 LIT_HEALTHY_EXECUTABLE = "--healthy-executable"
 LIT_BASELINE_EXECUTABLE = "--baseline-executable"
 LIT_RUNTIME_DIR = "--runtime-dir"
@@ -51,8 +50,8 @@ LIT_SELF_TEST = "--self-test"
 LIT_MAIN = "__main__"
 
 
-RUNNER_SCRIPT = Path("tests") / "ab" / "hybrid_shadow_boundary" / "run.py"
-HEALTHY_TARGET = "nwb_hybrid_shadow_boundary_healthy_benchmark"
+RUNNER_SCRIPT = Path("tests") / "ab" / "hardware_shadow_boundary" / "run.py"
+HEALTHY_TARGET = "nwb_hardware_shadow_boundary_healthy_benchmark"
 RUNTIME_DIRECTORY = Path("Testing") / "skinning_culling_benchmark_runtime"
 REQUIRED_DEFINES = {
     "NWB_BUILD_LOADER": LIT_ON,
@@ -73,13 +72,13 @@ class BoundaryPaths:
 
 def default_output_directory(root: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HYBRID_SHADOW_BOUNDARY / stamp
+    return root / LIT_COZTER / LIT_OUT / LIT_AB_RESULTS / LIT_HARDWARE_SHADOW_BOUNDARY / stamp
 
 
 def require_diagnostic_configuration(config: str) -> None:
     if config not in DIAGNOSTIC_CONFIGURATIONS:
         raise SystemExit(
-            "hybrid-shadow-boundary requires --config dbg or --config opt because fin omits the warning "
+            "hardware-shadow-boundary requires --config dbg or --config opt because fin omits the warning "
             "diagnostics used to reject transient hardware-shadow route degradation"
         )
 
@@ -158,7 +157,7 @@ def runner_command(args: argparse.Namespace, paths: BoundaryPaths) -> List[objec
 
 def run_runner(args: argparse.Namespace, paths: BoundaryPaths) -> int:
     command = runner_command(args, paths)
-    print(f"Hybrid-shadow boundary artifacts: {paths.output_directory}", flush=True)
+    print(f"Hardware-shadow boundary artifacts: {paths.output_directory}", flush=True)
     print("+ " + ROOT_LAUNCHER.format_command(command), flush=True)
     if args.dry_run:
         return 0
@@ -211,7 +210,7 @@ def run_self_test() -> int:
         assert "requires --config dbg or --config opt" in str(error)
     else:
         raise AssertionError("fin must not claim the warning-based semantic verdict")
-    print("hybrid-shadow boundary launcher self-test passed")
+    print("hardware-shadow boundary launcher self-test passed")
     return 0
 
 

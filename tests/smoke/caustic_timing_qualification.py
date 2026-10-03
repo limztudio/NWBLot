@@ -138,7 +138,7 @@ def single_match(pattern, text, label):
     return matches[0]
 
 
-def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=False):
+def validate_log(text, settings, capture=False):
     text = text.replace("\r\n", "\n")
     lines = text.splitlines()
     preset = settings[LIT_NWB_CAUSTIC_SMOKE_CAMERA_PRESET]
@@ -155,13 +155,12 @@ def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=Fal
             raise SmokeFailure("missing or repeated caustic lifecycle/policy: " + marker)
     route_messages = {
         "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": LIT_HARDWARE,
-        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": "hybrid",
     }
-    routes = [route_messages[line] for line in lines if line in route_messages]
-    if len(routes) != 1 or (routes[0] != LIT_HARDWARE and not allow_legacy_shadow_route):
+    routes = [route_messages.get(line) for line in lines
+        if line.startswith("TransparentMultiSmokeProject: natural ") and " shadow route " in line]
+    if len(routes) != 1 or routes[0] != LIT_HARDWARE:
         raise SmokeFailure("one supported caustic shadow route is required")
-    if routes == [LIT_HARDWARE]:
-        validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
+    validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     # Reject contradictory values as well as requiring the selected value once.
     for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ",
         "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",

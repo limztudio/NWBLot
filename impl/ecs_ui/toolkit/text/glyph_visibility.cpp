@@ -132,10 +132,9 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
     if(glyph.coverage.known && (ink.width <= 0.0f || ink.height <= 0.0f))
         return TextGlyphIntersection::Invisible;
     if(!glyph.coverage.known){
-        if(
-            ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face || !glyph.face->valid()
-            || !glyph.face->coverageInkReliable() || glyph.face->unitsPerEm() == 0u
-        )
+        if(!glyph.face || !glyph.face->valid() || glyph.face->unitsPerEm() == 0u)
+            return TextGlyphIntersection::Invalid;
+        if(ink.width <= 0.0f || ink.height <= 0.0f || !glyph.face->coverageInkReliable())
             return TextGlyphIntersection::Visible;
     }
     const f64 shapedSize = Floor(static_cast<f64>(fontSize) * 64.0 + 0.5) / 64.0;

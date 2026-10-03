@@ -22,11 +22,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque declaration keeping GraphicsRuntime::getGraphicsAPI source-compatible without the legacy header.
-namespace GraphicsAPI{
-    enum Enum : u8;
-};
-
 namespace GraphicsBackend{
     class BackendContext;
     using Backend = BackendContext;

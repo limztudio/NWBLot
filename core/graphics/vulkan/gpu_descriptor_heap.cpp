@@ -23,9 +23,8 @@ namespace __hidden_vulkan_descriptor_heap{
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
-    // Non-sampler classes share one resource-heap register set.
-    //
-    // Public descriptor-class tags are non-contiguous for ABI compatibility.
+    // Resource descriptors share one register set and omit the sampler and acceleration-structure class tags,
+    // which use their own descriptor sets.
     inline constexpr u32 s_ResourceClassCount = 9u;
     inline constexpr u32 s_SampledImageOrTexelClassCount = 6u;
 

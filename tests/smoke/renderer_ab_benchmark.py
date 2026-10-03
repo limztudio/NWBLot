@@ -108,8 +108,6 @@ AVBOIT = ("render.avboit_clear", OCCUPANCY, "render.avboit_depth_warp",
     "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate")
 SHADOW_ROUTES = {
     "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": LIT_HARDWARE,
-    # Frozen baselines retain their historical route identity; current scenes emit hardware.
-    "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": LIT_HYBRID,
     "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable": LIT_SOFTWARE,
 }
 SHADOW_CONTROLS = (LIT_RENDER_OPAQUE_REGULAR, LIT_RENDER_DEFERRED_LIGHTING,
@@ -245,8 +243,9 @@ def transparent_multi_log(text, workload, require_hardware):
     extents = {(int(width), int(height)) for width, height in DIMENSIONS.findall(text)}
     if extents != {(workload.width, workload.height)}:
         raise SmokeFailure(f"render extent changed or differs from the workload: {sorted(extents)}")
-    routes = [SHADOW_ROUTES[line] for line in lines if line in SHADOW_ROUTES]
-    if len(routes) != 1 or (require_hardware and routes[0] not in (LIT_HARDWARE, LIT_HYBRID)):
+    routes = [SHADOW_ROUTES.get(line) for line in lines
+        if line.startswith("TransparentMultiSmokeProject: natural ") and " shadow route " in line]
+    if len(routes) != 1 or routes[0] not in (LIT_HARDWARE, LIT_SOFTWARE) or (require_hardware and routes[0] != LIT_HARDWARE):
         raise SmokeFailure(f"natural shadow route is missing, contradictory, or unsupported: {routes}")
     if routes == [LIT_HARDWARE]:
         validate_expected_log_text(text, [LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA], [LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_SHA])
@@ -255,7 +254,7 @@ def transparent_multi_log(text, workload, require_hardware):
 
 
 def caustic_log(text, workload, require_hardware):
-    policy = caustic.validate_log(text, dict(workload.environment_overrides), capture=False, allow_legacy_shadow_route=True)
+    policy = caustic.validate_log(text, dict(workload.environment_overrides), capture=False)
     return {**device_material_signature(text), **policy}
 
 
@@ -276,7 +275,7 @@ def soft_shadow_log(text, workload, require_hardware):
         raise SmokeFailure("one actual soft-shadow scene startup is required")
     route_prefix = "ShadowTimingProbe: natural shadow route "
     routes = [line[len(route_prefix):] for line in lines if line.startswith(route_prefix)]
-    if len(routes) != 1 or routes[0] not in (LIT_HARDWARE, LIT_HYBRID, LIT_SOFTWARE) or (require_hardware and routes[0] not in (LIT_HARDWARE, LIT_HYBRID)):
+    if len(routes) != 1 or routes[0] not in (LIT_HARDWARE, LIT_SOFTWARE) or (require_hardware and routes[0] != LIT_HARDWARE):
         raise SmokeFailure("natural shadow route is missing, contradictory, or unsupported")
     extents = re.findall(r"^ShadowTimingProbe: source extents angular=(\S+) radius=(\S+)$", text, re.MULTILINE)
     if len(extents) != 1:

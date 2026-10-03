@@ -199,11 +199,12 @@ TEST(TextInput, ConsecutivePreeditCoalescesWithoutCrossingCommitOrDeletion){
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     const TextInputSessionToken token = service.begin({ {}, "abc", 1u, 1u }).token;
+    const u64 revision = service.surroundingRevision(token);
     ASSERT_EQ(service.emitPreedit(token, "draft", 5u, 5u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(token, "final draft", 11u, 11u, false), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitCommit(token, "committed"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(token, "new", 3u, 3u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.emitDeleteSurrounding(token, 1u, 1u), TextInputAdmission::Accepted);
+    ASSERT_EQ(service.emitDeleteSurrounding(token, 1u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     ASSERT_EQ(service.emitPreedit(token, "last", 4u, 4u), TextInputAdmission::Accepted);
     TextInputEvent event(arena.arena);
     ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
@@ -269,19 +270,21 @@ TEST(TextInput, InvalidUpdatesAreAtomicAndDeleteOffsetsRequireUtf8BoundariesAndR
     EXPECT_EQ(service.surroundingText(), "A\xED\x95\x9C" "B");
     EXPECT_EQ(service.surroundingCaretByte(), 4u);
     EXPECT_EQ(service.surroundingRevision(token), 1u);
+    const u64 revision = service.surroundingRevision(token);
     EXPECT_EQ(service.updateCaret(token, { 0, 0, 0, 1 }), TextInputAdmission::InvalidRange);
     EXPECT_EQ(service.caretRect().width, 1);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 1u, 0u), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 5u, 0u), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 2u), TextInputAdmission::InvalidRange);
-    ASSERT_EQ(service.emitDeleteSurrounding(token, 3u, 1u, 1u), TextInputAdmission::Accepted);
+    EXPECT_EQ(service.emitDeleteSurrounding(token, 1u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(service.emitDeleteSurrounding(token, 5u, 0u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 2u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    ASSERT_EQ(service.emitDeleteSurrounding(token, 3u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
     TextInputEvent event(arena.arena);
     ASSERT_EQ(service.poll(token, event), TextInputPollResult::Event);
     EXPECT_EQ(event.surroundingRevision, 1u);
     ASSERT_EQ(service.updateSurrounding(token, "updated", 0u, 0u), TextInputAdmission::Accepted);
     EXPECT_EQ(service.surroundingRevision(token), 2u);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, 1u), TextInputAdmission::InvalidRange);
-    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, 2u), TextInputAdmission::Accepted);
+    const u64 currentRevision = service.surroundingRevision(token);
+    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, revision, TextInputDeletionBasis::Caret), TextInputAdmission::InvalidRange);
+    EXPECT_EQ(service.emitDeleteSurrounding(token, 0u, 1u, currentRevision, TextInputDeletionBasis::Caret), TextInputAdmission::Accepted);
 }
 
 TEST(TextInput, MalformedNativeTextAndPreeditSelectionsCannotEnterQueue){

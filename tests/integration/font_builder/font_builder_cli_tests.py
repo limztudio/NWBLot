@@ -1,4 +1,4 @@
-"""Exercise paired font-builder output through the runtime atlas decoder."""
+"""Exercise the .nwb/.font authoring pair through both metadata cook importers."""
 import argparse
 import hashlib
 import json
@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 
-FONT_HEADER = struct.Struct("<IIIIQ")
+FONT_HEADER = struct.Struct("<IIIIII32s")
 ATLAS_HEADER = struct.Struct("<IIII64s32sIIIIIIIfffIII")
 GLYPH_RECORD = struct.Struct("<IIIIIIIfffffI")
 GROUP_HEADER = struct.Struct("<IIII32s")
@@ -19,16 +19,43 @@ TABLE_HEADER = struct.Struct("<II32s")
 TABLE_TAGS = {0x6B65726E: "kern", 0x47504F53: "GPOS", 0x47444546: "GDEF"}
 
 
-def source_bytes(path):
+def read_prepared_font(path):
     data = path.read_bytes()
     if len(data) < FONT_HEADER.size:
-        raise AssertionError("truncated FON1 header")
-    magic, version, face_index, reserved, byte_count = FONT_HEADER.unpack_from(data)
-    if (magic, version, face_index, reserved) != (0x464F4E31, 1, 0, 0):
-        raise AssertionError("invalid FON1 header")
-    if byte_count == 0 or byte_count != len(data) - FONT_HEADER.size:
-        raise AssertionError("invalid FON1 length")
-    return data[FONT_HEADER.size:]
+        raise AssertionError("truncated FON2 header")
+    magic, version, face_index, byte_count, group_count, reserved, digest = FONT_HEADER.unpack_from(data)
+    if (magic, version, face_index, reserved) != (0x324E4F46, 1, 0, 0):
+        raise AssertionError("invalid FON2 header")
+    if not (0 < byte_count <= 32 * 1024 * 1024 and 0 < group_count <= 8):
+        raise AssertionError("invalid FON2 counts")
+    cursor = FONT_HEADER.size
+    directory = []
+    for _ in range(group_count):
+        width, height, channels, pixel_bytes, pixel_hash = GROUP_HEADER.unpack_from(data, cursor)
+        if not (0 < width <= 2048 and 0 < height <= 2048 and 1 <= channels <= 4):
+            raise AssertionError("invalid FON2 image dimensions")
+        if pixel_bytes != width * height * channels:
+            raise AssertionError("invalid FON2 image byte count")
+        directory.append((width, height, channels, pixel_bytes, pixel_hash))
+        cursor += GROUP_HEADER.size
+    sfnt = data[cursor:cursor + byte_count]
+    if len(sfnt) != byte_count or hashlib.sha256(sfnt).digest() != digest:
+        raise AssertionError("invalid FON2 font digest")
+    cursor += byte_count
+    groups = []
+    for width, height, channels, pixel_bytes, pixel_hash in directory:
+        pixels = data[cursor:cursor + pixel_bytes]
+        if len(pixels) != pixel_bytes or hashlib.sha256(pixels).digest() != pixel_hash:
+            raise AssertionError("invalid FON2 pixel digest")
+        groups.append((width, height, channels, pixels))
+        cursor += pixel_bytes
+    if cursor != len(data):
+        raise AssertionError("trailing FON2 bytes")
+    return {"sfnt": sfnt, "groups": groups, "font_hash": digest, "face_index": face_index}
+
+
+def source_bytes(path):
+    return read_prepared_font(path)["sfnt"]
 
 
 def sfnt_tables(data):
@@ -40,8 +67,7 @@ def sfnt_tables(data):
     return tables
 
 
-def read_atlas(path):
-    data = path.read_bytes()
+def read_atlas(data):
     if len(data) < ATLAS_HEADER.size:
         raise AssertionError("truncated FTA1 header")
     (magic, version, encoding, reserved, identity, font_hash, face_index,
@@ -57,7 +83,9 @@ def read_atlas(path):
         values = GLYPH_RECORD.unpack_from(data, cursor)
         glyphs.append({"id": values[0], "group": values[1], "channel": values[2],
                        "x": values[3], "y": values[4], "width": values[5], "height": values[6],
-                       "advance": values[11], "drawable": values[12]})
+                       "plane_left": values[7], "plane_top": values[8],
+                       "plane_right": values[9], "plane_bottom": values[10],
+                       "advance_units": values[11], "drawable": values[12]})
         cursor += GLYPH_RECORD.size
     groups = []
     for _ in range(group_count):
@@ -99,8 +127,8 @@ class FontBuilderCli(unittest.TestCase):
         cls.korean = CONFIG.fonts / "korean.font"
         cls.output = cls.root / "latin" / "body.nwb"
         cls.invoke(cls.latin, cls.output)
-        cls.atlas = read_atlas(cls.output.with_suffix(".atlas"))
-        cls.payloads = cls.decode_package(cls.output.with_suffix(".atlas"))
+        cls.payloads = cls.decode_package(cls.output)
+        cls.atlas = read_atlas(cls.payloads["atlas.bin"])
 
     @classmethod
     def tearDownClass(cls):
@@ -115,35 +143,57 @@ class FontBuilderCli(unittest.TestCase):
         return result
 
     @classmethod
-    def decode_package(cls, atlas):
+    def decode_package(cls, metadata, success=True):
         with tempfile.TemporaryDirectory(prefix="decoded_", dir=cls.root) as temporary:
             destination = Path(temporary)
-            result = subprocess.run([str(CONFIG.package_probe), str(atlas), str(destination)],
+            result = subprocess.run([str(CONFIG.package_probe), str(metadata), str(destination)],
                                     cwd=cls.root, capture_output=True, text=True, timeout=120)
-            if result.returncode:
+            if (result.returncode == 0) != success:
                 raise AssertionError(f"Package probe exit {result.returncode}: {result.stdout}\n{result.stderr}")
             return {path.name: path.read_bytes() for path in destination.iterdir()}
 
-    def assert_triplet(self, output):
+    def assert_pair(self, output, payloads=None):
         self.assertEqual({path.name for path in output.parent.iterdir()},
-                         {output.with_suffix(extension).name for extension in (".nwb", ".font", ".atlas")})
+                         {output.with_suffix(extension).name for extension in (".nwb", ".font")})
         text = output.read_text(encoding="utf-8")
         self.assertIn("font face;", text)
-        self.assertIn("face.schema_version = 1;", text)
         self.assertIn("font_atlas atlas;", text)
-        self.assertIn("atlas.schema_version = 1;", text)
         self.assertIn("atlas.font = face;", text)
         self.assertIn("asset_bunch bunch = [face, atlas];", text)
-        self.assertNotIn("asset.source", text)
-        atlas = read_atlas(output.with_suffix(".atlas"))
-        source_hash = atlas["font_hash"].hex()
-        self.assertIn(f'face.source_sha256 = "{source_hash}";', text)
-        self.assertIn(f'atlas.source_sha256 = "{source_hash}";', text)
-        metadata_groups = [json.loads(record) for record in re.findall(r"\{[^{}]+\}", text)]
+        for obsolete in ("schema_version", "sha256", "source", ".atlas"):
+            self.assertNotIn(obsolete, text)
+        payloads = self.decode_package(output) if payloads is None else payloads
+        atlas = read_atlas(payloads["atlas.bin"])
+        prepared = read_prepared_font(output.with_suffix(".font"))
+        self.assertEqual(prepared["groups"], atlas["groups"])
+        self.assertEqual(prepared["font_hash"], atlas["font_hash"])
+        self.assertEqual(prepared["sfnt"], payloads["source.sfnt"])
+        for variable in ("face", "atlas"):
+            for name, value in (("face_index", atlas["face_index"]), ("units_per_em", atlas["units_per_em"]),
+                                ("glyph_count", len(atlas["glyphs"]))):
+                self.assertIn(f"{variable}.{name} = {value};", text)
+        metadata_groups = self.metadata_list(text, "groups")
         self.assertEqual(metadata_groups, [
-            {"width": width, "height": height, "channels": channels,
-             "sha256": hashlib.sha256(pixels).hexdigest()}
+            {"width": width, "height": height, "channels": channels}
             for width, height, channels, pixels in atlas["groups"]])
+        metadata_glyphs = self.metadata_list(text, "glyphs")
+        self.assertEqual(len(metadata_glyphs), len(atlas["glyphs"]))
+        float_fields = ("plane_left", "plane_top", "plane_right", "plane_bottom", "advance_units")
+        for declared, decoded in zip(metadata_glyphs, atlas["glyphs"]):
+            self.assertEqual(set(declared), set(decoded))
+            for key in decoded:
+                if key in float_fields:
+                    self.assertEqual(struct.pack("<f", declared[key]), struct.pack("<f", decoded[key]))
+                else:
+                    self.assertEqual(declared[key], decoded[key])
+        return atlas
+
+    @staticmethod
+    def metadata_list(text, field):
+        match = re.search(rf"atlas\.{field}\s*=\s*(\[.*?\]);", text, re.DOTALL)
+        if match is None:
+            raise AssertionError(f"missing atlas.{field}")
+        return json.loads(re.sub(r",\s*\]", "]", match.group(1)))
 
     def assert_compact_groups(self, atlas):
         self.assertEqual(atlas["guard"], 1)
@@ -168,18 +218,18 @@ class FontBuilderCli(unittest.TestCase):
                     end = begin + (glyph_height + 2) * width * channels
                     self.assertFalse(any(pixels[begin:end:width * channels]))
 
-    def triplet_bytes(self, output):
+    def pair_bytes(self, output):
         return {extension: output.with_suffix(extension).read_bytes()
-                for extension in (".nwb", ".font", ".atlas")}
+                for extension in (".nwb", ".font")}
 
     def test_pairing_every_glyph_and_source_hash(self):
-        self.assert_triplet(self.output)
+        self.assert_pair(self.output, self.payloads)
         original = source_bytes(self.latin)
         self.assertEqual(source_bytes(self.output.with_suffix(".font")), original)
         self.assertEqual(self.atlas["font_hash"], hashlib.sha256(original).digest())
         glyph_count = struct.unpack_from(">H", sfnt_tables(original)["maxp"], 4)[0]
         self.assertEqual([glyph["id"] for glyph in self.atlas["glyphs"]], list(range(glyph_count)))
-        self.assertTrue(any(glyph["drawable"] == 0 and glyph["advance"] > 0
+        self.assertTrue(any(glyph["drawable"] == 0 and glyph["advance_units"] > 0
                             for glyph in self.atlas["glyphs"]))
 
     def test_compact_channels_preserve_guards_and_exact_positioning_tables(self):
@@ -187,6 +237,7 @@ class FontBuilderCli(unittest.TestCase):
         self.assert_compact_groups(atlas)
         expected = {f"group_{index}.pixels" for index in range(len(atlas["groups"]))}
         expected.update(f"table_{tag}.bin" for tag in atlas["tables"])
+        expected.update(("atlas.bin", "source.sfnt"))
         self.assertEqual(set(self.payloads), expected)
         used = {(glyph["group"], glyph["channel"]) for glyph in atlas["glyphs"] if glyph["drawable"]}
         self.assertGreater(len(used), 4)
@@ -206,39 +257,41 @@ class FontBuilderCli(unittest.TestCase):
     def test_repeated_bake_and_raw_sfnt_input_are_byte_identical(self):
         repeated = self.root / "repeat" / "body.nwb"
         self.invoke(self.latin, repeated)
-        self.assert_triplet(repeated)
-        self.assertEqual(self.triplet_bytes(repeated), self.triplet_bytes(self.output))
+        self.assert_pair(repeated)
+        self.assertEqual(self.pair_bytes(repeated), self.pair_bytes(self.output))
         raw = self.root / "input.ttf"
         raw.write_bytes(source_bytes(self.latin))
         external = self.root / "external" / "body.nwb"
         self.invoke(raw, external)
-        self.assertEqual(self.triplet_bytes(external), self.triplet_bytes(self.output))
+        self.assertEqual(self.pair_bytes(external), self.pair_bytes(self.output))
 
     def test_non_power_of_two_capacity_preserves_compact_payload_on_repeat(self):
         output = self.root / "non_power_of_two" / "body.nwb"
         options = ("--ppem", "32", "--extent", "1023")
         self.invoke(self.latin, output, *options)
-        atlas = read_atlas(output.with_suffix(".atlas"))
+        payloads = self.decode_package(output)
+        atlas = self.assert_pair(output, payloads)
         self.assert_compact_groups(atlas)
         self.assertTrue(any(dimension & (dimension - 1) for group in atlas["groups"] for dimension in group[:2]))
         self.assertTrue(all(width <= 1023 and height <= 1023 for width, height, _, _ in atlas["groups"]))
         self.assertLess(sum(len(group[3]) for group in atlas["groups"]), len(atlas["groups"]) * 1023 * 1023 * 4)
-        self.assertEqual(self.decode_package(output.with_suffix(".atlas")), {
+        self.assertEqual(payloads, {
+            "atlas.bin": payloads["atlas.bin"], "source.sfnt": source_bytes(self.latin),
             **{f"group_{index}.pixels": group[3] for index, group in enumerate(atlas["groups"])},
             **{f"table_{tag}.bin": raw for tag, raw in atlas["tables"].items()}})
         repeated = self.root / "non_power_of_two_repeat" / "body.nwb"
         self.invoke(self.latin, repeated, *options)
-        self.assertEqual(self.triplet_bytes(repeated), self.triplet_bytes(output))
+        self.assertEqual(self.pair_bytes(repeated), self.pair_bytes(output))
 
-    def test_overwrite_and_failed_capacity_preserve_complete_triplet(self):
-        before = self.triplet_bytes(self.output)
+    def test_overwrite_and_failed_capacity_preserve_complete_pair(self):
+        before = self.pair_bytes(self.output)
         self.invoke(self.latin, self.output, success=False)
-        self.assertEqual(self.triplet_bytes(self.output), before)
+        self.assertEqual(self.pair_bytes(self.output), before)
         self.invoke(self.latin, self.output, "--overwrite")
-        self.assertEqual(self.triplet_bytes(self.output), before)
+        self.assertEqual(self.pair_bytes(self.output), before)
         self.invoke(self.latin, self.output, "--overwrite", "--extent", "32", "--max-groups", "1", success=False)
-        self.assertEqual(self.triplet_bytes(self.output), before)
-        self.assert_triplet(self.output)
+        self.assertEqual(self.pair_bytes(self.output), before)
+        self.assert_pair(self.output, self.payloads)
 
     def test_malformed_input_and_unknown_renderer_publish_nothing(self):
         invalid = self.root / "invalid.ttf"
@@ -249,20 +302,70 @@ class FontBuilderCli(unittest.TestCase):
         self.invoke(self.latin, output, "--renderer", "invented", success=False)
         self.assertFalse(output.parent.exists() and list(output.parent.iterdir()))
 
-    def test_relocation_keeps_same_stem_triplet(self):
+    def test_old_font_envelope_and_corrupt_source_hash_are_rejected(self):
+        sfnt = source_bytes(self.latin)
+        old = self.root / "old.font"
+        old.write_bytes(struct.pack("<IIIIQ", 0x464F4E31, 1, 0, 0, len(sfnt)) + sfnt)
+        output = self.root / "rejected_source" / "body.nwb"
+        self.invoke(old, output, success=False)
+        corrupt = self.root / "corrupt.font"
+        data = bytearray(self.latin.read_bytes())
+        data[24] ^= 1
+        corrupt.write_bytes(data)
+        self.invoke(corrupt, output, success=False)
+        self.assertFalse(output.parent.exists() and list(output.parent.iterdir()))
+
+    def test_partial_pair_and_occupied_work_paths_preserve_existing_bytes(self):
+        for extension in (".nwb", ".font"):
+            with self.subTest(extension=extension):
+                output = self.root / f"partial_{extension[1:]}" / "body.nwb"
+                output.parent.mkdir()
+                original = self.output.with_suffix(extension).read_bytes()
+                output.with_suffix(extension).write_bytes(original)
+                self.invoke(self.latin, output, "--overwrite", success=False)
+                self.assertEqual({path.name for path in output.parent.iterdir()},
+                                 {output.with_suffix(extension).name})
+                self.assertEqual(output.with_suffix(extension).read_bytes(), original)
+        for extension in (".nwb.tmp", ".font.tmp", ".nwb.old", ".font.old"):
+            with self.subTest(work_path=extension):
+                output = self.root / f"occupied_{extension[1:]}" / "body.nwb"
+                output.parent.mkdir()
+                sentinel = output.with_suffix(extension)
+                sentinel.write_bytes(b"owned by another operation")
+                self.invoke(self.latin, output, success=False)
+                self.assertEqual({path.name for path in output.parent.iterdir()}, {sentinel.name})
+                self.assertEqual(sentinel.read_bytes(), b"owned by another operation")
+
+    def test_cook_rejects_corrupt_pixels_and_invalid_readable_mappings(self):
+        output = self.root / "corrupt_pair" / "body.nwb"
+        output.parent.mkdir()
+        original_text = self.output.read_text(encoding="utf-8")
+        original_font = self.output.with_suffix(".font").read_bytes()
+        output.write_text(original_text, encoding="utf-8")
+        corrupt = bytearray(original_font)
+        corrupt[-1] ^= 1
+        output.with_suffix(".font").write_bytes(corrupt)
+        self.assertFalse(self.decode_package(output, success=False))
+        output.with_suffix(".font").write_bytes(original_font)
+        for text in (original_text.replace('"channels": 4', '"channels": 0', 1),
+                     original_text.replace('"drawable": 1', '"drawable": 2', 1)):
+            output.write_text(text, encoding="utf-8")
+            self.assertFalse(self.decode_package(output, success=False))
+
+    def test_relocation_keeps_same_stem_pair(self):
         destination = self.root / "relocated"
         destination.mkdir()
-        for extension in (".nwb", ".font", ".atlas"):
+        for extension in (".nwb", ".font"):
             shutil.copyfile(self.output.with_suffix(extension), destination / f"body{extension}")
         relocated = destination / "body.nwb"
-        self.assert_triplet(relocated)
-        self.assertEqual(self.decode_package(relocated.with_suffix(".atlas")), self.payloads)
+        payloads = self.decode_package(relocated)
+        self.assert_pair(relocated, payloads)
+        self.assertEqual(payloads, self.payloads)
 
     def test_korean_full_font_preserves_single_channel_tail_group(self):
         output = self.root / "korean" / "hangul.nwb"
         self.invoke(self.korean, output, "--ppem", "32", "--extent", "2048")
-        self.assert_triplet(output)
-        atlas = read_atlas(output.with_suffix(".atlas"))
+        atlas = self.assert_pair(output)
         self.assert_compact_groups(atlas)
         self.assertEqual(atlas["groups"][-1][2], 1)
         original = source_bytes(self.korean)
@@ -276,7 +379,7 @@ class FontBuilderCli(unittest.TestCase):
             self.assertEqual(raw, source[tag])
         repeated = self.root / "korean_repeat" / "hangul.nwb"
         self.invoke(self.korean, repeated, "--ppem", "32", "--extent", "2048")
-        self.assertEqual(self.triplet_bytes(output), self.triplet_bytes(repeated))
+        self.assertEqual(self.pair_bytes(output), self.pair_bytes(repeated))
 
 
 if __name__ == "__main__":

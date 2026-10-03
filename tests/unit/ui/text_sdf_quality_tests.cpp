@@ -2,8 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/asset.h>
+#include <impl/assets_font_atlas/cook.h>
 #include <impl/ecs_ui/toolkit/text/service.h>
+
+#include <core/assets/bunch/cook.h>
 
 #include <tests/common/font_fixture.h>
 
@@ -83,7 +85,7 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
     Core::Alloc::GlobalArena arena(Name("tests/ui/font_atlas/quality"));
     const NWB::Path assetRoot(arena, NWB_REPO_ROOT "/impl/assets");
     const NWB::Path directory = assetRoot / "ui/fonts/default";
-    static constexpr StringView s_Atlases[]{ "latin.atlas", "korean.atlas" };
+    static constexpr StringView s_Metadata[]{ "latin.nwb", "korean.nwb" };
     static constexpr StringView s_Sources[]{ "latin.font", "korean.font" };
     static constexpr StringView s_Identities[]{ "engine/ui/fonts/default/latin/face", "engine/ui/fonts/default/korean/face" };
     static constexpr StringView s_AtlasIdentities[]{ "engine/ui/fonts/default/latin/atlas", "engine/ui/fonts/default/korean/atlas" };
@@ -93,20 +95,33 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
     u32 comparisons = 0u;
     f32 worstEdge = 0.f;
     f32 worstMean = 0.f;
-    for(usize fixture = 0u; fixture < LengthOf(s_Atlases); ++fixture){
+    for(usize fixture = 0u; fixture < LengthOf(s_Metadata); ++fixture){
         Font font(arena, Name(s_Identities[fixture]));
         Core::Assets::AssetBytes source(arena);
         ASSERT_TRUE(Tests::ReadBundledFontBytes(directory / s_Sources[fixture], source));
         font.setFontBytes(Move(source));
         ASSERT_TRUE(font.validatePayload());
-        Core::Assets::AssetBytes atlasBinary(arena);
-        ErrorCode error;
-        ASSERT_TRUE(ReadBinaryFile(directory / s_Atlases[fixture], atlasBinary, error));
-        FontAtlasPayload decoded(arena);
-        ASSERT_TRUE(DeserializeFontAtlasPayload(atlasBinary, decoded));
-        decoded.font = Core::Assets::AssetRef<Font>(s_Identities[fixture].data());
+        const NWB::Path metadataPath = directory / s_Metadata[fixture];
+        Core::Assets::AssetString metadata(arena);
+        ASSERT_TRUE(ReadTextFile(metadataPath, metadata));
+        Core::Metascript::Document document(arena);
+        ASSERT_TRUE(document.parse(AStringView(metadata)));
+        Core::Alloc::ScratchArena scratch(Name("tests/ui/font_atlas/quality/cook"));
+        Core::Assets::ExpandedAssetMetadataVector expanded(scratch);
+        ASSERT_TRUE(Core::Assets::AssetsBunchCook::ExpandAssetBunch(assetRoot, "engine", metadataPath, document, expanded, scratch));
+        ASSERT_EQ(expanded.size(), 2u);
+        const Core::Metascript::Value* declaration = nullptr;
+        for(const auto& asset : expanded){
+            if(asset.virtualPath == Name(s_AtlasIdentities[fixture]))
+                declaration = &asset.value;
+        }
+        ASSERT_NE(declaration, nullptr);
+        FontAtlasCookEntry entry(arena);
+        ASSERT_TRUE(ParseFontAtlasCookMetadataValue(
+            Name(s_AtlasIdentities[fixture]), metadataPath, *declaration, entry, scratch
+        ));
         FontAtlas atlas(arena, Name(s_AtlasIdentities[fixture]));
-        atlas.setPayload(Move(decoded));
+        atlas.setPayload(Move(entry.payload));
         ASSERT_TRUE(atlas.validatePayload());
         const FontSource fontSource{ Core::Assets::AssetRef<Font>(s_Identities[fixture].data()), font, 1u, &atlas };
         TextService service(arena);

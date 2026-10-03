@@ -77,16 +77,21 @@ Those policies require a separate editing increment.
 
 Each installed `FontSource` may supply a matching `FontAtlas`. Installation verifies
 the typed font identity, exact source SHA-256, face index, units per em, glyph count,
-and complete original positioning-table bytes. It copies rendering records and RGBA
+and complete original positioning-table bytes. It copies rendering records and compact SDF
 images into a strong immutable `BakedFontAtlas` version. Missing or mismatched optional
 atlases leave that same face available through native coverage.
 
-At authoring time, `<stem>.nwb`, `<stem>.font`, and `<stem>.atlas` share one stem.
+At authoring time, `<stem>.nwb` and `<stem>.font` share one stem.
 The readable metadata declares independent `font face` and `font_atlas atlas` assets
-with their own metrics and hashes; `asset_bunch bunch = [face, atlas];` exports them
+with face metrics, bake settings, group dimensions/channels and all glyph mappings;
+`asset_bunch bunch = [face, atlas];` exports them
 under `/face` and `/atlas`, and `atlas.font = face;` selects the typed source. The
-`.font` contains the original SFNT bytes in a FON1 envelope; the binary `.atlas`
-contains the FTA1 glyph and image data. UI text receives the two cooked assets.
+`.font` contains original SFNT and compact images in a FON2 version 1 source envelope.
+The readable document has no schema-version or hash fields. Each glyph exposes its
+ID, group/channel, rectangle, plane bounds, advance and numeric drawable flag (0 or 1),
+including nondrawable records. Cooking admits those mappings, checks source metrics
+and image integrity, and copies original positioning tables without rasterizing.
+UI text receives the ordinary cooked Font/FON1 and FontAtlas/FTA1 assets.
 
 The baker packs independent scalar SDF pages into one to four stored channels,
 cropping each group to its guarded bounds without resampling. Each drawable shaped

@@ -3,6 +3,7 @@ set(_nwb_font_atlas_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/binary.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/source_match.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/source_tables.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/positioning_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/model.h"
@@ -19,6 +20,8 @@ if(NWB_BUILD_PIPELINE)
         ${_nwb_font_atlas_runtime_sources}
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_glyph_metadata.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_glyph_metadata.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
     )
     target_link_libraries(nwb_assets_font_atlas_cook PUBLIC nwb_assets_font_cook nwb_metascript)

@@ -50,10 +50,12 @@ using FontTestArena = TestArena<FontTestArenaTag>;
 
 [[nodiscard]] static bool LoadLatin(FontTestArena& testArena, Font& outFont){
     const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ErrorCode error;
+    Core::Assets::AssetBytes source(testArena.arena);
     Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin/face"));
-    if(!ReadBinaryFile(path, binary, error) || error || !candidate.loadBinary(binary))
+    if(!ReadBundledFontBytes(path, source))
+        return false;
+    candidate.setFontBytes(Move(source));
+    if(!candidate.validatePayload())
         return false;
     outFont = Move(candidate);
     return true;
@@ -100,7 +102,7 @@ static void WriteBigU32(u8* bytes, const u32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceBytes){
+TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
@@ -128,7 +130,9 @@ TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceByte
         Core::Assets::AssetBytes binary(testArena.arena);
         ASSERT_TRUE(codec.serialize(font, binary));
         EXPECT_EQ(binary.size(), sizeof(FontBinaryPayload::HeaderBinary) + s_SourceSizes[index]);
-        EXPECT_EQ(binary, prepared);
+        EXPECT_LT(binary.size(), prepared.size());
+        EXPECT_FALSE(font.loadBinary(prepared));
+        EXPECT_EQ(font.fontBytes(), source);
         UniquePtr<Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, font.virtualPath(), binary, loadedAsset));
         const Font* loaded = Core::Assets::CastAsset<Font>(loadedAsset.get());
@@ -137,7 +141,7 @@ TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceByte
         EXPECT_EQ(loaded->faceIndex(), 0u);
         EXPECT_EQ(loaded->fontBytes(), source);
     }
-    EXPECT_EQ(logger.errorCount(), 0u);
+    EXPECT_EQ(logger.errorCount(), LengthOf(s_BundledNames));
 }
 
 TEST(AssetsFont, RuntimeRegistrarExposesTypedFont){

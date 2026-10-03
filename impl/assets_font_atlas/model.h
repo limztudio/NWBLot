@@ -114,6 +114,7 @@ struct FontAtlasPayload{
 
 [[nodiscard]] bool ValidateFontAtlasPayload(const FontAtlasPayload& payload);
 [[nodiscard]] bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font);
+[[nodiscard]] bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPayload);
 [[nodiscard]] bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, u32 glyphCount);
 [[nodiscard]] bool SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetBytes& outBinary);
 [[nodiscard]] bool DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, FontAtlasPayload& outPayload);

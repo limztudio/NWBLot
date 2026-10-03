@@ -9,12 +9,9 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
+#include "prepared_source.h"
 
 #include <core/assets/paths.h>
-
-#include <global/filesystem.h>
-#include <global/sha256.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,13 +69,9 @@ static constexpr AStringView s_DiagnosticPrefix = "Font meta";
         else if(tag == 0x6d617870u)
             glyphCount = (static_cast<u32>(bytes[offset + 4u]) << 8u) | bytes[offset + 5u];
     }
-    AStringView hashText;
-    Sha256Digest declaredHash;
     if(
-        !CheckU32(path, asset, "schema_version", 1u) || !CheckU32(path, asset, "face_index", font.faceIndex())
+        !CheckU32(path, asset, "face_index", font.faceIndex())
         || !CheckU32(path, asset, "units_per_em", unitsPerEm) || !CheckU32(path, asset, "glyph_count", glyphCount)
-        || !Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, "source_sha256", true, hashText)
-        || !ParseSha256(hashText, declaredHash) || declaredHash != ComputeSha256({ bytes.data(), bytes.size() })
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Font meta '{}': visible metadata differs from the prepared font"), PathToString<tchar>(path));
         return false;
@@ -99,31 +92,16 @@ static constexpr AStringView s_DiagnosticPrefix = "Font meta";
 bool LoadPairedFontCookSource(const Path& nwbFilePath, Font& outFont){
     Path fontPath = nwbFilePath;
     fontPath.replace_extension(".font");
-    ErrorCode error;
-    const u64 byteCount = FileSize(fontPath, error);
-    if(error || byteCount < sizeof(FontBinaryPayload::HeaderBinary) || byteCount > sizeof(FontBinaryPayload::HeaderBinary) + s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font meta '{}': missing, empty, or oversized paired .font file"), PathToString<tchar>(nwbFilePath));
+    Core::Assets::AssetArena& arena = outFont.fontBytes().get_allocator().arena();
+    PreparedFontSource source(arena);
+    if(!ReadPreparedFontSource(fontPath, source, false))
         return false;
-    }
-    GlobalFilesystemDetail::InputFileStream stream(fontPath, GlobalFilesystemDetail::InputFileStream::binary);
-    if(!stream.is_open()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font meta '{}': failed to open paired .font file"), PathToString<tchar>(nwbFilePath));
+    Font candidate(arena, outFont.virtualPath());
+    candidate.setFontBytes(Move(source.fontBytes), source.faceIndex);
+    if(!candidate.validatePayload())
         return false;
-    }
-    Core::Assets::AssetBytes binary(outFont.fontBytes().get_allocator().arena());
-    binary.resize(static_cast<usize>(byteCount));
-    stream.read(reinterpret_cast<char*>(binary.data()), static_cast<GlobalFilesystemDetail::StreamSize>(byteCount));
-    if(stream.gcount() != static_cast<GlobalFilesystemDetail::StreamSize>(byteCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font meta '{}': paired .font read was truncated"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    char extraByte = 0;
-    stream.read(&extraByte, 1);
-    if(stream.gcount() != 0 || !stream.eof()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font meta '{}': paired .font changed during read"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    return outFont.loadBinary(binary);
+    outFont = Move(candidate);
+    return true;
 }
 
 bool ParseFontCookMetadata(
@@ -149,7 +127,7 @@ bool ParseFontCookMetadataValue(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
         || !Core::Assets::ValidateMetadataAssetFields(
             nwbFilePath, asset, s_DiagnosticPrefix,
-            { "schema_version", "face_index", "units_per_em", "glyph_count", "source_sha256" }
+            { "face_index", "units_per_em", "glyph_count" }
         )
     )
         return false;

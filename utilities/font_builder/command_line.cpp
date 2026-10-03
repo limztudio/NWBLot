@@ -24,15 +24,15 @@ int Run(const int argc, char** argv){
     AInteropString outputArgument;
     AInteropString rendererArgument = "bitmap";
     BakeOptions options(UtilityDetail::Arena());
-    CLI::App app{ "Build a font asset bunch with prepared shaping bytes and a compact binary SDF atlas." };
+    CLI::App app{ "Build readable .nwb font declarations and a paired .font containing shaping bytes and compact SDF images." };
     app.add_option("--font", sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
-    app.add_option("-o,--output", outputArgument, "Output .nwb asset bunch; paired .font and .atlas share its stem")->required();
+    app.add_option("-o,--output", outputArgument, "Output .nwb asset bunch; paired binary .font shares its stem")->required();
     app.add_option("--ppem", options.ppem, "Bake pixels per em (16..256, default64)");
     app.add_option("--spread", options.spread, "SDF distance range (2..32, default8)");
     app.add_option("--extent", options.extent, "Maximum square packing extent; final groups are cropped (32..2048, default1024)");
     app.add_option("--max-groups", options.maxGroups, "Maximum four-plane packing groups (1..8, default8)");
     app.add_option("--renderer", rendererArgument, "bitmap (default) or outline; errors never switch algorithms");
-    app.add_flag("--overwrite", options.overwrite, "Replace an existing complete font bundle");
+    app.add_flag("--overwrite", options.overwrite, "Replace an existing complete .nwb/.font pair");
     return
         InvokeTerminalEntry<CLI::ParseError>(
             [&](){
@@ -49,7 +49,7 @@ int Run(const int argc, char** argv){
                 ErrorCode error;
                 const bool exists = FileExists(options.output, error);
                 if(error || (exists && !options.overwrite)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output atlas without --overwrite"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
                     return 1;
                 }
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));

@@ -2,8 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/assets_font_atlas/asset.h>
+#include <impl/assets_font/cook.h>
+#include <impl/assets_font_atlas/cook.h>
 
+#include <core/assets/bunch/cook.h>
 #include <core/common/application_entry.h>
 
 #include <logger/client/logger.h>
@@ -43,6 +45,9 @@ inline constexpr int s_EntryFailure = -1;
     ErrorCode error;
     if(!EnsureDirectories(directory, error))
         return false;
+    NWB::Core::Assets::AssetBytes binary(payload.glyphs.get_allocator().arena());
+    if(!NWB::Impl::SerializeFontAtlasPayload(payload, binary) || !WriteBinaryFile(directory / "atlas.bin", binary))
+        return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
         const auto name = StringFormat(directory.arena(), "group_{}.pixels", index);
         if(!WriteBinaryFile(directory / name, payload.groups[index].pixels))
@@ -63,14 +68,47 @@ inline constexpr int s_EntryFailure = -1;
     NWB::Core::Assets::AssetArena arena(s_PackageArena);
     const NWB::Path sourcePath(arena, source);
     const NWB::Path destinationPath(arena, destination);
-    NWB::Core::Assets::AssetBytes binary(arena);
-    ErrorCode error;
-    if(!ReadBinaryFile(sourcePath, binary, error))
+    NWB::Core::Metascript::MetaArena metadataArena(Name("tests/integration/font_builder/metadata"));
+    NWB::Core::Alloc::ScratchArena scratch(Name("tests/integration/font_builder/scratch"));
+    NWB::Core::Metascript::MString metadata(metadataArena);
+    NWB::Core::Metascript::Document document(metadataArena);
+    if(!ReadTextFile(sourcePath, metadata))
         return false;
-    NWB::Impl::FontAtlasPayload payload(arena);
-    if(!NWB::Impl::DeserializeFontAtlasPayload(binary, payload))
+    StripUtf8Bom(metadata);
+    if(!document.parse(metadata))
         return false;
-    return ExportPayload(destinationPath, payload);
+    NWB::Core::Assets::ExpandedAssetMetadataVector expanded(scratch);
+    if(!NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
+        sourcePath.parent_path(), "probe", sourcePath, document, expanded, scratch
+    ) || expanded.size() != 2u)
+        return false;
+
+    NWB::Impl::Font font(arena);
+    NWB::Impl::FontAtlas atlas(arena);
+    bool foundFont = false;
+    bool foundAtlas = false;
+    for(const auto& asset : expanded){
+        if(asset.assetType == Name("font")){
+            NWB::Impl::FontCookEntry entry(arena);
+            if(foundFont || !NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, entry)
+                || !NWB::Impl::BuildFontAsset(entry, font))
+                return false;
+            foundFont = true;
+        }
+        else if(asset.assetType == Name("font_atlas")){
+            NWB::Impl::FontAtlasCookEntry entry(arena);
+            if(foundAtlas || !NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, entry, scratch)
+                || !NWB::Impl::BuildFontAtlasAsset(entry, atlas))
+                return false;
+            foundAtlas = true;
+        }
+        else
+            return false;
+    }
+    return foundFont && foundAtlas
+        && NWB::Impl::ValidateFontAtlasSourceMatch(atlas.payload(), font)
+        && ExportPayload(destinationPath, atlas.payload())
+        && WriteBinaryFile(destinationPath / "source.sfnt", font.fontBytes());
 }
 
 int Run(const int argc, char** argv){
@@ -81,11 +119,11 @@ int Run(const int argc, char** argv){
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
     if(argc != 3){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: expected source .atlas and decoded output directory"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
         return s_EntryFailure;
     }
     if(!DecodePackage(argv[1], argv[2])){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: cannot decode or export atlas package"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: cannot cook or export font pair"));
         return s_EntryFailure;
     }
     return 0;

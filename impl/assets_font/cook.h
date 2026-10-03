@@ -43,6 +43,7 @@ struct FontCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Reads only the paired FON2 source SFNT and preserves outFont when source admission fails.
 [[nodiscard]] bool LoadPairedFontCookSource(const Path& nwbFilePath, Font& outFont);
 [[nodiscard]] bool ParseFontCookMetadata(
     const Path& assetRoot,

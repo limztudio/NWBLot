@@ -144,9 +144,9 @@ target_compile_definitions(nwb_ui_tests PRIVATE
     NWB_TEST_FONT_DIRECTORY="${CMAKE_SOURCE_DIR}/impl/assets/ui/fonts/default"
 )
 
-if(TARGET nwb_assets_font_atlas)
+if(TARGET nwb_assets_font_atlas_cook)
     nwb_declare_gtest_executable(nwb_font_atlas_quality_tests)
     target_sources(nwb_font_atlas_quality_tests PRIVATE "${CMAKE_CURRENT_LIST_DIR}/text_sdf_quality_tests.cpp")
-    target_compile_definitions(nwb_font_atlas_quality_tests PRIVATE NWB_REPO_ROOT="${CMAKE_SOURCE_DIR}")
-    target_link_libraries(nwb_font_atlas_quality_tests PRIVATE nwb_ui_text nwb_assets_font_atlas)
+    target_compile_definitions(nwb_font_atlas_quality_tests PRIVATE NWB_COOK=1 NWB_REPO_ROOT="${CMAKE_SOURCE_DIR}")
+    target_link_libraries(nwb_font_atlas_quality_tests PRIVATE nwb_ui_text nwb_assets_font_atlas_cook nwb_assets_bunch_cook)
 endif()

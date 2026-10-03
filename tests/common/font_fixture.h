@@ -9,7 +9,7 @@
 
 
 #include <impl/assets_font/asset.h>
-#include <impl/assets_font/binary_payload.h>
+#include <impl/assets_font/prepared_source.h>
 
 #include <global/filesystem.h>
 
@@ -30,23 +30,10 @@ namespace Tests{
 
 
 [[nodiscard]] inline bool ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetBytes& outSfntBytes){
-    Core::Assets::AssetBytes binary(outSfntBytes.get_allocator().arena());
-    ErrorCode error;
-    if(!ReadBinaryFile(fontPath, binary, error) || binary.size() < sizeof(Impl::FontBinaryPayload::HeaderBinary))
+    Impl::PreparedFontSource source(outSfntBytes.get_allocator().arena());
+    if(!Impl::ReadPreparedFontSource(fontPath, source, false))
         return false;
-
-    Impl::FontBinaryPayload::HeaderBinary header;
-    NWB_MEMCPY(&header, sizeof(header), binary.data(), sizeof(header));
-    if(
-        header.magic != Impl::FontBinaryPayload::s_FontMagic
-        || header.version != Impl::FontBinaryPayload::s_FontVersion
-        || header.faceIndex != 0u || header.reserved != 0u
-        || header.byteCount == 0u || header.byteCount > Impl::s_FontMaxSourceBytes
-        || header.byteCount != binary.size() - sizeof(header)
-    )
-        return false;
-
-    outSfntBytes.assign(binary.begin() + sizeof(header), binary.end());
+    outSfntBytes = Move(source.fontBytes);
     return true;
 }
 

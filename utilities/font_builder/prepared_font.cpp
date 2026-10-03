@@ -5,8 +5,7 @@
 #include "prepared_font.h"
 #include "source_input.h"
 
-#include <impl/assets_font/binary_payload.h>
-#include <global/binary.h>
+#include <impl/assets_font/prepared_source.h>
 #include <global/sha256.h>
 #include <logger/client/logger.h>
 
@@ -29,14 +28,19 @@ bool BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload&
         return false;
     }
 
-    Impl::FontBinaryPayload::HeaderBinary header;
-    header.byteCount = source.size();
-    Core::Assets::AssetBytes binary(outBinary.get_allocator().arena());
-    binary.reserve(sizeof(header) + source.size());
-    AppendPOD(binary, header);
-    binary.insert(binary.end(), source.begin(), source.end());
-    outBinary = Move(binary);
-    return true;
+    Core::Assets::AssetVector<Impl::PreparedFontImageView> images(outBinary.get_allocator().arena());
+    images.reserve(atlas.groups.size());
+    for(const auto& group : atlas.groups){
+        images.push_back(Impl::PreparedFontImageView{
+            .width = group.width,
+            .height = group.height,
+            .channelCount = group.channelCount,
+            .pixels = { group.pixels.data(), group.pixels.size() },
+        });
+    }
+    return Impl::SerializePreparedFontSource(
+        { source.data(), source.size() }, atlas.faceIndex, images.data(), images.size(), outBinary
+    );
 }
 
 

@@ -13,7 +13,6 @@
 *.bxdf text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.nwb text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.font -text
-*.atlas -text
 *.py text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 *.cmake text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof
 CMakeLists.txt text eol=crlf whitespace=blank-at-eol,space-before-tab,cr-at-eol,-blank-at-eof

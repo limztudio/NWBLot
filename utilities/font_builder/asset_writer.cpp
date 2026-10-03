@@ -32,37 +32,26 @@ namespace __hidden_font_builder_writer{
 struct OutputPaths{
     Path metadata;
     Path font;
-    Path atlas;
     Path metadataTemporary;
     Path fontTemporary;
-    Path atlasTemporary;
     Path metadataBackup;
     Path fontBackup;
-    Path atlasBackup;
 
     explicit OutputPaths(const Path& output)
         : metadata(output)
         , font(output)
-        , atlas(output)
         , metadataTemporary(output)
         , fontTemporary(output)
-        , atlasTemporary(output)
         , metadataBackup(output)
         , fontBackup(output)
-        , atlasBackup(output)
     {
         font.replace_extension(".font");
-        atlas.replace_extension(".atlas");
         metadataTemporary += ".tmp";
         fontTemporary = font;
         fontTemporary += ".tmp";
-        atlasTemporary = atlas;
-        atlasTemporary += ".tmp";
         metadataBackup += ".old";
         fontBackup = font;
         fontBackup += ".old";
-        atlasBackup = atlas;
-        atlasBackup += ".old";
     }
 };
 
@@ -127,7 +116,7 @@ private:
 };
 
 [[nodiscard]] static bool CheckOutputs(const OutputPaths& paths, const bool overwrite, bool& outPresent){
-    const Path* files[] = { &paths.metadata, &paths.font, &paths.atlas };
+    const Path* files[] = { &paths.metadata, &paths.font };
     u32 presentCount = 0u;
     for(const Path* file : files){
         ErrorCode error;
@@ -136,16 +125,16 @@ private:
             return false;
         presentCount += exists ? 1u : 0u;
     }
-    if(presentCount != 0u && (presentCount != 3u || !overwrite))
+    if(presentCount != 0u && (presentCount != 2u || !overwrite))
         return false;
-    outPresent = presentCount == 3u;
+    outPresent = presentCount == 2u;
     return true;
 }
 
 [[nodiscard]] static bool CheckWorkPaths(const OutputPaths& paths){
     const Path* files[] = {
-        &paths.metadataTemporary, &paths.fontTemporary, &paths.atlasTemporary,
-        &paths.metadataBackup, &paths.fontBackup, &paths.atlasBackup,
+        &paths.metadataTemporary, &paths.fontTemporary,
+        &paths.metadataBackup, &paths.fontBackup,
     };
     for(const Path* file : files){
         ErrorCode error;
@@ -155,7 +144,7 @@ private:
     return true;
 }
 
-static void RestoreBackups(const Path* const outputs[3u], const Path* const backups[3u], const u32 count){
+static void RestoreBackups(const Path* const outputs[2u], const Path* const backups[2u], const u32 count){
     for(u32 index = count; index > 0u; --index){
         ErrorCode error;
         if(!RenamePath(*backups[index - 1u], *outputs[index - 1u], error))
@@ -163,18 +152,18 @@ static void RestoreBackups(const Path* const outputs[3u], const Path* const back
     }
 }
 
-[[nodiscard]] static bool Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& atlas, TemporaryFile& metadata, const bool overwrite){
+[[nodiscard]] static bool Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
     bool present = false;
     if(!CheckOutputs(paths, overwrite, present))
         return false;
-    const Path* outputs[] = { &paths.font, &paths.atlas, &paths.metadata };
-    const Path* backups[] = { &paths.fontBackup, &paths.atlasBackup, &paths.metadataBackup };
-    const Path* temporaries[] = { &paths.fontTemporary, &paths.atlasTemporary, &paths.metadataTemporary };
-    TemporaryFile* staged[] = { &font, &atlas, &metadata };
+    const Path* outputs[] = { &paths.font, &paths.metadata };
+    const Path* backups[] = { &paths.fontBackup, &paths.metadataBackup };
+    const Path* temporaries[] = { &paths.fontTemporary, &paths.metadataTemporary };
+    TemporaryFile* staged[] = { &font, &metadata };
 
     u32 backedUp = 0u;
     if(present){
-        for(; backedUp < 3u; ++backedUp){
+        for(; backedUp < 2u; ++backedUp){
             ErrorCode error;
             if(!RenamePath(*outputs[backedUp], *backups[backedUp], error)){
                 RestoreBackups(outputs, backups, backedUp);
@@ -183,7 +172,7 @@ static void RestoreBackups(const Path* const outputs[3u], const Path* const back
         }
     }
     u32 published = 0u;
-    for(; published < 3u; ++published){
+    for(; published < 2u; ++published){
         ErrorCode error;
         if(!RenamePath(*temporaries[published], *outputs[published], error)){
             for(u32 index = published; index > 0u; --index){
@@ -199,7 +188,7 @@ static void RestoreBackups(const Path* const outputs[3u], const Path* const back
     for(u32 index = 0u; index < backedUp; ++index){
         ErrorCode error;
         if(!RemoveFile(*backups[index], error))
-            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published bundle but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
+            NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
     }
     return true;
 }
@@ -217,10 +206,8 @@ static void RestoreBackups(const Path* const outputs[3u], const Path* const back
 bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
     Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
     Core::Assets::AssetBytes fontBinary(arena);
-    Core::Assets::AssetBytes atlasBinary(arena);
     MetadataString metadata(arena);
-    if(!Impl::SerializeFontAtlasPayload(payload, atlasBinary)
-        || !BuildPreparedFont(options, payload, fontBinary))
+    if(!BuildPreparedFont(options, payload, fontBinary))
         return false;
     BuildFontMetadata(payload, metadata);
 
@@ -228,7 +215,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     bool present = false;
     if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite, present)
         || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output bundle unavailable; use --overwrite for a complete regular-file trio"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
         return false;
     }
     ErrorCode error;
@@ -237,22 +224,19 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         return false;
 
     __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
-    __hidden_font_builder_writer::TemporaryFile stagedAtlas(paths.atlasTemporary);
     __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
     const u8* metadataBytes = reinterpret_cast<const u8*>(metadata.data());
     if(
         !stagedFont.stage(fontBinary.data(), fontBinary.size())
-        || !stagedAtlas.stage(atlasBinary.data(), atlasBinary.size())
         || !stagedMetadata.stage(metadataBytes, metadata.size())
         || !stagedFont.verify(fontBinary.data(), fontBinary.size())
-        || !stagedAtlas.verify(atlasBinary.data(), atlasBinary.size())
         || !stagedMetadata.verify(metadataBytes, metadata.size())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous bundle remains in place"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
-    if(!__hidden_font_builder_writer::Publish(paths, stagedFont, stagedAtlas, stagedMetadata, options.overwrite)){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: bundle publication failed"));
+    if(!__hidden_font_builder_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite)){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: pair publication failed"));
         return false;
     }
     return true;

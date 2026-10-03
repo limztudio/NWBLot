@@ -17,26 +17,28 @@ namespace __hidden_surfel_coverage_tests{
 
 
 // Compile the production Slang math as C++ so these assertions exercise the same coverage path as the GPU.
-struct float3{
+struct ShaderFloat3{
     float x;
     float y;
     float z;
 
-    explicit float3(float value) : x(value), y(value), z(value){}
-    float3(float red, float green, float blue) : x(red), y(green), z(blue){}
+    explicit ShaderFloat3(float value) : x(value), y(value), z(value){}
+    ShaderFloat3(float red, float green, float blue) : x(red), y(green), z(blue){}
 };
 
-struct float4{
+struct ShaderFloat4{
     float x;
     float y;
     float z;
     float w;
 
-    float4(float3 rgb, float alpha) : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
+    ShaderFloat4(ShaderFloat3 rgb, float alpha) : x(rgb.x), y(rgb.y), z(rgb.z), w(alpha){}
 };
+using float3 = ShaderFloat3;
+using float4 = ShaderFloat4;
 
-float3 operator/(float3 value, float divisor){
-    return float3(value.x / divisor, value.y / divisor, value.z / divisor);
+ShaderFloat3 operator/(ShaderFloat3 value, float divisor){
+    return ShaderFloat3(value.x / divisor, value.y / divisor, value.z / divisor);
 }
 
 // Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.

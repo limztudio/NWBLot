@@ -95,7 +95,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const bool* const asyncPrefixTimingSpansOnePacket,
     u64& outSceneLightingContentHash){
     using namespace RendererTaskGraphDetail;
-    using PrefixTimingSlot = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
+    namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
+    using PrefixTimingSlot = PrefixTimingSlotNs::Enum;
 
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -145,7 +146,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
-    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlot::kCount); ++timingSlot){
+    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::kCount); ++timingSlot){
         if(!timingTickets[timingSlot])
             return false;
     }
@@ -199,8 +200,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .meshViewAspectRatio = meshViewAspectRatio,
             .meshViewUploadRequired = meshViewUploadRequired,
             .asyncPrefixTiming = &asyncPrefixTiming,
-            .meshViewSetupTimingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
-            .sceneShadingSetupTimingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup),
+            .meshViewSetupTimingTicket = timingTicketSlot(PrefixTimingSlotNs::MeshViewSetup),
+            .sceneShadingSetupTimingTicket = timingTicketSlot(PrefixTimingSlotNs::SceneShadingSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
             .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
@@ -299,7 +300,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.materialSystem = &m_materialSystem;
     gbufferPayload.csgSystem = &m_csgSystem;
     gbufferPayload.targets = &deferredTargets;
-    gbufferPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+    gbufferPayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::Gbuffer);
     gbufferPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
     gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
     gbufferPayload.frameBindings = frameBindings;
@@ -359,7 +360,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgReceiverSpanPayload.targets = &deferredTargets;
         // The graph owns the receiver-surface producer fence. Normal prefix compilation merges this callback with
         // G-buffer, while a FrontierSafe boundary retains its own submission-local timing ticket.
-        csgReceiverSpanPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::CsgReceiverSpanBuild);
+        csgReceiverSpanPayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::CsgReceiverSpanBuild);
         csgReceiverSpanPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
         csgReceiverSpanPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgReceiverSpanPayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
@@ -382,7 +383,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalCombinePayload.targets = &deferredTargets;
         // The graph owns the preceding producer fence. Normal prefix compilation merges this callback with
         // G-buffer, while a FrontierSafe boundary retains its own submission-local timing ticket.
-        csgIntervalCombinePayload.timingTicket = timingTicketSlot(PrefixTimingSlot::CsgIntervalCombine);
+        csgIntervalCombinePayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::CsgIntervalCombine);
         csgIntervalCombinePayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
         csgIntervalCombinePayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgIntervalCombinePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
@@ -408,7 +409,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalSamplePayload.materialSystem = &m_materialSystem;
         csgIntervalSamplePayload.csgSystem = &m_csgSystem;
         csgIntervalSamplePayload.targets = &deferredTargets;
-        csgIntervalSamplePayload.timingTicket = timingTicketSlot(PrefixTimingSlot::CsgIntervalSample);
+        csgIntervalSamplePayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample);
         csgIntervalSamplePayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
         csgIntervalSamplePayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgIntervalSamplePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
@@ -822,13 +823,13 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.regular.indexedDrawItems.data(), opaqueDrawItems.regular.indexedDrawItems.size(),
         frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
-        nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
+        nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return false;
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.csgReceiverSurface.indexedDrawItems.data(), opaqueDrawItems.csgReceiverSurface.indexedDrawItems.size(),
         frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
-        nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
+        nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
         return false;
     gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
@@ -837,7 +838,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueComputeEmulationPayload.materialSystem = &m_materialSystem;
         opaqueComputeEmulationPayload.targets = &deferredTargets;
         // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
-        opaqueComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+        opaqueComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::Gbuffer);
         opaqueComputeEmulationPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
         opaqueComputeEmulationPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         opaqueComputeEmulationPayload.instanceCount = instanceData.size();
@@ -900,7 +901,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueCsgReceiverComputeEmulationPayload.targets = &deferredTargets;
         // The receiver producer is an early part of G-buffer's one semantic Graphics submission; its dispatch
         // timing shares the existing ticket while the receiver raster retains its own scope in G-buffer.
-        opaqueCsgReceiverComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+        opaqueCsgReceiverComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::Gbuffer);
         opaqueCsgReceiverComputeEmulationPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
         opaqueCsgReceiverComputeEmulationPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         opaqueCsgReceiverComputeEmulationPayload.instanceCount = instanceData.size();
@@ -1113,7 +1114,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             const Name identity,
             const AStringView markerLabel,
             const Core::GpuTaskId& dependency,
-            const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase phase,
+            const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
             const bool finishTiming,
             const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
@@ -1133,7 +1134,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             payload.frameBindings = frameBindings;
             payload.materialSystem = &m_materialSystem;
             payload.targets = &deferredTargets;
-            payload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+            payload.timingTicket = timingTicketSlot(PrefixTimingSlotNs::Gbuffer);
             payload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
             payload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
             payload.opaqueRegularTiming = &opaqueRegularSharedComputeEmulationTiming;
@@ -1150,7 +1151,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask
             >(desc, Move(payload));
         };
-        using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase;
+        using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase::Enum;
         const Name opaqueSharedComputeEmulationPhaseIdentities[] = {
             Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_a"),
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_a"),
@@ -1429,7 +1430,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         if(csgIntervalSamplePayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
             opaqueDrawItems.csg.indexedDrawItems.data(), opaqueDrawItems.csg.indexedDrawItems.size(),
             frameBindings, deferredTargets, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
-            csgIntervalSampleResourceScratch, nullptr, timingTicketSlot(PrefixTimingSlot::CsgIntervalSample)
+            csgIntervalSampleResourceScratch, nullptr, timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample)
         ))
             return false;
         if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
@@ -1440,7 +1441,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             // Producer and sample share the semantic CSG interval-sample submission/ticket; the timer opens here
             // and closes after the raster half, exactly preserving the former local material timing scope.
             opaqueCsgIntervalSampleComputeEmulationPayload.timingTicket =
-                timingTicketSlot(PrefixTimingSlot::CsgIntervalSample);
+                timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample);
             opaqueCsgIntervalSampleComputeEmulationPayload.meshViewSetupReady =
                 &m_graphicsPrefixMeshViewSetupReady;
             opaqueCsgIntervalSampleComputeEmulationPayload.sceneShadingSetupReady =
@@ -1646,7 +1647,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         PostGbufferNormalizeGraphTask::Payload{
             .raytracingSystem = &m_raytracingSystem,
             .asyncPrefixTiming = &asyncPrefixTiming,
-            .timingTicket = timingTicketSlot(PrefixTimingSlot::Normalize),
+            .timingTicket = timingTicketSlot(PrefixTimingSlotNs::Normalize),
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );

@@ -487,7 +487,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             const Name identity,
             const AStringView markerLabel,
             const Core::GpuTaskId& dependency,
-            const AvboitOccupancySharedComputeEmulationGraphTask::Phase phase,
+            const AvboitOccupancySharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
             const bool beginTiming,
             const bool finishTiming,
@@ -527,7 +527,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
                 Move(payload)
             );
         };
-        using OccupancySharedPhase = AvboitOccupancySharedComputeEmulationGraphTask::Phase;
+        using OccupancySharedPhase = AvboitOccupancySharedComputeEmulationGraphTask::Phase::Enum;
         const Name occupancySharedComputeEmulationPhaseIdentities[] = {
             Name("render.avboit.occupancy.shared_compute_emulation_generate_a"),
             Name("render.avboit.occupancy.shared_compute_emulation_raster_a"),

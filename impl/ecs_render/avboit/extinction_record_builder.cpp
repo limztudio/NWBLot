@@ -482,7 +482,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             const Name identity,
             const AStringView markerLabel,
             const Core::GpuTaskId& dependency,
-            const AvboitExtinctionSharedComputeEmulationGraphTask::Phase phase,
+            const AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Enum phase,
             const usize drawIndex,
             const bool beginTiming,
             const bool finishTiming,
@@ -522,7 +522,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
                 Move(payload)
             );
         };
-        using ExtinctionSharedPhase = AvboitExtinctionSharedComputeEmulationGraphTask::Phase;
+        using ExtinctionSharedPhase = AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Enum;
         const Name extinctionSharedComputeEmulationPhaseIdentities[] = {
             Name("render.avboit.extinction.shared_compute_emulation_generate_a"),
             Name("render.avboit.extinction.shared_compute_emulation_raster_a"),

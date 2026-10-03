@@ -84,9 +84,11 @@ struct AvboitAccumulationComputeEmulationGraphTask{
 
 // Shared-buffer accumulation draws cannot batch generators; keep D/R streams explicit.
 struct AvboitAccumulationSharedComputeEmulationGraphTask{
-    enum class Phase : u8{
-        Generate,
-        Raster,
+    struct Phase{
+        enum Enum : u8{
+            Generate,
+            Raster,
+        };
     };
 
     struct Payload{
@@ -105,7 +107,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         bool materialGeometryStatesGraphOwned = false;
         bool beginTiming = false;
         bool finishTiming = false;
-        Phase phase = Phase::Generate;
+        Phase::Enum phase = Phase::Generate;
     };
 
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{

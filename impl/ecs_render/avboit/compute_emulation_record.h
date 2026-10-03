@@ -79,9 +79,11 @@ struct AvboitComputeEmulationRecordInputs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-enum class AvboitSharedComputeEmulationPhase : u8{
-    Generate,
-    Raster,
+namespace AvboitSharedComputeEmulationPhase{
+    enum Enum : u8{
+        Generate,
+        Raster,
+    };
 };
 
 struct AvboitSharedComputeEmulationRecordInputs{
@@ -100,7 +102,7 @@ struct AvboitSharedComputeEmulationRecordInputs{
     bool materialGeometryStatesGraphOwned = false;
     bool beginTiming = false;
     bool finishTiming = false;
-    AvboitSharedComputeEmulationPhase phase = AvboitSharedComputeEmulationPhase::Generate;
+    AvboitSharedComputeEmulationPhase::Enum phase = AvboitSharedComputeEmulationPhase::Generate;
 };
 
 struct AvboitSharedComputeEmulationRecordTrait{

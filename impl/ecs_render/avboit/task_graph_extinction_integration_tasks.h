@@ -86,9 +86,11 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 
 // Shared-buffer extinction draws keep native D/R order; phases stay graph-visible.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
-    enum class Phase : u8{
-        Generate,
-        Raster,
+    struct Phase{
+        enum Enum : u8{
+            Generate,
+            Raster,
+        };
     };
 
     struct Payload{
@@ -107,7 +109,7 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         bool materialGeometryStatesGraphOwned = false;
         bool beginTiming = false;
         bool finishTiming = false;
-        Phase phase = Phase::Generate;
+        Phase::Enum phase = Phase::Generate;
     };
 
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{

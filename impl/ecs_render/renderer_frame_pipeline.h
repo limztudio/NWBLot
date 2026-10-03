@@ -90,16 +90,18 @@ struct MaterialTypedInstanceRangeVector;
 #endif
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived cross-queue frontier.
 // Each stage points at a rebindable timing slot so the renderer can attach one ticket to every actual packet after compilation.
-enum class DeferredGraphicsPrefixTimingSlot : u8{
-    MeshViewSetup,
-    SceneShadingSetup,
-    DeferredClear,
-    Gbuffer,
-    CsgReceiverSpanBuild,
-    CsgIntervalCombine,
-    CsgIntervalSample,
-    Normalize,
-    kCount,
+namespace DeferredGraphicsPrefixTimingSlot{
+    enum Enum : u8{
+        MeshViewSetup,
+        SceneShadingSetup,
+        DeferredClear,
+        Gbuffer,
+        CsgReceiverSpanBuild,
+        CsgIntervalCombine,
+        CsgIntervalSample,
+        Normalize,
+        kCount,
+    };
 };
 
 

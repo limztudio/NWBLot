@@ -65,9 +65,11 @@ struct OpaqueRegularComputeEmulationGraphTask{
 
 // Shared-output sequence keeps compat order; each instance records one phase.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
-    enum class Phase : u8{
-        Generate,
-        Raster,
+    struct Phase{
+        enum Enum : u8{
+            Generate,
+            Raster,
+        };
     };
 
     struct Payload{
@@ -86,7 +88,7 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool finishTiming = false;
-        Phase phase = Phase::Generate;
+        Phase::Enum phase = Phase::Generate;
     };
 
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{

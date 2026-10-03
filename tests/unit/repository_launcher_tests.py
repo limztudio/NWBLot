@@ -1,7 +1,9 @@
 import argparse
 import importlib.util
 import os
+import platform
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -226,19 +228,19 @@ class FakeBoundedProcessApi:
 class LauncherPlatformTests(unittest.TestCase):
     def test_host_architecture_uses_native_windows_machine_under_emulation(self):
         with (
-            mock.patch.object(launcher.platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(launcher.platform, LIT_MACHINE, return_value=LIT_AMD64),
+            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
+            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64),
             mock.patch.object(launcher, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=LIT_ARM64_2),
-            mock.patch.dict(launcher.os.environ, {}, clear=True),
+            mock.patch.dict(os.environ, {}, clear=True),
         ):
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
 
     def test_host_architecture_uses_wow64_environment_when_native_query_is_unavailable(self):
         with (
-            mock.patch.object(launcher.platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(launcher.platform, LIT_MACHINE, return_value=LIT_AMD64),
+            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
+            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64),
             mock.patch.object(launcher, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=None),
-            mock.patch.dict(launcher.os.environ, {"PROCESSOR_ARCHITEW6432": LIT_ARM64_2}, clear=True),
+            mock.patch.dict(os.environ, {"PROCESSOR_ARCHITEW6432": LIT_ARM64_2}, clear=True),
         ):
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
 
@@ -454,7 +456,7 @@ class LauncherPlatformTests(unittest.TestCase):
         run_result = repository_windows_process.WindowsBoundedRunResult(406, 23, True, True, False)
 
         with (
-            mock.patch.object(launcher.subprocess, LIT_POPEN, return_value=process),
+            mock.patch.object(subprocess, LIT_POPEN, return_value=process),
             mock.patch.object(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS),
             mock.patch.object(repository_windows_process, "run_bounded_process", return_value=run_result) as bounded,
             mock.patch.object(launcher, "terminate_process") as generic_terminate,
@@ -677,7 +679,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.patch(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
         self.patch(launcher, "cmake_command", return_value=(LIT_CMAKE_EXECUTABLE,))
         self.patch(launcher, "build_environment", return_value={})
-        self.process = self.patch(launcher.subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
+        self.process = self.patch(subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
         self.query = self.patch(launcher, "ensure_file_api_query", wraps=launcher.ensure_file_api_query)
         self.profile_build = self.patch(launcher, "build_profile_targets", wraps=launcher.build_profile_targets)
         output_patch = mock.patch(LIT_BUILTINS_PRINT)
@@ -690,7 +692,7 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
                 "launch_with_optional_profile",
             )
         ]
-        self.popen = self.patch(launcher.subprocess, LIT_POPEN, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
+        self.popen = self.patch(subprocess, LIT_POPEN, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
 
     def patch(self, owner, name, **kwargs):
         patcher = mock.patch.object(owner, name, **kwargs)
@@ -906,8 +908,8 @@ class LauncherDryRunDomainTests(unittest.TestCase):
             (launcher, LIT_HOST_PLATFORM_NAME, {"return_value": LIT_WINDOWS}),
             (launcher, "host_arch_name", {"return_value": LIT_ARM64}),
             (launcher, "ensure_file_api_query", {"wraps": launcher.ensure_file_api_query}),
-            (launcher.subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
-            (launcher.subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
+            (subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
+            (subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
         ):
             patcher = mock.patch.object(owner, operation, **options)
             result = patcher.start()
@@ -1005,7 +1007,7 @@ class PipelineLauncherTests(unittest.TestCase):
         self.refresh = self.patch(launcher, "refresh_launch_settings", return_value=self.settings)
         self.patch(launcher, "build_environment", return_value=self.environment)
         self.patch(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
-        self.process = self.patch(launcher.subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
+        self.process = self.patch(subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
         self.stage = self.patch(self.pipeline, "run_stage")
 
     def patch(self, owner, name, **kwargs):
@@ -1087,7 +1089,7 @@ class PipelineLauncherTests(unittest.TestCase):
         self.assertEqual(list(self.tool_paths.values()), [call.args[0] for call in self.stage.call_args_list])
 
     def test_dry_run_prints_commands_without_subprocesses_or_output_creation(self):
-        with mock.patch(LIT_BUILTINS_PRINT) as output, mock.patch.object(launcher.subprocess, LIT_POPEN) as popen:
+        with mock.patch(LIT_BUILTINS_PRINT) as output, mock.patch.object(subprocess, LIT_POPEN) as popen:
             self.assertEqual(0, self.pipeline.main([*self.arguments, LIT_DRY_RUN]))
 
         self.process.assert_not_called()
@@ -1146,7 +1148,7 @@ class PipelineLauncherTests(unittest.TestCase):
         for failed_index, executable in enumerate(self.tool_paths.values()):
             with self.subTest(stage=executable.name):
                 self.stage.reset_mock()
-                self.stage.side_effect = [None] * failed_index + [launcher.subprocess.CalledProcessError(23, [str(executable)])]
+                self.stage.side_effect = [None] * failed_index + [subprocess.CalledProcessError(23, [str(executable)])]
                 with mock.patch(LIT_BUILTINS_PRINT):
                     self.assertEqual(1, self.pipeline.main(self.arguments))
                 self.assertEqual(failed_index + 1, self.stage.call_count)

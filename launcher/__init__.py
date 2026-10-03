@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Repository launcher facade (backward-compatible re-exports).
+"""Repository launcher package root.
 
-The launcher used to live in a single 1341-line ``launcher/__init__.py`` mixing
-nine functionality domains. Each domain is now a separated class in its own
-module; this package root only re-exports the public surface so existing
-``import launcher`` / ``ROOT_LAUNCHER.*`` call sites keep working unchanged.
+Each functionality domain is a separated class in its own module; this
+package root re-exports the public surface for ``import launcher`` /
+``ROOT_LAUNCHER.*`` call sites.
 
 Domains:
 - launcher.models (LauncherModels): immutable data models.
@@ -23,18 +22,10 @@ Domains:
 from launcher.constants import *  # noqa: F401,F403
 from launcher.models import (  # noqa: F401
     CMakeTargetInfo,
-    Dict,
-    Iterable,
     LaunchSettings,
     LauncherModels,
-    List,
-    Optional,
     ProfileSession,
     RepoLauncher,
-    Sequence,
-    Tuple,
-    dataclass,
-    replace,
 )
 from launcher.discovery import LauncherDiscovery  # noqa: F401
 from launcher.host import HostProbe  # noqa: F401
@@ -124,19 +115,6 @@ from launcher.cli import add_common_options  # noqa: F401
 from launcher.cli import make_parser  # noqa: F401
 from launcher.cli import split_application_args  # noqa: F401
 from launcher.cli import main  # noqa: F401
-
-import argparse  # noqa: F401
-import ctypes  # noqa: F401
-import json  # noqa: F401
-import os  # noqa: F401
-import platform  # noqa: F401
-import re  # noqa: F401
-import shlex  # noqa: F401
-import shutil  # noqa: F401
-import socket  # noqa: F401
-import subprocess  # noqa: F401
-import sys  # noqa: F401
-import time  # noqa: F401
 
 __all__ = [
     'ARCH_X64_LITERAL',
@@ -475,16 +453,4 @@ __all__ = [
     'LauncherCli',
     'LauncherModels',
     'repository_windows_process',
-    'argparse',
-    'ctypes',
-    'json',
-    'os',
-    'platform',
-    're',
-    'shlex',
-    'shutil',
-    'socket',
-    'subprocess',
-    'sys',
-    'time',
 ]

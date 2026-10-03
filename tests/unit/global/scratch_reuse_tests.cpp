@@ -125,7 +125,7 @@ static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
 
 
 TEST(ScratchArenaReuse, ReverseFreesCrossChunkBoundariesAndReuseAllEmptyChunks){
-    ScratchArena arena(Name("tests/scratch_reuse/cross_chunk"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/cross_chunk"}, 256u);
     constexpr AllocationRequest s_Requests[]{ { 8u, 192u }, { 8u, 128u }, { 8u, 768u } };
     ASSERT_TRUE(RunAllocationBatch(arena, s_Requests));
     const ArenaMemoryStats warm = arena.memoryStats();
@@ -151,7 +151,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
     usize expectedReserved = 0u;
     ArenaMemoryStats released;
     {
-        ScratchArena arena(Name("tests/scratch_reuse/cold_alignment_buckets"), 257u);
+        ScratchArena arena(Name{"tests/scratch_reuse/cold_alignment_buckets"}, 257u);
         u8* allocations[LengthOf(s_Alignments)] = {};
         before = HeapBackingMemoryStats();
         for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
@@ -191,7 +191,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
 }
 
 TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
-    ScratchArena arena(Name("tests/scratch_reuse/invalid_alignment"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/invalid_alignment"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(s_ExpectedDualCount, 32u));
     ASSERT_NE(sentinel, nullptr);
     sentinel[0u] = 71u;
@@ -217,7 +217,7 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
 }
 
 TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentinels){
-    ScratchArena arena(Name("tests/scratch_reuse/alignments"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/alignments"}, 256u);
     constexpr usize s_Alignments[]{ 1u, 8u, 64u, 256u };
     u8* sentinels[LengthOf(s_Alignments)] = {};
     for(usize index = 0u; index < LengthOf(s_Alignments); ++index){
@@ -247,7 +247,7 @@ TEST(ScratchArenaReuse, AlignmentBucketsKeepIndependentLifoStacksAndCallerSentin
 }
 
 TEST(ScratchArenaReuse, OutOfOrderFreeRemainsANoopUntilThatAllocationBecomesTop){
-    ScratchArena arena(Name("tests/scratch_reuse/out_of_order"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/out_of_order"}, 256u);
     auto* first = static_cast<u8*>(arena.allocate(8u, 96u));
     auto* second = static_cast<u8*>(arena.allocate(8u, 96u));
     auto* third = static_cast<u8*>(arena.allocate(8u, 192u));
@@ -271,7 +271,7 @@ TEST(ScratchArenaReuse, OutOfOrderFreeRemainsANoopUntilThatAllocationBecomesTop)
 }
 
 TEST(ScratchArenaReuse, RelocatedAndZeroSizedTopReallocationsExposeThePreviousLiveChunk){
-    ScratchArena arena(Name("tests/scratch_reuse/relocation"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/relocation"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
     auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
     ASSERT_NE(sentinel, nullptr);
@@ -312,7 +312,7 @@ TEST(ScratchArenaReuse, RelocatedAndZeroSizedTopReallocationsExposeThePreviousLi
 }
 
 TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLastChunk){
-    ScratchArena arena(Name("tests/scratch_reuse/zero_bytes"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/zero_bytes"}, 256u);
     EXPECT_EQ(arena.allocate<u8>(0u), nullptr);
     EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
     void* zero = arena.allocate(8u, 0u);
@@ -348,7 +348,7 @@ TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLas
 }
 
 TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllocation){
-    ScratchArena arena(Name("tests/scratch_reuse/zero_initial_capacity"), 0u);
+    ScratchArena arena(Name{"tests/scratch_reuse/zero_initial_capacity"}, 0u);
     EXPECT_EQ(arena.allocate(8u, 0u), nullptr);
     EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().allocationCount, 0u);
@@ -363,7 +363,7 @@ TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllo
 }
 
 TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTop){
-    ScratchArena arena(Name("tests/scratch_reuse/cached_relocation"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/cached_relocation"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(8u, 64u));
     auto* allocation = static_cast<u8*>(arena.allocate(8u, 128u));
     void* cached = arena.allocate(8u, 1024u);
@@ -405,7 +405,7 @@ TEST(ScratchArenaReuse, RelocationReusesCachedBackingAndUnlinksAnEmptiedFormerTo
 }
 
 TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndCounters){
-    ScratchArena arena(Name("tests/scratch_reuse/failed_relocation"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/failed_relocation"}, 256u);
     auto* sentinel = static_cast<u8*>(arena.allocate(1u, 64u));
     auto* allocation = static_cast<u8*>(arena.allocate(1u, 128u));
     void* cached = arena.allocate(1u, 1536u);
@@ -440,7 +440,7 @@ TEST(ScratchArenaReuse, FailedRelocationPreservesLiveAllocationsCachedChunksAndC
 }
 
 TEST(ScratchArenaReuse, LargeSmallLargeRequestsDoNotRecreateUndersizedCachedChunks){
-    ScratchArena arena(Name("tests/scratch_reuse/mixed_sizes"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/mixed_sizes"}, 256u);
     constexpr AllocationRequest s_SmallFirst[]{ { 8u, 64u }, { 8u, 8192u }, { 8u, 96u }, { 8u, 512u } };
     constexpr AllocationRequest s_LargeFirst[]{ { 8u, 8192u }, { 8u, 96u }, { 8u, 64u }, { 8u, 8192u } };
     for(usize iteration = 0u; iteration < 3u; ++iteration){
@@ -463,7 +463,7 @@ TEST(ScratchArenaReuse, LargeSmallLargeRequestsDoNotRecreateUndersizedCachedChun
 }
 
 TEST(ScratchArenaReuse, NestedContainerDestructionAndCallerUnwindPreserveEarlierStorage){
-    ScratchArena arena(Name("tests/scratch_reuse/nested_containers"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/nested_containers"}, 256u);
     Vector<u64, ScratchArena> caller(arena);
     caller.assign(48u, 0x12345678u);
     const ArenaMemoryStats retained = arena.memoryStats();
@@ -488,7 +488,7 @@ TEST(ScratchArenaReuse, NestedContainerDestructionAndCallerUnwindPreserveEarlier
 }
 
 TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingFromUsage){
-    constexpr Name s_Owner("tests/scratch_reuse/owner_lifecycle");
+    constexpr Name s_Owner{"tests/scratch_reuse/owner_lifecycle"};
     ArenaMemoryStats before;
     const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
     while(record){
@@ -542,7 +542,7 @@ TEST(ScratchArenaReuse, OwnerTelemetryRetainsHistoryAndSeparatesReservedBackingF
 }
 
 TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
-    ScratchArena arena(Name("tests/scratch_reuse/collection_series"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/collection_series"}, 256u);
     Vector<u64, ScratchArena> caller(arena);
     caller.assign(32u, 0x76543210u);
     Array<RepeatedSample, 5u> samples{};
@@ -567,7 +567,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
 }
 
 TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
-    ScratchArena arena(Name("tests/scratch_reuse/alignment_series"), 256u);
+    ScratchArena arena(Name{"tests/scratch_reuse/alignment_series"}, 256u);
     constexpr AllocationRequest s_Requests[]{
         { 1u, 192u }, { 8u, 192u }, { 64u, 192u }, { 256u, 256u },
         { 1u, 512u }, { 8u, 512u }, { 64u, 512u }, { 256u, 512u },

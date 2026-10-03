@@ -71,6 +71,10 @@ template<typename CharT, usize N>
 [[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N]){
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
+template<typename CharT, typename ArenaT, usize N>
+[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N]){
+    return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
+}
 
 template<typename CharT>
 [[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file){

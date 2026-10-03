@@ -69,6 +69,14 @@ static constexpr AStringView s_BIN_SH = "/bin/sh";
 static constexpr AStringView s_C = "-c";
 #endif
 static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = NWB_TEXT("parallel logger message");
+#if defined(NWB_PLATFORM_WINDOWS)
+static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
+#endif
+static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
+static constexpr AStringView s_RAW_CONVERTED_WARNING = "raw converted warning";
+static constexpr AStringView s_VALUE_42 = "value 42";
+static constexpr AStringView s_VALUE_FORMAT_TRAILING = "value {}.trailing";
+static constexpr WStringView s_VALUE_FORMAT_TRAILING_WIDE = L"value {}.trailing";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -144,12 +152,17 @@ static char s_DiagnosticEventExpressionText[s_DiagnosticEventCaptureTextBytes] =
 static char s_DiagnosticEventMessageText[s_DiagnosticEventCaptureTextBytes] = {};
 static char s_DiagnosticEventFileText[s_DiagnosticEventCaptureTextBytes] = {};
 
+inline constexpr usize s_VerifyAlignedReallocationAlignment = 256u;
+inline constexpr usize s_VerifyAlignedReallocationInitialBytes = s_VerifyAlignedReallocationAlignment;
+inline constexpr usize s_VerifyAlignedReallocationBlockerBytes = s_VerifyAlignedReallocationAlignment;
+inline constexpr usize s_VerifyAlignedReallocationGrownBytes = s_VerifyAlignedReallocationAlignment * 4u;
+
 template<typename Arena>
 static void VerifyAlignedReallocation(Arena& arena){
-    constexpr usize s_Alignment = 256u;
-    constexpr usize s_InitialBytes = s_Alignment;
-    constexpr usize s_BlockerBytes = s_Alignment;
-    constexpr usize s_GrownBytes = s_Alignment * 4u;
+    constexpr usize s_Alignment = s_VerifyAlignedReallocationAlignment;
+    constexpr usize s_InitialBytes = s_VerifyAlignedReallocationInitialBytes;
+    constexpr usize s_BlockerBytes = s_VerifyAlignedReallocationBlockerBytes;
+    constexpr usize s_GrownBytes = s_VerifyAlignedReallocationGrownBytes;
 
     EXPECT_EQ(arena.reallocate(nullptr, s_Alignment, 0u), nullptr);
     auto* initial = static_cast<u8*>(arena.reallocate(nullptr, s_Alignment, s_InitialBytes));
@@ -457,19 +470,19 @@ TEST(Global, PersistentArenaReallocationPreservesAlignment){
 TEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks){
     constexpr AStringView s_Source = "Identity\\Bounded.trailing";
     constexpr AStringView s_Bounded = s_Source.substr(0u, 16u);
-    constexpr Name s_ViewName(s_Bounded);
-    constexpr Name s_LiteralName("identity/bounded");
+    constexpr Name s_ViewName{s_Bounded};
+    constexpr Name s_LiteralName{"identity/bounded"};
     constexpr char s_EmbeddedNull[]{ 'a', '\0', 'b' };
-    constexpr Name s_InvalidName(AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull)));
+    constexpr Name s_InvalidName{AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull))};
     static_assert(s_ViewName == s_LiteralName);
     static_assert(s_InvalidName == NAME_NONE);
-    static_assert(Name(AStringView{}) != NAME_NONE);
-    static_assert(Name(static_cast<const char*>(nullptr)) == NAME_NONE);
+    static_assert(Name{AStringView{}} != NAME_NONE);
+    static_assert(Name{static_cast<const char*>(nullptr)} == NAME_NONE);
 
     NameSymbolCallbackProbe probe;
     EXPECT_EQ(s_ViewName.identityHash(), s_LiteralName.identityHash());
     EXPECT_EQ(probe.recordCount, 0u);
-    const Name runtimeView(s_Bounded);
+    const Name runtimeView{s_Bounded};
     EXPECT_EQ(runtimeView, s_LiteralName);
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 0u);
@@ -533,8 +546,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filename());
     const usize searchPathLength = searchPathText.size();
     const usize executableNameLength = executableNameText.size();
-    searchPathText += ".trailing";
-    executableNameText += ".trailing";
+    searchPathText += s_TRAILING_SUFFIX;
+    executableNameText += s_TRAILING_SUFFIX;
     ASSERT_TRUE(ExecutableAvailableInPath(
         testArena.arena,
         AStringView(searchPathText).substr(0u, searchPathLength),
@@ -548,8 +561,8 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ::AString<NWB::Core::Alloc::GlobalArena> outputPathText = PathToString<char>(testArena.arena, outputPath);
     const usize outputPathLength = outputPathText.size();
     const usize executableLength = executableText.size();
-    outputPathText += ".trailing";
-    executableText += ".trailing";
+    outputPathText += s_TRAILING_SUFFIX;
+    executableText += s_TRAILING_SUFFIX;
     const AStringView arguments[]{
         AStringView(executableText).substr(0u, executableLength),
         "/c",
@@ -587,12 +600,12 @@ TEST(Global, SharedLibraryAcceptsBoundedNamesAndResetsFailedSymbols){
 #endif
 
 TEST(Global, DiagnosticFormatSupportsBoundedFormatViewsAndNullableAdapters){
-    constexpr AStringView s_Format = "value {}.trailing";
+    constexpr AStringView s_Format = s_VALUE_FORMAT_TRAILING;
     const DiagnosticEventText narrow = MakeDiagnosticEventText(s_Format.substr(0u, 8u), 42u);
-    EXPECT_EQ(narrow.view(), AStringView("value 42"));
-    constexpr WStringView s_WideFormat = L"value {}.trailing";
+    EXPECT_EQ(narrow.view(), s_VALUE_42);
+    constexpr WStringView s_WideFormat = s_VALUE_FORMAT_TRAILING_WIDE;
     const DiagnosticEventText wide = MakeDiagnosticEventText(s_WideFormat.substr(0u, 8u), 42u);
-    EXPECT_EQ(wide.view(), AStringView("value 42"));
+    EXPECT_EQ(wide.view(), s_VALUE_42);
     EXPECT_EQ(MakeDiagnosticEventText(static_cast<const char*>(nullptr), 42u).view(), AStringView{});
 }
 
@@ -610,9 +623,9 @@ TEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds){
 }
 
 TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
-    constexpr Name first("Identity\\First");
-    constexpr Name same("identity/first");
-    constexpr Name second("identity/second");
+    constexpr Name first{"Identity\\First"};
+    constexpr Name same{"identity/first"};
+    constexpr Name second{"identity/second"};
     static_assert(noexcept(static_cast<bool>(first)));
     static_assert(noexcept(first == same));
     static_assert(noexcept(first != second));
@@ -634,7 +647,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         NameHash changed = first.identityHash();
         changed.qwords[lane] ^= 1u;
-        const Name binary(changed);
+        const Name binary{changed};
         EXPECT_EQ(binary.identityHash(), changed);
         EXPECT_NE(binary.identityHash(), first.identityHash());
     }
@@ -647,8 +660,8 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
 }
 
 TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
-    constexpr Name literal("identity/callback_probe");
-    const Name binary(ComputeNameHash("identity/binary_probe"));
+    constexpr Name literal{"identity/callback_probe"};
+    const Name binary{ComputeNameHash("identity/binary_probe")};
     NameSymbolCallbackProbe probe;
     EXPECT_EQ(literal.identityHash(), ComputeNameHash("identity/callback_probe"));
     EXPECT_EQ(binary.identityHash(), ComputeNameHash("identity/binary_probe"));
@@ -656,7 +669,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_EQ(probe.recordCount, 0u);
     EXPECT_EQ(probe.resolveCount, 0u);
 
-    const Name recorded(AStringView("identity/recorded_probe"));
+    const Name recorded{AStringView("identity/recorded_probe")};
     EXPECT_EQ(probe.recordCount, 1u);
     char resolved[32u] = {};
     EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
@@ -672,13 +685,13 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
-    const Name runtimeName(AStringView("Runtime\\Generated"));
+    const Name runtimeName{AStringView("Runtime\\Generated")};
     char resolvedText[64] = {};
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "runtime/generated");
-    EXPECT_EQ(runtimeName.resolvedText(), AStringView("runtime/generated"));
+    EXPECT_STREQ(resolvedText, s_RUNTIME_GENERATED.data());
+    EXPECT_EQ(runtimeName.resolvedText(), s_RUNTIME_GENERATED);
 
-    const Name literalName("Literal\\Name");
+    const Name literalName{"Literal\\Name"};
 #if defined(NWB_BUILDMODE)
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, "literal/name");
@@ -689,14 +702,14 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(runtimeName.identityHash(), hashText, sizeof(hashText));
     const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
-    const Name binaryName(runtimeName.identityHash());
+    const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
 #if defined(NWB_DEBUG)
     EXPECT_EQ(binaryName.resolvedText(), hashView);
     EXPECT_EQ(formattedName.view(), hashView);
 #else
-    EXPECT_EQ(binaryName.resolvedText(), AStringView("runtime/generated"));
-    EXPECT_EQ(formattedName.view(), AStringView("runtime/generated"));
+    EXPECT_EQ(binaryName.resolvedText(), s_RUNTIME_GENERATED);
+    EXPECT_EQ(formattedName.view(), s_RUNTIME_GENERATED);
     EXPECT_NE(binaryName.resolvedText(), hashView);
     EXPECT_NE(binaryName.resolvedText(), binaryName.logText());
 #endif
@@ -711,7 +724,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
     char source[NameDetail::s_DebugNameCapacity + 1u];
     for(char& character : source)
         character = 'x';
-    const Name name(AStringView(source, sizeof(source)));
+    const Name name{AStringView(source, sizeof(source))};
 #if defined(NWB_DEBUG)
     EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
 #else
@@ -747,8 +760,8 @@ TEST(Global, NameHashDebugTextHelpers){
 
 TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     namespace NameSymbols = NWB::Core::Common::NameSymbols;
-    constexpr Name s_LiveOwner("Tests/NameSymbols/Before_Registry_Live");
-    constexpr Name s_RetiredOwner("Tests/NameSymbols/Before_Registry_Retired");
+    constexpr Name s_LiveOwner{"Tests/NameSymbols/Before_Registry_Live"};
+    constexpr Name s_RetiredOwner{"Tests/NameSymbols/Before_Registry_Retired"};
     constexpr NameHash s_LiveHash = ComputeNameHash("tests/namesymbols/before_registry_live");
     constexpr NameHash s_RetiredHash = ComputeNameHash("tests/namesymbols/before_registry_retired");
     constexpr NameHash s_HeapHash = ComputeNameHash("core/alloc/heap_backing");
@@ -886,7 +899,7 @@ TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance)
 }
 
 TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
-    NWB::Core::Alloc::GlobalArena arena(Name("tests/path/native_component_views"));
+    NWB::Core::Alloc::GlobalArena arena(Name{"tests/path/native_component_views"});
     const Path<NWB::Core::Alloc::GlobalArena> path(
         arena,
         "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_한글_😀/Third_component"
@@ -1354,7 +1367,7 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
     EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("macro 42")));
 
-    const AString rawMessage("raw converted warning");
+    const AString rawMessage(s_RAW_CONVERTED_WARNING);
     NWB_LOGGER_WARNING(StringConvert(rawMessage));
 
 #if NWB_OCCUR_WARNING

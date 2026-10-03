@@ -30,9 +30,9 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
             rows = [f"=== interval: {frames} frames / 0.5s ==="]
             for scope in benchmark.required_scopes(proof.VARIANT, cap):
                 count = control_count if scope in benchmark.OBSERVED_CONTROLS else frames
-                rows.append(f"  {scope}: total_ms=1 gpu_samples={count}")
+                rows.append(f"  {scope}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples={count} sample_avg_ms={1/count}")
             if temporal and cap == 1:
-                rows.append(f"  {benchmark.TEMPORAL}: total_ms=1 gpu_samples=1")
+                rows.append(f"  {benchmark.TEMPORAL}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples=1 sample_avg_ms=1")
             return LIT_N.join(rows) + LIT_N
         text = report(warmup_temporal, 100) + report(False, 100) + report(tail_temporal, 100)
         (self.path / "gpu_timing.txt").write_text(text, encoding=LIT_UTF_8)

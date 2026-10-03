@@ -92,30 +92,14 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     extinctionPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool extinctionCsgIntervalSampleImageStatesGraphOwned =
-        inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
-    ;
-    const bool extinctionCsgClipBufferStatesGraphOwned = inputs.csgStreamsUploaded;
+    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(
-        !extinctionCsgIntervalSampleImageStatesGraphOwned
+        !hasCsgIntervalReads
         || (
             extinctionPayload.extinctionPhasePrepared
             && extinctionPayload.extinctionSnapshot.captured
         )
     );
-    NWB_ASSERT(
-        !extinctionCsgClipBufferStatesGraphOwned
-        || (
-            extinctionPayload.extinctionPhasePrepared
-            && extinctionPayload.extinctionSnapshot.captured
-        )
-    );
-    extinctionPayload.extinctionCsgIntervalSampleImageStatesGraphOwned =
-        extinctionCsgIntervalSampleImageStatesGraphOwned
-    ;
-    extinctionPayload.extinctionCsgClipBufferStatesGraphOwned =
-        extinctionCsgClipBufferStatesGraphOwned
-    ;
     extinctionPayload.extinctionMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     extinctionPayload.extinctionMaterialGeometryStatesGraphOwned =
         inputs.streamsUploaded
@@ -210,7 +194,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     extinctionResourceUses.reserve(
         __hidden_avboit_extinction_record::s_ResourceBaseCount
         + (inputs.streamsUploaded ? __hidden_avboit_extinction_record::s_StreamUseCount : 0u)
-        + (extinctionCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_extinction_record::s_CsgIntervalUseCount : 0u)
+        + (hasCsgIntervalReads ? __hidden_avboit_extinction_record::s_CsgIntervalUseCount : 0u)
     );
     // Keep the full raster contract on every route so crossings retain hazards and lowering.
     extinctionResourceUses.push_back(ReadUse(inputs.albedo));
@@ -233,7 +217,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             extinctionResourceUses.push_back(ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // Interval producer owns this sample state through all low-raster phases.
             extinctionResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-            if(extinctionCsgIntervalSampleImageStatesGraphOwned){
+            if(hasCsgIntervalReads){
                 AppendCsgRemovedIntervalUses(
                     extinctionResourceUses,
                     inputs.csgRemovedIntervalDepth,
@@ -321,10 +305,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         computeEmulationPayload.materialTypedByteCount = extinctionPayload.extinctionSnapshot.materialTypedByteCount;
         computeEmulationPayload.materialDrawBuffersUploaded = inputs.streamsUploaded;
         computeEmulationPayload.csgFrameBuffersUploaded = inputs.csgStreamsUploaded;
-        computeEmulationPayload.csgIntervalSampleImageStatesGraphOwned =
-            extinctionCsgIntervalSampleImageStatesGraphOwned;
-        computeEmulationPayload.csgClipBufferStatesGraphOwned =
-            extinctionCsgClipBufferStatesGraphOwned;
         computeEmulationPayload.materialFrameStatesGraphOwned =
             extinctionPayload.extinctionMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned =

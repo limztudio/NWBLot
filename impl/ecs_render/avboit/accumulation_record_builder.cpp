@@ -94,30 +94,14 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     accumulationPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool accumulationCsgIntervalSampleImageStatesGraphOwned =
-        inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
-    ;
-    const bool accumulationCsgClipBufferStatesGraphOwned = inputs.csgStreamsUploaded;
+    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(
-        !accumulationCsgIntervalSampleImageStatesGraphOwned
+        !hasCsgIntervalReads
         || (
             accumulationPayload.accumulationPhasePrepared
             && accumulationPayload.accumulationSnapshot.captured
         )
     );
-    NWB_ASSERT(
-        !accumulationCsgClipBufferStatesGraphOwned
-        || (
-            accumulationPayload.accumulationPhasePrepared
-            && accumulationPayload.accumulationSnapshot.captured
-        )
-    );
-    accumulationPayload.accumulationCsgIntervalSampleImageStatesGraphOwned =
-        accumulationCsgIntervalSampleImageStatesGraphOwned
-    ;
-    accumulationPayload.accumulationCsgClipBufferStatesGraphOwned =
-        accumulationCsgClipBufferStatesGraphOwned
-    ;
     accumulationPayload.accumulationMaterialFrameStatesGraphOwned = inputs.streamsUploaded;
     accumulationPayload.accumulationMaterialGeometryStatesGraphOwned =
         inputs.streamsUploaded
@@ -220,7 +204,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     accumulationResourceUses.reserve(
         __hidden_avboit_accumulation_record::s_ResourceBaseCount
         + (inputs.streamsUploaded ? __hidden_avboit_accumulation_record::s_StreamUseCount : 0u)
-        + (accumulationCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_accumulation_record::s_CsgIntervalUseCount : 0u)
+        + (hasCsgIntervalReads ? __hidden_avboit_accumulation_record::s_CsgIntervalUseCount : 0u)
     );
     accumulationResourceUses.push_back(ReadUse(inputs.albedo));
     accumulationResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -248,7 +232,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             accumulationResourceUses.push_back(ReadUse(inputs.csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // Interval producer owns this state; accumulation only samples it.
             accumulationResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-            if(accumulationCsgIntervalSampleImageStatesGraphOwned){
+            if(hasCsgIntervalReads){
                 AppendCsgRemovedIntervalUses(
                     accumulationResourceUses,
                     inputs.csgRemovedIntervalDepth,
@@ -337,10 +321,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         computeEmulationPayload.accumulationTiming = inputs.accumulationComputeEmulationTiming;
         computeEmulationPayload.materialDrawBuffersUploaded = inputs.streamsUploaded;
         computeEmulationPayload.csgFrameBuffersUploaded = inputs.csgStreamsUploaded;
-        computeEmulationPayload.csgIntervalSampleImageStatesGraphOwned =
-            accumulationCsgIntervalSampleImageStatesGraphOwned;
-        computeEmulationPayload.csgClipBufferStatesGraphOwned =
-            accumulationCsgClipBufferStatesGraphOwned;
         computeEmulationPayload.materialFrameStatesGraphOwned =
             accumulationPayload.accumulationMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned =

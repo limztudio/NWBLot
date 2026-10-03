@@ -51,8 +51,7 @@ bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool transparentReady,
-    const bool graphEntryStatesOwned){
+    const bool transparentReady){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
     const Core::ComputePipelineHandle& pipeline = transparentReady
         ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;
@@ -74,17 +73,6 @@ bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
     )
         return false;
 
-    if(!graphEntryStatesOwned){
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.shadowSoftHalfB.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        if(transparentReady)
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-    }
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
     commandList.commitBarriers();
 

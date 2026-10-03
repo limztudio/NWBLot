@@ -81,16 +81,12 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     );
     const MaterialPassDrawContext drawContext{
         commandList,
-        *payload.targets,
         nullptr,
         nullptr,
         deferredViewportState,
         nullptr,
         payload.frameBindings,
         MaterialPipelinePass::Opaque,
-        false,
-        false,
-        false,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true
@@ -157,16 +153,12 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     );
     const MaterialPassDrawContext drawContext{
         commandList,
-        *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->framebuffer.get() : nullptr,
         nullptr,
         deferredViewportState,
         nullptr,
         payload.frameBindings,
         MaterialPipelinePass::Opaque,
-        false,
-        false,
-        false,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         true

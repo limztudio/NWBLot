@@ -60,8 +60,6 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool csgIntervalSampleImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool conservativeGeometryScissor = false;
@@ -139,8 +137,6 @@ struct AvboitExtinctionGraphTask{
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool extinctionPhasePrepared = false;
-        bool extinctionCsgIntervalSampleImageStatesGraphOwned = false;
-        bool extinctionCsgClipBufferStatesGraphOwned = false;
         bool extinctionMaterialFrameStatesGraphOwned = false;
         bool extinctionMaterialGeometryStatesGraphOwned = false;
         bool extinctionComputeEmulationOutputStatesGraphOwned = false;

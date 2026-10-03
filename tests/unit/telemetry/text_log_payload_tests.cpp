@@ -110,6 +110,32 @@ TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
     CheckPayload(payload, LogType::Error, s_Expected, LengthOf(s_Expected));
 }
 
+TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
+    TestArena testArena;
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Warning, NWB_TEXT("retained log"), payload));
+    const Telemetry::TelemetryBytes current = payload;
+    const u16 unsupportedVersions[] = {
+        0u,
+        static_cast<u16>(Telemetry::s_TextLogPayloadVersion + 1u),
+        Limit<u16>::s_Max,
+    };
+    Telemetry::TextLogPayload parsed(testArena.arena);
+    for(const u16 version : unsupportedVersions){
+        SCOPED_TRACE(version);
+        ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size(), parsed));
+        Telemetry::EncodedTextLogPayloadHeader header;
+        usize cursor = 0u;
+        ASSERT_TRUE(ReadPOD(current, cursor, header));
+        header.version = version;
+        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+        EXPECT_TRUE(parsed.messageUtf8.empty());
+        ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size(), parsed));
+        EXPECT_EQ(AStringView(parsed.messageUtf8), AStringView("retained log"));
+    }
+}
+
 TEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);

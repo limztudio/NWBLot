@@ -75,7 +75,6 @@ NWB_IMPL_BEGIN
     }
     renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
     renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
-    renderer.m_raytracingSystem.confirmAcceptedShadowPrepareAccelStructStateHandoffs();
     renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
     return true;
 }

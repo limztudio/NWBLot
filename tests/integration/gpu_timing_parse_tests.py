@@ -12,7 +12,8 @@ sys.path.insert(0, str(ROOT / "tests" / "ab"))
 from gpu_timing_parse import parse_timing_file, SmokeFailure
 
 INTERVAL = "=== interval: 20 frames / 0.5s ===\n"
-CURRENT_ROW = "  frame_hash: avg=4 min=3 max=5 samples=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
+CURRENT_ROW = "  frame_hash: window_avg_ms=4 window_min_ms=3 window_max_ms=5 published_windows=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
+RETIRED_ROW = "  frame_hash: avg=4 min=3 max=5 samples=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
 SYMBOLS = {"frame_hash": "render.frame"}
 
 
@@ -27,8 +28,13 @@ class GpuTimingParseTests(unittest.TestCase):
         return parse_timing_file(self.path, SYMBOLS, offset)
 
     def test_retired_or_partial_rows_fail_alone_and_among_current_intervals_then_recover(self):
-        retired = CURRENT_ROW.split(" total_ms=")[0] + "\n"
-        for row in (retired, CURRENT_ROW.replace(" gpu_samples=40", ""), CURRENT_ROW.replace(" sample_avg_ms=2", "")):
+        partial = CURRENT_ROW.split(" total_ms=")[0] + "\n"
+        retired_labels = tuple(CURRENT_ROW.replace(current, old) for current, old in (
+            ("window_avg_ms=", "avg="), ("window_min_ms=", "min="),
+            ("window_max_ms=", "max="), ("published_windows=", "samples="),
+        ))
+        for row in (RETIRED_ROW, partial, *retired_labels,
+            CURRENT_ROW.replace(" gpu_samples=40", ""), CURRENT_ROW.replace(" sample_avg_ms=2", "")):
             for text in (INTERVAL + row, INTERVAL + CURRENT_ROW + INTERVAL + row):
                 with self.subTest(text=text), self.assertRaises(SmokeFailure):
                     self.parse(text)
@@ -36,10 +42,10 @@ class GpuTimingParseTests(unittest.TestCase):
 
     def test_invalid_values_and_duplicate_scope_evidence_fail_then_recover(self):
         rows = [CURRENT_ROW.replace(old, new) for old, new in (
-            ("avg=4", "avg=1e999"), ("avg=4", "avg=..."), ("avg=4", "avg=1e"),
+            ("window_avg_ms=4", "window_avg_ms=1e999"), ("window_avg_ms=4", "window_avg_ms=..."), ("window_avg_ms=4", "window_avg_ms=1e"),
             ("total_ms=80", "total_ms=-1"),
             ("sample_avg_ms=2", "sample_avg_ms=nan"), ("gpu_samples=40", "gpu_samples=0"),
-            ("samples=20", "samples=0"), ("min=3", "min=6"), ("max=5", "max=2"),
+            ("published_windows=20", "published_windows=0"), ("window_min_ms=3", "window_min_ms=6"), ("window_max_ms=5", "window_max_ms=2"),
         )]
         rows.append(CURRENT_ROW + CURRENT_ROW)
         for row in rows:
@@ -48,7 +54,7 @@ class GpuTimingParseTests(unittest.TestCase):
             self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
 
     def test_unrecognized_indentation_or_rows_cannot_hide_retired_evidence(self):
-        retired = CURRENT_ROW.split(" total_ms=")[0] + "\n"
+        retired = RETIRED_ROW
         for row in (retired[1:], "\t" + retired.lstrip(), CURRENT_ROW.lstrip(), "unexpected telemetry\n"):
             with self.subTest(row=row), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW + row)
@@ -62,15 +68,15 @@ class GpuTimingParseTests(unittest.TestCase):
             INTERVAL.replace("20 frames", "0 frames"), INTERVAL.replace("20 frames", "4294967296 frames")):
             with self.subTest(header=header), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW + header + CURRENT_ROW)
-        for old, new in (("samples=20", "samples=4294967296"), ("gpu_samples=40", "gpu_samples=18446744073709551616")):
+        for old, new in (("published_windows=20", "published_windows=4294967296"), ("gpu_samples=40", "gpu_samples=18446744073709551616")):
             with self.subTest(counter=new), self.assertRaises(SmokeFailure):
                 self.parse(INTERVAL + CURRENT_ROW.replace(old, new))
-        zero = CURRENT_ROW.replace("avg=4 min=3 max=5", "avg=0 min=0 max=0").replace("total_ms=80", "total_ms=0").replace("sample_avg_ms=2", "sample_avg_ms=0")
+        zero = CURRENT_ROW.replace("window_avg_ms=4 window_min_ms=3 window_max_ms=5", "window_avg_ms=0 window_min_ms=0 window_max_ms=0").replace("total_ms=80", "total_ms=0").replace("sample_avg_ms=2", "sample_avg_ms=0")
         self.assertEqual(self.parse(INTERVAL + zero), [{"render.frame": 0.0}])
         self.assertEqual(self.parse(INTERVAL + CURRENT_ROW), [{"render.frame": 4.0}])
 
     def test_measurement_offset_excludes_retired_prefix_and_preserves_window_average(self):
-        prefix = INTERVAL + CURRENT_ROW.split(" total_ms=")[0] + "\n"
+        prefix = INTERVAL + RETIRED_ROW
         text = prefix + INTERVAL + CURRENT_ROW
         with self.assertRaises(SmokeFailure):
             self.parse(text)

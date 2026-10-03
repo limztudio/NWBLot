@@ -152,7 +152,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     return closest;
 }
 
-// Boolean occlusion under the legacy GI contract: ANY triangle blocks. No attribute loads, no material evaluation, no barycentric reconstruction.
+// Boolean GI occlusion: ANY triangle blocks. No attribute loads, no material evaluation, no barycentric reconstruction.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;

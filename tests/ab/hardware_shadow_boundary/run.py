@@ -765,19 +765,19 @@ def run_self_test() -> int:
         transparent_resolve_token = debug_name_hash_token(TRANSPARENT_RESOLVE_SCOPE)
         warmup_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=4.0000 min=3.0 max=5.0 samples=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
-            f"  {visibility_token}: avg=1.2500 min=1.0 max=1.5 samples=20 total_ms=25 gpu_samples=40 sample_avg_ms=0.625\n"
-            f"  {opaque_token}: avg=0.5000 min=0.4 max=0.6 samples=20 total_ms=10 gpu_samples=40 sample_avg_ms=0.25\n"
-            f"  {transparent_trace_token}: avg=0.3000 min=0.2 max=0.4 samples=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
-            f"  {transparent_resolve_token}: avg=0.2000 min=0.1 max=0.3 samples=20 total_ms=4 gpu_samples=40 sample_avg_ms=0.1\n"
+            f"  {frame_token}: window_avg_ms=4.0000 window_min_ms=3.0 window_max_ms=5.0 published_windows=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
+            f"  {visibility_token}: window_avg_ms=1.2500 window_min_ms=1.0 window_max_ms=1.5 published_windows=20 total_ms=25 gpu_samples=40 sample_avg_ms=0.625\n"
+            f"  {opaque_token}: window_avg_ms=0.5000 window_min_ms=0.4 window_max_ms=0.6 published_windows=20 total_ms=10 gpu_samples=40 sample_avg_ms=0.25\n"
+            f"  {transparent_trace_token}: window_avg_ms=0.3000 window_min_ms=0.2 window_max_ms=0.4 published_windows=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
+            f"  {transparent_resolve_token}: window_avg_ms=0.2000 window_min_ms=0.1 window_max_ms=0.3 published_windows=20 total_ms=4 gpu_samples=40 sample_avg_ms=0.1\n"
         )
         measurement_timing = (
             "=== interval: 20 frames / 0.5s ===\n"
-            f"  {frame_token}: avg=5.0000 min=4.0 max=6.0 samples=20 total_ms=100 gpu_samples=40 sample_avg_ms=2.5\n"
-            f"  {visibility_token}: avg=1.7500 min=1.0 max=2.0 samples=20 total_ms=35 gpu_samples=40 sample_avg_ms=0.875\n"
-            f"  {opaque_token}: avg=0.6000 min=0.5 max=0.7 samples=20 total_ms=12 gpu_samples=40 sample_avg_ms=0.3\n"
-            f"  {transparent_trace_token}: avg=0.4000 min=0.3 max=0.5 samples=20 total_ms=8 gpu_samples=40 sample_avg_ms=0.2\n"
-            f"  {transparent_resolve_token}: avg=0.3000 min=0.2 max=0.4 samples=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
+            f"  {frame_token}: window_avg_ms=5.0000 window_min_ms=4.0 window_max_ms=6.0 published_windows=20 total_ms=100 gpu_samples=40 sample_avg_ms=2.5\n"
+            f"  {visibility_token}: window_avg_ms=1.7500 window_min_ms=1.0 window_max_ms=2.0 published_windows=20 total_ms=35 gpu_samples=40 sample_avg_ms=0.875\n"
+            f"  {opaque_token}: window_avg_ms=0.6000 window_min_ms=0.5 window_max_ms=0.7 published_windows=20 total_ms=12 gpu_samples=40 sample_avg_ms=0.3\n"
+            f"  {transparent_trace_token}: window_avg_ms=0.4000 window_min_ms=0.3 window_max_ms=0.5 published_windows=20 total_ms=8 gpu_samples=40 sample_avg_ms=0.2\n"
+            f"  {transparent_resolve_token}: window_avg_ms=0.3000 window_min_ms=0.2 window_max_ms=0.4 published_windows=20 total_ms=6 gpu_samples=40 sample_avg_ms=0.15\n"
         )
         timing.write_bytes((warmup_timing + measurement_timing).encode(LIT_UTF_8))
         scopes = summarize_scopes(parse_timing_file(timing, timing_symbols))

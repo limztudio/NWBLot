@@ -10,7 +10,7 @@ raster pass captures its normal, IOR, absorption tint, and transparent-pass inst
 identity after opaque visibility and transparent CSG intervals are ready. Capture
 uses the same authored material hook and draw ordering as the other AVBOIT passes.
 Its depth attachment is separate from opaque depth, which the capture shader checks
-explicitly. Clear glass may have zero `renderCoverage`: coverage is the legacy
+explicitly. Clear glass may have zero `renderCoverage`: coverage is the
 AVBOIT opacity parameter, not an optical transmission mask.
 
 The primary instance is omitted from AVBOIT occupancy, extinction, and color

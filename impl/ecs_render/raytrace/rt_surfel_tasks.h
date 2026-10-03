@@ -85,7 +85,6 @@ struct SurfelGiAgeFreeGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -120,8 +119,7 @@ struct SurfelGiAgeFreeGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiAgeFree(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -150,7 +148,6 @@ struct SurfelGiHashBuildGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -178,8 +175,7 @@ struct SurfelGiHashBuildGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiHashBuild(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -205,7 +201,6 @@ struct SurfelGiSpawnGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -233,8 +228,7 @@ struct SurfelGiSpawnGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiSpawn(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -260,7 +254,6 @@ struct SurfelGiTraceBuildArgsGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -288,8 +281,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiTraceBuildArgs(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -315,7 +307,6 @@ struct SurfelGiTraceGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -343,8 +334,7 @@ struct SurfelGiTraceGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiTrace(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -370,7 +360,6 @@ struct SurfelGiResolveGraphTask{
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -398,8 +387,7 @@ struct SurfelGiResolveGraphTask{
         if(!payload.raytracingSystem->renderSurfelGiResolve(
             commandList,
             *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
+            payload.deferredLightingResources
         )){
             if(payload.asyncTiming->has_value()){
                 payload.asyncTiming->value().discardTiming();
@@ -419,33 +407,20 @@ struct SurfelGiResolveGraphTask{
 struct SurfelGiGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
-        bool graphEntryStatesOwned = false;
-        bool graphOwnsCellHeadClear = false;
-        bool graphOwnsHashBuild = false;
-        bool graphOwnsSpawn = false;
-        bool graphOwnsTraceBuildArgs = false;
-        bool graphOwnsTrace = false;
-        bool graphOwnsResolve = false;
     };
 
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
-        return { payload.graphOwnsCellHeadClear
-            ? Core::GpuQueueCapability::Compute
-            : Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
-        };
-    }
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     [[nodiscard]] static bool record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
+        if(!payload.raytracingSystem || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
             return false;
 
         const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
@@ -453,58 +428,22 @@ struct SurfelGiGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        if(payload.graphOwnsCellHeadClear){
-            if(
-                queue->queueClass == Core::CommandQueue::Compute
-                && (!payload.asyncTiming || !payload.asyncTiming->has_value())
-            )
-                return false;
-            if(!payload.raytracingSystem->renderSurfelGiAfterAgeFree(
-                commandList,
-                *payload.targets,
-                payload.deferredLightingResources,
-                payload.graphEntryStatesOwned,
-                true,
-                payload.graphOwnsHashBuild,
-                payload.graphOwnsSpawn,
-                payload.graphOwnsTraceBuildArgs,
-                payload.graphOwnsTrace,
-                payload.graphOwnsResolve
-            )){
-                if(payload.asyncTiming && payload.asyncTiming->has_value()){
-                    payload.asyncTiming->value().discardTiming();
-                    payload.asyncTiming->reset();
-                }
-                return false;
-            }
+        if(
+            payload.raytracingSystem->hasSurfelWork()
+            && queue->queueClass == Core::CommandQueue::Compute
+            && (!payload.asyncTiming || !payload.asyncTiming->has_value())
+        )
+            return false;
+        if(!payload.raytracingSystem->renderSurfelGiUpsample(commandList, *payload.targets, payload.deferredLightingResources)){
             if(payload.asyncTiming && payload.asyncTiming->has_value()){
-                payload.asyncTiming->value().finishTiming(commandList);
+                payload.asyncTiming->value().discardTiming();
                 payload.asyncTiming->reset();
             }
-            return true;
+            return false;
         }
-
-        Optional<Core::GpuTimingMeasure> asyncTiming;
-        if(queue->queueClass == Core::CommandQueue::Compute){
-            asyncTiming.emplace(
-                payload.graphics->gpuTiming(),
-                RendererGpuTimingScope::s_AsyncSurfelGi,
-                payload.graphics->getDevice(),
-                commandList
-            );
-        }
-
-        if(!payload.raytracingSystem->renderSurfelGi(
-            commandList,
-            *payload.targets,
-            payload.deferredLightingResources,
-            payload.graphEntryStatesOwned
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
-
-        if(asyncTiming){
-            asyncTiming->finishTiming(commandList);
-            asyncTiming.reset();
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().finishTiming(commandList);
+            payload.asyncTiming->reset();
         }
         return true;
     }

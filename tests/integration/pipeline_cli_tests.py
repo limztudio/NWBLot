@@ -36,6 +36,7 @@ LIT_INPUT = "--input"
 LIT_ASSET_TYPE = "--asset-type"
 LIT_INPUT_LIST = "--input-list"
 LIT_MAIN = "__main__"
+LIT_EMPTY_ASSET_TYPE = ""
 
 
 ASSET_TYPE_SENTINEL = "nwb_cli_test_unsupported"
@@ -226,6 +227,19 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     if sampler_filters(combined_payloads) != [0, 1]:
         raise AssertionError("multiple input assets did not produce both runtime sampler descriptions")
 
+    previous_build_files = {path.relative_to(combined_directory): path.read_bytes() for path in combined_directory.rglob("*") if path.is_file()}
+    failure_output = run_command(
+        [str(args.asset_builder), *build_options, LIT_INPUT, str(first_asset),
+         LIT_OUTPUT_DIRECTORY, str(combined_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE],
+        root,
+        failure=True,
+    )
+    if "unsupported --asset-type ''" not in failure_output:
+        raise AssertionError(f"builder accepted or misreported an explicitly empty domain:\n{failure_output[-4000:]}")
+    rejected_build_files = {path.relative_to(combined_directory): path.read_bytes() for path in combined_directory.rglob("*") if path.is_file()}
+    if rejected_build_files != previous_build_files:
+        raise AssertionError("an empty build domain changed existing artifacts or the manifest")
+
     individual_directories = []
     individual_payloads = {}
     for index, asset in enumerate((first_asset, second_asset)):
@@ -334,6 +348,19 @@ def run_pipeline_tests(args: argparse.Namespace, root: pathlib.Path) -> None:
     )
     if read_volume(cooked_directory) != combined_payloads:
         raise AssertionError("a failed build stage did not preserve the previously cooked volume")
+
+    failure_output = run_command(
+        [sys.executable, str(args.pipeline_launcher), LIT_SKIP_BUILD, *build_options,
+         LIT_DEPENDENCY_COMPUTER, str(args.dependency_computer),
+         LIT_ASSET_BUILDER, str(args.asset_builder), LIT_ASSET_GATHERER, str(args.asset_gatherer),
+         LIT_OUTPUT_DIRECTORY, str(cooked_directory), LIT_ASSET_TYPE, LIT_EMPTY_ASSET_TYPE],
+        root,
+        failure=True,
+    )
+    if "unsupported --asset-type ''" not in failure_output:
+        raise AssertionError(f"pipeline launcher accepted or replaced an explicitly empty domain:\n{failure_output[-4000:]}")
+    if read_volume(cooked_directory) != combined_payloads:
+        raise AssertionError("an empty launcher build domain changed the previously cooked volume")
 
     corrupt_path = root / "corrupt.nwba"
     artifact_bytes = bytearray(next(combined_directory.rglob(LIT_NWBA)).read_bytes())

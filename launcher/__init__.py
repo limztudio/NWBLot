@@ -49,7 +49,6 @@ from launcher.discovery import discover_leaf_launchers  # noqa: F401
 from launcher.discovery import discover_repo_launchers  # noqa: F401
 from launcher.host import host_platform_name  # noqa: F401
 from launcher.host import query_windows_native_machine_name  # noqa: F401
-from launcher.host import windows_native_machine_name  # noqa: F401
 from launcher.host import host_arch_name  # noqa: F401
 from launcher.host import configure_preset_architecture  # noqa: F401
 from launcher.host import executable_name  # noqa: F401
@@ -232,8 +231,6 @@ __all__ = [
     'CMAKE_BOOL_FALSE_TOKENS',
     'WINDOWS_KERNEL32',
     'WINDOWS_WOW64_PROC2',
-    'WINDOWS_ENV_ARCH6432',
-    'WINDOWS_ENV_ARCH',
     'PRESET_ARCH_SEPARATOR',
     'PRESET_TOOLCHAIN',
     'OPTION_WITH_PROFILE',
@@ -258,12 +255,16 @@ __all__ = [
     'MSG_INVALID_COMMAND',
     'MSG_COMMAND_CONFLICT',
     'MSG_MISSING_LAUNCHER_PREFIX',
+    'MSG_WINDOWS_ARCH_API_REQUIRED',
+    'MSG_WINDOWS_ARCH_QUERY_FAILED',
+    'MSG_WINDOWS_NATIVE_MACHINE_UNSUPPORTED',
     'MSG_UNSUPPORTED_ARCH',
     'MSG_ARCH_PRESET_CONFLICT',
     'MSG_CONFIGURE_REQUIRED',
     'MSG_NO_TARGETS',
     'MSG_NOT_EXECUTABLE',
-    'MSG_NO_METADATA',
+    'MSG_EXECUTABLE_METADATA_REQUIRED',
+    'MSG_EXECUTABLE_ARTIFACT_REQUIRED',
     'MSG_NO_PKILL',
     'MSG_MISSING_EXECUTABLE',
     'MSG_MISSING_WORKDIR',
@@ -377,7 +378,6 @@ __all__ = [
     'discover_repo_launchers',
     'host_platform_name',
     'query_windows_native_machine_name',
-    'windows_native_machine_name',
     'host_arch_name',
     'configure_preset_architecture',
     'executable_name',

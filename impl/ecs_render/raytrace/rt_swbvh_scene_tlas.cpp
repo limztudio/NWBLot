@@ -23,26 +23,9 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena){
-    return buildSceneTlasImpl(nullptr, scratchArena);
-}
-
-bool RendererRayTracingSystem::buildSceneTlas(
-    Core::CommandList& commandList,
-    Core::Alloc::ScratchArena& scratchArena,
-    const bool shadowMaterialContextBatchGraphOwned
-){
-    return buildSceneTlasImpl(&commandList, scratchArena, shadowMaterialContextBatchGraphOwned);
-}
-
-bool RendererRayTracingSystem::buildSceneTlasImpl(
-    Core::CommandList* const commandList,
-    Core::Alloc::ScratchArena& scratchArena,
-    const bool shadowMaterialContextBatchGraphOwned
-){
     using namespace __hidden_rt_swbvh;
 
-    if(!commandList)
-        m_preparedSceneContentStamp = {};
+    m_preparedSceneContentStamp = {};
 
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -53,8 +36,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
-    if(!commandList)
-        BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, true);
+    BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, true);
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
     // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this parallel handle stream until the accepting Shadow Preparation packet has submitted.
     Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena> instanceBlases{ scratchArena };
@@ -89,10 +71,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
     BeginMeshHeapHandleGather(m_rayTracingState.m_hwMeshHeapHandleCache);
     const auto resolveMeshHeapHandle = [&](const Core::BufferHandle& buffer, Core::GpuDescriptorHandle& outHandle){
-        return commandList
-            ? FindPreparedMeshHeapHandle(m_rayTracingState.m_hwMeshHeapHandleCache, buffer, outHandle)
-            : AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, buffer, outHandle)
-        ;
+        return AcquireMeshHeapHandle(heap, m_rayTracingState.m_hwMeshHeapHandleCache, buffer, outHandle);
     };
     m_rayTracingState.m_shadowMeshIndexBuffers.clear();
     m_rayTracingState.m_shadowMeshAttributeBuffers.clear();
@@ -107,9 +86,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     bool contentComplete = true;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
-    Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
-    if(!commandList)
-        sampledTextureCollector.emplace(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
+    ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
@@ -154,12 +131,9 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 || !resolveMeshHeapHandle(mesh.attributeBuffer, attributeHandle)
                 || !resolveMeshHeapHandle(mesh.positionBuffer, positionHandle)
             ){
-                if(!commandList){
-                    SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
-                }
-                else
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: HW scene mesh descriptor was not prepared before recording"));
+                SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+
                 return false;
             }
 
@@ -200,9 +174,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
             // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
             if(
-                !commandList
-                && materialInfo->surfaceDispatchId != Limit<u32>::s_Max
-                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, *sampledTextureCollector)
+                materialInfo->surfaceDispatchId != Limit<u32>::s_Max
+                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector)
             )
                 return false;
             u32 materialConstantByteOffset = 0u;
@@ -234,7 +207,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
         instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
             | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
-        if(!commandList && m_lightSpaceShadow.m_csg.gathering){
+        if(m_lightSpaceShadow.m_csg.gathering){
             AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, LoadFloat(instanceDesc.transform), mesh);
             m_lightSpaceShadow.m_casters.push_back({
                 .triangleIndexBuffer = mesh.triangleIndexBuffer,
@@ -293,7 +266,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    if(!commandList && !FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
+    if(!FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
         return false;
     const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
     if(csg.hasCsg){
@@ -306,17 +279,14 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK
                 | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
-            if(!commandList)
-                m_lightSpaceShadow.m_casters[index].csg = true;
+            m_lightSpaceShadow.m_casters[index].csg = true;
         }
         m_rayTracingState.m_sceneHasTransparentOccluder = true;
     }
-    if(!commandList){
-        m_lightSpaceShadow.m_sceneEligible = csg.hasCsg && contentComplete;
-        if(!csg.hasCsg){
-            m_lightSpaceShadow.m_casters.clear();
-            m_lightSpaceShadow.m_sceneBuffers.clear();
-        }
+    m_lightSpaceShadow.m_sceneEligible = csg.hasCsg && contentComplete;
+    if(!csg.hasCsg){
+        m_lightSpaceShadow.m_casters.clear();
+        m_lightSpaceShadow.m_sceneBuffers.clear();
     }
 
     if(m_rayTracingState.m_shadowMeshCount > m_rayTracingState.m_shadowMeshHeapHighWater){
@@ -326,8 +296,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             , static_cast<u64>(m_rayTracingState.m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
     }
-    if(!commandList)
-        SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
+    SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
 
     m_rayTracingState.m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
@@ -349,18 +318,6 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     ;
     if(!staticScene || !canReuseTlas)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
-
-    if(
-        commandList
-        && (
-            !m_rayTracingState.m_tlas
-            || m_rayTracingState.m_tlasMaxInstances < instances.size()
-            || !IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: scene TLAS changed after preflight; skipping recording-time replacement"));
-        return false;
-    }
 
     if(!canReuseTlas && (!m_rayTracingState.m_tlas || m_rayTracingState.m_tlasMaxInstances < instances.size())){
         const usize capacity = ::NextGrowingCapacity(
@@ -388,34 +345,14 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         }
         m_rayTracingState.m_tlas = Move(tlas);
         m_rayTracingState.m_tlasBackingFresh = true;
-        m_rayTracingState.m_tlasBackingStateHandoffPending = false;
         m_rayTracingState.m_tlasMaxInstances = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
     }
 
-    if(!canReuseTlas && commandList){
-        // The backend records the acceleration-structure build directly. Keep the task graph's declared AccelStructRead boundary truthful by explicitly publishing the native build write and its final read.
-        commandList->setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructWrite);
-        commandList->commitBarriers();
-        commandList->buildTopLevelAccelStruct(
-            m_rayTracingState.m_tlas.get(),
-            instances.data(),
-            instances.size(),
-            Core::RayTracingAccelStructBuildFlags::PreferFastTrace
-        );
-        commandList->setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
-        commandList->commitBarriers();
-        if(m_rayTracingState.m_tlasBackingFresh)
-            m_rayTracingState.m_tlasBackingStateHandoffPending = true;
-    }
     m_rayTracingState.m_tlasDeviceAddress = m_rayTracingState.m_tlas->getDeviceAddress();
 
     // Allocate a heap block only for a new TLAS generation.
     if(!IsAccelStructHeapHandle(m_rayTracingState.m_tlasHeapHandle)){
-        if(commandList){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: scene TLAS heap view was absent after preflight"));
-            return false;
-        }
         if(m_rayTracingState.m_tlasHeapHandle.valid()){
             heap.free(m_rayTracingState.m_tlasHeapHandle);
             m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -439,18 +376,6 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     usize materialTypedUploadBytes = 0u;
     if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
         return false;
-    if(
-        commandList
-        && !HasPreparedShadowMaterialContextBuffers(
-            m_rayTracingState,
-            instanceMaterials.size(),
-            shadowInstanceData.size(),
-            materialTypedUploadBytes
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after preflight; skipping recording-time replacement"));
-        return false;
-    }
     const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
         instanceMaterials,
         shadowInstanceData,
@@ -470,120 +395,76 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         )
     ;
     if(!canReuseHwMaterialContext){
-        if(!commandList){
-            if(
-                !ensureShadowInstanceMaterialBuffer(instances.size())
-                || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
-                || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
-                || !HasPreparedShadowMaterialContextBuffers(
-                    m_rayTracingState,
-                    instanceMaterials.size(),
-                    shadowInstanceData.size(),
-                    materialTypedUploadBytes
-                )
-            )
-                return false;
-            if(!capturePreparedShadowMaterialContext(
-                PreparedShadowMaterialContextRoute::Hardware,
-                staticScene,
-                hwMaterialContextHash,
-                instanceMaterials.data(),
+        if(
+            !ensureShadowInstanceMaterialBuffer(instances.size())
+            || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
+            || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
+            || !HasPreparedShadowMaterialContextBuffers(
+                m_rayTracingState,
                 instanceMaterials.size(),
-                instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-                shadowInstanceData.data(),
                 shadowInstanceData.size(),
-                shadowInstanceData.size() * sizeof(InstanceGpuData),
-                shadowMaterialTypedBytes.data(),
                 materialTypedUploadBytes
-            ))
-                return false;
-        }
-        if(commandList){
-            if(shadowMaterialContextBatchGraphOwned){
-                if(!matchesPreparedShadowMaterialContext(
-                    PreparedShadowMaterialContextRoute::Hardware,
-                    staticScene,
-                    hwMaterialContextHash,
-                    instanceMaterials.data(),
-                    instanceMaterials.size(),
-                    instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-                    shadowInstanceData.data(),
-                    shadowInstanceData.size(),
-                    shadowInstanceData.size() * sizeof(InstanceGpuData),
-                    shadowMaterialTypedBytes.data(),
-                    materialTypedUploadBytes
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
-                    return false;
-                }
-            }
-            else{
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed HW shadow material context has no graph-owned upload batch"));
-                return false;
-            }
-        }
-    }
-    else if(commandList && shadowMaterialContextBatchGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
-        return false;
-    }
-
-    // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
-    if(!commandList && !canReuseTlas){
-        if(!capturePreparedSceneTlasBuild(
+            )
+        )
+            return false;
+        if(!capturePreparedShadowMaterialContext(
+            PreparedShadowMaterialContextRoute::Hardware,
             staticScene,
-            tlasStaticSceneHash,
-            instances,
-            instanceBlases
-        )){
-            if(!m_rayTracingState.m_sceneHasTransparentOccluder){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
-                return false;
-            }
-            // A capture miss retains the direct TLAS recorder against the same preflighted material context.
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze scene TLAS build; retaining direct retry fallback"));
+            hwMaterialContextHash,
+            instanceMaterials.data(),
+            instanceMaterials.size(),
+            instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+            shadowInstanceData.data(),
+            shadowInstanceData.size(),
+            shadowInstanceData.size() * sizeof(InstanceGpuData),
+            shadowMaterialTypedBytes.data(),
+            materialTypedUploadBytes
+        ))
+            return false;
+
+    }
+    // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
+    if(!canReuseTlas){
+        if(!capturePreparedSceneTlasBuild(staticScene, tlasStaticSceneHash, instances, instanceBlases)){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
+            return false;
         }
     }
 
-    if(staticScene && commandList){
-        m_rayTracingState.m_tlasStaticSceneHash = tlasStaticSceneHash;
-        m_rayTracingState.m_tlasStaticSceneHashValid = true;
-    }
     // Publish semantic identity from the complete current gather, including cache-hit frames.
     // Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
-    if(!commandList){
-        if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
-            return false;
-        Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
-        m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
-        if(csg.hasCsg){
-            u64 captureIdentity = gatheredMaterialContentHash;
-            Fnv64AppendValue(captureIdentity, tlasStaticSceneHash);
-            Fnv64AppendValue(captureIdentity, csg.identity);
-            for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
-                Fnv64AppendValue(captureIdentity, buffer.get());
-            for(const auto& caster : m_lightSpaceShadow.m_casters){
-                Fnv64AppendValue(captureIdentity, caster.meshletCount);
-                Fnv64AppendValue(captureIdentity, caster.meshletDescSlot);
-                Fnv64AppendValue(captureIdentity, caster.meshletBoundsSlot);
-            }
-            bool captureTrusted = staticScene && contentComplete;
-            if(
-                m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame
-                || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames
-            ){
-                captureIdentity = BuildLightSpaceCsgCaptureIdentity(
-                    m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
-                    shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
-                    m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
-                );
-                captureTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted && contentComplete;
-            }
-            m_lightSpaceShadow.m_captureSceneIdentity = captureIdentity;
-            m_lightSpaceShadow.m_captureSceneTrusted = captureTrusted;
-            m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
+    if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
+        return false;
+    Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
+    m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
+    if(csg.hasCsg){
+        u64 captureIdentity = gatheredMaterialContentHash;
+        Fnv64AppendValue(captureIdentity, tlasStaticSceneHash);
+        Fnv64AppendValue(captureIdentity, csg.identity);
+        for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
+            Fnv64AppendValue(captureIdentity, buffer.get());
+        for(const auto& caster : m_lightSpaceShadow.m_casters){
+            Fnv64AppendValue(captureIdentity, caster.meshletCount);
+            Fnv64AppendValue(captureIdentity, caster.meshletDescSlot);
+            Fnv64AppendValue(captureIdentity, caster.meshletBoundsSlot);
         }
+        bool captureTrusted = staticScene && contentComplete;
+        if(
+            m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame
+            || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames
+        ){
+            captureIdentity = BuildLightSpaceCsgCaptureIdentity(
+                m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
+                shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
+                m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
+            );
+            captureTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted && contentComplete;
+        }
+        m_lightSpaceShadow.m_captureSceneIdentity = captureIdentity;
+        m_lightSpaceShadow.m_captureSceneTrusted = captureTrusted;
+        m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
     }
+
     return true;
 }
 

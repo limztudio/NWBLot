@@ -505,7 +505,7 @@ TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightCh
     EXPECT_FLOAT_EQ(target(thumb)->gestureReference.height, 190.0f);
 }
 
-TEST_F(UiListBuilderTests, StandaloneSelectableUsesLegacyActivationAndSkinFallback){
+TEST_F(UiListBuilderTests, StandaloneSelectableUsesActivationAndSkinFallback){
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
     WidgetOptions options;

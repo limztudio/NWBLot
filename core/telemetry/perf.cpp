@@ -24,6 +24,7 @@ namespace __hidden_telemetry_perf{
 
 [[nodiscard]] static bool ValidateHeader(const EncodedPerfTimingPayloadHeader& header)noexcept{
     return header.magic == s_PerfTimingPayloadMagic
+        && header.version == s_PerfTimingPayloadVersion
         && header.reserved == 0u
         && IsValidPerfTimingSource(static_cast<PerfTimingSource::Enum>(header.source))
         && header.sampleCount != 0u

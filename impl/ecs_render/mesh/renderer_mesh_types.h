@@ -60,7 +60,7 @@ using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>
 
 struct MeshResources : public RuntimeMeshBuffers{
     Name meshName = NAME_NONE;
-    // Unified generated geometry: legacy expanded vertices or compact vertices followed by u32 indices.
+    // Unified generated geometry: expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
     ECSRenderDetail::ObjectGeometryCacheState objectGeometryCache;
     Core::BufferHandle triangleIndexBuffer;
@@ -93,8 +93,6 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool blasBuildPending = false;
     // New backing starts in Common until a build or accepted handoff publishes state.
     bool blasBackingFresh = false;
-    // Direct recording queues a handoff; cleared on discard so rejected backing stays Common.
-    bool blasBackingStateHandoffPending = false;
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
     u64 runtimeMeshVersion = 0u;

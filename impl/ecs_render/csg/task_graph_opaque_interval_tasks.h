@@ -78,8 +78,6 @@ struct CsgReceiverSpanBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
-        bool receiverSpanInputImageStatesGraphOwned = false;
-        bool receiverSpanOutputImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : CsgOpaqueIntervalRecordInputs(arena)
@@ -99,8 +97,6 @@ struct CsgIntervalCombineGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
-        bool intervalCombineInputImageStatesGraphOwned = false;
-        bool removedIntervalOutputImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : CsgOpaqueIntervalRecordInputs(arena)
@@ -132,8 +128,6 @@ struct CsgIntervalSampleGraphTask{
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool intervalSampleImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         // Keep CSG compute draws raster-only so the compiler supplies the UAV boundary.

@@ -33,6 +33,7 @@ inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
 [[nodiscard]] static bool ValidateHeader(const EncodedDiagnosticPayloadHeader& header)noexcept{
     constexpr u16 s_KnownFlags = DiagnosticPayloadFlag::TerminatesProcess;
     return header.magic == s_DiagnosticPayloadMagic
+        && header.version == s_DiagnosticPayloadVersion
         && (header.flags & ~s_KnownFlags) == 0u
     ;
 }

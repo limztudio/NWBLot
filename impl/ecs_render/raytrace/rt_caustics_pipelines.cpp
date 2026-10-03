@@ -465,45 +465,14 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
 
 bool RendererRayTracingSystem::renderHwCaustics(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsAccumulatorDecay,
-    const bool graphOwnsResolve,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return renderHwCaustics(
-        commandList,
-        meshView,
-        targets,
-        deferredLightingResources,
-        graphEntryStatesOwned,
-        graphOwnsAccumulatorBootstrapClear,
-        graphOwnsAccumulatorDecay,
-        graphOwnsResolve,
-        causticPhotonTiming
-    );
-}
-
-bool RendererRayTracingSystem::renderHwCaustics(
-    Core::CommandList& commandList,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsAccumulatorDecay,
-    const bool graphOwnsResolve,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;
     NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredLightingResources.valid());
     {
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
@@ -524,34 +493,6 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        // Temporal gate on SIMD lanes: the decay-vs-zero compare selects the branch without scalar float math.
-        const SIMDVector decayGate = VectorGreater(VectorReplicate(temporalDecay), VectorZero());
-        if(VectorGetX(decayGate) > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
-            prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
-
-        if(!graphEntryStatesOwned){
-            // Direct compatibility callers restore heap-selected static producer inputs locally. The normal deferred graph declares and commits this descriptor-visible batch before the callback begins.
-            for(u32 slot = 0u; slot < m_rayTracingState.m_shadowMeshCount; ++slot)
-                commandList.setBufferState(m_rayTracingState.m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_rayTracingState.m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        }
-        if(!graphOwnsAccumulatorDecay){
-            commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-        }
-        if(!graphEntryStatesOwned || !graphOwnsAccumulatorDecay)
-            commandList.commitBarriers();
-
         // Hardware and software producers use matching photon parameters.
         CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
@@ -601,9 +542,6 @@ bool RendererRayTracingSystem::renderHwCaustics(
         );
         recordPhotons();
     }
-
-    if(!graphOwnsResolve)
-        dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!m_rayTracingState.m_hwCausticDispatchLogged){
         m_rayTracingState.m_hwCausticDispatchLogged = true;

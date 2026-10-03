@@ -91,8 +91,6 @@ static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPHICS_PREFIX_ = "rende
 static constexpr AStringView s_MESHFRAMEBINDINGSNAPSHOTFRAMEBINDINGS = "MeshFrameBindingSnapshotframeBindings;";
 static constexpr AStringView s_PREPARECSGCLIPCONTEXTSLOTDATA = "prepareCsgClipContextSlotData(";
 static constexpr AStringView s_DEFERRED_SYSTEM_H = "deferred_system.h";
-static constexpr AStringView s_DEFERREDLIGHTINGGRAPHRESOURCESDEFERREDLI = "DeferredLightingGraphResourcesdeferredLightingResources;";
-static constexpr AStringView s_DEFERREDLIGHTINGRESOURCES_DEFERREDLIGHTI = ".deferredLightingResources=deferredLightingResources,";
 static constexpr AStringView s_KERNEL = "kernel";
 
 
@@ -418,7 +416,6 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_TRUE(ContainsText(meshHeader, "collectRayTracingResourceSnapshots("));
     EXPECT_TRUE(ContainsText(meshHeader, "findRenderableRayTracingResourceSnapshot("));
     EXPECT_TRUE(ContainsText(meshHeader, "commitRayTracingResourceSnapshot("));
-    EXPECT_TRUE(ContainsText(meshHeader, "confirmAcceptedRayTracingStateHandoffs()noexcept;"));
     EXPECT_TRUE(ContainsText(meshHeader, "discardRayTracingBuildState()noexcept;"));
     EXPECT_TRUE(ContainsText(compactFrameBindings, "Core::GpuDescriptorHandleheapHandle"));
     EXPECT_TRUE(ContainsText(compactFrameBindings, "boolbindingValid()constnoexcept"));
@@ -428,7 +425,6 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     EXPECT_TRUE(ContainsText(meshView, "ECSRenderDetail::MeshViewGpuData acceptedView;"));
     EXPECT_TRUE(ContainsText(meshView, "outWorldToClip = acceptedView.worldToClip;"));
     EXPECT_TRUE(ContainsText(meshRayTracingSnapshots, "RayTracingResourceSnapshotMatches(found.value(),expected)"));
-    EXPECT_TRUE(ContainsText(rayTracingSystem, "m_meshSystem.confirmAcceptedRayTracingStateHandoffs();"));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "m_meshSystem.discardRayTracingBuildState();"));
     EXPECT_TRUE(ContainsText(rayTracingCaustics, "m_meshSystem.meshViewBufferSnapshot()"));
     EXPECT_TRUE(ContainsText(rayTracingCaustics, "ECSRenderDetail::MeshViewBufferSnapshot meshView;"));
@@ -586,7 +582,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_FALSE(ContainsText(compactStateHeader, "m_causticMaterialContextSlotsHeapHandle"));
     EXPECT_EQ(CountText(rayTracingShadowSource, "heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);"), 1u);
     EXPECT_FALSE(ContainsText(rayTracingCausticsSource, "heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);"));
-    EXPECT_TRUE(ContainsText(compactStateSystem, "m_tlasBackingFresh=false;m_tlasBackingStateHandoffPending=false;"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_tlasBackingFresh=false;"));
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_swShadowEdgeThreshold="));
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_causticTemporalDecay="));
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_shadowMeshHeapHighWater="));
@@ -1268,19 +1264,13 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(compactMeshHeader, "meshFrameBindingSnapshot()const;"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings"));
     EXPECT_TRUE(ContainsText(compactCsgHeader, "prepareCsgClipContextSlotData(constDeferredFrameTargets&targets,"));
-    EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgReceiverSurfaceImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
-    EXPECT_TRUE(ContainsText(compactCsgHeader, "setCsgIntervalSampleImageStates(Core::CommandList&commandList,constDeferredFrameTargets&targets);"));
     EXPECT_TRUE(ContainsText(compactCsgResources, "targets.bindless.slotsBufferDescriptor.slot()"));
     EXPECT_FALSE(ContainsText(compactCsgResources, "createMeshFrameHeapHandles()"));
     EXPECT_FALSE(ContainsText(compactCsgResources, "meshFrameHeapHandlesReady()"));
 
     EXPECT_FALSE(ContainsText(compactDeferredState, s_FRIENDCLASSRENDERERCSGSYSTEM));
 
-    EXPECT_TRUE(ContainsText(compactFrameTypes, "structMaterialPassDrawContext{Core::CommandList&commandList;constDeferredFrameTargets&deferredTargets;"));
     EXPECT_TRUE(ContainsText(compactFrameTypes, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings;"));
-    EXPECT_TRUE(ContainsText(compactMaterialDraw, "context.deferredTargets"));
-    EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgReceiverSurfaceImageStates(commandList,deferredTargets)"));
-    EXPECT_TRUE(ContainsText(compactMaterialDraw, "setCsgIntervalSampleImageStates(commandList,deferredTargets)"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "boolRendererMaterialSystem::setMaterialPassDrawPushConstants("));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "NWB_ASSERT(csgContextHeapSlotReady);"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!csgContextHeapSlotReady)returnfalse;"));
@@ -1369,7 +1359,6 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     AString materialResourcesSource;
     AString materialPassSource;
     AString materialDrawSource;
-    AString avboitHeaderSource;
     AString avboitPassSource;
     AString rootResourcesSource;
     AString prefixSource;
@@ -1384,7 +1373,6 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MATERIAL / s_MATERIAL_PASS_CPP, materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MATERIAL / s_MATERIAL_PASS_DRAW_CPP, materialDrawSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_AVBOIT / "avboit_system.h", avboitHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_AVBOIT / "avboit_pass.cpp", avboitPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_RESOURCES_CPP, rootResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPHICS_PREFIX_, prefixSource));
@@ -1408,10 +1396,6 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     const AStringView compactMaterialPass(compactMaterialPassStorage.data(), compactMaterialPassStorage.size());
     const AString compactMaterialDrawStorage = CompactSource(AStringView(materialDrawSource.data(), materialDrawSource.size()));
     const AStringView compactMaterialDraw(compactMaterialDrawStorage.data(), compactMaterialDrawStorage.size());
-    const AString compactAvboitHeaderStorage = CompactSource(AStringView(avboitHeaderSource.data(), avboitHeaderSource.size()));
-    const AStringView compactAvboitHeader(compactAvboitHeaderStorage.data(), compactAvboitHeaderStorage.size());
-    const AString compactAvboitPassStorage = CompactSource(AStringView(avboitPassSource.data(), avboitPassSource.size()));
-    const AStringView compactAvboitPass(compactAvboitPassStorage.data(), compactAvboitPassStorage.size());
     const AString compactRootResourcesStorage = CompactSource(
         AStringView(rootResourcesSource.data(), rootResourcesSource.size())
     );
@@ -1421,8 +1405,6 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
     const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
 
-    EXPECT_TRUE(ContainsText(compactFrameBindings, "usizeinstanceBufferCapacity=0u;"));
-    EXPECT_TRUE(ContainsText(compactFrameBindings, "usizematerialTypedBufferCapacity=0u;"));
     EXPECT_TRUE(ContainsText(
         compactFrameBindings,
         "frameReady(constusizeinstanceCount,constusizematerialTypedByteCount)constnoexcept{"
@@ -1479,8 +1461,6 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
         compactMaterialPass,
         "materialPassDrawResourcesReady(drawItems.regular,frameBindings)"
     ));
-    EXPECT_TRUE(ContainsText(compactMaterialPass, "nullptr,frameBindings"));
-    EXPECT_TRUE(ContainsText(compactMaterialPass, "&csgResources,frameBindings"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!context.frameBindings.bindingValid())returnfalse;"));
     EXPECT_TRUE(ContainsText(
         compactMaterialDraw,
@@ -1527,26 +1507,8 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     EXPECT_TRUE(ContainsText(compactRootGraph, "!meshViewBufferSnapshot.valid()"));
     EXPECT_TRUE(ContainsText(compactRootGraph, "(!csgFrameState.empty()&&!frameBindings.bindingValid())"));
 
-    EXPECT_TRUE(ContainsText(
-        compactAvboitHeader,
-        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedOccupancyFrameBindings=nullptr"
-    ));
-    EXPECT_TRUE(ContainsText(
-        compactAvboitHeader,
-        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedExtinctionFrameBindings=nullptr"
-    ));
-    EXPECT_TRUE(ContainsText(
-        compactAvboitHeader,
-        "constECSRenderDetail::MeshFrameBindingSnapshot*preparedAccumulationFrameBindings=nullptr"
-    ));
-    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedOccupancyFrameBindings);"));
-    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedExtinctionFrameBindings);"));
-    EXPECT_TRUE(ContainsText(compactAvboitPass, "NWB_ASSERT(preparedAccumulationFrameBindings);"));
     EXPECT_TRUE(ContainsText(avboitPassSource, s_INCLUDE_SHARED_RENDERER_FRAME_BINDINGS));
     EXPECT_FALSE(ContainsText(avboitPassSource, s_INCLUDE_MESH_MESH_SYSTEM));
-    EXPECT_EQ(CountText(compactAvboitPass, "*preparedOccupancyFrameBindings,"), 1u);
-    EXPECT_EQ(CountText(compactAvboitPass, "*preparedExtinctionFrameBindings,"), 1u);
-    EXPECT_EQ(CountText(compactAvboitPass, "*preparedAccumulationFrameBindings,"), 1u);
 
     const TestPath taskHeaderPaths[] = {
         repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.h",
@@ -1909,170 +1871,6 @@ TEST(EcsGraphics, RootMediatesDeferredRayTracingLightingClassification){
     ASSERT_NE(shadowVisibilityDeclaration, AStringView::npos);
     EXPECT_LT(graphicsPrefixDeclaration, shadowPlanSnapshot);
     EXPECT_LT(shadowPlanSnapshot, shadowVisibilityDeclaration);
-}
-
-
-TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
-    TestArena testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-    AString resourceImports;
-    ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / "graph_resource_import_builder.cpp", resourceImports));
-    AString hardwareCaustics;
-    ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", hardwareCaustics));
-    AString softShadowPipelines;
-    ASSERT_TRUE(ReadCompactSource(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RT_SOFTSHADOW_PIPELINES_CPP, softShadowPipelines));
-    AString frameTypesSource;
-    AString deferredHeaderSource;
-    AString rayTracingHeaderSource;
-    AString rayTracingSystemSource;
-    AString rayTracingShadowSource;
-    AString rayTracingSoftShadowSource;
-    AString rayTracingCausticsSource;
-    AString rayTracingSurfelSource;
-    AString deferredStateSource;
-    AString rootGraphSource;
-    AString rootShadowSource;
-    AString rootCausticsSource;
-    AString rootSurfelSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_SHARED / s_RENDERER_FRAME_TYPES_H, frameTypesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / s_DEFERRED_SYSTEM_H, deferredHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_H, rayTracingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RAYTRACING_SYSTEM_CPP, rayTracingSystemSource));
-    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
-        repoRoot,
-        {
-            "raytrace/rt_shadow_tasks.h",
-            "raytrace/rt_shadow_material_context.cpp",
-            "raytrace/rt_shadow_visibility_target.cpp",
-            "raytrace/rt_shadow_opaque.cpp",
-            "raytrace/rt_shadow_transparent.cpp",
-            "raytrace/rt_shadow_gpu_visibility.cpp",
-            "raytrace/rt_shadow_pipelines.cpp",
-        },
-        rayTracingShadowSource
-    ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / s_RT_SOFTSHADOW_DISPATCH_CPP, rayTracingSoftShadowSource));
-    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
-        repoRoot,
-        {
-            s_RT_CAUSTICS_TASKS_H,
-            s_RT_CAUSTICS_TASKS_CPP,
-            s_RT_CAUSTICS_GPU_RENDER_CPP,
-            s_RT_CAUSTICS_SOFTWARE_CPP,
-            s_RT_CAUSTICS_PIPELINES_CPP,
-            "raytrace/rt_caustics_emission_targets.cpp",
-            "raytrace/rt_caustics_accumulator.cpp",
-            "raytrace/rt_caustics_graph_dispatch.cpp",
-        },
-        rayTracingCausticsSource
-    ));
-    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
-        repoRoot,
-        {
-            "raytrace/rt_surfel_tasks.h",
-            "raytrace/rt_surfel_tasks.cpp",
-            "raytrace/rt_surfel_pipelines.cpp",
-            "raytrace/rt_surfel_resources.cpp",
-            "raytrace/rt_surfel_render.cpp",
-        },
-        rayTracingSurfelSource
-    ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_DEFERRED / s_RENDERER_DEFERRED_STATE_H, deferredStateSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_CPP, rootGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_shadow_visibility.cpp", rootShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_caustics.cpp", rootCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi.cpp", rootSurfelSource));
-
-    const AString compactFrameTypesStorage = CompactSource(AStringView(frameTypesSource.data(), frameTypesSource.size()));
-    const AStringView compactFrameTypes(compactFrameTypesStorage.data(), compactFrameTypesStorage.size());
-    const AString compactDeferredHeaderStorage = CompactSource(AStringView(deferredHeaderSource.data(), deferredHeaderSource.size()));
-    const AStringView compactDeferredHeader(compactDeferredHeaderStorage.data(), compactDeferredHeaderStorage.size());
-    const AString compactRayTracingHeaderStorage = CompactSource(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()));
-    const AStringView compactRayTracingHeader(compactRayTracingHeaderStorage.data(), compactRayTracingHeaderStorage.size());
-    const AString compactRayTracingShadowStorage = CompactSource(AStringView(rayTracingShadowSource.data(), rayTracingShadowSource.size()));
-    const AStringView compactRayTracingShadow(compactRayTracingShadowStorage.data(), compactRayTracingShadowStorage.size());
-    const AString compactRayTracingCausticsStorage = CompactSource(AStringView(rayTracingCausticsSource.data(), rayTracingCausticsSource.size()));
-    const AStringView compactRayTracingCaustics(compactRayTracingCausticsStorage.data(), compactRayTracingCausticsStorage.size());
-    const AString compactRayTracingSurfelStorage = CompactSource(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()));
-    const AStringView compactRayTracingSurfel(compactRayTracingSurfelStorage.data(), compactRayTracingSurfelStorage.size());
-    const AString compactDeferredStateStorage = CompactSource(AStringView(deferredStateSource.data(), deferredStateSource.size()));
-    const AStringView compactDeferredState(compactDeferredStateStorage.data(), compactDeferredStateStorage.size());
-    const AString compactRootGraphStorage = CompactSource(AStringView(rootGraphSource.data(), rootGraphSource.size()));
-    const AStringView compactRootGraph(compactRootGraphStorage.data(), compactRootGraphStorage.size());
-    const AString compactRootShadowStorage = CompactSource(AStringView(rootShadowSource.data(), rootShadowSource.size()));
-    const AStringView compactRootShadow(compactRootShadowStorage.data(), compactRootShadowStorage.size());
-    const AString compactRootCausticsStorage = CompactSource(AStringView(rootCausticsSource.data(), rootCausticsSource.size()));
-    const AStringView compactRootCaustics(compactRootCausticsStorage.data(), compactRootCausticsStorage.size());
-    const AString compactRootSurfelStorage = CompactSource(AStringView(rootSurfelSource.data(), rootSurfelSource.size()));
-    const AStringView compactRootSurfel(compactRootSurfelStorage.data(), compactRootSurfelStorage.size());
-
-    EXPECT_TRUE(ContainsText(
-        compactFrameTypes,
-        "structDeferredLightingGraphResources{Core::BufferHandlesceneShadingBuffer;Core::BufferHandlelightBuffer;"
-    ));
-    EXPECT_FALSE(ContainsText(compactDeferredHeader, "structDeferredLightingGraphResources{"));
-    EXPECT_TRUE(ConstructorParameterTypesMatch(
-        compactRayTracingHeader,
-        "public:RendererRayTracingSystem(",
-        {
-            s_CORE_ALLOC_GLOBAL_ARENA_REF,
-            s_CORE_ECS_WORLD_REF,
-            s_CORE_GRAPHICS_RUNTIME_REF,
-            s_RENDERER_SHADER_SYSTEM_REF,
-            "RendererMeshSystem&",
-            "RendererMaterialSystem&",
-            "RendererRayTracingState&",
-            "constRendererOpticalVolumeSelection&",
-            "constCsgShapeRegistry&",
-        }
-    ));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()), s_RENDERERDEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingSystemSource.data(), rayTracingSystemSource.size()), s_M_DEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingShadowSource.data(), rayTracingShadowSource.size()), s_M_DEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingSoftShadowSource.data(), rayTracingSoftShadowSource.size()), s_M_DEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingCausticsSource.data(), rayTracingCausticsSource.size()), s_M_DEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(AStringView(rayTracingSurfelSource.data(), rayTracingSurfelSource.size()), s_M_DEFERREDSTATE));
-
-    EXPECT_FALSE(ContainsText(softShadowPipelines, s_M_DEFERREDSTATE));
-    EXPECT_FALSE(ContainsText(compactDeferredState, s_FRIENDCLASSRENDERERRAYTRACINGSYSTEM));
-
-    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderGpuBvhShadowVisibility(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderGpuBvhCaustics(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderHwCaustics(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderSurfelGi(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
-
-    EXPECT_EQ(CountText(compactRayTracingShadow, s_DEFERREDLIGHTINGGRAPHRESOURCESDEFERREDLI), 8u);
-    EXPECT_EQ(CountText(compactRayTracingCaustics, s_DEFERREDLIGHTINGGRAPHRESOURCESDEFERREDLI), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(compactRayTracingSurfel, s_DEFERREDLIGHTINGGRAPHRESOURCESDEFERREDLI), 7u);
-    EXPECT_EQ(CountText(compactRayTracingShadow, s_DEFERREDLIGHTINGRESOURCES_DEFERREDLIGHTI), 8u);
-    EXPECT_EQ(CountText(compactRayTracingCaustics, s_DEFERREDLIGHTINGRESOURCES_DEFERREDLIGHTI), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(compactRayTracingSurfel, s_DEFERREDLIGHTINGRESOURCES_DEFERREDLIGHTI), 7u);
-    EXPECT_TRUE(ContainsText(compactRayTracingShadow, "deferredLightingResources.sceneShadingBuffer.get()"));
-    EXPECT_TRUE(ContainsText(compactRayTracingCaustics, "deferredLightingResources.lightBuffer.get()"));
-    EXPECT_TRUE(ContainsText(compactRayTracingSurfel, "deferredLightingResources.sceneShadingBuffer.get()"));
-
-    const usize lightingSnapshot = compactRootGraph.find("constDeferredLightingGraphResourcesdeferredLightingResources=m_deferredSystem.lightingGraphResources();");
-    const usize sceneShadingImport = compactRootGraph.find(".lightingResources=&deferredLightingResources,", lightingSnapshot);
-    const usize shadowDeclaration = compactRootGraph.find("declareDeferredShadowVisibilityTask(deferredTargets,deferredLightingResources,", lightingSnapshot);
-    const usize softwareCausticsDeclaration = compactRootGraph.find("declareDeferredSoftwareCausticsTask(declaresHardwareCaustics,deferredTargets,deferredLightingResources,", lightingSnapshot);
-    const usize surfelDeclaration = compactRootGraph.find("declareDeferredSurfelGiTask(deferredTargets,deferredLightingResources,", lightingSnapshot);
-    const usize hardwareCausticsDeclaration = compactRootGraph.find("if(!hardwareCausticsStageBuilder.declare(", lightingSnapshot);
-    ASSERT_NE(lightingSnapshot, AStringView::npos);
-    ASSERT_NE(sceneShadingImport, AStringView::npos);
-    ASSERT_NE(shadowDeclaration, AStringView::npos);
-    ASSERT_NE(softwareCausticsDeclaration, AStringView::npos);
-    ASSERT_NE(surfelDeclaration, AStringView::npos);
-    ASSERT_NE(hardwareCausticsDeclaration, AStringView::npos);
-    EXPECT_LT(lightingSnapshot, sceneShadingImport);
-    EXPECT_LT(sceneShadingImport, shadowDeclaration);
-    EXPECT_TRUE(ContainsText(compactRootShadow, "declareDeferredShadowVisibilityTask(DeferredFrameTargets&deferredTargets,constDeferredLightingGraphResources&deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRootShadow, "declareShadowVisibilityOpaqueTask(m_deferredLightingTaskGraph,opaqueDesc,deferredTargets,deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(compactRootCaustics, "declareSoftwareCausticsTask(m_deferredLightingTaskGraph,photonDesc,deferredTargets,deferredLightingResources,"));
-    EXPECT_TRUE(ContainsText(resourceImports, "DeferredLightingGraphResources&deferredLightingResources=*inputs.lightingResources;"));
-    EXPECT_TRUE(ContainsText(resourceImports, "importBuffer(deferredLightingResources.sceneShadingBuffer,"));
-    EXPECT_TRUE(ContainsText(hardwareCaustics, "declareHardwareCausticsTask(m_graph,hardwarePhotonDesc,(*inputs.targets),(*inputs.lightingResources),"));
-    EXPECT_TRUE(ContainsText(compactRootSurfel, "declareSurfelGiAgeFreeTask(m_deferredLightingTaskGraph,ageFreeDesc,deferredTargets,deferredLightingResources,"));
 }
 
 

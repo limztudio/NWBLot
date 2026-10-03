@@ -189,7 +189,6 @@ bool FrameGraphTransparentCsgTasks::declare(
     const bool avboitCsgReceiverSpanGraphOwned =
         avboitPrePayload.transparentCsgStreamsUploaded
         && avboitPrePayload.transparentCsgSnapshot.captured
-        && avboitPrePayload.deferTransparentCsgIntervalCombine
         && avboitCsgReceiverSpanPayload.transparentCsgSnapshot.captured
         && avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded
     ;
@@ -241,8 +240,6 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitCsgReceiverSpanPayload.targets = &deferredTargets;
         avboitCsgReceiverSpanPayload.timingTicket = inputs.timingTicket;
         avboitCsgReceiverSpanPayload.transparentCsgIntervalsTiming = inputs.transparentCsgIntervalsTiming;
-        avboitCsgReceiverSpanPayload.receiverSpanInputImageStatesGraphOwned = true;
-        avboitCsgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
     }
     if(avboitCsgIntervalCombineGraphOwned){
         constexpr usize s_IntervalCombineResourceUseCapacity = 11u;
@@ -305,8 +302,6 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitCsgIntervalCombinePayload.targets = &deferredTargets;
         avboitCsgIntervalCombinePayload.timingTicket = inputs.timingTicket;
         avboitCsgIntervalCombinePayload.transparentCsgIntervalsTiming = inputs.transparentCsgIntervalsTiming;
-        avboitCsgIntervalCombinePayload.intervalCombineInputImageStatesGraphOwned = true;
-        avboitCsgIntervalCombinePayload.removedIntervalOutputImageStatesGraphOwned = true;
     }
     m_avboitSystem.taskGraphStage().m_preTask = m_graph.addTask<AvboitPreGraphTask>(
         avboitIntervalDesc,

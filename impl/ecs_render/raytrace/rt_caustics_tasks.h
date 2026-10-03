@@ -61,7 +61,6 @@ struct CausticAccumulatorDecayGraphTask{
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
         f32 decayFactor = 0.f;
         bool hardwareCaustics = false;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -103,8 +102,7 @@ struct CausticAccumulatorDecayGraphTask{
         const bool dispatched = payload.raytracingSystem->dispatchCausticAccumulatorDecay(
             commandList,
             *payload.targets,
-            payload.decayFactor,
-            payload.graphEntryStatesOwned
+            payload.decayFactor
         );
         if(!dispatched){
             DiscardGpuTimingMeasure(payload.causticPhotonTiming);
@@ -131,11 +129,8 @@ struct SoftwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
-        bool graphOwnsAccumulatorDecay = false;
-        bool graphOwnsResolve = false;
         bool* causticProducerDispatched = nullptr;
     };
 
@@ -151,19 +146,12 @@ struct SoftwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the legacy non-temporal reset here.
-        if(!payload.graphOwnsNonTemporalAccumulatorClear)
-            payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
+        // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
                 payload.meshView,
                 *payload.targets,
-                payload.deferredLightingResources,
-                payload.graphEntryStatesOwned,
-                payload.graphOwnsAccumulatorBootstrapClear,
-                payload.graphOwnsAccumulatorDecay,
-                payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
             if(!causticsDispatched)
@@ -200,11 +188,8 @@ struct HardwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
-        bool graphOwnsAccumulatorDecay = false;
-        bool graphOwnsResolve = false;
         bool* causticProducerDispatched = nullptr;
     };
 
@@ -220,19 +205,12 @@ struct HardwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the legacy non-temporal reset here.
-        if(!payload.graphOwnsNonTemporalAccumulatorClear)
-            payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
+        // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
                 payload.meshView,
                 *payload.targets,
-                payload.deferredLightingResources,
-                payload.graphEntryStatesOwned,
-                payload.graphOwnsAccumulatorBootstrapClear,
-                payload.graphOwnsAccumulatorDecay,
-                payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
             if(!causticsDispatched)
@@ -269,7 +247,6 @@ struct CausticGeometryDownsampleGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* causticProducerDispatched = nullptr;
         Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -291,10 +268,9 @@ struct CausticGeometryDownsampleGraphTask{
             payload.graphics->getDevice(),
             commandList
         );
-        payload.raytracingSystem->dispatchGraphCausticGeometryDownsample(
+        payload.raytracingSystem->dispatchCausticGeometryDownsample(
             commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
+            *payload.targets
         );
         // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's nested marker now, before the packet recorder advances to the wavelet task marker.
         return Core::FinishSplitGpuTimingMarker(payload.causticResolveTiming);
@@ -314,7 +290,6 @@ struct CausticResolvePrepareGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -330,10 +305,9 @@ struct CausticResolvePrepareGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolvePrepare(
+        payload.raytracingSystem->dispatchCausticResolvePrepare(
             commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
+            *payload.targets
         );
         return true;
     }
@@ -348,7 +322,6 @@ struct CausticResolveWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -364,11 +337,7 @@ struct CausticResolveWaveletGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveWavelet(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
+        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 0u);
         return true;
     }
 };
@@ -383,7 +352,6 @@ struct CausticResolveSecondWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -399,11 +367,7 @@ struct CausticResolveSecondWaveletGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveSecondWavelet(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
+        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 1u);
         return true;
     }
 };
@@ -418,7 +382,6 @@ struct CausticResolveThirdWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -434,11 +397,7 @@ struct CausticResolveThirdWaveletGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveThirdWavelet(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
+        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 2u);
         return true;
     }
 };
@@ -453,7 +412,6 @@ struct CausticResolveFourthWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -469,11 +427,7 @@ struct CausticResolveFourthWaveletGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveFourthWavelet(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
+        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 3u);
         return true;
     }
 };
@@ -488,7 +442,6 @@ struct CausticResolveFifthWaveletGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -504,11 +457,7 @@ struct CausticResolveFifthWaveletGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveFifthWavelet(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
+        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 4u);
         return true;
     }
 };
@@ -522,7 +471,6 @@ struct CausticResolveUpsampleGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        bool graphEntryStatesOwned = false;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -538,10 +486,9 @@ struct CausticResolveUpsampleGraphTask{
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchGraphCausticResolveUpsample(
+        payload.raytracingSystem->dispatchCausticResolveUpsample(
             commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
+            *payload.targets
         );
         return true;
     }
@@ -598,8 +545,6 @@ inline void DispatchCausticResolvePass(
     Core::GpuDescriptorHeap& heap,
     Core::ComputePipeline& pipeline,
     DeferredFrameTargets& targets,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsPassEntryStates,
     const CausticResolvePassResources& input,
     const CausticResolvePassResources& output,
     const f32 effectiveIntensity,
@@ -620,24 +565,6 @@ inline void DispatchCausticResolvePass(
     const bool usesActivity = activity.valid();
     const i32 activityInput = usesActivity && activityPassIndex > 0u ? static_cast<i32>((activityPassIndex - 1u) % 2u) : -1;
     const i32 activityOutput = usesActivity && activityPassIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT ? static_cast<i32>(activityPassIndex % 2u) : -1;
-    if(!graphOwnsPassEntryStates){
-        // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup,
-        // later ping-pong passes explicitly establish their own dynamic input/output states.
-        if(!graphEntryStatesOwned){
-            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        }
-        commandList.setTextureState(input.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(output.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-        if(activityInput >= 0)
-            commandList.setBufferState(activity.buffers[activityInput].get(), Core::ResourceStates::ShaderResource);
-        if(activityOutput >= 0){
-            commandList.setEnableUavBarriersForBuffer(activity.buffers[activityOutput].get(), true);
-            commandList.setBufferState(activity.buffers[activityOutput].get(), Core::ResourceStates::UnorderedAccess);
-        }
-        commandList.commitBarriers();
-    }
 
     const u32 halfWidth = (targets.width + 1u) / 2u;
     const u32 halfHeight = (targets.height + 1u) / 2u;

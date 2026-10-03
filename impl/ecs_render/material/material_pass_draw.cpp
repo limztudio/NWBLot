@@ -4,7 +4,7 @@
 
 #include "material_system.h"
 
-#include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
@@ -28,34 +28,6 @@ namespace __hidden_material_pass_draw{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static void SetCsgHeapResourceStates(
-    RendererCsgSystem& csgSystem,
-    Core::CommandList& commandList,
-    const DeferredFrameTargets& deferredTargets,
-    const ECSRenderDetail::CsgGraphResourceSnapshot* const csgResources,
-    const MaterialPipelineCsgBindingUse& csgBindingUse,
-    const bool receiverSurfaceImageStatesGraphOwned,
-    const bool intervalSampleImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned
-){
-    if(!csgBindingUse.clip)
-        return;
-
-    if(!csgResources)
-        return;
-
-    if(!csgClipBufferStatesGraphOwned)
-        csgSystem.setCsgClipBufferStates(commandList, *csgResources);
-    if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
-        // Compat callers stage receiver-event images; graph declares the pair first.
-        csgSystem.setCsgReceiverSurfaceImageStates(commandList, deferredTargets);
-    }
-    if(csgBindingUse.intervalSample && !intervalSampleImageStatesGraphOwned){
-        // Cap/interval sampling needs GENERAL descriptors; compat callers keep the native bridge.
-        csgSystem.setCsgIntervalSampleImageStates(commandList, deferredTargets);
-    }
-}
 
 static bool ResolveMeshFrameHeapSlots(
     const MaterialPassDrawContext& context,
@@ -252,27 +224,6 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(
     return true;
 }
 
-void RendererMaterialSystem::setMaterialPassDrawItemResourceStates(
-    const MaterialPassDrawContext& context,
-    const MaterialPassDrawItem& drawItem,
-    const MaterialPassMeshResourceSnapshot& mesh
-){
-    const MaterialPipelineCsgBindingUse csgBindingUse =
-        MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
-
-    setMaterialPassCommonBufferStates(context, mesh);
-    __hidden_material_pass_draw::SetCsgHeapResourceStates(
-        m_csgSystem,
-        context.commandList,
-        context.deferredTargets,
-        context.csgResources,
-        csgBindingUse,
-        context.csgReceiverSurfaceImageStatesGraphOwned,
-        context.csgIntervalSampleImageStatesGraphOwned,
-        context.csgClipBufferStatesGraphOwned
-    );
-}
-
 void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItem& drawItem,
@@ -388,7 +339,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         const MaterialPassPipelineResourceSnapshot& pipelineResources = drawItem.pipelineResources;
         NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
         NWB_ASSERT(pipelineResources.meshletPipeline);
-        setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
+        setMaterialPassCommonBufferStates(context, mesh);
 
         Core::MeshletState meshletState;
         meshletState.setPipeline(pipelineResources.meshletPipeline.get());
@@ -426,7 +377,7 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
         NWB_ASSERT(pipelineResources.computePipeline);
         NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
         NWB_ASSERT(mesh.emulationVertexBuffer);
-        setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
+        setMaterialPassCommonBufferStates(context, mesh);
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
 }
@@ -447,7 +398,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
         NWB_ASSERT(materialPassDrawResourcesReady(mesh, context.frameBindings));
         NWB_ASSERT(pipelineResources.emulationPipeline);
         NWB_ASSERT(mesh.emulationVertexBuffer);
-        setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
+        setMaterialPassCommonBufferStates(context, mesh);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
 }
@@ -470,7 +421,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
         NWB_ASSERT(mesh.emulationVertexBuffer);
 
-        setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
+        setMaterialPassCommonBufferStates(context, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
         // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);

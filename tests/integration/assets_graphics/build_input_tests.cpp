@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <pipeline/asset_builder/build.h>
 #include <pipeline/asset_builder/build_inputs.h>
 #include <core/task/cpu/scheduler.h>
 #include <tests/common/capturing_logger.h>
@@ -90,6 +91,20 @@ protected:
     Assets::DiscoveredNwbFileVector m_files{ m_testArena.arena };
     Builder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 };
+
+TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
+    m_options.assetType.clear();
+    EXPECT_FALSE(Builder::BuildAssets(m_options));
+    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
+    EXPECT_EQ(m_logger.errorCount(), 1u);
+    EXPECT_TRUE(m_options.assetRoots.empty());
+    EXPECT_TRUE(m_options.outputDirectory.empty());
+
+    ASSERT_TRUE(m_options.assetType.assign(Builder::s_GraphicsAssetBuildType));
+    EXPECT_FALSE(Builder::BuildAssets(m_options));
+    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
+    EXPECT_EQ(m_logger.errorCount(), 2u);
+}
 
 TEST_F(BuildInputSelection, ExactInputsPreserveDiscoveredOrderAndDuplicateRecords){
     addFile("assets/z.nwb");

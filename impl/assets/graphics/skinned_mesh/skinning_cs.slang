@@ -103,7 +103,7 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
     float3 skinnedPosition = float3(0.0);
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
-    // Preserve the legacy influence filter: position skinning formerly passed this normal to the normal-matrix check.
+    // Position and normal skinning share the influence filter and normal-matrix admission.
     const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){

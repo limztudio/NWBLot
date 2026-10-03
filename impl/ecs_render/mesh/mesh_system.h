@@ -85,7 +85,6 @@ namespace ECSRenderDetail{
         bool runtimeMesh = false;
         bool blasBuildPending = false;
         bool blasBackingFresh = false;
-        bool blasBackingStateHandoffPending = false;
         bool swBvhBuildPending = false;
         bool swBvhTopologyBuilt = false;
         bool blasBuildAccepted = false;
@@ -208,7 +207,6 @@ public:
         const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
         ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
     );
-    void confirmAcceptedRayTracingStateHandoffs()noexcept;
     void discardRayTracingBuildState()noexcept;
     [[nodiscard]] bool collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const;
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;

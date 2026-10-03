@@ -93,8 +93,7 @@ bool nwbOpticalBootstrap(
         if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
             const NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(
                 config.instanceMaterialHeapSlot, ray.Origin, ray.Direction, query.CandidateTriangleRayT(), instance,
-                query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(), query.CandidateWorldToObject3x4(),
-                query.CandidateTriangleFrontFace()
+                query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(), query.CandidateWorldToObject3x4()
             );
             // A flat alpha surface cannot contain a medium. An unspecified refractor may be open or displaced;
             // without an authored volume contract it cannot prove that the initial origin is in air.

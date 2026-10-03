@@ -115,7 +115,7 @@ LIT_MAIN = "__main__"
 def report(rows, cpu_frames=500):
     text = f"=== interval: {cpu_frames} frames / 0.500000s ===\n"
     for scope, total, samples in rows:
-        text += (f"  {scope}: avg=999 min=888 max=1000 samples=2 total_ms={total} "
+        text += (f"  {scope}: window_avg_ms=999 window_min_ms=888 window_max_ms=1000 published_windows=2 total_ms={total} "
             f"gpu_samples={samples} sample_avg_ms=777\n")
     return text
 
@@ -163,20 +163,29 @@ class TimingNormalizationTests(unittest.TestCase):
         parsed = benchmark.parse_intervals(report([(token, 2, 1)]).replace("\n", "\r\n"), symbols, finalized=True)
         self.assertIn(benchmark.FRAME, parsed[0])
 
-    def test_legacy_only_nonfinite_empty_and_duplicate_samples_fail(self):
-        bad_rows = [
-            "  render.frame: avg=1 min=1 max=1 samples=2\n",
-            "  render.frame: total_ms=NaN gpu_samples=3\n",
-            "  render.frame: total_ms=-1 gpu_samples=3\n",
-            "  render.frame: total_ms=1 gpu_samples=0\n",
-            "  render.frame: total_ms=1 gpu_samples=1.5\n",
-            "  render.frame: total_ms=1 gpu_samples=2 gpu_samples=3\n",
-        ]
-        for row in bad_rows:
-            with self.subTest(row=row), self.assertRaises(benchmark.SmokeFailure):
-                benchmark.parse_intervals("=== interval: 1 frames / 0.5s ===\n" + row, finalized=True)
-        with self.assertRaises(benchmark.SmokeFailure):
-            benchmark.parse_intervals(report([(benchmark.FRAME, 1, 1), (benchmark.FRAME, 1, 1)]), finalized=True)
+    def test_retired_partial_nonfinite_empty_and_duplicate_rows_fail_then_recover(self):
+        current = report([(benchmark.FRAME, 1, 2)])
+        retired = current.replace("window_avg_ms=", "avg=").replace("window_min_ms=", "min=")
+        retired = retired.replace("window_max_ms=", "max=").replace("published_windows=", "samples=")
+        invalid = [retired, current.replace(" sample_avg_ms=777", "")]
+        invalid.extend(current.replace(old, new) for old, new in (
+            ("window_avg_ms=999", "avg=999"), ("window_min_ms=888", "min=888"),
+            ("window_max_ms=1000", "max=1000"), ("published_windows=2", "samples=2"),
+            ("total_ms=1", "total_ms=NaN"), ("total_ms=1", "total_ms=-1"),
+            ("gpu_samples=2", "gpu_samples=0"), ("gpu_samples=2", "gpu_samples=1.5"),
+            ("gpu_samples=2", "gpu_samples=2 gpu_samples=3"),
+            ("published_windows=2", "published_windows=0"),
+            ("published_windows=2", "published_windows=4294967296"),
+            ("gpu_samples=2", "gpu_samples=18446744073709551616"),
+            ("window_min_ms=888", "window_min_ms=1001"), ("sample_avg_ms=777", "sample_avg_ms=1e999"),
+        ))
+        invalid.append(report([(benchmark.FRAME, 1, 1), (benchmark.FRAME, 1, 1)]))
+        for text in invalid:
+            for evidence in (text, current + text):
+                with self.subTest(evidence=evidence), self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.parse_intervals(evidence, finalized=True)
+            recovered = benchmark.parse_intervals(current, finalized=True)
+            self.assertEqual(recovered[0][benchmark.FRAME], benchmark.ScopeSample(1, 2))
 
     def test_zero_duration_is_valid_for_a_sampled_kernel(self):
         parsed = benchmark.parse_intervals(report([(benchmark.CLASSIFY, 0, 5)]), finalized=True)

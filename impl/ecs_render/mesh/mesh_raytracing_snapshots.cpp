@@ -98,7 +98,6 @@ void CaptureRayTracingResourceSnapshot(
         .runtimeMesh = mesh.runtimeMesh,
         .blasBuildPending = mesh.blasBuildPending,
         .blasBackingFresh = mesh.blasBackingFresh,
-        .blasBackingStateHandoffPending = mesh.blasBackingStateHandoffPending,
         .swBvhBuildPending = mesh.swBvhBuildPending,
         .swBvhTopologyBuilt = mesh.swBvhTopologyBuilt,
         .blasBuildAccepted = mesh.blasBuildAccepted,
@@ -138,7 +137,6 @@ void CaptureRayTracingResourceSnapshot(
         && mesh.runtimeMesh == snapshot.runtimeMesh
         && mesh.blasBuildPending == snapshot.blasBuildPending
         && mesh.blasBackingFresh == snapshot.blasBackingFresh
-        && mesh.blasBackingStateHandoffPending == snapshot.blasBackingStateHandoffPending
         && mesh.swBvhBuildPending == snapshot.swBvhBuildPending
         && mesh.swBvhTopologyBuilt == snapshot.swBvhTopologyBuilt
         && mesh.runtimeMeshVersion == snapshot.runtimeMeshVersion
@@ -324,7 +322,6 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
     mesh.swBvhRefitsSinceRebuild = swBvhReplaced ? 0u : desired.swBvhRefitsSinceRebuild;
     mesh.blasBuildPending = blasReplaced || desired.blasBuildPending;
     mesh.blasBackingFresh = desired.blasBackingFresh;
-    mesh.blasBackingStateHandoffPending = desired.blasBackingStateHandoffPending;
     mesh.swBvhBuildPending = swBvhReplaced || desired.swBvhBuildPending;
     mesh.swBvhTopologyBuilt = !swBvhReplaced && desired.swBvhTopologyBuilt;
     mesh.blasBuildAccepted = !blasReplaced && desired.blasBuildAccepted;
@@ -375,7 +372,7 @@ void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail
     outBuffers.reserve(m_meshState.m_meshes.size() * 5u);
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
-        // Frozen BLAS may fall back to native builds; retain every live source and backing buffer.
+        // Retain every live BLAS source and backing buffer across preparation packets.
         if(mesh.blas){
             outBuffers.push_back(mesh.positionBuffer);
             outBuffers.push_back(mesh.triangleIndexBuffer);

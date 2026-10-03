@@ -366,8 +366,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgReceiverSpanPayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgReceiverSpanPayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
         csgReceiverSpanPayload.csgResources = csgResources;
-        csgReceiverSpanPayload.receiverSpanInputImageStatesGraphOwned = true;
-        csgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
         csgReceiverSpanPayload.opaqueDrawSnapshot.capture(
             opaqueDrawItems,
             csgFrameData,
@@ -389,8 +387,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalCombinePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgIntervalCombinePayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
         csgIntervalCombinePayload.csgResources = csgResources;
-        csgIntervalCombinePayload.intervalCombineInputImageStatesGraphOwned = true;
-        csgIntervalCombinePayload.removedIntervalOutputImageStatesGraphOwned = true;
         csgIntervalCombinePayload.opaqueDrawSnapshot.capture(
             opaqueDrawItems,
             csgFrameData,
@@ -414,11 +410,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalSamplePayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
         csgIntervalSamplePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgIntervalSamplePayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
-        csgIntervalSamplePayload.intervalSampleImageStatesGraphOwned = true;
         csgIntervalSamplePayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
-        // The interval-sample task is scheduled for semantic CSG work, but only the gathered GPU work
-        // declares these heap-selected clip buffers. Retain the native bridge for an empty gathered frame.
-        csgIntervalSamplePayload.csgClipBufferStatesGraphOwned = hasCsgFrameGpuWork;
         csgIntervalSamplePayload.opaqueDrawSnapshot.capture(
             opaqueDrawItems,
             csgFrameData,
@@ -428,13 +420,9 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
 
 
-// The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine
+    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine
     // consumes the five prior-stage aliases and publishes removed-interval images, then Sample consumes those
     // outputs. Their native thunks consume graph-owned StorageImage state without staging target transitions.
-    gbufferPayload.csgIntervalPeelTargetStatesGraphOwned = hasOpaqueCsgFrameWork;
-    gbufferPayload.csgReceiverSurfaceImageStatesGraphOwned = hasOpaqueCsgFrameWork;
-    // Match the actual graph declarations above; semantic CSG work may have no gathered GPU frame data.
-    gbufferPayload.csgClipBufferStatesGraphOwned = hasCsgFrameGpuWork;
 
     // The clear is intentionally keyed to the semantic opaque-CSG frame flag, rather than the later native
     // readiness checks. This preserves the old defensive clear timing while making its two actual CopyDest writes
@@ -513,9 +501,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     ;
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
-        // A prepared material callback selects these mesh buffers through frozen heap slots.  Do not let the
-        // graph record it with an undeclared dynamic resource set; the caller will retain the direct compatibility
-        // path for this frame instead.
+        // Frozen heap slots require a complete graph declaration before this material callback can record.
         return false;
     }
     const bool gbufferMaterialSampledTexturesCollected = gbufferUsesMaterialGeometry
@@ -536,7 +522,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
 
 
-// A generated-vertex buffer is persistent per mesh, so pulling every compute dispatch ahead of raster would be
+    // A generated-vertex buffer is persistent per mesh, so pulling every compute dispatch ahead of raster would be
     // wrong when multiple frozen draw items select the same output. The plan deliberately enables only the fully
     // alias-free regular opaque case; all other streams keep their established local interleaved handoff.
     ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{ m_arena };
@@ -1454,10 +1440,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 csgIntervalSamplePayload.materialDrawBuffersUploaded;
             opaqueCsgIntervalSampleComputeEmulationPayload.csgFrameBuffersUploaded =
                 csgIntervalSamplePayload.csgFrameBuffersUploaded;
-            opaqueCsgIntervalSampleComputeEmulationPayload.intervalSampleImageStatesGraphOwned =
-                csgIntervalSamplePayload.intervalSampleImageStatesGraphOwned;
-            opaqueCsgIntervalSampleComputeEmulationPayload.csgClipBufferStatesGraphOwned =
-                csgIntervalSamplePayload.csgClipBufferStatesGraphOwned;
             opaqueCsgIntervalSampleComputeEmulationPayload.materialFrameStatesGraphOwned =
                 csgIntervalSamplePayload.materialFrameStatesGraphOwned;
             opaqueCsgIntervalSampleComputeEmulationPayload.materialGeometryStatesGraphOwned =

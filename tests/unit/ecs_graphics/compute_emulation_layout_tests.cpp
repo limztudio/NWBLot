@@ -28,7 +28,7 @@ TEST(ComputeEmulationLayoutTests, TinyMeshReservesSentinelAndPadsTheUnifiedStruc
     EXPECT_GE(layout.bufferByteSize, static_cast<u64>(layout.indexByteOffset) + 3u * sizeof(u32));
 }
 
-TEST(ComputeEmulationLayoutTests, DenseMeshRetainsEnoughBackingForLegacyExpandedPrograms){
+TEST(ComputeEmulationLayoutTests, DenseMeshRetainsEnoughBackingForExpandedPrograms){
     ComputeEmulationLayout layout;
     ASSERT_TRUE(ResolveComputeEmulationLayout(64u * sizeof(MeshletLocalVertexRef), 378u, layout));
     EXPECT_EQ(layout.indexByteOffset, 65u * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);

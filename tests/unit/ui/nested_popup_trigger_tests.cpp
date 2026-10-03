@@ -214,7 +214,7 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildSearchPointerOpensExplicitQuerySc
     EXPECT_FALSE(m_search.combo().isOpen());
     EXPECT_EQ(target(queryId()), nullptr);
     EXPECT_EQ(target(rowsId()), nullptr);
-    EXPECT_EQ(m_host.legacyLoans, 0u);
+    EXPECT_EQ(m_host.contextScopedLoans, 0u);
     EXPECT_EQ(m_context.input().focus(), fieldId());
     expectUserParentsOpen();
 }

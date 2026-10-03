@@ -58,7 +58,7 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
     return nwbMakeMeshSurface(baseColor, normal, half(0.0), half(0.0));
 }
 
-// Authored reflection inputs remain independent of legacy BXDF parameters and optical absorption/coverage.
+// Authored reflection inputs remain independent of BXDF parameters and optical absorption/coverage.
 // Reject nonfinite inputs to the neutral defaults before clamping, so later filtering never spreads NaNs.
 half4 nwbPackMeshSurfaceReflection(half3 specularF0, half perceptualRoughness){
     const half3 validSpecularF0 = all(isfinite(float3(specularF0))) ? saturate(specularF0) : NWB_SURFACE_SPECULAR_F0_NONE;

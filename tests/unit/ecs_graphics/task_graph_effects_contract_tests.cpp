@@ -97,6 +97,7 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     AString surfelSource;
     AString surfelTaskGraphSource;
     AString readbackSource;
+    AString readbackLifecycleSource;
     AString systemSource;
     AString rayTracingSystemSource;
     ASSERT_TRUE(ReadRendererSources(
@@ -114,7 +115,9 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_frame_resources.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "execute/frame_execute_surfel_readback.cpp", readbackLifecycleSource));
     const AStringView readbackOwner(readbackSource.data(), readbackSource.size());
+    const AStringView readbackLifecycle(readbackLifecycleSource.data(), readbackLifecycleSource.size());
     const AStringView surfel(surfelSource.data(), surfelSource.size());
     const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
@@ -139,15 +142,17 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     EXPECT_FALSE(ContainsText(readback, ".acceptedToken ="));
 
     EXPECT_TRUE(ContainsText(surfelTaskGraph, ".states = m_surfelGiCounterPersistentState.source(),"));
-    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.buildFilteredBufferSubset("));
-    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(\n                    *context->candidate"));
+    EXPECT_TRUE(ContainsText(readbackLifecycle, "m_surfelGiCounterPersistentState.buildFilteredBufferSubset("));
+    const usize retainedStateCommit = readbackLifecycle.find("context->acceptedStateReady = context->renderer->m_surfelGiCounterPersistentState.commit(");
+    const usize acceptedStateGuard = readbackLifecycle.find("if(context->acceptedStateReady)", retainedStateCommit);
+    const usize readbackPublication = readbackLifecycle.find("context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);", acceptedStateGuard);
+    ASSERT_NE(retainedStateCommit, AStringView::npos);
+    ASSERT_NE(acceptedStateGuard, AStringView::npos);
+    ASSERT_NE(readbackPublication, AStringView::npos);
+    EXPECT_LT(retainedStateCommit, acceptedStateGuard);
+    EXPECT_LT(acceptedStateGuard, readbackPublication);
     EXPECT_TRUE(ContainsText(system, ".task = m_deferredSurfelGiCounterReadbackTask,"));
     EXPECT_TRUE(ContainsText(system, "scratchArena,\n                nullptr,\n                &readbackAcceptedCallback"));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "if(context->acceptedStateReady)\n"
-        "                    context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);"
-    ));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;"));
     const usize readbackExecutionOffset = system.find("const bool readbackAccepted = scheduler.executeTask(");
     const usize readbackTokenOffset = system.find(
@@ -414,7 +419,7 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 
 
 // A fully prepared soft-transparent frame selects the split graph route from production state alone.
-// The retained monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
+// The monolithic callback records adaptive and unsplit shadow phases selected by current resource readiness.
 TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -471,7 +476,7 @@ TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
 
 
 // A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff.
-// Keep the narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
+// Keep the fifth shared draw explicit; combined per-draw recording remains necessary for material aliases and interleaved work.
 TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

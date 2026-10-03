@@ -1324,7 +1324,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Empty hooks keep the compatibility present() path.
+    // Empty hooks use direct presentation for standalone passes.
     const Core::QueueSubmissionPreSubmitHook framePresentationSignal = m_graphics.claimFramePresentationSignal();
     const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = {
         Core::GpuTaskGraphTaskSubmissionHook{

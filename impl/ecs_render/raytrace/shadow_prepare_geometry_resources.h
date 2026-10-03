@@ -71,10 +71,7 @@ public:
 public:
     // Collect identities without reading graph state; size outputs from distinct buffers.
     void prepareStorage(bool blasInputStatesGraphOwned);
-    void gatherBuildInputs(
-        const Core::GpuTaskGraph& graph,
-        bool& blasInputStatesGraphOwned
-    );
+    [[nodiscard]] bool gatherBuildInputs(const Core::GpuTaskGraph& graph);
     [[nodiscard]] bool gatherRemainingTraceResources();
     [[nodiscard]] bool isPreparedMeshBlasBuild(const Name& meshName)const;
 

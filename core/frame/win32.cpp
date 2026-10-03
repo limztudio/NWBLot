@@ -43,8 +43,6 @@ namespace FrameDetail{
 
 static Frame* s_Frame = nullptr;
 
-static constexpr isize s_PerMonitorAwareV2Context = -4;
-static constexpr UINT s_DefaultDpi = 96;
 static constexpr usize s_Win32ExtendedKeyBit = 24u;
 static constexpr usize s_Win32ScancodeShift = 16u;
 static constexpr usize s_Win32PreviousKeyStateBit = 30u;
@@ -59,75 +57,18 @@ static constexpr u32 s_AsciiUpperFirst = 'A';
 static constexpr u32 s_AsciiUpperLast = 'Z';
 
 
-static HMODULE GetUser32Module(){
-    HMODULE module = GetModuleHandleW(L"user32.dll");
-    if(!module)
-        module = LoadLibraryW(L"user32.dll");
-    return module;
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-template<typename FunctionT>
-[[nodiscard]] static FunctionT DecodeUser32Procedure(const FARPROC procedure){
-    static_assert(sizeof(FunctionT) == sizeof(procedure));
-    if(!procedure)
-        return nullptr;
 
-    // GetProcAddress returns a generic pointer; copy its ABI instead of casting.
-    FunctionT result = nullptr;
-    NWB_MEMCPY(&result, sizeof(result), &procedure, sizeof(procedure));
-    return result;
-}
+static bool EnableProcessDpiAwareness(){
+    if(AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2))
+        return true;
 
-static void EnableProcessDpiAwareness(){
-    HMODULE user32 = GetUser32Module();
-    if(!user32)
-        return;
-
-    using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
-    const auto setProcessDpiAwarenessContext = DecodeUser32Procedure<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
-    if(setProcessDpiAwarenessContext){
-        if(setProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(s_PerMonitorAwareV2Context)))
-            return;
+    if(!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 per-monitor DPI awareness setup failed: {}"), GetLastError());
+        return false;
     }
-
-    using SetProcessDpiAwareFn = BOOL(WINAPI*)();
-    const auto setProcessDpiAware = DecodeUser32Procedure<SetProcessDpiAwareFn>(GetProcAddress(user32, "SetProcessDPIAware"));
-    if(setProcessDpiAware)
-        setProcessDpiAware();
-}
-
-static UINT QueryInitialWindowDpi(){
-    HMODULE user32 = GetUser32Module();
-    if(user32){
-        using GetDpiForSystemFn = UINT(WINAPI*)();
-        const auto getDpiForSystem = DecodeUser32Procedure<GetDpiForSystemFn>(GetProcAddress(user32, "GetDpiForSystem"));
-        if(getDpiForSystem){
-            const UINT dpi = getDpiForSystem();
-            if(dpi != 0)
-                return dpi;
-        }
-    }
-
-    HDC screenDc = GetDC(nullptr);
-    if(!screenDc)
-        return s_DefaultDpi;
-
-    const i32 dpi = GetDeviceCaps(screenDc, LOGPIXELSX);
-    ReleaseDC(nullptr, screenDc);
-
-    return dpi > 0 ? static_cast<UINT>(dpi) : s_DefaultDpi;
-}
-
-static bool AdjustWindowRectForDpi(RECT& rect, DWORD style, BOOL hasMenu, DWORD styleEx, UINT dpi){
-    HMODULE user32 = GetUser32Module();
-    if(user32){
-        using AdjustWindowRectExForDpiFn = BOOL(WINAPI*)(LPRECT, DWORD, BOOL, DWORD, UINT);
-        const auto adjustWindowRectExForDpi = DecodeUser32Procedure<AdjustWindowRectExForDpiFn>(GetProcAddress(user32, "AdjustWindowRectExForDpi"));
-        if(adjustWindowRectExForDpi)
-            return adjustWindowRectExForDpi(&rect, style, hasMenu, styleEx, dpi) != FALSE;
-    }
-
-    return AdjustWindowRectEx(&rect, style, hasMenu, styleEx) != FALSE;
+    return true;
 }
 
 static bool IsExtendedKey(LPARAM lParam){
@@ -533,7 +474,14 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
 
 bool Frame::init(){
-    FrameDetail::EnableProcessDpiAwareness();
+    if(!FrameDetail::EnableProcessDpiAwareness())
+        return false;
+
+    const UINT initialDpi = GetDpiForSystem();
+    if(initialDpi == 0u){
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 system DPI query failed"));
+        return false;
+    }
 
     constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
     const TStringView windowTitle = windowTitleOrDefault();
@@ -567,10 +515,8 @@ bool Frame::init(){
             workArea = monitorInfo.rcWork;
     }
 
-    const UINT initialDpi = FrameDetail::QueryInitialWindowDpi();
-
     RECT decorationRect = { 0, 0, 0, 0 };
-    if(!FrameDetail::AdjustWindowRectForDpi(decorationRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
+    if(!AdjustWindowRectExForDpi(&decorationRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
@@ -604,7 +550,7 @@ bool Frame::init(){
     frameData.height() = windowHeight;
 
     RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
-    if(!FrameDetail::AdjustWindowRectForDpi(rc, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
+    if(!AdjustWindowRectExForDpi(&rc, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
         NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }

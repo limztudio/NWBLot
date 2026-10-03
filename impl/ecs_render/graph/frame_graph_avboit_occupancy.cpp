@@ -112,6 +112,10 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
         }
 
         const bool occupancyHasCsgDrawItems = occupancyUploadResult.hasCsgDrawItems;
+        if(occupancyHasCsgDrawItems && !intervalOutputsGraphOwned){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT occupancy draws require prepared interval outputs"));
+            return false;
+        }
         if(occupancyUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = {

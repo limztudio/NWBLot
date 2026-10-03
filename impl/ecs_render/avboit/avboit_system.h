@@ -120,42 +120,24 @@ public:
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
-        const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
-        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedTransparentCsgResources = nullptr,
-        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedFrameBindings = nullptr,
-        usize preparedTransparentCsgInstanceCount = 0u,
-        usize preparedTransparentCsgMaterialTypedByteCount = 0u,
-        bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
-        bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned = false,
-        bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned = false,
-        bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned = false,
-        bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned = false,
-        // Graph interval work declares CSG SRVs/CBVs; unprepared paths keep native setup.
-        bool preparedTransparentCsgClipBufferStatesGraphOwned = false,
-        // Graph may retain source-buffer SRVs; unprepared work keeps native geometry setup.
-        bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false,
-        bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false,
-        // Graph may split span/combine dispatches; compat paths keep the native tail.
-        bool deferPreparedTransparentCsgIntervalCombine = false,
-        // Split callbacks preserve the aggregate timing range; compat keeps local scope.
-        Optional<Core::GpuTimingMeasure>* deferredPreparedTransparentCsgIntervalTiming = nullptr
+        const MaterialPassDrawItems& receiverSurfaceDrawItems,
+        const CsgFrameGpuData& csgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+        usize instanceCount,
+        usize materialTypedByteCount,
+        bool materialGeometryStatesGraphOwned,
+        Optional<Core::GpuTimingMeasure>& intervalTiming
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
-        const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
-        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedOccupancyCsgResources = nullptr,
-        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedOccupancyFrameBindings = nullptr,
-        usize preparedOccupancyInstanceCount = 0u,
-        usize preparedOccupancyMaterialTypedByteCount = 0u,
-        // Graph declares depth/coverage states first; compat callers keep the bridge.
-        bool occupancyStatesGraphOwned = false,
-        // Interval producer declares removed-interval outputs first; others keep the UAV handoff.
-        bool occupancyCsgIntervalSampleImageStatesGraphOwned = false,
-        // Prepared occupancy CSG streams also carry graph-declared clip buffers.
-        bool occupancyCsgClipBufferStatesGraphOwned = false,
+        const MaterialPassDrawItemPartitions& preparedOccupancyDrawItems,
+        const CsgFrameGpuData& preparedOccupancyCsgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
+        usize preparedOccupancyInstanceCount,
+        usize preparedOccupancyMaterialTypedByteCount,
         bool occupancyMaterialFrameStatesGraphOwned = false,
         bool occupancyMaterialGeometryStatesGraphOwned = false,
         // Graph may generate alias-free vertices; shared/direct paths keep local work.
@@ -168,14 +150,12 @@ public:
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
-        const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
-        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedExtinctionCsgResources = nullptr,
-        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedExtinctionFrameBindings = nullptr,
-        usize preparedExtinctionInstanceCount = 0u,
-        usize preparedExtinctionMaterialTypedByteCount = 0u,
-        bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
-        bool extinctionCsgClipBufferStatesGraphOwned = false,
+        const MaterialPassDrawItemPartitions& preparedExtinctionDrawItems,
+        const CsgFrameGpuData& preparedExtinctionCsgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
+        usize preparedExtinctionInstanceCount,
+        usize preparedExtinctionMaterialTypedByteCount,
         bool extinctionMaterialFrameStatesGraphOwned = false,
         bool extinctionMaterialGeometryStatesGraphOwned = false,
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
@@ -187,17 +167,12 @@ public:
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr,
-        const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
-        const ECSRenderDetail::CsgGraphResourceSnapshot* preparedAccumulationCsgResources = nullptr,
-        const ECSRenderDetail::MeshFrameBindingSnapshot* preparedAccumulationFrameBindings = nullptr,
-        usize preparedAccumulationInstanceCount = 0u,
-        usize preparedAccumulationMaterialTypedByteCount = 0u,
-        // Graph declares accumulation attachments and depth in a finalizer; compat keeps its bridge.
-        bool accumulationFinalStatesGraphOwned = false,
-        // Interval producer may hand StorageImage outputs to graph-owned sampling.
-        bool accumulationCsgIntervalSampleImageStatesGraphOwned = false,
-        bool accumulationCsgClipBufferStatesGraphOwned = false,
+        const MaterialPassDrawItemPartitions& preparedAccumulationDrawItems,
+        const CsgFrameGpuData& preparedAccumulationCsgFrameData,
+        const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
+        usize preparedAccumulationInstanceCount,
+        usize preparedAccumulationMaterialTypedByteCount,
         bool accumulationMaterialFrameStatesGraphOwned = false,
         bool accumulationMaterialGeometryStatesGraphOwned = false,
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
@@ -218,29 +193,6 @@ public:
         Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
         bool* timingRecorded = nullptr
     );
-
-private:
-    void renderPreparedTransparentCsgIntervals(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const MaterialPassDrawItems& receiverSurfaceDrawItems,
-        const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        usize instanceCount,
-        usize materialTypedByteCount,
-        bool intervalTargetsGraphOwned,
-        bool receiverSurfaceImageStatesGraphOwned,
-        bool intervalPeelTargetStatesGraphOwned,
-        bool receiverSpanOutputImageStatesGraphOwned,
-        bool removedIntervalOutputImageStatesGraphOwned,
-        bool csgClipBufferStatesGraphOwned,
-        bool materialFrameStatesGraphOwned,
-        bool materialGeometryStatesGraphOwned,
-        bool deferIntervalCombine,
-        Optional<Core::GpuTimingMeasure>* deferredIntervalTiming
-    );
-
 
 private:
     Core::Alloc::GlobalArena& m_arena;

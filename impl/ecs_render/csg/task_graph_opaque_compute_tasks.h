@@ -102,8 +102,6 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool intervalSampleImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 

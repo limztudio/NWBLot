@@ -130,10 +130,7 @@ namespace ECSRenderDetail{
             deferredTargets,
             csgFrameData,
             payload.csgResources,
-            payload.frameBindings,
-            payload.csgIntervalPeelTargetStatesGraphOwned,
-            payload.csgClipBufferStatesGraphOwned,
-            payload.materialFrameStatesGraphOwned
+            payload.frameBindings
         );
     }
 
@@ -154,16 +151,12 @@ namespace ECSRenderDetail{
     if(deferredResourcesReady){
         const MaterialPassDrawContext opaqueDrawContext{
             commandList,
-            deferredTargets,
             deferredTargets.framebuffer.get(),
             nullptr,
             deferredViewportState,
             nullptr,
             payload.frameBindings,
             MaterialPipelinePass::Opaque,
-            false,
-            false,
-            false,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.regularComputeEmulationOutputStatesGraphOwned
@@ -213,16 +206,12 @@ namespace ECSRenderDetail{
         ;
         const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
             commandList,
-            deferredTargets,
             deferredTargets.framebuffer.get(),
             nullptr,
             csgIntervalViewportState,
             &payload.csgResources,
             payload.frameBindings,
             MaterialPipelinePass::CsgReceiverSurface,
-            payload.csgReceiverSurfaceImageStatesGraphOwned,
-            false,
-            payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgReceiverComputeEmulationOutputStatesGraphOwned

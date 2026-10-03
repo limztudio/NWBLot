@@ -18,7 +18,8 @@ from launcher.constants import (
     DEFAULT_DOMAIN,
     FILE_API_TARGET_EXECUTABLE,
     MSG_NOT_EXECUTABLE,
-    MSG_NO_METADATA,
+    MSG_EXECUTABLE_ARTIFACT_REQUIRED,
+    MSG_EXECUTABLE_METADATA_REQUIRED,
     MSG_NO_TARGETS,
     OPTION_WITH_PROFILE,
 )
@@ -73,15 +74,15 @@ class BuildController:
         if executable_override is not None:
             return executable_override if executable_override.is_absolute() else settings.root / executable_override
 
-        target_info = None if dry_run else _facade.load_cmake_target_info(settings.build_dir, target, settings.config)
-        if target_info is not None:
+        if not dry_run:
+            target_info = _facade.load_cmake_target_info(settings.build_dir, target, settings.config)
+            if target_info is None:
+                raise SystemExit(MSG_EXECUTABLE_METADATA_REQUIRED.format(target=target, config=settings.config))
             if target_info.target_type != FILE_API_TARGET_EXECUTABLE:
                 raise SystemExit(MSG_NOT_EXECUTABLE.format(target=target))
-            if target_info.artifacts:
-                return target_info.artifacts[0]
-
-        if not dry_run:
-            print(MSG_NO_METADATA, flush=True)
+            if not target_info.artifacts:
+                raise SystemExit(MSG_EXECUTABLE_ARTIFACT_REQUIRED.format(target=target, config=settings.config))
+            return target_info.artifacts[0]
 
         base_name = executable_base_name or _facade.target_default_executable_base_name(target)
         return _facade.output_root(settings.root, settings.platform_name, settings.arch, settings.domain) / settings.config / _facade.executable_name(

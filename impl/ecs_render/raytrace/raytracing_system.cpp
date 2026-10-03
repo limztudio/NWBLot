@@ -536,8 +536,7 @@ bool RendererRayTracingSystem::capturePreparedSceneTlasBuild(
 }
 
 bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
-    Core::CommandList& commandList,
-    const bool sceneTlasBuildStatesGraphOwned
+    Core::CommandList& commandList
 ){
     const auto& state = m_rayTracingState;
     if(
@@ -565,22 +564,12 @@ bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
         }
     }
 
-    // Normal graph preparation declares Write before this callback and the adjacent state-only finalizer publishes Read afterwards.
-    // Direct and compatibility callers retain the historical native Write -> Read bridge.
-    if(!sceneTlasBuildStatesGraphOwned){
-        commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructWrite);
-        commandList.commitBarriers();
-    }
     commandList.buildTopLevelAccelStruct(
         m_preparedSceneTlas.get(),
         m_preparedSceneTlasInstances.data(),
         m_preparedSceneTlasInstances.size(),
         Core::RayTracingAccelStructBuildFlags::PreferFastTrace
     );
-    if(!sceneTlasBuildStatesGraphOwned){
-        commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructRead);
-        commandList.commitBarriers();
-    }
     m_rayTracingState.m_tlasDeviceAddress = m_preparedSceneTlas->getDeviceAddress();
     return true;
 }
@@ -621,19 +610,8 @@ void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
     // This callback follows the accepted persistent-state handoff. A later graph import must use that binding rather than reasserting Common for this backing generation.
     if(preparedTlasMatchesCurrent){
         state.m_tlasBackingFresh = false;
-        state.m_tlasBackingStateHandoffPending = false;
     }
     clearPreparedSceneTlasBuild();
-}
-
-void RendererRayTracingSystem::confirmAcceptedShadowPrepareAccelStructStateHandoffs()noexcept{
-    auto& state = m_rayTracingState;
-    if(state.m_tlasBackingFresh && state.m_tlasBackingStateHandoffPending){
-        state.m_tlasBackingFresh = false;
-        state.m_tlasBackingStateHandoffPending = false;
-    }
-
-    m_meshSystem.confirmAcceptedRayTracingStateHandoffs();
 }
 
 bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena){
@@ -718,7 +696,6 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
-    m_rayTracingState.m_tlasBackingStateHandoffPending = false;
     m_shadowVisibilityPreparedTargets = nullptr;
     m_preparedSceneContentStamp = {};
     m_hardwareOpticalScene.resetPrepared();
@@ -813,6 +790,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(!capturePreparedMeshBlasBuilds(scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
             clearPreparedSceneTlasBuild();
+            return false;
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
         const bool backendReady = ensureShadowPipeline();
@@ -892,7 +870,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         return true;
     }
     // Enable surfel GI on the SW path and create its resources in the prepare phase right after the scene BVH is resident.
-    // renderSurfelGi can then spawn, hash, and trace on the same frame surfels become active.
+    // The prepared GI stages can then spawn, hash, and trace on the same frame surfels become active.
     // The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.
     if(m_rayTracingState.m_sceneBvhInstanceCount > 0u && m_rayTracingState.m_swShadowMeshCount > 0u){
         m_rayTracingState.m_surfelEnabled = true;
@@ -909,9 +887,10 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         return true;
     }
     // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal hardware fallback.
-    // A capture miss keeps the established direct recorder for this frame rather than mixing a partially frozen operation with a live one.
-    if(!capturePreparedMeshSwBvhBuilds(scratchArena))
+    if(!capturePreparedMeshSwBvhBuilds(scratchArena)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
+        return false;
+    }
     m_shadowVisibilityTraceResourcesPreflighted = true;
 
     const bool backendReady = ensureSwShadowPipeline();
@@ -971,7 +950,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     bool& outBackendReady,
-    const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneTlasBuildGraphOwned,
     const bool meshBlasBuildsGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned,
@@ -982,49 +960,23 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-
     // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity growth
     // recording: the shared graph has already frozen its imported resource identities.
     if(!m_shadowVisibilityTraceResourcesPreflighted)
         return true;
 
     if(m_shadowVisibilityHardwareSupported){
-        const bool meshBlasReady = meshBlasBuildsGraphOwned
-            ? recordPreparedMeshBlasBuilds(commandList, true, meshBlasGeometryBuildInputStatesGraphOwned)
-            : buildPendingMeshBlas(commandList, scratchArena)
-        ;
-        if(!meshBlasReady){
-            m_rayTracingState.m_softTransparentReady = false;
-            m_rayTracingState.m_softTransparentTemporalReady = false;
-            m_rayTracingState.m_surfelEnabled = false;
-            m_rayTracingState.m_surfelUseHwTrace = false;
-            return !meshBlasBuildsGraphOwned && !sceneTlasBuildGraphOwned;
-        }
-        const bool sceneTlasReady = sceneTlasBuildGraphOwned
-            ? recordPreparedSceneTlasBuild(commandList, true)
-            : buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)
-        ;
-        if(!sceneTlasReady){
-            m_rayTracingState.m_softTransparentReady = false;
-            m_rayTracingState.m_softTransparentTemporalReady = false;
-            m_rayTracingState.m_surfelEnabled = false;
-            m_rayTracingState.m_surfelUseHwTrace = false;
-            return !sceneTlasBuildGraphOwned && !shadowMaterialContextBatchGraphOwned;
-        }
+        if(meshBlasBuildsGraphOwned && !recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
+            return false;
+        if(sceneTlasBuildGraphOwned && !recordPreparedSceneTlasBuild(commandList))
+            return false;
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
         return true;
     }
 
-    const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-        // Pure software Shadow Preparation has no preceding hardware BLAS producer. Its frozen position/index inputs are declared as ShaderResource by the graph. When per-operation typed clears and compute tasks already recorded in this same accepting packet, retain only the existing scene-BVH/material tail here.
-        ? (preparedMeshSwBvhBuildsRecordedByGraph || recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned))
-        : buildPendingMeshSwBvh(commandList, scratchArena)
-    ;
-    if(!meshSwBvhReady){
-        if(meshSwBvhBuildsGraphOwned)
-            return false;
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
+    if(!m_preparedMeshSwBvhBuildPlanFrozen || (meshSwBvhBuildsGraphOwned && !preparedMeshSwBvhBuildsRecordedByGraph)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
+        return false;
     }
     // Pure software frames have no opaque-HW fallback. Fresh uploads and accepted cache reuse both retain their matching traversal snapshot,
     // recording validates that exact plan without regathering scene/material data. A missing or stale plan rejects the packet

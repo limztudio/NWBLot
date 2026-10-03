@@ -76,7 +76,6 @@ void RendererRayTracingState::invalidateResources(){
     // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
     m_tlas.reset();
     m_tlasBackingFresh = false;
-    m_tlasBackingStateHandoffPending = false;
     m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_tlasMaxInstances = 0u;
     m_tlasDeviceAddress = 0u;

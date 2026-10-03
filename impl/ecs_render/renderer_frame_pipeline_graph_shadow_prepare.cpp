@@ -520,7 +520,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
-    bool meshBlasGeometryBuildInputStatesGraphOwned =
+    const bool meshBlasGeometryBuildInputStatesGraphOwned =
         meshBlasBuildsGraphOwned
         && !softwareTraceResourcesPrepared
         && !meshSwBvhBuildsGraphOwned
@@ -582,10 +582,10 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
 
     bool resourcesImported = true;
-    geometryResources.gatherBuildInputs(
-        m_deferredLightingTaskGraph,
-        meshBlasGeometryBuildInputStatesGraphOwned
-    );
+    if(!geometryResources.gatherBuildInputs(m_deferredLightingTaskGraph)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
+        return false;
+    }
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
@@ -600,7 +600,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             );
             resourcesImported = resourcesImported && blas.valid();
             if(blas.valid()){
-                // Typed resource lowers state via backing allocation; compat routes keep native bridge.
+                // Typed acceleration-structure uses lower through their backing allocation.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
             }
@@ -709,7 +709,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
                 accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
             }
             else{
-                // Compat builders keep their native sequence; final handoff stays unchanged.
+                // Cached scene TLAS remains read-ready; retain its accepted-state handoff.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructRead));
             }
         }
@@ -731,7 +731,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourcesImported = resourcesImported && blas.valid();
         if(blas.valid()){
             if(state.nativeBuildsBlas){
-                // Compat and frozen plans record native sequences; backing seeds on next declaration.
+                // Retained backing keeps its accepted read state until the selected build is published.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructRead));
             }
             else{
@@ -745,13 +745,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
+    const bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
     if(pureSoftwareMeshSwBvhBuildsGraphOwned && !ResolvePreparedSoftwareBvhGraphResources(
         m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, pureSoftwareMeshSwBvhGraphResources
     )){
-        // Keep the aggregate direct path for operations without exact graph identity.
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH build is missing graph resources; retaining aggregate compatibility recorder"));
-        pureSoftwareMeshSwBvhBuildsGraphOwned = false;
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
+        return false;
     }
 
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
@@ -871,7 +870,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     if(const auto& sceneRefit = m_raytracingSystem.preparedSceneSwBvhRefit(); sceneRefit){
-        // A refit cannot precede a mesh build deferred into the aggregate endpoint recorder.
+        // A scene refit requires every frozen mesh build to be declared before it.
         if(
             !m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
             || (!preparedMeshSwBvhBuilds.empty() && !pureSoftwareMeshSwBvhBuildsGraphOwned)
@@ -983,7 +982,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
             // The immutable typed final-state collection expands to the same compiler inputs. Retain the
-            // individual declarations if a future compatibility route cannot form a complete unique set.
+            // individual declarations when members cannot form a complete unique set.
             .setResourceUses(
                 accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(),
                 accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size()

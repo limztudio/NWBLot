@@ -58,8 +58,6 @@ struct AvboitComputeEmulationRecordInputs{
     usize materialTypedByteCount = 0u;
     bool materialDrawBuffersUploaded = false;
     bool csgFrameBuffersUploaded = false;
-    bool csgIntervalSampleImageStatesGraphOwned = false;
-    bool csgClipBufferStatesGraphOwned = false;
     bool materialFrameStatesGraphOwned = false;
     bool materialGeometryStatesGraphOwned = false;
     bool conservativeGeometryScissor = false;
@@ -145,8 +143,6 @@ template<typename PayloadT>
         payload.materialTypedByteCount,
         payload.materialDrawBuffersUploaded,
         payload.csgFrameBuffersUploaded,
-        payload.csgIntervalSampleImageStatesGraphOwned,
-        payload.csgClipBufferStatesGraphOwned,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
         payload.conservativeGeometryScissor,
@@ -181,24 +177,20 @@ template<typename PayloadT, typename DispatchFn>
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItemPartitions drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
-    const MaterialPassDrawItemPartitions* preparedDrawItems = nullptr;
-    const CsgFrameGpuData* preparedCsgFrameData = nullptr;
     usize preparedInstanceCount = 0u;
     usize preparedMaterialTypedByteCount = 0u;
     if(payload.hasTransparentRenderers && (!(payload.*phasePreparedMember) || !(payload.*snapshotMember).captured))
         return false;
     if((payload.*phasePreparedMember) && (payload.*snapshotMember).captured){
         (payload.*snapshotMember).materialize(drawItems, csgFrameData);
-        preparedDrawItems = &drawItems;
-        preparedCsgFrameData = &csgFrameData;
         preparedInstanceCount = (payload.*snapshotMember).instanceCount;
         preparedMaterialTypedByteCount = (payload.*snapshotMember).materialTypedByteCount;
     }
     if(payload.hasTransparentRenderers){
         dispatch(
             commandList,
-            preparedDrawItems,
-            preparedCsgFrameData,
+            drawItems,
+            csgFrameData,
             preparedInstanceCount,
             preparedMaterialTypedByteCount
         );

@@ -54,9 +54,6 @@ struct GbufferGraphTask{
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool csgIntervalPeelTargetStatesGraphOwned = false;
-        bool csgReceiverSurfaceImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool regularComputeEmulationOutputStatesGraphOwned = false;

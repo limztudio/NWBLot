@@ -93,30 +93,14 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     occupancyPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
 
-    const bool occupancyCsgIntervalSampleImageStatesGraphOwned =
-        inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
-    ;
-    const bool occupancyCsgClipBufferStatesGraphOwned = inputs.csgStreamsUploaded;
+    const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
     NWB_ASSERT(
-        !occupancyCsgIntervalSampleImageStatesGraphOwned
+        !hasCsgIntervalReads
         || (
             occupancyPayload.occupancyStreamsUploaded
             && occupancyPayload.occupancySnapshot.captured
         )
     );
-    NWB_ASSERT(
-        !occupancyCsgClipBufferStatesGraphOwned
-        || (
-            occupancyPayload.occupancyStreamsUploaded
-            && occupancyPayload.occupancySnapshot.captured
-        )
-    );
-    occupancyPayload.occupancyCsgIntervalSampleImageStatesGraphOwned =
-        occupancyCsgIntervalSampleImageStatesGraphOwned
-    ;
-    occupancyPayload.occupancyCsgClipBufferStatesGraphOwned =
-        occupancyCsgClipBufferStatesGraphOwned
-    ;
     occupancyPayload.occupancyMaterialFrameStatesGraphOwned = occupancyPayload.occupancyStreamsUploaded;
     occupancyPayload.occupancyMaterialGeometryStatesGraphOwned =
         occupancyPayload.occupancyStreamsUploaded
@@ -216,7 +200,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     avboitPreResourceUses.reserve(
         __hidden_avboit_occupancy_record::s_ResourceBaseCount
         + (occupancyPayload.occupancyStreamsUploaded ? __hidden_avboit_occupancy_record::s_StreamUseCount : 0u)
-        + (occupancyCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_occupancy_record::s_CsgIntervalUseCount : 0u)
+        + (hasCsgIntervalReads ? __hidden_avboit_occupancy_record::s_CsgIntervalUseCount : 0u)
     );
     avboitPreResourceUses.push_back(ReadUse(inputs.albedo));
     avboitPreResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -237,7 +221,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             avboitPreResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
         }
     }
-    if(occupancyCsgIntervalSampleImageStatesGraphOwned){
+    if(hasCsgIntervalReads){
         AppendCsgRemovedIntervalUses(
             avboitPreResourceUses,
             inputs.csgRemovedIntervalDepth,
@@ -325,10 +309,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         computeEmulationPayload.materialDrawBuffersUploaded =
             occupancyPayload.occupancyStreamsUploaded;
         computeEmulationPayload.csgFrameBuffersUploaded = inputs.csgStreamsUploaded;
-        computeEmulationPayload.csgIntervalSampleImageStatesGraphOwned =
-            occupancyCsgIntervalSampleImageStatesGraphOwned;
-        computeEmulationPayload.csgClipBufferStatesGraphOwned =
-            occupancyCsgClipBufferStatesGraphOwned;
         computeEmulationPayload.materialFrameStatesGraphOwned =
             occupancyPayload.occupancyMaterialFrameStatesGraphOwned;
         computeEmulationPayload.materialGeometryStatesGraphOwned =

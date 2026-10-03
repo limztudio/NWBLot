@@ -24,7 +24,6 @@ static constexpr AStringView s_ASSETS = "assets";
 static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_GI = "gi";
 static constexpr AStringView s_RAYTRACE = "raytrace";
-static constexpr AStringView s_NWBSHADOWDISPATCHSURFACE = "nwbShadowDispatchSurface";
 static constexpr AStringView s_GI_SW_TRACE_SLANGI = "gi_sw_trace.slangi";
 static constexpr AStringView s_GI_HW_TRACE_SLANGI = "gi_hw_trace.slangi";
 static constexpr AStringView s_GRAPH = "graph";
@@ -164,126 +163,6 @@ TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction
     EXPECT_TRUE(ContainsText(sw, "nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2)"));
     EXPECT_TRUE(ContainsText(hw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
     EXPECT_TRUE(ContainsText(hw, "RAY_FLAG_FORCE_OPAQUE"));
-}
-
-
-// Trace dispatch must declare the sampled textures captured during material preflight.
-TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
-    TestArena testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-
-    AString deferredLightingTaskGraphSource;
-    AString shadowVisibilityTaskGraphSource;
-    AString causticsTaskGraphSource;
-    AString hardwareCausticsStageSource;
-    AString surfelGiTaskGraphSource;
-    AString materialSurfaceSource;
-    AString rayTracingSystemSource;
-    AString rayTracingSystemHeader;
-    AString swBvhSource;
-    AString swShadowTraceSource;
-    AString hwShadowTraceSource;
-    AString swCausticSource;
-    AString hwCausticSource;
-    AString swGiTraceSource;
-    AString hwGiTraceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_caustics.cpp", causticsTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "hardware_caustics_stage_builder.cpp", hardwareCausticsStageSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiTaskGraphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "material" / "material_surface.cpp", materialSurfaceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_system.h", rayTracingSystemHeader));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_swbvh_scene_swbvh.cpp", swBvhSource));
-    AString swBvhTlasSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_swbvh_scene_tlas.cpp", swBvhTlasSource));
-    swBvhSource.insert(swBvhSource.end(), swBvhTlasSource.begin(), swBvhTlasSource.end());
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_SHADOW / "sw_shadow_traverse.slangi", swShadowTraceSource));
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "assets" / "graphics" / s_SHADOW / "hardware_transparent_evaluate.slangi", hwShadowTraceSource
-    ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / "caustic" / "caustic_photon_sw_cs.slang", swCausticSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / "caustic" / "caustic_photon_hw_chit.slang", hwCausticSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swGiTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwGiTraceSource));
-
-    const AStringView deferredLightingTaskGraph(deferredLightingTaskGraphSource.data(), deferredLightingTaskGraphSource.size());
-    const AStringView shadowVisibilityTaskGraph(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
-    const AStringView causticsTaskGraph(causticsTaskGraphSource.data(), causticsTaskGraphSource.size());
-    const AStringView hardwareCausticsStage(hardwareCausticsStageSource.data(), hardwareCausticsStageSource.size());
-    const usize hardwareSampledUseStart = hardwareCausticsStage.find("const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{");
-    ASSERT_NE(hardwareSampledUseStart, AStringView::npos);
-    const usize hardwareSampledUseEnd = hardwareCausticsStage.find("};", hardwareSampledUseStart);
-    ASSERT_NE(hardwareSampledUseEnd, AStringView::npos);
-    const AStringView hardwareSampledUse = hardwareCausticsStage.substr(hardwareSampledUseStart, hardwareSampledUseEnd - hardwareSampledUseStart);
-    const AStringView surfelGiTaskGraph(surfelGiTaskGraphSource.data(), surfelGiTaskGraphSource.size());
-    const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
-    const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
-    const AStringView rayTracingSystemHeaderView(rayTracingSystemHeader.data(), rayTracingSystemHeader.size());
-    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
-    const AStringView swShadowTrace(swShadowTraceSource.data(), swShadowTraceSource.size());
-    const AStringView hwShadowTrace(hwShadowTraceSource.data(), hwShadowTraceSource.size());
-    const AStringView swCaustic(swCausticSource.data(), swCausticSource.size());
-    const AStringView hwCaustic(hwCausticSource.data(), hwCausticSource.size());
-    const AStringView swGiTrace(swGiTraceSource.data(), swGiTraceSource.size());
-    const AStringView hwGiTrace(hwGiTraceSource.data(), hwGiTraceSource.size());
-
-    EXPECT_TRUE(ContainsText(materialSurface, "appendPreparedMaterialSurfaceSampledTextures"));
-    EXPECT_TRUE(ContainsText(rayTracingSystemHeaderView, "PreparedShadowTraceMaterialSampledTextureVector"));
-    EXPECT_TRUE(ContainsText(rayTracingSystem, "appendPreparedShadowTraceMaterialSampledTextures"));
-    EXPECT_TRUE(ContainsText(swBvh, "materialInfo->surfaceDispatchId != Limit<u32>::s_Max"));
-
-    EXPECT_TRUE(ContainsText(swShadowTrace, s_NWBSHADOWDISPATCHSURFACE));
-    EXPECT_TRUE(ContainsText(hwShadowTrace, s_NWBSHADOWDISPATCHSURFACE));
-    EXPECT_TRUE(ContainsText(swCaustic, s_NWBSHADOWDISPATCHSURFACE));
-    EXPECT_TRUE(ContainsText(hwCaustic, s_NWBSHADOWDISPATCHSURFACE));
-    EXPECT_TRUE(ContainsText(swGiTrace, s_NWBSHADOWDISPATCHSURFACE));
-    EXPECT_TRUE(ContainsText(hwGiTrace, s_NWBSHADOWDISPATCHSURFACE));
-
-    EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "render.trace_material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "Trace Material Sampled Textures"));
-    EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "render.shadow_visibility.soft_transparent_trace"));
-    EXPECT_TRUE(ContainsText(causticsTaskGraph, "render.software_caustics.photons"));
-    EXPECT_TRUE(ContainsText(hardwareCausticsStage, "render.hardware_caustics.photons"));
-    EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "render.surfel_gi.trace"));
-    EXPECT_TRUE(ContainsText(hardwareCausticsStage, "traceMaterialSampledTextureSetUse"));
-    EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet)"));
-    EXPECT_TRUE(ContainsText(causticsTaskGraph, "traceMaterialSampledTextureSetUse"));
-    EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet)"));
-    EXPECT_TRUE(ContainsText(hardwareSampledUse, ".resourceSet = inputs.traceMaterialSampledTextureSet"));
-    EXPECT_TRUE(ContainsText(hardwareSampledUse, ".requiredState = Core::ResourceStates::ShaderResource"));
-    EXPECT_TRUE(ContainsText(hardwareSampledUse, ".access = Core::GpuTaskResourceAccess::Read"));
-    EXPECT_TRUE(ContainsBeforeClosingBrace(
-        hardwareCausticsStage,
-        "if(inputs.traceMaterialSampledTextureSet.valid())",
-        "hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;"
-    ));
-    EXPECT_TRUE(ContainsBeforeClosingBrace(
-        hardwareCausticsStage,
-        "Core::GpuTaskDesc hardwarePhotonDesc;",
-        "hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses : nullptr"
-    ));
-    EXPECT_TRUE(ContainsBeforeClosingBrace(
-        deferredLightingTaskGraph,
-        "HardwareCausticsStageInputs{",
-        ".traceMaterialSampledTextureSet = traceMaterialSampledTextureSet"
-    ));
-    EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "if(!hardwareCausticsStageBuilder.declare("));
-    EXPECT_TRUE(ContainsBeforeClosingBrace(
-        deferredLightingTaskGraph,
-        "could not declare hardware-caustics stage",
-        s_RETURN
-    ));
-    EXPECT_TRUE(ContainsText(
-        swBvh,
-        "HW shadow material context changed after graph preflight; rejecting frozen upload batch"
-    ));
-    // The software scene-BVH path prepares its material context preflight-only
-    EXPECT_TRUE(ContainsText(
-        swBvh,
-        "could not freeze software scene traversal"
-    ));
 }
 
 

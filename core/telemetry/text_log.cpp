@@ -25,6 +25,7 @@ namespace __hidden_telemetry_text_log{
 
 [[nodiscard]] static bool ValidatePayloadHeader(const EncodedTextLogPayloadHeader& header)noexcept{
     return header.magic == s_TextLogPayloadMagic
+        && header.version == s_TextLogPayloadVersion
         && header.reserved == 0u
         && IsValidTextLogType(static_cast<Common::LogType::Enum>(header.type))
     ;

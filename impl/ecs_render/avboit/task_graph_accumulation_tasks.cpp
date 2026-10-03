@@ -76,8 +76,8 @@ namespace RendererTaskGraphDetail{
         &Payload::accumulationComputeEmulationTiming,
         [&](
             Core::CommandList& dispatchCommandList,
-            const MaterialPassDrawItemPartitions* dispatchDrawItems,
-            const CsgFrameGpuData* dispatchCsgFrameData,
+            const MaterialPassDrawItemPartitions& dispatchDrawItems,
+            const CsgFrameGpuData& dispatchCsgFrameData,
             const usize dispatchInstanceCount,
             const usize dispatchMaterialTypedByteCount
         ){
@@ -86,14 +86,10 @@ namespace RendererTaskGraphDetail{
                 *payload.targets,
                 dispatchDrawItems,
                 dispatchCsgFrameData,
-                &payload.csgResources,
-                &payload.frameBindings,
+                payload.csgResources,
+                payload.frameBindings,
                 dispatchInstanceCount,
                 dispatchMaterialTypedByteCount,
-                // The mergeable finalizer owns the framebuffer handoff.
-                true,
-                payload.accumulationCsgIntervalSampleImageStatesGraphOwned,
-                payload.accumulationCsgClipBufferStatesGraphOwned,
                 payload.accumulationMaterialFrameStatesGraphOwned,
                 payload.accumulationMaterialGeometryStatesGraphOwned,
                 payload.accumulationComputeEmulationOutputStatesGraphOwned,

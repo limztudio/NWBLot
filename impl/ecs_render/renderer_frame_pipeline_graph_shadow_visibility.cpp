@@ -58,8 +58,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
     bool& opaqueProduced,
     bool& transparentTraceProduced,
-    u32& opaqueFrameIndex
-){
+    u32& opaqueFrameIndex){
     using namespace RendererTaskGraphDetail;
 
     const bool hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;
@@ -280,7 +279,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     bool optionalResourcesImported =
         (
             // The retained monolith selects its adaptive fallback only after runtime slot checks. Declare coarse as
-            // an output across that whole compatibility route, while prepared split callbacks omit it completely.
+            // an output across that whole adaptive route, while prepared split callbacks omit it completely.
             splitSoftTransparentFold
             || appendOptionalWriteTexture(
                 deferredTargets.shadowCoarseTransmittance,
@@ -464,7 +463,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         ? traceResourceSets.uses[0u]
         : Core::GpuTaskResourceSetUse{};
 
-
     // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB
     // resolve as adjacent callbacks. Re-importing retains shared graph identities while making each graph-owned
     // handoff explicit.
@@ -591,7 +589,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
 
         // The opaque callback has no temporal or coarse scratch access. Keep its direct serial writes separate from
-        // the monolithic compatibility vector so a fresh retained target never becomes a synthetic first read.
+        // the unsplit adaptive declaration so a fresh retained target never becomes a synthetic first read.
         constexpr usize s_OpaqueResourceUseCapacity = 18u;
         opaqueResourceUses.reserve(s_OpaqueResourceUseCapacity + (
             traceGeometryStatesGraphOwned
@@ -922,7 +920,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &shadowVisibilityTiming,
             &opaqueProduced,
             &opaqueFrameIndex,
-            true,
             graphOwnsOpaqueTemporalMergeEntryStates,
             &rayTracingPlan.lightSpace
         );
@@ -962,7 +959,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 &opaqueProduced,
                 &opaqueFrameIndex,
                 hardwareShadowSupported,
-                true,
                 graphOwnsOpaqueTemporalMergeEntryStates,
                 combinedSoftUpsample,
                 combinedSoftWavelet
@@ -994,8 +990,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 &opaqueResolveTiming,
                 &opaqueProduced,
                 &opaqueFrameIndex,
-                hardwareShadowSupported,
-                true
+                hardwareShadowSupported
             );
             if(!m_deferredShadowVisibilityOpaqueResolveTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
@@ -1030,7 +1025,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &opaqueFrameIndex,
             &transparentTraceProduced,
-            true,
             &rayTracingPlan.lightSpace
         );
         if(!m_deferredShadowVisibilityTransparentTraceTask.valid()){
@@ -1068,7 +1062,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                     &transparentTraceProduced,
                     &opaqueFrameIndex,
                     true,
-                    true,
                     combinedSoftTemporal,
                     hardwareShadowSupported
                 )
@@ -1100,7 +1093,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &transparentTraceProduced,
             &opaqueFrameIndex,
-            true,
             true,
             !graphOwnsTransparentTemporalMergeEntryStates,
             combinedSoftWavelet
@@ -1134,7 +1126,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &transparentTraceProduced,
             &opaqueFrameIndex,
-            true,
             combinedSoftUpsample
         );
         if(!m_deferredShadowVisibilityTask.valid()){
@@ -1254,8 +1245,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         &m_shadowPreparationOutcome.ready,
         hardwareShadowSupported,
         timingTicket,
-        true,
-        true,
         graphOwnedAdaptivePlan
     );
     if(!m_deferredShadowVisibilityTask.valid()){

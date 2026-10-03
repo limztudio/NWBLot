@@ -137,16 +137,12 @@ struct CaptureDrawTask{
         viewport.addViewportAndScissorRect(payload.avboitTargets.refractionFramebuffer->getFramebufferInfo().getViewport());
         const MaterialPassDrawContext drawContext{
             commandList,
-            *payload.deferredTargets,
             payload.generate ? nullptr : payload.avboitTargets.refractionFramebuffer.get(),
             &payload.avboitTargets,
             viewport,
             payload.csg ? &payload.csgResources : nullptr,
             payload.frameBindings,
             MaterialPipelinePass::AvboitRefractionCapture,
-            false,
-            true,
-            true,
             true,
             true,
             true,

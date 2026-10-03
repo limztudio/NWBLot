@@ -127,7 +127,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutALegacyActivation){
+TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActivation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     focus();
     press(Core::Key::Down);

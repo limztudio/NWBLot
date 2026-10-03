@@ -105,7 +105,7 @@ using PreparedMeshSwBvhBuildVector = Vector<
 
 
 // The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning buffer
-// handles rather than the mutable raw tables rebuilt by the legacy recording path.
+// handles so recording consumes the same resources captured during preparation.
 struct PreparedSceneSwBvhMesh{
     Name meshName = NAME_NONE;
     Core::BufferHandle nodeBuffer;

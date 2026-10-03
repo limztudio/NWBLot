@@ -47,7 +47,6 @@ struct ShadowVisibilityOpaqueGraphTask{
         bool* opaqueProduced = nullptr;
         u32* opaqueFrameIndex = nullptr;
         bool hardwareShadowSupported = false;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
     };
 
@@ -109,7 +108,6 @@ struct ShadowVisibilityOpaqueGraphTask{
                     *payload.targets,
                     payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
-                    payload.graphEntryStatesOwned,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates,
                     &payload.lightSpace
                 )
@@ -118,7 +116,6 @@ struct ShadowVisibilityOpaqueGraphTask{
                     *payload.targets,
                     payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
-                    payload.graphEntryStatesOwned,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates,
                     &payload.lightSpace
                 )
@@ -186,7 +183,6 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool hardwareShadowSupported = false;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
         bool deferUpsample = false;
         bool deferWavelet = false;
@@ -231,7 +227,6 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.hardwareShadowSupported,
-            payload.graphEntryStatesOwned,
             payload.graphOwnsOpaqueTemporalMergeEntryStates,
             payload.deferWavelet ? SoftShadowOpaqueResolvePhase::TemporalOnly : SoftShadowOpaqueResolvePhase::TemporalAndWavelet
         )){
@@ -291,7 +286,6 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool hardwareShadowSupported = false;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -323,8 +317,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
             *payload.targets,
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
-            payload.hardwareShadowSupported,
-            payload.graphEntryStatesOwned
+            payload.hardwareShadowSupported
         )){
             payload.opaqueResolveTiming->value().finishTiming(commandList);
             payload.opaqueResolveTiming->reset();
@@ -364,7 +357,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
 
 
 // The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output
-// from UAV to shader-read between them. The terminal resolve task retains the legacy timing and acceptance owner.
+// from UAV to shader-read between them. The terminal resolve task owns shared timing and acceptance.
 struct ShadowTransparentSoftTraceGraphTask{
     // Transparent hardware fallback also initializes its indirect dispatch arguments through a buffer upload.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
@@ -380,7 +373,6 @@ struct ShadowTransparentSoftTraceGraphTask{
         const bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool* transparentTraceProduced = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -410,7 +402,6 @@ struct ShadowTransparentSoftTraceGraphTask{
             *payload.targets,
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
-            payload.graphEntryStatesOwned,
             true,
             &payload.lightSpace
         )){
@@ -443,7 +434,6 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         const bool* opaqueProduced = nullptr;
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsTransparentTemporalMergeEntryStates = false;
         bool combinedTemporal = false;
         bool hardwareShadowSupported = false;
@@ -475,8 +465,13 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             if(!payload.combinedTemporal)
                 return true;
             return payload.raytracingSystem->renderSoftOpaqueShadowResolvePhase(
-                commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
-                payload.hardwareShadowSupported, payload.graphEntryStatesOwned, true, SoftShadowOpaqueResolvePhase::TemporalOnly
+                commandList,
+                *payload.targets,
+                payload.deferredLightingResources,
+                *payload.opaqueFrameIndex,
+                payload.hardwareShadowSupported,
+                true,
+                SoftShadowOpaqueResolvePhase::TemporalOnly
             );
         };
         if(!*payload.transparentTraceProduced)
@@ -494,8 +489,11 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         const bool merged = payload.combinedTemporal
             ? payload.raytracingSystem->renderSoftShadowCombinedTemporalMerge(commandList, *payload.targets)
             : payload.raytracingSystem->renderSoftTransparentShadowTemporalMerge(
-                commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
-                payload.graphEntryStatesOwned, payload.graphOwnsTransparentTemporalMergeEntryStates
+                commandList,
+                *payload.targets,
+                payload.deferredLightingResources,
+                *payload.opaqueFrameIndex,
+                payload.graphOwnsTransparentTemporalMergeEntryStates
             )
         ;
         if(merged){
@@ -532,7 +530,6 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         const bool* opaqueProduced = nullptr;
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
-        bool graphEntryStatesOwned = false;
         bool graphOwnsTransparentWaveletInputBoundary = false;
         bool startsTransparentResolveTiming = true;
         bool combinedWavelet = false;
@@ -573,7 +570,6 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
                 payload.deferredLightingResources,
                 *payload.opaqueFrameIndex,
                 true,
-                payload.graphEntryStatesOwned,
                 true,
                 SoftShadowOpaqueResolvePhase::WaveletOnly
             );
@@ -605,7 +601,6 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             *payload.targets,
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
-            payload.graphEntryStatesOwned,
             payload.graphOwnsTransparentWaveletInputBoundary
         )){
             if(payload.startsTransparentResolveTiming && !Core::FinishSplitGpuTimingMarker(payload.transparentResolveTiming))
@@ -644,7 +639,6 @@ struct ShadowTransparentSoftFoldGraphTask{
         const bool* opaqueProduced = nullptr;
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
-        bool graphEntryStatesOwned = false;
         bool combinedUpsample = false;
     };
 
@@ -684,11 +678,16 @@ struct ShadowTransparentSoftFoldGraphTask{
                 return false;
             const bool resolved = payload.combinedUpsample
                 ? payload.raytracingSystem->renderSoftShadowTerminalUpsample(
-                    commandList, *payload.targets, payload.deferredLightingResources, true, payload.graphEntryStatesOwned
+                    commandList,
+                    *payload.targets,
+                    payload.deferredLightingResources,
+                    true
                 )
                 : payload.raytracingSystem->renderSoftTransparentShadowFold(
-                    commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
-                    payload.graphEntryStatesOwned
+                    commandList,
+                    *payload.targets,
+                    payload.deferredLightingResources,
+                    *payload.opaqueFrameIndex
                 )
             ;
             if(resolved){
@@ -712,7 +711,10 @@ struct ShadowTransparentSoftFoldGraphTask{
         // Fusion deferred the opaque upsample, so a failed transparent phase must still publish opaque visibility.
         if(payload.combinedUpsample && !*payload.transparentTraceProduced){
             if(!payload.raytracingSystem->renderSoftShadowTerminalUpsample(
-                commandList, *payload.targets, payload.deferredLightingResources, false, payload.graphEntryStatesOwned
+                commandList,
+                *payload.targets,
+                payload.deferredLightingResources,
+                false
             ))
                 return false;
         }
@@ -747,8 +749,6 @@ struct ShadowVisibilityGraphTask{
 
     struct Payload{
         bool hardwareShadowSupported = false;
-        bool graphEntryStatesOwned = false;
-        bool graphOwnsAllLitVisibilityClear = false;
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -797,8 +797,7 @@ struct ShadowVisibilityGraphTask{
             shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(
                 commandList,
                 *payload.targets,
-                payload.deferredLightingResources,
-                payload.graphEntryStatesOwned
+                payload.deferredLightingResources
             );
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
@@ -808,7 +807,6 @@ struct ShadowVisibilityGraphTask{
                 commandList,
                 *payload.targets,
                 payload.deferredLightingResources,
-                payload.graphEntryStatesOwned,
                 false,
                 nullptr,
                 false,
@@ -816,11 +814,7 @@ struct ShadowVisibilityGraphTask{
                 graphOwnedAdaptivePlan
             );
         }
-        // The retained monolithic graph path always records a typed white clear immediately before this callback.
-        // A producer overwrites it; a no-producer/preflight-failure path leaves its all-lit result intact. Direct
-        // compatibility callers and split soft-shadow fallback callbacks retain their local native clear.
-        if(!shadowVisibilityWritten && !payload.graphOwnsAllLitVisibilityClear)
-            payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
+        // The preceding typed white clear remains the all-lit result when no producer records.
 
         if(asyncTiming){
             asyncTiming->finishTiming(commandList);

@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import ctypes
-import os
 import platform
 import sys
 from pathlib import Path
@@ -23,6 +22,9 @@ from launcher.constants import (
     EXEC_OUTPUT_ROOT_DIR,
     EXEC_WINDOWS_SUFFIX,
     MSG_UNSUPPORTED_ARCH,
+    MSG_WINDOWS_ARCH_API_REQUIRED,
+    MSG_WINDOWS_ARCH_QUERY_FAILED,
+    MSG_WINDOWS_NATIVE_MACHINE_UNSUPPORTED,
     NWB_TARGET_PREFIX,
     PLATFORM_DARWIN,
     PLATFORM_DARWIN_SYSTEM,
@@ -35,8 +37,6 @@ from launcher.constants import (
     PRESET_NAME_FORMAT,
     PRESET_TOOLCHAIN,
     SUPPORTED_ARCHITECTURES,
-    WINDOWS_ENV_ARCH,
-    WINDOWS_ENV_ARCH6432,
     WINDOWS_KERNEL32,
     WINDOWS_NATIVE_MACHINE_NAMES,
     WINDOWS_WOW64_PROC2,
@@ -60,11 +60,11 @@ class HostProbe:
         return sys.platform.lower()
 
     @staticmethod
-    def query_windows_native_machine_name() -> Optional[str]:
+    def query_windows_native_machine_name() -> str:
         kernel32 = ctypes.WinDLL(WINDOWS_KERNEL32, use_last_error=True)
         is_wow64_process2 = getattr(kernel32, WINDOWS_WOW64_PROC2, None)
         if is_wow64_process2 is None:
-            return None
+            raise SystemExit(MSG_WINDOWS_ARCH_API_REQUIRED)
 
         get_current_process = kernel32.GetCurrentProcess
         get_current_process.argtypes = []
@@ -79,23 +79,17 @@ class HostProbe:
         process_machine = ctypes.c_ushort(0)
         native_machine = ctypes.c_ushort(0)
         if not is_wow64_process2(get_current_process(), ctypes.byref(process_machine), ctypes.byref(native_machine)):
-            return None
-        return WINDOWS_NATIVE_MACHINE_NAMES.get(native_machine.value)
-
-    @staticmethod
-    def windows_native_machine_name() -> Optional[str]:
-        import launcher as _facade
-        machine = _facade.query_windows_native_machine_name()
-        if machine:
-            return machine
-        return os.environ.get(WINDOWS_ENV_ARCH6432) or os.environ.get(WINDOWS_ENV_ARCH)
+            raise SystemExit(MSG_WINDOWS_ARCH_QUERY_FAILED.format(error=ctypes.get_last_error()))
+        machine = WINDOWS_NATIVE_MACHINE_NAMES.get(native_machine.value)
+        if machine is None:
+            raise SystemExit(MSG_WINDOWS_NATIVE_MACHINE_UNSUPPORTED.format(machine=native_machine.value))
+        return machine
 
     @staticmethod
     def host_arch_name(machine_name: Optional[str] = None) -> str:
-        import launcher as _facade
         if machine_name is None:
-            machine_name = _facade.windows_native_machine_name() if platform.system() == PLATFORM_WINDOWS_SYSTEM else None
-        machine = (machine_name or platform.machine()).lower()
+            machine_name = HostProbe.query_windows_native_machine_name() if platform.system() == PLATFORM_WINDOWS_SYSTEM else platform.machine()
+        machine = machine_name.lower()
         if machine in (ARCH_X64, ARCH_AMD64_ALIAS, ARCH_X86_64_ALIAS, ARCH_X86_64_DASH_ALIAS):
             return ARCH_X64
         if machine in (ARCH_ARM64, ARCH_AARCH64_ALIAS):
@@ -137,7 +131,6 @@ class HostProbe:
 
 host_platform_name = HostProbe.host_platform_name
 query_windows_native_machine_name = HostProbe.query_windows_native_machine_name
-windows_native_machine_name = HostProbe.windows_native_machine_name
 host_arch_name = HostProbe.host_arch_name
 configure_preset_architecture = HostProbe.configure_preset_architecture
 executable_name = HostProbe.executable_name

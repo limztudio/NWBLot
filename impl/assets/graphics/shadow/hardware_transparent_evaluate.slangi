@@ -190,7 +190,7 @@ void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const 
             chord += max(ray.TMax - stream.intervalStart, 0.0);
     }
     else if((stream.crossingCount & 1u) != 0u){
-        // Unspecified materials preserve the legacy singleton/odd-boundary behavior.
+        // Unspecified materials use singleton/odd-boundary admission.
         chord = stream.crossingCount > 1u ? stream.lastDistance - stream.firstDistance : 0.0;
     }
     // Bounded (0, 1) visibility math stays half; widen only the geometry chord product.

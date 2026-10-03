@@ -78,8 +78,8 @@ namespace RendererTaskGraphDetail{
         &Payload::extinctionComputeEmulationTiming,
         [&](
             Core::CommandList& dispatchCommandList,
-            const MaterialPassDrawItemPartitions* dispatchDrawItems,
-            const CsgFrameGpuData* dispatchCsgFrameData,
+            const MaterialPassDrawItemPartitions& dispatchDrawItems,
+            const CsgFrameGpuData& dispatchCsgFrameData,
             const usize dispatchInstanceCount,
             const usize dispatchMaterialTypedByteCount
         ){
@@ -88,12 +88,10 @@ namespace RendererTaskGraphDetail{
                 *payload.targets,
                 dispatchDrawItems,
                 dispatchCsgFrameData,
-                &payload.csgResources,
-                &payload.frameBindings,
+                payload.csgResources,
+                payload.frameBindings,
                 dispatchInstanceCount,
                 dispatchMaterialTypedByteCount,
-                payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-                payload.extinctionCsgClipBufferStatesGraphOwned,
                 payload.extinctionMaterialFrameStatesGraphOwned,
                 payload.extinctionMaterialGeometryStatesGraphOwned,
                 payload.extinctionComputeEmulationOutputStatesGraphOwned,

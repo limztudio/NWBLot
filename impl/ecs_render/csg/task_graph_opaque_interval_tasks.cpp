@@ -92,9 +92,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
             commandList,
             deferredTargets,
             csgFrameData,
-            payload.csgResources,
-            payload.receiverSpanOutputImageStatesGraphOwned,
-            payload.receiverSpanInputImageStatesGraphOwned
+            payload.csgResources
         );
     }
     commandList.endRenderPass();
@@ -164,9 +162,7 @@ bool CsgIntervalCombineGraphTask::record(
             commandList,
             deferredTargets,
             csgFrameData,
-            payload.csgResources,
-            payload.removedIntervalOutputImageStatesGraphOwned,
-            payload.intervalCombineInputImageStatesGraphOwned
+            payload.csgResources
         );
     }
     commandList.endRenderPass();
@@ -266,16 +262,12 @@ bool CsgIntervalSampleGraphTask::record(
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
         const MaterialPassDrawContext csgDrawContext{
             commandList,
-            deferredTargets,
             deferredTargets.framebuffer.get(),
             nullptr,
             deferredViewportState,
             &payload.csgResources,
             payload.frameBindings,
             MaterialPipelinePass::Opaque,
-            false,
-            payload.intervalSampleImageStatesGraphOwned,
-            payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             payload.csgComputeEmulationOutputStatesGraphOwned
@@ -301,11 +293,7 @@ bool CsgIntervalSampleGraphTask::record(
                 commandList,
                 deferredTargets,
                 csgFrameData,
-                payload.csgResources,
-                payload.frameBindings,
-                payload.intervalSampleImageStatesGraphOwned,
-                payload.csgClipBufferStatesGraphOwned,
-                payload.materialFrameStatesGraphOwned
+                payload.csgResources
             );
         }
     }

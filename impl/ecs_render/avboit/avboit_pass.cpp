@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/avboit/avboit_private.h>
-#include <impl/ecs_render/deferred/csg_interval_target_clear.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 
@@ -235,7 +234,7 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
     ;
 }
 
-void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
+void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const MaterialPassDrawItems& receiverSurfaceDrawItems,
@@ -244,16 +243,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool intervalTargetsGraphOwned,
-    const bool receiverSurfaceImageStatesGraphOwned,
-    const bool intervalPeelTargetStatesGraphOwned,
-    const bool receiverSpanOutputImageStatesGraphOwned,
-    const bool removedIntervalOutputImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned,
-    const bool materialFrameStatesGraphOwned,
     const bool materialGeometryStatesGraphOwned,
-    const bool deferIntervalCombine,
-    Optional<Core::GpuTimingMeasure>* const deferredIntervalTiming
+    Optional<Core::GpuTimingMeasure>& intervalTiming
 ){
     if(
         !targets.framebuffer
@@ -264,39 +255,16 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     )
         return;
 
-    // Keep mismatched compatibility calls on the native bridge.
-    NWB_ASSERT(!intervalPeelTargetStatesGraphOwned || intervalTargetsGraphOwned);
-    NWB_ASSERT(!receiverSpanOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
-    NWB_ASSERT(!removedIntervalOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
-    NWB_ASSERT(!deferIntervalCombine || (intervalTargetsGraphOwned && deferredIntervalTiming));
-
-    // Span/Combine share one packet; malformed splits fall back to aggregate.
-    const bool splitIntervalCombine = deferIntervalCombine && deferredIntervalTiming;
-    const bool splitReceiverSpanBuild = splitIntervalCombine;
-    Optional<Core::GpuTimingMeasure> localIntervalTiming;
-    Optional<Core::GpuTimingMeasure>* const intervalTiming = splitIntervalCombine
-        ? deferredIntervalTiming
-        : &localIntervalTiming
-    ;
-    if(splitIntervalCombine && intervalTiming->has_value()){
-        intervalTiming->value().discardTiming();
-        intervalTiming->reset();
+    if(intervalTiming.has_value()){
+        intervalTiming.value().discardTiming();
+        intervalTiming.reset();
     }
-    intervalTiming->emplace(
+    intervalTiming.emplace(
         m_graphics.gpuTiming(),
         RendererGpuTimingScope::s_TransparentCsgIntervals,
         m_graphics.getDevice(),
         commandList
     );
-    // Keep the direct helper for compatibility callers.
-    if(!intervalTargetsGraphOwned){
-        ClearDeferredCsgIntervalTargets(
-            m_graphics,
-            commandList,
-            targets,
-            csgFrameData.workRegion.resolveRect(targets.width, targets.height)
-        );
-    }
 
     // The native step only consumes graph-owned data; never rebuild it.
     const bool drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
@@ -305,13 +273,11 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         m_materialSystem.materialPassDrawResourcesReady(receiverSurfaceDrawItems, frameBindings)
     ;
     if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
-        if(splitIntervalCombine){
-            // Preserve the short interval; drop the unfinished reservation.
-            if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
-                return;
-            intervalTiming->value().finishTiming(commandList);
-            intervalTiming->reset();
-        }
+        // Preserve the short interval; drop the unfinished reservation.
+        if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
+            return;
+        intervalTiming.value().finishTiming(commandList);
+        intervalTiming.reset();
         return;
     }
 
@@ -326,25 +292,18 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         targets,
         csgFrameData,
         csgResources,
-        frameBindings,
-        intervalTargetsGraphOwned && intervalPeelTargetStatesGraphOwned,
-        csgClipBufferStatesGraphOwned,
-        materialFrameStatesGraphOwned
+        frameBindings
     );
 
     const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
         commandList,
-        targets,
         targets.framebuffer.get(),
         nullptr,
         viewportState,
         &csgResources,
         frameBindings,
         MaterialPipelinePass::CsgReceiverSurface,
-        receiverSurfaceImageStatesGraphOwned,
-        false,
-        csgClipBufferStatesGraphOwned,
-        materialFrameStatesGraphOwned,
+        true,
         materialGeometryStatesGraphOwned,
         false
     };
@@ -353,105 +312,22 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         receiverSurfaceDrawItems
     );
 
-    if(!splitReceiverSpanBuild){
-        m_csgSystem.dispatchCsgReceiverSpanBuild(
-            commandList,
-            targets,
-            csgFrameData,
-            csgResources,
-            intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
-        );
-    }
-    if(!splitIntervalCombine){
-        m_csgSystem.dispatchCsgIntervalCombine(
-            commandList,
-            targets,
-            csgFrameData,
-            csgResources,
-            intervalTargetsGraphOwned && removedIntervalOutputImageStatesGraphOwned
-        );
-    }
-    else{
-        // Close the marker before Combine begins; the endpoint stays open.
-        if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
-            return;
-    }
+    // Span and Combine are separate graph tasks; the aggregate endpoint remains open.
+    if(!Core::FinishSplitGpuTimingMarker(&intervalTiming))
+        return;
     // Close the raster pass even when the span dispatch moved out.
     commandList.endRenderPass();
-}
-
-void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
-    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedTransparentCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedFrameBindings,
-    const usize preparedTransparentCsgInstanceCount,
-    const usize preparedTransparentCsgMaterialTypedByteCount,
-    const bool preparedTransparentCsgIntervalTargetsGraphOwned,
-    const bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
-    const bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
-    const bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
-    const bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
-    const bool preparedTransparentCsgClipBufferStatesGraphOwned,
-    const bool preparedTransparentCsgMaterialFrameStatesGraphOwned,
-    const bool preparedTransparentCsgMaterialGeometryStatesGraphOwned,
-    const bool deferPreparedTransparentCsgIntervalCombine,
-    Optional<Core::GpuTimingMeasure>* const deferredPreparedTransparentCsgIntervalTiming
-){
-    if(
-        preparedTransparentCsgReceiverSurfaceDrawItems
-        || preparedTransparentCsgFrameData
-        || preparedTransparentCsgResources
-        || preparedFrameBindings
-    ){
-        NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
-        NWB_ASSERT(preparedTransparentCsgFrameData);
-        NWB_ASSERT(preparedTransparentCsgResources);
-        NWB_ASSERT(preparedFrameBindings);
-        if(
-            preparedTransparentCsgReceiverSurfaceDrawItems
-            && preparedTransparentCsgFrameData
-            && preparedTransparentCsgResources
-            && preparedFrameBindings
-        ){
-            renderPreparedTransparentCsgIntervals(
-                commandList,
-                targets,
-                *preparedTransparentCsgReceiverSurfaceDrawItems,
-                *preparedTransparentCsgFrameData,
-                *preparedTransparentCsgResources,
-                *preparedFrameBindings,
-                preparedTransparentCsgInstanceCount,
-                preparedTransparentCsgMaterialTypedByteCount,
-                preparedTransparentCsgIntervalTargetsGraphOwned,
-                preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
-                preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
-                preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
-                preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
-                preparedTransparentCsgClipBufferStatesGraphOwned,
-                preparedTransparentCsgMaterialFrameStatesGraphOwned,
-                preparedTransparentCsgMaterialGeometryStatesGraphOwned,
-                deferPreparedTransparentCsgIntervalCombine,
-                deferredPreparedTransparentCsgIntervalTiming
-            );
-        }
-    }
 }
 
 void RendererAvboitSystem::renderAvboitOccupancyPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions* const preparedOccupancyDrawItems,
-    const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedOccupancyCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedOccupancyFrameBindings,
+    const MaterialPassDrawItemPartitions& preparedOccupancyDrawItems,
+    const CsgFrameGpuData& preparedOccupancyCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& preparedOccupancyCsgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedOccupancyFrameBindings,
     const usize preparedOccupancyInstanceCount,
     const usize preparedOccupancyMaterialTypedByteCount,
-    const bool occupancyStatesGraphOwned,
-    const bool occupancyCsgIntervalSampleImageStatesGraphOwned,
-    const bool occupancyCsgClipBufferStatesGraphOwned,
     const bool occupancyMaterialFrameStatesGraphOwned,
     const bool occupancyMaterialGeometryStatesGraphOwned,
     const bool occupancyComputeEmulationOutputStatesGraphOwned,
@@ -463,70 +339,36 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     NWB_ASSERT(m_avboitState.m_depthWarpPipeline);
     NWB_ASSERT(m_avboitState.m_integratePipeline);
 
-    // Occupancy uses heap descriptors; compatibility callers keep this bridge.
-    if(!occupancyStatesGraphOwned){
-        commandList.setTextureState(
-            targets.depth.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        );
-        commandList.setBufferState(avboitTargets.coverageBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-    }
-
-    if(
-        preparedOccupancyDrawItems
-        || preparedOccupancyCsgFrameData
-        || preparedOccupancyCsgResources
-        || preparedOccupancyFrameBindings
-    ){
-        NWB_ASSERT(preparedOccupancyDrawItems);
-        NWB_ASSERT(preparedOccupancyCsgFrameData);
-        NWB_ASSERT(preparedOccupancyCsgResources);
-        NWB_ASSERT(preparedOccupancyFrameBindings);
-        if(
-            preparedOccupancyDrawItems
-            && preparedOccupancyCsgFrameData
-            && preparedOccupancyCsgResources
-            && preparedOccupancyFrameBindings
-        ){
-            m_materialSystem.renderPreparedMaterialPass(
-                commandList,
-                targets,
-                avboitTargets.lowFramebuffer.get(),
-                MaterialPipelinePass::AvboitOccupancy,
-                &avboitTargets,
-                *preparedOccupancyDrawItems,
-                *preparedOccupancyCsgFrameData,
-                *preparedOccupancyCsgResources,
-                *preparedOccupancyFrameBindings,
-                preparedOccupancyInstanceCount,
-                preparedOccupancyMaterialTypedByteCount,
-                occupancyCsgIntervalSampleImageStatesGraphOwned,
-                occupancyCsgClipBufferStatesGraphOwned,
-                occupancyMaterialFrameStatesGraphOwned,
-                occupancyMaterialGeometryStatesGraphOwned,
-                occupancyComputeEmulationOutputStatesGraphOwned,
-                occupancyComputeEmulationTiming,
-                occupancyCsgComputeEmulationOutputStatesGraphOwned,
-                generatedGeometryReused
-            );
-        }
-    }
+    m_materialSystem.renderPreparedMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitOccupancy,
+        &avboitTargets,
+        preparedOccupancyDrawItems,
+        preparedOccupancyCsgFrameData,
+        preparedOccupancyCsgResources,
+        preparedOccupancyFrameBindings,
+        preparedOccupancyInstanceCount,
+        preparedOccupancyMaterialTypedByteCount,
+        occupancyMaterialFrameStatesGraphOwned,
+        occupancyMaterialGeometryStatesGraphOwned,
+        occupancyComputeEmulationOutputStatesGraphOwned,
+        occupancyComputeEmulationTiming,
+        occupancyCsgComputeEmulationOutputStatesGraphOwned,
+        generatedGeometryReused
+    );
     commandList.endRenderPass();
 }
 
 void RendererAvboitSystem::renderAvboitExtinctionPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
-    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedExtinctionCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedExtinctionFrameBindings,
+    const MaterialPassDrawItemPartitions& preparedExtinctionDrawItems,
+    const CsgFrameGpuData& preparedExtinctionCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& preparedExtinctionCsgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedExtinctionFrameBindings,
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
-    const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
-    const bool extinctionCsgClipBufferStatesGraphOwned,
     const bool extinctionMaterialFrameStatesGraphOwned,
     const bool extinctionMaterialGeometryStatesGraphOwned,
     const bool extinctionComputeEmulationOutputStatesGraphOwned,
@@ -536,61 +378,36 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
-    // Packet states are graph-owned; this thunk holds only the raster pass.
-    if(
-        preparedExtinctionDrawItems
-        || preparedExtinctionCsgFrameData
-        || preparedExtinctionCsgResources
-        || preparedExtinctionFrameBindings
-    ){
-        NWB_ASSERT(preparedExtinctionDrawItems);
-        NWB_ASSERT(preparedExtinctionCsgFrameData);
-        NWB_ASSERT(preparedExtinctionCsgResources);
-        NWB_ASSERT(preparedExtinctionFrameBindings);
-        if(
-            preparedExtinctionDrawItems
-            && preparedExtinctionCsgFrameData
-            && preparedExtinctionCsgResources
-            && preparedExtinctionFrameBindings
-        ){
-            m_materialSystem.renderPreparedMaterialPass(
-                commandList,
-                targets,
-                avboitTargets.lowFramebuffer.get(),
-                MaterialPipelinePass::AvboitExtinction,
-                &avboitTargets,
-                *preparedExtinctionDrawItems,
-                *preparedExtinctionCsgFrameData,
-                *preparedExtinctionCsgResources,
-                *preparedExtinctionFrameBindings,
-                preparedExtinctionInstanceCount,
-                preparedExtinctionMaterialTypedByteCount,
-                extinctionCsgIntervalSampleImageStatesGraphOwned,
-                extinctionCsgClipBufferStatesGraphOwned,
-                extinctionMaterialFrameStatesGraphOwned,
-                extinctionMaterialGeometryStatesGraphOwned,
-                extinctionComputeEmulationOutputStatesGraphOwned,
-                extinctionComputeEmulationTiming,
-                extinctionCsgComputeEmulationOutputStatesGraphOwned,
-                generatedGeometryReused
-            );
-        }
-    }
+    m_materialSystem.renderPreparedMaterialPass(
+        commandList,
+        avboitTargets.lowFramebuffer.get(),
+        MaterialPipelinePass::AvboitExtinction,
+        &avboitTargets,
+        preparedExtinctionDrawItems,
+        preparedExtinctionCsgFrameData,
+        preparedExtinctionCsgResources,
+        preparedExtinctionFrameBindings,
+        preparedExtinctionInstanceCount,
+        preparedExtinctionMaterialTypedByteCount,
+        extinctionMaterialFrameStatesGraphOwned,
+        extinctionMaterialGeometryStatesGraphOwned,
+        extinctionComputeEmulationOutputStatesGraphOwned,
+        extinctionComputeEmulationTiming,
+        extinctionCsgComputeEmulationOutputStatesGraphOwned,
+        generatedGeometryReused
+    );
     commandList.endRenderPass();
 }
 
 void RendererAvboitSystem::renderAvboitAccumulatePass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const MaterialPassDrawItemPartitions* const preparedAccumulationDrawItems,
-    const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot* const preparedAccumulationCsgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot* const preparedAccumulationFrameBindings,
+    const MaterialPassDrawItemPartitions& preparedAccumulationDrawItems,
+    const CsgFrameGpuData& preparedAccumulationCsgFrameData,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& preparedAccumulationCsgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& preparedAccumulationFrameBindings,
     const usize preparedAccumulationInstanceCount,
     const usize preparedAccumulationMaterialTypedByteCount,
-    const bool accumulationFinalStatesGraphOwned,
-    const bool accumulationCsgIntervalSampleImageStatesGraphOwned,
-    const bool accumulationCsgClipBufferStatesGraphOwned,
     const bool accumulationMaterialFrameStatesGraphOwned,
     const bool accumulationMaterialGeometryStatesGraphOwned,
     const bool accumulationComputeEmulationOutputStatesGraphOwned,
@@ -600,66 +417,25 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
-    // This thunk owns only the raster pass and its final transition.
-    if(
-        preparedAccumulationDrawItems
-        || preparedAccumulationCsgFrameData
-        || preparedAccumulationCsgResources
-        || preparedAccumulationFrameBindings
-    ){
-        NWB_ASSERT(preparedAccumulationDrawItems);
-        NWB_ASSERT(preparedAccumulationCsgFrameData);
-        NWB_ASSERT(preparedAccumulationCsgResources);
-        NWB_ASSERT(preparedAccumulationFrameBindings);
-        if(
-            preparedAccumulationDrawItems
-            && preparedAccumulationCsgFrameData
-            && preparedAccumulationCsgResources
-            && preparedAccumulationFrameBindings
-        ){
-            m_materialSystem.renderPreparedMaterialPass(
-                commandList,
-                targets,
-                avboitTargets.accumulationFramebuffer.get(),
-                MaterialPipelinePass::AvboitAccumulate,
-                &avboitTargets,
-                *preparedAccumulationDrawItems,
-                *preparedAccumulationCsgFrameData,
-                *preparedAccumulationCsgResources,
-                *preparedAccumulationFrameBindings,
-                preparedAccumulationInstanceCount,
-                preparedAccumulationMaterialTypedByteCount,
-                accumulationCsgIntervalSampleImageStatesGraphOwned,
-                accumulationCsgClipBufferStatesGraphOwned,
-                accumulationMaterialFrameStatesGraphOwned,
-                accumulationMaterialGeometryStatesGraphOwned,
-                accumulationComputeEmulationOutputStatesGraphOwned,
-                accumulationComputeEmulationTiming,
-                accumulationCsgComputeEmulationOutputStatesGraphOwned,
-                generatedGeometryReused
-            );
-        }
-    }
+    m_materialSystem.renderPreparedMaterialPass(
+        commandList,
+        avboitTargets.accumulationFramebuffer.get(),
+        MaterialPipelinePass::AvboitAccumulate,
+        &avboitTargets,
+        preparedAccumulationDrawItems,
+        preparedAccumulationCsgFrameData,
+        preparedAccumulationCsgResources,
+        preparedAccumulationFrameBindings,
+        preparedAccumulationInstanceCount,
+        preparedAccumulationMaterialTypedByteCount,
+        accumulationMaterialFrameStatesGraphOwned,
+        accumulationMaterialGeometryStatesGraphOwned,
+        accumulationComputeEmulationOutputStatesGraphOwned,
+        accumulationComputeEmulationTiming,
+        accumulationCsgComputeEmulationOutputStatesGraphOwned,
+        generatedGeometryReused
+    );
     commandList.endRenderPass();
-
-    // Deferred composite is Compute; direct callers keep the bridge.
-    if(!accumulationFinalStatesGraphOwned){
-        commandList.setTextureState(
-            avboitTargets.accumColor.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        );
-        commandList.setTextureState(
-            avboitTargets.accumExtinction.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        );
-        commandList.setTextureState(
-            targets.depth.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        );
-    }
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(

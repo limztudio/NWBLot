@@ -142,7 +142,6 @@ public:
     // deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
         Core::CommandList& commandList,
-        const DeferredFrameTargets& deferredTargets,
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,
         const AvboitFrameTargets* avboitTargets,
@@ -152,14 +151,7 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         usize instanceCount,
         usize materialTypedByteCount,
-        // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
-        // and other prepared compatibility phases retain their native UAV handoff by leaving this false.
-        bool csgIntervalSampleImageStatesGraphOwned = false,
-        // Prepared graph tasks also declare their heap-selected CSG clip buffers. Direct and unprepared callers
-        // retain the native SRV/CBV state setup by leaving this false.
-        bool csgClipBufferStatesGraphOwned = false,
-        // The shared graph declares mesh-view/material entry states for immutable prepared streams. Direct and
-        // compatibility consumers retain their historical native setup by leaving this false.
+        // The shared graph declares immutable mesh-view/material inputs; local phases establish these states.
         bool materialFrameStatesGraphOwned = false,
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
         bool materialGeometryStatesGraphOwned = false,
@@ -195,8 +187,7 @@ public:
 #endif
         MaterialTypedByteDataVector& materialTypedBytes,
         RendererResourceLookupMode::Enum lookupMode,
-        // Graph declaration can supply the exact immutable view payload that will be uploaded before this CSG
-        // work records. Compatibility paths retain the accepted CPU mirror fallback.
+        // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     );
     [[nodiscard]] static bool findMaterialInstanceOverrideField(
@@ -256,9 +247,8 @@ public:
         const MaterialPassDrawItemVector& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
-    // Resolves the exact persistent sampled textures selected by frozen prepared draw streams. It never creates
-    // assets or descriptors: a missing or unresolved cached resource makes the collection unavailable so callers
-    // can retain their existing compatibility route.
+    // Resolves persistent sampled textures selected by frozen draws. Missing cached resources reject collection;
+    // asset and descriptor creation belong to preparation.
     [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(
         const MaterialSurfaceInfo& materialInfo,
         MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
@@ -276,11 +266,6 @@ public:
     [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
     void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
-    void setMaterialPassDrawItemResourceStates(
-        const MaterialPassDrawContext& context,
-        const MaterialPassDrawItem& drawItem,
-        const MaterialPassMeshResourceSnapshot& mesh
-    );
     [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
     void dispatchComputeMaterialPassDrawItem(
         const MaterialPassDrawContext& context,
@@ -304,7 +289,7 @@ public:
     // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this
     // method records the graphics state, descriptor heap, push constants, and draws without an output transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Compatibility combined producer/raster path. It retains the native per-item UAV-to-vertex/index handoff.
+    // Per-draw generation and rasterization retain the local UAV-to-vertex/index handoff when outputs alias.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);

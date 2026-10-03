@@ -91,8 +91,8 @@ struct DecodeTask{
         commandList.endRenderPass();
         const Core::ViewportState viewport;
         const MaterialPassDrawContext context{
-            commandList, payload.targets, nullptr, nullptr, viewport, nullptr, payload.frameBindings,
-            MaterialPipelinePass::Opaque, false, false, false, true, true, true,
+            commandList, nullptr, nullptr, viewport, nullptr, payload.frameBindings,
+            MaterialPipelinePass::Opaque, true, true, true,
         };
         if(!payload.materialSystem.recordObjectGeometryDecode(context, payload.draw))
             return false;

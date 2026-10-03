@@ -23,10 +23,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueToTransparentBoundary,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
+    const LightSpaceShadowSnapshot* const lightSpace){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -38,7 +36,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const bool replaceTransparent = composeCsg
         && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
     if(lightSpace && lightSpace->ready && (!composeCsg || replaceTransparent)){
-        NWB_ASSERT(graphEntryStatesOwned && graphOwnsOpaqueToTransparentBoundary);
+        NWB_ASSERT(graphOwnsOpaqueToTransparentBoundary);
         Core::GpuTimingMeasure timing(
             m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
         );
@@ -63,7 +61,6 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         frameIndex,
         softGroupsX,
         softGroupsY,
-        graphEntryStatesOwned,
         false,
         false,
         true,
@@ -107,9 +104,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsTransparentTemporalMergeEntryStates
-){
+    const bool graphOwnsTransparentTemporalMergeEntryStates){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -128,7 +123,6 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
         frameIndex,
         softGroupsX,
         softGroupsY,
-        graphEntryStatesOwned,
         false,
         false,
         false,
@@ -152,9 +146,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsTransparentWaveletInputBoundary
-){
+    const bool graphOwnsTransparentWaveletInputBoundary){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -172,7 +164,6 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
         frameIndex,
         softGroupsX,
         softGroupsY,
-        graphEntryStatesOwned,
         false,
         false,
         false,
@@ -195,9 +186,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const bool graphEntryStatesOwned
-){
+    const u32 frameIndex){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -215,7 +204,6 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         frameIndex,
         softGroupsX,
         softGroupsY,
-        graphEntryStatesOwned,
         false,
         false,
         false,
@@ -242,11 +230,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentTemporalMergeEntryStates,
     const bool combinedTemporal,
-    const bool hardwareShadowSupported
-){
+    const bool hardwareShadowSupported){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask::Payload{
@@ -259,7 +245,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
             .opaqueProduced = opaqueProduced,
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
             .combinedTemporal = combinedTemporal,
             .hardwareShadowSupported = hardwareShadowSupported,
@@ -277,11 +262,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentWaveletInputBoundary,
     const bool startsTransparentResolveTiming,
-    const bool combinedWavelet
-){
+    const bool combinedWavelet){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
@@ -294,7 +277,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
             .opaqueProduced = opaqueProduced,
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsTransparentWaveletInputBoundary = graphOwnsTransparentWaveletInputBoundary,
             .startsTransparentResolveTiming = startsTransparentResolveTiming,
             .combinedWavelet = combinedWavelet,
@@ -314,7 +296,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned,
     const bool combinedUpsample){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask>(
         desc,
@@ -329,7 +310,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
             .opaqueProduced = opaqueProduced,
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
             .combinedUpsample = combinedUpsample,
         }
     );
@@ -344,9 +324,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     const bool* const opaqueProduced,
     const u32* const opaqueFrameIndex,
     bool* const transparentTraceProduced,
-    const bool graphEntryStatesOwned,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
+    const LightSpaceShadowSnapshot* const lightSpace){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask::Payload{
@@ -358,7 +336,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .transparentTraceProduced = transparentTraceProduced,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -371,16 +348,11 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     const bool* const prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsAllLitVisibilityClear,
-    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan
-){
+    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{
             .hardwareShadowSupported = hardwareShadowSupported,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
-            .graphOwnsAllLitVisibilityClear = graphOwnsAllLitVisibilityClear,
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,

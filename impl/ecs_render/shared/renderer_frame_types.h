@@ -108,7 +108,6 @@ static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHand
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;
-    const DeferredFrameTargets& deferredTargets;
     Core::Framebuffer* framebuffer = nullptr;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
@@ -117,17 +116,11 @@ struct MaterialPassDrawContext{
     // Every material path consumes one immutable Mesh-published binding generation.
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    // Graph tasks declare receiver-event images first; compat callers keep direct setup.
-    bool csgReceiverSurfaceImageStatesGraphOwned = false;
-    // Sample task lowers the UAV handoff first; compat callers keep their bridge.
-    bool csgIntervalSampleImageStatesGraphOwned = false;
-    // Graph declares CSG SRVs/CBVs first; unprepared callers keep native setup.
-    bool csgClipBufferStatesGraphOwned = false;
     // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
     bool materialFrameStatesGraphOwned = false;
     // Graph may retain source buffers; emulation vertices stay local by default.
     bool materialGeometryStatesGraphOwned = false;
-    // Split pairs receive generated-vertex entry states from the graph; compat keeps native handoff.
+    // Split pairs receive generated-output entry states; shared-output draws interleave generation and rasterization.
     bool emulationOutputEntryStateGraphOwned = false;
     // Shared generated output must retain triangles needed by every consuming viewport.
     bool conservativeGeometryScissor = false;

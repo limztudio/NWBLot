@@ -3,11 +3,9 @@
 
 
 #include "deferred_system.h"
-#include "csg_interval_target_clear.h"
 
 #include <impl/ecs_render/deferred/deferred_descriptor_register.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>
-#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
@@ -21,91 +19,6 @@
 
 
 NWB_IMPL_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_deferred_targets{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-struct CsgIntervalSubresources{
-    Core::TextureSubresourceSet peel;
-    Core::TextureSubresourceSet receiverEvent;
-    Core::TextureSubresourceSet receiverEventCounter;
-    Core::TextureSubresourceSet receiverSpan;
-    Core::TextureSubresourceSet receiverSpanCounter;
-    Core::TextureSubresourceSet removedInterval;
-    Core::TextureSubresourceSet removedIntervalCounter;
-};
-
-[[nodiscard]] static CsgIntervalSubresources MakeCsgIntervalSubresources(const DeferredFrameTargets& targets){
-    return {
-        Core::TextureSubresourceSet(0, 1, 0, targets.csgPeelLayerCount),
-        Core::TextureSubresourceSet(0, 1, 0, targets.csgReceiverEventLayerCount),
-        Core::TextureSubresourceSet(0, 1, 0, 1),
-        Core::TextureSubresourceSet(0, 1, 0, targets.csgReceiverSpanLayerCount),
-        Core::TextureSubresourceSet(0, 1, 0, 1),
-        Core::TextureSubresourceSet(0, 1, 0, targets.csgRemovedIntervalLayerCount),
-        Core::TextureSubresourceSet(0, 1, 0, 1)
-    };
-}
-
-static void AssertCsgIntervalTargetsAvailable([[maybe_unused]] const DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.csgCapBackNormal);
-    NWB_ASSERT(targets.csgIntervalDepth);
-    NWB_ASSERT(targets.csgIntervalId);
-    NWB_ASSERT(targets.csgReceiverEventData);
-    NWB_ASSERT(targets.csgReceiverEventCount);
-    NWB_ASSERT(targets.csgReceiverSpanData);
-    NWB_ASSERT(targets.csgReceiverSpanCount);
-    NWB_ASSERT(targets.csgRemovedIntervalDepth);
-    NWB_ASSERT(targets.csgRemovedIntervalCapNormal);
-    NWB_ASSERT(targets.csgRemovedIntervalData);
-    NWB_ASSERT(targets.csgRemovedIntervalCount);
-    NWB_ASSERT(targets.csgPeelLayerCount > 0u);
-    NWB_ASSERT(targets.csgReceiverEventLayerCount > 0u);
-    NWB_ASSERT(targets.csgReceiverSpanLayerCount > 0u);
-    NWB_ASSERT(targets.csgRemovedIntervalLayerCount > 0u);
-}
-
-static void SetCsgIntervalTargetCopyDestStates(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgIntervalSubresources& subresources
-){
-    commandList.setTextureState(targets.csgCapBackNormal.get(), subresources.peel, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgIntervalDepth.get(), subresources.peel, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgIntervalId.get(), subresources.peel, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgReceiverEventData.get(), subresources.receiverEvent, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgReceiverEventCount.get(), subresources.receiverEventCounter, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgReceiverSpanData.get(), subresources.receiverSpan, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgReceiverSpanCount.get(), subresources.receiverSpanCounter, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), subresources.removedInterval, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), subresources.removedInterval, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgRemovedIntervalData.get(), subresources.removedInterval, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), subresources.removedIntervalCounter, Core::ResourceStates::CopyDest);
-}
-
-static void ClearCsgIntervalTargets(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgIntervalSubresources& subresources,
-    const Core::Rect& csgClearRect
-){
-    // CSG interval targets are per-pixel append buffers; only accumulating state needs reset.
-    commandList.clearTextureRectUInt(*targets.csgIntervalId, subresources.peel, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(*targets.csgReceiverEventCount, subresources.receiverEventCounter, csgClearRect, 0u);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -680,27 +593,6 @@ bool RendererDeferredSystem::createDeferredFrameTargetResources(
         return true;
     resetDeferredBindlessFrameResources(targets);
     return false;
-}
-
-void ClearDeferredCsgIntervalTargets(
-    Core::GraphicsRuntime& graphics,
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const Core::Rect& csgClearRect
-){
-    __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
-
-    Core::GpuTimingMeasure timing(graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics.getDevice(), commandList);
-
-    const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
-        __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)
-    ;
-
-    __hidden_deferred_targets::SetCsgIntervalTargetCopyDestStates(commandList, targets, csgSubresources);
-
-    commandList.commitBarriers();
-
-    __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
 }
 
 

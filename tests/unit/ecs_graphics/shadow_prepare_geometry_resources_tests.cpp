@@ -112,8 +112,7 @@ TEST(ShadowPrepareGeometryResources, KeepsFirstBuildOrderAndTraceMultiplicityAcr
     bool blasOwned = true;
     const auto referencesBefore = context.buffers[3u]->getReferenceCount();
     selection.prepareStorage(blasOwned);
-    selection.gatherBuildInputs(context.graph, blasOwned);
-    EXPECT_TRUE(blasOwned);
+    ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
     ASSERT_EQ(selection.m_blasBuildInputs.size(), 3u);
     EXPECT_EQ(selection.m_blasBuildInputs[0u], context.imported[3u]);
     EXPECT_EQ(selection.m_blasBuildInputs[1u], context.imported[1u]);
@@ -139,7 +138,7 @@ TEST(ShadowPrepareGeometryResources, KeepsFirstBuildOrderAndTraceMultiplicityAcr
     EXPECT_FALSE(selection.isPreparedMeshBlasBuild(Name("tests/shadow_prepare_geometry/not_prepared")));
 }
 
-TEST(ShadowPrepareGeometryResources, MissingOrUnlistedBlasInputKeepsBuildStatesNative){
+TEST(ShadowPrepareGeometryResources, MissingOrUnlistedBlasInputRejectsWithoutPublishingPartialStates){
     for(u32 failure = 0u; failure < 3u; ++failure){
         GeometryContext context;
         ASSERT_EQ(context.addBuffer(), 0u);
@@ -151,17 +150,22 @@ TEST(ShadowPrepareGeometryResources, MissingOrUnlistedBlasInputKeepsBuildStatesN
             context.blasBuilds.back().triangleIndexBuffer = nullptr;
         else if(failure == 1u)
             context.blasBuilds.back().triangleIndexBuffer = context.makeBuffer(Name("tests/shadow_prepare_geometry/unimported"));
-        Core::Alloc::ScratchArena scratch(Name("tests/shadow_prepare_geometry/blas_fallback_scratch"));
+        Core::Alloc::ScratchArena scratch(Name("tests/shadow_prepare_geometry/blas_rejection_scratch"));
         Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
         bool blasOwned = true;
         selection.prepareStorage(blasOwned);
-        selection.gatherBuildInputs(context.graph, blasOwned);
-        EXPECT_FALSE(blasOwned);
+        EXPECT_FALSE(selection.gatherBuildInputs(context.graph));
         EXPECT_TRUE(selection.m_blasBuildInputs.empty());
-        ASSERT_TRUE(selection.gatherRemainingTraceResources());
-        ASSERT_EQ(selection.m_remainingTraceGeometry.size(), context.trace.size());
-        for(usize index = 0u; index < context.trace.size(); ++index)
-            EXPECT_EQ(selection.m_remainingTraceGeometry[index], context.trace[index]);
+        EXPECT_TRUE(selection.m_remainingTraceGeometry.empty());
+        context.blasBuilds.back().triangleIndexBuffer = context.buffers[s_ExpectedDualCount];
+        context.trace.push_back(context.imported[s_ExpectedDualCount]);
+        Impl::ShadowPrepareGeometryResources recovered(context.inputs(), scratch);
+        recovered.prepareStorage(true);
+        ASSERT_TRUE(recovered.gatherBuildInputs(context.graph));
+        ASSERT_EQ(recovered.m_blasBuildInputs.size(), 3u);
+        EXPECT_EQ(recovered.m_blasBuildInputs.back(), context.imported[s_ExpectedDualCount]);
+        ASSERT_TRUE(recovered.gatherRemainingTraceResources());
+        EXPECT_TRUE(recovered.m_remainingTraceGeometry.empty());
     }
 }
 
@@ -175,8 +179,7 @@ TEST(ShadowPrepareGeometryResources, InactiveBuildsSkipInvalidInputsAndEmptyBuil
         Impl::ShadowPrepareGeometryResources selection(context.inputs(false), scratch);
         bool blasOwned = false;
         selection.prepareStorage(blasOwned);
-        selection.gatherBuildInputs(context.graph, blasOwned);
-        EXPECT_FALSE(blasOwned);
+        ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
         EXPECT_FALSE(selection.isPreparedMeshBlasBuild(context.blasBuilds[0u].meshName));
         ASSERT_TRUE(selection.gatherRemainingTraceResources());
         ASSERT_EQ(selection.m_remainingTraceGeometry.size(), 1u);
@@ -187,8 +190,7 @@ TEST(ShadowPrepareGeometryResources, InactiveBuildsSkipInvalidInputsAndEmptyBuil
     Impl::ShadowPrepareGeometryResources empty(context.inputs(), scratch);
     bool blasOwned = true;
     empty.prepareStorage(blasOwned);
-    empty.gatherBuildInputs(context.graph, blasOwned);
-    EXPECT_TRUE(blasOwned);
+    ASSERT_TRUE(empty.gatherBuildInputs(context.graph));
     EXPECT_TRUE(empty.m_blasBuildInputs.empty());
     EXPECT_TRUE(empty.gatherRemainingTraceResources());
     EXPECT_TRUE(empty.m_remainingTraceGeometry.empty());
@@ -222,8 +224,7 @@ TEST(ShadowPrepareGeometryResources, ComparesEveryNameLaneAndTheFullResourceGene
     }
     bool blasOwned = true;
     selection.prepareStorage(blasOwned);
-    selection.gatherBuildInputs(context.graph, blasOwned);
-    EXPECT_FALSE(blasOwned);
+    EXPECT_FALSE(selection.gatherBuildInputs(context.graph));
     EXPECT_TRUE(selection.m_blasBuildInputs.empty());
     // Partitioning validates the opaque ID shape; the graph's later resource-set import owns generation admission.
     ASSERT_TRUE(selection.gatherRemainingTraceResources());
@@ -243,8 +244,7 @@ TEST(ShadowPrepareGeometryResources, InvalidTraceEntryRejectsOnlyAtThePartitionP
     Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
     bool blasOwned = true;
     selection.prepareStorage(blasOwned);
-    selection.gatherBuildInputs(context.graph, blasOwned);
-    EXPECT_TRUE(blasOwned);
+    ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
     ASSERT_EQ(selection.m_blasBuildInputs.size(), s_ExpectedDualCount);
     ASSERT_EQ(context.addBuffer(false), 3u);
     EXPECT_FALSE(selection.gatherRemainingTraceResources());
@@ -263,8 +263,7 @@ TEST(ShadowPrepareGeometryResources, NewOperationUsesReplacedBuffersAndTheCurren
         Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
         bool blasOwned = true;
         selection.prepareStorage(blasOwned);
-        selection.gatherBuildInputs(context.graph, blasOwned);
-        ASSERT_TRUE(blasOwned);
+        ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
         ASSERT_TRUE(selection.gatherRemainingTraceResources());
         EXPECT_TRUE(selection.m_remainingTraceGeometry.empty());
     }
@@ -277,8 +276,7 @@ TEST(ShadowPrepareGeometryResources, NewOperationUsesReplacedBuffersAndTheCurren
     Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
     bool blasOwned = true;
     selection.prepareStorage(blasOwned);
-    selection.gatherBuildInputs(context.graph, blasOwned);
-    ASSERT_TRUE(blasOwned);
+    ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
     ASSERT_EQ(selection.m_blasBuildInputs.size(), s_ExpectedDualCount);
     EXPECT_EQ(selection.m_blasBuildInputs[0u], context.imported[s_ThirdElementIndex]);
     EXPECT_EQ(selection.m_blasBuildInputs[1u], context.imported[3u]);
@@ -304,8 +302,7 @@ TEST(ShadowPrepareGeometryResources, IndexedRequestsPreserveOrderAndClearMembers
         Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
         bool blasOwned = true;
         selection.prepareStorage(blasOwned);
-        selection.gatherBuildInputs(context.graph, blasOwned);
-        EXPECT_EQ(blasOwned, failure == 0u);
+        EXPECT_EQ(selection.gatherBuildInputs(context.graph), failure == 0u);
         EXPECT_TRUE(selection.isPreparedMeshBlasBuild(context.blasBuilds.back().meshName));
         ASSERT_EQ(context.addBuffer(false), 80u + failure);
         ASSERT_TRUE(selection.gatherRemainingTraceResources());
@@ -354,8 +351,7 @@ TEST(ShadowPrepareGeometryResources, ScratchUsageTracksUniqueRequestsInsteadOfBu
             Impl::ShadowPrepareGeometryResources selection(context.inputs(), scratch);
             bool blasOwned = true;
             selection.prepareStorage(blasOwned);
-            selection.gatherBuildInputs(context.graph, blasOwned);
-            ASSERT_TRUE(blasOwned);
+            ASSERT_TRUE(selection.gatherBuildInputs(context.graph));
             ASSERT_TRUE(selection.gatherRemainingTraceResources());
             EXPECT_EQ(selection.m_blasBuildInputs.size(), workload.uniqueMeshes * s_ExpectedDualCount);
             EXPECT_EQ(selection.m_remainingTraceGeometry.size(), workload.uniqueMeshes);
@@ -404,7 +400,7 @@ static void BenchmarkSelection(
             bool blasOwned = true;
             selection.prepareStorage(blasOwned);
             const Timer buildBegin = TimerNow();
-            selection.gatherBuildInputs(context.graph, blasOwned);
+            const bool gathered = selection.gatherBuildInputs(context.graph);
             buildNanoseconds += DurationInNS<u64>(TimerNow(), buildBegin);
             const Timer partitionBegin = TimerNow();
             const bool partitioned = selection.gatherRemainingTraceResources();
@@ -415,7 +411,7 @@ static void BenchmarkSelection(
                     ++totalPrepared;
             }
             meshLookupNanoseconds += DurationInNS<u64>(TimerNow(), meshLookupBegin);
-            succeeded = succeeded && blasOwned && partitioned;
+            succeeded = succeeded && gathered && partitioned;
             totalBlasInputs += selection.m_blasBuildInputs.size();
             totalRemaining += selection.m_remainingTraceGeometry.size();
         }

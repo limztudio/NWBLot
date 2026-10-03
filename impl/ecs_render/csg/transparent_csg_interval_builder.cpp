@@ -479,13 +479,6 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             return false;
         }
         outResult.uploadTask = m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
-        avboitPrePayload.transparentCsgIntervalTargetsGraphOwned = true;
-        avboitPrePayload.transparentCsgIntervalPeelTargetStatesGraphOwned = true;
-        avboitPrePayload.transparentCsgReceiverSurfaceImageStatesGraphOwned = true;
-        // Span/Combine callbacks own exact UAV handoffs; compat calls keep native fences.
-        avboitPrePayload.deferTransparentCsgIntervalCombine = true;
-        avboitPrePayload.transparentCsgClipBufferStatesGraphOwned = true;
-        avboitPrePayload.transparentCsgMaterialFrameStatesGraphOwned = true;
         NWB_ASSERT(
             avboitPrePayload.transparentCsgStreamsUploaded
             && avboitPrePayload.transparentCsgSnapshot.captured

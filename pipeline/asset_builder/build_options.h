@@ -48,7 +48,7 @@ struct AssetBuildOptions{
     Core::Assets::AssetString outputDirectory;
     Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
-    ACompactString assetType;
+    ACompactString assetType{ s_GraphicsAssetBuildType };
     AssetBuildServices services;
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     bool useExplicitInputs = false;

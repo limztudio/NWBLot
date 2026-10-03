@@ -22,33 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::buildPendingMeshSwBvh(
-    Core::CommandList& commandList,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    // Record only prepared SW-BVH work; callers decide when software tracing is needed.
-    bool allBuildsReady = true;
-    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
-    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
-    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
-
-        if(!RequiresMeshSwBvhUpdate(meshResources))
-            continue;
-        if(!updateMeshSwBvh(commandList, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' software BVH build failed"), StringConvert(meshResources.meshName.resolvedText()));
-            allBuildsReady = false;
-            continue;
-        }
-        meshResources.swBvhBuildPending = false;
-        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-            allBuildsReady = false;
-        }
-    }
-    return allBuildsReady;
-}
-
 bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
     // Prepare storage only for geometry requiring an acceleration update.
     bool allResourcesReady = true;
@@ -260,23 +233,13 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
     ;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
+bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
     Core::CommandList& commandList,
-    const PreparedMeshSwBvhBuild& build,
-    const bool meshSwBvhInputStatesGraphOwned,
-    const bool sentinelClearsGraphOwned,
-    const bool graphBoundaryStatesOwned
+    const PreparedMeshSwBvhBuild& build
 ){
     if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
         return false;
-    }
-
-    // Direct/retry and incomplete-plan callers retain the native AccelStructBuildInput -> ShaderResource bridge.
-    if(!meshSwBvhInputStatesGraphOwned){
-        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
     }
 
     Core::BufferHandle nodeBuffer = build.nodeBuffer;
@@ -290,9 +253,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
             nodeBuffer,
             parentBuffer,
             build.nodeHeapHandle,
-            build.parentHeapHandle,
-            sentinelClearsGraphOwned,
-            graphBoundaryStatesOwned
+            build.parentHeapHandle
         )
         : buildMeshSwBvhPrepared(
             commandList,
@@ -304,46 +265,13 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
             nodeBuffer,
             parentBuffer,
             build.nodeHeapHandle,
-            build.parentHeapHandle,
-            sentinelClearsGraphOwned,
-            graphBoundaryStatesOwned
+            build.parentHeapHandle
         )
     ;
     if(!recorded){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
     }
     return recorded;
-}
-
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
-    Core::CommandList& commandList,
-    const PreparedMeshSwBvhBuild& build
-){
-    // The graph callback has exact SRV/UAV uses and a typed clear predecessor, so it owns both the entry and successor state boundaries. The native recorder keeps only dispatch-internal UAV fences.
-    return recordPreparedMeshSwBvhBuild(commandList, build, true, true, true);
-}
-
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
-    Core::CommandList& commandList,
-    const bool meshSwBvhInputStatesGraphOwned
-){
-    if(!m_preparedMeshSwBvhBuildsReady || m_preparedMeshSwBvhBuilds.empty())
-        return false;
-
-    // Preserve the aggregate recorder's all-plan validation before it emits any direct commands.
-    // The graph-split pure-software route instead rejects its one shared packet if a later individual snapshot no longer matches.
-    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
-            return false;
-        }
-    }
-
-    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        if(!recordPreparedMeshSwBvhBuild(commandList, build, meshSwBvhInputStatesGraphOwned, false, false))
-            return false;
-    }
-    return true;
 }
 
 bool RendererRayTracingSystem::preparedMeshSwBvhBuildsReady()const noexcept{

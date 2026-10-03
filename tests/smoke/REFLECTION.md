@@ -304,12 +304,13 @@ reflection scopes are `render.reflection_depth_pyramid`,
 `render.reflection_classify` (including screen tracing),
 `render.reflection_build_args`, and `render.reflection_hardware`; stage-five
 filtering adds `render.reflection_temporal` and `render.reflection_spatial`.
-The probe has a 64-scope cap, so the benchmark must require all expected scopes
-rather than silently accepting missing timings. Decode opt/fin scope hashes with
+The probe uses dynamically sized scope storage. The benchmark must still require all
+expected scopes rather than silently accepting missing timings. Decode opt/fin scope hashes with
 the matching `.namesym` file using `tests/ab/gpu_timing_parse.py`.
 
-Timing-file records expose `avg/min/max/samples` for publication-window statistics;
-the sample count is the number of folded publication windows. They also expose `total_ms`
+Timing-file records expose `window_avg_ms`, `window_min_ms`, `window_max_ms`, and
+`published_windows` for publication-window totals and their count. Both parsers reject
+the retired `avg_ms`, `min_ms`, `max_ms`, and `samples` row fields. Records also expose `total_ms`
 (summed GPU duration), `gpu_samples` (actual timed samples), and `sample_avg_ms`
 (`total_ms / gpu_samples`). These raw fields allow normalization by known timed
 work instead of treating asynchronous publication cadence as a frame rate. A

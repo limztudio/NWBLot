@@ -44,7 +44,7 @@ TEST_F(UiSearchComboBuilderTests, PopupBorrowsAnExplicitEditorScopeAndDelegatesT
     ASSERT_TRUE(openSearch(2u));
     ASSERT_NE(target(query()), nullptr);
     ASSERT_NE(target(list()), nullptr);
-    EXPECT_EQ(m_host.legacyLoans, 0u);
+    EXPECT_EQ(m_host.contextScopedLoans, 0u);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.publications, 1u);
     EXPECT_TRUE(m_host.lastPopup.valid());

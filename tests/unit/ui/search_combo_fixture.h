@@ -171,7 +171,7 @@ public:
 
 public:
     [[nodiscard]] virtual EditBoxResult edit(const WidgetState&, EditModel&, const EditBoxOptions&)override{
-        ++legacyLoans;
+        ++contextScopedLoans;
         return {};
     }
 
@@ -232,7 +232,7 @@ public:
     PopupToken publishContextPopup;
     EditModel* publishMutation = nullptr;
     u64 loans = 0u;
-    u64 legacyLoans = 0u;
+    u64 contextScopedLoans = 0u;
     u64 publications = 0u;
     bool submitted = false;
     bool cancelled = false;

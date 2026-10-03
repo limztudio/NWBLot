@@ -311,7 +311,7 @@ bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin,
     return false;
 }
 
-// Scene-level boolean occlusion: ANY surface blocks under the legacy GI contract. Returns on the first valid blocker; never reconstructs attributes or shades provisional hits.
+// Scene-level boolean GI occlusion: ANY surface blocks. Returns on the first valid blocker; never reconstructs attributes or shades provisional hits.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
     const float3 invDir = nwbBvhSafeInvDir(direction);
 

@@ -23,7 +23,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Only the compute producer reads this tail; raster and legacy custom geometry retain the base mesh push ABI.
+// Only the compute producer reads this tail; raster and custom geometry use the base mesh push ABI.
 struct MeshComputePushConstants{
     ShaderDrivenPushConstants mesh;
     u32 generatedIndexByteOffset = 0u;

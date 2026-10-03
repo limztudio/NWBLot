@@ -70,33 +70,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(
     meshResources.blasBuildAccepted = false;
     meshResources.blasGeometryContentRevision = 0u;
     meshResources.blasBackingFresh = true;
-    meshResources.blasBackingStateHandoffPending = false;
     meshResources.blasRefitsSinceRebuild = 0u;
-    return true;
-}
-
-bool RendererRayTracingSystem::buildMeshBlas(
-    Core::CommandList& commandList,
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
-){
-    PreparedMeshBlasBuild build;
-    if(
-        !__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)
-        || !__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(commandList, build, false, false)
-    )
-        return false;
-
-    if(meshResources.blasBackingFresh)
-        meshResources.blasBackingStateHandoffPending = true;
-    meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
-    if(build.firstBuild){
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
-            , StringConvert(meshResources.meshName.resolvedText())
-            , meshResources.runtimeMesh
-            , static_cast<u64>(build.vertexCount)
-            , static_cast<u64>(build.indexCount)
-        );
-    }
     return true;
 }
 

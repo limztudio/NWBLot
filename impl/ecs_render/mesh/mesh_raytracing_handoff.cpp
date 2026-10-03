@@ -30,20 +30,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererMeshSystem::confirmAcceptedRayTracingStateHandoffs()noexcept{
-    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-        MeshResources& mesh = meshIt.value();
-        if(mesh.blasBackingFresh && mesh.blasBackingStateHandoffPending){
-            mesh.blasBackingFresh = false;
-            mesh.blasBackingStateHandoffPending = false;
-        }
-    }
-}
-
 void RendererMeshSystem::discardRayTracingBuildState()noexcept{
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         MeshResources& mesh = meshIt.value();
-        mesh.blasBackingStateHandoffPending = false;
         mesh.blasBuildAccepted = false;
         mesh.swBvhBuildAccepted = false;
         mesh.blasGeometryContentRevision = 0u;

@@ -59,7 +59,7 @@ TEST_F(HorizontalNavigationFixture, OptedInHostPublishesOrderedHorizontalAndExis
     EXPECT_TRUE(m_router.actions().empty());
 }
 
-TEST_F(HorizontalNavigationFixture, LegacyNavigableHostKeepsHorizontalKeysLocalAndVerticalKeysActive){
+TEST_F(HorizontalNavigationFixture, VerticalOnlyNavigableHostKeepsHorizontalKeysLocalAndVerticalKeysActive){
     HitTarget host;
     host.id = m_targets[0u].id;
     host.declarationGeneration = m_targets[0u].declarationGeneration;

@@ -103,9 +103,11 @@ The launcher reuses the repository's `--config`, `--arch`, `--domain`,
 root defaults to the repository containing the script. Asset arguments
 `--repo-root`, `--asset-root`, `--output-directory`, `--cache-directory`,
 `--configuration`, and `--asset-type graphics` remain available. `--configuration`
-overrides the asset configuration label; otherwise it follows `--config`.
+overrides the asset configuration label; otherwise it follows `--config`. Omitting `--asset-type` selects `graphics`;
+explicitly empty or unsupported values are rejected by the builder, including internal build requests.
 
-By default, executable paths come from the selected CMake build and configuration.
+By default, executable paths require executable artifacts from the selected CMake build and configuration's File API reply.
+Missing metadata fails instead of guessing a tool path; dry runs retain naming previews.
 Use `--tool-directory`, or `--dependency-computer`, `--asset-builder`, and
 `--asset-gatherer`, to supply already built tools. `--skip-build` skips both CMake
 configuration and compilation; CMake asset commands use it to avoid starting a

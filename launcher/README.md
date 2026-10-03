@@ -42,6 +42,11 @@ Common build controls:
 - `-D KEY=VALUE` supplies a configuration setting and triggers configuration.
 - `--dry-run` prints the planned commands without configuring, building, or launching anything.
 
+Windows hosts require Windows 10 version 1709 or newer, the documented minimum for
+[IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2). Native host detection requires that API. An unavailable API, a failed query, or an
+unsupported native machine type produces an error; architecture is not guessed from the Python process or environment.
+Use `--arch` to select a target explicitly. Other platforms retain their native machine-name normalization.
+
 A new custom build directory is configured from the selected preset automatically. Relative paths are resolved against the repository root:
 
 ```powershell
@@ -62,7 +67,10 @@ python -m launcher testbed --config opt -- --gpudbg
 ```
 
 Build-only commands reject application arguments and contradictory `--skip-build` requests before making changes.
-`--skip-build` remains available for launching existing binaries, and `python -m launcher profiles` lists the discovered project and utility commands.
+`--skip-build` remains available for launching existing binaries. Real launches require an executable artifact from the
+selected build and configuration's CMake File API reply, unless `--executable` supplies the path explicitly. Missing target
+metadata or artifacts fail before launch. Dry runs can preview the repository naming convention; `--executable-name` and
+`--profile-logserver-name` only change that preview. `python -m launcher profiles` lists the discovered project and utility commands.
 
 Specialized workflows such as `pipeline`, `smoke`, and the A/B runners have their own options; use their `--help` output.
 To build their CMake targets without running the workflow, use the generic `build` command. The Python `ui-skin` generator

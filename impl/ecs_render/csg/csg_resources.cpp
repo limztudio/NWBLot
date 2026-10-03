@@ -4,7 +4,6 @@
 
 #include "csg_system.h"
 
-#include <impl/ecs_render/csg/csg_interval_private.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -327,34 +326,6 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
     outContextSlots.intervalSampleState = csgResources.intervalSampleStateHeapHandle.slot();
     return true;
 }
-
-void RendererCsgSystem::setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-}
-
-void CsgIntervalDetail::SetCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-}
-
-
-void RendererCsgSystem::setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    CsgIntervalDetail::SetCsgIntervalSampleImageStates(commandList, targets);
-}
-
-void RendererCsgSystem::setCsgClipBufferStates(
-    Core::CommandList& commandList,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
-){
-    commandList.setBufferState(csgResources.receiverRanges.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(csgResources.cutters.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(csgResources.clipContextSlots.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(csgResources.intervalSampleState.get(), Core::ResourceStates::ConstantBuffer);
-}
-
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
     auto& device = m_graphics.getDevice();

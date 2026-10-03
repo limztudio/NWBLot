@@ -22,9 +22,7 @@ NWB_IMPL_BEGIN
 void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const u32 passIndex,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsPassEntryStates){
+    const u32 passIndex){
     NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -66,8 +64,6 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
         heap,
         *wavelet.m_pipeline.get(),
         targets,
-        graphEntryStatesOwned,
-        graphOwnsPassEntryStates,
         inputIsHalfB ? halfB : halfA,
         inputIsHalfB ? halfA : halfB,
         effectiveIntensity,
@@ -80,12 +76,9 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
 }
 
 
-void RendererRayTracingSystem::dispatchCausticWaveletResolve(
+void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsPassEntryStates
-){
+    DeferredFrameTargets& targets){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -120,8 +113,6 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
         heap,
         *m_rayTracingState.m_causticResolve.m_upsample.m_pipeline.get(),
         targets,
-        graphEntryStatesOwned,
-        graphOwnsPassEntryStates,
         halfB,
         irradiance,
         effectiveIntensity,
@@ -133,49 +124,10 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
     );
 }
 
-void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor){
-    // Bootstrap temporal accumulation once; later frames decay before atomic splats.
-    if(!m_rayTracingState.m_causticAccumulatorInitialized){
-        m_rayTracingState.m_causticAccumulatorInitialized = true;
-        commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.clearTextureUInt(*targets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
-        return;
-    }
-
-    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-    commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
-
-    CausticAccumulatorDecayPushConstants decayPush;
-    decayPush.width = targets.width;
-    decayPush.height = targets.height;
-    decayPush.decayFactor = decayFactor;
-    decayPush.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
-
-    Core::ComputeState decayState;
-    decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
-    commandList.setComputeState(decayState);
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
-    heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
-    commandList.setPushConstants(&decayPush, sizeof(decayPush));
-    commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE)),
-        1u
-    );
-
-    // Order decay writes before photon atomic adds.
-    commandList.commitBarriers();
-}
-
 bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const f32 decayFactor,
-    const bool graphEntryStatesOwned
-){
+    const f32 decayFactor){
     if(
         !targets.causticAccumulator
         || !targets.bindless.causticAccumulatorStorage.valid()
@@ -183,16 +135,8 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     )
         return false;
 
-    // The normal deferred graph arrives with the accumulator already lowered to UAV by this task's declared use. Compatibility callers retain the native transition
+    // The task declares the accumulator write and the photon producer dependency.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-    if(!graphEntryStatesOwned){
-        commandList.setTextureState(
-            targets.causticAccumulator.get(),
-            ECSRenderDetail::s_CausticAccumulatorSubresources,
-            Core::ResourceStates::UnorderedAccess
-        );
-        commandList.commitBarriers();
-    }
 
     CausticAccumulatorDecayPushConstants decayPush;
     decayPush.width = targets.width;
@@ -213,11 +157,6 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
         1u
     );
     return true;
-}
-
-bool RendererRayTracingSystem::hasCausticWork()const noexcept{
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return hasCausticWork(meshView);
 }
 
 bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept{

@@ -114,6 +114,10 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
         }
 
         const bool extinctionHasCsgDrawItems = extinctionUploadResult.hasCsgDrawItems;
+        if(extinctionHasCsgDrawItems && !intervalOutputsGraphOwned){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT extinction draws require prepared interval outputs"));
+            return false;
+        }
         if(extinctionUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = {

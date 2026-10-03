@@ -528,9 +528,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle,
-    const bool sentinelClearsGraphOwned,
-    const bool graphBoundaryStatesOwned
+    const Core::GpuDescriptorHandle parentHeapHandle
 ){
     if(
         primitiveCount == 0u
@@ -563,17 +561,6 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     StoreFloat(VectorSetW(aabbMin, 0.0f), pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), pushConstants.aabbMax);
 
-    // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct compatibility routes preserve their established native sentinel setup here.
-    if(!sentinelClearsGraphOwned){
-        commandList.setBufferState(keysBuffer, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.clearBufferUInt(*keysBuffer, BvhNodeIndex::Invalid);
-        commandList.clearBufferUInt(*meshParentBuffer, BvhNodeIndex::Invalid);
-        commandList.clearBufferUInt(*visitCounterBuffer, 0u);
-    }
-
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
@@ -599,10 +586,6 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.dispatch(groupCount, 1u, 1u);
     };
 
-    // The pure-software graph callback declares every input/output state. It owns the first boundary after its typed clears; direct callers retain the standalone native transition/UAV fence.
-    if(!graphBoundaryStatesOwned)
-        bvhBuildBarrier();
-
     dispatchBuildKernel(*m_rayTracingState.m_bvhMortonPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
@@ -620,9 +603,6 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     }
 
     dispatchBuildKernel(*m_rayTracingState.m_bvhFitPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
-    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV handoffs for graph callers. Keep the direct close fence for compatibility recorders.
-    if(!graphBoundaryStatesOwned)
-        bvhBuildBarrier();
     return true;
 }
 
@@ -634,9 +614,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
-    const Core::GpuDescriptorHandle parentHeapHandle,
-    const bool sentinelClearsGraphOwned,
-    const bool graphBoundaryStatesOwned
+    const Core::GpuDescriptorHandle parentHeapHandle
 ){
     if(
         primitiveCount == 0u
@@ -664,30 +642,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
-    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback;
-    // direct routes retain the native compatibility primitive.
-    if(!sentinelClearsGraphOwned){
-        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.clearBufferUInt(*visitCounterBuffer, 0u);
-    }
-
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Fit declares all scratch views, so direct callers retain its native entry UAV fence.
-    // The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
-    if(!graphBoundaryStatesOwned){
-        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-    }
-
     Core::ComputeState computeState;
     computeState.setPipeline(m_rayTracingState.m_bvhFitPipeline.get());
     commandList.setComputeState(computeState);
@@ -695,97 +654,6 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 
-    // The graph successor owns this final node state for pure software; direct callers retain it.
-    if(!graphBoundaryStatesOwned){
-        commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-    }
-    return true;
-}
-
-bool RendererRayTracingSystem::updateMeshSwBvh(
-    Core::CommandList& commandList,
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
-){
-    if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
-        return false;
-    if(
-        !meshResources.swBvhPositionHeapHandle.valid()
-        || meshResources.swBvhPositionHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !meshResources.swBvhTriangleIndexHeapHandle.valid()
-        || meshResources.swBvhTriangleIndexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    )
-        return false;
-    if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u)
-        return false;
-    const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
-    if(!meshSwBvhResourcesReady(
-        meshResources.swBvhNodeBuffer,
-        meshResources.swBvhParentBuffer,
-        meshResources.swBvhNodeHeapHandle,
-        meshResources.swBvhParentHeapHandle
-    ))
-        return false;
-
-    // Build kernels read input buffers as raw SRVs.
-    commandList.setBufferState(meshResources.positionBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(meshResources.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-
-    // Runtime meshes refit until the adaptive budget; first build initializes topology.
-    const bool firstBuild = !meshResources.swBvhTopologyBuilt || !meshResources.swBvhBuildAccepted;
-    const bool performRefit =
-        meshResources.runtimeMesh
-        && !firstBuild
-        && meshResources.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
-    ;
-    const u32 positionHeapSlot = meshResources.swBvhPositionHeapHandle.slot();
-    const u32 triangleIndexHeapSlot = meshResources.swBvhTriangleIndexHeapHandle.slot();
-
-    bool built = false;
-    if(performRefit){
-        built = refitMeshSwBvhPrepared(
-            commandList,
-            positionHeapSlot,
-            triangleIndexHeapSlot,
-            primitiveCount,
-            meshResources.swBvhNodeBuffer,
-            meshResources.swBvhParentBuffer,
-            meshResources.swBvhNodeHeapHandle,
-            meshResources.swBvhParentHeapHandle
-        );
-    }
-    else{
-        const SIMDVector aabbMin = LoadFloatInt(meshResources.csgLocalBounds.minBounds);
-        const SIMDVector aabbMax = LoadFloatInt(meshResources.csgLocalBounds.maxBounds);
-        built = buildMeshSwBvhPrepared(
-            commandList,
-            positionHeapSlot,
-            triangleIndexHeapSlot,
-            primitiveCount,
-            aabbMin,
-            aabbMax,
-            meshResources.swBvhNodeBuffer,
-            meshResources.swBvhParentBuffer,
-            meshResources.swBvhNodeHeapHandle,
-            meshResources.swBvhParentHeapHandle
-        );
-    }
-    if(!built)
-        return false;
-
-    if(!performRefit)
-        meshResources.swBvhTopologyBuilt = true;
-
-    if(firstBuild){
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")
-            , StringConvert(meshResources.meshName.resolvedText())
-            , meshResources.runtimeMesh
-            , static_cast<u64>(primitiveCount)
-        );
-    }
-
-    meshResources.swBvhRefitsSinceRebuild = performRefit ? (meshResources.swBvhRefitsSinceRebuild + 1u) : 0u;
     return true;
 }
 

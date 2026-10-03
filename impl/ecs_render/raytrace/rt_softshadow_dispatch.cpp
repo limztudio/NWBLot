@@ -63,7 +63,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 frameIndex,
     const u32 softGroupsX,
     const u32 softGroupsY,
-    const bool graphEntryStatesOwned,
     const bool dispatchOpaqueGeometry,
     const bool dispatchOpaqueResolve,
     const bool dispatchTransparentTrace,
@@ -109,16 +108,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
 
     if(dispatchOpaqueGeometry){
         // Graph declares downsample inputs; later soft-shadow transitions stay local.
-        if(!graphEntryStatesOwned){
-            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-        }
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-        if(!graphEntryStatesOwned)
-            commandList.commitBarriers();
 
         {
             Core::GpuTimingMeasure geometryTiming(
@@ -284,19 +274,18 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             opaqueDispatch.sceneShading = targets.bindless.sceneShading.slot();
             opaqueDispatch.temporalMomentsValid = opaqueTemporalActive;
             opaqueDispatch.graphOwnsWaveletGeometryEntryState = graphOwnsOpaqueGeometryToResolveBoundary;
-            opaqueDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
+            opaqueDispatch.graphOwnsUpsampleStaticEntryStates = true;
             const bool graphOwnsDeferredOpaqueWaveletInputs =
-                graphEntryStatesOwned && opaquePhase == SoftShadowOpaqueResolvePhase::WaveletOnly;
+                opaquePhase == SoftShadowOpaqueResolvePhase::WaveletOnly;
             opaqueDispatch.graphOwnsWaveletMomentsEntryState = graphOwnsDeferredOpaqueWaveletInputs;
             opaqueDispatch.graphOwnsFirstWaveletInputState = graphOwnsDeferredOpaqueWaveletInputs
                 || (graphOwnsOpaqueTraceToFirstWaveletBoundary && !opaqueTemporalActive);
             opaqueDispatch.graphOwnsFirstWaveletOutputState =
-                dispatchOpaqueResolve && !dispatchOpaqueResolveTail && graphEntryStatesOwned
+                dispatchOpaqueResolve && !dispatchOpaqueResolveTail
             ;
             const bool graphOwnsOneWaveletOpaqueResolveTailEntryStates =
                 !dispatchOpaqueResolve
                 && dispatchOpaqueResolveTail
-                && graphEntryStatesOwned
                 && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u
             ;
             opaqueDispatch.graphOwnsUpsampleInputColorEntryState = graphOwnsOneWaveletOpaqueResolveTailEntryStates;
@@ -329,29 +318,22 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 commandList
             );
             if(hardwareTransparentShadowReady()){
-                dispatchHardwareTransparentShadow(commandList, targets, deferredLightingResources, frameIndex, graphEntryStatesOwned);
+                dispatchHardwareTransparentShadow(commandList, targets, frameIndex);
             }
             else{
                 // The software route is retained for devices without hardware ray queries.
-                if(!graphEntryStatesOwned){
-                    transitionSwShadowTraversalResources(commandList);
-                    commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-                    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                    commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                    commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-                }
                 if(!graphOwnsOpaqueToTransparentBoundary){
                     commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                 }
                 commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
-                if(!graphOwnsOpaqueToTransparentBoundary || !graphEntryStatesOwned)
+                if(!graphOwnsOpaqueToTransparentBoundary)
                     commandList.commitBarriers();
 
                 const bool samplingHistoryUsable = temporalHistoryReadable && m_rayTracingState.m_softTransparentTemporalReady
                     && m_rayTracingState.m_softwareTransparentSampling.m_history.usable();
-                if(samplingHistoryUsable && (!graphEntryStatesOwned || !graphOwnsOpaqueToTransparentBoundary)){
-                    // These reads also belong to the split trace task; direct/unsplit callers retain local transitions.
+                if(samplingHistoryUsable && !graphOwnsOpaqueToTransparentBoundary){
+                    // These reads also belong to the split trace task; unsplit phases retain local transitions.
                     commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setTextureState(frontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(),
@@ -457,7 +439,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             dispatchTransparentResolve
             && splitTransparentResolve
             && !dispatchTransparentTemporalMerge
-            && graphEntryStatesOwned
             && transparentTemporalActive
         ;
         transparentDispatch.graphOwnsFirstWaveletInputState =
@@ -468,16 +449,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             graphOwnsTransparentTemporalMergeToWaveletBoundary
         ;
         transparentDispatch.graphOwnsWaveletGeometryEntryState =
-            graphEntryStatesOwned && graphOwnsTransparentTraceToResolveBoundary
+            graphOwnsTransparentTraceToResolveBoundary
         ;
-        transparentDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
+        transparentDispatch.graphOwnsUpsampleStaticEntryStates = true;
         transparentDispatch.graphOwnsFirstWaveletOutputState =
-            dispatchTransparentResolve && splitTransparentResolve && graphEntryStatesOwned
+            dispatchTransparentResolve && splitTransparentResolve
         ;
         const bool graphOwnsOneWaveletTransparentResolveTailEntryStates =
             !dispatchTransparentResolve
             && dispatchTransparentResolveTail
-            && graphEntryStatesOwned
             && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u
         ;
         transparentDispatch.graphOwnsUpsampleInputColorEntryState =

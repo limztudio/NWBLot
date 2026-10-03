@@ -3,7 +3,6 @@
 
 
 #include "deferred_system.h"
-#include "csg_interval_target_clear.h"
 
 #include <impl/ecs_render/deferred/deferred_descriptor_register.h>
 #include <impl/ecs_render/kernel/renderer_format_private.h>

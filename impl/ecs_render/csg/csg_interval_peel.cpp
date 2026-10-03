@@ -32,51 +32,6 @@ namespace CsgIntervalDetail{
 }
 
 
-static void SetCsgIntervalPeelStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-}
-
-static void SetCsgReceiverSpanStorageStates(
-    Core::CommandList& commandList,
-    const DeferredFrameTargets& targets,
-    const bool receiverSpanOutputImageStatesGraphOwned,
-    const bool receiverSpanInputImageStatesGraphOwned
-){
-    // Load-only StorageImage inputs; aggregate callers keep the fence here.
-    if(!receiverSpanInputImageStatesGraphOwned){
-        commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-    if(!receiverSpanOutputImageStatesGraphOwned){
-        commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-}
-
-static void SetCsgIntervalCombineStorageStates(
-    Core::CommandList& commandList,
-    const DeferredFrameTargets& targets,
-    const bool removedIntervalOutputImageStatesGraphOwned,
-    const bool intervalCombineInputImageStatesGraphOwned
-){
-    // Combine loads prior values via StorageImage aliases; keep fences here.
-    if(!intervalCombineInputImageStatesGraphOwned){
-        commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-    if(!removedIntervalOutputImageStatesGraphOwned){
-        commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-}
-
 [[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
@@ -183,19 +138,12 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
     return true;
 }
 
-void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
-    // Pipelines stay reusable; only the framebuffer variant refreshes.
-}
-
 void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const bool intervalPeelTargetStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned,
-    const bool materialFrameStatesGraphOwned
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -204,16 +152,6 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     NWB_ASSERT(frameBindings.bindingValid());
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, m_graphics.getDevice(), commandList);
-
-    // Graph tasks declare peel states; compatibility callers keep native setup.
-    if(!intervalPeelTargetStatesGraphOwned)
-        CsgIntervalDetail::SetCsgIntervalPeelStorageStates(commandList, targets);
-    // Compatibility callers keep native setup.
-    if(!materialFrameStatesGraphOwned)
-        commandList.setBufferState(frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
-    if(!csgClipBufferStatesGraphOwned)
-        setCsgClipBufferStates(commandList, csgResources);
-    commandList.commitBarriers();
 
     CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
@@ -230,9 +168,7 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const bool receiverSpanOutputImageStatesGraphOwned,
-    const bool receiverSpanInputImageStatesGraphOwned
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -242,14 +178,6 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::SetCsgReceiverSpanStorageStates(
-        commandList,
-        targets,
-        receiverSpanOutputImageStatesGraphOwned,
-        receiverSpanInputImageStatesGraphOwned
-    );
-    commandList.commitBarriers();
-
     CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
         m_graphics.getDevice().getDescriptorHeap(),
@@ -264,9 +192,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const bool removedIntervalOutputImageStatesGraphOwned,
-    const bool intervalCombineInputImageStatesGraphOwned
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -276,14 +202,6 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, m_graphics.getDevice(), commandList);
 
     commandList.endRenderPass();
-    CsgIntervalDetail::SetCsgIntervalCombineStorageStates(
-        commandList,
-        targets,
-        removedIntervalOutputImageStatesGraphOwned,
-        intervalCombineInputImageStatesGraphOwned
-    );
-    commandList.commitBarriers();
-
     CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
         m_graphics.getDevice().getDescriptorHeap(),
@@ -298,30 +216,12 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    const bool intervalSampleImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned,
-    const bool materialFrameStatesGraphOwned
-){
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
     NWB_ASSERT(m_csgState.m_intervalCapFillPipeline);
     NWB_ASSERT(csgResources.frameReady(csgFrameData));
-    NWB_ASSERT(frameBindings.bindingValid());
     NWB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
-
-    if(!intervalSampleImageStatesGraphOwned)
-        CsgIntervalDetail::SetCsgIntervalSampleImageStates(commandList, targets);
-    // Compatibility callers keep this bridge.
-    if(!materialFrameStatesGraphOwned){
-        commandList.setBufferState(frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
-    }
-    if(!csgClipBufferStatesGraphOwned)
-        setCsgClipBufferStates(commandList, csgResources);
-    commandList.commitBarriers();
 
     Core::ViewportState viewportState;
     viewportState

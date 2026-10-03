@@ -123,6 +123,7 @@ struct EventHeader{
 
     [[nodiscard]] bool valid()const{
         return magic == s_EventMagic
+            && version == s_TelemetryFormatVersion
             && kind != EventKind::Unknown
             && IsValidEventKind(kind)
         ;

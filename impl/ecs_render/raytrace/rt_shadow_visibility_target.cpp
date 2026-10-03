@@ -253,13 +253,11 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
+    const LightSpaceShadowSnapshot* const lightSpace){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     NWB_ASSERT(deferredLightingResources.valid());
     if(!targets.shadowVisibility)
@@ -284,17 +282,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     if(!splitSoftTransparentFold)
         timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
 
-    if(!graphEntryStatesOwned){
-        // Heap-selected resources still need explicit state transitions for direct compatibility callers.
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
-    }
-
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
         const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
@@ -302,14 +289,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
-        if(!graphEntryStatesOwned){
-            commandList.setTextureState(
-                targets.shadowSoftHalfA.get(),
-                ECSRenderDetail::s_ShadowVisibilitySubresources,
-                Core::ResourceStates::UnorderedAccess
-            );
-            commandList.commitBarriers();
-        }
 
         // Resolve reuses the trace outputs as UAV/SRV scratch.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
@@ -371,8 +350,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             }
         }
 
-        // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence. Direct
-        // and unsplit compatibility paths retain the established local fence.
+        // Split resolve declares the trace fence; unsplit soft resolve phases retain their internal UAV fence.
         if(!splitOpaqueSoftResolve){
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -386,7 +364,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             frameIndex,
             softGroupsX,
             softGroupsY,
-            graphEntryStatesOwned,
             true,
             !splitOpaqueSoftResolve,
             !splitSoftTransparentFold,
@@ -407,14 +384,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     }
 
     // Full-resolution inline-RayQuery fallback.
-    if(!graphEntryStatesOwned){
-        commandList.setTextureState(
-            targets.shadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::UnorderedAccess
-        );
-        commandList.commitBarriers();
-    }
 
     {
         Core::GpuTimingMeasure opaqueTraceTiming(

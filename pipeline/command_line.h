@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "asset_builder/global.h"
+
 #include <core/assets/global.h>
 #include <global/terminal_entry.h>
 
@@ -44,7 +46,7 @@ struct PipelineOptions{
     NWB::Core::Assets::AssetString outputPath;
     NWB::Core::Assets::AssetString cacheDirectory;
     ACompactString configuration;
-    ACompactString assetType;
+    ACompactString assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
     bool includeSkinDependencies = false;
 
     explicit PipelineOptions(NWB::Core::Assets::AssetArena& arena)
@@ -87,7 +89,7 @@ private:
     AInteropString m_outputPath;
     AInteropString m_cacheDirectory;
     AInteropString m_configuration;
-    AInteropString m_assetType;
+    AInteropString m_assetType{ NWB::Pipeline::AssetBuilder::s_GraphicsAssetBuildType };
     bool m_includeSkinDependencies = false;
     PipelineTool::Enum m_tool;
     CLI::App m_app;

@@ -140,7 +140,7 @@ TEST_F(UiWheelInputTests, RightUpAndLeftDownKeepTheirNativeSignsAndSequence){
     EXPECT_EQ(leftDown.id.sequence, rightUp.id.sequence + 1u);
 }
 
-TEST_F(UiWheelInputTests, LegacyListConsumesPureXWithoutDeliveringAControlAction){
+TEST_F(UiWheelInputTests, VerticalOnlyListConsumesPureXWithoutDeliveringAControlAction){
     m_targets[0u].scrollStepX = 0.0;
     m_targets[0u].gestureMaximumX = 0.0;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
@@ -150,7 +150,7 @@ TEST_F(UiWheelInputTests, LegacyListConsumesPureXWithoutDeliveringAControlAction
     EXPECT_TRUE(m_router.controlActions().empty());
 }
 
-TEST_F(UiWheelInputTests, LegacyListDiagonalStillDeliversItsExactVerticalStep){
+TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalStep){
     m_targets[0u].scrollStepX = 0.0;
     m_targets[0u].gestureMaximumX = 0.0;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));

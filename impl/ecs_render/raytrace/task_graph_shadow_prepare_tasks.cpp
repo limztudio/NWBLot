@@ -39,13 +39,12 @@ bool ShadowPrepareGraphTask::record(
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     payload.outcome->ready = false;
-    // Selector state is ConstantBuffer; normal graph frames need no native bridge.
+    // The graph establishes the selector ConstantBuffer state before recording.
     const bool shadowResourcesPrepared = payload.targets->bindless.valid()
         && payload.raytracingSystem->recordPreflightShadowVisibilityResources(
             commandList,
             *payload.targets,
             payload.outcome->ready,
-            payload.shadowMaterialContextBatchGraphOwned,
             payload.sceneTlasBuildGraphOwned,
             payload.meshBlasBuildsGraphOwned,
             payload.meshBlasGeometryBuildInputStatesGraphOwned,

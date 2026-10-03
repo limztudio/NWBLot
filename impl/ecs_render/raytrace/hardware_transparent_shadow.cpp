@@ -181,36 +181,11 @@ bool RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
 void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex,
-    const bool graphEntryStatesOwned){
+    const u32 frameIndex){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
     NWB_ASSERT(state.m_ready);
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
-    if(!graphEntryStatesOwned){
-        commandList.setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructRead);
-        const auto transitionGeometry = [&](const auto& buffers){
-            for(Core::Buffer* buffer : buffers)
-                commandList.setBufferState(buffer, Core::ResourceStates::ShaderResource);
-        };
-        transitionGeometry(m_rayTracingState.m_shadowMeshPositionBuffers);
-        transitionGeometry(m_rayTracingState.m_shadowMeshIndexBuffers);
-        transitionGeometry(m_rayTracingState.m_shadowMeshAttributeBuffers);
-        commandList.setBufferState(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        const auto opticalScene = m_hardwareOpticalScene.snapshot();
-        if(opticalScene.valid())
-            commandList.setBufferState(opticalScene.buffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    }
     const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
     const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_HW_TRANSPARENT_GROUP_SIZE));

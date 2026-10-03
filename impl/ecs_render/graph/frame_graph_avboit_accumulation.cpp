@@ -113,6 +113,10 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
         }
 
         const bool accumulationHasCsgDrawItems = accumulationUploadResult.hasCsgDrawItems;
+        if(accumulationHasCsgDrawItems && !intervalOutputsGraphOwned){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT accumulation draws require prepared interval outputs"));
+            return false;
+        }
         if(accumulationUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = {

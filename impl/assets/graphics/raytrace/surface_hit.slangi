@@ -36,7 +36,6 @@ struct NwbRayTraceGeometryHit{
 
 struct NwbRayTraceSurfaceHit{
     bool hit;
-    bool frontFace;
     uint instance;
     uint primitive;
     uint flags;
@@ -85,7 +84,7 @@ float3 nwbRayTraceTriangleGeometricNormal(
     const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     // Inverse-transpose preserves physical outwardness (even under negative determinant; no det-sign multiply).
-    // Optical membership uses this normal; FrontFace stays for legacy callers.
+    // Optical membership uses this normal.
     const float3 edge0 = nwbRayTraceScaleGeometryVector(v1 - v0);
     const float3 edge1 = nwbRayTraceScaleGeometryVector(v2 - v0);
     const float3 normal = nwbRayTraceScaleGeometryVector(cross(edge0, edge1));
@@ -144,11 +143,9 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     const uint instance,
     const uint primitive,
     const float2 bary,
-    const float3x4 worldToObject,
-    const bool frontFace){
+    const float3x4 worldToObject){
     NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
     hit.hit = true;
-    hit.frontFace = frontFace;
     hit.instance = instance;
     hit.primitive = primitive;
     hit.distance = distance;
@@ -216,7 +213,7 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(
         instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive,
-        geometry.barycentrics, geometry.worldToObject, geometry.frontFace
+        geometry.barycentrics, geometry.worldToObject
     );
 }
 

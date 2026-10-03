@@ -32,14 +32,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
+    const LightSpaceShadowSnapshot* const lightSpace){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return false;
@@ -72,22 +70,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     if(!splitSoftTransparentFold)
         timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
 
-    if(!graphEntryStatesOwned){
-        // BVH build leaves traversal inputs in UAV state. Direct compatibility callers restore them locally.
-        transitionSwShadowTraversalResources(commandList);
-        if(m_rayTracingState.m_shadowInstanceBuffer)
-            commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    }
     // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
-    if(!graphEntryStatesOwned)
-        commandList.commitBarriers();
 
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
@@ -183,7 +167,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
                 : NWB_SW_SHADOW_SOFT_SPP;
             if(lightSpace && lightSpace->ready){
-                NWB_ASSERT(graphEntryStatesOwned && splitSoftTransparentFold);
+                NWB_ASSERT(splitSoftTransparentFold);
                 if(!RecordLightSpaceResolve(
                     commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount,
                     targets.bindless.shadowSoftHalfAStorage.slot(), false
@@ -209,7 +193,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         }
 
         // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
-        // Direct and unsplit compatibility paths retain the established local fence.
+        // Unsplit soft resolve phases retain their internal UAV fence.
         if(!splitOpaqueSoftResolve){
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -223,7 +207,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             frameIndex,
             softGroupsX,
             softGroupsY,
-            graphEntryStatesOwned,
             true,
             !splitOpaqueSoftResolve,
             !splitSoftTransparentFold,
@@ -362,10 +345,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
-    const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace
-){
+    const LightSpaceShadowSnapshot* const lightSpace){
     outFrameIndex = 0u;
     if(
         !m_rayTracingState.m_softShadowReady
@@ -377,7 +358,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
         commandList,
         targets,
         deferredLightingResources,
-        graphEntryStatesOwned,
         true,
         &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,

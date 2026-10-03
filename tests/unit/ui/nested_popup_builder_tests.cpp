@@ -365,7 +365,7 @@ TEST_F(UiNestedPopupBuilderTests, SearchInsideTheChildLendsAnExplicitQueryPopupA
     EXPECT_EQ(query->layer, rows->layer);
     EXPECT_GT(query->layer, field->layer);
     ExpectRect(m_search.editorState().placement.bounds, query->rectangle);
-    EXPECT_EQ(m_host.legacyLoans, 0u);
+    EXPECT_EQ(m_host.contextScopedLoans, 0u);
     EXPECT_EQ(m_context.input().focus(), query->id);
 }
 

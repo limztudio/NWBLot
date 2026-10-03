@@ -24,8 +24,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
         desc,
@@ -36,7 +35,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = &asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -47,8 +45,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
         desc,
@@ -58,7 +55,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -69,8 +65,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
         desc,
@@ -80,7 +75,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -91,8 +85,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
         desc,
@@ -102,7 +95,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -113,8 +105,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
         desc,
@@ -124,7 +115,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -135,8 +125,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
         desc,
@@ -146,7 +135,6 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -157,31 +145,16 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsCellHeadClear,
-    const bool graphOwnsHashBuild,
-    const bool graphOwnsSpawn,
-    const bool graphOwnsTraceBuildArgs,
-    const bool graphOwnsTrace,
-    const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{
             .raytracingSystem = this,
-            .graphics = &m_graphics,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
-            .graphOwnsCellHeadClear = graphOwnsCellHeadClear,
-            .graphOwnsHashBuild = graphOwnsHashBuild,
-            .graphOwnsSpawn = graphOwnsSpawn,
-            .graphOwnsTraceBuildArgs = graphOwnsTraceBuildArgs,
-            .graphOwnsTrace = graphOwnsTrace,
-            .graphOwnsResolve = graphOwnsResolve,
         }
     );
 }

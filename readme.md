@@ -22,6 +22,8 @@ Common tools:
 - `slangc` for the asset pipeline, which is enabled by default
 - A Vulkan loader and a compatible Vulkan driver for rendering
 
+Windows hosts require Windows 10 version 1709 or newer. The launcher requires [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2) for native architecture discovery; frame creation uses current Per-Monitor v2 DPI APIs, including [SetProcessDpiAwarenessContext](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext).
+
 Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations.
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.

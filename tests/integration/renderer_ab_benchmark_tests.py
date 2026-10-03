@@ -220,16 +220,16 @@ def trial_matrix(frame_delta=-.5):
 class CoverageTests(unittest.TestCase):
     def test_actual_gpu_counts_ignore_cpu_frame_and_displayed_average_fields(self):
         text = ("=== interval: 99999 frames / 0.5s ===\n"
-            "  render.frame: avg=123 samples=1 total_ms=90 gpu_samples=10\n"
+            "  render.frame: window_avg_ms=123 window_min_ms=123 window_max_ms=123 published_windows=1 total_ms=90 gpu_samples=10 sample_avg_ms=9\n"
             "=== interval: 1 frames / 0.5s ===\n"
-            "  render.frame: avg=456 samples=1 total_ms=100 gpu_samples=100\n")
+            "  render.frame: window_avg_ms=456 window_min_ms=456 window_max_ms=456 published_windows=1 total_ms=100 gpu_samples=100 sample_avg_ms=1\n")
         result = benchmark.summarize_intervals(benchmark.parse_intervals(text, finalized=True))
         self.assertEqual(result[benchmark.FRAME][LIT_GPU_SAMPLES], 110)
         self.assertAlmostEqual(result[benchmark.FRAME][LIT_MEAN_MS], 190 / 110)
 
     def test_partial_live_tail_is_not_counted(self):
         text = ("=== interval: 1 frames / 0.5s ===\n"
-            "  render.frame: total_ms=4 gpu_samples=1\n"
+            "  render.frame: window_avg_ms=4 window_min_ms=4 window_max_ms=4 published_windows=1 total_ms=4 gpu_samples=1 sample_avg_ms=4\n"
             "=== interval: 1 frames / 0.5s ===\n  render.frame: total_ms=")
         self.assertEqual(len(benchmark.parse_intervals(text)), 1)
 
@@ -748,7 +748,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
         workload = benchmark.workloads()[LIT_REFLECTION_SCREEN_DEPTH]
         symbols = benchmark.load_name_symbols(None, workload.observed_scopes)
         token = next(token for token, name in symbols.items() if name == benchmark.reflection.HARDWARE)
-        text = f"=== interval: 1 frames / 0.5s ===\n  {token}: total_ms=1 gpu_samples=1\n"
+        text = f"=== interval: 1 frames / 0.5s ===\n  {token}: window_avg_ms=1 window_min_ms=1 window_max_ms=1 published_windows=1 total_ms=1 gpu_samples=1 sample_avg_ms=1\n"
         parsed = benchmark.summarize_intervals(benchmark.parse_intervals(text, symbols, finalized=True))
         with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_INACTIVE_REFLECTION_SCOPES):
             benchmark.validate_inactive_scopes(parsed, workload)

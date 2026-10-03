@@ -75,7 +75,6 @@ NWB_IMPL_BEGIN
 class MeshSkinningRuntimeCache final : NoCopy{
 private:
     struct MeshSkinningSource{
-        Name sourceName = NAME_NONE;
         UniquePtr<Core::Assets::IAsset> meshAsset;
         UniquePtr<Core::Assets::IAsset> skinAsset;
         u32 referenceCount = 0;
@@ -100,7 +99,6 @@ public:
 private:
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);
     [[nodiscard]] bool ensureSourceLoaded(
-        Core::Assets::AssetRef<Mesh>& meshAsset,
         const Core::Assets::AssetRef<Skin>& skinAsset,
         MeshSkinningSource*& outSource
     );

@@ -546,7 +546,7 @@ TEST_F(UiControlInputTests, ClosingPopupBlocksFocusHintAndHeldNavigationCannotRe
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
 }
 
-TEST_F(UiControlInputTests, LegacyActivationAlsoFencesItsCopiedControlEpoch){
+TEST_F(UiControlInputTests, ActivationAlsoFencesItsCopiedControlEpoch){
     HitTarget target = Host();
     target.navigable = false;
     target.scrollable = false;
@@ -561,7 +561,7 @@ TEST_F(UiControlInputTests, LegacyActivationAlsoFencesItsCopiedControlEpoch){
     EXPECT_FALSE(m_router.consumeActivation(target.id));
 }
 
-TEST_F(UiControlInputTests, ControlLegacyAndGestureActionsShareOneMonotonicSequence){
+TEST_F(UiControlInputTests, ControlActivationAndGestureActionsShareOneMonotonicSequence){
     HitTarget button = Host(4u, 140.0f);
     button.control = {};
     button.navigable = false;
@@ -571,11 +571,11 @@ TEST_F(UiControlInputTests, ControlLegacyAndGestureActionsShareOneMonotonicSeque
     ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
     click({ 150.0f, 10.0f });
     ASSERT_EQ(m_router.actions().size(), 1u);
-    const u64 legacySequence = m_router.actions()[0u].id.sequence;
+    const u64 activationSequence = m_router.actions()[0u].id.sequence;
     EXPECT_TRUE(wheel().pointerConsumed);
     ControlAction action;
     ASSERT_TRUE(take(action));
-    EXPECT_GT(action.id.sequence, legacySequence);
+    EXPECT_GT(action.id.sequence, activationSequence);
     const u64 wheelSequence = action.id.sequence;
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture gesture;

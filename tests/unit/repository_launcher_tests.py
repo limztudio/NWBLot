@@ -1,5 +1,7 @@
 import argparse
+import ctypes
 import importlib.util
+import json
 import os
 import platform
 import re
@@ -129,6 +131,16 @@ LIT_ENGINE = "engine"
 LIT_WINDOWS_CLANG_ENGINE_ARM64 = "windows-clang-engine-arm64"
 LIT_WINDOWS_CLANG_TESTBED_ARM64 = "windows-clang-testbed-arm64"
 LIT_EXEC_OUTPUT_ROOT = "__exec"
+LIT_WINDOWS_DLL = "WinDLL"
+LIT_WINDOWS_LAST_ERROR = "get_last_error"
+LIT_WINDOWS_ENV_ARCH6432 = "PROCESSOR_ARCHITEW6432"
+LIT_METADATA_INDEX = "index-0001.json"
+LIT_METADATA_CODEMODEL = "codemodel.json"
+LIT_METADATA_TARGET = "target.json"
+LIT_METADATA_LIBRARY = "STATIC_LIBRARY"
+LIT_ACTUAL_EXECUTABLE = "actual-target.exe"
+LIT_PREVIEW_EXECUTABLE = "preview-target"
+LIT_EXPLICIT_EXECUTABLE = "explicit-target.exe"
 
 
 class FakeWindowsProcessApi:
@@ -230,19 +242,57 @@ class LauncherPlatformTests(unittest.TestCase):
         with (
             mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
             mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64),
-            mock.patch.object(launcher, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=LIT_ARM64_2),
+            mock.patch.object(launcher.HostProbe, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=LIT_ARM64_2),
             mock.patch.dict(os.environ, {}, clear=True),
         ):
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
 
-    def test_host_architecture_uses_wow64_environment_when_native_query_is_unavailable(self):
+    def test_missing_native_windows_api_rejects_environment_and_process_guesses(self):
         with (
             mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
-            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64),
-            mock.patch.object(launcher, LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME, return_value=None),
-            mock.patch.dict(os.environ, {"PROCESSOR_ARCHITEW6432": LIT_ARM64_2}, clear=True),
+            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine,
+            mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=mock.Mock(spec=()), create=True),
+            mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_ARM64_2}, clear=True),
         ):
+            with self.assertRaisesRegex(SystemExit, launcher.WINDOWS_WOW64_PROC2):
+                launcher.host_arch_name()
+            machine.assert_not_called()
+
+    def test_failed_native_windows_query_rejects_guesses_and_recovers_after_success(self):
+        kernel32 = mock.Mock()
+        kernel32.GetCurrentProcess.return_value = 1
+        query = getattr(kernel32, launcher.WINDOWS_WOW64_PROC2)
+        query.return_value = 0
+        with (
+            mock.patch.object(platform, LIT_SYSTEM, return_value=LIT_WINDOWS_2),
+            mock.patch.object(platform, LIT_MACHINE, return_value=LIT_AMD64) as machine,
+            mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=kernel32, create=True),
+            mock.patch.object(ctypes, LIT_WINDOWS_LAST_ERROR, return_value=87, create=True),
+            mock.patch.dict(os.environ, {LIT_WINDOWS_ENV_ARCH6432: LIT_AMD64}, clear=True),
+        ):
+            with self.assertRaisesRegex(SystemExit, "Windows error 87"):
+                launcher.host_arch_name()
+
+            def report_arm64(process, process_machine, native_machine):
+                native_machine._obj.value = launcher.WINDOWS_IMAGE_FILE_MACHINE_ARM64
+                return 1
+
+            query.side_effect = report_arm64
             self.assertEqual(LIT_ARM64, launcher.host_arch_name())
+            machine.assert_not_called()
+
+    def test_unknown_native_windows_machine_is_rejected(self):
+        kernel32 = mock.Mock()
+        kernel32.GetCurrentProcess.return_value = 1
+
+        def report_unknown(process, process_machine, native_machine):
+            native_machine._obj.value = 0x014c
+            return 1
+
+        getattr(kernel32, launcher.WINDOWS_WOW64_PROC2).side_effect = report_unknown
+        with mock.patch.object(ctypes, LIT_WINDOWS_DLL, return_value=kernel32, create=True):
+            with self.assertRaisesRegex(SystemExit, "unsupported Windows native machine type 0x014c"):
+                launcher.query_windows_native_machine_name()
 
     def test_explicit_architecture_must_match_configure_preset(self):
         args = argparse.Namespace(
@@ -960,6 +1010,76 @@ class LauncherDryRunDomainTests(unittest.TestCase):
         for expected_domain, arguments in cases:
             with self.subTest(domain=expected_domain):
                 self.assert_preview_uses_domain(expected_domain, arguments)
+
+
+class LauncherExecutableMetadataTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.settings = launcher.LaunchSettings(
+            root=self.root,
+            platform_name=LIT_WINDOWS,
+            arch=LIT_ARM64,
+            domain=LIT_FULL,
+            config=LIT_OPT,
+            configure_preset=LIT_WINDOWS_CLANG_ARM64,
+            build_dir=self.root / LIT_CMAKE / LIT_BUILD,
+            cmake=(LIT_CMAKE_EXECUTABLE,),
+        )
+        self.reply = self.settings.build_dir / launcher.FILE_API_DIR_CMAKE / launcher.FILE_API_DIR_API / launcher.FILE_API_DIR_V1 / launcher.FILE_API_DIR_REPLY
+        self.reply.mkdir(parents=True)
+        self.actual = self.settings.build_dir / LIT_ACTUAL_EXECUTABLE
+
+    def write_target_metadata(self, target_type, artifacts):
+        documents = {
+            LIT_METADATA_INDEX: {
+                launcher.FILE_API_OBJECTS_KEY: [{
+                    launcher.FILE_API_KIND_KEY: launcher.FILE_API_KIND_CODEMODEL,
+                    launcher.FILE_API_VERSION_KEY: {launcher.FILE_API_VERSION_MAJOR: launcher.FILE_API_CODEMODEL_VERSION},
+                    launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_CODEMODEL,
+                }],
+            },
+            LIT_METADATA_CODEMODEL: {
+                launcher.FILE_API_CONFIGURATIONS_KEY: [{
+                    launcher.FILE_API_NAME_KEY: self.settings.config,
+                    launcher.FILE_API_TARGETS_KEY: [{
+                        launcher.FILE_API_NAME_KEY: LIT_TESTBED,
+                        launcher.FILE_API_JSON_FILE_KEY: LIT_METADATA_TARGET,
+                    }],
+                }],
+            },
+            LIT_METADATA_TARGET: {
+                launcher.FILE_API_NAME_KEY: LIT_TESTBED,
+                launcher.FILE_API_TYPE_KEY: target_type,
+                launcher.FILE_API_ARTIFACTS_KEY: [{launcher.FILE_API_PATH_KEY: str(path)} for path in artifacts],
+            },
+        }
+        for name, document in documents.items():
+            (self.reply / name).write_text(json.dumps(document), encoding=LIT_UTF_8)
+
+    def test_missing_metadata_rejects_guess_but_keeps_explicit_and_preview_paths(self):
+        predicted = launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True)
+        predicted.parent.mkdir(parents=True)
+        predicted.touch()
+        with self.assertRaisesRegex(SystemExit, "CMake File API metadata is required"):
+            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
+        explicit = Path(LIT_EXPLICIT_EXECUTABLE)
+        self.assertEqual(self.root / explicit, launcher.resolve_executable_path(self.settings, LIT_TESTBED, explicit, None, False))
+        self.assertEqual(predicted, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, True))
+
+        self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
+        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False))
+
+    def test_executable_metadata_without_artifact_or_with_library_type_is_rejected(self):
+        self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [])
+        with self.assertRaisesRegex(SystemExit, "has no executable artifact"):
+            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
+        self.write_target_metadata(LIT_METADATA_LIBRARY, [self.actual])
+        with self.assertRaisesRegex(SystemExit, "CMake target is not executable"):
+            launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
+        self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [Path(LIT_ACTUAL_EXECUTABLE)])
+        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
 
 
 class PipelineLauncherTests(unittest.TestCase):

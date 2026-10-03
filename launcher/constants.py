@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Shared launcher literals (single-domain constants module)."""
 
-from pathlib import Path
+from pathlib import Path as _Path
 
 
 
@@ -19,7 +19,7 @@ WINDOWS_NATIVE_MACHINE_NAMES = {
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
-LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"), Path("pipeline"))
+LAUNCHER_SEARCH_ROOTS = (_Path("CoolStuff"), _Path("tests"), _Path("utilities"), _Path("pipeline"))
 LAUNCHER_SCRIPT_NAME = "launch.py"
 RESERVED_LAUNCH_COMMANDS = frozenset(("build", "profiles", "run"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
@@ -128,8 +128,6 @@ CMAKE_BOOL_TRUE_TOKENS = ("1", "ON", "TRUE", "YES")
 CMAKE_BOOL_FALSE_TOKENS = ("0", "OFF", "FALSE", "NO")
 WINDOWS_KERNEL32 = "kernel32"
 WINDOWS_WOW64_PROC2 = "IsWow64Process2"
-WINDOWS_ENV_ARCH6432 = "PROCESSOR_ARCHITEW6432"
-WINDOWS_ENV_ARCH = "PROCESSOR_ARCHITECTURE"
 PRESET_ARCH_SEPARATOR = "-"
 PRESET_TOOLCHAIN = "clang"
 OPTION_WITH_PROFILE = "with_profile"
@@ -154,12 +152,16 @@ MSG_DISAMBIGUATE = "rename one leaf directory to disambiguate"
 MSG_INVALID_COMMAND = f"invalid launch command '{{command}}' in {{source}}; use lowercase letters, digits, and single hyphens"
 MSG_COMMAND_CONFLICT = f"launch command '{{command}}' in {{source}} conflicts with a built-in launcher command"
 MSG_MISSING_LAUNCHER_PREFIX = "missing "
+MSG_WINDOWS_ARCH_API_REQUIRED = f"Windows native architecture discovery requires {WINDOWS_WOW64_PROC2}; this host API is unavailable"
+MSG_WINDOWS_ARCH_QUERY_FAILED = f"Windows native architecture discovery through {WINDOWS_WOW64_PROC2} failed (Windows error {{error}})"
+MSG_WINDOWS_NATIVE_MACHINE_UNSUPPORTED = "unsupported Windows native machine type 0x{machine:04x}; NWBLot supports x64 and arm64"
 MSG_UNSUPPORTED_ARCH = f"unsupported host architecture '{{machine}}'; NWBLot supports x64 and arm64"
 MSG_ARCH_PRESET_CONFLICT = f"--arch {{args.arch}} conflicts with configure preset '{{args.configure_preset}}' ({{preset_arch}})"
 MSG_CONFIGURE_REQUIRED = f"CMake configure is required for {{settings.build_dir}}, but --configure=never was requested"
 MSG_NO_TARGETS = "at least one CMake target is required"
 MSG_NOT_EXECUTABLE = f"CMake target is not executable: {{target}}"
-MSG_NO_METADATA = "warning: CMake target metadata unavailable; using repository executable naming convention"
+MSG_EXECUTABLE_METADATA_REQUIRED = "CMake File API metadata is required to launch target '{target}' ({config}); configure this build or supply --executable"
+MSG_EXECUTABLE_ARTIFACT_REQUIRED = "CMake target '{target}' has no executable artifact ({config}); configure this build or supply --executable"
 MSG_NO_PKILL = "warning: --kill-existing requested, but pkill is not available on this host"
 MSG_MISSING_EXECUTABLE = f"missing executable: {{executable}}"
 MSG_MISSING_WORKDIR = f"missing working directory: {{working_directory}}"
@@ -249,7 +251,7 @@ HELP_DRY_RUN = "Print configure/build/launch commands without executing them."
 HELP_BUILD_DRY_RUN = "Print configure/build commands without executing them."
 HELP_WORKING_DIRECTORY = "Override launch working directory."
 HELP_EXECUTABLE = "Override executable path."
-HELP_EXECUTABLE_NAME = "Override executable base name when CMake metadata is unavailable."
+HELP_EXECUTABLE_NAME = "Override the executable base name in dry-run previews."
 HELP_GPUDbg = "Append --gpudbg to the launched application."
 HELP_KILL_EXISTING = "Stop running copies of the selected executable before launch; Windows matches the exact executable image path."
 HELP_DETACH = "Return after launch instead of waiting for the app."
@@ -258,7 +260,7 @@ HELP_WITH_PROFILE = "Start nwb_logserver and connect the launched app to it."
 HELP_PROFILE_LOG_ADDRESS = "Log address passed to the launched app when --with-profile is enabled."
 HELP_PROFILE_LOG_PORT = "Logserver port for --with-profile. Defaults to an available localhost port."
 HELP_PROFILE_LOGSERVER_TARGET = "CMake target used for the profiling logserver."
-HELP_PROFILE_LOGSERVER_NAME = "Executable base name for the profiling logserver when CMake metadata is unavailable."
+HELP_PROFILE_LOGSERVER_NAME = "Executable base name for the profiling logserver in dry-run previews."
 HELP_PROFILE_LOGSERVER_EXECUTABLE = "Override logserver executable path for --with-profile."
 HELP_PROFILE_LOGSERVER_TIMEOUT = "Seconds to wait for the profiling logserver to accept connections."
 HELP_PROFILE_LOGSERVER_ARG = "Extra argument passed to the profiling logserver; repeat as needed."

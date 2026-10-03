@@ -172,7 +172,7 @@ void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(
         const auto& mesh = drawItem.meshResources;
         const auto& cache = mesh.objectGeometryCache;
         const Core::GraphicsPipelineHandle& pipeline = drawItem.pipelineResources.indexedPipeline;
-        setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
+        setMaterialPassCommonBufferStates(context, mesh);
         Core::GraphicsState state;
         state.setPipeline(pipeline.get());
         state.setFramebuffer(context.framebuffer);

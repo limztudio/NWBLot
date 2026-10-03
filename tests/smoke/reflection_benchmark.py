@@ -20,7 +20,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
-from gpu_timing_parse import load_name_symbols
+from gpu_timing_parse import SCOPE_RE, load_name_symbols
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip,
@@ -102,7 +102,6 @@ OBSERVED_CONTROLS = CONTROLS + ("render.deferred_composite", "render.deferred_pr
 KERNELS = (CLASSIFY, DEPTH, BUILD_ARGS, HARDWARE, TEMPORAL, SPATIAL)
 KNOWN_SCOPES = (FRAME,) + OBSERVED_CONTROLS + KERNELS
 HEADER = re.compile(r"^=== interval: (\d+) frames / ([-+0-9.eE]+)s ===$", re.MULTILINE)
-SCOPE = re.compile(r"^  ([^:]+): (.+)$")
 DIMENSIONS = re.compile(r"deferred rendering targets ready \((\d+)x(\d+),")
 FEEDBACK_PROBE_PERIOD = 16
 TIMING_IN_FLIGHT_RANGES = 32
@@ -173,30 +172,18 @@ def parse_intervals(text, symbols=None, finalized=False):
         for line in text[match.end():end].splitlines():
             if not line.strip():
                 continue
-            parsed = SCOPE.fullmatch(line)
+            parsed = SCOPE_RE.fullmatch(line)
             if not parsed:
                 raise SmokeFailure(f"malformed completed GPU timing row: {line}")
-            scope = symbols.get(parsed.group(1), parsed.group(1))
-            fields = {}
-            for field in parsed.group(2).split():
-                if "=" not in field:
-                    raise SmokeFailure(f"malformed timing field: {field}")
-                key, value = field.split("=", 1)
-                if key in fields:
-                    raise SmokeFailure(f"duplicate timing field: {key}")
-                fields[key] = value
-            if LIT_TOTAL_MS not in fields or LIT_GPU_SAMPLES not in fields:
-                raise SmokeFailure("timing file lacks total_ms/gpu_samples; rebuild the current timing probe")
-            try:
-                total = float(fields[LIT_TOTAL_MS])
-                raw_count = fields[LIT_GPU_SAMPLES]
-                if not raw_count.isdecimal():
-                    raise ValueError("sample count is not an unsigned integer")
-                gpu_samples = int(raw_count)
-            except ValueError as error:
-                raise SmokeFailure(f"invalid normalized timing row: {line}") from error
-            if not math.isfinite(total) or total < 0 or gpu_samples <= 0:
-                raise SmokeFailure(f"nonfinite, negative, or empty GPU timing sample: {line}")
+            scope = symbols.get(parsed.group("scope"), parsed.group("scope"))
+            values = tuple(float(parsed.group(field)) for field in ("average", "minimum", "maximum", "total", "sample_average"))
+            gpu_samples = int(parsed.group("gpu_samples"))
+            published_windows = int(parsed.group("published_windows"))
+            if (any(not math.isfinite(value) or value < 0.0 for value in values)
+                or not 0 < published_windows < 2 ** 32 or not 0 < gpu_samples < 2 ** 64
+                or values[1] > values[0] or values[0] > values[2]):
+                raise SmokeFailure(f"invalid current GPU timing values: {line}")
+            total = values[3]
             if scope in samples:
                 raise SmokeFailure(f"duplicate timing scope in one report: {scope}")
             samples[scope] = ScopeSample(total, gpu_samples)

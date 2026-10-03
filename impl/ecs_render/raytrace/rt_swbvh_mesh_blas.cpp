@@ -22,31 +22,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::buildPendingMeshBlas(
-    Core::CommandList& commandList,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
-        return false;
-
-    ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
-    m_meshSystem.collectRayTracingResourceSnapshots(meshes);
-    for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
-
-        if(!RequiresMeshBlasUpdate(meshResources))
-            continue;
-        if(!buildMeshBlas(commandList, meshResources))
-            return false;
-        meshResources.blasBuildPending = false;
-        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            m_rayTracingState.m_tlasStaticSceneHashValid = false;
-            return false;
-        }
-    }
-    return true;
-}
-
 bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena){
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
@@ -104,7 +79,6 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
 
 bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
     Core::CommandList& commandList,
-    const bool meshBlasAccelStructStatesGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned
 ){
     if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
@@ -124,7 +98,6 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
         if(!__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(
             commandList,
             build,
-            meshBlasAccelStructStatesGraphOwned,
             meshBlasGeometryBuildInputStatesGraphOwned
         )){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
@@ -161,7 +134,6 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         meshResources.blasBuildPending = false;
         // The accepted Shadow Preparation state handoff now owns this generation's native final state.
         meshResources.blasBackingFresh = false;
-        meshResources.blasBackingStateHandoffPending = false;
         meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
         meshResources.blasBuildAccepted = true;
         meshResources.blasGeometryContentRevision = build.geometryContentRevision;

@@ -58,8 +58,6 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool csgIntervalSampleImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool conservativeGeometryScissor = false;
@@ -137,8 +135,6 @@ struct AvboitAccumulationGraphTask{
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool accumulationPhasePrepared = false;
-        bool accumulationCsgIntervalSampleImageStatesGraphOwned = false;
-        bool accumulationCsgClipBufferStatesGraphOwned = false;
         bool accumulationMaterialFrameStatesGraphOwned = false;
         bool accumulationMaterialGeometryStatesGraphOwned = false;
         bool accumulationComputeEmulationOutputStatesGraphOwned = false;

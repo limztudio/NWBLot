@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Runtime alpha controls only legacy AVBOIT coverage. Optical tint remains authored at zero coverage.
+// Runtime alpha controls AVBOIT coverage. Optical tint remains authored at zero coverage.
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);

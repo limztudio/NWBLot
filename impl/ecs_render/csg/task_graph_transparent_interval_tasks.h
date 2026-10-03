@@ -49,8 +49,6 @@ struct AvboitCsgReceiverSpanGraphTask{
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
-        bool receiverSpanInputImageStatesGraphOwned = false;
-        bool receiverSpanOutputImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena);
     };
@@ -81,8 +79,6 @@ struct AvboitCsgIntervalCombineGraphTask{
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
-        bool intervalCombineInputImageStatesGraphOwned = false;
-        bool removedIntervalOutputImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena);
     };

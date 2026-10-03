@@ -40,6 +40,7 @@ namespace __hidden_telemetry_codec{
 
 [[nodiscard]] static bool ValidateStreamHeader(const EncodedStreamHeader& header)noexcept{
     return header.magic == s_StreamMagic
+        && header.version == s_TelemetryFormatVersion
         && header.reserved == 0u
     ;
 }

@@ -74,8 +74,6 @@ NWB_IMPL_BEGIN
         !materialSystem.materialPassDrawResourcesReady(drawItems, *inputs.frameBindings)
         || (csgComputeEmulation && (
             !inputs.csgFrameBuffersUploaded
-            || !inputs.csgIntervalSampleImageStatesGraphOwned
-            || !inputs.csgClipBufferStatesGraphOwned
             || !csgFrameData.hasWork()
             || !inputs.csgResources->frameReady(csgFrameData)
         ))
@@ -100,16 +98,12 @@ NWB_IMPL_BEGIN
     );
     const MaterialPassDrawContext drawContext{
         commandList,
-        *inputs.targets,
         nullptr,
         &inputs.targets->avboit,
         viewportState,
         csgComputeEmulation ? inputs.csgResources : nullptr,
         *inputs.frameBindings,
         trait.pipelinePass,
-        false,
-        csgComputeEmulation && inputs.csgIntervalSampleImageStatesGraphOwned,
-        csgComputeEmulation && inputs.csgClipBufferStatesGraphOwned,
         inputs.materialFrameStatesGraphOwned,
         inputs.materialGeometryStatesGraphOwned,
         true,
@@ -196,16 +190,12 @@ NWB_IMPL_BEGIN
     ;
     const MaterialPassDrawContext drawContext{
         commandList,
-        *inputs.targets,
         rasterFramebuffer,
         &inputs.targets->avboit,
         viewportState,
         nullptr,
         *inputs.frameBindings,
         trait.pipelinePass,
-        false,
-        false,
-        false,
         inputs.materialFrameStatesGraphOwned,
         inputs.materialGeometryStatesGraphOwned,
         true

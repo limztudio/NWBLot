@@ -26,8 +26,7 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// GPU timing is async: windows != frames. avg/min/max are per published window; total_ms/gpu_samples normalize
-// by dispatches, not cadence.
+// GPU timing is async: windows != frames. Window statistics describe published totals; total_ms/gpu_samples normalize by dispatches, not cadence.
 class GpuPassTimingProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
@@ -167,10 +166,10 @@ private:
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.resolvedText()
-                    << ": avg=" << averageMs
-                    << " min=" << accum.minSeconds * s_MillisecondsPerSecond
-                    << " max=" << accum.maxSeconds * s_MillisecondsPerSecond
-                    << " samples=" << static_cast<unsigned>(accum.frames)
+                    << ": window_avg_ms=" << averageMs
+                    << " window_min_ms=" << accum.minSeconds * s_MillisecondsPerSecond
+                    << " window_max_ms=" << accum.maxSeconds * s_MillisecondsPerSecond
+                    << " published_windows=" << static_cast<unsigned>(accum.frames)
                     << " total_ms=" << accum.sumSeconds * s_MillisecondsPerSecond
                     << " gpu_samples=" << accum.samples
                     << " sample_avg_ms=" << accum.sumSeconds * s_MillisecondsPerSecond / static_cast<f64>(accum.samples)

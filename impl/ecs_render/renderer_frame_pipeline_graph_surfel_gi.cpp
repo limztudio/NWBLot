@@ -350,7 +350,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     }
 
 
-// Prepared Surfel GI splits stages across the graph; unavailable resources stay monolithic.
     const bool graphOwnsSurfelGiResolve =
         hasSurfelWork
         && shadowInstanceMaterials.valid()
@@ -369,6 +368,10 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         && (useHwTrace ? tlas.valid() : (sceneBvhNodes.valid() && sceneInstances.valid()))
         && rayTracingResources.surfelSplitGraphPipelinesReady
     ;
+    if(hasSurfelWork && !graphOwnsSurfelGiResolve){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: active surfel GI has no complete prepared graph resources"));
+        return false;
+    }
     if(graphOwnsSurfelGiResolve){
         resourceUses.clear();
         resourceUses.push_back(ReadUse(worldPosition));
@@ -517,8 +520,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            asyncTiming,
-            true
+            asyncTiming
         );
         if(!m_deferredSurfelGiAgeFreeTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
@@ -565,8 +567,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming,
-            true
+            &asyncTiming
         );
         if(!m_deferredSurfelGiHashBuildTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
@@ -597,8 +598,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming,
-            true
+            &asyncTiming
         );
         if(!m_deferredSurfelGiSpawnTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
@@ -626,8 +626,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming,
-            true
+            &asyncTiming
         );
         if(!m_deferredSurfelGiTraceBuildArgsTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
@@ -656,8 +655,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming,
-            true
+            &asyncTiming
         );
         if(!m_deferredSurfelGiTraceTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
@@ -682,8 +680,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming,
-            true
+            &asyncTiming
         );
         if(!m_deferredSurfelGiResolveTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
@@ -722,13 +719,6 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         deferredTargets,
         deferredLightingResources,
         timingTicket,
-        true,
-        graphOwnsSurfelGiResolve,
-        graphOwnsSurfelGiResolve,
-        graphOwnsSurfelGiResolve,
-        graphOwnsSurfelGiResolve,
-        graphOwnsSurfelGiResolve,
-        graphOwnsSurfelGiResolve,
         graphOwnsSurfelGiResolve ? &asyncTiming : nullptr
     );
     if(!m_deferredSurfelGiTask.valid()){

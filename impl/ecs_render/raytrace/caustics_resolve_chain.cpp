@@ -49,8 +49,7 @@ struct ResolveStageDesc{
         Core::GpuTaskGraph&,
         const Core::GpuTaskDesc&,
         DeferredFrameTargets&,
-        const bool*,
-        bool
+        const bool*
     );
 };
 
@@ -140,8 +139,7 @@ struct ResolveStageDesc{
             m_graph,
             stageDesc,
             (*inputs.targets),
-            inputs.producerDispatched,
-            true
+            inputs.producerDispatched
         );
         if(!stage.outTask->valid()){
             NWB_LOGGER_WARNING(stage.naming->warnText);

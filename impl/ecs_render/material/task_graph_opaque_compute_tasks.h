@@ -63,7 +63,7 @@ struct OpaqueRegularComputeEmulationGraphTask{
 };
 
 
-// Shared-output sequence keeps compat order; each instance records one phase.
+// Shared outputs interleave generation and rasterization; each instance records one phase.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
     struct Phase{
         enum Enum : u8{

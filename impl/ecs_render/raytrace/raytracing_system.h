@@ -249,7 +249,6 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool& outBackendReady,
-        bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneTlasBuildGraphOwned = false,
         bool meshBlasBuildsGraphOwned = false,
         bool meshBlasGeometryBuildInputStatesGraphOwned = false,
@@ -270,13 +269,6 @@ public:
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 
-    [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildSceneTlas(
-        Core::CommandList& commandList,
-        Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false
-    );
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
@@ -313,11 +305,10 @@ public:
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
-    // Only a newly allocated backing generation has a descriptor-native source. Every graph import uses this current-generation query so direct and frozen paths agree
+    // Only newly allocated backing has a descriptor-native source; graph imports observe its current accepted generation.
     [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
-    // Direct fallback recording cannot publish native state until its Shadow Preparation packet accepts.
-    void confirmAcceptedShadowPrepareAccelStructStateHandoffs()noexcept;
+    // Publish acceleration-structure handoffs only after the Shadow Preparation packet accepts.
     // Hardware BLAS build/refit choices retain their selected handles through recording. Only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
@@ -336,12 +327,11 @@ public:
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
-    // The shared deferred graph declares the hardware trace entry resources. Direct compatibility callers retain their native state setup by leaving graphEntryStatesOwned false.
+    // The deferred graph declares hardware trace entry resources before recording.
     [[nodiscard]] bool renderShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
@@ -356,11 +346,9 @@ public:
         const bool* prepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsAllLitVisibilityClear = false,
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = {}
     );
-    // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one semantic Shadow Visibility packet. The opaque task starts the legacy timing scopes
+    // A prepared soft-transparent frame splits opaque visibility and transparent fold in one semantic packet. The opaque task opens the shared timing scopes
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -373,7 +361,6 @@ public:
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
         bool* opaqueProduced,
         u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
@@ -391,7 +378,6 @@ public:
         bool* opaqueProduced,
         const u32* opaqueFrameIndex,
         bool hardwareShadowSupported,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool deferUpsample = false,
         bool deferWavelet = false
@@ -407,8 +393,7 @@ public:
         Optional<Core::GpuTimingMeasure>* opaqueResolveTiming,
         bool* opaqueProduced,
         const u32* opaqueFrameIndex,
-        bool hardwareShadowSupported,
-        bool graphEntryStatesOwned = false
+        bool hardwareShadowSupported
     );
     // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval.
     // Its output reaches the first wavelet through the compiler-owned task handoff.
@@ -422,7 +407,6 @@ public:
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsTransparentTemporalMergeEntryStates = false,
         bool combinedTemporal = false,
         bool hardwareShadowSupported = false
@@ -439,7 +423,6 @@ public:
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsTransparentWaveletInputBoundary = false,
         bool startsTransparentResolveTiming = true,
         bool combinedWavelet = false
@@ -456,7 +439,6 @@ public:
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false,
         bool combinedUpsample = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
@@ -468,13 +450,9 @@ public:
         const bool* opaqueProduced,
         const u32* opaqueFrameIndex,
         bool* transparentTraceProduced,
-        bool graphEntryStatesOwned = false,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Direct compatibility helper for the per-frame non-temporal accumulator reset.
-    // The normal deferred graph owns its typed clear and commits the matching CPU reset only after the containing producer packet accepts.
-    void clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void confirmCausticAccumulatorNonTemporalClear();
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear();
@@ -488,22 +466,19 @@ public:
         f32 decayFactor,
         bool hardwareCaustics,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming
     );
     // Record the decay dispatch itself.  Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler
     [[nodiscard]] bool dispatchCausticAccumulatorDecay(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        f32 decayFactor,
-        bool graphEntryStatesOwned = false
+        f32 decayFactor
     );
-    // Software visibility includes opaque shadows and transparent transmittance. Graph callers supply traversal entry states; direct callers retain their native setup.
+    // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
@@ -520,36 +495,16 @@ public:
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsNonTemporalAccumulatorClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* causticProducerDispatched = nullptr
     );
-    // The shared deferred graph supplies descriptor-visible shared-deferred entry states. Direct compatibility callers retain the native setup by leaving this false.
-    [[nodiscard]] bool renderGpuBvhCaustics(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
-    );
-    [[nodiscard]] bool hasCausticWork()const noexcept;
     [[nodiscard]] bool hasCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
     [[nodiscard]] bool renderGpuBvhCaustics(
         Core::CommandList& commandList,
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
@@ -561,46 +516,25 @@ public:
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsNonTemporalAccumulatorClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* causticProducerDispatched = nullptr
-    );
-    // The shared deferred graph supplies descriptor-visible hardware-caustic producer inputs. Direct compatibility callers retain native setup by leaving this false.
-    [[nodiscard]] bool renderHwCaustics(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool renderHwCaustics(
         Core::CommandList& commandList,
         const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false,
-        bool graphOwnsAccumulatorDecay = false,
-        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs
-    // Direct compatibility callers keep the full resolve attached to it.
     [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         const bool* causticProducerDispatched,
-        Optional<Core::GpuTimingMeasure>* causticResolveTiming,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming
     );
     [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const;
     [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(
@@ -614,91 +548,61 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveSecondWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveThirdWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveFourthWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveFifthWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveUpsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        const bool* causticProducerDispatched,
-        bool graphEntryStatesOwned = false
+        const bool* causticProducerDispatched
     );
-    // Narrow entries for the graph-owned geometry/prepare/five-wavelet/upsample callbacks. The shared direct implementation remains private and retains its original single-call timing scope.
-    void dispatchGraphCausticGeometryDownsample(
+    // Typed stages own immutable inputs and each ping-pong handoff.
+    void dispatchCausticGeometryDownsample(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets
+    );
+    void dispatchCausticResolvePrepare(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets
+    );
+    void dispatchCausticResolveWaveletPass(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
+        u32 passIndex
     );
-    void dispatchGraphCausticResolveUpsample(
+    void dispatchCausticResolveUpsample(
         Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolvePrepare(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolveWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolveSecondWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolveThirdWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolveFourthWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchGraphCausticResolveFifthWavelet(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
+        DeferredFrameTargets& targets
     );
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasHwCausticWork(const ECSRenderDetail::MeshViewBufferSnapshot& meshView)const noexcept;
@@ -710,7 +614,7 @@ public:
         const Core::GpuTaskDesc& desc
     );
     [[nodiscard]] bool recordSurfelResourceInitializationLifecycle()noexcept;
-    // Clear ownership commits only after the producer packet accepts; direct compatibility callers use the same lifecycle methods around their retained native clear sequence.
+    // The initialization mirror commits only after the typed-clear producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
     [[nodiscard]] Core::GpuTaskId declareSurfelGiAgeFreeTask(
@@ -719,8 +623,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& asyncTiming,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>& asyncTiming
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiHashBuildTask(
         Core::GpuTaskGraph& graph,
@@ -728,8 +631,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiSpawnTask(
         Core::GpuTaskGraph& graph,
@@ -737,8 +639,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiTraceBuildArgsTask(
         Core::GpuTaskGraph& graph,
@@ -746,8 +647,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiTraceTask(
         Core::GpuTaskGraph& graph,
@@ -755,8 +655,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiResolveTask(
         Core::GpuTaskGraph& graph,
@@ -764,8 +663,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiTask(
         Core::GpuTaskGraph& graph,
@@ -773,21 +671,7 @@ public:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsCellHeadClear = false,
-        bool graphOwnsHashBuild = false,
-        bool graphOwnsSpawn = false,
-        bool graphOwnsTraceBuildArgs = false,
-        bool graphOwnsTrace = false,
-        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
-    );
-    // Direct compatibility callers retain the complete native age/free, cell-head-clear, hash-build, Spawn, trace-build-args, trace, resolve, and upsample sequence.
-    [[nodiscard]] bool renderSurfelGi(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
     );
     // Persistent surfel storage survives resize.
     [[nodiscard]] bool ensureSurfelResources();
@@ -814,11 +698,6 @@ private:
     [[nodiscard]] bool preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildSceneTlasImpl(
-        Core::CommandList* commandList,
-        Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false
-    );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool capturePreparedShadowMaterialContext(
         PreparedShadowMaterialContextRoute route,
@@ -839,19 +718,6 @@ private:
         usize instanceCount,
         usize materialTypedByteCount
     );
-    [[nodiscard]] bool matchesPreparedShadowMaterialContext(
-        PreparedShadowMaterialContextRoute route,
-        bool staticScene,
-        u64 hash,
-        const void* instanceMaterialData,
-        usize instanceMaterialCount,
-        usize instanceMaterialByteCount,
-        const void* instanceData,
-        usize instanceCount,
-        usize instanceByteCount,
-        const void* materialTypedData,
-        usize materialTypedByteCount
-    )const;
     void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(
         const MaterialSurfaceInfo& materialInfo,
@@ -885,30 +751,17 @@ private:
         const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
     );
     [[nodiscard]] bool recordPreparedSceneTlasBuild(
-        Core::CommandList& commandList,
-        bool sceneTlasBuildStatesGraphOwned
+        Core::CommandList& commandList
     );
     void clearPreparedSceneTlasBuild()noexcept;
     [[nodiscard]] bool capturePreparedMeshBlasBuilds(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(
         Core::CommandList& commandList,
-        bool meshBlasAccelStructStatesGraphOwned,
         bool meshBlasGeometryBuildInputStatesGraphOwned
     );
     void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool capturePreparedMeshSwBvhBuilds(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(
-        Core::CommandList& commandList,
-        bool meshSwBvhInputStatesGraphOwned
-    );
     [[nodiscard]] bool preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build);
-    [[nodiscard]] bool recordPreparedMeshSwBvhBuild(
-        Core::CommandList& commandList,
-        const PreparedMeshSwBvhBuild& build,
-        bool meshSwBvhInputStatesGraphOwned,
-        bool sentinelClearsGraphOwned,
-        bool graphBoundaryStatesOwned
-    );
     [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(
         const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
     )const noexcept;
@@ -917,74 +770,51 @@ private:
     [[nodiscard]] bool renderSurfelGiAgeFree(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
-    [[nodiscard]] bool renderSurfelGiAfterAgeFree(
+    [[nodiscard]] bool renderSurfelGiUpsample(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsCellHeadClear = false,
-        bool graphOwnsHashBuild = false,
-        bool graphOwnsSpawn = false,
-        bool graphOwnsTraceBuildArgs = false,
-        bool graphOwnsTrace = false,
-        bool graphOwnsResolve = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiHashBuild(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiSpawn(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiTraceBuildArgs(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiTrace(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned = false
+        const DeferredLightingGraphResources& deferredLightingResources
     );
     [[nodiscard]] bool renderSurfelGiPhases(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        bool graphEntryStatesOwned,
         bool dispatchAgeFree,
         bool dispatchHashBuild,
         bool dispatchSpawn,
         bool dispatchTraceBuildArgs,
         bool dispatchTrace,
         bool dispatchResolve,
-        bool dispatchRemaining,
-        bool graphOwnsCellHeadClear,
-        bool graphOwnsHashBuild,
-        bool graphOwnsTraceBuildArgs,
-        bool graphOwnsTrace,
-        bool graphOwnsResolve
+        bool dispatchRemaining
     );
     [[nodiscard]] bool prepareMeshBlasResources(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources);
-    [[nodiscard]] bool buildMeshBlas(
-        Core::CommandList& commandList,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
-    );
     // Runtime meshes prepare every frame; static meshes remain dirty until first build.
     [[nodiscard]] bool preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool ensureShadowPipeline();
@@ -1008,8 +838,7 @@ private:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        bool transparentReady,
-        bool graphEntryStatesOwned
+        bool transparentReady
     );
 
     [[nodiscard]] bool prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets);
@@ -1018,9 +847,7 @@ private:
     void dispatchHardwareTransparentShadow(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        bool graphEntryStatesOwned
+        u32 frameIndex
     );
 
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
@@ -1043,7 +870,6 @@ private:
         u32 frameIndex,
         u32 softGroupsX,
         u32 softGroupsY,
-        bool graphEntryStatesOwned = false,
         bool dispatchOpaqueGeometry = true,
         bool dispatchOpaqueResolve = true,
         bool dispatchTransparentTrace = true,
@@ -1066,7 +892,6 @@ private:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
-        bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates,
         const LightSpaceShadowSnapshot* lightSpace
     );
@@ -1076,7 +901,6 @@ private:
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool hardwareShadowSupported,
-        bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates,
         SoftShadowOpaqueResolvePhase::Enum phase
     );
@@ -1085,15 +909,13 @@ private:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
-        bool hardwareShadowSupported,
-        bool graphEntryStatesOwned
+        bool hardwareShadowSupported
     );
     [[nodiscard]] bool renderGpuBvhShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
-        bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
@@ -1102,7 +924,6 @@ private:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
-        bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
@@ -1112,7 +933,6 @@ private:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
-        bool graphEntryStatesOwned,
         bool graphOwnsTransparentTemporalMergeEntryStates
     );
     [[nodiscard]] bool renderSoftTransparentShadowFirstWavelet(
@@ -1120,15 +940,13 @@ private:
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
-        bool graphEntryStatesOwned,
         bool graphOwnsTransparentWaveletInputBoundary
     );
     [[nodiscard]] bool renderSoftTransparentShadowFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        u32 frameIndex,
-        bool graphEntryStatesOwned
+        u32 frameIndex
     );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
@@ -1147,39 +965,6 @@ private:
     // Temporal phase changes only after accepted producer updates.
     [[nodiscard]] u32 causticTemporalPhaseCount();
     void advanceCausticTemporalReuse();
-    // Bootstrap or decay temporal splat accumulation before photon atomic adds.
-    void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic resolve. Normal graph callers split geometry, prepare, and all five wavelet stages
-    // they declare immutable inputs and ping-pong handoffs; direct compatibility callers retain setup.
-    void dispatchCausticResolve(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchCausticGeometryDownsample(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
-    );
-    void dispatchCausticResolvePrepare(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticResolveWaveletPass(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        u32 passIndex,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
-    void dispatchCausticWaveletResolve(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsPassEntryStates = false
-    );
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);
@@ -1189,12 +974,8 @@ private:
     [[nodiscard]] bool createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] bool ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
-    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false, bool graphBoundaryStatesOwned = false);
-    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false, bool graphBoundaryStatesOwned = false);
-    [[nodiscard]] bool updateMeshSwBvh(
-        Core::CommandList& commandList,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
-    );
+    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
+    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
     void preflightLightSpaceShadowResources();
     [[nodiscard]] bool buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, LightSpacePlan& plan)const;
     void prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
@@ -1206,8 +987,6 @@ private:
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    // Stage shared software-BVH traversal inputs.
-    void transitionSwShadowTraversalResources(Core::CommandList& commandList);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
@@ -1235,7 +1014,7 @@ private:
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;
-    // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
+    // Retain packed NwbCausticEmissionTargetGpu bytes across declaration and recording without regathering state.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
     // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
     // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.

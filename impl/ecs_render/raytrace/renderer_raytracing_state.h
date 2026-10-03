@@ -116,10 +116,8 @@ struct RtSceneBvhState{
     bool m_sceneSwBvhStaticSceneHashValid = false;
     bool m_hwShadowMaterialContextHashValid = false;
     bool m_swShadowMaterialContextHashValid = false;
-    // A new backing generation begins in Common until native direct recording or an accepted Shadow Preparation
-    // handoff records its final state. This remains true across discarded frozen plans.
+    // A new backing generation stays Common until accepted Shadow Preparation publishes its final state.
     bool m_tlasBackingFresh = false;
-    bool m_tlasBackingStateHandoffPending = false;
     // The selected tracing backend prepares transparency only when the scene requires it.
     bool m_sceneHasTransparentOccluder = false;
     bool m_prevWorldToClipValid = false;

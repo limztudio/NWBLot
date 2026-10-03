@@ -37,31 +37,24 @@ void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGr
     m_storagePrepared = true;
 }
 
-void ShadowPrepareGeometryResources::gatherBuildInputs(
-    const Core::GpuTaskGraph& graph,
-    bool& blasInputStatesGraphOwned){
+bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
     NWB_ASSERT(m_storagePrepared && !m_inputsGathered);
-    NWB_ASSERT(m_preparedBlasPolicy == blasInputStatesGraphOwned);
     if(!resolveRequests(graph)){
-        blasInputStatesGraphOwned = false;
         clearBuildInputs();
         m_inputsGathered = true;
-        return;
+        return false;
     }
-    if(blasInputStatesGraphOwned){
+    if(m_preparedBlasPolicy){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
-            if(
-                !appendBuildInput(build.positionBuffer)
-                || !appendBuildInput(build.triangleIndexBuffer)
-            ){
-                // A missing frozen stream keeps the native bridge instead of rejecting the packet.
-                blasInputStatesGraphOwned = false;
+            if(!appendBuildInput(build.positionBuffer) || !appendBuildInput(build.triangleIndexBuffer)){
                 clearBuildInputs();
-                break;
+                m_inputsGathered = true;
+                return false;
             }
         }
     }
     m_inputsGathered = true;
+    return true;
 }
 
 bool ShadowPrepareGeometryResources::gatherRemainingTraceResources(){

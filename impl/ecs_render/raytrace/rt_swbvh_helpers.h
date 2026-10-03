@@ -181,24 +181,6 @@ inline void BeginMeshHeapHandleGather(
 }
 
 // Recording is not allowed to register a new descriptor after the shared graph has frozen resource identities.
-[[nodiscard]] inline bool FindPreparedMeshHeapHandle(
-    RtMeshHeapHandleCache& cache,
-    const Core::BufferHandle& bufferHandle,
-    Core::GpuDescriptorHandle& outHandle
-){
-    outHandle = Core::GpuDescriptorHandle::invalid();
-    if(!bufferHandle)
-        return false;
-
-    auto found = cache.find(bufferHandle.get());
-    if(found == cache.end() || !IsStorageBufferHeapHandle(found.value().handle))
-        return false;
-
-    found.value().seenThisFrame = true;
-    outHandle = found.value().handle;
-    return true;
-}
-
 [[nodiscard]] inline bool IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle){
     return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
 }
@@ -340,7 +322,6 @@ template<typename RayTracingState>
 [[nodiscard]] inline bool RecordPreparedMeshBlasBuild(
     Core::CommandList& commandList,
     const PreparedMeshBlasBuild& build,
-    const bool meshBlasAccelStructStatesGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned
 ){
     if(
@@ -376,19 +357,13 @@ template<typename RayTracingState>
     if(build.performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Direct and retry callbacks retain the native input-state bridge. Frozen graph routes establish this state in their packet prologue.
+    // Mixed geometry input ownership establishes these states locally; fully declared inputs use the packet prologue.
     if(!meshBlasGeometryBuildInputStatesGraphOwned){
         commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
         commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
     }
-    if(!meshBlasAccelStructStatesGraphOwned)
-        commandList.setAccelStructState(build.blas.get(), Core::ResourceStates::AccelStructWrite);
     commandList.commitBarriers();
     commandList.buildBottomLevelAccelStruct(build.blas.get(), &geometry, 1u, buildFlags);
-    if(!meshBlasAccelStructStatesGraphOwned){
-        commandList.setAccelStructState(build.blas.get(), Core::ResourceStates::AccelStructRead);
-        commandList.commitBarriers();
-    }
     return true;
 }
 

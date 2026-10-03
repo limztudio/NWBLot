@@ -3,6 +3,9 @@
 
 
 #include "telemetry_test_helpers.h"
+
+#include <global/binary.h>
+
 #include <gtest/gtest.h>
 
 
@@ -27,7 +30,7 @@ static constexpr AStringView s_PROJECT_ARENA_TEXT = "Project Arena";
 using namespace TelemetryTestDetail;
 
 
-TEST(Telemetry, PerfTimingPayloadRejectsCorruptedHeaderAfterValidParse){
+TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterValidParse){
     TestArena testArena;
     const Name scopeName{s_RENDERER_FRAME};
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
@@ -45,6 +48,25 @@ TEST(Telemetry, PerfTimingPayloadRejectsCorruptedHeaderAfterValidParse){
     Telemetry::PerfTimingPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
+    const Telemetry::TelemetryBytes current = payload;
+    const u16 unsupportedVersions[] = {
+        0u,
+        static_cast<u16>(Telemetry::s_PerfTimingPayloadVersion + 1u),
+        Limit<u16>::s_Max,
+    };
+    for(const u16 version : unsupportedVersions){
+        SCOPED_TRACE(version);
+        Telemetry::EncodedPerfTimingPayloadHeader header;
+        usize cursor = 0u;
+        ASSERT_TRUE(ReadPOD(current, cursor, header));
+        header.version = version;
+        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+        EXPECT_TRUE(parsed.scopeText.empty());
+        ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size(), parsed));
+        EXPECT_EQ(parsed.scopeName, scopeName);
+    }
+    payload = current;
     payload[0u] = 0u;
     EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
 }

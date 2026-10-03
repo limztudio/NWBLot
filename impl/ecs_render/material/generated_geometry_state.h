@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
-// Generated geometry stores compact vertices and indices in one allocation; legacy draws use only its vertex region.
+// Generated geometry stores compact vertices and indices in one allocation; non-indexed draws use only its vertex region.
 inline constexpr Core::ResourceStates::Mask s_GeneratedGeometryRasterState =
     Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
 

@@ -81,42 +81,30 @@ public:
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
-    void invalidateCsgIntervalPeelPipelines();
     void dispatchCsgIntervalPeels(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        bool intervalPeelTargetStatesGraphOwned = false,
-        bool csgClipBufferStatesGraphOwned = false,
-        bool materialFrameStatesGraphOwned = false
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
     void dispatchCsgReceiverSpanBuild(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        bool receiverSpanOutputImageStatesGraphOwned = false,
-        bool receiverSpanInputImageStatesGraphOwned = false
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
     void dispatchCsgIntervalCombine(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        bool removedIntervalOutputImageStatesGraphOwned = false,
-        bool intervalCombineInputImageStatesGraphOwned = false
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
     void renderCsgIntervalCaps(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        bool intervalSampleImageStatesGraphOwned = false,
-        bool csgClipBufferStatesGraphOwned = false,
-        bool materialFrameStatesGraphOwned = false
+        const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
     );
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
@@ -139,9 +127,6 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         CsgIntervalSampleStateGpuData& outState
     )const;
-    void setCsgReceiverSurfaceImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
-    void setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets);
-    void setCsgClipBufferStates(Core::CommandList& commandList, const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,

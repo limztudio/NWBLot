@@ -21,46 +21,15 @@ NWB_IMPL_BEGIN
 
 bool RendererRayTracingSystem::renderGpuBvhCaustics(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsAccumulatorDecay,
-    const bool graphOwnsResolve,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
-    const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    return renderGpuBvhCaustics(
-        commandList,
-        meshView,
-        targets,
-        deferredLightingResources,
-        graphEntryStatesOwned,
-        graphOwnsAccumulatorBootstrapClear,
-        graphOwnsAccumulatorDecay,
-        graphOwnsResolve,
-        causticPhotonTiming
-    );
-}
-
-bool RendererRayTracingSystem::renderGpuBvhCaustics(
-    Core::CommandList& commandList,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsAccumulatorBootstrapClear,
-    const bool graphOwnsAccumulatorDecay,
-    const bool graphOwnsResolve,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
-){
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
     // Software photon producer runs before deferred lighting.
 
     if(!hasCausticWork(meshView))
         return false;
     NWB_ASSERT(meshView.bindingValid());
     NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredLightingResources.valid());
     const f32 temporalDecay = causticTemporalDecay();
     if(
         !m_rayTracingState.m_swCausticPipeline
@@ -73,32 +42,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        // Temporal gate on SIMD lanes: the decay-vs-zero compare selects the branch without scalar float math.
-        const SIMDVector decayGate = VectorGreater(VectorReplicate(temporalDecay), VectorZero());
-        if(VectorGetX(decayGate) > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
-            prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
-
-        if(!graphEntryStatesOwned){
-            // Direct compatibility callers restore heap-selected traversal inputs locally. The normal deferred graph declares and commits these descriptor-visible states before this callback begins.
-            transitionSwShadowTraversalResources(commandList);
-            commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(m_rayTracingState.m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        }
-        if(!graphOwnsAccumulatorDecay){
-            commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-        }
-        if(!graphEntryStatesOwned){
-            commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        }
-        if(!graphEntryStatesOwned || !graphOwnsAccumulatorDecay)
-            commandList.commitBarriers();
-
         CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
@@ -146,9 +89,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         );
         recordPhotons();
     }
-
-    if(!graphOwnsResolve)
-        dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!m_rayTracingState.m_swCausticDispatchLogged){
         m_rayTracingState.m_swCausticDispatchLogged = true;

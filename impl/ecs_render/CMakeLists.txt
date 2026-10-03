@@ -131,7 +131,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_transparent_interval_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/transparent_csg_interval_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/transparent_csg_interval_builder.h"
-    "${CMAKE_CURRENT_LIST_DIR}/deferred/csg_interval_target_clear.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_resource_import_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_resource_import_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/lighting_stage_builder.cpp"

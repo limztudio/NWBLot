@@ -84,9 +84,7 @@ bool AvboitCsgReceiverSpanGraphTask::record(
             commandList,
             *payload.targets,
             csgFrameData,
-            payload.csgResources,
-            payload.receiverSpanOutputImageStatesGraphOwned,
-            payload.receiverSpanInputImageStatesGraphOwned
+            payload.csgResources
         );
     }
     else{
@@ -153,9 +151,7 @@ bool AvboitCsgIntervalCombineGraphTask::record(
             commandList,
             *payload.targets,
             csgFrameData,
-            payload.csgResources,
-            payload.removedIntervalOutputImageStatesGraphOwned,
-            payload.intervalCombineInputImageStatesGraphOwned
+            payload.csgResources
         );
         payload.transparentCsgIntervalsTiming->value().finishTiming(commandList);
         payload.transparentCsgIntervalsTiming->reset();

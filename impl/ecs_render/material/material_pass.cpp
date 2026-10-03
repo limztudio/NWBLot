@@ -192,7 +192,6 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
 void RendererMaterialSystem::renderPreparedMaterialPass(
     Core::CommandList& commandList,
-    const DeferredFrameTargets& deferredTargets,
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,
     const AvboitFrameTargets* const avboitTargets,
@@ -202,8 +201,6 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool csgIntervalSampleImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned,
     const bool materialFrameStatesGraphOwned,
     const bool materialGeometryStatesGraphOwned,
     const bool emulationOutputEntryStateGraphOwned,
@@ -263,16 +260,12 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
     const MaterialPassDrawContext regularDrawContext{
         commandList,
-        deferredTargets,
         framebuffer,
         avboitTargets,
         viewportState,
         nullptr,
         frameBindings,
         pass,
-        false,
-        csgIntervalSampleImageStatesGraphOwned,
-        csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
         emulationOutputEntryStateGraphOwned
@@ -280,16 +273,12 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     // CSG opts in only via its own frozen producer; keep it separate from the regular flag.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
-        deferredTargets,
         framebuffer,
         avboitTargets,
         viewportState,
         &csgResources,
         frameBindings,
         pass,
-        false,
-        csgIntervalSampleImageStatesGraphOwned,
-        csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
         csgEmulationOutputEntryStateGraphOwned

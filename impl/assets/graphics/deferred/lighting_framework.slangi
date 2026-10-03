@@ -42,7 +42,7 @@ bool nwbDeferredPresentationIsHdr10(){
     return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
 }
 
-// This legacy presentation query describes the output surface, not the radiance required by transport passes.
+// This presentation query describes the output surface; transport passes use radiance.
 bool nwbBxdfPresentationIsHdr10(){
     return nwbDeferredPresentationIsHdr10();
 }

@@ -599,8 +599,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             rayTracingResources.causticTemporalDecay,
             false,
             timingTicket,
-            &causticPhotonTiming,
-            true
+            &causticPhotonTiming
         );
         if(!accumulatorDecayTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay"));
@@ -636,11 +635,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         meshViewBufferSnapshot,
         &m_shadowPreparationOutcome.ready,
         timingTicket,
-        true,
         graphOwnsAccumulatorBootstrapClear,
         graphOwnsNonTemporalAccumulatorClear,
-        graphOwnsAccumulatorDecay,
-        true,
         &causticPhotonTiming,
         &m_deferredCausticProducerDispatched
     );
@@ -666,8 +662,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         deferredTargets,
         timingTicket,
         &m_deferredCausticProducerDispatched,
-        &causticResolveTiming,
-        true
+        &causticResolveTiming
     );
     if(!m_deferredCausticGeometryTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));

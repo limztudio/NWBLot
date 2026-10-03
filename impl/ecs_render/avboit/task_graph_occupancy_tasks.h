@@ -56,14 +56,6 @@ struct AvboitPreGraphTask{
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool hasTransparentRenderers = false;
         bool transparentCsgStreamsUploaded = false;
-        bool transparentCsgIntervalTargetsGraphOwned = false;
-        bool transparentCsgIntervalPeelTargetStatesGraphOwned = false;
-        bool transparentCsgReceiverSurfaceImageStatesGraphOwned = false;
-        bool transparentCsgReceiverSpanOutputImageStatesGraphOwned = false;
-        bool transparentCsgRemovedIntervalOutputImageStatesGraphOwned = false;
-        bool deferTransparentCsgIntervalCombine = false;
-        bool transparentCsgClipBufferStatesGraphOwned = false;
-        bool transparentCsgMaterialFrameStatesGraphOwned = false;
         bool transparentCsgMaterialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
@@ -101,8 +93,6 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
-        bool csgIntervalSampleImageStatesGraphOwned = false;
-        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool conservativeGeometryScissor = false;
@@ -177,8 +167,6 @@ struct AvboitOccupancyGraphTask{
         bool hasTransparentRenderers = false;
         bool occupancyPhasePrepared = false;
         bool occupancyStreamsUploaded = false;
-        bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;
-        bool occupancyCsgClipBufferStatesGraphOwned = false;
         bool occupancyMaterialFrameStatesGraphOwned = false;
         bool occupancyMaterialGeometryStatesGraphOwned = false;
         bool occupancyComputeEmulationOutputStatesGraphOwned = false;

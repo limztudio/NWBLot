@@ -147,6 +147,8 @@ struct PacketWaitStatistics{
     usize waitTokenCount,
     Alloc::ScratchArena& scratchArena
 );
+[[nodiscard]] u64 AllocateAcceptanceRevision()noexcept;
+
 [[nodiscard]] bool ValidateInitialOwnershipCompletionToken(
     const GpuTaskGraphInitialOwnerHandoffSourceView& source,
     const GpuCompiledBarrier& barrier,

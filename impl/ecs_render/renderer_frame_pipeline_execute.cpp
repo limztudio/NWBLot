@@ -3,7 +3,10 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/execute/frame_execute_cpu_restore.h>
+#include <impl/ecs_render/execute/frame_execute_history_copy.h>
 #include <impl/ecs_render/execute/frame_execute_lifecycle.h>
+#include <impl/ecs_render/execute/frame_execute_surfel_readback.h>
 #include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
 #include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
@@ -227,36 +230,30 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources =
         m_raytracingSystem.snapshotSurfelPersistentResources()
     ;
+    const FrameExecuteCpuRestore::Snapshot executeCpuRestoreSnapshot{
+        .rayTracing = rayTracingCpuState,
+        .avboitTargetsNeedClear = avboitTargetsNeedClear,
+        .deferredBindlessSlotsUploaded = deferredBindlessSlotsUploaded,
+    };
     const auto restorePrefixCpuState = [&](){
-        // Rejected recording invalidates upload mirrors.
-        m_meshSystem.invalidateMeshViewBufferUploadMirror();
-        m_deferredSystem.invalidateSceneLightingUploadMirrors();
+        FrameExecuteCpuRestore::restorePrefixCpuState(m_meshSystem, m_deferredSystem);
     };
 
     const auto restoreShadowCpuState = [&](){
-        m_rayTracingState.restoreShadowPacketCpuState(rayTracingCpuState);
+        FrameExecuteCpuRestore::restoreShadowCpuState(m_rayTracingState, rayTracingCpuState);
     };
 
     const auto restoreCausticsCpuState = [&](){
-        m_rayTracingState.restoreCausticPacketCpuState(rayTracingCpuState);
+        FrameExecuteCpuRestore::restoreCausticsCpuState(m_rayTracingState, rayTracingCpuState);
     };
     const auto restoreSurfelGiCpuState = [&](){
-        m_rayTracingState.restoreSurfelGiPacketCpuState(rayTracingCpuState);
+        FrameExecuteCpuRestore::restoreSurfelGiCpuState(m_rayTracingState, rayTracingCpuState);
     };
     const auto restoreAvboitCpuState = [&](){
-        m_avboitSystem.restoreTargetClearState(avboitTargetsNeedClear);
-    };
-    const auto restorePostGbufferEffectsCpuState = [&](){
-        restoreCausticsCpuState();
-        restoreSurfelGiCpuState();
-        restoreAvboitCpuState();
+        FrameExecuteCpuRestore::restoreAvboitCpuState(m_avboitSystem, avboitTargetsNeedClear);
     };
     const auto restorePostGbufferPacketCpuState = [&](const bool restoreBindlessSlots){
-        if(restoreBindlessSlots)
-            deferredTargets.bindless.slotsUploaded = deferredBindlessSlotsUploaded;
-        restorePrefixCpuState();
-        restoreShadowCpuState();
-        restorePostGbufferEffectsCpuState();
+        FrameExecuteCpuRestore::restorePostGbufferPacketCpuState(m_meshSystem, m_deferredSystem, m_rayTracingState, m_avboitSystem, deferredTargets, executeCpuRestoreSnapshot, restoreBindlessSlots);
     };
     // Retain this token even if Surfel GI consumes the diagnostic.
     const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
@@ -1592,63 +1589,20 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 rayTracingSurfelResources.counterBuffer,
             };
             // Keep the candidate private until Transfer accepts.
-            struct SurfelCounterReadbackContext{
-                Core::Alloc::ScratchArena& scratchArena;
-                RendererFramePipeline* renderer = nullptr;
-                Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
-                const Core::BufferHandle* buffers = nullptr;
-                usize bufferCount = 0u;
-                bool finalStateReady = false;
-                bool acceptedStateReady = false;
-            } readbackContext{
+            FrameExecuteSurfelReadback::Context readbackContext{
                 .scratchArena = scratchArena,
                 .renderer = this,
                 .candidate = &readbackCounterStateCandidate,
                 .buffers = readbackCounterBuffers,
                 .bufferCount = LengthOf(readbackCounterBuffers),
             };
-            const auto prepareReadbackFinalState = [](
-                void* const rawContext,
-                const Core::CommandListResourceStateHandoff* const finalState
-            ) -> bool {
-                SurfelCounterReadbackContext* const context =
-                    static_cast<SurfelCounterReadbackContext*>(rawContext)
-                ;
-                if(!context || !context->renderer || !context->candidate || !context->buffers)
-                    return false;
-                context->finalStateReady = finalState
-                    && context->renderer->m_surfelGiCounterPersistentState.buildFilteredBufferSubset(
-                        *context->candidate,
-                        *finalState,
-                        context->buffers,
-                        context->bufferCount,
-                        context->scratchArena
-                    )
-                ;
-                return context->finalStateReady;
-            };
+            const auto prepareReadbackFinalState = &FrameExecuteSurfelReadback::prepareReadbackFinalState;
             const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{
                 .task = m_deferredSurfelGiCounterReadbackTask,
                 .context = &readbackContext,
                 .invoke = prepareReadbackFinalState,
             };
-            const auto acceptReadbackFinalState = [](
-                void* const rawContext,
-                const Core::QueueSubmissionToken& token
-            ) -> bool {
-                static_cast<void>(token);
-                SurfelCounterReadbackContext* const context =
-                    static_cast<SurfelCounterReadbackContext*>(rawContext)
-                ;
-                if(!context || !context->renderer || !context->candidate || !context->finalStateReady)
-                    return false;
-                context->acceptedStateReady = context->renderer->m_surfelGiCounterPersistentState.commit(
-                    *context->candidate
-                );
-                if(context->acceptedStateReady)
-                    context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);
-                return context->acceptedStateReady;
-            };
+            const auto acceptReadbackFinalState = &FrameExecuteSurfelReadback::acceptReadbackFinalState;
             const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{
                 .task = m_deferredSurfelGiCounterReadbackTask,
                 .context = &readbackContext,
@@ -1720,16 +1674,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_shadowVisibilityReturnState);
             Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_causticIrradianceReturnState);
             Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_surfelIrradianceReturnState);
-            struct HistoryCopyAcceptanceContext{
-                Core::Alloc::ScratchArena& scratchArena;
-                RendererFramePipeline* renderer = nullptr;
-                DeferredFrameTargets* targets = nullptr;
-                Core::GpuPersistentResourceStateCache::Candidate* shadowStateCandidate = nullptr;
-                Core::GpuPersistentResourceStateCache::Candidate* causticStateCandidate = nullptr;
-                Core::GpuPersistentResourceStateCache::Candidate* surfelStateCandidate = nullptr;
-                bool finalStateReady = false;
-                bool acceptedStateReady = false;
-            } historyCopyAcceptance{
+            FrameExecuteHistoryCopy::Context historyCopyAcceptance{
                 .scratchArena = scratchArena,
                 .renderer = this,
                 .targets = &deferredTargets,
@@ -1737,95 +1682,13 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .causticStateCandidate = &causticHistoryReturnStateCandidate,
                 .surfelStateCandidate = &surfelHistoryReturnStateCandidate,
             };
-            const auto prepareHistoryCopyFinalState = [](
-                void* const rawContext,
-                const Core::CommandListResourceStateHandoff* const finalState
-            ) -> bool {
-                HistoryCopyAcceptanceContext* const context =
-                    static_cast<HistoryCopyAcceptanceContext*>(rawContext)
-                ;
-                if(
-                    !context
-                    || !context->renderer
-                    || !context->targets
-                    || !context->shadowStateCandidate
-                    || !context->causticStateCandidate
-                    || !context->surfelStateCandidate
-                    || !finalState
-                )
-                    return false;
-
-                const bool shadowStateReady =
-                    context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(
-                        *context->shadowStateCandidate,
-                        *finalState,
-                        &context->targets->shadowVisibility,
-                        1u,
-                        nullptr,
-                        0u,
-                        context->scratchArena
-                    )
-                ;
-                const bool causticStateReady =
-                    context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(
-                        *context->causticStateCandidate,
-                        *finalState,
-                        &context->targets->causticIrradiance,
-                        1u,
-                        nullptr,
-                        0u,
-                        context->scratchArena
-                    )
-                ;
-                const bool surfelStateReady =
-                    context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(
-                        *context->surfelStateCandidate,
-                        *finalState,
-                        &context->targets->surfelIrradiance,
-                        1u,
-                        nullptr,
-                        0u,
-                        context->scratchArena
-                    )
-                ;
-                context->finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-                return context->finalStateReady;
-            };
+            const auto prepareHistoryCopyFinalState = &FrameExecuteHistoryCopy::prepareHistoryCopyFinalState;
             const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{
                 .task = m_deferredLaggedLightingHistoryTask,
                 .context = &historyCopyAcceptance,
                 .invoke = prepareHistoryCopyFinalState,
             };
-            const auto acceptHistoryCopyFinalState = [](
-                void* const rawContext,
-                const Core::QueueSubmissionToken& token
-            ) -> bool {
-                static_cast<void>(token);
-                HistoryCopyAcceptanceContext* const context =
-                    static_cast<HistoryCopyAcceptanceContext*>(rawContext)
-                ;
-                if(
-                    !context
-                    || !context->renderer
-                    || !context->shadowStateCandidate
-                    || !context->causticStateCandidate
-                    || !context->surfelStateCandidate
-                    || !context->finalStateReady
-                )
-                    return false;
-
-                const bool shadowStateReady = context->renderer->m_shadowVisibilityReturnState.commit(
-                    *context->shadowStateCandidate
-                );
-                const bool causticStateReady = context->renderer->m_causticIrradianceReturnState.commit(
-                    *context->causticStateCandidate
-                );
-                const bool surfelStateReady = context->renderer->m_surfelIrradianceReturnState.commit(
-                    *context->surfelStateCandidate
-                );
-                context->acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
-                return context->acceptedStateReady;
-            };
+            const auto acceptHistoryCopyFinalState = &FrameExecuteHistoryCopy::acceptHistoryCopyFinalState;
             const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{
                 .task = m_deferredLaggedLightingHistoryTask,
                 .context = &historyCopyAcceptance,

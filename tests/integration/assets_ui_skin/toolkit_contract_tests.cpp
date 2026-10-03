@@ -154,7 +154,7 @@ TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGeneric
     const Path defaultAtlasPath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "skins" / "default" / "atlas.nwb";
     TestAString genericMetadata;
     ASSERT_TRUE(ReadTextFile(defaultAtlasPath, genericMetadata));
-    const AStringView contractField = "asset.toolkit_contract = \"widgets_v1\";";
+    const AStringView contractField = "asset.toolkit_contract = \"widgets\";";
     const usize contractOffset = genericMetadata.find(contractField);
     ASSERT_NE(contractOffset, TestAString::npos);
     genericMetadata.erase(contractOffset, contractField.size());

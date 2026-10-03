@@ -59,8 +59,11 @@ mask stream. Each mask texel is encoded as `(a, a, a, 255)` and decoded from
 its red channel. Opaque HDR has no mask stream; non-white constant alpha is
 stored in metadata without a mask stream.
 
-LDR texture metadata uses version 1 and `uastc_ldr_4x4`; HDR metadata uses
-version 2 and `uastc_hdr_4x4`. Both use the `mip_major_slice_major_blocks`
+The converter selects `asset.format = "uastc_ldr_4x4";` for LDR and
+`asset.format = "uastc_hdr_4x4";` for HDR. Generated `.nwb` metadata has no
+author-maintained version or specification-revision fields; the cooker selects
+the supported payload contract from `asset.format` and rejects unknown fields.
+Both formats use the `mip_major_slice_major_blocks`
 order: each mip's planes are contiguous before the next mip. A 2D mip has one
 plane, cube planes retain `+X, -X, +Y, -Y, +Z, -Z` order, and volume planes
 retain ascending Z order. Volume mips reduce all three dimensions, including
@@ -75,8 +78,8 @@ The sibling .nwb file is readable metascript metadata. It records:
   count.
 
 HDR metadata additionally records `alpha_mode`: `opaque`, `constant_unorm8`,
-or `uastc_ldr_4x4`. The latter includes the trailing alpha stream's byte offset,
-byte count, and pinned LDR UASTC revision.
+or `uastc_ldr_4x4`. The latter includes the trailing alpha stream's byte offset
+and byte count.
 
 For example, a 7x5 source has three mips and its payload records 64 bytes at
 offset 0 for 7x5, then 16 bytes each for 3x2 and 1x1. The metadata's

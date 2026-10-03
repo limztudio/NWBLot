@@ -46,10 +46,7 @@ bool ParseTextureCookMetadata(
             asset,
             s_DiagnosticPrefix,
             {
-                s_VersionField,
                 s_FormatField,
-                s_UastcSpecificationRevisionField,
-                s_UastcHdrSpecificationRevisionField,
                 s_ColorSpaceField,
                 s_DimensionField,
                 s_WidthField,
@@ -65,7 +62,6 @@ bool ParseTextureCookMetadata(
                 s_AlphaConstantUnorm8Field,
                 s_AlphaPayloadOffsetBytesField,
                 s_AlphaPayloadByteCountField,
-                s_AlphaUastcSpecificationRevisionField,
                 s_MipCountField,
                 s_DataField,
                 s_MipsField,
@@ -79,7 +75,6 @@ bool ParseTextureCookMetadata(
     if(!::NWB::Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
         return false;
 
-    u32 metadataVersion = 0u;
     u32 hasAlpha = 0u;
     u32 mipCount = 0u;
     u64 alphaPayloadOffsetBytes = 0u;
@@ -94,24 +89,10 @@ bool ParseTextureCookMetadata(
     if(format == s_UastcLdr4x4Format){
         outEntry.payloadFormat = TexturePayloadFormat::UastcLdr4x4;
         if(
-            !ReadRequiredUnsignedField(
-                nwbFilePath,
-                asset,
-                s_VersionField,
-                s_UastcLdrTextureMetadataVersion,
-                s_UastcLdrTextureMetadataVersion,
-                metadataVersion
-            )
-            || !ReadExactStringField(nwbFilePath, asset, s_UastcSpecificationRevisionField, s_UastcSpecificationRevision)
-        )
-            return false;
-        if(
-            FindField(asset, s_UastcHdrSpecificationRevisionField)
-            || FindField(asset, s_AlphaModeField)
+            FindField(asset, s_AlphaModeField)
             || FindField(asset, s_AlphaConstantUnorm8Field)
             || FindField(asset, s_AlphaPayloadOffsetBytesField)
             || FindField(asset, s_AlphaPayloadByteCountField)
-            || FindField(asset, s_AlphaUastcSpecificationRevisionField)
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': HDR alpha fields are not valid for '{}' textures")
                 , StringConvert(s_DiagnosticPrefix)
@@ -121,30 +102,8 @@ bool ParseTextureCookMetadata(
             return false;
         }
     }
-    else if(format == s_UastcHdr4x4Format){
+    else if(format == s_UastcHdr4x4Format)
         outEntry.payloadFormat = TexturePayloadFormat::UastcHdr4x4;
-        if(
-            !ReadRequiredUnsignedField(
-                nwbFilePath,
-                asset,
-                s_VersionField,
-                s_UastcHdrTextureMetadataVersion,
-                s_UastcHdrTextureMetadataVersion,
-                metadataVersion
-            )
-            || !ReadExactStringField(nwbFilePath, asset, s_UastcHdrSpecificationRevisionField, s_UastcSpecificationRevision)
-        )
-            return false;
-        if(FindField(asset, s_UastcSpecificationRevisionField)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is only valid for '{}' textures")
-                , StringConvert(s_DiagnosticPrefix)
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(s_UastcSpecificationRevisionField)
-                , StringConvert(s_UastcLdr4x4Format)
-            );
-            return false;
-        }
-    }
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
             , StringConvert(s_DiagnosticPrefix)
@@ -292,7 +251,6 @@ bool ParseTextureCookMetadata(
                 || FindField(asset, s_AlphaConstantUnorm8Field)
                 || FindField(asset, s_AlphaPayloadOffsetBytesField)
                 || FindField(asset, s_AlphaPayloadByteCountField)
-                || FindField(asset, s_AlphaUastcSpecificationRevisionField)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': opaque HDR alpha metadata must not carry an alpha payload")
                     , StringConvert(s_DiagnosticPrefix)
@@ -315,7 +273,6 @@ bool ParseTextureCookMetadata(
                 )
                 || FindField(asset, s_AlphaPayloadOffsetBytesField)
                 || FindField(asset, s_AlphaPayloadByteCountField)
-                || FindField(asset, s_AlphaUastcSpecificationRevisionField)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': constant HDR alpha metadata is invalid")
                     , StringConvert(s_DiagnosticPrefix)
@@ -344,12 +301,6 @@ bool ParseTextureCookMetadata(
                     static_cast<u64>(0u),
                     Limit<u64>::s_Max,
                     alphaPayloadByteCount
-                )
-                || !ReadExactStringField(
-                    nwbFilePath,
-                    asset,
-                    s_AlphaUastcSpecificationRevisionField,
-                    s_UastcSpecificationRevision
                 )
                 || FindField(asset, s_AlphaConstantUnorm8Field)
             ){

@@ -113,7 +113,6 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     const AString dataName = MakeJsonEscapedText<AString>(PathToGenericString<AString>(dataPath.filename()));
     const bool hdr = payload.format == TexturePayloadFormat::UastcHdr4x4;
     const AStringView formatName = hdr ? TextureFormat::s_UastcHdr4x4Format : TextureFormat::s_UastcLdr4x4Format;
-    const u32 metadataVersion = hdr ? TextureFormat::s_UastcHdrTextureMetadataVersion : TextureFormat::s_UastcLdrTextureMetadataVersion;
     if(
         (!hdr && (!payload.alphaBytes.empty() || payload.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4))
         || (hdr && payload.srgb)
@@ -140,14 +139,7 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
         << (hdr ? "UASTC HDR RGB block stream, optionally followed by a matched UASTC LDR alpha stream." : "UASTC LDR block stream.") << s_NewLine
         << "texture asset;" << s_NewLine
         << s_NewLine
-        << "asset.version = " << metadataVersion << ";" << s_NewLine
         << "asset.format = \"" << formatName << "\";" << s_NewLine
-    ;
-    if(!hdr)
-        output << "asset.uastc_spec_revision = \"" << TextureFormat::s_UastcSpecificationRevision << "\";" << s_NewLine;
-    else
-        output << "asset.uastc_hdr_spec_revision = \"" << TextureFormat::s_UastcSpecificationRevision << "\";" << s_NewLine;
-    output
         << "asset.color_space = \"" << (payload.srgb ? TextureFormat::s_SrgbColorSpace : TextureFormat::s_LinearColorSpace) << "\";" << s_NewLine
         << "asset.dimension = \"" << dimensionName << "\";" << s_NewLine
         << "asset.depth = " << payload.depth << ";" << s_NewLine
@@ -178,7 +170,6 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
                 << "asset.alpha_mode = \"" << TextureFormat::s_AlphaUastcLdr4x4Mode << "\";" << s_NewLine
                 << "asset.alpha_payload_offset_bytes = " << payload.bytes.size() << ";" << s_NewLine
                 << "asset.alpha_payload_byte_count = " << payload.alphaBytes.size() << ";" << s_NewLine
-                << "asset.alpha_uastc_spec_revision = \"" << TextureFormat::s_UastcSpecificationRevision << "\";" << s_NewLine
             ;
             break;
         default:

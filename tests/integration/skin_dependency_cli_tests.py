@@ -45,7 +45,6 @@ def _write_skin(path: pathlib.Path, texture: str, extent: tuple[int, int] = ATLA
     colors = [{"name": role, "rgba": [1.0, 1.0, 1.0, 1.0]} for role in roles]
     _write_metadata(path, (
         "ui_skin asset;\n"
-        f"asset.schema_version = {SKIN_VERSION};\n"
         f'asset.texture = "{texture}";\n'
         f"asset.atlas_extent = [{extent[0]}, {extent[1]}];\n"
         "asset.reference_density = 1.0;\n"

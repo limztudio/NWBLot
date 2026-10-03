@@ -179,10 +179,10 @@ def generate(directory: Path) -> None:
             alias.update(padding=[8.0, 6.0, 8.0, 6.0], minimum_size=[12.0, 12.0])
         regions.append(alias)
     lines = [
-        "ui_skin asset;", "", "asset.schema_version = 3;",
+        "ui_skin asset;", "",
         'asset.texture = "engine/ui/skins/default/texture";',
         f"asset.atlas_extent = [{ATLAS_SIZE}, {ATLAS_SIZE}];",
-        "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = [",
+        "asset.reference_density = 1.0;", "asset.toolkit_contract = \"widgets\";", "asset.regions = [",
     ]
     lines.extend("    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions)
     lines.extend(["];", "asset.colors = ["])

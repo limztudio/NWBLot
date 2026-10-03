@@ -2,7 +2,7 @@
 
 `atlas.nwb` is the `ui_skin` asset at `engine/ui/skins/default/atlas`. It names regions in one texture asset,
 `engine/ui/skins/default/texture`, described by `texture.nwb` and its UASTC `texture.tex` payload.
-Its schema-3 typography role sets the default widget font size to 16 logical UI units; font glyph data stays in separate font bundles.
+Its typography role sets the default widget font size to 16 logical UI units; font glyph data stays in separate Font and FontAtlas assets.
 The generator can recreate `source.png` artwork as straight-alpha sRGB color; that image is not checked in or required at runtime.
 
 Atlas rectangles use top-left pixel coordinates. The reference density is one artwork pixel per logical UI unit.
@@ -28,7 +28,9 @@ See [the skin generator guide](../../../../../utilities/ui_skin/README.md) for g
 
 To make a replacement skin, author a texture with the existing `tex_conv` workflow and a `ui_skin` `.nwb` using
 the same named regions. Set its typed texture reference, atlas extent, density, rectangles, draw modes, slice
-insets, content padding, and minimum sizes. Include both texture and skin metadata in the cooked asset input roots.
+insets, content padding, and minimum sizes. Skin metadata has no version or schema-revision field; use
+`asset.toolkit_contract = "widgets";` to validate the required stock widget regions during cooking. Include both
+texture and skin metadata in the cooked asset input roots.
 Control behavior and font glyph atlases are independent of the skin artwork.
 
 Fixed-height lists use `list.background`, `list.row.normal`, `list.row.hover`, `list.row.selected`,
@@ -48,6 +50,7 @@ font or skin atlas parts. The caret is one physical pixel wide after display sca
 selection/copy behavior and use the ordinary/focused artwork; disabled fields use their separate region.
 The Testbed edit gallery uses this same skin with application-owned text models and borrowed OS services.
 
-Font bundles remain independent of the skin artwork. Each default font uses a same-stem `.nwb` declaration,
-prepared `.font` shaping payload and binary `.atlas` with lossless RGBA SDF pages and positioning tables.
-Replacing control artwork does not require rebaking those font bundles.
+Font assets remain independent of the skin artwork. Each default font uses readable `.nwb` declarations
+paired with a same-stem `.font` prepared source containing SFNT shaping data and compact lossless SDF images.
+Cooking reconstructs separate Font and FontAtlas runtime assets. Replacing control artwork does not require
+rebaking those font assets.

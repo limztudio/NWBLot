@@ -48,7 +48,6 @@ using SkinTestArena = TestArena<UiSkinTestArenaTag>;
 static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/cook");
 static constexpr AStringView s_Metadata =
     "ui_skin asset;\r\n"
-    "asset.schema_version = 3;\r\n"
     "asset.texture = \"project/ui/texture\";\r\n"
     "asset.atlas_extent = [64, 32];\r\n"
     "asset.reference_density = 2.0;\r\n"
@@ -231,7 +230,7 @@ TEST(AssetsUiSkin, CookAndCodecRoundTripPreservesAtlasAndMetrics){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsUiSkin, CurrentSchemaCooksAndRoundTripsPaletteAndTypography){
+TEST(AssetsUiSkin, VersionlessMetadataCooksAndRoundTripsPaletteAndTypography){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
@@ -293,7 +292,7 @@ TEST(AssetsUiSkin, TypographyRejectsMalformedFooterWithoutReplacingSkin){
     }
 }
 
-TEST(AssetsUiSkin, TypographyMetadataRequiresValidRoleAndSchemaThree){
+TEST(AssetsUiSkin, TypographyMetadataRequiresValidFontSize){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
@@ -575,14 +574,18 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096")));
 }
 
-TEST(AssetsUiSkin, CookRejectsUnsupportedSchemaUnknownFieldsAndMalformedArrays){
+TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
     static constexpr AStringView s_Overrides[] = {
         "asset.schema_version = 1;\r\n",
         "asset.schema_version = 2;\r\n",
+        "asset.schema_version = 3;\r\n",
         "asset.schema_version = 4;\r\n",
+        "asset.version = 3;\r\n",
+        "asset.revision = 1;\r\n",
+        "asset.toolkit_contract = \"widgets_v1\";\r\n",
         "asset.unknown_field = 1;\r\n",
         "asset.texture = \"\";\r\n",
         "asset.atlas_extent = [64];\r\n",
@@ -608,6 +611,7 @@ TEST(AssetsUiSkin, CookRejectsUnsupportedSchemaUnknownFieldsAndMalformedArrays){
         EXPECT_EQ(entry.virtualPath, NAME_NONE);
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
 }
 
 TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){

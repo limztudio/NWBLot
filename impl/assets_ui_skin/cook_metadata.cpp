@@ -9,7 +9,6 @@
 
 
 #include "cook.h"
-#include "binary_payload.h"
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -56,13 +55,12 @@ static constexpr AStringView s_ColorsField = "colors";
 static constexpr AStringView s_RgbaField = "rgba";
 static constexpr AStringView s_TypographyField = "typography";
 static constexpr AStringView s_DefaultFontSizeField = "default_font_size";
-static constexpr AStringView s_SchemaVersionField = "schema_version";
 static constexpr AStringView s_TextureField = "texture";
 static constexpr AStringView s_AtlasExtentField = "atlas_extent";
 static constexpr AStringView s_ReferenceDensityField = "reference_density";
 static constexpr AStringView s_ToolkitContractField = "toolkit_contract";
 static constexpr AStringView s_RegionsField = "regions";
-static constexpr AStringView s_WidgetsV1Contract = "widgets_v1";
+static constexpr AStringView s_WidgetsContract = "widgets";
 static constexpr AStringView s_DrawModeHint = "must be 'sprite' or 'nine_slice'";
 
 static constexpr usize s_RectComponentCount = 4u;
@@ -256,7 +254,7 @@ template<usize Count>
 [[nodiscard]] static bool ParseTypography(const Path& path, const Value& asset, UiSkinTypography& outTypography){
     const Value* typography = FindField(asset, s_TypographyField);
     if(!typography){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': version-3 skins require typography.default_font_size")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': skins require typography.default_font_size")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
         );
@@ -306,21 +304,10 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        { s_SchemaVersionField, s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }
+        { s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }
     ))
         return false;
 
-    const Value* schema = FindField(asset, s_SchemaVersionField);
-    u32 schemaVersion = 0u;
-    if(!schema || !ReadU32Value(nwbFilePath, *schema, s_SchemaVersionField, schemaVersion)
-        || schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , UiSkinBinaryPayload::s_UiSkinVersion
-        );
-        return false;
-    }
     if(!ParsePalette(nwbFilePath, asset, parsed.palette) || !ParseTypography(nwbFilePath, asset, parsed.typography))
         return false;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena))
@@ -342,8 +329,8 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath, asset, s_DiagnosticPrefix, s_ToolkitContractField, false, toolkitContract, &hasToolkitContract
     ))
         return false;
-    if(hasToolkitContract && toolkitContract != s_WidgetsV1Contract){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets_v1'")
+    if(hasToolkitContract && toolkitContract != s_WidgetsContract){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets'")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );

@@ -46,9 +46,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 static constexpr AStringView s_TextureTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 1;\n"
     "asset.format = \"uastc_ldr_4x4\";\n"
-    "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"srgb\";\n"
     "asset.dimension = \"2d\";\n"
     "asset.depth = 1;\n"
@@ -71,9 +69,7 @@ static constexpr AStringView s_TextureTestMetadata =
 
 static constexpr AStringView s_TextureCubeTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 1;\n"
     "asset.format = \"uastc_ldr_4x4\";\n"
-    "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"srgb\";\n"
     "asset.dimension = \"cube\";\n"
     "asset.depth = 1;\n"
@@ -95,9 +91,7 @@ static constexpr AStringView s_TextureCubeTestMetadata =
 
 static constexpr AStringView s_TextureVolumeTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 1;\n"
     "asset.format = \"uastc_ldr_4x4\";\n"
-    "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"linear\";\n"
     "asset.dimension = \"volume\";\n"
     "asset.depth = 3;\n"
@@ -120,9 +114,7 @@ static constexpr AStringView s_TextureVolumeTestMetadata =
 
 static constexpr AStringView s_TextureHdrTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 2;\n"
     "asset.format = \"uastc_hdr_4x4\";\n"
-    "asset.uastc_hdr_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"linear\";\n"
     "asset.dimension = \"2d\";\n"
     "asset.depth = 1;\n"
@@ -137,7 +129,6 @@ static constexpr AStringView s_TextureHdrTestMetadata =
     "asset.alpha_mode = \"uastc_ldr_4x4\";\n"
     "asset.alpha_payload_offset_bytes = 48;\n"
     "asset.alpha_payload_byte_count = 48;\n"
-    "asset.alpha_uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.mip_count = 3;\n"
     "asset.data = \"bright.tex\";\n"
     "asset.mips = [\n"
@@ -686,35 +677,94 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, TextureCookerRejectsUnsupportedMetadataVersion){
-#if defined(NWB_FINAL)
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+TEST(AssetsGraphics, TextureCookerRejectsObsoleteVersionAndRevisionMetadata){
+    struct ObsoleteField{
+        AStringView assignment;
+        TStringView diagnostic;
+    };
+    constexpr Array<ObsoleteField, 6u> obsoleteFields = {{
+        { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
+        { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
+            NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
+        { "asset.uastc_hdr_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
+            NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
+        { "asset.alpha_uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
+            NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
+        { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
+        { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
+    }};
+    for(const AStringView source : { s_TextureTestMetadata, s_TextureHdrTestMetadata }){
+        for(const ObsoleteField& field : obsoleteFields){
+            CapturingLogger logger;
+            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+                logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+            );
 
-    TestArena testArena;
-    AString metadata(s_TextureTestMetadata);
-    const usize versionPosition = metadata.find("asset.version = 1;");
-    ASSERT_NE(versionPosition, AString::npos);
-    metadata.replace(versionPosition, 18u, "asset.version = 2;");
+            TestArena testArena;
+            NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+            ::AString<NWB::Core::Alloc::ScratchArena> metadata(scratchArena);
+            metadata.reserve(source.size() + field.assignment.size());
+            metadata.append(source);
+            metadata.append(field.assignment);
+            NWB::Core::Metascript::Document document(testArena.arena);
+            ASSERT_TRUE(document.parse(metadata));
 
-    NWB::Core::Metascript::Document document(testArena.arena);
-    ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
+            const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / "assets";
+            const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+            NWB::Impl::TextureCookEntry entry(testArena.arena);
+            EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
+                assetRoot,
+                "project",
+                metadataPath,
+                document,
+                entry,
+                scratchArena
+            )) << field.assignment;
+            EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+        }
+    }
+}
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_unsupported_metadata_version") / "assets";
-    const Path metadataPath = assetRoot / "textures" / "checker.nwb";
-    NWB::Impl::TextureCookEntry entry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
-        assetRoot,
-        "project",
-        metadataPath,
-        document,
-        entry,
-        scratchArena
-    ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the supported range")));
-#else
-#endif
+TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
+    struct InvalidFormat{
+        AStringView assignment;
+        TStringView diagnostic;
+    };
+    constexpr Array<InvalidFormat, 4u> invalidFormats = {{
+        { "", NWB_TEXT("field 'format' is required") },
+        { "asset.format = 17;", NWB_TEXT("field 'format' must be a string") },
+        { "asset.format = \"\";", NWB_TEXT("field 'format' must not be empty") },
+        { "asset.format = \"uastc_hdr_6x6\";", NWB_TEXT("field 'format' must be 'uastc_ldr_4x4' or 'uastc_hdr_4x4'") },
+    }};
+    constexpr AStringView formatAssignment = "asset.format = \"uastc_ldr_4x4\";";
+    for(const InvalidFormat& invalidFormat : invalidFormats){
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+        );
+
+        TestArena testArena;
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        ::AString<NWB::Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
+        const usize formatPosition = metadata.find(formatAssignment);
+        ASSERT_NE(formatPosition, AString::npos);
+        metadata.replace(formatPosition, formatAssignment.size(), invalidFormat.assignment);
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(metadata));
+
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_format") / "assets";
+        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        NWB::Impl::TextureCookEntry entry(testArena.arena);
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
+            assetRoot,
+            "project",
+            metadataPath,
+            document,
+            entry,
+            scratchArena
+        )) << invalidFormat.assignment;
+        EXPECT_TRUE(logger.sawErrorContaining(invalidFormat.diagnostic)) << invalidFormat.assignment;
+    }
 }
 
 TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){

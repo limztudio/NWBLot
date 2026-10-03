@@ -51,10 +51,10 @@ def generate(work_directory, output_directory, converter):
     for color in colors:
         if color["name"] == "text.tooltip":
             color["rgba"] = [1.0, 0.58, 0.26, 1.0]
-    lines = ["ui_skin asset;", "", "asset.schema_version = 3;",
+    lines = ["ui_skin asset;", "",
         'asset.texture = "project/ui/skins/alternate/texture";',
         "asset.atlas_extent = [256, 256];", "asset.reference_density = 1.0;",
-        "asset.toolkit_contract = \"widgets_v1\";", "asset.regions = ["]
+        "asset.toolkit_contract = \"widgets\";", "asset.regions = ["]
     lines += ["    " + json.dumps(region, separators=(", ", ": ")) + "," for region in regions]
     lines += ["];", "asset.colors = ["]
     lines += ["    " + json.dumps(color, separators=(", ", ": ")) + "," for color in colors]

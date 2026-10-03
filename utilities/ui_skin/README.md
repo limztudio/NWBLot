@@ -14,7 +14,9 @@ The default output directory is `impl/assets/ui/skins/default`. Use `--directory
 python -m launcher ui-skin -- --directory "path/to/skin"
 ```
 
-This Python generator writes `source.png` and `atlas.nwb`. To convert the generated artwork into the runtime texture
+This Python generator writes `source.png` and `atlas.nwb`. The atlas uses current versionless `ui_skin` metadata
+and `asset.toolkit_contract = "widgets";` to validate the complete stock widget region set. Authors do not maintain
+schema or revision numbers. To convert the generated artwork into the runtime texture
 with automatic converter configuration and compilation, use the native utility launcher:
 
 ```powershell

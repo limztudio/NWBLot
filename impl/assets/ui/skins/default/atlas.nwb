@@ -1,10 +1,9 @@
 ui_skin asset;
 
-asset.schema_version = 3;
 asset.texture = "engine/ui/skins/default/texture";
 asset.atlas_extent = [256, 256];
 asset.reference_density = 1.0;
-asset.toolkit_contract = "widgets_v1";
+asset.toolkit_contract = "widgets";
 asset.regions = [
     {"name": "panel.normal", "rect": [4, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},
     {"name": "window.normal", "rect": [36, 4, 24, 24], "draw_mode": "nine_slice", "slice": [6, 6, 6, 6], "padding": [8.0, 8.0, 8.0, 8.0], "minimum_size": [12.0, 12.0]},

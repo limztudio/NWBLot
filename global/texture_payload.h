@@ -97,7 +97,6 @@ namespace TextureFormat{
 
 inline constexpr AStringView s_UastcLdr4x4Format = "uastc_ldr_4x4";
 inline constexpr AStringView s_UastcHdr4x4Format = "uastc_hdr_4x4";
-inline constexpr AStringView s_UastcSpecificationRevision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";
 inline constexpr AStringView s_AlphaOpaqueMode = "opaque";
 inline constexpr AStringView s_AlphaConstantUnorm8Mode = "constant_unorm8";
 inline constexpr AStringView s_AlphaUastcLdr4x4Mode = "uastc_ldr_4x4";
@@ -112,8 +111,6 @@ inline constexpr AStringView s_TextureDataExtension = ".tex";
 inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
 inline constexpr u32 s_UastcBytesPerBlock = 16u;
-inline constexpr u32 s_UastcLdrTextureMetadataVersion = 1u;
-inline constexpr u32 s_UastcHdrTextureMetadataVersion = 2u;
 inline constexpr u32 s_TextureCubeFaceCount = 6u;
 // HDR alpha transport reserves the fully opaque UNORM8 value for the explicit opaque mode.
 // Constant-alpha payloads therefore carry the inclusive [0, 254] range and never alias the opaque-mode sentinel.

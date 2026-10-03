@@ -79,14 +79,14 @@ bool ValidateUiSkinToolkitContract(const UiSkin& skin){
         return false;
     for(const auto& required : __hidden_ui_skin_toolkit_contract::s_RequiredRegions){
         if(!skin.findRegion(required.name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets_v1' failed: missing required region '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: missing required region '{}'")
                 , StringConvert(required.text)
             );
             return false;
         }
     }
     if(!skin.findRegion(UiSkinToolkitRegions::s_WindowResizeRegionName) && !skin.findRegion(UiSkinToolkitRegions::s_WhiteRegionName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets_v1' failed: window resizing requires 'window.resize' or 'white'"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UI skin toolkit contract 'widgets' failed: window resizing requires 'window.resize' or 'white'"));
         return false;
     }
     return true;

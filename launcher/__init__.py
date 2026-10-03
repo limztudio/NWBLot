@@ -33,7 +33,7 @@ DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"), Path("pipeline"))
 LAUNCHER_SCRIPT_NAME = "launch.py"
-RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
+RESERVED_LAUNCH_COMMANDS = frozenset(("build", "profiles", "run"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 LOGSERVER_LABEL = "logserver"
 PROFILE_LOGSERVER_EXECUTABLE = LOGSERVER_LABEL
@@ -108,6 +108,7 @@ FILE_API_PATH_KEY = "path"
 FILE_API_TYPE_KEY = "type"
 FILE_API_TARGET_EXECUTABLE = "EXECUTABLE"
 COMMAND_SEPARATOR = "--"
+COMMAND_BUILD = "build"
 COMMAND_RUN = "run"
 COMMAND_PROFILES = "profiles"
 COMMAND_HELP_SHORT = "-h"
@@ -127,6 +128,7 @@ CONFIGURE_AUTO = "auto"
 DEFINE_ACTION = "append"
 DEFINE_METAVAR = "KEY=VALUE"
 STORE_TRUE = "store_true"
+NARGS_ONE_OR_MORE = "+"
 EMPTY_STRING = ""
 ARG_JOIN_SEPARATOR = " "
 DEFAULT_DOMAIN_FALLBACK = "default"
@@ -170,7 +172,6 @@ MSG_COMMAND_CONFLICT = f"launch command '{{command}}' in {{source}} conflicts wi
 MSG_MISSING_LAUNCHER_PREFIX = "missing "
 MSG_UNSUPPORTED_ARCH = f"unsupported host architecture '{{machine}}'; NWBLot supports x64 and arm64"
 MSG_ARCH_PRESET_CONFLICT = f"--arch {{args.arch}} conflicts with configure preset '{{args.configure_preset}}' ({{preset_arch}})"
-MSG_CUSTOM_BUILD_DIR = "custom --build-dir is not configured; configure it first or use a matching --configure-preset/default build dir"
 MSG_CONFIGURE_REQUIRED = f"CMake configure is required for {{settings.build_dir}}, but --configure=never was requested"
 MSG_NO_TARGETS = "at least one CMake target is required"
 MSG_NOT_EXECUTABLE = f"CMake target is not executable: {{target}}"
@@ -196,6 +197,7 @@ MSG_NO_EXIT_STATUS = f"{{executable.name}} did not report an exit status after t
 MSG_LEAVING_BOTH = "leaving app and logserver running; close them when done"
 MSG_LEAVING_APP = "leaving app running; close the window when done"
 MSG_UNKNOWN_LAUNCHER = f"unknown {{directory.name}} launcher '{{values[0]}}' (valid: {{valid}})"
+MSG_BUILD_USAGE = "  build <targets...> [build options]"
 MSG_RUN_USAGE = "  run <cmake-target> [launcher options] [-- application arguments]"
 MSG_RUNNABLE_COMMANDS = "runnable commands:"
 MSG_CMAKE_DEFINE_USAGE = "CMake define must be KEY=VALUE: {entry}"
@@ -213,6 +215,7 @@ ARG_DEFINE_SHORT = "-D"
 ARG_DEFINE_LONG = "--define"
 ARG_DEFINE_DEST = "defines"
 ARG_SKIP_BUILD = "--skip-build"
+ARG_BUILD_ONLY = "--build-only"
 ARG_DRY_RUN = "--dry-run"
 ARG_WORKING_DIRECTORY = "--working-directory"
 ARG_EXECUTABLE = "--executable"
@@ -231,16 +234,21 @@ ARG_PROFILE_LOGSERVER_TIMEOUT = "--profile-logserver-timeout"
 ARG_PROFILE_LOGSERVER_ARG = "--profile-logserver-arg"
 ARG_PROFILE_LOGSERVER_ARGS_DEST = "profile_logserver_args"
 ARG_TARGET = "target"
+ARG_TARGETS = "targets"
 ARG_COMMAND = "command"
 MSG_LIST_COMMANDS = "runnable commands:"
 MSG_ROUTE_ITEM = "  {launcher.command}  ({route})"
 MSG_DIR_COMMANDS = "runnable {directory.name} commands:"
 MSG_DIR_ITEM = "  {launcher.command}  ({launcher.script})"
 MSG_FORWARD_THROUGH = "Forward through {route}."
+MSG_BUILD_TARGET_HELP = "Configure and build targets without launching an application."
 MSG_RUN_TARGET_HELP = "Build and launch a CMake executable target."
 MSG_PROFILES_HELP = "List generic and discovered launch commands."
 MSG_LAUNCHER_DESC = "Configure, build, and launch NWB targets."
 MSG_TARGET_HELP = "CMake executable target, such as testbed or nwb_asset_builder."
+MSG_BUILD_TARGETS_HELP = "One or more executable, library, or aggregate targets."
+MSG_BUILD_APPLICATION_ARGS = "build-only commands do not accept application arguments after --"
+MSG_BUILD_ONLY_SKIP_BUILD = "--build-only cannot be combined with --skip-build"
 CONFIGURE_CHOICES = (CONFIGURE_AUTO, CONFIGURE_ALWAYS, CONFIGURE_NEVER)
 MAIN_ENTRY = "__main__"
 HELP_REPO_ROOT = "Repository root. Defaults to the root launcher directory."
@@ -253,7 +261,9 @@ HELP_CMAKE = "CMake executable. Defaults to CMAKE_COMMAND, repo-local CMake, or 
 HELP_JOBS = "Parallel build jobs passed to cmake --build."
 HELP_CONFIGURE = "Run CMake configure when needed, always, or never."
 HELP_SKIP_BUILD = "Do not build before launching."
+HELP_BUILD_ONLY = "Configure and build without launching the application or profiling server."
 HELP_DRY_RUN = "Print configure/build/launch commands without executing them."
+HELP_BUILD_DRY_RUN = "Print configure/build commands without executing them."
 HELP_WORKING_DIRECTORY = "Override launch working directory."
 HELP_EXECUTABLE = "Override executable path."
 HELP_EXECUTABLE_NAME = "Override executable base name when CMake metadata is unavailable."
@@ -518,12 +528,12 @@ def read_cmake_cache_value(build_dir: Path, key: str) -> Optional[str]:
     return None
 
 
-def infer_output_domain(build_dir: Path, platform_name: str, arch: str) -> str:
+def infer_output_domain(build_dir: Path, platform_name: str, arch: str, configure_preset: Optional[str] = None) -> str:
     cached_domain = read_cmake_cache_value(build_dir, CMAKE_OUTPUT_DOMAIN_KEY)
     if cached_domain:
         return cached_domain
 
-    name = build_dir.name
+    name = configure_preset or build_dir.name
     if name == default_configure_preset_name(platform_name, DEFAULT_DOMAIN, arch):
         return DEFAULT_DOMAIN
 
@@ -713,6 +723,7 @@ def resolve_repo_root(value: Optional[Path]) -> Path:
 def resolve_launch_settings(args, default_domain: str) -> LaunchSettings:
     root = resolve_repo_root(args.repo_root)
     platform_name = args.platform
+    requested_build_dir = resolve_path(root, args.build_dir) if args.build_dir is not None else None
     preset_arch = configure_preset_architecture(args.configure_preset) if args.configure_preset else None
     if args.arch and preset_arch and args.arch != preset_arch:
         raise SystemExit(
@@ -721,12 +732,12 @@ def resolve_launch_settings(args, default_domain: str) -> LaunchSettings:
     arch = args.arch or preset_arch or (host_arch_name() if platform_name == PLATFORM_WINDOWS else ARCH_X64)
     if args.configure_preset:
         configure_preset = args.configure_preset
-        build_dir = args.build_dir or root / CMAKE_BUILD_ROOT_DIR / CMAKE_BUILD_SUBDIR / configure_preset
+        build_dir = requested_build_dir or root / CMAKE_BUILD_ROOT_DIR / CMAKE_BUILD_SUBDIR / configure_preset
     else:
         requested_domain = args.domain or default_domain
         configure_preset = default_configure_preset_name(platform_name, requested_domain, arch)
-        build_dir = args.build_dir or default_build_dir(root, platform_name, requested_domain, arch)
-    domain = args.domain or infer_output_domain(build_dir, platform_name, arch)
+        build_dir = requested_build_dir or default_build_dir(root, platform_name, requested_domain, arch)
+    domain = args.domain or infer_output_domain(build_dir, platform_name, arch, configure_preset)
     return LaunchSettings(
         root=root,
         platform_name=platform_name,
@@ -742,7 +753,7 @@ def resolve_launch_settings(args, default_domain: str) -> LaunchSettings:
 def refresh_launch_settings(settings: LaunchSettings, explicit_domain: Optional[str]) -> LaunchSettings:
     if explicit_domain:
         return settings
-    domain = infer_output_domain(settings.build_dir, settings.platform_name, settings.arch)
+    domain = infer_output_domain(settings.build_dir, settings.platform_name, settings.arch, settings.configure_preset)
     if domain == settings.domain:
         return settings
     return replace(settings, domain=domain)
@@ -754,9 +765,7 @@ def configure_command(settings: LaunchSettings, build_dir_was_configured: bool, 
         return list(settings.cmake) + [CMAKE_PRESET_FLAG, settings.configure_preset] + cmake_define_args(extra_defines)
     if build_dir_was_configured:
         return list(settings.cmake) + [CMAKE_SOURCE_FLAG, str(settings.root), CMAKE_BINARY_FLAG, str(settings.build_dir)] + cmake_define_args(extra_defines)
-    raise SystemExit(
-        MSG_CUSTOM_BUILD_DIR
-    )
+    return list(settings.cmake) + [CMAKE_PRESET_FLAG, settings.configure_preset, CMAKE_BINARY_FLAG, str(settings.build_dir)] + cmake_define_args(extra_defines)
 
 
 def maybe_configure(args, settings: LaunchSettings, required_defines: Dict[str, str], env: Dict[str, str]) -> None:
@@ -1096,6 +1105,15 @@ def launch_with_optional_profile(
     return launch_process(args, executable, working_directory, env, application_args, profile_session, paths_validated=True)
 
 
+def build_command(args) -> int:
+    env = build_environment(args)
+    settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
+    maybe_configure(args, settings, {}, env)
+    settings = refresh_launch_settings(settings, args.domain)
+    build_targets(args, settings, args.targets, env)
+    return 0
+
+
 def run_target_command(args) -> int:
     env = build_environment(args)
     settings = resolve_launch_settings(args, DEFAULT_DOMAIN)
@@ -1103,6 +1121,8 @@ def run_target_command(args) -> int:
     settings = refresh_launch_settings(settings, args.domain)
     build_target(args, settings, args.target, env)
     build_profile_targets(args, settings, env)
+    if args.build_only:
+        return 0
 
     executable = resolve_executable_path(settings, args.target, args.executable, args.executable_name, args.dry_run)
     working_directory = resolve_working_directory(
@@ -1182,6 +1202,7 @@ def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
 
 def list_profiles_command(args) -> int:
     print(MSG_LIST_COMMANDS, flush=True)
+    print(MSG_BUILD_USAGE, flush=True)
     print(MSG_RUN_USAGE, flush=True)
     for launcher in args.repo_launchers.values():
         route = ROUTE_SEPARATOR.join(str(script) for script in (*launcher.route, launcher.script))
@@ -1189,7 +1210,7 @@ def list_profiles_command(args) -> int:
     return 0
 
 
-def add_build_options(parser: argparse.ArgumentParser) -> None:
+def add_build_options(parser: argparse.ArgumentParser, *, allow_skip_build: bool = True) -> None:
     parser.add_argument(ARG_REPO_ROOT, type=Path, help=HELP_REPO_ROOT)
     parser.add_argument(ARG_PLATFORM, default=host_platform_name(), help=HELP_PLATFORM)
     parser.add_argument(
@@ -1210,8 +1231,9 @@ def add_build_options(parser: argparse.ArgumentParser) -> None:
         help=HELP_CONFIGURE,
     )
     parser.add_argument(ARG_DEFINE_SHORT, ARG_DEFINE_LONG, dest=ARG_DEFINE_DEST, action=DEFINE_ACTION, default=list(), metavar=DEFINE_METAVAR)
-    parser.add_argument(ARG_SKIP_BUILD, action=STORE_TRUE, help=HELP_SKIP_BUILD)
-    parser.add_argument(ARG_DRY_RUN, action=STORE_TRUE, help=HELP_DRY_RUN)
+    if allow_skip_build:
+        parser.add_argument(ARG_SKIP_BUILD, action=STORE_TRUE, help=HELP_SKIP_BUILD)
+    parser.add_argument(ARG_DRY_RUN, action=STORE_TRUE, help=HELP_DRY_RUN if allow_skip_build else HELP_BUILD_DRY_RUN)
 
 
 def add_common_options(parser: argparse.ArgumentParser) -> None:
@@ -1280,8 +1302,14 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     parser = argparse.ArgumentParser(description=MSG_LAUNCHER_DESC)
     subparsers = parser.add_subparsers(dest=ARG_COMMAND, required=True)
 
+    build_parser = subparsers.add_parser(COMMAND_BUILD, help=MSG_BUILD_TARGET_HELP)
+    add_build_options(build_parser, allow_skip_build=False)
+    build_parser.add_argument(ARG_TARGETS, nargs=NARGS_ONE_OR_MORE, help=MSG_BUILD_TARGETS_HELP)
+    build_parser.set_defaults(handler=build_command, skip_build=False)
+
     run_parser = subparsers.add_parser(COMMAND_RUN, help=MSG_RUN_TARGET_HELP)
     add_common_options(run_parser)
+    run_parser.add_argument(ARG_BUILD_ONLY, action=STORE_TRUE, help=HELP_BUILD_ONLY)
     run_parser.add_argument(ARG_TARGET, help=MSG_TARGET_HELP)
     run_parser.set_defaults(handler=run_target_command)
 
@@ -1310,8 +1338,14 @@ def main(argv: Sequence[str]) -> int:
         return run_discovered_launcher(launcher, argv[1:], echo=not is_help_request(argv[1:]))
 
     parser_args, application_args = split_application_args(argv)
-    args = make_parser(repo_launchers).parse_args(parser_args)
+    parser = make_parser(repo_launchers)
+    args = parser.parse_args(parser_args)
     args.application_args = application_args
+    build_only = args.command == COMMAND_BUILD or (args.command == COMMAND_RUN and args.build_only)
+    if build_only and application_args:
+        parser.error(MSG_BUILD_APPLICATION_ARGS)
+    if args.command == COMMAND_RUN and args.build_only and args.skip_build:
+        parser.error(MSG_BUILD_ONLY_SKIP_BUILD)
     return args.handler(args)
 
 

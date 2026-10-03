@@ -32,35 +32,34 @@ See [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-
 
 ## Quick start
 
+Use the repository launcher for configuration and builds. It selects the matching preset and configures automatically when needed.
+
 ### Windows ARM64
 
 ```powershell
-cmake --preset windows-clang-arm64
-cmake --build --preset windows-clang-arm64-dbg
-ctest --preset windows-clang-arm64-dbg
+python -m launcher build all --arch arm64 --config dbg
 ```
 
 ### Windows x64
 
 ```powershell
-cmake --preset windows-clang-x64
-cmake --build --preset windows-clang-dbg
-ctest --preset windows-clang-dbg
+python -m launcher build all --arch x64 --config dbg
 ```
 
 ### Linux x64
 
 ```bash
-cmake --preset linux-clang-x64
-cmake --build --preset linux-clang-dbg
-ctest --preset linux-clang-dbg
+python3 -m launcher build all --arch x64 --config dbg
 ```
 
-Append `--target <target>` to a build command for a focused build. For example:
+Build a project without starting it, or select one or more targets for a focused build:
 
 ```powershell
-cmake --build --preset windows-clang-arm64-dbg --target testbed
+python -m launcher testbed --build-only --config dbg
+python -m launcher build nwb_global_tests nwb_ui_tests --config dbg
 ```
+
+See [the launcher guide](launcher/README.md) for custom build directories, configurations, and command previews.
 
 ## Run the Testbed and tools
 
@@ -103,7 +102,7 @@ Texture cooking and runtime format selection account for device format support, 
 
 ## Source and dependency registration
 
-`CMakePresets.json` defines supported build variants. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources`; add new C/C++ files there and reconfigure CMake.
+`CMakePresets.json` defines supported build variants. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources`; add new C/C++ files there and use `python -m launcher build <target> --configure always` to refresh the build.
 
 Third-party packages are vendored as flat top-level directories under `3rd_parties/`. Each package records its source and version in `nwb_update.txt`. See [Third-Party Packages](https://github.com/limztudio/NWBLot/wiki/Third-Party-Packages) before updating a dependency.
 

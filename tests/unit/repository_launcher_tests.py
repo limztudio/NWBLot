@@ -35,6 +35,7 @@ LIT_MACHINE = "machine"
 LIT_QUERY_WINDOWS_NATIVE_MACHINE_NAME = "query_windows_native_machine_name"
 LIT_REPO = "repo"
 LIT_CMAKE = "__cmake"
+LIT_CMAKE_EXECUTABLE = "cmake"
 LIT_BUILD = "build"
 LIT_FULL = "full"
 LIT_WINDOWS_CLANG_ARM64 = "windows-clang-arm64"
@@ -107,6 +108,25 @@ LIT_PROJECT_COOK = "project-cook"
 LIT_BUILTINS_PRINT = "builtins.print"
 LIT_TOOL_DIRECTORY = "--tool-directory"
 LIT_MAIN = "__main__"
+LIT_BUILD_ONLY = "--build-only"
+LIT_SKIP_BUILD = "--skip-build"
+LIT_BUILD_DIR = "--build-dir"
+LIT_CONFIGURE_PRESET = "--configure-preset"
+LIT_ARCH = "--arch"
+LIT_PLATFORM = "--platform"
+LIT_DOMAIN = "--domain"
+LIT_WITH_PROFILE = "--with-profile"
+LIT_DEFINE = "-D"
+LIT_LIBRARY_TARGET = "nwb_common"
+LIT_AGGREGATE_TARGET = "nwb_pipeline"
+LIT_COLD_CUSTOM_BUILD = "cold custom build"
+LIT_NWB_LOGSERVER = "nwb_logserver"
+LIT_HELP = "--help"
+LIT_FORBIDDEN_LAUNCH = "A build operation entered a launch path"
+LIT_ENGINE = "engine"
+LIT_WINDOWS_CLANG_ENGINE_ARM64 = "windows-clang-engine-arm64"
+LIT_WINDOWS_CLANG_TESTBED_ARM64 = "windows-clang-testbed-arm64"
+LIT_EXEC_OUTPUT_ROOT = "__exec"
 
 
 class FakeWindowsProcessApi:
@@ -642,6 +662,300 @@ class LauncherPlatformTests(unittest.TestCase):
             [LIT_AB, LIT_ASYNC_SHADOW_M4_2, LIT_EMPTY, LIT_MEASURE_SECONDS, LIT_N_30],
             echo=True,
         )
+
+
+class LauncherBuildBoundaryTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.arguments = [
+            LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS, LIT_ARCH, LIT_ARM64,
+            LIT_DOMAIN, LIT_FULL, LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_CONFIG, LIT_OPT,
+        ]
+        self.patch(launcher, "repo_root", return_value=self.root)
+        self.patch(launcher, LIT_HOST_PLATFORM_NAME, return_value=LIT_WINDOWS)
+        self.patch(launcher, "cmake_command", return_value=(LIT_CMAKE_EXECUTABLE,))
+        self.patch(launcher, "build_environment", return_value={})
+        self.process = self.patch(launcher.subprocess, LIT_RUN, return_value=mock.Mock(returncode=0))
+        self.query = self.patch(launcher, "ensure_file_api_query", wraps=launcher.ensure_file_api_query)
+        self.profile_build = self.patch(launcher, "build_profile_targets", wraps=launcher.build_profile_targets)
+        output_patch = mock.patch(LIT_BUILTINS_PRINT)
+        self.output = output_patch.start()
+        self.addCleanup(output_patch.stop)
+        self.forbidden = [
+            self.patch(launcher, operation, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
+            for operation in (
+                "resolve_executable_path", "resolve_working_directory", "start_profile_session",
+                "launch_with_optional_profile",
+            )
+        ]
+        self.popen = self.patch(launcher.subprocess, LIT_POPEN, side_effect=AssertionError(LIT_FORBIDDEN_LAUNCH))
+
+    def patch(self, owner, name, **kwargs):
+        patcher = mock.patch.object(owner, name, **kwargs)
+        result = patcher.start()
+        self.addCleanup(patcher.stop)
+        return result
+
+    def test_nonexecutable_targets_build_in_a_cold_custom_directory_without_launching(self):
+        custom = self.root / LIT_COLD_CUSTOM_BUILD
+        self.assertEqual(0, launcher.main([
+            LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET, *self.arguments,
+            LIT_BUILD_DIR, str(custom), LIT_DEFINE, "NWB_BUILD_TESTS=ON",
+        ]))
+
+        commands = [call.args[0] for call in self.process.call_args_list]
+        self.assertEqual(2, len(commands))
+        self.assertEqual(
+            [LIT_CMAKE_EXECUTABLE, "--preset", LIT_WINDOWS_CLANG_ARM64, "-B", str(custom), "-DNWB_BUILD_TESTS=ON"],
+            commands[0],
+        )
+        target_index = commands[1].index("--target")
+        self.assertEqual([LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET], commands[1][target_index + 1:target_index + 3])
+        self.profile_build.assert_not_called()
+        self.popen.assert_not_called()
+
+    def test_relative_cold_directory_is_resolved_against_the_foreign_repository_root(self):
+        relative = Path(f"{LIT_COLD_CUSTOM_BUILD}-{self.root.name}")
+        custom = self.root / relative
+        caller_directory = Path.cwd() / relative
+        caller_existed = caller_directory.exists()
+        self.assertNotEqual(Path.cwd(), self.root)
+
+        with mock.patch.object(launcher, "ensure_file_api_query") as query:
+            self.assertEqual(0, launcher.main([
+                LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments, LIT_BUILD_DIR, str(relative),
+            ]))
+
+        query.assert_called_once_with(custom)
+        commands = [call.args[0] for call in self.process.call_args_list]
+        self.assertEqual(2, len(commands))
+        self.assertEqual(str(custom), commands[0][commands[0].index("-B") + 1])
+        self.assertEqual(str(custom), commands[1][commands[1].index("--build") + 1])
+        self.assertFalse(custom.exists())
+        self.assertEqual(caller_existed, caller_directory.exists())
+        self.popen.assert_not_called()
+
+    def test_existing_custom_directory_is_reconfigured_without_replacing_its_preset(self):
+        custom = self.root / LIT_COLD_CUSTOM_BUILD
+        custom.mkdir()
+        (custom / LIT_CMAKECACHE_TXT).write_text("CMAKE_GENERATOR:INTERNAL=Ninja\n", encoding=LIT_UTF_8)
+
+        self.assertEqual(0, launcher.main([
+            LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments, LIT_BUILD_DIR, str(custom),
+            LIT_DEFINE, "NWB_BUILD_TESTS=ON",
+        ]))
+
+        self.assertEqual(
+            [LIT_CMAKE_EXECUTABLE, "-S", str(self.root), "-B", str(custom), "-DNWB_BUILD_TESTS=ON"],
+            self.process.call_args_list[0].args[0],
+        )
+        self.popen.assert_not_called()
+
+    def test_profiled_build_only_builds_dependencies_without_starting_a_session(self):
+        self.assertEqual(0, launcher.main([
+            LIT_RUN, LIT_TESTBED, *self.arguments, LIT_BUILD_ONLY, LIT_WITH_PROFILE,
+        ]))
+
+        commands = [call.args[0] for call in self.process.call_args_list]
+        self.assertEqual(3, len(commands))
+        self.assertIn("-DNWB_BUILD_LOGSERVER=ON", commands[0])
+        self.assertEqual(LIT_TESTBED, commands[1][commands[1].index("--target") + 1])
+        self.assertEqual(LIT_NWB_LOGSERVER, commands[2][commands[2].index("--target") + 1])
+        self.profile_build.assert_called_once()
+        for operation in self.forbidden:
+            operation.assert_not_called()
+        self.popen.assert_not_called()
+
+    def test_project_build_only_does_not_require_an_application_executable(self):
+        specification = importlib.util.spec_from_file_location(
+            "nwb_test_testbed_launcher", ROOT / LIT_COOLSTUFF / "Testbed" / LIT_LAUNCH_PY,
+        )
+        project = importlib.util.module_from_spec(specification)
+        specification.loader.exec_module(project)
+
+        self.assertEqual(0, project.main([*self.arguments, LIT_BUILD_ONLY]))
+
+        self.assertEqual(2, self.process.call_count)
+        for operation in self.forbidden:
+            operation.assert_not_called()
+        self.popen.assert_not_called()
+
+    def test_build_dry_run_leaves_cold_custom_directories_and_processes_untouched(self):
+        custom = self.root / LIT_COLD_CUSTOM_BUILD
+        invocations = (
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET],
+            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
+        )
+        for invocation in invocations:
+            with self.subTest(command=invocation):
+                self.output.reset_mock()
+                before = tuple(self.root.rglob("*"))
+                self.assertEqual(0, launcher.main([
+                    *invocation, *self.arguments, LIT_BUILD_DIR, str(custom), LIT_DRY_RUN,
+                ]))
+                self.assertEqual(before, tuple(self.root.rglob("*")))
+                self.assertFalse(custom.exists())
+                self.query.assert_not_called()
+                self.process.assert_not_called()
+                self.popen.assert_not_called()
+                printed = "\n".join(str(call.args[0]) for call in self.output.call_args_list)
+                self.assertIn(LIT_WINDOWS_CLANG_ARM64, printed)
+                self.assertIn(str(custom), printed)
+                self.assertIn("--build", printed)
+
+    def test_configuration_failure_prevents_build_and_launch(self):
+        invocations = (
+            [LIT_BUILD, LIT_LIBRARY_TARGET],
+            [LIT_RUN, LIT_TESTBED],
+            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
+        )
+        for invocation in invocations:
+            with self.subTest(command=invocation):
+                self.process.reset_mock()
+                self.profile_build.reset_mock()
+                self.process.side_effect = [mock.Mock(returncode=23)]
+                with self.assertRaises(SystemExit) as failure:
+                    launcher.main([*invocation, *self.arguments])
+                self.assertEqual(23, failure.exception.code)
+                self.assertEqual(1, self.process.call_count)
+                self.assertNotIn("--build", self.process.call_args.args[0])
+                self.profile_build.assert_not_called()
+                self.popen.assert_not_called()
+
+    def test_target_build_failure_prevents_profile_build_and_launch(self):
+        invocations = (
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET],
+            [LIT_RUN, LIT_TESTBED],
+            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_WITH_PROFILE],
+        )
+        for invocation in invocations:
+            with self.subTest(command=invocation):
+                self.process.reset_mock()
+                self.profile_build.reset_mock()
+                self.process.side_effect = [mock.Mock(returncode=0), mock.Mock(returncode=37)]
+                with self.assertRaises(SystemExit) as failure:
+                    launcher.main([*invocation, *self.arguments])
+                self.assertEqual(37, failure.exception.code)
+                self.assertEqual(2, self.process.call_count)
+                self.assertIn("--build", self.process.call_args.args[0])
+                self.profile_build.assert_not_called()
+                self.popen.assert_not_called()
+
+    def test_conflicting_or_malformed_build_arguments_fail_before_side_effects(self):
+        invocations = (
+            [LIT_BUILD],
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_SKIP_BUILD],
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_WITH_PROFILE],
+            [LIT_BUILD, LIT_LIBRARY_TARGET, LIT_EMPTY, "application argument"],
+            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_SKIP_BUILD],
+            [LIT_RUN, LIT_TESTBED, LIT_BUILD_ONLY, LIT_EMPTY, "application argument"],
+        )
+        with mock.patch.object(sys, "stderr"):
+            for invocation in invocations:
+                with self.subTest(command=invocation):
+                    before = tuple(self.root.rglob("*"))
+                    with self.assertRaises(SystemExit) as failure:
+                        launcher.main([invocation[0], *self.arguments, *invocation[1:]])
+                    self.assertNotEqual(0, failure.exception.code)
+                    self.assertEqual(before, tuple(self.root.rglob("*")))
+                    self.query.assert_not_called()
+                    self.process.assert_not_called()
+                    self.popen.assert_not_called()
+
+    def test_build_help_does_not_create_a_cold_build_tree(self):
+        with self.assertRaises(SystemExit) as result:
+            launcher.main([LIT_BUILD, LIT_HELP])
+        self.assertEqual(0, result.exception.code)
+        self.assertEqual((), tuple(self.root.rglob("*")))
+        self.query.assert_not_called()
+        self.process.assert_not_called()
+        self.popen.assert_not_called()
+
+    def test_reserved_build_command_cannot_be_shadowed_by_a_project_leaf(self):
+        category = self.root / LIT_COOLSTUFF
+        leaf = category / LIT_BUILD
+        leaf.mkdir(parents=True)
+        (category / LIT_LAUNCH_PY).write_text("", encoding=LIT_UTF_8)
+        (leaf / LIT_LAUNCH_PY).write_text("", encoding=LIT_UTF_8)
+
+        with self.assertRaisesRegex(SystemExit, "conflicts with a built-in launcher command"):
+            launcher.main([LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments])
+
+        self.query.assert_not_called()
+        self.process.assert_not_called()
+        self.popen.assert_not_called()
+
+
+class LauncherDryRunDomainTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.custom = self.root / LIT_COLD_CUSTOM_BUILD
+        self.arguments = [
+            LIT_RUN, LIT_TESTBED, LIT_REPO_ROOT, str(self.root), LIT_PLATFORM, LIT_WINDOWS,
+            LIT_ARCH, LIT_ARM64, LIT_CONFIG, LIT_OPT, LIT_BUILD_DIR, str(self.custom), LIT_DRY_RUN,
+        ]
+        output_patch = mock.patch(LIT_BUILTINS_PRINT)
+        self.output = output_patch.start()
+        self.addCleanup(output_patch.stop)
+        for owner, operation, options in (
+            (launcher, "cmake_command", {"return_value": (LIT_CMAKE_EXECUTABLE,)}),
+            (launcher, "ensure_file_api_query", {"wraps": launcher.ensure_file_api_query}),
+            (launcher.subprocess, LIT_RUN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
+            (launcher.subprocess, LIT_POPEN, {"side_effect": AssertionError(LIT_FORBIDDEN_LAUNCH)}),
+        ):
+            patcher = mock.patch.object(owner, operation, **options)
+            result = patcher.start()
+            self.addCleanup(patcher.stop)
+            if operation != "cmake_command":
+                self.addCleanup(result.assert_not_called)
+
+    def assert_preview_uses_domain(self, expected_domain, extra_arguments):
+        self.output.reset_mock()
+        args = launcher.make_parser({}).parse_args([*self.arguments, *extra_arguments])
+        args.application_args = []
+        before = tuple((path, path.read_bytes() if path.is_file() else None) for path in sorted(self.root.rglob("*")))
+        settings = launcher.resolve_launch_settings(args, LIT_FULL)
+        self.assertEqual(expected_domain, settings.domain)
+        self.assertEqual(expected_domain, launcher.refresh_launch_settings(settings, args.domain).domain)
+
+        self.assertEqual(0, launcher.run_target_command(args))
+
+        output = self.root / LIT_EXEC_OUTPUT_ROOT / LIT_WINDOWS / LIT_ARM64
+        if expected_domain != LIT_ENGINE:
+            output /= expected_domain
+        executable = output / LIT_OPT / "testbed.exe"
+        printed = [str(call.args[0]) for call in self.output.call_args_list]
+        self.assertIn("+ " + launcher.format_command([str(executable)]), printed)
+        self.assertIn("  cwd: " + str(output), printed)
+        after = tuple((path, path.read_bytes() if path.is_file() else None) for path in sorted(self.root.rglob("*")))
+        self.assertEqual(before, after)
+
+    def test_cold_custom_directory_preview_uses_selected_preset_instead_of_directory_name(self):
+        cases = (
+            (LIT_FULL, []),
+            (LIT_FULL, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]),
+            (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ENGINE_ARM64]),
+            (LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_TESTBED_ARM64]),
+        )
+        for expected_domain, arguments in cases:
+            with self.subTest(domain=expected_domain, arguments=arguments):
+                self.assert_preview_uses_domain(expected_domain, arguments)
+                self.assertFalse(self.custom.exists())
+
+    def test_cache_and_explicit_domain_override_the_custom_directory_preset_fallback(self):
+        self.custom.mkdir()
+        (self.custom / LIT_CMAKECACHE_TXT).write_text("NWB_OUTPUT_DOMAIN:STRING=testbed\n", encoding=LIT_UTF_8)
+        cases = (
+            (LIT_TESTBED, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64]),
+            (LIT_ENGINE, [LIT_CONFIGURE_PRESET, LIT_WINDOWS_CLANG_ARM64, LIT_DOMAIN, LIT_ENGINE]),
+        )
+        for expected_domain, arguments in cases:
+            with self.subTest(domain=expected_domain):
+                self.assert_preview_uses_domain(expected_domain, arguments)
 
 
 class PipelineLauncherTests(unittest.TestCase):

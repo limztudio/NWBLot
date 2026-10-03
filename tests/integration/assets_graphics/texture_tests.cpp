@@ -49,22 +49,10 @@ static constexpr AStringView s_TextureTestMetadata =
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.color_space = \"srgb\";\n"
     "asset.dimension = \"2d\";\n"
-    "asset.depth = 1;\n"
     "asset.width = 7;\n"
     "asset.height = 5;\n"
-    "asset.block_width = 4;\n"
-    "asset.block_height = 4;\n"
-    "asset.bytes_per_block = 16;\n"
-    "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
-    "asset.mip_address_mode = \"clamp\";\n"
     "asset.has_alpha = 1;\n"
-    "asset.mip_count = 3;\n"
     "asset.data = \"checker.tex\";\n"
-    "asset.mips = [\n"
-    "    { \"level\": 0, \"width\": 7, \"height\": 5, \"blocks_x\": 2, \"blocks_y\": 2, \"offset_bytes\": 0, \"size_bytes\": 64, \"slices\": 1 },\n"
-    "    { \"level\": 1, \"width\": 3, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16, \"slices\": 1 },\n"
-    "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 80, \"size_bytes\": 16, \"slices\": 1 },\n"
-    "];\n"
 ;
 
 static constexpr AStringView s_TextureCubeTestMetadata =
@@ -72,21 +60,10 @@ static constexpr AStringView s_TextureCubeTestMetadata =
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.color_space = \"srgb\";\n"
     "asset.dimension = \"cube\";\n"
-    "asset.depth = 1;\n"
     "asset.width = 2;\n"
     "asset.height = 2;\n"
-    "asset.block_width = 4;\n"
-    "asset.block_height = 4;\n"
-    "asset.bytes_per_block = 16;\n"
-    "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
-    "asset.mip_address_mode = \"clamp\";\n"
     "asset.has_alpha = 0;\n"
-    "asset.mip_count = 2;\n"
     "asset.data = \"sky.tex\";\n"
-    "asset.mips = [\n"
-    "    { \"level\": 0, \"width\": 2, \"height\": 2, \"slices\": 6, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 0, \"size_bytes\": 96 },\n"
-    "    { \"level\": 1, \"width\": 1, \"height\": 1, \"slices\": 6, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 96, \"size_bytes\": 96 },\n"
-    "];\n"
 ;
 
 static constexpr AStringView s_TextureVolumeTestMetadata =
@@ -97,45 +74,18 @@ static constexpr AStringView s_TextureVolumeTestMetadata =
     "asset.depth = 3;\n"
     "asset.width = 4;\n"
     "asset.height = 2;\n"
-    "asset.block_width = 4;\n"
-    "asset.block_height = 4;\n"
-    "asset.bytes_per_block = 16;\n"
-    "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
-    "asset.mip_address_mode = \"clamp\";\n"
     "asset.has_alpha = 1;\n"
-    "asset.mip_count = 3;\n"
     "asset.data = \"fog.tex\";\n"
-    "asset.mips = [\n"
-    "    { \"level\": 0, \"width\": 4, \"height\": 2, \"slices\": 3, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 0, \"size_bytes\": 48 },\n"
-    "    { \"level\": 1, \"width\": 2, \"height\": 1, \"slices\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 48, \"size_bytes\": 16 },\n"
-    "    { \"level\": 2, \"width\": 1, \"height\": 1, \"slices\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16 },\n"
-    "];\n"
 ;
 
 static constexpr AStringView s_TextureHdrTestMetadata =
     "texture asset;\n\n"
     "asset.format = \"uastc_hdr_4x4\";\n"
-    "asset.color_space = \"linear\";\n"
     "asset.dimension = \"2d\";\n"
-    "asset.depth = 1;\n"
     "asset.width = 4;\n"
     "asset.height = 2;\n"
-    "asset.block_width = 4;\n"
-    "asset.block_height = 4;\n"
-    "asset.bytes_per_block = 16;\n"
-    "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
-    "asset.mip_address_mode = \"clamp\";\n"
-    "asset.has_alpha = 1;\n"
     "asset.alpha_mode = \"uastc_ldr_4x4\";\n"
-    "asset.alpha_payload_offset_bytes = 48;\n"
-    "asset.alpha_payload_byte_count = 48;\n"
-    "asset.mip_count = 3;\n"
     "asset.data = \"bright.tex\";\n"
-    "asset.mips = [\n"
-    "    { \"level\": 0, \"width\": 4, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 0, \"size_bytes\": 16, \"slices\": 1 },\n"
-    "    { \"level\": 1, \"width\": 2, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 16, \"size_bytes\": 16, \"slices\": 1 },\n"
-    "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 32, \"size_bytes\": 16, \"slices\": 1 },\n"
-    "];\n"
 ;
 
 
@@ -677,12 +627,12 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, TextureCookerRejectsObsoleteVersionAndRevisionMetadata){
+TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
     struct ObsoleteField{
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<ObsoleteField, 6u> obsoleteFields = {{
+    constexpr Array<ObsoleteField, 15u> obsoleteFields = {{
         { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
         { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
             NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
@@ -692,6 +642,15 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteVersionAndRevisionMetadata){
             NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
         { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
         { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
+        { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
+        { "asset.block_height = 4;\n", NWB_TEXT("unsupported asset field 'block_height'") },
+        { "asset.bytes_per_block = 16;\n", NWB_TEXT("unsupported asset field 'bytes_per_block'") },
+        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
+        { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
+        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
+        { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
+        { "asset.alpha_payload_byte_count = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
     }};
     for(const AStringView source : { s_TextureTestMetadata, s_TextureHdrTestMetadata }){
         for(const ObsoleteField& field : obsoleteFields){
@@ -764,6 +723,191 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
             scratchArena
         )) << invalidFormat.assignment;
         EXPECT_TRUE(logger.sawErrorContaining(invalidFormat.diagnostic)) << invalidFormat.assignment;
+    }
+}
+
+TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
+    struct DerivedField{
+        AStringView source;
+        AStringView assignment;
+        TStringView diagnostic;
+    };
+    constexpr Array<DerivedField, 7u> derivedFields = {{
+        { s_TextureTestMetadata, "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
+        { s_TextureCubeTestMetadata, "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
+        { s_TextureHdrTestMetadata, "asset.color_space = \"linear\";\n", NWB_TEXT("unsupported asset field 'color_space'") },
+        { s_TextureHdrTestMetadata, "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
+        { s_TextureHdrTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+        { s_TextureTestMetadata, "asset.alpha_mode = \"opaque\";\n", NWB_TEXT("unsupported asset field 'alpha_mode'") },
+        { s_TextureTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+    }};
+    for(const DerivedField& field : derivedFields){
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+        );
+
+        TestArena testArena;
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        ::AString<NWB::Core::Alloc::ScratchArena> metadata(scratchArena);
+        metadata.reserve(field.source.size() + field.assignment.size());
+        metadata.append(field.source);
+        metadata.append(field.assignment);
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(metadata));
+
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_fields") / "assets";
+        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        NWB::Impl::TextureCookEntry entry(testArena.arena);
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
+        EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
+    }
+}
+
+TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
+    struct SidecarCase{
+        AStringView metadata;
+        AStringView filename;
+        usize byteCount;
+    };
+    constexpr Array<SidecarCase, 4u> sidecarCases = {{
+        { s_TextureTestMetadata, "checker.tex", 96u },
+        { s_TextureHdrTestMetadata, "bright.tex", 96u },
+        { s_TextureCubeTestMetadata, "sky.tex", 192u },
+        { s_TextureVolumeTestMetadata, "fog.tex", 80u },
+    }};
+    for(const SidecarCase& sidecarCase : sidecarCases){
+        TestArena testArena;
+        Path root(testArena.arena);
+        ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_derived_sidecar_size", root));
+        const Path assetRoot = root / "assets";
+        const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, sidecarCase.metadata));
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(sidecarCase.metadata));
+
+        for(const usize byteCount : { sidecarCase.byteCount - 1u, sidecarCase.byteCount, sidecarCase.byteCount + 1u }){
+            CapturingLogger logger;
+            NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+                logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+            );
+
+            ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / sidecarCase.filename, MakeTextureTestUastcPayload(testArena, byteCount)));
+            NWB::Impl::TextureCookEntry entry(testArena.arena);
+            NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+            const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
+            EXPECT_EQ(parsed, byteCount == sidecarCase.byteCount) << sidecarCase.filename << ": " << byteCount;
+            if(parsed){
+                NWB::Impl::Texture texture(testArena.arena, NAME_NONE);
+                EXPECT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
+                EXPECT_EQ(logger.errorCount(), 0u);
+            }
+            else
+                EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sidecar size does not match the derived mip and alpha layout")));
+        }
+        ErrorCode errorCode;
+        EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    }
+}
+
+TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
+    struct AlphaCase{
+        AStringView assignment;
+        bool valid;
+        TextureAlphaMode::Enum alphaMode;
+        u8 alphaConstant;
+    };
+    constexpr Array<AlphaCase, 4u> alphaCases = {{
+        { "asset.alpha_mode = \"opaque\";", true, TextureAlphaMode::Opaque, 255u },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0;", true, TextureAlphaMode::ConstantUnorm8, 0u },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 254;", true, TextureAlphaMode::ConstantUnorm8, 254u },
+        { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", false, TextureAlphaMode::ConstantUnorm8, 255u },
+    }};
+    constexpr AStringView alphaAssignment = "asset.alpha_mode = \"uastc_ldr_4x4\";";
+    TestArena testArena;
+    Path root(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_hdr_alpha_inference", root));
+    const Path assetRoot = root / "assets";
+    const Path metadataPath = assetRoot / "textures" / "bright.nwb";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureHdrTestMetadata));
+    ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "bright.tex", MakeTextureTestUastcPayload(testArena, 48u)));
+    for(const AlphaCase& alphaCase : alphaCases){
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+        );
+
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        ::AString<NWB::Core::Alloc::ScratchArena> metadata(s_TextureHdrTestMetadata, scratchArena);
+        const usize alphaPosition = metadata.find(alphaAssignment);
+        ASSERT_NE(alphaPosition, AString::npos);
+        metadata.replace(alphaPosition, alphaAssignment.size(), alphaCase.assignment);
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(metadata));
+        NWB::Impl::TextureCookEntry entry(testArena.arena);
+        const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
+        EXPECT_EQ(parsed, alphaCase.valid) << alphaCase.assignment;
+        if(parsed){
+            NWB::Impl::Texture texture(testArena.arena, NAME_NONE);
+            ASSERT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
+            EXPECT_EQ(texture.colorSpace(), NWB::Impl::TextureColorSpace::Linear);
+            EXPECT_EQ(texture.hasAlpha(), alphaCase.alphaMode != TextureAlphaMode::Opaque);
+            EXPECT_EQ(texture.alphaMode(), alphaCase.alphaMode);
+            EXPECT_EQ(texture.alphaConstantUnorm8(), alphaCase.alphaConstant);
+            EXPECT_EQ(logger.errorCount(), 0u);
+        }
+        else
+            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'alpha_constant_unorm8' is outside the supported range")));
+    }
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
+TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
+    struct OverflowCase{
+        AStringView fields;
+        TStringView diagnostic;
+    };
+    constexpr Array<OverflowCase, 4u> overflowCases = {{
+        {
+            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
+            "asset.dimension = \"2d\"; asset.width = 4294967295; asset.height = 4294967295;\n",
+            NWB_TEXT("block grid exceeds runtime limits")
+        },
+        {
+            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
+            "asset.dimension = \"volume\"; asset.width = 2147483648; asset.height = 2147483648; asset.depth = 4;\n",
+            NWB_TEXT("byte size overflows")
+        },
+        {
+            "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
+            "asset.dimension = \"volume\"; asset.width = 1073741824; asset.height = 1073741824; asset.depth = 15;\n",
+            NWB_TEXT("mip payload offsets overflow")
+        },
+        {
+            "asset.format = \"uastc_hdr_4x4\"; asset.alpha_mode = \"uastc_ldr_4x4\";\n"
+            "asset.dimension = \"cube\"; asset.width = 1073741824; asset.height = 1073741824;\n",
+            NWB_TEXT("separate HDR alpha payload size overflows")
+        },
+    }};
+    for(const OverflowCase& overflowCase : overflowCases){
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+        );
+
+        TestArena testArena;
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        ::AString<NWB::Core::Alloc::ScratchArena> metadata("texture asset;\n", scratchArena);
+        metadata.append(overflowCase.fields);
+        metadata.append("asset.data = \"overflow.tex\";\n");
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(metadata));
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_size_overflow") / "assets";
+        const Path metadataPath = assetRoot / "textures" / "overflow.nwb";
+        NWB::Impl::TextureCookEntry entry(testArena.arena);
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
+        EXPECT_TRUE(logger.sawErrorContaining(overflowCase.diagnostic));
     }
 }
 

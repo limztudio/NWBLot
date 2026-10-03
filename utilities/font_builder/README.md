@@ -4,12 +4,16 @@
 
 | File | Purpose |
 | --- | --- |
-| `<stem>.nwb` | Independent `font face` and `font_atlas atlas` declarations collected in an `asset_bunch`. Face metrics, bake settings, group dimensions/channels and every glyph mapping remain readable. |
+| `<stem>.nwb` | Independent `font face` and `font_atlas atlas` declarations collected in an `asset_bunch`. Bake settings, editable vertical layout metrics and every glyph mapping remain readable; face facts and image layouts come from the prepared source. |
 | `<stem>.font` | FON2 version 1 prepared source: exact original SFNT bytes and compact R8/RG8/RGB8/RGBA8 signed-distance images, with internal lengths and integrity hashes. |
 
 The standard asset bunch publishes `<metadata virtual path>/face` and `<metadata virtual path>/atlas`, resolving `atlas.font = face` as a typed dependency. Both cookers derive the paired `.font` path from the original `.nwb` basename. The font cooker reads the exact SFNT without allocating image payloads; the atlas cooker admits the readable glyph mappings and settings against the source face and image directory, validates image hashes, and copies original positioning tables from the SFNT. Cooking reconstructs ordinary `Font` and `FontAtlas` runtime assets without rerasterizing. The input TTF/OTF can remain outside the repository, and `.font` remains usable for later atlas regeneration.
 
-The `.nwb` contains no schema-version or hash fields. Each group map declares `width`, `height` and `channels`. Each glyph map declares `id`, `group`, `channel`, `x`, `y`, `width`, `height`, `plane_left`, `plane_top`, `plane_right`, `plane_bottom`, `advance_units` and the numeric `drawable` flag (0 or 1). Every source glyph has a record, including nondrawable glyphs. Float values use nine significant decimal digits so their f32 bits survive cooking. FON2 stores a 56-byte header, 48-byte image directory entries, the exact SFNT, then tightly interleaved compact image bytes. Internal source/pixel hashes stay in that binary. Previous prepared-source envelopes must be regenerated from the original font.
+The `font face;` declaration has no fields. The atlas declares its Font reference, `bake_ppem`, `spread_pixels`, `raster_mode`, editable `ascender_units`/`descender_units`/`line_gap_units`, and `glyphs`. Face index, units per em, glyph count, group dimensions/channels, and the fixed one-texel guard are derived during cooking; `.nwb` rejects those copied facts, `groups`, version/revision fields, and hashes.
+
+Each glyph map declares `group`, `channel`, `x`, `y`, `width`, `height`, `plane_left`, `plane_top`, `plane_right`, `plane_bottom`, `advance_units` and the numeric `drawable` flag (0 or 1). Every source glyph has one record in source order, including nondrawable glyphs. The cooker derives its ID from the list ordinal and rejects an authored `id`. Float values use nine significant decimal digits so their f32 bits survive cooking.
+
+FON2 stores a 56-byte header, 48-byte image directory entries, the exact SFNT, then tightly interleaved compact image bytes. Internal source/pixel hashes stay in that binary. Previous prepared-source envelopes must be regenerated from the original font.
 
 ## Build and use
 

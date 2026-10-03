@@ -114,7 +114,8 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     const bool hdr = payload.format == TexturePayloadFormat::UastcHdr4x4;
     const AStringView formatName = hdr ? TextureFormat::s_UastcHdr4x4Format : TextureFormat::s_UastcLdr4x4Format;
     if(
-        (!hdr && (!payload.alphaBytes.empty() || payload.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4))
+        (payload.format != TexturePayloadFormat::UastcLdr4x4 && payload.format != TexturePayloadFormat::UastcHdr4x4)
+        || (!hdr && (!payload.alphaBytes.empty() || payload.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4))
         || (hdr && payload.srgb)
         || (hdr && payload.hasAlpha != (payload.alphaMode != TextureAlphaMode::Opaque))
         || (hdr && payload.alphaMode == TextureAlphaMode::EmbeddedLdr)
@@ -122,11 +123,6 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
         || (hdr && payload.alphaMode != TextureAlphaMode::SeparateUastcLdr4x4 && !payload.alphaBytes.empty())
         || (hdr && payload.alphaMode != TextureAlphaMode::ConstantUnorm8 && payload.alphaConstantUnorm8 != TextureFormat::s_OpaqueAlphaUnorm8)
     )
-        return {};
-    u32 blockWidth = 0u;
-    u32 blockHeight = 0u;
-    u32 bytesPerBlock = 0u;
-    if(!TextureFormat::GetTexturePayloadBlockLayout(payload.format, blockWidth, blockHeight, bytesPerBlock))
         return {};
     const AStringView dimensionName = payload.dimension == TextureDimension::TextureCube
         ? TextureFormat::s_TextureCubeDimension
@@ -140,21 +136,19 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
         << "texture asset;" << s_NewLine
         << s_NewLine
         << "asset.format = \"" << formatName << "\";" << s_NewLine
-        << "asset.color_space = \"" << (payload.srgb ? TextureFormat::s_SrgbColorSpace : TextureFormat::s_LinearColorSpace) << "\";" << s_NewLine
-        << "asset.dimension = \"" << dimensionName << "\";" << s_NewLine
-        << "asset.depth = " << payload.depth << ";" << s_NewLine
     ;
+    if(!hdr)
+        output << "asset.color_space = \"" << (payload.srgb ? TextureFormat::s_SrgbColorSpace : TextureFormat::s_LinearColorSpace) << "\";" << s_NewLine;
+    output << "asset.dimension = \"" << dimensionName << "\";" << s_NewLine;
+    if(payload.dimension == TextureDimension::Texture3D)
+        output << "asset.depth = " << payload.depth << ";" << s_NewLine;
     output
         << "asset.width = " << payload.width << ";" << s_NewLine
         << "asset.height = " << payload.height << ";" << s_NewLine
-        << "asset.block_width = " << blockWidth << ";" << s_NewLine
-        << "asset.block_height = " << blockHeight << ";" << s_NewLine
-        << "asset.bytes_per_block = " << bytesPerBlock << ";" << s_NewLine
-        << "asset.payload_layout = \"" << TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout << "\";" << s_NewLine
-        << "asset.mip_address_mode = \"" << TextureFormat::s_ClampMipAddressMode << "\";" << s_NewLine
-        << "asset.has_alpha = " << (payload.hasAlpha ? 1 : 0) << ";" << s_NewLine
     ;
-    if(hdr){
+    if(!hdr)
+        output << "asset.has_alpha = " << (payload.hasAlpha ? 1 : 0) << ";" << s_NewLine;
+    else{
         switch(payload.alphaMode){
         case TextureAlphaMode::Opaque:
             output << "asset.alpha_mode = \"" << TextureFormat::s_AlphaOpaqueMode << "\";" << s_NewLine;
@@ -166,40 +160,13 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
             ;
             break;
         case TextureAlphaMode::SeparateUastcLdr4x4:
-            output
-                << "asset.alpha_mode = \"" << TextureFormat::s_AlphaUastcLdr4x4Mode << "\";" << s_NewLine
-                << "asset.alpha_payload_offset_bytes = " << payload.bytes.size() << ";" << s_NewLine
-                << "asset.alpha_payload_byte_count = " << payload.alphaBytes.size() << ";" << s_NewLine
-            ;
+            output << "asset.alpha_mode = \"" << TextureFormat::s_AlphaUastcLdr4x4Mode << "\";" << s_NewLine;
             break;
         default:
             return {};
         }
     }
-    output
-        << "asset.mip_count = " << payload.mips.size() << ";" << s_NewLine
-        << "asset.data = \"" << dataName << "\";" << s_NewLine
-        << "asset.mips = [" << s_NewLine
-    ;
-
-    for(usize index = 0u; index < payload.mips.size(); ++index){
-        const MipLevel& mip = payload.mips[index];
-        output
-            << "    { \"level\": " << mip.level
-            << ", \"width\": " << mip.width
-            << ", \"height\": " << mip.height
-            << ", \"blocks_x\": " << mip.blocksX
-            << ", \"blocks_y\": " << mip.blocksY
-            << ", \"offset_bytes\": " << mip.offsetBytes
-            << ", \"size_bytes\": " << mip.sizeBytes
-            << ", \"slices\": " << mip.sliceCount
-        ;
-        output
-            << " }" << (index + 1u == payload.mips.size() ? "" : ",") << s_NewLine
-        ;
-    }
-
-    output << "];" << s_NewLine;
+    output << "asset.data = \"" << dataName << "\";" << s_NewLine;
     return output.str();
 }
 

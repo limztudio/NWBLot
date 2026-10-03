@@ -60,27 +60,33 @@ its red channel. Opaque HDR has no mask stream; non-white constant alpha is
 stored in metadata without a mask stream.
 
 The converter selects `asset.format = "uastc_ldr_4x4";` for LDR and
-`asset.format = "uastc_hdr_4x4";` for HDR. Generated `.nwb` metadata has no
-author-maintained version or specification-revision fields; the cooker selects
-the supported payload contract from `asset.format` and rejects unknown fields.
-Both formats use the `mip_major_slice_major_blocks`
-order: each mip's planes are contiguous before the next mip. A 2D mip has one
-plane, cube planes retain `+X, -X, +Y, -Y, +Z, -Z` order, and volume planes
-retain ascending Z order. Volume mips reduce all three dimensions, including
-depth, until they reach 1×1×1.
+`asset.format = "uastc_hdr_4x4";` for HDR. The sibling `.nwb` is readable
+metascript metadata containing only author-controlled choices:
 
-The sibling .nwb file is readable metascript metadata. It records:
+- `format`, `dimension` (`2d`, `cube`, or `volume`), positive `width` and
+  `height`, and `data`, the same-directory `.tex` filename without path components;
+- positive `depth` for volumes only; 2D and cube textures infer depth 1;
+- for LDR, `color_space` (`linear` or `srgb`) and numeric `has_alpha` (0 or 1);
+- for HDR, `alpha_mode` (`opaque`, `constant_unorm8`, or `uastc_ldr_4x4`),
+  with `alpha_constant_unorm8` required only for `constant_unorm8` (integer
+  0..254; use `opaque` for 255).
 
-- the payload format, color space, base resolution, dimension, and depth;
-- the format's 4x4 / 16-byte UASTC block layout;
-- the .tex basename and mip-major payload layout; and
-- for each mip, its dimensions, block grid, byte offset, byte size, and plane
-  count.
+HDR is always linear, and its alpha presence follows `alpha_mode`. The cooker
+derives those values, fixed block dimensions and byte size, the complete mip chain,
+block grids, slice counts, byte offsets and sizes, and any trailing HDR alpha range.
+Do not author block/layout/address fields, `mip_count`, `mips`, HDR `color_space`
+or `has_alpha`, or alpha payload offsets/counts. Metadata also has no version or
+specification-revision fields. Unknown fields fail cooking.
 
-HDR metadata additionally records `alpha_mode`: `opaque`, `constant_unorm8`,
-or `uastc_ldr_4x4`. The latter includes the trailing alpha stream's byte offset
-and byte count.
+The raw sidecar uses a fixed mip-major, then slice-major byte order: each mip's
+planes are contiguous before the next mip. A 2D mip has one plane, cube planes
+retain `+X, -X, +Y, -Y, +Z, -Z` order, and volume planes retain ascending Z order.
+Volume mips reduce all three dimensions, including depth, until they reach 1x1x1.
+A separate HDR alpha stream starts immediately after RGB and mirrors the whole
+RGB mip/slice layout. None of this byte layout is configurable in `.nwb`.
 
-For example, a 7x5 source has three mips and its payload records 64 bytes at
-offset 0 for 7x5, then 16 bytes each for 3x2 and 1x1. The metadata's
-offset_bytes and size_bytes are authoritative when reading the raw payload.
+For example, a 7x5 2D source has a derived three-level chain: 7x5 uses 64 bytes
+at offset 0, 3x2 uses 16 bytes at offset 64, and 1x1 uses 16 bytes at offset 80.
+The primary stream therefore contains exactly 96 bytes. A variable-alpha HDR
+source appends another 96-byte stream. The cooker computes these ranges from
+the semantic fields and rejects a sidecar whose total byte count differs.

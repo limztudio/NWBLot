@@ -19,17 +19,14 @@ Every current atlas field is mandatory, and unknown fields fail cooking:
 | Field | Meaning |
 | --- | --- |
 | `font` | Typed Font reference, resolved from a local bunch reference or an explicit virtual path. |
-| `face_index` | Static SFNT face index, currently zero. |
-| `units_per_em`, `glyph_count` | Exact face values checked against the paired SFNT. |
-| `bake_ppem`, `spread_pixels`, `guard_texels` | Bake size, SDF spread, and the one-texel exterior guard. |
+| `bake_ppem`, `spread_pixels` | Author-selected bake size and SDF spread. |
 | `raster_mode` | Exact token `bitmap` or `outline`. |
-| `ascender_units`, `descender_units`, `line_gap_units` | Finite vertical metrics in font design units. |
-| `groups` | Ordered image descriptions with exactly `width`, `height`, and `channels`. Each must match the prepared source directory. |
+| `ascender_units`, `descender_units`, `line_gap_units` | Editable finite vertical layout metrics in font design units. |
 | `glyphs` | One ordered dictionary for every source glyph ID, including nondrawable glyphs. |
 
-Each glyph dictionary has exactly `id`, `group`, `channel`, `x`, `y`, `width`, `height`, `plane_left`, `plane_top`, `plane_right`, `plane_bottom`, `advance_units`, and `drawable`. `drawable` is a numeric boolean, exactly integer `0` or `1`, following the metascript value contract. Glyph IDs must follow source order without omissions or duplicates. Drawable records select an existing group and channel and supply a guarded bitmap rectangle plus padded design-unit plane bounds. Nondrawable records retain their advance and set all image coordinates and plane bounds to zero.
+Each glyph dictionary has exactly `group`, `channel`, `x`, `y`, `width`, `height`, `plane_left`, `plane_top`, `plane_right`, `plane_bottom`, `advance_units`, and `drawable`. `drawable` is a numeric boolean, exactly integer `0` or `1`, following the metascript value contract. The list must contain exactly one record per source glyph in source order, including nondrawable glyphs. The cooker derives each glyph ID from its list ordinal; an authored `id` is rejected. Drawable records select an existing group and channel and supply a guarded bitmap rectangle plus padded design-unit plane bounds. Nondrawable records retain their advance and set all image coordinates and plane bounds to zero.
 
-The builder writes lists with ordinary metascript dictionary syntax, such as `{ "width": 512, "height": 384, "channels": 2 }`. Integrity hashes are stored internally in the prepared source and cooked runtime payload; metadata does not repeat hashes or binary source paths.
+The cooker derives face index, units per em, and glyph count from the paired SFNT, and image dimensions/channel counts from the prepared source directory. The exterior guard is fixed at one texel. Metadata does not repeat these values or a `groups` list; those retired fields are rejected. Glyph lists use ordinary metascript dictionary syntax. Integrity hashes stay in the prepared source and cooked runtime payload; metadata does not expose hashes, binary source paths, or version/revision fields.
 
 ## Compact image groups
 
@@ -51,7 +48,7 @@ The admission validator checks OpenType `kern` format-0 pairs, GPOS roots, Singl
 
 Shared limits in `model.h` apply to the builder, cooker, runtime binary, and GPU admission: 65,535 glyphs, eight groups, 1..4 channels and at most 2048 by 2048 per group, 128 MiB total image bytes, and 32 MiB total positioning bytes. Bake size is 16..256 ppem; spread is 2..32 pixels.
 
-Prepared-source reads check the complete container layout before allocation and verify SFNT and image integrity before atlas construction. Metadata admission checks bounded integer fields, finite metrics, complete glyph order, exact source group layouts, and a resolved typed Font reference. Shared atlas validation checks byte counts and hashes, valid channel selection, padded plane extents against bitmap size, and guarded region overlap within the same channel. Different channels can share coordinates. Failed metadata parsing or runtime loading preserves the previously published output.
+Prepared-source reads check the complete container layout before allocation and verify SFNT and image integrity before atlas construction. Metadata admission checks bounded integer fields, finite editable metrics, complete source glyph order, and a resolved typed Font reference; image layouts are read from the prepared source. Shared atlas validation checks byte counts and hashes, valid channel selection, padded plane extents against bitmap size, and guarded region overlap within the same channel. Different channels can share coordinates. Failed metadata parsing or runtime loading preserves the previously published output.
 
 The cooked runtime atlas layout remains `FTA1` version 2: explicitly little-endian scalars, a fixed 164-byte header, sequential sections, bounded counts, zero reserved fields, and exact payload consumption. Every 48-byte group header stores width, height, channel count, byte count, and an internal pixel hash followed by tightly interleaved pixels. Glyph records and original positioning tables are serialized into this runtime asset after metadata admission.
 

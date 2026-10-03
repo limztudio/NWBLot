@@ -29,14 +29,11 @@ namespace TextureCookDetail{
 using Core::Metascript::Value;
 using Core::Metascript::FindField;
 using TextureFormat::ComputeCompleteMipCount;
-using TextureFormat::GetTexturePayloadBlockLayout;
 using TextureFormat::s_AlphaConstantUnorm8Mode;
 using TextureFormat::s_AlphaOpaqueMode;
 using TextureFormat::s_AlphaUastcLdr4x4Mode;
-using TextureFormat::s_ClampMipAddressMode;
 using TextureFormat::s_LinearColorSpace;
 using TextureFormat::s_MaxConstantAlphaUnorm8;
-using TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout;
 using TextureFormat::s_OpaqueAlphaUnorm8;
 using TextureFormat::s_SrgbColorSpace;
 using TextureFormat::s_UastcHdr4x4Format;
@@ -48,26 +45,10 @@ inline constexpr AStringView s_DimensionField = "dimension";
 inline constexpr AStringView s_WidthField = "width";
 inline constexpr AStringView s_HeightField = "height";
 inline constexpr AStringView s_DepthField = "depth";
-inline constexpr AStringView s_BlockWidthField = "block_width";
-inline constexpr AStringView s_BlockHeightField = "block_height";
-inline constexpr AStringView s_BytesPerBlockField = "bytes_per_block";
-inline constexpr AStringView s_PayloadLayoutField = "payload_layout";
-inline constexpr AStringView s_MipAddressModeField = "mip_address_mode";
 inline constexpr AStringView s_HasAlphaField = "has_alpha";
 inline constexpr AStringView s_AlphaModeField = "alpha_mode";
 inline constexpr AStringView s_AlphaConstantUnorm8Field = "alpha_constant_unorm8";
-inline constexpr AStringView s_AlphaPayloadOffsetBytesField = "alpha_payload_offset_bytes";
-inline constexpr AStringView s_AlphaPayloadByteCountField = "alpha_payload_byte_count";
-inline constexpr AStringView s_MipCountField = "mip_count";
 inline constexpr AStringView s_DataField = "data";
-inline constexpr AStringView s_MipsField = "mips";
-
-inline constexpr AStringView s_LevelField = "level";
-inline constexpr AStringView s_BlocksXField = "blocks_x";
-inline constexpr AStringView s_BlocksYField = "blocks_y";
-inline constexpr AStringView s_SlicesField = "slices";
-inline constexpr AStringView s_OffsetBytesField = "offset_bytes";
-inline constexpr AStringView s_SizeBytesField = "size_bytes";
 
 template<typename IntegerT>
 [[nodiscard]] inline bool ReadRequiredUnsignedField(
@@ -112,22 +93,6 @@ template<typename IntegerT>
     return true;
 }
 
-template<typename IntegerT>
-[[nodiscard]] inline bool ReadExactUnsignedField(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    const IntegerT expectedValue
-){
-    IntegerT value = 0u;
-    return ReadRequiredUnsignedField(nwbFilePath, asset, fieldName, expectedValue, expectedValue, value);
-}
-[[nodiscard]] bool ReadExactStringField(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    AStringView fieldName,
-    AStringView expectedValue
-);
 [[nodiscard]] bool ReadTextureDimension(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -138,16 +103,15 @@ template<typename IntegerT>
     AStringView dataFileName,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseMipLevels(
+[[nodiscard]] bool BuildMipLevels(
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
     TexturePayloadFormat::Enum payloadFormat,
     TextureDimension::Enum dimension,
     u32 width,
     u32 height,
     u32 depth,
-    u32 expectedMipCount,
-    Texture::MipLevelVector& outMipLevels
+    Texture::MipLevelVector& outMipLevels,
+    u64& outPayloadByteCount
 );
 
 

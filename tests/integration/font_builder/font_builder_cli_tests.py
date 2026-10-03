@@ -160,7 +160,8 @@ class FontBuilderCli(unittest.TestCase):
         self.assertIn("font_atlas atlas;", text)
         self.assertIn("atlas.font = face;", text)
         self.assertIn("asset_bunch bunch = [face, atlas];", text)
-        for obsolete in ("schema_version", "sha256", "source", ".atlas"):
+        for obsolete in ("schema_version", "sha256", "source", ".atlas", "face_index",
+                         "units_per_em", "glyph_count", "guard_texels", "atlas.groups"):
             self.assertNotIn(obsolete, text)
         payloads = self.decode_package(output) if payloads is None else payloads
         atlas = read_atlas(payloads["atlas.bin"])
@@ -168,20 +169,17 @@ class FontBuilderCli(unittest.TestCase):
         self.assertEqual(prepared["groups"], atlas["groups"])
         self.assertEqual(prepared["font_hash"], atlas["font_hash"])
         self.assertEqual(prepared["sfnt"], payloads["source.sfnt"])
-        for variable in ("face", "atlas"):
-            for name, value in (("face_index", atlas["face_index"]), ("units_per_em", atlas["units_per_em"]),
-                                ("glyph_count", len(atlas["glyphs"]))):
-                self.assertIn(f"{variable}.{name} = {value};", text)
-        metadata_groups = self.metadata_list(text, "groups")
-        self.assertEqual(metadata_groups, [
-            {"width": width, "height": height, "channels": channels}
-            for width, height, channels, pixels in atlas["groups"]])
+        self.assertEqual(atlas["face_index"], prepared["face_index"])
+        source_tables = sfnt_tables(prepared["sfnt"])
+        self.assertEqual(atlas["units_per_em"], struct.unpack_from(">H", source_tables["head"], 18)[0])
+        self.assertEqual(len(atlas["glyphs"]), struct.unpack_from(">H", source_tables["maxp"], 4)[0])
         metadata_glyphs = self.metadata_list(text, "glyphs")
         self.assertEqual(len(metadata_glyphs), len(atlas["glyphs"]))
         float_fields = ("plane_left", "plane_top", "plane_right", "plane_bottom", "advance_units")
-        for declared, decoded in zip(metadata_glyphs, atlas["glyphs"]):
-            self.assertEqual(set(declared), set(decoded))
-            for key in decoded:
+        for index, (declared, decoded) in enumerate(zip(metadata_glyphs, atlas["glyphs"])):
+            self.assertEqual(decoded["id"], index)
+            self.assertEqual(set(declared), set(decoded) - {"id"})
+            for key in declared:
                 if key in float_fields:
                     self.assertEqual(struct.pack("<f", declared[key]), struct.pack("<f", decoded[key]))
                 else:
@@ -347,7 +345,11 @@ class FontBuilderCli(unittest.TestCase):
         output.with_suffix(".font").write_bytes(corrupt)
         self.assertFalse(self.decode_package(output, success=False))
         output.with_suffix(".font").write_bytes(original_font)
-        for text in (original_text.replace('"channels": 4', '"channels": 0', 1),
+        for text in (original_text + "\nface.face_index = 0;\n",
+                     original_text + "\natlas.units_per_em = 1000;\n",
+                     original_text + "\natlas.guard_texels = 1;\n",
+                     original_text + '\natlas.groups = [{ "width": 1, "height": 1, "channels": 4 }];\n',
+                     original_text.replace('"group":', '"id": 0, "group":', 1),
                      original_text.replace('"drawable": 1', '"drawable": 2', 1)):
             output.write_text(text, encoding="utf-8")
             self.assertFalse(self.decode_package(output, success=False))

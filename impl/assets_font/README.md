@@ -10,22 +10,19 @@ The metadata declares independent assets and gathers them through the ordinary a
 
 ```text
 font face;
-face.face_index = 0;
-face.units_per_em = 2048;
-face.glyph_count = 846;
 
 font_atlas atlas;
 atlas.font = face;
-// The builder writes atlas metrics, groups, and all glyph records here.
+// The builder writes atlas bake settings, layout metrics, and all glyph records here.
 
 asset_bunch bunch = [face, atlas];
 ```
 
-The values shown are illustrative; each Font value must match its prepared SFNT. The Font declaration accepts exactly `face_index`, `units_per_em`, and `glyph_count`. Every field is required, and unknown fields fail cooking. Image descriptions and glyph mappings belong to the separate FontAtlas declaration.
+The Font declaration has no authored fields. The cooker derives its face index and metrics from the paired prepared SFNT; copied face facts, source filenames, and version/revision fields are rejected. Bake settings, editable layout metrics, and glyph mappings belong to the separate FontAtlas declaration. Image dimensions and channel counts come from the prepared source directory.
 
 For `latin.nwb`, the bunch publishes `<virtual directory>/latin/face` and `<virtual directory>/latin/atlas`. Its local `atlas.font = face` reference resolves to a typed `AssetRef<Font>` before either importer consumes it. Both assets derive `latin.font` from the original metadata path, so there are no authored source filenames or hash fields.
 
-A standalone `font asset;` document uses the same three fields and finds its sibling `.font` by replacing the document extension. Its identity follows the metadata path. Font-only import validates the complete FON2 directory and file length, verifies the SFNT integrity hash, and reads only SFNT bytes; it does not allocate atlas image pixels. Missing, truncated, malformed, or mismatched source data preserves the previously parsed entry.
+A standalone `font asset;` document also has no fields and finds its sibling `.font` by replacing the document extension. Its identity follows the metadata path. Font-only import validates the complete FON2 directory and file length, verifies the SFNT integrity hash, and reads only SFNT bytes; it does not allocate atlas image pixels. Missing, truncated, malformed, or corrupt source data preserves the previously parsed entry.
 
 ## Prepared source and runtime payload
 

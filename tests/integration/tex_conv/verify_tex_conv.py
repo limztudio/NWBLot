@@ -22,13 +22,7 @@ LIT_N_4I = "<4i"
 LIT_LINEORDER = "lineOrder"
 LIT_FLOAT = "float"
 LIT_F = "<f"
-LIT_SIZE_BYTES = "size_bytes"
 LIT_LINEAR = "linear"
-LIT_ASSET_BLOCK_WIDTH_4 = "asset.block_width = 4;"
-LIT_ASSET_BLOCK_HEIGHT_4 = "asset.block_height = 4;"
-LIT_ASSET_BYTES_PER_BLOCK_16 = "asset.bytes_per_block = 16;"
-LIT_MIP_MAJOR_SLICE_MAJOR_BLOCKS = "mip_major_slice_major_blocks"
-LIT_CLAMP = "clamp"
 LIT_CHECKER_TEX = "checker.tex"
 LIT_CUBE_TEX = "cube.tex"
 LIT_VOLUME_TEX = "volume.tex"
@@ -51,33 +45,17 @@ LIT_NWB_TMP_SUFFIX = ".nwb.tmp"
 LIT_TEX_TMP_SUFFIX = ".tex.tmp"
 LIT_TMP_SUFFIX = ".tmp"
 LIT_UTF_8 = "utf-8"
-LIT_ASSET_VERSION_OR_REVISION_FIELD_PATTERN = r"\basset\.[A-Za-z0-9_]*(?:version|revision)[A-Za-z0-9_]*\s*="
-LIT_UASTC_LDR_4X4 = "uastc_ldr_4x4"
-LIT_N_2D = "2d"
-LIT_ASSET_DEPTH_1 = "asset.depth = 1;"
 LIT_ASSET_HAS_ALPHA_1 = "asset.has_alpha = 1;"
-LIT_ASSET_MIP_COUNT_3 = "asset.mip_count = 3;"
-LIT_LEVEL = "level"
-LIT_WIDTH = "width"
-LIT_HEIGHT = "height"
-LIT_BLOCKS_X = "blocks_x"
-LIT_BLOCKS_Y = "blocks_y"
-LIT_OFFSET_BYTES = "offset_bytes"
-LIT_SLICES = "slices"
 LIT_OUTPUT = "--output"
 LIT_LINEAR_2 = "--linear"
 LIT_ALPHA = "--alpha"
 LIT_ASSET_HAS_ALPHA_0 = "asset.has_alpha = 0;"
 LIT_ASSET_WIDTH_4 = "asset.width = 4;"
 LIT_ASSET_HEIGHT_2 = "asset.height = 2;"
-LIT_OPAQUE = "opaque"
 LIT_ASSET_ALPHA_CONSTANT_UNORM8 = "asset.alpha_constant_unorm8"
-LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES = "asset.alpha_payload_offset_bytes"
-LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT = "asset.alpha_payload_byte_count"
 LIT_CUBE = "--cube"
 LIT_CUBE_2 = "cube"
 LIT_ASSET_WIDTH_2 = "asset.width = 2;"
-LIT_ASSET_MIP_COUNT_2 = "asset.mip_count = 2;"
 LIT_VOLUME = "--volume"
 LIT_VOLUME_2 = "volume"
 LIT_ASSET_DEPTH_3 = "asset.depth = 3;"
@@ -256,8 +234,18 @@ def write_openexr(path: pathlib.Path) -> None:
 
 def read_texture_metadata(path: pathlib.Path) -> str:
     metadata = path.read_text(encoding=LIT_UTF_8)
-    if re.search(LIT_ASSET_VERSION_OR_REVISION_FIELD_PATTERN, metadata, flags=re.IGNORECASE):
-        raise AssertionError(f"generated texture metadata contains an authored version or revision field: {path}\n{metadata}")
+    fields = re.findall(r"^asset\.([A-Za-z_][A-Za-z0-9_]*)\s*=", metadata, flags=re.MULTILINE)
+    expected_fields = {"format", "dimension", "width", "height", "data"}
+    if 'asset.format = "uastc_hdr_4x4";' in metadata:
+        expected_fields.add("alpha_mode")
+        if 'asset.alpha_mode = "constant_unorm8";' in metadata:
+            expected_fields.add("alpha_constant_unorm8")
+    else:
+        expected_fields.update(("color_space", "has_alpha"))
+    if 'asset.dimension = "volume";' in metadata:
+        expected_fields.add("depth")
+    if set(fields) != expected_fields or len(fields) != len(expected_fields):
+        raise AssertionError(f"generated metadata fields {fields} differ from author fields {sorted(expected_fields)}: {path}\n{metadata}")
     return metadata
 
 
@@ -275,37 +263,10 @@ def require_metadata_field_absent(metadata: str, field: str) -> None:
         raise AssertionError(f"metadata unexpectedly contains {field!r}\n{metadata}")
 
 
-def metadata_mip_payload_byte_count(metadata: str) -> int:
-    mip_sizes = [int(size) for size in re.findall(r'"' + LIT_SIZE_BYTES + r'": (\d+)', metadata)]
-    if not mip_sizes:
-        raise AssertionError(f"metadata does not contain mip byte sizes\n{metadata}")
-    return sum(mip_sizes)
-
-
-def require_texture_payload_matches_metadata(metadata: str, texture_path: pathlib.Path) -> int:
-    rgb_payload_bytes = metadata_mip_payload_byte_count(metadata)
-    alpha_payload_match = re.search(r"^asset\.alpha_payload_byte_count = (\d+);$", metadata, flags=re.MULTILINE)
-    alpha_payload_bytes = int(alpha_payload_match.group(1)) if alpha_payload_match else 0
-    expected_payload_bytes = rgb_payload_bytes + alpha_payload_bytes
-    actual_payload_bytes = texture_path.stat().st_size
-    if actual_payload_bytes != expected_payload_bytes:
-        raise AssertionError(
-            f"texture payload size expected {expected_payload_bytes} bytes from metadata, got {actual_payload_bytes}: {texture_path}"
-        )
-    return rgb_payload_bytes
-
-
-def require_uastc_hdr_metadata(metadata: str) -> None:
-    for fragment in (
-        'asset.format = "uastc_hdr_4x4";',
-        'asset.color_space = "linear";',
-        LIT_ASSET_BLOCK_WIDTH_4,
-        LIT_ASSET_BLOCK_HEIGHT_4,
-        LIT_ASSET_BYTES_PER_BLOCK_16,
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        'asset.mip_address_mode = "clamp";',
-    ):
-        require_metadata_fragment(metadata, fragment)
+def require_texture_payload_byte_count(texture_path: pathlib.Path, expected_bytes: int) -> None:
+    actual_bytes = texture_path.stat().st_size
+    if actual_bytes != expected_bytes:
+        raise AssertionError(f"texture payload expected {expected_bytes} bytes, got {actual_bytes}: {texture_path}")
 
 
 def main() -> int:
@@ -449,20 +410,10 @@ def main() -> int:
         'asset.format = "uastc_ldr_4x4";',
         'asset.color_space = "srgb";',
         'asset.dimension = "2d";',
-        LIT_ASSET_DEPTH_1,
         "asset.width = 7;",
         "asset.height = 5;",
-        LIT_ASSET_BLOCK_WIDTH_4,
-        LIT_ASSET_BLOCK_HEIGHT_4,
-        LIT_ASSET_BYTES_PER_BLOCK_16,
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        'asset.mip_address_mode = "clamp";',
         LIT_ASSET_HAS_ALPHA_1,
-        LIT_ASSET_MIP_COUNT_3,
         'asset.data = "checker.tex";',
-        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 7' + ', "' + LIT_HEIGHT + '": 5' + ', "' + LIT_BLOCKS_X + '": 2' + ', "' + LIT_BLOCKS_Y + '": 2' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 64' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 3' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 64' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 80' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(metadata, fragment)
 
@@ -619,27 +570,17 @@ def main() -> int:
             f"tex_conv Radiance HDR failed with {radiance.returncode}\nstdout:\n{radiance.stdout}\nstderr:\n{radiance.stderr}"
     )
     radiance_metadata = read_texture_metadata(radiance_metadata_path)
-    require_uastc_hdr_metadata(radiance_metadata)
+    require_metadata_fragment(radiance_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "2d";',
-        LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        LIT_ASSET_MIP_COUNT_3,
         'asset.data = "radiance.tex";',
-        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 16' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 32' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(radiance_metadata, fragment)
-    for field in (
-        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
-        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
-        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
-    ):
-        require_metadata_field_absent(radiance_metadata, field)
-    require_texture_payload_matches_metadata(radiance_metadata, radiance_texture_path)
+    require_metadata_field_absent(radiance_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
+    require_texture_payload_byte_count(radiance_texture_path, 48)
 
     radiance_white = subprocess.run(
         [args.tex_conv, str(radiance_source_path), LIT_ALPHA, LIT_WHITE, LIT_OUTPUT, str(output_dir / "radiance_white")],
@@ -653,16 +594,10 @@ def main() -> int:
             f"\nstdout:\n{radiance_white.stdout}\nstderr:\n{radiance_white.stderr}"
         )
     radiance_white_metadata = read_texture_metadata(radiance_white_metadata_path)
-    require_uastc_hdr_metadata(radiance_white_metadata)
-    require_metadata_fragment(radiance_white_metadata, LIT_ASSET_HAS_ALPHA_0)
+    require_metadata_fragment(radiance_white_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_white_metadata, 'asset.alpha_mode = "opaque";')
-    for field in (
-        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
-        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
-        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
-    ):
-        require_metadata_field_absent(radiance_white_metadata, field)
-    require_texture_payload_matches_metadata(radiance_white_metadata, radiance_white_texture_path)
+    require_metadata_field_absent(radiance_white_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
+    require_texture_payload_byte_count(radiance_white_texture_path, 48)
     require_matching_payloads(radiance_white_texture_path, radiance_texture_path, "HDR --alpha white")
 
     radiance_black = subprocess.run(
@@ -677,16 +612,10 @@ def main() -> int:
             f"\nstdout:\n{radiance_black.stdout}\nstderr:\n{radiance_black.stderr}"
         )
     radiance_black_metadata = read_texture_metadata(radiance_black_metadata_path)
-    require_uastc_hdr_metadata(radiance_black_metadata)
-    require_metadata_fragment(radiance_black_metadata, LIT_ASSET_HAS_ALPHA_1)
+    require_metadata_fragment(radiance_black_metadata, 'asset.format = "uastc_hdr_4x4";')
     require_metadata_fragment(radiance_black_metadata, 'asset.alpha_mode = "constant_unorm8";')
     require_metadata_unsigned_field(radiance_black_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8, 0)
-    for field in (
-        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
-        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
-    ):
-        require_metadata_field_absent(radiance_black_metadata, field)
-    require_texture_payload_matches_metadata(radiance_black_metadata, radiance_black_texture_path)
+    require_texture_payload_byte_count(radiance_black_texture_path, 48)
     require_matching_payloads(radiance_black_texture_path, radiance_texture_path, "HDR --alpha black RGB stream")
 
     write_openexr(openexr_source_path)
@@ -701,29 +630,17 @@ def main() -> int:
             f"tex_conv OpenEXR failed with {openexr.returncode}\nstdout:\n{openexr.stdout}\nstderr:\n{openexr.stderr}"
     )
     openexr_metadata = read_texture_metadata(openexr_metadata_path)
-    require_uastc_hdr_metadata(openexr_metadata)
+    require_metadata_fragment(openexr_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "2d";',
-        LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "uastc_ldr_4x4";',
-        LIT_ASSET_MIP_COUNT_3,
         'asset.data = "openexr.tex";',
-        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 16' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 32' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(openexr_metadata, fragment)
-    openexr_rgb_payload_bytes = metadata_mip_payload_byte_count(openexr_metadata)
-    require_metadata_unsigned_field(
-        openexr_metadata, LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES, openexr_rgb_payload_bytes
-    )
-    require_metadata_unsigned_field(
-        openexr_metadata, LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT, openexr_rgb_payload_bytes
-    )
     require_metadata_field_absent(openexr_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
-    require_texture_payload_matches_metadata(openexr_metadata, openexr_texture_path)
+    require_texture_payload_byte_count(openexr_texture_path, 96)
 
     for face_index, face_path in enumerate(hdr_cube_face_paths):
         write_radiance_hdr_pixels(
@@ -754,26 +671,17 @@ def main() -> int:
             f"tex_conv HDR cube failed with {hdr_cube.returncode}\nstdout:\n{hdr_cube.stdout}\nstderr:\n{hdr_cube.stderr}"
     )
     hdr_cube_metadata = read_texture_metadata(hdr_cube_metadata_path)
-    require_uastc_hdr_metadata(hdr_cube_metadata)
+    require_metadata_fragment(hdr_cube_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "cube";',
-        LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        LIT_ASSET_MIP_COUNT_2,
         'asset.data = "hdr_cube.tex";',
-        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 96' + ', "' + LIT_SLICES + '": 6' + ' }',
-        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 96' + ', "' + LIT_SIZE_BYTES + '": 96' + ', "' + LIT_SLICES + '": 6' + ' }',
     ):
         require_metadata_fragment(hdr_cube_metadata, fragment)
-    for field in (
-        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
-        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
-        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
-    ):
-        require_metadata_field_absent(hdr_cube_metadata, field)
-    require_texture_payload_matches_metadata(hdr_cube_metadata, hdr_cube_texture_path)
+    require_metadata_field_absent(hdr_cube_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
+    require_texture_payload_byte_count(hdr_cube_texture_path, 192)
 
     for slice_path in hdr_volume_slice_paths:
         write_radiance_hdr(slice_path)
@@ -794,27 +702,18 @@ def main() -> int:
             f"tex_conv HDR volume failed with {hdr_volume.returncode}\nstdout:\n{hdr_volume.stdout}\nstderr:\n{hdr_volume.stderr}"
     )
     hdr_volume_metadata = read_texture_metadata(hdr_volume_metadata_path)
-    require_uastc_hdr_metadata(hdr_volume_metadata)
+    require_metadata_fragment(hdr_volume_metadata, 'asset.format = "uastc_hdr_4x4";')
     for fragment in (
         'asset.dimension = "volume";',
         LIT_ASSET_DEPTH_3,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
         'asset.alpha_mode = "opaque";',
-        LIT_ASSET_MIP_COUNT_3,
         'asset.data = "hdr_volume.tex";',
-        '{ "' + LIT_LEVEL + '": 0' + ', "' + LIT_WIDTH + '": 4' + ', "' + LIT_HEIGHT + '": 2' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 0' + ', "' + LIT_SIZE_BYTES + '": 48' + ', "' + LIT_SLICES + '": 3' + ' }',
-        '{ "' + LIT_LEVEL + '": 1' + ', "' + LIT_WIDTH + '": 2' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 48' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
-        '{ "' + LIT_LEVEL + '": 2' + ', "' + LIT_WIDTH + '": 1' + ', "' + LIT_HEIGHT + '": 1' + ', "' + LIT_BLOCKS_X + '": 1' + ', "' + LIT_BLOCKS_Y + '": 1' + ', "' + LIT_OFFSET_BYTES + '": 64' + ', "' + LIT_SIZE_BYTES + '": 16' + ', "' + LIT_SLICES + '": 1' + ' }',
     ):
         require_metadata_fragment(hdr_volume_metadata, fragment)
-    for field in (
-        LIT_ASSET_ALPHA_CONSTANT_UNORM8,
-        LIT_ASSET_ALPHA_PAYLOAD_OFFSET_BYTES,
-        LIT_ASSET_ALPHA_PAYLOAD_BYTE_COUNT,
-    ):
-        require_metadata_field_absent(hdr_volume_metadata, field)
-    require_texture_payload_matches_metadata(hdr_volume_metadata, hdr_volume_texture_path)
+    require_metadata_field_absent(hdr_volume_metadata, LIT_ASSET_ALPHA_CONSTANT_UNORM8)
+    require_texture_payload_byte_count(hdr_volume_texture_path, 80)
 
     # Faces are supplied in the on-disk/Basis convention: +X, -X, +Y, -Y, +Z, -Z.
     for face_index, face_path in enumerate(cube_face_paths):
@@ -840,14 +739,8 @@ def main() -> int:
     cube_metadata = read_texture_metadata(cube_metadata_path)
     for fragment in (
         'asset.dimension = "cube";',
-        LIT_ASSET_DEPTH_1,
         LIT_ASSET_WIDTH_2,
         LIT_ASSET_HEIGHT_2,
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        LIT_ASSET_MIP_COUNT_2,
-        '"' + LIT_LEVEL + '": 0, "' + LIT_WIDTH + '": 2, "' + LIT_HEIGHT + '": 2',
-        '"' + LIT_LEVEL + '": 1, "' + LIT_WIDTH + '": 1, "' + LIT_HEIGHT + '": 1',
-        '"' + LIT_SLICES + '": 6',
         'asset.data = "cube.tex";',
     ):
         require_metadata_fragment(cube_metadata, fragment)
@@ -881,12 +774,6 @@ def main() -> int:
         LIT_ASSET_DEPTH_3,
         LIT_ASSET_WIDTH_4,
         LIT_ASSET_HEIGHT_2,
-        'asset.payload_layout = "mip_major_slice_major_blocks";',
-        LIT_ASSET_MIP_COUNT_3,
-        '"' + LIT_LEVEL + '": 0, "' + LIT_WIDTH + '": 4, "' + LIT_HEIGHT + '": 2',
-        '"' + LIT_LEVEL + '": 1, "' + LIT_WIDTH + '": 2, "' + LIT_HEIGHT + '": 1',
-        '"' + LIT_LEVEL + '": 2, "' + LIT_WIDTH + '": 1, "' + LIT_HEIGHT + '": 1',
-        '"' + LIT_SLICES + '": 3',
         'asset.data = "volume.tex";',
     ):
         require_metadata_fragment(volume_metadata, fragment)

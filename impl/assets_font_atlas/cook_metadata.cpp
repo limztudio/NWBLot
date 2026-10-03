@@ -59,21 +59,46 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     return false;
 }
 
-[[nodiscard]] static bool CheckGroupField(const Path& path, const Value& group, const AStringView field, const u32 expected){
-    u32 value = 0u;
-    if(!ReadU32(path, group, field, expected, expected, value))
+[[nodiscard]] static u32 ReadBigU32(const u8* bytes){
+    return
+        (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
+        | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])
+    ;
+}
+
+[[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload){
+    const Core::Assets::AssetBytes& bytes = font.fontBytes();
+    if(bytes.size() < 12u)
         return false;
-    return true;
+    const u32 tableCount = (static_cast<u32>(bytes[4u]) << 8u) | bytes[5u];
+    if(tableCount == 0u || tableCount > s_FontMaxTableCount || static_cast<u64>(tableCount) * 16u > bytes.size() - 12u)
+        return false;
+    payload.faceIndex = font.faceIndex();
+    for(u32 index = 0u; index < tableCount; ++index){
+        const u8* record = bytes.data() + 12u + static_cast<usize>(index) * 16u;
+        const u32 tag = ReadBigU32(record);
+        const u32 offset = ReadBigU32(record + 8u);
+        const u32 length = ReadBigU32(record + 12u);
+        if(offset > bytes.size() || length > bytes.size() - offset)
+            return false;
+        if(tag == 0x68656164u){
+            if(length < 20u)
+                return false;
+            payload.unitsPerEm = (static_cast<u32>(bytes[offset + 18u]) << 8u) | bytes[offset + 19u];
+        }
+        else if(tag == 0x6d617870u){
+            if(length < 6u)
+                return false;
+            payload.sourceGlyphCount = (static_cast<u32>(bytes[offset + 4u]) << 8u) | bytes[offset + 5u];
+        }
+    }
+    return payload.unitsPerEm >= 16u && payload.unitsPerEm <= 16384u && payload.sourceGlyphCount > 0u;
 }
 
 [[nodiscard]] static bool ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
     if(
-        !ReadU32(path, asset, "face_index", 0u, 0u, payload.faceIndex)
-        || !ReadU32(path, asset, "units_per_em", 16u, 16384u, payload.unitsPerEm)
-        || !ReadU32(path, asset, "glyph_count", 1u, s_FontAtlasMaxGlyphCount, payload.sourceGlyphCount)
-        || !ReadU32(path, asset, "bake_ppem", s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem, payload.bakePpem)
+        !ReadU32(path, asset, "bake_ppem", s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem, payload.bakePpem)
         || !ReadU32(path, asset, "spread_pixels", s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels, payload.spreadPixels)
-        || !ReadU32(path, asset, "guard_texels", 1u, 1u, payload.guardTexels)
         || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "ascender_units", true, payload.ascenderUnits)
         || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "descender_units", true, payload.descenderUnits)
         || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "line_gap_units", true, payload.lineGapUnits)
@@ -93,25 +118,9 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     return true;
 }
 
-[[nodiscard]] static bool ReadGroups(const Path& path, const Value& asset, PreparedFontSource& source, FontAtlasPayload& payload){
-    const Value* groups = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, "groups");
-    if(!groups)
-        return false;
-    if(groups->asList().size() != source.groups.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': group count differs from paired font source"), PathToString<tchar>(path));
-        return false;
-    }
+static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& payload){
     payload.groups.reserve(source.groups.size());
-    for(usize index = 0u; index < source.groups.size(); ++index){
-        const Value& map = groups->asList()[index];
-        PreparedFontImageGroup& prepared = source.groups[index];
-        if(
-            !Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix)
-            || !Core::Assets::ValidateMetadataAssetFields(path, map, s_DiagnosticPrefix, { "width", "height", "channels" })
-            || !CheckGroupField(path, map, "width", prepared.width) || !CheckGroupField(path, map, "height", prepared.height)
-            || !CheckGroupField(path, map, "channels", prepared.channelCount)
-        )
-            return false;
+    for(PreparedFontImageGroup& prepared : source.groups){
         FontAtlasGroup group(payload.groups.get_allocator().arena());
         group.width = prepared.width;
         group.height = prepared.height;
@@ -120,7 +129,6 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
         group.pixels = Move(prepared.pixels);
         payload.groups.push_back(Move(group));
     }
-    return true;
 }
 
 
@@ -158,8 +166,8 @@ bool ParseFontAtlasCookMetadataValue(
         !virtualPath || !Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix)
         || !Core::Assets::ValidateMetadataAssetFields(
             nwbFilePath, asset, s_DiagnosticPrefix,
-            { "font", "face_index", "units_per_em", "glyph_count", "bake_ppem", "spread_pixels", "guard_texels", "raster_mode",
-                "ascender_units", "descender_units", "line_gap_units", "groups", "glyphs" }
+            { "font", "bake_ppem", "spread_pixels", "raster_mode",
+                "ascender_units", "descender_units", "line_gap_units", "glyphs" }
         )
     )
         return false;
@@ -172,11 +180,16 @@ bool ParseFontAtlasCookMetadataValue(
     Path fontPath = nwbFilePath;
     fontPath.replace_extension(".font");
     PreparedFontSource source(outEntry.arena);
-    if(!ReadPreparedFontSource(fontPath, source, true) || !ReadGroups(nwbFilePath, asset, source, candidate.payload))
+    if(!ReadPreparedFontSource(fontPath, source, true))
         return false;
+    CopySourceGroups(source, candidate.payload);
     candidate.payload.fontSha256 = source.fontSha256;
     Font font(outEntry.arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
+    if(!ReadSourceFaceMetrics(font, candidate.payload)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
+        return false;
+    }
     if(
         !CopyFontAtlasPositioningTables(font, candidate.payload)
         || !ValidateFontAtlasSourceMatch(candidate.payload, font)

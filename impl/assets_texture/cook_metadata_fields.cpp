@@ -40,27 +40,6 @@ using TextureFormat::s_TextureDataExtension;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ReadExactStringField(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    const AStringView expectedValue
-){
-    AStringView value;
-    if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
-        return false;
-    if(value == expectedValue)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}'")
-        , StringConvert(s_DiagnosticPrefix)
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(fieldName)
-        , StringConvert(expectedValue)
-    );
-    return false;
-}
-
 [[nodiscard]] bool ReadTextureDimension(
     const Path& nwbFilePath,
     const Value& asset,

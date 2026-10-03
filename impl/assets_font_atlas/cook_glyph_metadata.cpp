@@ -49,15 +49,14 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     return false;
 }
 
-[[nodiscard]] static bool ReadGlyph(const Path& path, const Value& map, const u32 expectedId, FontAtlasGlyph& glyph){
+[[nodiscard]] static bool ReadGlyph(const Path& path, const Value& map, const u32 glyphId, FontAtlasGlyph& glyph){
     if(
         !Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix)
         || !Core::Assets::ValidateMetadataAssetFields(
             path, map, s_DiagnosticPrefix,
-            { "id", "group", "channel", "x", "y", "width", "height", "plane_left", "plane_top", "plane_right",
+            { "group", "channel", "x", "y", "width", "height", "plane_left", "plane_top", "plane_right",
                 "plane_bottom", "advance_units", "drawable" }
         )
-        || !ReadU32(path, map, "id", s_FontAtlasMaxGlyphCount - 1u, glyph.glyphId)
         || !ReadU32(path, map, "group", s_FontAtlasMaxGroupCount - 1u, glyph.group)
         || !ReadU32(path, map, "channel", 3u, glyph.channel)
         || !ReadU32(path, map, "x", s_FontAtlasMaxExtent, glyph.x)
@@ -72,10 +71,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
         || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "advance_units", true, glyph.advanceUnits)
     )
         return false;
-    if(glyph.glyphId != expectedId){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': glyph IDs must follow source order"), PathToString<tchar>(path));
-        return false;
-    }
+    glyph.glyphId = glyphId;
     return true;
 }
 

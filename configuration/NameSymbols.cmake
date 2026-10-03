@@ -5,7 +5,7 @@ function(nwb_configure_name_symbols)
         return()
     endif()
 
-    add_compile_definitions(NWB_BUILDMODE=1)
+    add_compile_definitions(NWB_BUILDMODE=1 GLOBAL_BUILD_SYMBOLS=1)
 endfunction()
 
 # Build and run an isolated NWB_BUILDMODE variant, then copy its Name sidecars into the release output.

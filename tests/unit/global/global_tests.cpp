@@ -653,7 +653,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     }
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
-#if defined(NWB_BUILDMODE)
+#if defined(GLOBAL_BUILD_SYMBOLS)
     EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
@@ -675,7 +675,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
-#if defined(NWB_BUILDMODE)
+#if defined(GLOBAL_BUILD_SYMBOLS)
     EXPECT_EQ(literal.hash(), literal.identityHash());
     EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
 #endif
@@ -692,7 +692,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     EXPECT_EQ(runtimeName.resolvedText(), s_RUNTIME_GENERATED);
 
     const Name literalName{"Literal\\Name"};
-#if defined(NWB_BUILDMODE)
+#if defined(GLOBAL_BUILD_SYMBOLS)
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, "literal/name");
 #else
@@ -780,7 +780,7 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
 
     ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
     NameSymbols::Serialize(namesymText);
-#if defined(NWB_BUILDMODE)
+#if defined(GLOBAL_BUILD_SYMBOLS)
     EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -809,7 +809,7 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     NameSymbols::InstallRuntimeRegistry();
     namesymText.clear();
     ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
-#if defined(NWB_BUILDMODE)
+#if defined(GLOBAL_BUILD_SYMBOLS)
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);

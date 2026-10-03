@@ -30,9 +30,9 @@ namespace AdaptorDetail{
 
 template<typename T>
 struct ArenaAllocatorTraits{
-    static_assert(!IsConst_V<T>, "NWB arena allocators forbid containers of const elements because allocator<const T> is ill-formed.");
-    static_assert(!IsFunction_V<T>, "NWB arena allocators forbid allocators for function elements because of [allocator.requirements].");
-    static_assert(!IsReference_V<T>, "NWB arena allocators forbid allocators for reference elements because of [allocator.requirements].");
+    static_assert(!IsConst_V<T>, "Global arena allocators forbid containers of const elements because allocator<const T> is ill-formed.");
+    static_assert(!IsFunction_V<T>, "Global arena allocators forbid allocators for function elements because of [allocator.requirements].");
+    static_assert(!IsReference_V<T>, "Global arena allocators forbid allocators for reference elements because of [allocator.requirements].");
 
     using value_type = T;
 

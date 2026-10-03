@@ -107,7 +107,7 @@ using InitializerList = std::initializer_list<T>;
 #define NWB_DLL_IMPORT
 #endif
 
-#if defined(NWB_EXPORT_DLL)
+#if defined(GLOBAL_EXPORT_DLL)
 #define NWB_DLL_API NWB_DLL_EXPORT
 #else
 #define NWB_DLL_API NWB_DLL_IMPORT

@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 import struct
 import subprocess
+from typing import Optional, Sequence
 import zlib
 
 
@@ -190,11 +191,11 @@ def generate(directory: Path) -> None:
     (directory / "atlas.nwb").write_bytes("\r\n".join(lines).encode("utf-8"))
 
 
-def main() -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, default=DEFAULT_DIRECTORY)
     parser.add_argument("--tex-conv", type=Path, help="Also regenerate texture.nwb/.tex using the built tex_conv executable.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     directory = args.directory.resolve()
     generate(directory)
     if args.tex_conv:

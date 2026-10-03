@@ -10,16 +10,17 @@ Panels and control backgrounds use six-pixel nine-slice borders, with separate c
 Each 24 x 24 region occupies a 32 x 32 tile with four transparent gutter pixels on every side. The initial UI
 renderer should sample the base mip; generated smaller mips do not provide region-isolated filtering.
 
+The utility owns `utilities/ui_skin/launch.py` and is discovered as `ui-skin` by the repository launcher.
 Regenerate the artwork and atlas from the repository root:
 
 ```powershell
-python utilities/ui_skin/generate_default.py
+python -m launcher ui-skin
 ```
 
 Regenerate the texture with the existing converter, using the matching built executable:
 
 ```powershell
-python utilities/ui_skin/generate_default.py --tex-conv __exec/windows/arm64/full/opt/tex_conv.exe
+python -m launcher ui-skin -- --tex-conv __exec/windows/arm64/full/opt/tex_conv.exe
 ```
 
 To make a replacement skin, author a texture with the existing `tex_conv` workflow and a `ui_skin` `.nwb` using

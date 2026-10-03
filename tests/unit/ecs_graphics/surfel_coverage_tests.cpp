@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include <cmath>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,8 @@ float3 operator/(float3 value, float divisor){
     return float3(value.x / divisor, value.y / divisor, value.z / divisor);
 }
 
-using std::exp;
+// Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.
+inline float exp(const float value){ return ::Exp(value); }
 
 #include <impl/assets/graphics/gi/surfel/surfel_coverage.slangi>
 

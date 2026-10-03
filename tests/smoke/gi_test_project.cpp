@@ -19,9 +19,6 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include <cmath>
-#include <iterator>
-
 #include "gpu_pass_timing_probe.h"
 #include "presentation_fps_probe.h"
 #include "smoke_environment.h"
@@ -470,8 +467,8 @@ private:
                 return false;
             const f32 aAngle = a.yawDegrees * (s_PI / 180.0f);
             const f32 bAngle = b.yawDegrees * (s_PI / 180.0f);
-            const f32 aCos = absolute(std::cos(aAngle)), aSin = absolute(std::sin(aAngle));
-            const f32 bCos = absolute(std::cos(bAngle)), bSin = absolute(std::sin(bAngle));
+            const f32 aCos = absolute(Cos(aAngle)), aSin = absolute(Sin(aAngle));
+            const f32 bCos = absolute(Cos(bAngle)), bSin = absolute(Sin(bAngle));
             const f32 aHalfX = (aCos * a.scale.x + aSin * a.scale.z) * 0.5f;
             const f32 aHalfZ = (aSin * a.scale.x + aCos * a.scale.z) * 0.5f;
             const f32 bHalfX = (bCos * b.scale.x + bSin * b.scale.z) * 0.5f;
@@ -531,7 +528,7 @@ private:
 
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created"),
-            std::size(s_ComplexSceneBoxes), std::size(s_ComplexBouncePatches), std::size(s_ComplexFrontEnclosureBoxes),
+            LengthOf(s_ComplexSceneBoxes), LengthOf(s_ComplexBouncePatches), LengthOf(s_ComplexFrontEnclosureBoxes),
             placedBodyCount, s_ComplexRandomBodySeed
         );
         if(m_coverageViewEnabled){

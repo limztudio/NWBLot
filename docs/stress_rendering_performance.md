@@ -109,8 +109,7 @@ $perfBuild = '__cmake/build/windows-clang-arm64'
 $perfRuntime = "$perfBuild/Testing/skinning_culling_benchmark_runtime/opt"
 $perfExe = '__exec/windows/arm64/full/opt/stress_test_smoke.exe'
 $perfOutput = '__artifacts/stress_rendering_reproduction'
-cmake --preset windows-clang-arm64
-cmake --build $perfBuild --config opt --parallel 8 --target nwb_stress_test_smoke nwb_caustic_sphere_smoke nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_skinned_caustic_smoke nwb_gi_test_smoke nwb_ecs_graphics_tests nwb_gpu_task_tests
+& $perfPython -m launcher build nwb_stress_test_smoke nwb_caustic_sphere_smoke nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_skinned_caustic_smoke nwb_gi_test_smoke nwb_ecs_graphics_tests nwb_gpu_task_tests --configure-preset windows-clang-arm64 --build-dir $perfBuild --config opt --jobs 8 --configure always
 ctest --test-dir $perfBuild -C opt -j 1 -R '^(nwb_ecs_graphics_tests|nwb_gpu_task_tests|nwb_stress_presentation_timing_analysis_unit|nwb_stress_cpu_timing_analysis_unit)$' --output-on-failure
 $perfCommon = @('--executable', $perfExe, '--working-directory', $perfRuntime, '--no-logserver',
     '--animate', '--characters-per-class', '10', '--software-shadow-backend', 'automatic',

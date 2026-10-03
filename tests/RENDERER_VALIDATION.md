@@ -61,9 +61,8 @@ Initial and intermediate failures remain in the artifact directory, including `b
 Run one build or GPU test job at a time. From the repository root:
 
 ```powershell
-cmake --preset windows-clang-arm64
-cmake --build --preset windows-clang-arm64-opt
-cmake --build --preset windows-clang-arm64-dbg
+python -m launcher build all --configure-preset windows-clang-arm64 --config opt
+python -m launcher build all --configure-preset windows-clang-arm64 --config dbg
 ctest --preset windows-clang-arm64-opt -j 1 --output-on-failure
 ctest --preset windows-clang-arm64-dbg -j 1 --output-on-failure
 ```

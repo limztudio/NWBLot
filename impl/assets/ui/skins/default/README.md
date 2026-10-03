@@ -20,8 +20,11 @@ python -m launcher ui-skin
 Regenerate the texture with the existing converter, using the matching built executable:
 
 ```powershell
+python -m launcher tex-conv --build-only --arch arm64 --config opt
 python -m launcher ui-skin -- --tex-conv __exec/windows/arm64/full/opt/tex_conv.exe
 ```
+
+See [the skin generator guide](../../../../../utilities/ui_skin/README.md) for generation and conversion options.
 
 To make a replacement skin, author a texture with the existing `tex_conv` workflow and a `ui_skin` `.nwb` using
 the same named regions. Set its typed texture reference, atlas extent, density, rectangles, draw modes, slice

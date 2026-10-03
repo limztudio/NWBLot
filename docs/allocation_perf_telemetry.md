@@ -36,7 +36,7 @@ The registry stores owner identities once. Allocations update the arena's own co
 For readable names in `opt` and `fin`, generate the existing `.namesym` sidecars from a matching build and workload. For this Windows ARM64 preset, the existing target is:
 
 ```powershell
-cmake --build --preset windows-clang-arm64-opt --target nwb_namesym
+python -m launcher build nwb_namesym --configure-preset windows-clang-arm64 --config opt
 ```
 
 That target runs the project's established symbol-collection workloads and bundles sidecars beside the matching logserver. Start or restart the logserver after generating those sidecars so it loads them before producing reports. Build-mode symbol export now includes retained arena owner names, including arenas created before symbol callbacks were installed or destroyed before export. This collection does not require perf capture to be enabled. The logger resolves a raw hash display name against its loaded symbols using the full binary identity; explicitly supplied display labels are preserved. Without a matching symbol entry, the stable hash remains available for correlation.

@@ -68,12 +68,15 @@ The repository launcher configures when needed, builds the selected target, and 
 ```powershell
 python -m launcher testbed --config dbg
 python -m launcher pipeline --help
+python -m launcher ui-skin --help
 python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 python -m launcher smoke --profiles
 python -m launcher profiles
 ```
 
 The root launcher discovers the `pipeline` command from `pipeline/launch.py`, using the same `launch.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependency_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.
+
+The `ui-skin` utility owns `utilities/ui_skin/launch.py` and generates artwork and atlas metadata through the same root entry point. See [its guide](utilities/ui_skin/README.md) for regeneration and texture conversion.
 
 Use `--with-profile` to start the log server with a launched application. Use `--run-seconds <N>` for a bounded profiling run.
 

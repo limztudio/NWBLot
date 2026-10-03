@@ -15,8 +15,7 @@ The common async queue and UTF-8 tests run on Windows and Linux. Linux pipe test
 On a Linux host with the repository toolchain and native X11 development packages installed, run:
 
 ```sh
-cmake --preset linux-clang-x64
-cmake --build --preset linux-clang-dbg --target nwb_os_tests
+python3 -m launcher build nwb_os_tests --configure-preset linux-clang-x64 --config dbg --configure always
 ctest --preset linux-clang-dbg -R '^nwb_os_tests$' --output-on-failure
 ```
 
@@ -26,7 +25,7 @@ Install `xvfb-run`/Xvfb before configuring to enable the isolated selection inte
 ctest --preset linux-clang-dbg -R '^nwb_os_x11_clipboard_isolated$' --output-on-failure
 ```
 
-Wayland additionally needs the existing `wayland-client`, `xkbcommon`, `wayland-scanner`, and `wayland-protocols` dependencies. The normal Linux preset discovers them; use `-DNWB_ENABLE_WAYLAND=OFF` at configure time for the X11-only build. Primary-selection XML is discovered separately from xdg-shell; its absence keeps the core Wayland clipboard enabled and reports primary selection unsupported.
+Wayland additionally needs the existing `wayland-client`, `xkbcommon`, `wayland-scanner`, and `wayland-protocols` dependencies. The normal Linux preset discovers them; pass `-D NWB_ENABLE_WAYLAND=OFF` to the launcher build command for the X11-only build. Primary-selection XML is discovered separately from xdg-shell; its absence keeps the core Wayland clipboard enabled and reports primary selection unsupported.
 
 ## Text-input sessions
 

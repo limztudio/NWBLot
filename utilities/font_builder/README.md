@@ -15,9 +15,13 @@ The bundle cooker derives the font identity from the `.nwb` path and the atlas i
 The directory launcher is discovered as `font-builder` and builds the `nwb_font_builder` target. Arguments after `--` go to the utility.
 
 ```text
+python -m launcher font-builder --build-only --config opt
 python -m launcher font-builder --config opt -- --font "/absolute/path/source.ttf" --output "/absolute/path/assets/latin.nwb" --ppem 32 --extent 1024
 python -m launcher font-builder --skip-build --config opt -- --font "/absolute/path/assets/latin.font" --output "/absolute/path/another/latin.nwb" --ppem 32 --extent 1024
 ```
+
+The first command prepares the utility without baking a font. The launcher configures
+and builds as needed; see [the launcher guide](../../launcher/README.md) for build options.
 
 Use `--overwrite` to replace an existing complete trio. A partial trio, occupied `.tmp` or `.old` work path, or invalid source fails without publishing. The builder stages, flushes, and byte-verifies all three files before replacement; existing files are moved to backups while the new files are published, and restored if publication fails. It publishes the `.nwb` declaration last.
 

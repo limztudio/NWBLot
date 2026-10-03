@@ -250,7 +250,7 @@ floor markers and outcome partitions passed the same checks.
 Build and run on the Windows ARM64 debug preset:
 
 ```powershell
-cmake --build --preset windows-clang-arm64-dbg --target nwb_reflection_smoke
+python -m launcher build nwb_reflection_smoke --configure-preset windows-clang-arm64 --config dbg
 ctest --test-dir __cmake/build/windows-clang-arm64 -C dbg --output-on-failure -R '^nwb_reflection_capture_analysis_unit$'
 python tests/smoke/reflection_smoke.py --executable __exec/windows/arm64/full/dbg/reflection_smoke.exe --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg --output-directory __cmake/build/windows-clang-arm64/Testing/smoke/dbg/reflection_statistics_gpudbg --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe --require-hardware --application-arg=--gpudbg
 ```

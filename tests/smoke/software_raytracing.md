@@ -46,7 +46,10 @@ are cooked: `nwb_transparent_multi_smoke`, `nwb_transparent_csg_smoke`,
 `nwb_caustic_sphere_smoke`, `nwb_skinned_caustic_smoke`,
 `nwb_stress_test_smoke`, and `nwb_gi_test_smoke`.
 
+From the repository root, select a matching platform/architecture configure preset and build without launching a scene:
+
 ```text
+python -m launcher build nwb_transparent_multi_smoke nwb_transparent_csg_smoke nwb_caustic_sphere_smoke nwb_skinned_caustic_smoke nwb_stress_test_smoke nwb_gi_test_smoke --configure-preset <configure-preset> --build-dir <build-directory> --config opt -D NWB_BUILD_TESTS=ON
 ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-failure
 ```
 

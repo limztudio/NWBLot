@@ -50,7 +50,7 @@ Initial failed acquisitions are preserved separately: one stopped rendering afte
 
 ## Reproduce
 
-Build with `cmake --build --preset windows-clang-arm64-opt --target nwb_reflection_smoke nwb_ecs_graphics_tests --parallel 8`. Complete relevant rendering/correctness suites from [REFLECTION.md](REFLECTION.md) before timing a changed renderer. The benchmark runner and its CTest analysis suite are checked in as [reflection_benchmark.py](reflection_benchmark.py) and `nwb_reflection_benchmark_analysis_unit`.
+Build with `python -m launcher build nwb_reflection_smoke nwb_ecs_graphics_tests --configure-preset windows-clang-arm64 --config opt --jobs 8`. Complete relevant rendering/correctness suites from [REFLECTION.md](REFLECTION.md) before timing a changed renderer. The benchmark runner and its CTest analysis suite are checked in as [reflection_benchmark.py](reflection_benchmark.py) and `nwb_reflection_benchmark_analysis_unit`.
 
 From the repository root, use a new empty output directory for each run. Keep the executable and authored volumes unchanged between qualification and timing. Do not build, cook, or run other GPU tests during acquisition.
 

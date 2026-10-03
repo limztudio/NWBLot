@@ -14,16 +14,19 @@ The directory launcher is discovered by the repository root, builds the target
 as needed, and forwards arguments after `--`:
 
 ```sh
-python -m launcher fbx-to-nwb -- --help
-python -m launcher fbx-to-nwb -- assets/models/crate.fbx
+python -m launcher fbx-to-nwb --build-only --config dbg
+python -m launcher fbx-to-nwb --working-directory . -- --help
+python -m launcher fbx-to-nwb --working-directory . -- assets/models/crate.fbx
 ```
 
-The second command starts the interactive workflow. For CI and asset pipelines,
+The build-only command prepares the utility without importing an asset. See
+[the launcher guide](../../launcher/README.md) for configuration and build options.
+The final command starts the interactive workflow. For CI and asset pipelines,
 pass `--yes` so that every unspecified option uses its default instead of
 prompting:
 
 ```sh
-python -m launcher fbx-to-nwb -- \
+python -m launcher fbx-to-nwb --working-directory . -- \
     assets/models/crate.fbx \
     --output assets/models/crate.nwb \
     --asset-type bunch \
@@ -40,7 +43,7 @@ replaced by `.nwb`. Existing primary output files are never replaced unless
 List the visible mesh instances in a scene before exporting one:
 
 ```sh
-python -m launcher fbx-to-nwb -- assets/characters/hero.fbx --list-meshes
+python -m launcher fbx-to-nwb --working-directory . -- assets/characters/hero.fbx --list-meshes
 ```
 
 `--mesh` (or `-m`) selects `all` instances by default. It also accepts `first`,
@@ -52,7 +55,7 @@ present.
 For example, this writes a single static mesh asset from the first instance:
 
 ```sh
-python -m launcher fbx-to-nwb -- \
+python -m launcher fbx-to-nwb --working-directory . -- \
     assets/props/crate.fbx \
     --output assets/meshes/crate.nwb \
     --asset-type mesh \
@@ -136,7 +139,7 @@ document.
 To make a canonical copy:
 
 ```sh
-python -m launcher fbx-to-nwb -- \
+python -m launcher fbx-to-nwb --working-directory . -- \
     assets/meshes/crate.nwb \
     --output assets/meshes/crate_canonical.nwb \
     --yes
@@ -145,7 +148,7 @@ python -m launcher fbx-to-nwb -- \
 To replace the input in place, explicitly acknowledge the overwrite:
 
 ```sh
-python -m launcher fbx-to-nwb -- \
+python -m launcher fbx-to-nwb --working-directory . -- \
     assets/meshes/crate.nwb \
     --yes --force
 ```

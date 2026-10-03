@@ -11,19 +11,30 @@ Run the complete pipeline through the repository launcher:
 python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
+To prepare the tools without running asset stages, use:
+
+```console
+python -m launcher build nwb_pipeline --config dbg -D NWB_BUILD_PIPELINE=ON
+```
+
+Both commands configure and build automatically. See [the launcher guide](../launcher/README.md)
+for architecture, configuration, custom build directories, and dry-run previews.
+
 The root discovers `pipeline/launch.py` as a normal runnable directory. Build
 and asset options use one argument list. The pipeline launcher configures when
 needed with `NWB_BUILD_PIPELINE=ON`, builds `nwb_pipeline`, and resolves all three
 tools from the selected CMake configuration. Configure, build, and pipeline
 failures retain their nonzero exit status at the root launcher.
 
-`dependency_computer` currently returns exactly its inputs, preserving order and
-duplicates. Root asset selection and dependency expansion are not implemented.
+`dependency_computer` preserves its inputs, including their order and duplicates.
+With `--include-skin-dependencies`, it also resolves textures referenced by selected
+UI skins and appends missing metadata providers. General dependency expansion is
+not implemented.
 It accepts multiple `--input` values, repeated `--input` options, or an
 `--input-list` file. Its `--output` is a UTF-8 file containing one input per line.
 
 ```console
-dependency_computer --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
+python -m launcher run nwb_dependency_computer --config dbg --working-directory . -- --input project/assets/samplers/a.nwb project/assets/samplers/b.nwb --output dependencies.list
 ```
 
 `asset_builder` compiles selected `.nwb` assets into standalone runtime binary
@@ -36,7 +47,7 @@ The builder only parses selected inputs; it does not expand their dependencies.
 Related assets required by metadata validation must be included in the inputs.
 
 ```console
-asset_builder --input-list dependencies.list --repo-root . --asset-root project/assets --output-directory built --configuration dbg
+python -m launcher run nwb_asset_builder --config dbg --working-directory . -- --input-list dependencies.list --repo-root . --asset-root project/assets --output-directory built --configuration dbg
 ```
 
 The output directory contains `.nwba` files and `assets.list`. Each artifact
@@ -65,8 +76,8 @@ the default volume implementation through `IFilesystem`. The staged publication
 preserves the previous volume if validation or packing fails.
 
 ```console
-asset_gatherer --input built-a built-b --output-directory runtime/res
-asset_gatherer --input-list built/assets.list --output-directory runtime/res
+python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- --input built-a built-b --output-directory runtime/res
+python -m launcher run nwb_asset_gatherer --config dbg --working-directory . -- --input-list built/assets.list --output-directory runtime/res
 ```
 
 `pipeline/launch.py` replaces the removed `resource_cooker` executable. The root
@@ -80,12 +91,11 @@ errors and failed stages stop the pipeline and preserve the published volume.
 python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
-Build and asset options share one argument list. The pipeline launcher can also
-run independently, and either help command returns without building:
+Build and asset options share one argument list. Use the root entry point for
+the workflow and help; help returns without building:
 
 ```console
 python -m launcher pipeline --help
-python pipeline/launch.py --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 The launcher reuses the repository's `--config`, `--arch`, `--domain`,
@@ -102,11 +112,12 @@ configuration and compilation; CMake asset commands use it to avoid starting a
 nested build. For example:
 
 ```console
-python pipeline/launch.py --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --skip-build --tool-directory __exec/windows/arm64/full/dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 `--dry-run` prints planned build and pipeline commands without writing manifests,
 artifacts, or volumes, or running tools. `--input` limits selected sources.
+Use `--include-skin-dependencies` to include textures referenced by selected skins.
 `--build-directory` chooses where to retain intermediate artifacts; otherwise
 they live in an output-specific directory under the asset cache.
 

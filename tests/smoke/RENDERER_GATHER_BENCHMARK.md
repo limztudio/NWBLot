@@ -16,12 +16,11 @@ The runtime case verifies eight resolved runtime renderers and eight owners. It 
 ## Build
 
 ```text
-cmake --preset windows-clang-arm64 -DNWB_BUILD_RENDERER_GATHER_BENCHMARK=ON
-cmake --build --preset windows-clang-arm64-opt --target nwb_renderer_gather_benchmark
+python -m launcher build nwb_renderer_gather_benchmark --configure-preset windows-clang-arm64 --config opt -D NWB_BUILD_RENDERER_GATHER_BENCHMARK=ON
 ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_renderer_gather_benchmark_analysis_unit$" -j1
 ```
 
-Use the debug build/test presets for debug qualification. The fixture is opt-in and no acquisition is registered in the default CTest run. The generator mirrors ordinary project assets into a private combined project root, then adds the benchmark identities and project-owned surface. It validates templates and the exact generated file set, rejecting stale files before writing. A separate short cache root and runtime keep its generated material dispatch separate from ordinary smoke assets.
+Use `--config dbg` for the launcher build and the debug CTest preset for debug qualification. The fixture is opt-in and no acquisition is registered in the default CTest run. The generator mirrors ordinary project assets into a private combined project root, then adds the benchmark identities and project-owned surface. It validates templates and the exact generated file set, rejecting stale files before writing. A separate short cache root and runtime keep its generated material dispatch separate from ordinary smoke assets.
 
 For this preset, the executable is `__exec/windows/arm64/full/opt/renderer_gather_benchmark.exe`; the private runtime is `__cmake/build/windows-clang-arm64/Testing/gather_benchmark_runtime/opt`. Generated input identity is recorded in the adjacent `gather_benchmark_generated/opt/generation_identity.json`.
 

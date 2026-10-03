@@ -40,9 +40,11 @@ best-effort fallback, because the resulting composed desktop capture would not b
 Build both benchmark targets and their cooked runtime assets. A debug or namesym build is simplest because timing scope names are readable. For an opt/final build, pass each generated `.namesym` sidecar to the runner.
 
 ```bash
-cmake --build <build-dir> --target \
+python -m launcher build \
   nwb_async_shadow_m4_sync_benchmark \
-  nwb_async_shadow_m4_async_benchmark
+  nwb_async_shadow_m4_async_benchmark nwb_logserver \
+  --configure-preset <configure-preset> --build-dir <build-dir> --config dbg \
+  -D NWB_BUILD_TESTS=ON
 
 python tests/ab/async_shadow_m4/run.py \
   --sync-executable <exec-dir>/async_shadow_m4_sync_benchmark \
@@ -53,7 +55,7 @@ python tests/ab/async_shadow_m4/run.py \
   --gpu-validation
 ```
 
-On Linux, run this from an active X11/Xwayland session. The runner sets `NWB_RENDER_UNFOCUSED=1` and freezes `NWB_STRESS_TEST_SPIN_ANGLE=0.6` for a repeatable capture. It returns exit code `77` when the target has no dedicated compute family; that is an environment skip after selecting the Graphics queue route.
+Choose a configure preset for the target platform and architecture, and use the same build directory and configuration for both the launcher build and runner paths. The build command configures a cold directory automatically and cooks the target runtime assets without starting either benchmark. On Linux, run this from an active X11/Xwayland session. The runner sets `NWB_RENDER_UNFOCUSED=1` and freezes `NWB_STRESS_TEST_SPIN_ANGLE=0.6` for a repeatable capture. It returns exit code `77` when the target has no dedicated compute family; that is an environment skip after selecting the Graphics queue route.
 
 The default gate needs at least six timing intervals, a median graph-owned `render.async_shadow` duration of at least `0.01 ms`, no more than `3%` median `render.frame` regression, no forbidden validation/ownership logs, and pixel differences inside the reported tolerance. Tune those thresholds explicitly on the command line for a device's known noise floor. `--report-only` always preserves the report while returning success for a failed rollout gate.
 

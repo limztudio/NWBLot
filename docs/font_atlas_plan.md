@@ -20,7 +20,7 @@ The current runtime `Font` and `FontAtlas` codecs remain FON1 and FTA1 version 1
 
 ## Builder and publication
 
-Build `nwb_font_builder` or use `python -m launcher font-builder`; see the [utility README](../utilities/font_builder/README.md) for executable examples. The utility admits a readable static SFNT face of at most 32 MiB, using face index zero, and retains every source glyph ID, including glyph zero and nondrawable whitespace. It refuses unsupported fonts, truncation, invalid bake options, and capacity exhaustion rather than silently dropping glyphs or changing settings.
+Build the utility with `python -m launcher build nwb_font_builder`, or build and run it with `python -m launcher font-builder`; see the [utility README](../utilities/font_builder/README.md) for executable examples. The utility admits a readable static SFNT face of at most 32 MiB, using face index zero, and retains every source glyph ID, including glyph zero and nondrawable whitespace. It refuses unsupported fonts, truncation, invalid bake options, and capacity exhaustion rather than silently dropping glyphs or changing settings.
 
 The pinned FreeType 2.14.3 SDF sources come from vendor revision `0a0221a1347e2f1e07c395263540026e9a0aa7c7`. `--renderer bitmap` is the default: it renders unhinted grayscale coverage and then a bitmap SDF. `--renderer outline` requests direct outline SDF and fails if the face cannot support that path. Default settings are 64 pixels per em, spread 8, square 1024-pixel groups, and at most eight groups. Shared bounds are 65,535 glyphs, group extents no greater than 2048², at most 128 MiB of RGBA pixels and 32 MiB of positioning tables, ppem 16..256, and spread 2..32.
 

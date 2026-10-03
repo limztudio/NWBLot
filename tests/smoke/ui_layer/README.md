@@ -6,7 +6,14 @@ The first two submitted snapshots are empty, exercising the cleared transparent 
 
 The CMake target cooks the engine asset root and this fixture's isolated `assets` root into `Testing/ui_layer_runtime/<configuration>/res`. The fixture root uses the existing `project/` virtual asset namespace; the Testbed cooker and the engine default skin are unchanged. The source files separate startup configuration, callback lifecycle, ECS world ownership, and paint scene construction. Capture orchestration and pixel acceptance remain separate Python files.
 
-After building `nwb_ui_layer_smoke`, run `ctest -C dbg -R nwb_ui_layer_ --output-on-failure` from the configured build directory. All standalone tests hold the shared `nwb_display` lock and request GPU validation:
+Build and run the UI tests from the repository root, selecting the matching preset for another platform or architecture:
+
+```powershell
+python -m launcher build nwb_ui_layer_smoke --configure-preset windows-clang-arm64 --config dbg
+ctest --preset windows-clang-arm64-dbg -R '^nwb_ui_layer_' --output-on-failure
+```
+
+All standalone tests hold the shared `nwb_display` lock and request GPU validation:
 
 - `nwb_ui_layer_framebuffer_smoke` uses the existing `FramebufferCapture` observer to copy a completed 960x540 acquired backbuffer after 60 presentation frames. It stores `ui_layer.bmp`, the collected launch log, and `pixels.json` under `Testing/smoke/<configuration>/ui_layer_framebuffer`.
 - `nwb_ui_layer_resize_smoke` uses the existing desktop capture helper to verify a rendered 960x540 client, resize it to 800x600, confirm the graphics resize marker, and capture the new client. It checks the same pixels before and after resize and stores both BMPs plus `pixels.json` under the corresponding `ui_layer_resize` directory.
@@ -80,7 +87,8 @@ Fixture-only F8 closes the ancestor. The Win32 driver sets the actual cursor, po
 Run both variants with:
 
 ```powershell
-ctest --test-dir __cmake/build/windows-clang-arm64-ui-retirement -C dbg -R '^nwb_ui_layer_text_area(_skin)?_smoke$' --output-on-failure
+python -m launcher build nwb_ui_layer_smoke --configure-preset windows-clang-arm64 --config dbg
+ctest --preset windows-clang-arm64-dbg -R '^nwb_ui_layer_text_area(_skin)?_smoke$' --output-on-failure
 ```
 
 The fixture qualifies LF/submit commands, preferred-column navigation, Page height, line/document edges, cross-line selections, clipboard CRLF conversion/history, caret reveal, policy/focus changes and resize. It does not inject synthetic preedit or claim live Korean IME qualification. The separate model/View/host unit suites cover composition geometry and lifetime fencing.

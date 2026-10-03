@@ -73,7 +73,7 @@ This foundation increment is part of M1. GPU composition, font/text, and initial
 
 Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 
-- `cmake --preset windows-clang-arm64` and a coordinated build of `nwb_ui_tests`, `nwb_os_tests`, `nwb_assets_ui_skin_tests`, `nwb_asset_builder`, and `testbed` passed.
+- The Windows ARM64 configuration and a coordinated build of `nwb_ui_tests`, `nwb_os_tests`, `nwb_assets_ui_skin_tests`, `nwb_asset_builder`, and `testbed` passed.
 - All 24 new tests passed: five CPU paint cases, ten clipboard protocol cases, and nine skin cook/load/validation cases. Native clipboard contents are not read or written by these tests.
 - The regular Testbed pipeline cooked/gathered 128 assets, including the default skin pair. An isolated pipeline invocation using the default skin directory also completed and produced a runtime `.vol`.
 - The existing window-capture smoke launched Testbed successfully and captured a 1280 x 900 scene with its existing ImGui overlay. This validates startup/rendering after OS borrowing integration; it is not evidence of the future custom GPU renderer or IME behavior.

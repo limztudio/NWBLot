@@ -3,11 +3,13 @@ front of an opaque stripe wall. A red transparent panel sits in front of the gla
 a blue transparent panel sits behind it. The fixed camera and unlit authored BXDF
 make the image comparison independent of lighting histories.
 
-Build or open the scene through the normal asset cooking flow:
+Build the scene and its cooked runtime assets through the repository launcher:
 
 ```powershell
-python tests/smoke/launch.py refraction --config dbg
+python -m launcher build nwb_refraction_smoke --configure-preset windows-clang-arm64 --config dbg
 ```
+
+For interactive inspection, use `python -m launcher smoke refraction --config dbg`.
 
 Run `nwb_refraction_capture_smoke` through CTest after building
 `nwb_refraction_smoke`. `nwb_refraction_gpudbg_capture_smoke` runs the same sequence
@@ -45,7 +47,7 @@ shading, a neutral backdrop, and refraction disabled. This makes overlapping and
 nested geometry easier to inspect.
 
 ```powershell
-python tests/smoke/launch.py refraction --config dbg --refraction-case torus
+python -m launcher smoke refraction --config dbg --refraction-case torus
 ```
 
 Generate all eighty-eight actual framebuffer captures and a portable offline gallery:
@@ -137,7 +139,7 @@ The caustic-sphere fixture also explicitly enables camera refraction while keepi
 its original glass material, light, receiver, and photon caustics. Launch it with:
 
 ```powershell
-python tests/smoke/launch.py caustic-sphere --config dbg
+python -m launcher smoke caustic-sphere --config dbg
 ```
 
 `NWB_REFRACTION_SMOKE_ENABLED=0` disables only camera refraction for a comparison;

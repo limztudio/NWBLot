@@ -71,7 +71,9 @@ Validation passed in optimized and debug builds: the ECS graphics suite, existin
 Reproduce the registered proof and its analysis tests with either configuration:
 
 ```text
+python -m launcher build nwb_reflection_smoke --configure-preset windows-clang-arm64 --config opt
 ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_reflection_temporal_omission_analysis_unit|nwb_reflection_temporal_omission_smoke)$" -j1
+python -m launcher build nwb_reflection_smoke --configure-preset windows-clang-arm64 --config dbg
 ctest --preset windows-clang-arm64-dbg --output-on-failure -R "^(nwb_reflection_temporal_omission_analysis_unit|nwb_reflection_temporal_omission_smoke)$" -j1
 ```
 
@@ -119,7 +121,7 @@ The runner reports `control_uncertain`: opaque and deferred-lighting intervals d
 
 Evidence: `__artifacts/reflection_optimization_steps/step4/`, including `opt_unit_native_junit.xml`, the preserved initial `opt_capture_junit.xml` failure, `opt_fixed_capture_junit.xml`, `dbg_junit.xml`, frozen arms, raw campaign logs and `benchmark_optical_clear/report.json`. Report SHA256 is `52f7b9d03518387336689a54f3cd45487f0a5743b2a3c92717aa7fa6da5f78d1`. Balanced power and 78% battery were reported before and after acquisition; frequency/thermal telemetry was unavailable. No build, cook or GPU test overlapped timing.
 
-Reproduce the surviving source-contract coverage with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_ecs_graphics_tests$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.
+Build `nwb_ecs_graphics_tests` with `python -m launcher build nwb_ecs_graphics_tests --configure-preset windows-clang-arm64 --config opt` (repeat with `--config dbg` for debug). Reproduce the surviving source-contract coverage with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_ecs_graphics_tests$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.
 
 ## CPU measurement prerequisite: correct asynchronous source-frame bounds
 
@@ -129,7 +131,7 @@ The performance owner now maintains the minimum and maximum source frames. Sampl
 
 A CPU regression drives the real overlap correlator with distinct durations and reversed frame completion. A native regression actually releases and reuses one of two timer-query slots, checks callback order 51 then 50, and verifies aggregate bounds 50..51 without duplicate publication. Both optimized and debug graphics-resource, telemetry and native descriptor-buffer suites passed; the existing main-thread frame timing lifecycle test also passed. The new native regression did not skip. Evidence is under `__artifacts/reflection_optimization_steps/step5/benchmark_support_fixed_opt_junit.xml`, `benchmark_support_dbg_junit.xml`, and `benchmark_support_dbg_full_ctest.log`; the reviewed proposal is under `timing_source_span/`.
 
-This is a measurement correctness fix, with no rendering speedup claim. Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests)$" -j1` and the debug preset.
+This is a measurement correctness fix, with no rendering speedup claim. Build both prerequisites with `python -m launcher build nwb_graphics_resource_tests nwb_telemetry_tests --configure-preset windows-clang-arm64 --config opt` (repeat with `--config dbg` for debug). Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests)$" -j1` and the debug preset.
 
 ## Compiler scaling prerequisite: linear resource-fragment ordering
 
@@ -143,7 +145,7 @@ The compiler-fixed, Step5-absent fixture completed all six functional workloads,
 
 Evidence is under `__artifacts/reflection_optimization_steps/compiler_fragment_order/` (`opt_unit_native_junit.xml`, `opt_unit_native_full.log`, `dbg_junit.xml`, `dbg_full.log`, `opt_captures_junit.xml`) and `cpu_gather_benchmark/` (`baseline_unique_stack_diagnostic`, frozen `compiler_baseline_v3`/`compiler_candidate_v4`, and `compiler_fixed_all_timing_pilot`). Initial invalid target invocation is retained in `opt_build.log`; the corrected target build passed. The proposal patch SHA256 is `b8b5f0c71260565c31f0978848de25773d2f0a3e4c3789176e304e55e4489dc4`.
 
-Reproduce ordering qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_gpu_task_tests$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.
+Build the ordering suite with `python -m launcher build nwb_gpu_task_tests --configure-preset windows-clang-arm64 --config opt` (repeat with `--config dbg` for debug). Reproduce ordering qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_gpu_task_tests$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.
 
 ## CPU gathering measurement support
 

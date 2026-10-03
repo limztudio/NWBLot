@@ -40,9 +40,9 @@ struct OpaqueMaterialPassGraphSnapshot{
     DrawItemVector csgReceiverSurfaceComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
-    CsgFrameWorkRegion csgWorkRegion;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
+    CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
     explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)

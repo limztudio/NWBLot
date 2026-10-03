@@ -29,15 +29,16 @@ struct EditBoxOptions{
 };
 
 // The host keeps this value alive through the matching endPanel/endWindow; paint and GPU snapshots own their text.
+// Members are ordered by alignment (8-byte, then 4-byte, then 1-byte) to minimize padding.
 struct EditBoxState{
-    EditBoxPlacement placement;
-    f32 scroll = 0.0f;
     f64 caretElapsed = 0.0;
     u64 modelGeneration = 0u;
     u64 revision = 0u;
     u64 selectionGeneration = 0u;
     usize anchor = 0u;
     usize caret = 0u;
+    EditBoxPlacement placement;
+    f32 scroll = 0.0f;
     bool focused = false;
 };
 

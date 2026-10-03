@@ -59,38 +59,39 @@ struct InputEvent{
 };
 
 // Rectangle and clip use the same logical coordinates as painting; publication order provides the default focus traversal order.
+// Members are ordered by alignment (8-byte, then 4-byte, then 1-byte) to minimize padding.
 struct HitTarget{
     WidgetId id;
+    u64 declarationGeneration = 1u;
+    PopupToken popup;
+    ControlToken control;
+    WidgetId owner;
+    u64 ownerDeclarationGeneration = 0u;
+    u64 value = 0u;
+    f64 scrollStep = 0.0;
+    u64 pageRows = 1u;
+    f64 gestureMaximum = 0.0;
+    WidgetId keyboardOwner;
+    u64 keyboardOwnerDeclarationGeneration = 0u;
+    ControlToken keyboardControl;
+    f64 scrollStepX = 0.0;
+    f64 gestureMaximumX = 0.0;
     Rect rectangle;
     Rect clip;
-    u64 declarationGeneration = 1u;
+    // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
+    Rect gestureReference{};
     u32 paintOrder = 0u;
+    u32 layer = 0u;
     bool enabled = true;
     bool focusable = false;
     bool activatable = false;
     bool pointerGesture = false;
     bool textEditable = false;
-    // Both zero dimensions omit the reference; a supplied reference has two positive dimensions.
-    Rect gestureReference{};
-    PopupToken popup;
-    u32 layer = 0u;
-    ControlToken control;
-    WidgetId owner;
-    u64 ownerDeclarationGeneration = 0u;
-    u64 value = 0u;
     bool navigable = false;
     bool scrollable = false;
-    f64 scrollStep = 0.0;
-    u64 pageRows = 1u;
-    f64 gestureMaximum = 0.0;
     bool focusOnCommit = false;
     // A focused editor may borrow vertical navigation and an Enter intention from another accepted control lifetime.
-    WidgetId keyboardOwner;
-    u64 keyboardOwnerDeclarationGeneration = 0u;
-    ControlToken keyboardControl;
     bool contextMenu = false;
-    f64 scrollStepX = 0.0;
-    f64 gestureMaximumX = 0.0;
     bool horizontalNavigation = false;
 };
 

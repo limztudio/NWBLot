@@ -235,13 +235,13 @@ private:
     ControlToken m_focusControl;
     u64 m_focusDeclaration = 0u;
     u64 m_captureDeclaration = 0u;
+    ContextMenuOwner m_secondaryOwner;
     Point m_pointer;
     bool m_pointerKnown = false;
     bool m_primaryDown = false;
     bool m_pointerSequenceConsumed = false;
     bool m_secondaryDown = false;
     bool m_secondarySequenceConsumed = false;
-    ContextMenuOwner m_secondaryOwner;
     bool m_windowFocused = true;
 };
 

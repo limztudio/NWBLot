@@ -45,7 +45,6 @@ static constexpr AStringView s_AddressWField = "address_w";
 static constexpr AStringView s_ReductionField = "reduction";
 static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
-static constexpr AStringView s_BorderColorField = "border_color";
 
 static constexpr Core::Assets::NamedEnumCase<bool> s_FilterCases[] = {
     { "nearest", false },
@@ -81,8 +80,6 @@ static constexpr Core::Assets::NamedEnumCase<Core::SamplerAddressMode::Enum> s_A
 static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTypeCases[] = {
     { "standard", Core::SamplerReductionType::Standard },
     { "comparison", Core::SamplerReductionType::Comparison },
-    { "minimum", Core::SamplerReductionType::Minimum },
-    { "maximum", Core::SamplerReductionType::Maximum },
 };
 
 [[nodiscard]] static bool ParseAddressMode(
@@ -118,39 +115,6 @@ static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s
         outReductionType,
         "has an unsupported reduction type"
     );
-}
-
-[[nodiscard]] static bool ParseBorderColor(
-    const Path& nwbFilePath,
-    const Value& asset,
-    Core::Color& outColor
-){
-    const Value* const field = asset.findField(s_BorderColorField);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_BorderColorField)
-        );
-        return false;
-    }
-    if(!field->isList() || field->asList().size() != 4u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a four-component numeric list")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_BorderColorField)
-        );
-        return false;
-    }
-
-    f32 components[4u] = {};
-    const auto& values = field->asList();
-    for(usize index = 0u; index < LengthOf(components); ++index){
-        if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, values[index], s_DiagnosticPrefix, s_BorderColorField, components[index]))
-            return false;
-    }
-    outColor = Core::Color(components[0u], components[1u], components[2u], components[3u]);
-    return true;
 }
 
 
@@ -221,7 +185,6 @@ bool ParseSamplerCookMetadata(
             s_ReductionField,
             s_MaxAnisotropyField,
             s_MipBiasField,
-            s_BorderColorField,
         }
     ))
         return false;
@@ -230,6 +193,7 @@ bool ParseSamplerCookMetadata(
         return false;
 
     Core::SamplerDesc description;
+    description.borderColor = Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
     if(
         !ParseFilter(nwbFilePath, asset, s_MinFilterField, description.minFilter)
         || !ParseFilter(nwbFilePath, asset, s_MagFilterField, description.magFilter)
@@ -240,7 +204,6 @@ bool ParseSamplerCookMetadata(
         || !ParseReductionType(nwbFilePath, asset, description.reductionType)
         || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MaxAnisotropyField, true, description.maxAnisotropy)
         || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MipBiasField, true, description.mipBias)
-        || !ParseBorderColor(nwbFilePath, asset, description.borderColor)
     )
         return false;
     if(!IsValidSamplerDescription(description)){

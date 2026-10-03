@@ -183,7 +183,6 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
         return false;
     if(!outEntry.stage.assign(MaterialShaderStageNames::s_ComputeArchiveStageText))
         return false;
-    outEntry.targetProfile = sourceEntry.targetProfile;
 
     return SetShaderImplicitDefine(
         outEntry,

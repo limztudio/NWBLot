@@ -166,7 +166,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
         ASSERT_TRUE(EnsureDirectories(directory, error));
         ASSERT_TRUE(WriteFixtureFile(directory / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "include.slangi", "static const uint fixtureValue = 1;\r\n"));
-        ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "shader asset;\r\nasset.stage = \"cs\";\r\nasset.target_profile = \"spirv_1_5\";\r\nasset.entry_point = \"main\";\r\n"));
+        ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "shader asset;\r\nasset.stage = \"cs\";\r\nasset.entry_point = \"main\";\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "include.nwb", "include asset;\r\nasset.defines = { \"FIXTURE_OPTION\": [\"0\", \"1\"] };\r\n"));
         for(const AStringView fileName : { AStringView("shader.nwb"), AStringView("include.nwb") }){
             const NWB::Path path = directory / fileName;
@@ -498,8 +498,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         "asset.address_v = \"wrap\";\r\n"
         "asset.address_w = \"wrap\";\r\n"
         "asset.reduction = \"standard\";\r\n"
-        "asset.max_anisotropy = 1.0;\r\n"
-        "asset.border_color = [0.0, 0.0, 0.0, 0.0];\r\n";
+        "asset.max_anisotropy = 1.0;\r\n";
     for(usize index = 0u; index < s_SamplerCount; ++index){
         const usize identity = (index * 37u) % s_SamplerCount;
         const AssetString filename = StringFormat(fixtureArena, "sampler_{:03}.nwb", identity);

@@ -219987,7 +219987,6 @@ model.skeletons = {
 
 model.skinned_meshes = {
     "mesh": {
-        "mesh": mesh,
         "skin": skin,
         "skeleton": "skeleton",
     },

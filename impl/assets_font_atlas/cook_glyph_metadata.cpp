@@ -49,29 +49,44 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     return false;
 }
 
-[[nodiscard]] static bool ReadGlyph(const Path& path, const Value& map, const u32 glyphId, FontAtlasGlyph& glyph){
+[[nodiscard]] static bool ReadGlyph(const Path& path, const Value& map, const u32 glyphId, const f32 unitsPerPixel, FontAtlasGlyph& glyph){
+    if(!Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix))
+        return false;
+    const bool hasBitmap = map.findField("width") != nullptr;
+    if(!Core::Assets::ValidateMetadataAssetFields(
+        path, map, s_DiagnosticPrefix,
+        [hasBitmap](const AStringView field){
+            return
+                field == "advance_units"
+                || (hasBitmap && (field == "group" || field == "channel" || field == "x" || field == "y"
+                    || field == "width" || field == "height" || field == "plane_left" || field == "plane_top"))
+            ;
+        }
+    ))
+        return false;
+    if(!Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "advance_units", true, glyph.advanceUnits))
+        return false;
+    glyph.glyphId = glyphId;
+    if(!hasBitmap)
+        return true;
     if(
-        !Core::Assets::CheckMetadataAssetMap(path, map, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(
-            path, map, s_DiagnosticPrefix,
-            { "group", "channel", "x", "y", "width", "height", "plane_left", "plane_top", "plane_right",
-                "plane_bottom", "advance_units", "drawable" }
-        )
-        || !ReadU32(path, map, "group", s_FontAtlasMaxGroupCount - 1u, glyph.group)
+        !ReadU32(path, map, "group", s_FontAtlasMaxGroupCount - 1u, glyph.group)
         || !ReadU32(path, map, "channel", 3u, glyph.channel)
         || !ReadU32(path, map, "x", s_FontAtlasMaxExtent, glyph.x)
         || !ReadU32(path, map, "y", s_FontAtlasMaxExtent, glyph.y)
         || !ReadU32(path, map, "width", s_FontAtlasMaxExtent, glyph.width)
         || !ReadU32(path, map, "height", s_FontAtlasMaxExtent, glyph.height)
-        || !ReadU32(path, map, "drawable", 1u, glyph.drawable)
         || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_left", true, glyph.planeLeft)
         || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_top", true, glyph.planeTop)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_right", true, glyph.planeRight)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "plane_bottom", true, glyph.planeBottom)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, map, s_DiagnosticPrefix, "advance_units", true, glyph.advanceUnits)
     )
         return false;
-    glyph.glyphId = glyphId;
+    if(glyph.width == 0u || glyph.height == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
+        return false;
+    }
+    glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width) * unitsPerPixel;
+    glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height) * unitsPerPixel;
+    glyph.drawable = 1u;
     return true;
 }
 
@@ -99,9 +114,10 @@ bool ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(outPayload.glyphs.get_allocator().arena());
     candidate.reserve(outPayload.sourceGlyphCount);
+    const f32 unitsPerPixel = static_cast<f32>(outPayload.unitsPerEm) / static_cast<f32>(outPayload.bakePpem);
     for(u32 index = 0u; index < outPayload.sourceGlyphCount; ++index){
         FontAtlasGlyph glyph;
-        if(!ReadGlyph(nwbFilePath, glyphs->asList()[index], index, glyph))
+        if(!ReadGlyph(nwbFilePath, glyphs->asList()[index], index, unitsPerPixel, glyph))
             return false;
         candidate.push_back(glyph);
     }

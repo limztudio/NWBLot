@@ -100,7 +100,7 @@ public:
 private:
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);
     [[nodiscard]] bool ensureSourceLoaded(
-        const Core::Assets::AssetRef<Mesh>& meshAsset,
+        Core::Assets::AssetRef<Mesh>& meshAsset,
         const Core::Assets::AssetRef<Skin>& skinAsset,
         MeshSkinningSource*& outSource
     );

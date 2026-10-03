@@ -140,7 +140,6 @@ def write_sampler(path: pathlib.Path, filtering: str) -> None:
         'asset.reduction = "standard";\n'
         "asset.max_anisotropy = 1.0;\n"
         "asset.mip_bias = 0.0;\n"
-        "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n"
     )
     path.write_bytes(metadata.replace(LIT_N, "\r\n").encode(LIT_UTF_8))
 

@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_BINDLESS_TLAS
+#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
+#endif
+#define NWB_BINDLESS_TLAS 1
+
 // Full-res HW opaque trace: per-pixel binary any-hit mask via nwbShadowRqLightVisible. Transparent color comes from
 // the software traversal (hybrid split: HW/SW disagree at grazing chords).
 

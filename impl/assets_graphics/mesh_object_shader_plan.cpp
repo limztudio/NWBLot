@@ -40,26 +40,27 @@ bool AppendMeshObjectShaderEntries(
     ScratchArena& scratchArena
 ){
     const ShaderCook::ShaderEntry& mesh = meshEntry.entry;
-    if(mesh.meshObjectVertexSource.empty())
-        return true;
-
     // The fixed decoder and this raster stage share an engine ABI, independent of authored material defines.
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
     static constexpr AStringView s_ObjectVertexSourceName = "object_vs.slang";
     static constexpr AStringView s_VertexStageText = "vs";
-    static constexpr AStringView s_Spirv15TargetProfile = MaterialShaderStageNames::s_Spirv15TargetProfileText;
     static constexpr AStringView s_ImplPathToken = "impl";
     static constexpr AStringView s_AssetsPathToken = "assets";
     static constexpr AStringView s_GraphicsPathToken = "graphics";
     static constexpr AStringView s_MeshPathToken = "mesh";
     static constexpr AStringView s_SharedMeshSourceFile = "shared_ms.slang";
+    if(mesh.name != s_SharedMeshProgramName && !TStringView(meshEntry.sourcePath.native()).ends_with(NWB_TEXT("shared_ms.slang")))
+        return true;
+
     const Path expectedSource = resolvedPaths.repoRoot / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
+    const bool hasFixedSource = meshEntry.sourcePath.lexically_normal() == expectedSource.lexically_normal();
+    if(mesh.name != s_SharedMeshProgramName && !hasFixedSource)
+        return true;
     if(
         mesh.name != s_SharedMeshProgramName
         || mesh.archiveStage.view() != MaterialShaderStageNames::s_MeshArchiveStageText
         || mesh.stage.view() != MaterialShaderStageNames::s_MeshArchiveStageText
-        || meshEntry.sourcePath.lexically_normal() != expectedSource.lexically_normal()
-        || mesh.meshObjectVertexSource != s_ObjectVertexSourceName
+        || !hasFixedSource
         || !mesh.emitMeshComputeShadow
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object geometry stages require the fixed engine shared mesh program"));
@@ -69,8 +70,7 @@ bool AppendMeshObjectShaderEntries(
     PreparedShaderEntry prepared(cookArena);
     prepared.entry.name = mesh.name;
     if(!prepared.entry.stage.assign(s_VertexStageText)
-        || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::MeshObjectVertexArchiveStageText())
-        || !prepared.entry.targetProfile.assign(s_Spirv15TargetProfile))
+        || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::MeshObjectVertexArchiveStageText()))
         return false;
     prepared.entry.emitMeshComputeShadow = false;
     prepared.sourcePath = meshEntry.sourcePath.parent_path() / s_ObjectVertexSourceName;

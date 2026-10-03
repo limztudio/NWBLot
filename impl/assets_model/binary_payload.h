@@ -24,7 +24,7 @@ namespace ModelBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_ModelMagic = 0x4D444C31u; // MDL1
+inline constexpr u32 s_ModelMagic = 0x4D444C32u; // MDL2
 
 struct ModelHeaderBinary{
     u32 magic = s_ModelMagic;
@@ -57,7 +57,6 @@ static_assert(IsTriviallyCopyable_V<ModelStaticMeshObjectBinary>, "ModelStaticMe
 
 struct ModelSkinnedMeshObjectBinary{
     NameHash nameHash = {};
-    NameHash meshNameHash = {};
     NameHash skinNameHash = {};
     NameHash materialNameHash = {};
     NameHash skeletonObjectNameHash = {};

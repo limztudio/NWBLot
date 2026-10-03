@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_BINDLESS_TLAS
+#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
+#endif
+#define NWB_BINDLESS_TLAS 1
+
 // Hardware and software traces share the receiver grid and cone-jittered sample conventions.
 
 

@@ -25,13 +25,15 @@ void BuildFontMetadata(const Impl::FontAtlasPayload& payload, MetadataString& ou
     StringAppendFormat(outText, "atlas.line_gap_units = {:#.9g};\r\n", payload.lineGapUnits);
     outText += "atlas.glyphs = [\r\n";
     for(const auto& glyph : payload.glyphs){
+        if(glyph.drawable == 0u){
+            StringAppendFormat(outText, "    {{ \"advance_units\": {:#.9g} }},\r\n", glyph.advanceUnits);
+            continue;
+        }
         StringAppendFormat(outText,
             "    {{ \"group\": {}, \"channel\": {}, \"x\": {}, \"y\": {}, \"width\": {}, \"height\": {}, "
-            "\"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"plane_right\": {:#.9g}, \"plane_bottom\": {:#.9g}, "
-            "\"advance_units\": {:#.9g}, \"drawable\": {} }},\r\n",
+            "\"plane_left\": {:#.9g}, \"plane_top\": {:#.9g}, \"advance_units\": {:#.9g} }},\r\n",
             glyph.group, glyph.channel, glyph.x, glyph.y, glyph.width, glyph.height,
-            glyph.planeLeft, glyph.planeTop, glyph.planeRight, glyph.planeBottom, glyph.advanceUnits,
-            glyph.drawable
+            glyph.planeLeft, glyph.planeTop, glyph.advanceUnits
         );
     }
     outText += "];\r\n\r\nasset_bunch bunch = [face, atlas];\r\n";

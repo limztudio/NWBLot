@@ -483,9 +483,6 @@ void WriteModelAssetBody(
 
         file << variableName << ".skinned_meshes = {\n";
         file << "    \"mesh\": {\n";
-        file << "        \"mesh\": ";
-        WriteReferenceValue(file, meshName, quoteAssetReferences);
-        file << ",\n";
         file << "        \"skin\": ";
         WriteReferenceValue(file, *skinName, quoteAssetReferences);
         file << ",\n";

@@ -493,7 +493,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(!m_shaderSystem.loadShader(
         m_rayTracingState.m_surfelTraceHwShader,
         AssetsGraphicsGi::s_SurfelTraceHwShaderName,
-        Core::ShaderArchive::s_BindlessTlasVariant,
+        Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_SurfelTraceHw"
     )){

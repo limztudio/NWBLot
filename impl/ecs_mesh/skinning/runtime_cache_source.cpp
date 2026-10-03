@@ -262,8 +262,8 @@ template<typename MeshT, typename SkinStreamT>
 
 
 bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component){
-    const Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(component.mesh.name(), component.skin.name());
-    if(!sourceName){
+    Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(component.mesh.name(), component.skin.name());
+    if(!sourceName && !component.skin.valid()){
         releaseRuntimeMesh(entity);
         component.runtimeMesh.reset();
         return false;
@@ -297,6 +297,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     if(!sourcePtr)
         return false;
     MeshSkinningSource& source = *sourcePtr;
+    sourceName = source.sourceName;
     const Mesh* mesh = source.mesh();
     const Skin* skin = source.skin();
     if(!mesh || !skin){
@@ -345,53 +346,72 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
 }
 
 bool MeshSkinningRuntimeCache::ensureSourceLoaded(
-    const Core::Assets::AssetRef<Mesh>& meshAsset,
+    Core::Assets::AssetRef<Mesh>& meshAsset,
     const Core::Assets::AssetRef<Skin>& skinAsset,
-    MeshSkinningSource*& outSource
-){
+    MeshSkinningSource*& outSource){
     outSource = nullptr;
+    if(!skinAsset.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
+        return false;
+    }
 
-    const Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(meshAsset.name(), skinAsset.name());
+    if(meshAsset.name()){
+        const Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(meshAsset.name(), skinAsset.name());
+        const auto foundSource = m_sources.find(sourceName);
+        if(foundSource != m_sources.end()){
+            MeshSkinningSource& cachedSource = foundSource.value();
+            if(!cachedSource.mesh() || !cachedSource.skin())
+                return false;
+            outSource = &cachedSource;
+            return true;
+        }
+    }
+    else{
+        // Only new bindings without a mesh scan the existing sources; later frames use the composite key.
+        for(auto it = m_sources.begin(); it != m_sources.end(); ++it){
+            MeshSkinningSource& cachedSource = it.value();
+            const Skin* cachedSkin = cachedSource.skin();
+            if(!cachedSkin || cachedSkin->virtualPath() != skinAsset.name() || !cachedSource.mesh())
+                continue;
+            meshAsset = cachedSkin->mesh();
+            outSource = &cachedSource;
+            return true;
+        }
+    }
+
+    UniquePtr<Core::Assets::IAsset> loadedSkinAsset;
+    const Skin* loadedSkin = m_assetManager.loadTypedSync<Skin>(
+        skinAsset.name(),
+        loadedSkinAsset,
+        NWB_TEXT("MeshSkinningRuntimeCache"),
+        "skin"
+    );
+    if(!loadedSkin)
+        return false;
+
+    const Core::Assets::AssetRef<Mesh> resolvedMesh = meshAsset.name() ? meshAsset : loadedSkin->mesh();
+    if(loadedSkin->mesh().name() != resolvedMesh.name()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skin '{}' targets a different mesh than '{}'")
+            , StringConvert(skinAsset.name().resolvedText())
+            , StringConvert(resolvedMesh.name().resolvedText())
+        );
+        return false;
+    }
+    const Name sourceName = __hidden_runtime_cache_source::BuildBindingSourceName(resolvedMesh.name(), skinAsset.name());
     if(!sourceName){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
         return false;
     }
 
-    const auto foundSource = m_sources.find(sourceName);
-    if(foundSource != m_sources.end()){
-        outSource = &foundSource.value();
-        MeshSkinningSource& cachedSource = *outSource;
-        return cachedSource.mesh() != nullptr && cachedSource.skin() != nullptr;
-    }
-
     UniquePtr<Core::Assets::IAsset> loadedMeshAsset;
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
-        meshAsset.name(),
+        resolvedMesh.name(),
         loadedMeshAsset,
         NWB_TEXT("MeshSkinningRuntimeCache"),
         Mesh::s_AssetTypeText
     );
     if(!loadedMesh)
         return false;
-
-    UniquePtr<Core::Assets::IAsset> loadedSkinAsset;
-    const Skin* preloadedSkin = m_assetManager.loadTypedSync<Skin>(
-        skinAsset.name(),
-        loadedSkinAsset,
-        NWB_TEXT("MeshSkinningRuntimeCache"),
-        "skin"
-    );
-    if(!preloadedSkin)
-        return false;
-
-    const Skin* loadedSkin = preloadedSkin;
-    if(loadedSkin->mesh().name() != meshAsset.name()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skin '{}' targets a different mesh than '{}'")
-            , StringConvert(skinAsset.name().resolvedText())
-            , StringConvert(meshAsset.name().resolvedText())
-        );
-        return false;
-    }
 
     MeshSkinningSource source;
     source.sourceName = sourceName;
@@ -400,9 +420,12 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
 
     auto result = m_sources.try_emplace(sourceName, Move(source));
     auto it = result.first;
-    outSource = &it.value();
-    MeshSkinningSource& storedSource = *outSource;
-    return storedSource.mesh() != nullptr && storedSource.skin() != nullptr;
+    MeshSkinningSource& storedSource = it.value();
+    if(!storedSource.mesh() || !storedSource.skin())
+        return false;
+    meshAsset = resolvedMesh;
+    outSource = &storedSource;
+    return true;
 }
 
 

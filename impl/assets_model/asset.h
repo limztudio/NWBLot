@@ -44,7 +44,6 @@ struct ModelStaticMeshObject{
 
 struct ModelSkinnedMeshObject{
     Name name = NAME_NONE;
-    Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skin> skin;
     Core::Assets::AssetRef<Material> material;
     Name skeletonObject = NAME_NONE;

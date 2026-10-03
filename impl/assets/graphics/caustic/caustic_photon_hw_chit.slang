@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_BINDLESS_TLAS
+#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
+#endif
+#define NWB_BINDLESS_TLAS 1
+
 #include "caustic_hw_common.slangi"
 
 

@@ -161,7 +161,8 @@ class FontBuilderCli(unittest.TestCase):
         self.assertIn("atlas.font = face;", text)
         self.assertIn("asset_bunch bunch = [face, atlas];", text)
         for obsolete in ("schema_version", "sha256", "source", ".atlas", "face_index",
-                         "units_per_em", "glyph_count", "guard_texels", "atlas.groups"):
+                         "units_per_em", "glyph_count", "guard_texels", "atlas.groups",
+                         "plane_right", "plane_bottom", "drawable"):
             self.assertNotIn(obsolete, text)
         payloads = self.decode_package(output) if payloads is None else payloads
         atlas = read_atlas(payloads["atlas.bin"])
@@ -175,10 +176,19 @@ class FontBuilderCli(unittest.TestCase):
         self.assertEqual(len(atlas["glyphs"]), struct.unpack_from(">H", source_tables["maxp"], 4)[0])
         metadata_glyphs = self.metadata_list(text, "glyphs")
         self.assertEqual(len(metadata_glyphs), len(atlas["glyphs"]))
-        float_fields = ("plane_left", "plane_top", "plane_right", "plane_bottom", "advance_units")
+        float_fields = ("plane_left", "plane_top", "advance_units")
+        units_per_pixel = struct.unpack("<f", struct.pack("<f", atlas["units_per_em"] / atlas["ppem"]))[0]
         for index, (declared, decoded) in enumerate(zip(metadata_glyphs, atlas["glyphs"])):
             self.assertEqual(decoded["id"], index)
-            self.assertEqual(set(declared), set(decoded) - {"id"})
+            self.assertEqual(set(declared), (set(decoded) - {"id", "drawable", "plane_right", "plane_bottom"})
+                             if decoded["drawable"] else {"advance_units"})
+            for origin, extent, end in (("plane_left", "width", "plane_right"),
+                                        ("plane_top", "height", "plane_bottom")):
+                size = struct.unpack("<f", struct.pack("<f", decoded[extent] * units_per_pixel))[0]
+                # ARM can fuse the multiply/add; either rounding retains the same bitmap plane.
+                expected = (struct.pack("<f", decoded[origin] + size),
+                            struct.pack("<f", decoded[origin] + decoded[extent] * units_per_pixel))
+                self.assertIn(struct.pack("<f", decoded[end]), expected)
             for key in declared:
                 if key in float_fields:
                     self.assertEqual(struct.pack("<f", declared[key]), struct.pack("<f", decoded[key]))
@@ -265,7 +275,7 @@ class FontBuilderCli(unittest.TestCase):
 
     def test_non_power_of_two_capacity_preserves_compact_payload_on_repeat(self):
         output = self.root / "non_power_of_two" / "body.nwb"
-        options = ("--ppem", "32", "--extent", "1023")
+        options = ("--ppem", "33", "--extent", "1023")
         self.invoke(self.latin, output, *options)
         payloads = self.decode_package(output)
         atlas = self.assert_pair(output, payloads)
@@ -350,7 +360,11 @@ class FontBuilderCli(unittest.TestCase):
                      original_text + "\natlas.guard_texels = 1;\n",
                      original_text + '\natlas.groups = [{ "width": 1, "height": 1, "channels": 4 }];\n',
                      original_text.replace('"group":', '"id": 0, "group":', 1),
-                     original_text.replace('"drawable": 1', '"drawable": 2', 1)):
+                     original_text.replace('"group":', '"drawable": 1, "group":', 1),
+                     original_text.replace('"group":', '"plane_right": 0, "group":', 1),
+                     original_text.replace('"group":', '"plane_bottom": 0, "group":', 1),
+                     re.sub(r'"height": \d+', '"height": 0', original_text, count=1),
+                     original_text.replace('{ "advance_units":', '{ "x": 0, "advance_units":', 1)):
             output.write_text(text, encoding="utf-8")
             self.assertFalse(self.decode_package(output, success=False))
 

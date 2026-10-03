@@ -150,12 +150,10 @@ model.skeletons = {
 
 model.skinned_meshes = {
     "body": {
-        "mesh": mesh,
         "skin": skin,
         "skeleton": "rig",
     },
     "detail": {
-        "mesh": mesh,
         "skin": skin,
         "skeleton": "rig",
     },
@@ -245,7 +243,6 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     if(model.skeletonObjects().size() != 1u)
         return;
 
-    const Name expectedMesh("project/characters/model_fixture/mesh");
     const Name expectedSkin("project/characters/model_fixture/skin");
     const Name expectedSkeleton("project/characters/model_fixture/skeleton");
     EXPECT_EQ(model.skeletonObjects()[0].name, Name(s_RIG));
@@ -256,12 +253,10 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     EXPECT_NE(body, nullptr);
     EXPECT_NE(detail, nullptr);
     if(body){
-        EXPECT_EQ(body->mesh.name(), expectedMesh);
         EXPECT_EQ(body->skin.name(), expectedSkin);
         EXPECT_EQ(body->skeletonObject, Name(s_RIG));
     }
     if(detail){
-        EXPECT_EQ(detail->mesh.name(), expectedMesh);
         EXPECT_EQ(detail->skin.name(), expectedSkin);
         EXPECT_EQ(detail->skeletonObject, Name(s_RIG));
     }

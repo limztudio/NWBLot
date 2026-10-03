@@ -358,6 +358,12 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
     const auto& definesMap = definesVal->asMap();
     outDefineValues.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
+        if(AStringView(key.data(), key.size()) == "NWB_BINDLESS_TLAS"){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source")
+                , PathToString<tchar>(nwbFilePath)
+            );
+            return false;
+        }
         CookString defineName(key.data(), key.size(), arena);
         if(defineName.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
@@ -452,31 +458,23 @@ bool ShaderCook::parseShaderMeta(
     ))
         return false;
 
+    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "stage", false, outEntry.stage))
+        return false;
+    outEntry.archiveStage = outEntry.stage;
     if(!Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
         "Shader meta",
-        { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow", "mesh_object_vertex" }
+        [isMesh = outEntry.stage.view() == "mesh"](const AStringView field){
+            return
+                field == "stage" || field == "ray_query" || field == "optimization_level" || field == "entry_point"
+                || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow")
+            ;
+        }
     ))
         return false;
-    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "stage", false, outEntry.stage))
+    if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "ray_query", outEntry.rayQuery))
         return false;
-    outEntry.archiveStage = outEntry.stage;
-    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "target_profile", false, outEntry.targetProfile))
-        return false;
-    AStringView slangTargetProfile;
-    AStringView targetProfileCapability;
-    if(!SlangShaderCompiler::tryMapTargetProfileToSlangArguments(
-        outEntry.targetProfile.view(),
-        slangTargetProfile,
-        targetProfileCapability
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported target_profile '{}'"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(outEntry.targetProfile.view())
-        );
-        return false;
-    }
     AStringView optimizationLevelText;
     bool optimizationLevelPresent = false;
     if(!Assets::ReadMetadataStringField(
@@ -513,18 +511,6 @@ bool ShaderCook::parseShaderMeta(
     if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
         return false;
 
-    AStringView objectVertexSource;
-    bool objectVertexPresent = false;
-    if(!Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "mesh_object_vertex", false, objectVertexSource, &objectVertexPresent))
-        return false;
-    if(objectVertexPresent){
-        if(objectVertexSource.empty() || outEntry.stage.view() != "mesh"){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': object geometry requires a nonempty vertex source on a mesh shader"), PathToString<tchar>(nwbFilePath));
-            return false;
-        }
-        outEntry.meshObjectVertexSource.assign(objectVertexSource.data(), objectVertexSource.size());
-    }
-
     if(const auto* includeRootsVal = asset.findField("include_roots")){
         if(!includeRootsVal->copyStringList(outEntry.includeRoots)){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
@@ -544,10 +530,6 @@ bool ShaderCook::parseShaderMeta(
 
     if(outEntry.stage.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
-    if(outEntry.targetProfile.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': target_profile is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 

@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_BINDLESS_TLAS
+#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
+#endif
+#define NWB_BINDLESS_TLAS 1
+
 // Surfel trace with the hardware RayQuery backend. The shared surfel body is in surfel_trace_common.slangi.
 
 

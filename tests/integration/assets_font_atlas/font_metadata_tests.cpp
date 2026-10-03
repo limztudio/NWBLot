@@ -344,21 +344,24 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsPreservePriorAtlas){
     EXPECT_EQ(obsoleteId.field("glyphs").asList()[0u].findField("id"), nullptr);
     obsoleteId.field("glyphs").asList()[0u].field("id").setInteger(0);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsoleteId, entry, scratchArena));
-    static constexpr AStringView s_IntegerFields[] = { "group", "channel", "x", "y", "width", "height", "drawable" };
+    static constexpr AStringView s_IntegerFields[] = { "group", "channel", "x", "y", "width", "height" };
     for(const AStringView field : s_IntegerFields){
         Core::Metascript::Value wrong(metadata);
         wrong.field("glyphs").asList()[0u].field(field).setInteger(s_FontAtlasMaxExtent + 1u);
         EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, entry, scratchArena));
     }
-    static constexpr AStringView s_FloatFields[] = { "plane_left", "plane_top", "plane_right", "plane_bottom", "advance_units" };
+    static constexpr AStringView s_FloatFields[] = { "plane_left", "plane_top", "advance_units" };
     for(const AStringView field : s_FloatFields){
         Core::Metascript::Value wrong(metadata);
         wrong.field("glyphs").asList()[0u].field(field).setDouble(Limit<f64>::s_Infinity);
         EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrong, entry, scratchArena));
     }
-    Core::Metascript::Value nonBoolean(metadata);
-    nonBoolean.field("glyphs").asList()[0u].field("drawable").setDouble(0.5);
-    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, nonBoolean, entry, scratchArena));
+    static constexpr AStringView s_DerivedGlyphFields[] = { "drawable", "plane_right", "plane_bottom" };
+    for(const AStringView field : s_DerivedGlyphFields){
+        Core::Metascript::Value obsolete(metadata);
+        obsolete.field("glyphs").asList()[0u].field(field).setInteger(0);
+        EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, obsolete, entry, scratchArena));
+    }
     Core::Metascript::Value unknownGlyphField(metadata);
     unknownGlyphField.field("glyphs").asList()[0u].field("sha256").setString("obsolete");
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, unknownGlyphField, entry, scratchArena));
@@ -375,8 +378,25 @@ TEST(AssetsFontMetadata, IncompleteAndInvalidGlyphMappingsPreservePriorAtlas){
     wrongChannel.field("glyphs").asList()[drawableIndex].field("channel").setInteger(entry.payload.groups[drawable.group].channelCount);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, wrongChannel, entry, scratchArena));
     Core::Metascript::Value croppedGlyph(metadata);
-    croppedGlyph.field("glyphs").asList()[drawableIndex].field("width").setInteger(drawable.width + 1u);
+    croppedGlyph.field("glyphs").asList()[drawableIndex].field("width").setInteger(entry.payload.groups[drawable.group].width);
     EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, croppedGlyph, entry, scratchArena));
+    Core::Metascript::Value zeroDimension(metadata);
+    zeroDimension.field("glyphs").asList()[drawableIndex].field("height").setInteger(0);
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, zeroDimension, entry, scratchArena));
+    usize emptyIndex = originalGlyphCount;
+    for(usize index = 0u; index < originalGlyphCount; ++index){
+        if(entry.payload.glyphs[index].drawable == 0u){
+            emptyIndex = index;
+            break;
+        }
+    }
+    ASSERT_LT(emptyIndex, originalGlyphCount);
+    Core::Metascript::Value emptyWithGeometry(metadata);
+    emptyWithGeometry.field("glyphs").asList()[emptyIndex].field("x").setInteger(0);
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, emptyWithGeometry, entry, scratchArena));
+    Core::Metascript::Value missingWidth(metadata);
+    ASSERT_EQ(missingWidth.field("glyphs").asList()[drawableIndex].asMap().erase(AStringView("width")), 1u);
+    EXPECT_FALSE(ParseFontAtlasCookMetadataValue(Name("project/other"), path, missingWidth, entry, scratchArena));
     EXPECT_EQ(entry.virtualPath, Name("project/fonts/latin/atlas"));
     EXPECT_EQ(entry.payload.fontSha256, originalHash);
     EXPECT_EQ(entry.payload.glyphs.size(), originalGlyphCount);

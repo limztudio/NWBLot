@@ -62,7 +62,6 @@ public:
     struct ShaderCompilerRequest{
         AStringView shaderName;
         AStringView stage;
-        AStringView targetProfile;
         AStringView entryPoint;
         AStringView variantName;
         const ShaderMacroDefinition* defines = nullptr;
@@ -72,6 +71,7 @@ public:
         const Path& outputPath;
         u32 defineCount = 0;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
+        bool rayQuery = false;
     };
 
     class IShaderCompiler : NoCopy{
@@ -130,24 +130,20 @@ public:
         CookString name;
         ACompactString stage;
         ACompactString archiveStage;
-        ACompactString targetProfile;
         CookString entryPoint;
         CookString source;
-
-        // Paired fixed-engine raster stages opt the shared mesh shader into the object-space cache contract.
-        CookString meshObjectVertexSource;
 
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
+        bool rayQuery = false;
         bool emitMeshComputeShadow = true;
 
         explicit ShaderEntry(CookArena& memoryArena)
             : name(memoryArena)
             , entryPoint("main", memoryArena)
             , source(memoryArena)
-            , meshObjectVertexSource(memoryArena)
             , includeRoots(memoryArena)
             , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
             , implicitDefines(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)

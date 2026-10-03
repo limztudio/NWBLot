@@ -614,6 +614,48 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
 }
 
+TEST(AssetsUiSkin, SpriteSlicesAreDerivedAndRetiredFieldsPreservePriorCookEntry){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    SkinTestArena testArena;
+    UiSkinCookEntry entry(testArena.arena);
+    ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
+    const Name originalPath = entry.virtualPath;
+    const Name originalTexture = entry.texture.name();
+    const usize originalRegionCount = entry.regions.size();
+    static constexpr AStringView s_Overrides[] = {
+        "asset.regions = [{ \"name\": \"replacement\", \"rect\": [0, 0, 4, 4], \"slice\": [0, 0, 0, 0] }];\r\n",
+        "asset.regions = [{ \"name\": \"replacement\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\", \"slice\": [0, 0, 0, 0] }];\r\n",
+        "asset.regions = [{ \"name\": \"replacement\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\", \"slice\": [1, 0, 0, 0] }];\r\n",
+    };
+    for(const AStringView overrideText : s_Overrides){
+        TestAString metadata(PaletteMetadata());
+        metadata.append("asset.texture = \"project/other_texture\";\r\n");
+        metadata.append(overrideText);
+        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry));
+        EXPECT_EQ(entry.virtualPath, originalPath);
+        EXPECT_EQ(entry.texture.name(), originalTexture);
+        ASSERT_EQ(entry.regions.size(), originalRegionCount);
+        EXPECT_EQ(entry.regions.front().name, Name("panel.normal"));
+        EXPECT_EQ(entry.regions.front().drawMode, UiSkinDrawMode::NineSlice);
+        EXPECT_EQ(entry.regions.front().sliceInsets.left, 3u);
+        EXPECT_EQ(entry.regions.front().sliceInsets.top, 4u);
+        EXPECT_EQ(entry.regions.front().sliceInsets.right, 5u);
+        EXPECT_EQ(entry.regions.front().sliceInsets.bottom, 6u);
+    }
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'slice'")));
+    TestAString spriteMetadata(PaletteMetadata());
+    spriteMetadata.append("asset.regions = [{ \"name\": \"sprite\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\" }];\r\n");
+    UiSkinCookEntry spriteEntry(testArena.arena);
+    ASSERT_TRUE(ParseMetadata(testArena, spriteMetadata, spriteEntry));
+    ASSERT_EQ(spriteEntry.regions.size(), 1u);
+    const UiSkinSliceInsets& slice = spriteEntry.regions.front().sliceInsets;
+    EXPECT_EQ(slice.left, 0u);
+    EXPECT_EQ(slice.top, 0u);
+    EXPECT_EQ(slice.right, 0u);
+    EXPECT_EQ(slice.bottom, 0u);
+}
+
 TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

@@ -12,6 +12,8 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 
+#include <impl/assets_material/shader_stage_names.h>
+
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
 #include <core/common/log.h>
@@ -243,7 +245,10 @@ bool ShaderCook::computeSourceChecksum(
     appendChecksumLine(AStringView(entry.name));
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
-    appendChecksumLine(entry.targetProfile.view());
+    appendChecksumLine(entry.rayQuery
+        ? MaterialShaderStageNames::s_Spirv15RayQueryTargetProfileText
+        : MaterialShaderStageNames::s_Spirv15TargetProfileText
+    );
     appendChecksumLine(__hidden_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);

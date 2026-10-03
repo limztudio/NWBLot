@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifdef NWB_BINDLESS_TLAS
+#error "NWB_BINDLESS_TLAS is fixed by this hardware shader source"
+#endif
+#define NWB_BINDLESS_TLAS 1
+
 // Variant 2 retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
 #if NWB_REFLECTION_OPTICAL_TRANSPORT == 2
 #define NWB_OPTICAL_CLOSED_MEDIA 0

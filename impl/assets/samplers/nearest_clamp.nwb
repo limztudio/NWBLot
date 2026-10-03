@@ -9,4 +9,3 @@ asset.address_w = "clamp";
 asset.reduction = "standard";
 asset.max_anisotropy = 1.0;
 asset.mip_bias = 0.0;
-asset.border_color = [0.0, 0.0, 0.0, 0.0];

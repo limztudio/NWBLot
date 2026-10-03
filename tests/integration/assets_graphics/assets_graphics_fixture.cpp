@@ -524,7 +524,6 @@ bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     shaderMeta += stage;
     shaderMeta +=
         "\";\n"
-        "asset.target_profile = \"spirv_1_5\";\n"
         "asset.entry_point = \"main\";\n"
         "asset.include_roots = [\""
     ;

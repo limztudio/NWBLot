@@ -39,8 +39,6 @@ NWB_IMPL_BEGIN
     switch(reductionType){
     case Core::SamplerReductionType::Standard:
     case Core::SamplerReductionType::Comparison:
-    case Core::SamplerReductionType::Minimum:
-    case Core::SamplerReductionType::Maximum:
         return true;
     default:
         return false;
@@ -49,10 +47,10 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] inline bool IsValidSamplerDescription(const Core::SamplerDesc& description){
     return
-        IsFinite(description.borderColor.r)
-        && IsFinite(description.borderColor.g)
-        && IsFinite(description.borderColor.b)
-        && IsFinite(description.borderColor.a)
+        description.borderColor.r == 0.0f
+        && description.borderColor.g == 0.0f
+        && description.borderColor.b == 0.0f
+        && description.borderColor.a == 0.0f
         && IsFinite(description.maxAnisotropy)
         && description.maxAnisotropy >= 1.0f
         && IsFinite(description.mipBias)

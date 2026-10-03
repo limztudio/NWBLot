@@ -136,7 +136,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
 
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
-        if(!object.name || !object.mesh.valid() || !object.skin.valid() || !object.skeletonObject){
+        if(!object.name || !object.skin.valid() || !object.skeletonObject){
             NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
             return false;
         }
@@ -237,7 +237,6 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     for(const ModelBinaryPayload::ModelSkinnedMeshObjectBinary& objectBinary : skinnedMeshObjectBinaries){
         ModelSkinnedMeshObject object;
         object.name = Name(objectBinary.nameHash);
-        object.mesh.virtualPath = Name(objectBinary.meshNameHash);
         object.skin.virtualPath = Name(objectBinary.skinNameHash);
         object.material.virtualPath = Name(objectBinary.materialNameHash);
         object.skeletonObject = Name(objectBinary.skeletonObjectNameHash);

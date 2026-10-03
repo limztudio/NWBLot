@@ -38,7 +38,6 @@ class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
 public:
     static bool extractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind);
     static bool resolveIncludeFile(const AStringView includeName, const ShaderIncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath);
-    static bool tryMapTargetProfileToSlangArguments(const AStringView targetProfile, AStringView& outSlangProfile, AStringView& outSlangCapability);
 
 
 public:

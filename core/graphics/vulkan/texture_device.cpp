@@ -304,6 +304,11 @@ TextureHandle Device::createHandleForNativeTexture(
 
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
+    if(d.reductionType != SamplerReductionType::Standard && d.reductionType != SamplerReductionType::Comparison){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
+        return nullptr;
+    }
+
     SamplerDesc normalizedDesc = d;
     const f32 maxSupportedAnisotropy = Max(m_context.physicalDeviceProperties.limits.maxSamplerAnisotropy, 1.f);
     if(!(normalizedDesc.maxAnisotropy >= 1.f))

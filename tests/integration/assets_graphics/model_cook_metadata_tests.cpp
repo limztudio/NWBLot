@@ -63,7 +63,6 @@ struct ModelMetadata{
 
     void addSkinnedMesh(const AStringView objectName, const AStringView skeleton, const AStringView expectedObject){
         Value& object = asset.field(s_SKINNED_MESHES).field(objectName);
-        object.field("mesh").setString(s_MeshVirtualPath);
         object.field("skin").setString("tests/model_cook_metadata/skin");
         object.field(s_SKELETON).setString(skeleton);
         expectedSkeletons.insert_or_assign(Name(objectName), Name(expectedObject));
@@ -79,7 +78,6 @@ struct ModelMetadata{
             const auto expected = expectedSkeletons.find(object.name);
             ASSERT_NE(expected, expectedSkeletons.end());
             EXPECT_EQ(object.skeletonObject, expected->second);
-            EXPECT_EQ(object.mesh.name(), Name(s_MeshVirtualPath));
             EXPECT_EQ(object.skin.name(), Name("tests/model_cook_metadata/skin"));
         }
     }
@@ -226,6 +224,27 @@ TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
+}
+
+TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyReferenceRecovers){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    ModelMetadata metadata;
+    metadata.addSkeleton(s_RIG, "tests/model_cook_metadata/skeleton");
+    metadata.addSkinnedMesh(s_BODY, s_RIG, s_RIG);
+    ASSERT_TRUE(metadata.parse());
+    metadata.verifyObjectReferences();
+
+    Value& object = metadata.asset.field(s_SKINNED_MESHES).field(s_BODY);
+    object.field("mesh").setString(s_MeshVirtualPath);
+    EXPECT_FALSE(metadata.parse());
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
+
+    ASSERT_EQ(object.asMap().erase(AStringView("mesh")), 1u);
+    ASSERT_TRUE(metadata.parse());
+    metadata.verifyObjectReferences();
+    EXPECT_EQ(logger.errorCount(), 1u);
 }
 
 TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndThreeRowsRecover){

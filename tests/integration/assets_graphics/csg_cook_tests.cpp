@@ -142,7 +142,6 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
         entry.source = "shader.slang";
         entry.stage = "ps";
         entry.archiveStage = "ps";
-        entry.targetProfile = "spirv_1_5";
         addDefine(entry.defineValues, "AUTHORED", { "authored" });
         if(mode == 1u)
             addDefine(entry.defineValues, Impl::AssetsGraphicsCsgShaderVariants::s_ProjectEvaluatorModuleDefineName, { "\"../common.slangi\"" });

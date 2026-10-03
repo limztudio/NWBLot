@@ -52,7 +52,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!m_shaderSystem.loadShader(
         m_rayTracingState.m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
-        Core::ShaderArchive::s_BindlessTlasVariant,
+        Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
@@ -109,7 +109,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(!m_shaderSystem.loadShader(
         m_rayTracingState.m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
-        Core::ShaderArchive::s_BindlessTlasVariant,
+        Core::ShaderArchive::s_DefaultVariant,
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){

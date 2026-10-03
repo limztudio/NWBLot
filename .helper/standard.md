@@ -292,7 +292,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Do not force case-sensitive external API text into `Name` or `ACompactString`.
   - Keep `Name` for canonical identity/lookups.
   - Keep exact text separately at the boundary when the API requires original spelling/case, such as Vulkan/SPIR-V shader entry-point names, shader define names, and shader variant signatures.
-- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage` and `target_profile`), prefer `ACompactString` over heap-backed `AString`.
+- For short canonicalized metadata/config tokens with bounded size and case-insensitive semantics (for example shader `stage`), prefer `ACompactString` over heap-backed `AString`.
 - Debug/profiling marker labels are also plain external text.
   - Model command-list markers as text views/strings, not `Name`, so GPU markers and crash-dump labels keep their original spelling.
 - For simple generated mesh assets, keep the shape description/payload in `.nwb` metadata.
@@ -479,6 +479,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Keep `.nwb` metadata files as declarative metascript text without the source-file banner, but still use UTF-8 and CRLF line endings.
 - Authored `.nwb` metadata must not expose version, revision, schema-version, or codec-specification-revision fields, including version suffixes on contract names. Asset authors describe the asset with stable semantic fields such as `format` and `toolkit_contract`; cookers own the current schema and encoding contract. Keep cooked binary versions and their validation internal to the engine, with no authored version selection or legacy schema conversion paths.
 - Expose only asset content and meaningful author-controlled choices in `.nwb`. Do not expose fixed implementation constants or redundant transport values that the cooker can derive from semantic inputs or an authoritative prepared source. This includes payload layout, fixed block geometry, mandatory mip policy, derived counts/offsets/sizes, and copied source-header facts. Infer those once during cooking, retain checked arithmetic and source/payload validation, and reject retired fields through the existing field validation. Generators follow the same contract; do not retain optional compatibility knobs. Asset dimensions, layout metrics, references, and configurable format/color/alpha choices remain author-owned data.
+- For skinned models, author only the Skin reference; Skin owns the authoritative mesh. Derive and cache the mesh at the existing source-load boundary, reuse cached owners, and keep derivation out of the repeated-frame path. Do not add a duplicate model reference or a new persistent lookup index for this purpose.
+- Express shader capabilities as semantic requirements; backend compiler profiles and fixed auxiliary source filenames stay internal. Fixed engine shader transport switches such as `NWB_BINDLESS_TLAS` belong in shader source before its includes and are rejected in authored `defines`, even when the supplied value matches the fixed value. Keep only meaningful variant dimensions in authored define sets and archive/caller signatures. Do not advertise authored settings that the selected implementation ignores. Omit derived glyph flags/rectangle ends and fixed zero-only fields from empty records; derive them once from the authored geometry and scale. Reject unsupported choices and retired fields instead of silently accepting ineffective metadata.
 - After the shader banner separator, keep exactly two blank lines before the first shader directive, define, include, or include guard (`#define`, `#include`, `#ifndef`, etc.). Do not collapse this gap.
 - Stage entry files (`.slang`) put feature defines first when needed, then includes, declarations/resources, helpers, and the entry point, separated by file-scope long separators.
 - Include files (`.slangi`) use uppercase include guards in the form `NWB_<MODULE>_SLANGI`; place the closing `#endif` before the final separator.
@@ -498,7 +500,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - For multiline shader `return` expressions, keep `return <expression>` on the first line when readable and put the final `;` on its own line after the split expression.
 - Avoid macro-generated function signatures. Use explicit declarations for shader authoring hooks unless a Slang/preprocessor constraint requires a macro.
 - Use comments sparingly; keep them for non-obvious resource packing, layout, or API constraints.
-- Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.stage`, `asset.target_profile`, `asset.entry_point`, `asset.include_roots`, and `asset.defines`.
+- Keep `.nwb` shader metadata small and declarative: `shader asset;`, `asset.stage`, optional `asset.ray_query`, `asset.entry_point`, `asset.include_roots`, and `asset.defines`.
 
 ## 16. ECS Component Headers
 - Engine ECS module component definitions belong in that module's `components.h`.

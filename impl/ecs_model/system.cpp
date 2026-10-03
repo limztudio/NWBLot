@@ -479,7 +479,6 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
         m_applyRenderer(m_world, m_arena, entity, owner, object.material);
 
     auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
-    binding.mesh = object.mesh;
     binding.skin = object.skin;
     binding.skeletonEntity = skeletonEntity;
     return true;

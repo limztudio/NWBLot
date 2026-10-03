@@ -541,23 +541,12 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
             return false;
         }
 
-        if(request.targetProfile.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : target profile is empty"), StringConvert(request.shaderName));
-            return false;
-        }
-
         AStringView slangStage;
         if(!tryMapStageToSlangStage(request.stage, slangStage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
             return false;
         }
 
-        AStringView slangTargetProfile;
-        AStringView targetProfileCapability;
-        if(!tryMapTargetProfileToSlangArguments(request.targetProfile, slangTargetProfile, targetProfileCapability)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Unsupported shader target profile '{}' in entry '{}'"), StringConvert(request.targetProfile), StringConvert(request.shaderName));
-            return false;
-        }
         const AStringView optimizationArgument = slangOptimizationArgument(request.optimizationLevel);
         if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}")
@@ -624,10 +613,10 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         if(!optimizationArgument.empty())
             arguments.push_back(optimizationArgument);
         arguments.push_back("-profile");
-        arguments.push_back(slangTargetProfile);
-        if(!targetProfileCapability.empty()){
+        arguments.push_back(MaterialShaderStageNames::s_Spirv15TargetProfileText);
+        if(request.rayQuery){
             arguments.push_back("-capability");
-            arguments.push_back(targetProfileCapability);
+            arguments.push_back(MaterialShaderStageNames::s_SpvRayQueryCapabilityText);
         }
         for(const AStringView capability : __hidden_slang_compiler::s_SpirvBaselineCapabilities){
             arguments.push_back("-capability");
@@ -773,31 +762,6 @@ bool SlangShaderCompiler::tryMapStageToSlangStage(const AStringView stage, AStri
     }
 
     outStage = {};
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool SlangShaderCompiler::tryMapTargetProfileToSlangArguments(
-    const AStringView targetProfile,
-    AStringView& outSlangProfile,
-    AStringView& outSlangCapability
-){
-    outSlangProfile = {};
-    outSlangCapability = {};
-
-    if(targetProfile == MaterialShaderStageNames::s_Spirv15TargetProfileText){
-        outSlangProfile = targetProfile;
-        return true;
-    }
-    if(targetProfile == MaterialShaderStageNames::s_Spirv15RayQueryTargetProfileText){
-        outSlangProfile = MaterialShaderStageNames::s_Spirv15TargetProfileText;
-        outSlangCapability = MaterialShaderStageNames::s_SpvRayQueryCapabilityText;
-        return true;
-    }
-
     return false;
 }
 

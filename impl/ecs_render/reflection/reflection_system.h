@@ -49,9 +49,9 @@ NWB_IMPL_BEGIN
 class RendererShaderSystem;
 struct DeferredFrameTargets;
 
-inline constexpr StringView s_ReflectionHwOpticalVariant = "NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=1";
-inline constexpr StringView s_ReflectionHwPlainVariant = "NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=0";
-inline constexpr StringView s_ReflectionHwUnspecifiedVariant = "NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=2";
+inline constexpr StringView s_ReflectionHwOpticalVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=1";
+inline constexpr StringView s_ReflectionHwPlainVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=0";
+inline constexpr StringView s_ReflectionHwUnspecifiedVariant = "NWB_REFLECTION_OPTICAL_TRANSPORT=2";
 
 struct ReflectionFrameParameters{
 #define NWB_REFLECTION_CPU_UINT_FIELD(name, value) u32 name = value;

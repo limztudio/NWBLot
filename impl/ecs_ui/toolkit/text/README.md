@@ -87,11 +87,12 @@ with bake settings, editable vertical layout metrics and all glyph mappings in s
 `asset_bunch bunch = [face, atlas];` exports them
 under `/face` and `/atlas`, and `atlas.font = face;` selects the typed source. The
 `.font` contains original SFNT and compact images in a FON2 version 1 source envelope.
-The readable document has no schema-version or hash fields. Each glyph exposes its
-group/channel, rectangle, plane bounds, advance and numeric drawable flag (0 or 1),
-including nondrawable records. The Font declaration has no fields. Cooking derives
-face facts and image layouts from `.font`, glyph IDs from list order, and the fixed
-one-texel guard. It admits the mappings, validates source/image integrity, and copies
+The readable document has no schema-version or hash fields. Each empty glyph records
+only its required advance. Bitmap glyphs record group/channel, rectangle, left/top
+plane origin and advance. The Font declaration has no fields. Cooking derives
+face facts and image layouts from `.font`, glyph IDs from list order, drawable state
+from bitmap presence, right/bottom plane bounds from bitmap size and bake scale,
+and the fixed one-texel guard. It admits the mappings, validates source/image integrity, and copies
 original positioning tables without rasterizing.
 UI text receives the ordinary cooked Font/FON1 and FontAtlas/FTA1 assets.
 

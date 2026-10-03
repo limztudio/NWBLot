@@ -68,7 +68,6 @@ struct ModelInputs{
         });
         skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
             .name = Name(s_BODY),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
             .material = {},
             .skeletonObject = Name(s_RIG),
@@ -168,7 +167,7 @@ TEST(ModelPayload, RejectsDuplicateNamesWithinAndAcrossObjectKinds){
 TEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    for(u32 invalidCase = 0u; invalidCase < 8u; ++invalidCase){
+    for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         ModelInputs inputs;
         switch(invalidCase){
         case 0u: inputs.skeletonObjects.front().name = NAME_NONE; break;
@@ -176,9 +175,8 @@ TEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels){
         case s_ExpectedDualCount: inputs.staticMeshObjects.front().name = NAME_NONE; break;
         case 3u: inputs.staticMeshObjects.front().mesh.reset(); break;
         case 4u: inputs.skinnedMeshObjects.front().name = NAME_NONE; break;
-        case 5u: inputs.skinnedMeshObjects.front().mesh.reset(); break;
-        case 6u: inputs.skinnedMeshObjects.front().skin.reset(); break;
-        case 7u: inputs.skinnedMeshObjects.front().skeletonObject = NAME_NONE; break;
+        case 5u: inputs.skinnedMeshObjects.front().skin.reset(); break;
+        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = NAME_NONE; break;
         }
         inputs.publish();
         EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
@@ -307,6 +305,42 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
 }
 
 
+TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloadsCurrentPayload){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    ModelInputs inputs;
+    ModelAssetCodec codec;
+    Core::Assets::AssetBytes binary(inputs.arena);
+    ASSERT_TRUE(codec.serialize(inputs.model, binary));
+    const usize expectedBytes = sizeof(ModelBinaryPayload::ModelHeaderBinary)
+        + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary)
+        + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary)
+        + sizeof(ModelBinaryPayload::ModelSkinnedMeshObjectBinary);
+    ASSERT_EQ(binary.size(), expectedBytes);
+    Model loaded(inputs.arena, inputs.model.virtualPath());
+    ASSERT_TRUE(loaded.loadBinary(binary));
+
+    Core::Assets::AssetBytes malformed(binary);
+    constexpr u32 s_PreviousModelMagic = 0x4D444C31u;
+    NWB_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_TRUE(loaded.skeletonObjects().empty());
+    EXPECT_TRUE(loaded.staticMeshObjects().empty());
+    EXPECT_TRUE(loaded.skinnedMeshObjects().empty());
+    ASSERT_TRUE(loaded.loadBinary(binary));
+
+    malformed = binary;
+    malformed.pop_back();
+    EXPECT_FALSE(loaded.loadBinary(malformed));
+    EXPECT_TRUE(loaded.skinnedMeshObjects().empty());
+    ASSERT_TRUE(loaded.loadBinary(binary));
+    ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
+    EXPECT_EQ(loaded.skinnedMeshObjects().front().skin.name(), inputs.skinnedMeshObjects.front().skin.name());
+    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_RIG));
+    EXPECT_EQ(logger.errorCount(), 2u);
+}
+
+
 // These workloads are opt-in via --gtest_also_run_disabled_tests and a ModelPayloadBenchmark.* filter.
 TEST(ModelPayloadBenchmark, DISABLED_ValidatesSingleObject){
     ModelInputs inputs;
@@ -345,7 +379,6 @@ TEST(ModelPayloadBenchmark, DISABLED_ValidatesLargeMixedModel){
         });
         inputs.skinnedMeshObjects.push_back(ModelSkinnedMeshObject{
             .name = IndexedName(Name("body/"), index),
-            .mesh = Core::Assets::AssetRef<Mesh>(s_TESTS_MODEL_PAYLOAD_MESH.data()),
             .skin = Core::Assets::AssetRef<Skin>("tests/model_payload/skin"),
             .material = {},
             .skeletonObject = parent,

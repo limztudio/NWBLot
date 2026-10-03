@@ -48,49 +48,85 @@ static constexpr AStringView s_SamplerTestMetadata =
     "asset.reduction = \"standard\";\n"
     "asset.max_anisotropy = 4.0;\n"
     "asset.mip_bias = -0.25;\n"
-    "asset.border_color = [0.125, 0.25, 0.5, 1.0];\n"
 ;
 
 
-TEST(AssetsGraphics, SamplerCodecRoundTripPreservesDescription){
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+        logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+    );
 
     TestArena testArena;
-    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/test"));
+    NWB::Impl::Sampler sampler(testArena.arena, Name("project/samplers/binary_admission"));
     NWB::Core::SamplerDesc description;
-    description.borderColor = NWB::Core::Color(0.125f, 0.25f, 0.5f, 1.0f);
-    description.maxAnisotropy = 4.0f;
-    description.mipBias = -0.25f;
-    description.minFilter = false;
-    description.magFilter = true;
-    description.mipFilter = false;
-    description.addressU = NWB::Core::SamplerAddressMode::Wrap;
-    description.addressV = NWB::Core::SamplerAddressMode::Mirror;
+    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
     description.addressW = NWB::Core::SamplerAddressMode::Border;
     sampler.setDescription(description);
-    ASSERT_TRUE(sampler.validatePayload());
 
     NWB::Impl::SamplerAssetCodec codec;
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(sampler, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
+    const NWB::Core::Assets::AssetBytes validBinary(binary);
 
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
-    ASSERT_NE(loadedAsset.get(), nullptr);
-    const NWB::Impl::Sampler& loadedSampler = static_cast<const NWB::Impl::Sampler&>(*loadedAsset);
-    const NWB::Core::SamplerDesc& loaded = loadedSampler.description();
-    EXPECT_FALSE(loaded.minFilter);
-    EXPECT_TRUE(loaded.magFilter);
-    EXPECT_FALSE(loaded.mipFilter);
-    EXPECT_EQ(loaded.addressU, NWB::Core::SamplerAddressMode::Wrap);
-    EXPECT_EQ(loaded.addressV, NWB::Core::SamplerAddressMode::Mirror);
-    EXPECT_EQ(loaded.addressW, NWB::Core::SamplerAddressMode::Border);
-    EXPECT_EQ(loaded.maxAnisotropy, 4.0f);
-    EXPECT_EQ(loaded.mipBias, -0.25f);
-    EXPECT_EQ(loaded.borderColor, NWB::Core::Color(0.125f, 0.25f, 0.5f, 1.0f));
-    EXPECT_EQ(logger.errorCount(), 0u);
+    for(const NWB::Core::SamplerReductionType::Enum reduction : {
+        NWB::Core::SamplerReductionType::Minimum, NWB::Core::SamplerReductionType::Maximum
+    }){
+        binary = validBinary;
+        const u32 reductionValue = static_cast<u32>(reduction);
+        NWB_MEMCPY(
+            binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType),
+            sizeof(reductionValue),
+            &reductionValue,
+            sizeof(reductionValue)
+        );
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
+        EXPECT_EQ(loadedAsset.get(), nullptr);
+
+        description.reductionType = reduction;
+        sampler.setDescription(description);
+        EXPECT_FALSE(codec.serialize(sampler, binary));
+    }
+
+    for(const usize borderOffset : {
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorR),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorG),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorB),
+        offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, borderColorA)
+    }){
+        binary = validBinary;
+        const f32 nonblack = 1.0f;
+        NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
+        EXPECT_EQ(loadedAsset.get(), nullptr);
+    }
+
+    description.reductionType = NWB::Core::SamplerReductionType::Standard;
+    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 1.0f);
+    sampler.setDescription(description);
+    EXPECT_FALSE(codec.serialize(sampler, binary));
+
+    for(const NWB::Core::SamplerReductionType::Enum reduction : {
+        NWB::Core::SamplerReductionType::Standard, NWB::Core::SamplerReductionType::Comparison
+    }){
+        description.reductionType = reduction;
+        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+        sampler.setDescription(description);
+        ASSERT_TRUE(codec.serialize(sampler, binary));
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
+        ASSERT_NE(loadedAsset.get(), nullptr);
+        const NWB::Impl::Sampler& loaded = static_cast<const NWB::Impl::Sampler&>(*loadedAsset);
+        EXPECT_EQ(loaded.description().reductionType, reduction);
+        EXPECT_EQ(loaded.description().borderColor, NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f));
+    }
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
 }
 
 
@@ -131,10 +167,56 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     EXPECT_EQ(description.addressW, NWB::Core::SamplerAddressMode::Border);
     EXPECT_EQ(description.maxAnisotropy, 4.0f);
     EXPECT_EQ(description.mipBias, -0.25f);
+    EXPECT_EQ(description.borderColor, NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f));
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
+    static constexpr AStringView s_UnsupportedAssignments[] = {
+        "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n",
+        "asset.reduction = \"minimum\";\n",
+        "asset.reduction = \"maximum\";\n",
+    };
+
+    for(const AStringView assignment : s_UnsupportedAssignments){
+        CapturingLogger logger;
+        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
+            logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
+        );
+        TestArena testArena;
+        AString metadata(s_SamplerTestMetadata);
+        const AStringView reductionAssignment = "asset.reduction = \"standard\";\n";
+        if(assignment.starts_with("asset.reduction")){
+            const usize reductionPosition = metadata.find(reductionAssignment);
+            ASSERT_NE(reductionPosition, AString::npos);
+            metadata.replace(reductionPosition, reductionAssignment.size(), assignment);
+        }
+        else
+            metadata += assignment;
+
+        NWB::Core::Metascript::Document document(testArena.arena);
+        ASSERT_TRUE(document.parse(AStringView(metadata)));
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
+        const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
+        NWB::Impl::SamplerCookEntry entry(testArena.arena);
+        NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
+        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(
+            assetRoot,
+            "project",
+            metadataPath,
+            document,
+            entry,
+            scratchArena
+        )) << assignment;
+        const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction")
+            ? NWB_TEXT("unsupported reduction type")
+            : NWB_TEXT("unsupported asset field 'border_color'")
+        ;
+        EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
+    }
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){

@@ -143,16 +143,6 @@ template<usize Count>
 [[nodiscard]] static bool ParseRegion(const Path& path, const Value& object, UiSkinRegion& outRegion){
     if(!Core::Assets::CheckMetadataAssetMap(path, object, s_DiagnosticPrefix))
         return false;
-    if(!Core::Assets::ValidateMetadataAssetFields(
-        path,
-        object,
-        s_DiagnosticPrefix,
-        { s_NameField, s_RectField, s_DrawModeField, s_SliceField, s_PaddingField, s_MinimumSizeField }
-    ))
-        return false;
-    if(!Core::Assets::ReadMetadataNameField(path, object, s_DiagnosticPrefix, s_NameField, true, outRegion.name))
-        return false;
-
     if(FindField(object, s_DrawModeField)){
         if(!Core::Assets::ParseNamedMetadataEnumField(
             path,
@@ -166,6 +156,21 @@ template<usize Count>
         ))
             return false;
     }
+
+    if(!Core::Assets::ValidateMetadataAssetFields(
+        path,
+        object,
+        s_DiagnosticPrefix,
+        [hasSlice = outRegion.drawMode == UiSkinDrawMode::NineSlice](const AStringView field){
+            return
+                field == s_NameField || field == s_RectField || field == s_DrawModeField
+                || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField)
+            ;
+        }
+    ))
+        return false;
+    if(!Core::Assets::ReadMetadataNameField(path, object, s_DiagnosticPrefix, s_NameField, true, outRegion.name))
+        return false;
 
     u32 rectangle[s_RectComponentCount] = {};
     u32 slice[s_SliceComponentCount] = {};

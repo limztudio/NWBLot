@@ -40,6 +40,7 @@ static_assert(IsTriviallyCopyable_V<MeshComponent>, "MeshComponent must stay che
 
 
 struct SkinnedMeshBindingComponent{
+    // An unset mesh is derived from Skin once at source loading; an explicit mesh must match Skin.mesh.
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skin> skin;
     Core::ECS::EntityID skeletonEntity = Core::ECS::s_InvalidEntityId;

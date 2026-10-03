@@ -69,7 +69,6 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     for(const ModelSkinnedMeshObject& object : model.skinnedMeshObjects()){
         ModelBinaryPayload::ModelSkinnedMeshObjectBinary objectBinary;
         objectBinary.nameHash = object.name.hash();
-        objectBinary.meshNameHash = object.mesh.name().hash();
         objectBinary.skinNameHash = object.skin.name().hash();
         objectBinary.materialNameHash = object.material.name().hash();
         objectBinary.skeletonObjectNameHash = object.skeletonObject.hash();
@@ -278,12 +277,11 @@ template<typename ObjectVectorT, typename ParseObjectFn>
         nwbFilePath,
         objectValue,
         s_ObjectKind,
-        { s_MeshField, s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }
+        { s_SkinField, s_MaterialField, s_SkeletonField, s_TransformField }
     ))
         return false;
 
-    return Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
-        && Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
+    return Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
         && Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
         && Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeletonObject)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)

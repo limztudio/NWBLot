@@ -417,12 +417,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
             return false;
         }
-        static constexpr AStringView s_Spirv15TargetProfile = MaterialShaderStageNames::s_Spirv15TargetProfileText;
         static constexpr AStringView s_EngineGraphicsIncludeRoot = "engine/graphics";
-        if(!pixelShaderEntry.targetProfile.assign(s_Spirv15TargetProfile)){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
-            return false;
-        }
         pixelShaderEntry.optimizationLevel = optimizationLevel;
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;

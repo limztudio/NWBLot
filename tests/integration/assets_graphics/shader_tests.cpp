@@ -40,7 +40,6 @@ static constexpr AStringView s_PROJECT_SHADERS_STANDALONE_PS = "project/shaders/
 static constexpr AStringView s_MAINCASE = "MainCase";
 static constexpr AStringView s_SHADER_ASSET_HEAD = "shader asset;\n\n";
 static constexpr AStringView s_ASSET_STAGE_PS = "asset.stage = \"ps\";\n";
-static constexpr AStringView s_ASSET_TARGET_SPIRV = "asset.target_profile = \"spirv_1_5\";\n";
 static constexpr AStringView s_ASSET_ENTRY_MAIN = "asset.entry_point = \"main\";\n";
 static constexpr AStringView s_MAIN = "main";
 static constexpr AStringView s_MATERIAL_BIND_INCLUDES = "material_bind_includes";
@@ -271,10 +270,9 @@ TEST(AssetsGraphics, ShaderMetadataParsesOptimizationLevel){
     const Path shaderMetaPath = assetRoot / "shaders" / "optimization_level_ps.nwb";
     const auto shaderMetadata = StringFormat(
         testArena.arena,
-        "{}{}{}{}{}",
+        "{}{}{}{}",
         s_SHADER_ASSET_HEAD,
         s_ASSET_STAGE_PS,
-        s_ASSET_TARGET_SPIRV,
         "asset.optimization_level = \"none\";\n",
         s_ASSET_ENTRY_MAIN
     );
@@ -302,6 +300,132 @@ NwbOptimizationLevelPixelOutput main(){
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
+TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
+    Path root(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_ray_query_metadata", root));
+    const Path metadataPath = root / "shader.nwb";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
+    struct MetadataCase{
+        AStringView fields;
+        bool accepted;
+        bool rayQuery;
+    };
+    constexpr MetadataCase cases[] = {
+        { "", true, false },
+        { "asset.ray_query = 0;\n", true, false },
+        { "asset.ray_query = 1;\n", true, true },
+        { "asset.ray_query = -1;\n", false, false },
+        { "asset.ray_query = 2;\n", false, false },
+        { "asset.ray_query = 1.0;\n", false, false },
+        { "asset.ray_query = \"1\";\n", false, false },
+        { "asset.ray_query = [];\n", false, false },
+        { "asset.ray_query = {};\n", false, false },
+        { "asset.target_profile = \"spirv_1_5\";\n", false, false },
+        { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false, false },
+        { "asset.emit_mesh_compute_shadow = 0;\n", false, false },
+        { "asset.emit_mesh_compute_shadow = 1;\n", false, false },
+    };
+    Impl::ShaderCook shaderCook(testArena.arena);
+    Impl::ShaderCook::ShaderEntry entry(testArena.arena);
+    u64 baselineChecksum = 0u;
+    for(const MetadataCase& testCase : cases){
+        SCOPED_TRACE(testCase.fields);
+        Impl::ShaderCook::CookString metadata("shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n", testArena.arena);
+        metadata.append(testCase.fields);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
+        EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
+        if(!testCase.accepted)
+            continue;
+        EXPECT_EQ(entry.rayQuery, testCase.rayQuery);
+        u64 checksum = 0u;
+        ASSERT_TRUE(shaderCook.computeSourceChecksum(entry, Core::ShaderArchive::s_DefaultVariant, 0u, checksum, scratchArena));
+        if(baselineChecksum == 0u)
+            baselineChecksum = checksum;
+        if(testCase.rayQuery)
+            EXPECT_NE(checksum, baselineChecksum);
+        else
+            EXPECT_EQ(checksum, baselineChecksum);
+    }
+    constexpr AStringView stages[] = { "vs", "ps", "rgen" };
+    for(const AStringView stage : stages){
+        const auto metadata = StringFormat(testArena.arena,
+            "shader asset;\nasset.stage = \"{}\";\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n", stage);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
+        EXPECT_FALSE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+    }
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath,
+        "shader asset;\nasset.stage = \"mesh\";\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
+    ASSERT_TRUE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+    EXPECT_FALSE(entry.emitMeshComputeShadow);
+    ErrorCode error;
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithRealVariants){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
+    Path root(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_transport_defines", root));
+    const Path shaderPath = root / "shader.nwb";
+    const Path includePath = root / "include.nwb";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
+    static constexpr AStringView s_ShaderDeclaration = "shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n";
+    static constexpr AStringView s_RealDefines = "asset.defines = { \"PROJECT_QUALITY\": [\"0\", \"1\"] };\n";
+    const auto validShaderMetadata = StringFormat(testArena.arena, "{}{}", s_ShaderDeclaration, s_RealDefines);
+    const auto validIncludeMetadata = StringFormat(testArena.arena, "include asset;\n{}", s_RealDefines);
+    Impl::ShaderCook shaderCook(testArena.arena);
+    Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
+    Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
+
+    for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
+        SCOPED_TRACE(retiredValue);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
+        ASSERT_TRUE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        ASSERT_FALSE(shaderEntry.defineValues.empty());
+        const auto obsoleteShaderMetadata = StringFormat(
+            testArena.arena,
+            "{}asset.defines = {{ \"NWB_BINDLESS_TLAS\": [\"{}\"] }};\n",
+            s_ShaderDeclaration,
+            retiredValue
+        );
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
+        EXPECT_FALSE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        EXPECT_TRUE(shaderEntry.defineValues.empty());
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("define 'NWB_BINDLESS_TLAS' is an engine transport feature")));
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
+        ASSERT_TRUE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
+        EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
+        EXPECT_FALSE(shaderCook.validateVariantSignature(
+            "project/shader", "NWB_BINDLESS_TLAS=1;PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena
+        ));
+
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
+        ASSERT_TRUE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        ASSERT_FALSE(includeEntry.defineValues.empty());
+        const auto obsoleteIncludeMetadata = StringFormat(
+            testArena.arena,
+            "include asset;\nasset.defines = {{ \"NWB_BINDLESS_TLAS\": [\"{}\"] }};\n",
+            retiredValue
+        );
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, obsoleteIncludeMetadata));
+        EXPECT_FALSE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        EXPECT_TRUE(includeEntry.defineValues.empty());
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
+        ASSERT_TRUE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        EXPECT_TRUE(shaderCook.validateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
+    }
+    ErrorCode error;
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
 TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
@@ -400,10 +524,9 @@ NwbStandalonePixelOutput main(){
 static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(
         assetRoot.arena(),
-        "{}{}{}{}",
+        "{}{}{}",
         s_SHADER_ASSET_HEAD,
         s_ASSET_STAGE_PS,
-        s_ASSET_TARGET_SPIRV,
         s_ASSET_ENTRY_MAIN
     );
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "standalone_ps.nwb", shaderMetadata))
@@ -437,10 +560,9 @@ NwbBomCompilerProbeOutput main(){
 static bool WriteBomCompilerProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(
         assetRoot.arena(),
-        "{}{}{}{}",
+        "{}{}{}",
         s_SHADER_ASSET_HEAD,
         s_ASSET_STAGE_PS,
-        s_ASSET_TARGET_SPIRV,
         s_ASSET_ENTRY_MAIN
     );
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.nwb", shaderMetadata))
@@ -466,10 +588,9 @@ NwbExactEntryPointPixelOutput MainCase(){
 static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     const auto shaderMetadata = StringFormat(
         assetRoot.arena(),
-        "{}{}{}{}",
+        "{}{}{}",
         s_SHADER_ASSET_HEAD,
         s_ASSET_STAGE_PS,
-        s_ASSET_TARGET_SPIRV,
         "asset.entry_point = \"MainCase\";\n"
     );
     if(!AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.nwb", shaderMetadata))

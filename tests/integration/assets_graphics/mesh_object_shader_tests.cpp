@@ -44,7 +44,7 @@ namespace Plan = Impl::AssetsGraphicsCookDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsGraphics, ObjectGeometryMetadataRequiresExplicitNonemptyVertexSourceOnlyForMeshStages){
+TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     CapturingLogger logger;
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
@@ -57,17 +57,16 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRequiresExplicitNonemptyVertexSourceO
         AStringView stage;
         AStringView fields;
         bool accepted;
-        bool objectGeometry;
     };
     constexpr MetadataCase cases[] = {
-        { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", true, true },
-        { "mesh", "", true, false },
-        { "ps", "", true, false },
-        { "mesh", "asset.mesh_object_vertex = \"\";\n", false, false },
-        { "cs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "vs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "ps", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false, false },
+        { "mesh", "", true },
+        { "ps", "", true },
+        { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "mesh", "asset.mesh_object_vertex = \"\";\n", false },
+        { "cs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "vs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "ps", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry entry(testArena.arena);
@@ -76,14 +75,13 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRequiresExplicitNonemptyVertexSourceO
         SCOPED_TRACE(testCase.fields);
         Impl::ShaderCook::CookString metadata("shader asset;\nasset.stage = \"", testArena.arena);
         metadata.append(testCase.stage.data(), testCase.stage.size());
-        metadata.append("\";\nasset.target_profile = \"spirv_1_5\";\nasset.entry_point = \"main\";\n");
+        metadata.append("\";\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.fields.data(), testCase.fields.size());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
         if(testCase.accepted){
             EXPECT_EQ(logger.errorCount(), priorErrors);
-            EXPECT_EQ(entry.meshObjectVertexSource, testCase.objectGeometry ? "object_vs.slang" : "");
         }
         else{
             EXPECT_GT(logger.errorCount(), priorErrors);
@@ -112,9 +110,8 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.entry.name = "engine/graphics/mesh/shared_ms";
     mesh.entry.stage = "mesh";
     mesh.entry.archiveStage = "mesh";
-    mesh.entry.targetProfile = "spirv_1_6";
+    mesh.entry.rayQuery = true;
     mesh.entry.entryPoint = "authoredEntry";
-    mesh.entry.meshObjectVertexSource = "object_vs.slang";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);
     mesh.entry.implicitDefines.emplace(
         Impl::ShaderCook::CookString("NWB_CSG_ENABLED", testArena.arena), Impl::ShaderCook::CookString("1", testArena.arena)
@@ -141,7 +138,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_EQ(auxiliary.entry.name, mesh.entry.name);
         EXPECT_EQ(auxiliary.entry.stage.view(), stages[index]);
         EXPECT_EQ(auxiliary.entry.archiveStage.view(), archiveStages[index]);
-        EXPECT_EQ(auxiliary.entry.targetProfile.view(), "spirv_1_5");
+        EXPECT_FALSE(auxiliary.entry.rayQuery);
         EXPECT_EQ(auxiliary.entry.entryPoint, "main");
         EXPECT_EQ(auxiliary.sourcePath.lexically_normal(), expectedSources[index].lexically_normal());
         EXPECT_EQ(auxiliary.includeDirectories, mesh.includeDirectories);
@@ -152,7 +149,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         ASSERT_TRUE(shaderCook.expandDefineCombinations(auxiliary.entry.defineValues, combinations, scratchArena));
         ASSERT_EQ(combinations.size(), 1u);
         EXPECT_EQ(shaderCook.buildVariantName(combinations[0], scratchArena), Core::ShaderArchive::s_DefaultVariant);
-        EXPECT_TRUE(auxiliary.entry.meshObjectVertexSource.empty());
         EXPECT_FALSE(auxiliary.entry.emitMeshComputeShadow);
         EXPECT_FALSE(auxiliary.usesMaterialTypedBinding);
         EXPECT_FALSE(auxiliary.supportsCsgClipVariant);
@@ -161,7 +157,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_GE(auxiliary.dependencies.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    for(u32 mismatch = 0u; mismatch < 6u; ++mismatch){
+    for(u32 mismatch = 0u; mismatch < 5u; ++mismatch){
         SCOPED_TRACE(mismatch);
         Plan::PreparedShaderEntry rejected = mesh;
         switch(mismatch){
@@ -169,8 +165,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         case 1u: rejected.sourcePath = root / "project" / "shared_ms.slang"; break;
         case s_ExpectedDualCount: rejected.entry.archiveStage = "mesh_compute"; break;
         case 3u: rejected.entry.stage = "cs"; break;
-        case 4u: rejected.entry.meshObjectVertexSource = "custom_vs.slang"; break;
-        case 5u: rejected.entry.emitMeshComputeShadow = false; break;
+        case 4u: rejected.entry.emitMeshComputeShadow = false; break;
         }
         Plan::PreparedShaderPlan rejectedPlan(testArena.arena);
         rejectedPlan.plannedFileCount = 7u;
@@ -181,6 +176,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("require the fixed engine shared mesh program")));
     Plan::PreparedShaderEntry standalone(testArena.arena);
     standalone.entry.name = "project/custom_mesh";
+    standalone.sourcePath = root / "project" / "shared_ms.slang";
     Plan::PreparedShaderPlan standalonePlan(testArena.arena);
     standalonePlan.plannedFileCount = 3u;
     EXPECT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, standalone, standalonePlan, scratchArena));
@@ -193,6 +189,14 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
     EXPECT_NE(changedPlan.preparedEntries[0].dependencyChecksum, oldChecksum);
     EXPECT_EQ(changedPlan.preparedEntries[0].variantCount, 1u);
+    ErrorCode removeError;
+    ASSERT_TRUE(RemoveFile(meshRoot / "object_vs.slang", removeError));
+    ASSERT_FALSE(removeError);
+    Plan::PreparedShaderPlan missingSourcePlan(testArena.arena);
+    missingSourcePlan.plannedFileCount = 7u;
+    EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, missingSourcePlan, scratchArena));
+    EXPECT_TRUE(missingSourcePlan.preparedEntries.empty());
+    EXPECT_EQ(missingSourcePlan.plannedFileCount, 7u);
     ErrorCode error;
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }

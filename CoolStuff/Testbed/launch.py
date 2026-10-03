@@ -14,7 +14,7 @@ sys.path.insert(0, str(REPO))
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
 
-TESTBED_TARGET = TESTBED_TARGET
+TESTBED_TARGET = "testbed"
 MAIN_ENTRY = "__main__"
 
 

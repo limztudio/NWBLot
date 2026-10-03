@@ -24,13 +24,13 @@ int Run(const int argc, char** argv){
     AInteropString outputArgument;
     AInteropString rendererArgument = "bitmap";
     BakeOptions options(UtilityDetail::Arena());
-    CLI::App app{ "Build a paired font bundle with prepared shaping bytes and a binary RGBA SDF atlas." };
+    CLI::App app{ "Build a font asset bunch with prepared shaping bytes and a compact binary SDF atlas." };
     app.add_option("--font", sourceArgument, "Static source .ttf/.otf or prepared .font")->required();
-    app.add_option("-o,--output", outputArgument, "Output .nwb bundle declaration; paired .font and .atlas share its stem")->required();
+    app.add_option("-o,--output", outputArgument, "Output .nwb asset bunch; paired .font and .atlas share its stem")->required();
     app.add_option("--ppem", options.ppem, "Bake pixels per em (16..256, default64)");
     app.add_option("--spread", options.spread, "SDF distance range (2..32, default8)");
-    app.add_option("--extent", options.extent, "Square page extent (32..2048, default1024)");
-    app.add_option("--max-groups", options.maxGroups, "Maximum RGBA groups (1..8, default8)");
+    app.add_option("--extent", options.extent, "Maximum square packing extent; final groups are cropped (32..2048, default1024)");
+    app.add_option("--max-groups", options.maxGroups, "Maximum four-plane packing groups (1..8, default8)");
     app.add_option("--renderer", rendererArgument, "bitmap (default) or outline; errors never switch algorithms");
     app.add_flag("--overwrite", options.overwrite, "Replace an existing complete font bundle");
     return
@@ -56,7 +56,7 @@ int Run(const int argc, char** argv){
                 Impl::FontAtlasPayload payload(UtilityDetail::Arena());
                 if(!Bake(options, payload, scratch) || !WriteOutputs(options, payload))
                     return 1;
-                NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font bundle '{}' with {} glyphs / {} RGBA groups")
+                NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups")
                     , PathToString<tchar>(options.output)
                     , payload.glyphs.size()
                     , payload.groups.size()

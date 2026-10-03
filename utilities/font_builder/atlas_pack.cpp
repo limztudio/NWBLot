@@ -3,6 +3,7 @@
 
 
 #include "bake.h"
+#include "atlas_compact.h"
 
 #include <global/sha256.h>
 #include <logger/client/logger.h>
@@ -79,6 +80,7 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
                 Impl::FontAtlasGroup group(outPayload.groups.get_allocator().arena());
                 group.width = options.extent;
                 group.height = options.extent;
+                group.channelCount = 4u;
                 group.pixels.resize(static_cast<usize>(options.extent) * options.extent * 4u, 0u);
                 outPayload.groups.push_back(Move(group));
             }
@@ -113,9 +115,10 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
             return false;
         }
     }
+    CompactAtlasGroups(outPayload);
     for(auto& group : outPayload.groups)
         group.sha256 = ComputeSha256(BinaryByteView{ .bytes = group.pixels.data(), .byteCount = group.pixels.size() });
-    NWB_LOGGER_INFO(NWB_TEXT("font_builder: packed {} glyphs into {} logical pages / {} RGBA groups")
+    NWB_LOGGER_INFO(NWB_TEXT("font_builder: packed {} glyphs into {} logical pages / {} compact groups")
         , glyphs.size()
         , order.empty() ? 0u : lastPage + 1u
         , outPayload.groups.size()

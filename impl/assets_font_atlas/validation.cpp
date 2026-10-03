@@ -25,12 +25,12 @@ namespace __hidden_font_atlas_validation{
     Core::Assets::AssetVector<u64> occupied(payload.glyphs.get_allocator().arena());
     usize maxWords = 0u;
     for(const FontAtlasGroup& group : payload.groups)
-        maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * 4u + 63u) / 64u);
+        maxWords = Max(maxWords, (static_cast<usize>(group.width) * group.height * group.channelCount + 63u) / 64u);
     occupied.reserve(maxWords);
     for(usize groupIndex = 0u; groupIndex < payload.groups.size(); ++groupIndex){
         const FontAtlasGroup& group = payload.groups[groupIndex];
         const usize planePixels = static_cast<usize>(group.width) * group.height;
-        occupied.assign((planePixels * 4u + 63u) / 64u, 0u);
+        occupied.assign((planePixels * group.channelCount + 63u) / 64u, 0u);
         for(const FontAtlasGlyph& glyph : payload.glyphs){
             if(glyph.drawable == 0u || glyph.group != groupIndex)
                 continue;
@@ -97,21 +97,25 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         return false;
     }
     if(payload.groups.empty() || payload.groups.size() > s_FontAtlasMaxGroupCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid RGBA group count"));
+        NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid image group count"));
         return false;
     }
     u64 pixelBytes = 0u;
     for(const FontAtlasGroup& group : payload.groups){
-        const u64 byteCount = static_cast<u64>(group.width) * group.height * 4u;
         if(
             group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
-            || group.pixels.size() != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes
+            || group.channelCount == 0u || group.channelCount > 4u
         ){
+            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent or channel count"));
+            return false;
+        }
+        const u64 byteCount = static_cast<u64>(group.width) * group.height * group.channelCount;
+        if(group.pixels.size() != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid extent, payload size, or byte budget"));
             return false;
         }
         if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256){
-            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: RGBA content hash mismatch"));
+            NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: pixel content hash mismatch"));
             return false;
         }
         pixelBytes += byteCount;
@@ -136,7 +140,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             continue;
         }
         if(
-            glyph.group >= payload.groups.size() || glyph.channel >= 4u || glyph.width == 0u || glyph.height == 0u
+            glyph.group >= payload.groups.size() || glyph.width == 0u || glyph.height == 0u
             || glyph.planeLeft >= glyph.planeRight || glyph.planeTop >= glyph.planeBottom
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
@@ -154,7 +158,8 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         }
         const FontAtlasGroup& group = payload.groups[glyph.group];
         if(
-            glyph.x < payload.guardTexels || glyph.y < payload.guardTexels || glyph.x >= group.width || glyph.y >= group.height
+            glyph.channel >= group.channelCount || glyph.x < payload.guardTexels || glyph.y < payload.guardTexels
+            || glyph.x >= group.width || glyph.y >= group.height
             || glyph.width >= group.width - glyph.x || glyph.height >= group.height - glyph.y
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);

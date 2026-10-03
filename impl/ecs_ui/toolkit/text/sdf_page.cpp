@@ -19,6 +19,7 @@ bool operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)n
         lhs.font == rhs.font && lhs.fontSha256 == rhs.fontSha256 && lhs.pixelsSha256 == rhs.pixelsSha256
         && lhs.fontGeneration == rhs.fontGeneration && lhs.atlasIdentity == rhs.atlasIdentity && lhs.generation == rhs.generation
         && lhs.index == rhs.index && lhs.width == rhs.width && lhs.height == rhs.height
+        && lhs.channelCount == rhs.channelCount
         && lhs.spreadPixels == rhs.spreadPixels && lhs.distanceEncoding == rhs.distanceEncoding
     ;
 }
@@ -46,9 +47,10 @@ SharedSdfAtlasPage CreateSdfAtlasPage(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
         || binding.width > s_FontAtlasMaxExtent || binding.height > s_FontAtlasMaxExtent
+        || binding.channelCount == 0u || binding.channelCount > 4u
         || binding.spreadPixels < s_FontAtlasMinSpreadPixels || binding.spreadPixels > s_FontAtlasMaxSpreadPixels
         || binding.distanceEncoding != s_SdfDistanceEncodingFreeTypeU8
-        || pixels.size() != static_cast<usize>(binding.width) * binding.height * 4u
+        || pixels.size() != static_cast<usize>(binding.width) * binding.height * binding.channelCount
     )
         return {};
     SdfAtlasPageBinding immutable = binding;
@@ -83,6 +85,7 @@ SharedSdfAtlasPage CreateSdfAtlasPage(
         .index = groupIndex,
         .width = group.width,
         .height = group.height,
+        .channelCount = group.channelCount,
         .spreadPixels = payload.spreadPixels,
     };
     SdfAtlasPage::Pixels pixels(arena);

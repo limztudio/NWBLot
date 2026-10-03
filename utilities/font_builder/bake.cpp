@@ -36,7 +36,7 @@ bool ValidateOptions(const BakeOptions& options){
         return false;
     }
     if(PathToGenericString<AString>(options.output.extension()) != ".nwb"){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font bundle declaration"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
     const AString stem = PathToGenericString<AString>(options.output.stem());

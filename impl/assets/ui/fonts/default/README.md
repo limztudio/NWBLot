@@ -1,13 +1,17 @@
 # Default UI font bundles
 
-The engine ships a Latin primary face and a Korean fallback. Each face is a paired, same-stem trio: `latin.nwb`, `latin.font`, `latin.atlas`, and likewise for `korean`. The small `.nwb` declares `font_bundle` schema 1. The `.font` is a FON1 envelope around the exact original SFNT bytes needed by FreeType and HarfBuzz. The `.atlas` is a binary FTA1 package containing SDF glyph records, RGBA groups, and exact original positioning tables. The cooker derives the font identity from the stem and the atlas identity by appending `_atlas`; the metadata contains no source filename or font reference.
+The engine ships a Latin primary face and a Korean fallback. Each face is a same-stem trio: `latin.nwb`, `latin.font`, `latin.atlas`, and likewise for `korean`. The readable `.nwb` declares independent schema 1 `font face` and `font_atlas atlas` assets collected by `asset_bunch bunch = [face, atlas];`. Each asset has its own visible metadata, and `atlas.font = face;` declares the typed relation. The cooker checks the declared metrics, hashes, bake settings, and group layouts against the paired binaries; companion paths are derived from the shared stem.
 
-| Stem | Cooked `Font` identity | Cooked `FontAtlas` identity | Glyphs | RGBA groups | Atlas bytes |
-| --- | --- | --- | ---: | ---: | ---: |
-| `latin` | `engine/ui/fonts/default/latin` | `engine/ui/fonts/default/latin_atlas` | 3,748 | 2 × 1024² | 8,657,014 |
-| `korean` | `engine/ui/fonts/default/korean` | `engine/ui/fonts/default/korean_atlas` | 24,964 | 4 × 2048² | 68,451,728 |
+The `.font` is a FON1 envelope around the exact original SFNT bytes needed by FreeType and HarfBuzz. The `.atlas` is a current-version 2 FTA1 package containing SDF glyph records, compact image groups, and exact original positioning tables. The bunch publishes `engine/ui/fonts/default/latin/face` and `engine/ui/fonts/default/latin/atlas`, and the corresponding `/korean/face` and `/korean/atlas` identities.
 
-Each RGBA channel is an independent scalar signed-distance page, including alpha. Both atlases use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, and linear RGBA8 without mips. The Latin atlas uses six logical pages, and the Korean atlas uses thirteen. All glyph IDs, including nondrawable spaces and shaped forms, have records. The `kern`, `GPOS`, and `GDEF` tables present in each source are retained exactly. HarfBuzz shapes from `.font`; atlas table bytes are not applied to positions a second time.
+| Stem | Glyphs | Image groups | Texture data | Atlas file bytes |
+| --- | ---: | --- | ---: | ---: |
+| `latin` | 3,748 | 1024 × 1024 RGBA8; 1024 × 1023 RG8 | 5.998 MiB | 6,557,822 |
+| `korean` | 24,964 | 2 × 2048 × 2048 RGBA8; 2048 × 2047 RGBA8; 2048 × 1209 R8 | 50.354 MiB | 54,142,368 |
+
+Each stored channel is an independent scalar signed-distance page, including alpha when present. Both atlases use the pinned FreeType 2.14.3 bitmap-SDF renderer, 32 bake pixels per em, spread 8, one guard texel, and linear UNORM bytes without mips. The Latin atlas uses six logical pages, and the Korean atlas uses thirteen. All glyph IDs, including nondrawable spaces and shaped forms, have records. The `kern`, `GPOS`, and `GDEF` tables present in each source are retained exactly. HarfBuzz shapes from `.font`; atlas table bytes are not applied to positions a second time.
+
+Compared with the former fixed RGBA8 squares, cropping guarded bounds and dropping unused trailing channels reduces the combined texture payload from 72 MiB to 56.3515625 MiB, saving 15.6484375 MiB (21.733941%). The regenerated glyph metrics, every guarded SDF region, all retained image components, source hashes, and positioning tables match the originals exactly. These are image-byte totals; device allocation size can also include driver tiling and alignment.
 
 The original `.ttf` and `.otf` files are not retained beside the bundles. Their exact SFNT bytes remain in `.font`, so font rendering and repeat atlas generation require no external download. The source revisions and hashes are:
 

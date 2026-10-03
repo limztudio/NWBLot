@@ -33,6 +33,7 @@ struct SdfAtlasPageBinding{
     u32 index = 0u;
     u32 width = 0u;
     u32 height = 0u;
+    u32 channelCount = 4u;
     u32 spreadPixels = 0u;
     u32 distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
 };
@@ -43,7 +44,7 @@ struct SdfAtlasPageBinding{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RGBA channels are four independent linear SDF pages. Published pixels and their binding never change.
+// One to four channels store independent linear SDF pages. Published pixels and their binding never change.
 // A replacement/repack uses a fresh atlas identity; the caller's arena outlives snapshots and GPU consumers.
 class SdfAtlasPage : NoCopy{
 public:

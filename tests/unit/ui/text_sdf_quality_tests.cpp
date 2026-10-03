@@ -39,7 +39,7 @@ using namespace NWB::Impl::Ui;
     const auto fetch = [&](i32 sx, i32 sy){
         const u32 ix = static_cast<u32>(Clamp(sx, 0, static_cast<i32>(group.width) - 1));
         const u32 iy = static_cast<u32>(Clamp(sy, 0, static_cast<i32>(group.height) - 1));
-        return static_cast<f32>(group.pixels[(static_cast<usize>(iy) * group.width + ix) * 4u + glyph.channel]);
+        return static_cast<f32>(group.pixels[(static_cast<usize>(iy) * group.width + ix) * group.channelCount + glyph.channel]);
     };
     const f32 upper = fetch(x0, y0) * (1.f - tx) + fetch(x0 + 1, y0) * tx;
     const f32 lower = fetch(x0, y0 + 1) * (1.f - tx) + fetch(x0 + 1, y0 + 1) * tx;
@@ -85,8 +85,8 @@ TEST(FontAtlasQuality, DefaultFieldsTrackSupersampledNativeOutlinesAcrossZoomAnd
     const NWB::Path directory = assetRoot / "ui/fonts/default";
     static constexpr StringView s_Atlases[]{ "latin.atlas", "korean.atlas" };
     static constexpr StringView s_Sources[]{ "latin.font", "korean.font" };
-    static constexpr StringView s_Identities[]{ "engine/ui/fonts/default/latin", "engine/ui/fonts/default/korean" };
-    static constexpr StringView s_AtlasIdentities[]{ "engine/ui/fonts/default/latin_atlas", "engine/ui/fonts/default/korean_atlas" };
+    static constexpr StringView s_Identities[]{ "engine/ui/fonts/default/latin/face", "engine/ui/fonts/default/korean/face" };
+    static constexpr StringView s_AtlasIdentities[]{ "engine/ui/fonts/default/latin/atlas", "engine/ui/fonts/default/korean/atlas" };
     static constexpr StringView s_Text[]{ "Aoegq", "\xED\x95\x9C" };
     static constexpr f32 s_Zoom[]{ 0.5f, 0.75f, 1.f, 1.5f, 2.f, 4.f };
     static constexpr f32 s_Dpi[]{ 1.f, 1.5f, 2.f };

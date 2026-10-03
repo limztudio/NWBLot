@@ -19,10 +19,10 @@ NWB_IMPL_BEGIN
 
 namespace FontAtlasBinaryPayload{
     inline constexpr u32 s_Magic = 0x31415446u; // FTA1, explicitly encoded little endian.
-    inline constexpr u32 s_Version = 1u;
+    inline constexpr u32 s_Version = 2u;
     inline constexpr u32 s_HeaderBytes = 164u;
     inline constexpr u32 s_GlyphBytes = 52u;
-    inline constexpr u32 s_GroupHeaderBytes = 44u;
+    inline constexpr u32 s_GroupHeaderBytes = 48u;
     inline constexpr u32 s_TableHeaderBytes = 40u;
 };
 

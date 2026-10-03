@@ -118,13 +118,18 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
         u32 byteCount = 0u;
         if(
             !ReadU32(bytes, cursor, group.width) || !ReadU32(bytes, cursor, group.height)
+            || !ReadU32(bytes, cursor, group.channelCount)
             || !ReadU32(bytes, cursor, byteCount) || !ReadBytes(bytes, cursor, sizeof(group.sha256.bytes), group.sha256.bytes)
         )
             return false;
-        const u64 expectedBytes = static_cast<u64>(group.width) * group.height * 4u;
         if(
             group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
-            || expectedBytes != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes
+            || group.channelCount == 0u || group.channelCount > 4u
+        )
+            return false;
+        const u64 expectedBytes = static_cast<u64>(group.width) * group.height * group.channelCount;
+        if(
+            expectedBytes != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes
             || cursor > bytes.size() || byteCount > bytes.size() - cursor
         )
             return false;
@@ -209,7 +214,7 @@ bool SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::As
         AppendFloat(binary, glyph.advanceUnits); AppendU32(binary, glyph.drawable);
     }
     for(const FontAtlasGroup& group : payload.groups){
-        AppendU32(binary, group.width); AppendU32(binary, group.height);
+        AppendU32(binary, group.width); AppendU32(binary, group.height); AppendU32(binary, group.channelCount);
         AppendU32(binary, static_cast<u32>(group.pixels.size()));
         binary.insert(binary.end(), group.sha256.bytes, group.sha256.bytes + sizeof(group.sha256.bytes));
         binary.insert(binary.end(), group.pixels.begin(), group.pixels.end());

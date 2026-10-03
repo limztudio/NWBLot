@@ -6,6 +6,7 @@
 #include "renderer_internal.h"
 
 #include <core/common/log.h>
+#include <core/alloc/scratch.h>
 
 #include <global/text_utils.h>
 
@@ -40,9 +41,10 @@ namespace __hidden_ui_gpu_sdf{
         binding.font.valid() && binding.fontGeneration != 0u && binding.atlasIdentity != 0u && binding.generation != 0u
         && binding.index < s_FontAtlasMaxGroupCount && binding.width != 0u && binding.height != 0u
         && binding.width <= s_FontAtlasMaxExtent && binding.height <= s_FontAtlasMaxExtent
+        && binding.channelCount != 0u && binding.channelCount <= 4u
         && binding.spreadPixels >= s_FontAtlasMinSpreadPixels && binding.spreadPixels <= s_FontAtlasMaxSpreadPixels
         && binding.distanceEncoding == s_SdfDistanceEncodingFreeTypeU8
-        && page->pixels().size() == static_cast<usize>(binding.width) * binding.height * 4u
+        && page->pixels().size() == static_cast<usize>(binding.width) * binding.height * binding.channelCount
     ;
 }
 
@@ -54,7 +56,7 @@ namespace __hidden_ui_gpu_sdf{
     if(!descriptor.valid())
         return false;
     if(!heap.write(descriptor, Core::DescriptorWriteItem::Texture_SRV(
-        0u, version.m_texture.get(), Core::Format::RGBA8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D
+        0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D
     ))){
         heap.free(descriptor);
         return false;
@@ -100,7 +102,10 @@ bool GpuRendererState::validateSdfPages(const DrawSnapshot& snapshot){
         }
     }
     for(const DrawCommand& command : snapshot.commands()){
-        if(command.material == PaintMaterial::SdfGlyph && (command.sdfPageIndex >= pages.size() || command.sdfChannel >= 4u))
+        if(
+            command.material == PaintMaterial::SdfGlyph
+            && (command.sdfPageIndex >= pages.size() || command.sdfChannel >= pages[command.sdfPageIndex]->binding().channelCount)
+        )
             return false;
     }
     return true;
@@ -122,26 +127,46 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
     }
     Core::Device& device = m_graphics.getDevice();
     constexpr Core::FormatSupport::Mask requiredSupport = Core::FormatSupport::Texture | Core::FormatSupport::ShaderSample;
-    if((device.queryFormatSupport(Core::Format::RGBA8_UNORM) & requiredSupport) != requiredSupport)
+    const SdfAtlasPageBinding& binding = page->binding();
+    constexpr Core::Format::Enum formats[]{ Core::Format::R8_UNORM, Core::Format::RG8_UNORM,
+        Core::Format::RGB8_UNORM, Core::Format::RGBA8_UNORM };
+    Core::Format::Enum format = formats[binding.channelCount - 1u];
+    u32 uploadChannels = binding.channelCount;
+    if(binding.channelCount == 3u && (device.queryFormatSupport(format) & requiredSupport) != requiredSupport){
+        format = Core::Format::RGBA8_UNORM;
+        uploadChannels = 4u;
+    }
+    if((device.queryFormatSupport(format) & requiredSupport) != requiredSupport)
         return {};
     auto version = MakeGpuVersion<GpuSdfAtlasVersion>(m_arena, m_graphics, page);
     if(!version)
         return {};
-    const SdfAtlasPageBinding& binding = page->binding();
     Core::TextureDesc description;
     description
         .setName(Name("ui.sdf_page")).setWidth(binding.width).setHeight(binding.height)
-        .setFormat(Core::Format::RGBA8_UNORM).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
+        .setFormat(format).setInitialState(Core::ResourceStates::ShaderResource).setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
     ;
     version->m_texture = device.createTexture(description);
     if(!version->m_texture)
         return {};
+    Core::Alloc::ScratchArena scratch(Name("impl/ecs_ui/gpu/sdf_upload"));
+    Vector<u8, Core::Alloc::ScratchArena> expanded(scratch);
+    const u8* uploadData = page->pixels().data();
+    usize uploadBytes = page->pixels().size();
+    if(uploadChannels != binding.channelCount){
+        const usize texels = static_cast<usize>(binding.width) * binding.height;
+        expanded.resize(texels * uploadChannels, 0u);
+        for(usize texel = 0u; texel < texels; ++texel)
+            NWB_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData + texel * binding.channelCount, binding.channelCount);
+        uploadData = expanded.data();
+        uploadBytes = expanded.size();
+    }
     const Core::GraphicsRuntime::TextureUploadRegion region{
-        .data = page->pixels().data(),
-        .dataSize = page->pixels().size(),
-        .rowPitch = static_cast<usize>(binding.width) * 4u,
-        .depthPitch = page->pixels().size(),
+        .data = uploadData,
+        .dataSize = uploadBytes,
+        .rowPitch = static_cast<usize>(binding.width) * uploadChannels,
+        .depthPitch = uploadBytes,
     };
     if(!m_graphics.uploadTextureBatch(Core::GraphicsRuntime::TextureUploadBatchDesc{
         .destination = version->m_texture,
@@ -205,7 +230,7 @@ bool GpuRendererState::declareSdfPages(
         }
         const Core::GpuGraphResourceId texture = graph.importTexture(
             page->m_texture,
-            Core::GpuGraphResourceDesc().setIdentity(textureIdentity).setMarkerLabel("UI Linear RGBA SDF Page")
+            Core::GpuGraphResourceDesc().setIdentity(textureIdentity).setMarkerLabel("UI Linear SDF Page")
                 .setType(Core::GpuGraphResourceType::Texture).setInitialAvailabilityCompletion(ready)
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );

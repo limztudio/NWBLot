@@ -81,12 +81,15 @@ and complete original positioning-table bytes. It copies rendering records and R
 images into a strong immutable `BakedFontAtlas` version. Missing or mismatched optional
 atlases leave that same face available through native coverage.
 
-At authoring time, `<stem>.nwb`, `<stem>.font`, and `<stem>.atlas` form one bundle.
-The cooker derives `Font` and `FontAtlas` identities from that common stem. The
+At authoring time, `<stem>.nwb`, `<stem>.font`, and `<stem>.atlas` share one stem.
+The readable metadata declares independent `font face` and `font_atlas atlas` assets
+with their own metrics and hashes; `asset_bunch bunch = [face, atlas];` exports them
+under `/face` and `/atlas`, and `atlas.font = face;` selects the typed source. The
 `.font` contains the original SFNT bytes in a FON1 envelope; the binary `.atlas`
 contains the FTA1 glyph and image data. UI text receives the two cooked assets.
 
-The baker packs four independent scalar SDF pages into R/G/B/A. Each drawable shaped
+The baker packs independent scalar SDF pages into one to four stored channels,
+cropping each group to its guarded bounds without resampling. Each drawable shaped
 glyph selects its actual face's group and channel; padded plane bounds combine with
 HarfBuzz's baseline position and offsets. Neither atlas inspection advances nor
 exported `kern`/GPOS/GDEF bytes are applied again after shaping.
@@ -101,7 +104,7 @@ coverage across zoom and DPI; other fonts require their own visual qualification
 Scalar SDF does not guarantee arbitrary magnification or recover details missing from its bake.
 
 Layouts retain their exact source font and baked image versions. Paint snapshots pin
-immutable RGBA pages after source asset release or font replacement. Warm SDF painting
+immutable compact SDF pages after source asset release or font replacement. Warm SDF painting
 and supported DPI changes reuse the same pages; native coverage maintains a separate
 raster cache. Both image kinds are admitted atomically before quads are emitted.
 

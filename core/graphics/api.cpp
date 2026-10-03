@@ -85,6 +85,7 @@ static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
     { Format::RG8_SINT             , "RG8_SINT"             ,  2,  1, FormatKind::Integer     , true , true , false, false, false, false, true , false },
     { Format::RG8_UNORM            , "RG8_UNORM"            ,  2,  1, FormatKind::Normalized  , true , true , false, false, false, false, false, false },
     { Format::RG8_SNORM            , "RG8_SNORM"            ,  2,  1, FormatKind::Normalized  , true , true , false, false, false, false, true , false },
+    { Format::RGB8_UNORM           , "RGB8_UNORM"           ,  3,  1, FormatKind::Normalized  , true , true , true , false, false, false, false, false },
     { Format::R16_UINT             , "R16_UINT"             ,  2,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
     { Format::R16_SINT             , "R16_SINT"             ,  2,  1, FormatKind::Integer     , true , false, false, false, false, false, true , false },
     { Format::R16_UNORM            , "R16_UNORM"            ,  2,  1, FormatKind::Normalized  , true , false, false, false, false, false, false, false },

@@ -36,6 +36,7 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests
     nwb_assets_mesh_volume_entries
     nwb_assets_model_volume_entry
     nwb_assets_font_atlas_volume_entry
+    nwb_assets_font_volume_entry
     nwb_assets_texture_volume_entry
     nwb_assets_ui_skin_volume_entry
     nwb_assets_sampler_volume_entry

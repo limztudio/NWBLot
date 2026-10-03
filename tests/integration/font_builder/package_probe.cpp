@@ -44,7 +44,7 @@ inline constexpr int s_EntryFailure = -1;
     if(!EnsureDirectories(directory, error))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
-        const auto name = StringFormat(directory.arena(), "group_{}.rgba", index);
+        const auto name = StringFormat(directory.arena(), "group_{}.pixels", index);
         if(!WriteBinaryFile(directory / name, payload.groups[index].pixels))
             return false;
     }

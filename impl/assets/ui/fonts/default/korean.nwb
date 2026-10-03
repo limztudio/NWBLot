@@ -1,2 +1,29 @@
-font_bundle asset;
-asset.schema_version = 1;
+font face;
+face.schema_version = 1;
+face.face_index = 0;
+face.units_per_em = 1000;
+face.glyph_count = 24964;
+face.source_sha256 = "69975a0ac8472717870aefeab0a4d52739308d90856b9955313b2ad5e0148d68";
+
+font_atlas atlas;
+atlas.font = face;
+atlas.schema_version = 1;
+atlas.face_index = 0;
+atlas.units_per_em = 1000;
+atlas.glyph_count = 24964;
+atlas.source_sha256 = "69975a0ac8472717870aefeab0a4d52739308d90856b9955313b2ad5e0148d68";
+atlas.bake_ppem = 32;
+atlas.spread_pixels = 8;
+atlas.guard_texels = 1;
+atlas.raster_mode = "bitmap";
+atlas.ascender_units = 1160.000000000;
+atlas.descender_units = -288.000000000;
+atlas.line_gap_units = 0.000000000;
+atlas.groups = [
+    { "width": 2048, "height": 2048, "channels": 4, "sha256": "5fc21dd2d7260d903f5f2c56e6baa8f03783a3ecf42b1f4c720a57bad070ee1a" },
+    { "width": 2048, "height": 2047, "channels": 4, "sha256": "1bf4550b9e7a7111ce1b5a509b14981df5205ff2c49c3e3bcdfc868ddcdd8356" },
+    { "width": 2048, "height": 2048, "channels": 4, "sha256": "98b839a0b668955868a63c21dea9f7be8ccedcd8ca7bb58c019af516f008a35b" },
+    { "width": 2048, "height": 1209, "channels": 1, "sha256": "c89cce10cd4d2bd200eec1885782d060c0c8e287e10e9c71ae7b87433c31090c" },
+];
+
+asset_bunch bunch = [face, atlas];

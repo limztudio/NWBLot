@@ -3,7 +3,7 @@
 
 
 #include "bake.h"
-#include "bundle_metadata.h"
+#include "asset_metadata.h"
 #include "prepared_font.h"
 
 #include <global/blocking_io.h>
@@ -220,9 +220,9 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     Core::Assets::AssetBytes atlasBinary(arena);
     MetadataString metadata(arena);
     if(!Impl::SerializeFontAtlasPayload(payload, atlasBinary)
-        || !BuildPreparedFont(options, payload, fontBinary)
-        || !BuildFontBundleMetadata(metadata))
+        || !BuildPreparedFont(options, payload, fontBinary))
         return false;
+    BuildFontMetadata(payload, metadata);
 
     const __hidden_font_builder_writer::OutputPaths paths(options.output);
     bool present = false;

@@ -62,7 +62,7 @@ FontAtlasPositioningTable ClassPairFixture(Core::Assets::AssetArena& arena){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(FontAtlasPacking, IndependentChannelsAndNextGroupPreserveEveryByte){
+TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
     using namespace __hidden_font_atlas_tests;
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -71,34 +71,44 @@ TEST(FontAtlasPacking, IndependentChannelsAndNextGroupPreserveEveryByte){
     BakeOptions options(arena);
     options.extent = 32u;
     options.maxGroups = 2u;
-    RasterGlyphs glyphs(arena);
-    for(u32 index = 0u; index < 6u; ++index){
-        RasterGlyph glyph(arena);
-        glyph.record.glyphId = index;
-        glyph.record.drawable = 1u;
-        glyph.record.width = 28u;
-        glyph.record.height = 28u;
-        glyph.pixels.resize(28u * 28u, static_cast<u8>((index + 1u) * 17u));
-        glyphs.push_back(Move(glyph));
-    }
-    FontAtlasPayload payload(arena);
-    ASSERT_TRUE(PackGlyphs(options, glyphs, payload, scratch));
-    ASSERT_EQ(payload.groups.size(), 2u);
-    for(u32 index = 0u; index < 6u; ++index){
-        const auto& glyph = payload.glyphs[index];
-        EXPECT_EQ(glyph.group, index / 4u);
-        EXPECT_EQ(glyph.channel, index % 4u);
-        EXPECT_EQ(glyph.x, 1u);
-        EXPECT_EQ(glyph.y, 1u);
-        const auto& pixels = payload.groups[glyph.group].pixels;
-        for(u32 y = 1u; y < 29u; ++y){
-            for(u32 x = 1u; x < 29u; ++x)
-                EXPECT_EQ(pixels[(y * 32u + x) * 4u + glyph.channel], (index + 1u) * 17u);
+    for(u32 tailChannels = 1u; tailChannels <= 4u; ++tailChannels){
+        RasterGlyphs glyphs(arena);
+        for(u32 index = 0u; index < 4u + tailChannels; ++index){
+            RasterGlyph glyph(arena);
+            glyph.record.glyphId = index;
+            glyph.record.drawable = 1u;
+            glyph.record.width = 28u;
+            glyph.record.height = 29u;
+            glyph.pixels.resize(28u * 29u, static_cast<u8>((index + 1u) * 17u));
+            glyphs.push_back(Move(glyph));
         }
-        EXPECT_EQ(pixels[glyph.channel], 0u);
+        FontAtlasPayload payload(arena);
+        ASSERT_TRUE(PackGlyphs(options, glyphs, payload, scratch));
+        ASSERT_EQ(payload.groups.size(), 2u);
+        EXPECT_EQ(payload.groups[0u].channelCount, 4u);
+        EXPECT_EQ(payload.groups[1u].channelCount, tailChannels);
+        for(const auto& group : payload.groups){
+            EXPECT_EQ(group.width, 30u);
+            EXPECT_EQ(group.height, 31u);
+            EXPECT_EQ(group.pixels.size(), 30u * 31u * group.channelCount);
+            EXPECT_EQ(group.sha256, ComputeSha256({ group.pixels.data(), group.pixels.size() }));
+        }
+        for(u32 index = 0u; index < glyphs.size(); ++index){
+            const auto& glyph = payload.glyphs[index];
+            EXPECT_EQ(glyph.group, index / 4u);
+            EXPECT_EQ(glyph.channel, index % 4u);
+            EXPECT_EQ(glyph.x, 1u);
+            EXPECT_EQ(glyph.y, 1u);
+            const auto& group = payload.groups[glyph.group];
+            for(u32 y = 0u; y < group.height; ++y){
+                for(u32 x = 0u; x < group.width; ++x){
+                    const bool guard = x == 0u || y == 0u || x + 1u == group.width || y + 1u == group.height;
+                    const u8 expected = guard ? 0u : static_cast<u8>((index + 1u) * 17u);
+                    EXPECT_EQ(group.pixels[(y * group.width + x) * group.channelCount + glyph.channel], expected);
+                }
+            }
+        }
     }
-    EXPECT_EQ(payload.groups[1u].pixels[(1u * 32u + 1u) * 4u + 2u], 0u);
-    EXPECT_EQ(payload.groups[1u].pixels[(1u * 32u + 1u) * 4u + 3u], 0u);
 }
 
 TEST(FontAtlasPacking, RejectsCapacityWithoutDroppingGlyphs){

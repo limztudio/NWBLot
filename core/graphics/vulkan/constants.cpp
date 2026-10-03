@@ -72,6 +72,7 @@ static constexpr FormatMapping s_FormatMappings[] = {
     { Format::R11G11B10_FLOAT        , VK_FORMAT_B10G11R11_UFLOAT_PACK32       ,  4, false, false, false },
 
     { Format::RGBA8_UNORM            , VK_FORMAT_R8G8B8A8_UNORM                ,  4, false, false, false },
+    { Format::RGB8_UNORM             , VK_FORMAT_R8G8B8_UNORM                  ,  3, false, false, false },
     { Format::RGBA8_SNORM            , VK_FORMAT_R8G8B8A8_SNORM                ,  4, false, false, false },
     { Format::RGBA8_UINT             , VK_FORMAT_R8G8B8A8_UINT                 ,  4, false, false, false },
     { Format::RGBA8_SINT             , VK_FORMAT_R8G8B8A8_SINT                 ,  4, false, false, false },

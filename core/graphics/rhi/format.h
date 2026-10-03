@@ -34,6 +34,7 @@ namespace Format{
         RG8_SINT,
         RG8_UNORM,
         RG8_SNORM,
+        RGB8_UNORM,
         R16_UINT,
         R16_SINT,
         R16_UNORM,

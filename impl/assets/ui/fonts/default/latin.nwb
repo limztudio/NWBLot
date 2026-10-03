@@ -1,2 +1,27 @@
-font_bundle asset;
-asset.schema_version = 1;
+font face;
+face.schema_version = 1;
+face.face_index = 0;
+face.units_per_em = 1000;
+face.glyph_count = 3748;
+face.source_sha256 = "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5";
+
+font_atlas atlas;
+atlas.font = face;
+atlas.schema_version = 1;
+atlas.face_index = 0;
+atlas.units_per_em = 1000;
+atlas.glyph_count = 3748;
+atlas.source_sha256 = "b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5";
+atlas.bake_ppem = 32;
+atlas.spread_pixels = 8;
+atlas.guard_texels = 1;
+atlas.raster_mode = "bitmap";
+atlas.ascender_units = 1069.000000000;
+atlas.descender_units = -293.000000000;
+atlas.line_gap_units = 0.000000000;
+atlas.groups = [
+    { "width": 1024, "height": 1024, "channels": 4, "sha256": "b7fe560752b2e2abaa02daccf8038e7fb9ee999a84d5393ace4bc304fc67b69e" },
+    { "width": 1024, "height": 1023, "channels": 2, "sha256": "4bd94b7a3c895c59e4781b21f81b594127cd2f3dbb2b6b98923eb4c120df641f" },
+];
+
+asset_bunch bunch = [face, atlas];

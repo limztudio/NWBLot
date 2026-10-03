@@ -600,6 +600,7 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     case Format::R8_SNORM: return writeSNorm8Components(1u);
     case Format::RG8_UNORM: return writeUNorm8Components(s_TextureClearRGComponentCount, false);
     case Format::RG8_SNORM: return writeSNorm8Components(s_TextureClearRGComponentCount);
+    case Format::RGB8_UNORM: return writeUNorm8Components(3u, false);
     case Format::RGBA8_UNORM: return writeUNorm8Components(s_TextureClearRGBAComponentCount, false);
     case Format::RGBA8_SNORM: return writeSNorm8Components(s_TextureClearRGBAComponentCount);
     case Format::RGBA8_UNORM_SRGB: return writeUNorm8Components(s_TextureClearRGBAComponentCount, true);

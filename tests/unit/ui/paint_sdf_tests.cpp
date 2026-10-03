@@ -257,6 +257,40 @@ TEST_F(UiPaintSdfTests, PageFactoryRejectsUnsupportedEncodingSpreadAndIncomplete
     EXPECT_EQ(pixels.size(), 255u);
 }
 
+TEST_F(UiPaintSdfTests, CompactPageRejectsMissingChannelsWithoutPublishingGeometry){
+    SdfAtlasPageBinding binding = makePage()->binding();
+    binding.width = 7u;
+    binding.height = 5u;
+    binding.channelCount = 2u;
+    SdfAtlasPage::Pixels pixels(m_arena);
+    pixels.resize(7u * 5u * 2u, 128u);
+    const SharedSdfAtlasPage page = CreateSdfAtlasPage(m_arena, binding, Move(pixels));
+    ASSERT_TRUE(page);
+    EXPECT_FALSE(m_builder.drawSdfGlyph(page, 2u, { 1.f, 1.f, 4.f, 4.f }, { 0.f, 0.f, 0.5f, 0.5f }));
+    EXPECT_TRUE(m_builder.freeze().commands().empty());
+    begin(8u);
+    ASSERT_TRUE(m_builder.drawSdfGlyph(page, 1u, { 1.f, 1.f, 4.f, 4.f }, { 0.f, 0.f, 0.5f, 0.5f }));
+    const DrawSnapshot snapshot = m_builder.freeze();
+    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
+    EXPECT_EQ(snapshot.sdfPages()[0]->pixels().size(), 70u);
+    EXPECT_EQ(snapshot.commands()[0].sdfChannel, 1u);
+}
+
+TEST_F(UiPaintSdfTests, CompactFactoryRejectsInvalidChannelCountAndRgbaSizedInput){
+    SdfAtlasPageBinding binding = makePage()->binding();
+    SdfAtlasPage::Pixels pixels(m_arena);
+    pixels.resize(256u, 128u);
+    binding.channelCount = 0u;
+    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    binding.channelCount = 5u;
+    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    binding.channelCount = 1u;
+    EXPECT_FALSE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+    EXPECT_EQ(pixels.size(), 256u);
+    pixels.resize(64u);
+    ASSERT_TRUE(CreateSdfAtlasPage(m_arena, binding, Move(pixels)));
+}
+
 TEST_F(UiPaintSdfTests, AssetFactoryCopiesExactGroupBytesBeforeSourceAssetIsReleased){
     SharedSdfAtlasPage page;
     Sha256Digest sourceHash;

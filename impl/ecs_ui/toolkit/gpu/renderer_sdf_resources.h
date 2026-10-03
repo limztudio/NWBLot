@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns one exact RGBA distance image and its accepted physical upload until every frame consumer releases it.
+// Owns one distance image and its accepted physical upload until every frame consumer releases it.
 struct GpuSdfAtlasVersion : NoCopy{
     Core::GraphicsRuntime& m_graphics;
     SharedSdfAtlasPage m_page;

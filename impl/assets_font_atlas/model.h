@@ -61,6 +61,7 @@ struct FontAtlasGlyph{
 struct FontAtlasGroup{
     u32 width = 0u;
     u32 height = 0u;
+    u32 channelCount = 4u;
     Sha256Digest sha256;
     Core::Assets::AssetBytes pixels;
 

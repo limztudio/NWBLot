@@ -28,7 +28,7 @@ bool PaintBuilder::drawSdfGlyph(
     const Color& tint){
     NWB_ASSERT(m_recording);
     if(
-        !page || channel >= 4u || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
+        !page || channel >= page->binding().channelCount || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
         || uv.x + uv.width > 1.0f || uv.y + uv.height > 1.0f
     )

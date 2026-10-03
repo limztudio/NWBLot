@@ -54,10 +54,10 @@ namespace __hidden_ui_layer_smoke_world{
 
 static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_DefaultSkin{"engine/ui/skins/default/atlas"};
 static constexpr Core::Assets::AssetRef<Impl::UiSkin> s_AlternateSkin{"project/ui/skins/alternate/atlas"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
-static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin_atlas"};
-static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean_atlas"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin/face"};
+static constexpr Core::Assets::AssetRef<Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean/face"};
+static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin/atlas"};
+static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean/atlas"};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

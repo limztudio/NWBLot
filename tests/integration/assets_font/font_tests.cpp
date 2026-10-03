@@ -52,7 +52,7 @@ using FontTestArena = TestArena<FontTestArenaTag>;
     const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
     Core::Assets::AssetBytes binary(testArena.arena);
     ErrorCode error;
-    Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin"));
+    Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin/face"));
     if(!ReadBinaryFile(path, binary, error) || error || !candidate.loadBinary(binary))
         return false;
     outFont = Move(candidate);
@@ -106,7 +106,7 @@ TEST(AssetsFont, BundledPreparedLatinAndKoreanRoundTripWithoutChangingSourceByte
     FontTestArena testArena;
     const Path bundledRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
     static constexpr AStringView s_BundledNames[] = { "latin.font", "korean.font" };
-    static constexpr Name s_Names[] = { Name("engine/ui/fonts/default/latin"), Name("engine/ui/fonts/default/korean") };
+    static constexpr Name s_Names[] = { Name("engine/ui/fonts/default/latin/face"), Name("engine/ui/fonts/default/korean/face") };
     static constexpr usize s_SourceSizes[] = { 569208u, 4644748u };
     for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){
         const Path bundledPath = bundledRoot / s_BundledNames[index];

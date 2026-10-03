@@ -44,7 +44,6 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
     FrameGraphAvboitExtinctionUploadResult& outResult
 ){
     outResult = FrameGraphAvboitExtinctionUploadResult{};
-    using namespace RendererTaskGraphDetail;
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& avboitExtinctionPayload = extinctionPayload;
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& avboitExtinctionComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = *inputs.targets;

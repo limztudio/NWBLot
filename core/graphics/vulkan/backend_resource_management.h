@@ -45,7 +45,6 @@ public:
     [[nodiscard]] const BindlessLayoutDesc* getBindlessDesc()const{ return m_isBindless ? &m_bindlessDesc : nullptr; }
 
 public:
-    [[nodiscard]] const BindingLayoutDesc& getBindingLayoutDesc()const{ return m_desc; }
     // Descriptor-buffer metadata; layouts must be pure resource or sampler sets.
     [[nodiscard]] bool isDescriptorBufferCompatible()const{ return m_descriptorBufferCompatible; }
     [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const{ return m_descriptorBufferSetSizeBytes; }
@@ -145,7 +144,6 @@ public:
 
 public:
     [[nodiscard]] const RayTracingOpacityMicromapDesc& getDescription()const{ return m_desc; }
-    [[nodiscard]] bool isCompacted()const{ return m_compacted; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
 
 
@@ -159,7 +157,6 @@ private:
     Atomic<bool> m_acceptedConstructed{ false };
     u32 m_maxOpacity2StateSubdivisionLevel = 0u;
     u32 m_maxOpacity4StateSubdivisionLevel = 0u;
-    bool m_compacted = false;
 };
 
 

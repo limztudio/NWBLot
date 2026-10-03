@@ -500,7 +500,6 @@ public:
             const GpuGraphResourceId& resource
         )const & noexcept;
         GpuCompiledExternalResourceExportView externalResourceExport(const GpuGraphResourceId& resource)const && = delete;
-        [[nodiscard]] usize externalResourceExportCount()const noexcept;
         [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const & noexcept;
         const GpuCompiledPresentEndpoint* presentEndpoint()const && = delete;
         [[nodiscard]] GpuTaskGraphCompileStatistics compileStatistics()const noexcept;

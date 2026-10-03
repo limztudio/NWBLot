@@ -700,7 +700,7 @@ TEST(AssetsGraphics, TextureCookerRejectsUnsupportedMetadataVersion){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_legacy_metadata") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_unsupported_metadata_version") / "assets";
     const Path metadataPath = assetRoot / "textures" / "checker.nwb";
     NWB::Impl::TextureCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

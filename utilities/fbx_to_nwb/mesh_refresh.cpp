@@ -5,7 +5,6 @@
 #include "module.h"
 #include "mesh_refresh_parse.h"
 #include "mesh_refresh_text.h"
-#include <global/text_write.h>
 
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
@@ -25,12 +24,6 @@ namespace __hidden_mesh_refresh{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-using TextWrite::WriteFloat;
-using TextWrite::WriteVec2;
-using TextWrite::WriteVec3;
-using TextWrite::WriteVec4;
-using TextWrite::s_OutputFloatPrecision;
 
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
 inline constexpr StringView s_PositionStreamLabel = "position";

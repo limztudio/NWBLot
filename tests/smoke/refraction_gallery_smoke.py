@@ -37,7 +37,6 @@ LIT_LOGSERVER_EXECUTABLE = "--logserver-executable"
 LIT_AVBOIT_REFRACTION_RESOLVE = "AVBOIT refraction resolve:"
 LIT_UTF_8 = "utf-8"
 LIT_LIMITS = "limits"
-LIT_CASE_NOTE = "case-note"
 LIT_CASES = "cases"
 LIT_CAPTURES = "captures"
 LIT_FILE = "file"
@@ -227,7 +226,7 @@ def capture(args, case, variant):
 
 
 HTML = r'''<!doctype html>
-<html lang="en"><meta charset=LIT_UTF_8><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AVBOIT refraction: rendered case gallery</title>
 <style>
 :root{color-scheme:dark;font:15px/1.5 system-ui,sans-serif;background:#10151d;color:#e6edf5}
@@ -244,11 +243,11 @@ dialog{padding:0;max-width:96vw;max-height:96vh;width:1300px;background:#10151d;
 </style>
 <header><div class="eyebrow">Actual 960 × 720 framebuffer captures</div><h1>AVBOIT refraction: rendered case gallery</h1>
 <p>Inspect geometry, hardware-preferred tracing, screen-space fallback, and refraction disabled from the same fixed camera.</p>
-<p class="small" id="provenance"></p><div class="notice" id=LIT_LIMITS></div></header>
+<p class="small" id="provenance"></p><div class="notice" id="limits"></div></header>
 <main><nav class="case-tabs" id="tabs" aria-label="Refraction case"></nav>
-<h2 id="case-title"></h2><p id="case-description"></p><p class=LIT_CASE_NOTE id=LIT_CASE_NOTE></p>
+<h2 id="case-title"></h2><p id="case-description"></p><p class="case-note" id="case-note"></p>
 <div class="key"><span><i class="dot red"></i>Red: foreground AVBOIT panel</span><span><i class="dot blue"></i>Blue: background AVBOIT panel</span><span><i class="dot gray"></i>Stripes: opaque background</span></div>
-<div class="controls"><div class="checks" id="variant-controls"></div><label>Scene zoom <input id="zoom" type="range" min="1" max="3" step=".25" value="1.5"><output id="zoom-value">1.5×</output></label><label>Layout <select id="layout"><option value="two">Side by side</option><option value=LIT_SINGLE>One per row</option></select></label><button id="reset">Reset view</button></div>
+<div class="controls"><div class="checks" id="variant-controls"></div><label>Scene zoom <input id="zoom" type="range" min="1" max="3" step=".25" value="1.5"><output id="zoom-value">1.5×</output></label><label>Layout <select id="layout"><option value="two">Side by side</option><option value="single">One per row</option></select></label><button id="reset">Reset view</button></div>
 <section class="grid" id="cards" aria-label="Captured variants"></section></main>
 <footer>All images are actual framebuffer readbacks, encoded losslessly as PNG with unchanged RGB pixels. The original BMPs are retained beside this file. This gallery works offline and needs no image server or external libraries. Click a capture to inspect pixels. Differences compare the full frame with the disabled variant and are descriptive, not a physical-accuracy score.</footer>
 <dialog id="viewer"><div class="dialog-head"><strong id="viewer-title"></strong><div class="dialog-controls"><label>Pixel scale <select id="pixel-scale"><option value="1">100%</option><option value="2">200%</option><option value="3">300%</option></select></label><button id="close-viewer">Close</button></div></div><div class="dialog-view"><img id="viewer-image" alt="Expanded actual framebuffer capture"></div></dialog>

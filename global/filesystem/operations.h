@@ -92,10 +92,6 @@ inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
 }
 #endif
 
-inline void SetMissingPathError(ErrorCode& outError)noexcept{
-    outError = std::make_error_code(std::errc::no_such_file_or_directory);
-}
-
 inline void SetUnsupportedError(ErrorCode& outError)noexcept{
     outError = std::make_error_code(std::errc::function_not_supported);
 }
@@ -423,12 +419,6 @@ template<typename ArenaT>
 #else
     return error == std::errc::no_such_file_or_directory || error == std::errc::not_a_directory;
 #endif
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline bool PathExists(const Path<ArenaT>& path)noexcept{
-    ErrorCode error;
-    return FileExists(path, error) && !error;
 }
 
 template<typename ArenaT>

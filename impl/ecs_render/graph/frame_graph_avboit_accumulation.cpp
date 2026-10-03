@@ -44,7 +44,6 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
     FrameGraphAvboitAccumulationUploadResult& outResult
 ){
     outResult = FrameGraphAvboitAccumulationUploadResult{};
-    using namespace RendererTaskGraphDetail;
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& avboitAccumulationPayload = accumulationPayload;
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& avboitAccumulationComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = *inputs.targets;

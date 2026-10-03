@@ -286,13 +286,6 @@ template<typename ArenaT>
     AppendHexU64(value, result);
     return result;
 }
-template<typename ArenaT>
-[[nodiscard]] inline WString<ArenaT> FormatHex64W(ArenaT& arena, const u64 value){
-    WString<ArenaT> result{arena};
-    result.reserve(s_HexU64DigitCount);
-    AppendHexU64(value, result);
-    return result;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

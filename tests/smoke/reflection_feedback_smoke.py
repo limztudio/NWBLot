@@ -513,7 +513,7 @@ def write_report(args, completed, evidence, metrics=None):
         cards.append(f'<article><h2>{html.escape(spec.name)}</h2><a href="{spec.name}.bmp">Raw BMP</a> / '
             f'<a href="{spec.name}.log">Completed-frame log</a><img alt="Actual {html.escape(spec.name)} capture" '
             f'src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = '<!doctype html><html lang="en"><meta charset=LIT_UTF_8><title>Reflection feedback evidence</title>'
+    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection feedback evidence</title>'
     document += '<style>body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}</style>'
     document += '<h1>Reflection feedback — actual captures</h1><p>' + html.escape(note) + '</p><main>' + ''.join(cards) + '</main><pre>'
     document += html.escape(json.dumps(metrics, indent=2) if metrics else 'Captured evidence; assertions pending.') + '</pre></html>'

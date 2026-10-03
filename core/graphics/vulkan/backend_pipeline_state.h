@@ -204,14 +204,6 @@ public:
     [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const;
     [[nodiscard]] u32 getMaxTexelBufferElements()const;
 
-    // Coherent copies from the current binding generation; zeroed while unavailable.
-    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getResourceBindingInfo()const;
-    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getSamplerBindingInfo()const;
-
-    // Resource and sampler buffer indices in bind order.
-    [[nodiscard]] u32 getResourceBufferIndex()const{ return s_ResourceDescriptorBufferIndex; }
-    [[nodiscard]] u32 getSamplerBufferIndex()const{ return s_SamplerDescriptorBufferIndex; }
-
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
 
@@ -422,11 +414,6 @@ public:
         GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
     );
 
-    [[nodiscard]] u32 getResourceCapacity()const{ return m_resourceSlots.capacity; }
-    [[nodiscard]] u32 getSamplerCapacity()const{ return m_samplerSlots.capacity; }
-    [[nodiscard]] u32 getResourceSetIndex()const{ return m_desc.bindlessHeapAbi.resourceSetIndex; }
-    [[nodiscard]] u32 getSamplerSetIndex()const{ return m_desc.bindlessHeapAbi.samplerSetIndex; }
-    [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_desc.bindlessHeapAbi.accelStructSetIndex; }
     // Resource and sampler layouts at sets 0 and 1.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
@@ -435,9 +422,7 @@ public:
     [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
     [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const;
-    // Persistent segment blocks bound at heap sets.
-    [[nodiscard]] const DescriptorBufferSegment& getResourceBufferBlock()const{ return m_resourceBufferBlock; }
-    [[nodiscard]] const DescriptorBufferSegment& getSamplerBufferBlock()const{ return m_samplerBufferBlock; }
+    // Per-generation TLAS segment block bound at heap set 2.
     [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const;
 
 

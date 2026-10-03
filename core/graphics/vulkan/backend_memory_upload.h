@@ -315,15 +315,6 @@ private:
 
 
 public:
-    struct VolatileBufferState{
-        i32 latestVersion = 0;
-        i32 minVersion = 0;
-        i32 maxVersion = 0;
-        bool initialized = false;
-    };
-
-
-public:
     Buffer(
         const VulkanContext& context,
         VulkanAllocator& allocator,
@@ -376,7 +367,6 @@ private:
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
     Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
-    VolatileBufferState m_volatileState;
     Futex m_bufferViewsMutex;
 
     const bool m_creationInitialStateKnown;

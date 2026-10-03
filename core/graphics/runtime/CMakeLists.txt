@@ -11,7 +11,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime_graph_setup.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_setup.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/runtime_setup_async.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_swap_chain.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_texture_upload.cpp"
 )

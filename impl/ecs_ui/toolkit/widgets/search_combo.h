@@ -76,7 +76,6 @@ private:
     u64 m_viewCount = 0u;
     u64 m_queryGeneration = 0u;
     u64 m_queryExternalRevision = 0u;
-    u64 m_queryRevision = 0u;
     bool m_filterValid = false;
 };
 

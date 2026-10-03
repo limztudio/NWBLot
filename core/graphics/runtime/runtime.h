@@ -40,7 +40,7 @@ public:
         // Upload sizes and destination offsets must be four-byte aligned.
         usize dataSize = 0;
         u64 destOffsetBytes = 0;
-        // Written after producer submission and consumer readiness bridges; asynchronous callers retain token storage.
+        // Optional output written after producer submission and consumer readiness bridges.
         QueueSubmissionToken* acceptedToken = nullptr;
         // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
         // The scheduler independently places the producer and submits readiness bridges for consumers.
@@ -50,7 +50,7 @@ public:
     struct TextureSetupDesc{
         TextureDesc textureDesc;
         const void* data = nullptr;
-        // Total upload payload size in bytes (required for async copy ownership).
+        // Total upload payload size in bytes, used to validate the subresource upload layout.
         usize uploadDataSize = 0;
         usize rowPitch = 0;
         usize depthPitch = 0;
@@ -120,15 +120,6 @@ public:
         }
     };
 
-    struct CoopVectorSupport{
-        bool inferencingSupported = false;
-        bool trainingSupported = false;
-        bool fp16InferencingSupported = false;
-        bool fp16TrainingSupported = false;
-        bool fp32TrainingSupported = false;
-    };
-
-    using TaskHandle = CpuTaskScheduler::TaskHandle;
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
     // A synchronous caller may declare one isolated graph through this callback. The graph owns all native command
     // recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
@@ -194,7 +185,6 @@ public:
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
     // new frame. This is useful when an external capture must sample the last completed temporal frame exactly.
     void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
-    [[nodiscard]] bool isFrameSubmissionSuspended()const noexcept{ return m_frameSubmissionSuspended; }
     bool runFrame();
     // A render pass uses this when an accepted cross-queue release cannot be recovered safely. The current graphics
     // generation then stops before another pass or presentation can use indeterminate ownership; its owner must
@@ -257,7 +247,6 @@ public:
     }
 
     [[nodiscard]] TStringView getRendererString()const;
-    [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
     // Preserved across resize, destroy/init and device recreation; this is not a monitor scan-out completion count.
@@ -304,28 +293,8 @@ public:
     )const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 
-    [[nodiscard]] TaskHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
-    [[nodiscard]] TaskHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);
-    [[nodiscard]] TaskHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh);
-
-    [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
     [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
-
-    // Schedules CPU-side graphics tasks through the shared scheduler. Callers must wait for the returned task before
-    // submitting or destroying any command lists/resources the work touches.
-    template<typename Func>
-    [[nodiscard]] TaskHandle scheduleGraphicsTask(Func&& task){
-        return m_tasks.submit(Forward<Func>(task));
-    }
-
-    template<typename Func>
-    [[nodiscard]] TaskHandle scheduleGraphicsTask(Func&& task, const TaskHandle dependency){
-        return m_tasks.submit(Forward<Func>(task), dependency);
-    }
-
-    void waitTask(TaskHandle handle)const;
-    void waitTasks(){ m_tasks.wait(); }
 
     [[nodiscard]] bool backBufferResizing(SwapChainTransitionTicket& outTicket);
     [[nodiscard]] bool backBufferResized();
@@ -346,7 +315,6 @@ private:
 
 
 public:
-    void updateAverageFrameTime(f64 elapsedTime);
     void notifyPointerScaleChanged()const;
     [[nodiscard]] bool shouldRenderUnfocused()const;
     bool animateRenderPresent();
@@ -361,7 +329,6 @@ private:
     GraphicsAllocator& m_allocator;
     CpuTaskScheduler& m_cpuScheduler;
     GpuTaskScheduler& m_gpuTasks;
-    CpuTaskScope m_tasks;
     CpuTaskProfileLabel m_frameTaskProfileLabel;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
@@ -375,7 +342,6 @@ private:
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
 
-    bool m_skipRenderOnFirstFrame = false;
     bool m_hasPresentedFrame = false;
     bool m_windowVisible = false;
     bool m_windowIsInFocus = true;
@@ -393,11 +359,6 @@ private:
     f32 m_dpiScaleFactorY = 1.f;
     f32 m_prevDPIScaleFactorX = 0.f;
     f32 m_prevDPIScaleFactorY = 0.f;
-
-    f64 m_averageFrameTime = 0.0;
-    f64 m_averageTimeUpdateInterval = s_AverageFrameTimeUpdateIntervalSeconds;
-    f64 m_frameTimeSum = 0.0;
-    i32 m_numberOfAccumulatedFrames = 0;
 
     u32 m_frameIndex = 0;
     u64 m_successfulPresentationCount = 0u;

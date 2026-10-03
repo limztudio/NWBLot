@@ -550,24 +550,3 @@ template<typename StringT, typename EnumT, typename TextFunction>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename CharT, typename Container>
-inline bool SplitText(const BasicStringView<CharT> line, const CharT delimiter, Container& outParts){
-    outParts.clear();
-
-    usize begin = 0;
-    for(usize i = 0u; i <= line.size(); ++i){
-        const bool atEnd = i == line.size();
-        if(!atEnd && line[i] != delimiter)
-            continue;
-
-        outParts.push_back(line.substr(begin, i - begin));
-        begin = i + 1;
-    }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

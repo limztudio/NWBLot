@@ -302,9 +302,6 @@ GpuCompiledExternalResourceExportView GpuCompiledGraph::ReadView::externalResour
         .sources = m_graph->externalResourceExportSources(*plan),
     };
 }
-usize GpuCompiledGraph::ReadView::externalResourceExportCount()const noexcept{
-    return m_graph ? m_graph->m_externalResourceExports.size() : 0u;
-}
 const GpuCompiledPresentEndpoint* GpuCompiledGraph::ReadView::presentEndpoint()const & noexcept{
     return m_graph && m_graph->valid() && m_graph->m_hasPresentEndpoint ? &m_graph->m_presentEndpoint : nullptr;
 }

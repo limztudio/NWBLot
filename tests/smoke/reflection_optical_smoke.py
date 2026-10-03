@@ -278,7 +278,7 @@ def write_report(args, completed, evidence, metrics=None):
         cards.append(f'<article><h2>{html.escape(spec.name)} / {spec.queries} queries</h2>'
             f'<a href="{spec.name}.bmp">Raw BMP</a> / <a href="{spec.name}.log">Completed-frame log</a>'
             f'<img alt="Actual {html.escape(spec.name)} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = '<!doctype html><html lang="en"><meta charset=LIT_UTF_8><title>Reflected optical transport</title>'
+    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflected optical transport</title>'
     document += '<style>body{font:16px system-ui;background:#141922;color:#e7edf5;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{padding:16px;background:#202937}img{display:block;width:100%;margin-top:12px}a{color:#8cf}pre{white-space:pre-wrap}</style>'
     document += '<h1>Reflected optical transport — actual framebuffer captures</h1><p>' + html.escape(LIMITATIONS) + '</p>'
     document += '<p>Glass and colored chart are behind the camera. The visible central rectangle is a smooth mirror. PNG conversion preserves every captured RGB pixel; raw BMPs remain available.</p><main>'

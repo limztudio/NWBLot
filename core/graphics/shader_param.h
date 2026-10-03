@@ -72,9 +72,6 @@ static constexpr usize s_AlignRemainderZero = 0;
 static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == s_AlignRemainderZero, "IndirectInstanceDesc::transform must stay SIMD-aligned");
 #endif
 
-inline constexpr u32 s_ClasByteAlignment = 128;
-inline constexpr u32 s_ClasMaxTriangles = 256;
-inline constexpr u32 s_ClasMaxVertices = 256;
 inline constexpr u32 s_MaxGeometryIndex = 16777215;
 
 // CLAS construction and template construction share this ABI prefix exactly. Keep it macro-defined rather than using

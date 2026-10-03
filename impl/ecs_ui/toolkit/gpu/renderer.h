@@ -55,7 +55,6 @@ public:
     // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
     [[nodiscard]] bool submit(DrawSnapshot&& snapshot);
     void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode);
-    [[nodiscard]] GpuCommandRecordingMode::Enum commandRecordingMode()const;
     [[nodiscard]] bool hasPendingFrame()const;
     [[nodiscard]] u64 lastAcceptedGeneration()const;
     [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const;

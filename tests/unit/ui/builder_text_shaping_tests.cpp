@@ -69,11 +69,14 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiBuilderTextShapingTests, ExplicitHangulPolicyReachesLabelAndEditBox){
+TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenScopeMutationFails){
     ASSERT_TRUE(installKoreanFallback());
     addEditRegion();
     ASSERT_TRUE(m_skin.validatePayload());
     ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('H', 'a', 'n', 'g'), "ko"));
+    EXPECT_FALSE(m_builder.setTextShaping(0u, "ko"));
+    EXPECT_FALSE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko!"));
+    ASSERT_FALSE(m_builder.failed());
     EditModel model(m_arena);
     ASSERT_TRUE(model.setText(s_Jamo));
     EditBoxState state;
@@ -85,21 +88,6 @@ TEST_F(UiBuilderTextShapingTests, ExplicitHangulPolicyReachesLabelAndEditBox){
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_EQ(glyphQuads(snapshot), 2u);
-}
-
-TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenScopeMutationFails){
-    ASSERT_TRUE(installKoreanFallback());
-    ASSERT_TRUE(m_builder.setTextShaping(TextScriptTag('H', 'a', 'n', 'g'), "ko"));
-    EXPECT_FALSE(m_builder.setTextShaping(0u, "ko"));
-    EXPECT_FALSE(m_builder.setTextShaping(TextScriptTag('L', 'a', 't', 'n'), "ko!"));
-    ASSERT_FALSE(m_builder.failed());
-
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 0.0f, 0.0f, 400.0f, 100.0f }));
-    ASSERT_TRUE(m_builder.label("label", s_Jamo));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(glyphQuads(snapshot), 1u);
     ASSERT_TRUE(m_context.commitFrame(1u));
 
     ASSERT_TRUE(begin(2u));

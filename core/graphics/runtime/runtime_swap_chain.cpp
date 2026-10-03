@@ -45,7 +45,6 @@ TextureHandle GraphicsRuntime::createTexture(const TextureDesc& desc)const{
 }
 
 bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){
-    waitTasks();
     if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)){
         requestDeviceRecreation();
         return false;

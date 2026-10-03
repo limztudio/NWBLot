@@ -183,7 +183,6 @@ bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBloc
 bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
 bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
-bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, TStringView operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
 bool BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
@@ -261,23 +260,6 @@ template<typename... Pointers>
     ;
 }
 
-template<typename... Pointers>
-inline bool DebugValidateNotNull(TStringView operationName, TStringView message, Pointers... pointers){
-#if defined(NWB_DEBUG)
-    if(!AreAllPointersValid(pointers...)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        return false;
-    }
-#else
-    static_cast<void>(operationName);
-    static_cast<void>(message);
-    (static_cast<void>(pointers), ...);
-#endif
-
-    return true;
-}
-
 inline bool DebugValidateBufferRange(
     const BufferDesc& desc,
     const u64 offsetBytes,
@@ -349,35 +331,6 @@ inline bool DebugValidateTextureSliceExtentsMatch(
     static_cast<void>(second);
     static_cast<void>(operationName);
     static_cast<void>(message);
-#endif
-
-    return true;
-}
-
-inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, TStringView operationName){
-#if defined(NWB_DEBUG)
-    if(!IsTextureSubresourceRangeValid(subresources)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
-        return false;
-    }
-#else
-    static_cast<void>(subresources);
-    static_cast<void>(operationName);
-#endif
-
-    return true;
-}
-
-inline bool DebugValidateBufferImageCopyAspect(VkImageAspectFlags aspectMask, TStringView operationName){
-#if defined(NWB_DEBUG)
-    if(!ValidateBufferImageCopyAspectMask(aspectMask, operationName)){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil buffer-image copies are not supported"), operationName);
-        return false;
-    }
-#else
-    static_cast<void>(aspectMask);
-    static_cast<void>(operationName);
 #endif
 
     return true;

@@ -1577,6 +1577,7 @@ class WindowsCapture:
     DWMWCP_DONOTROUND = 1
     HWND_TOPMOST = ctypes.c_void_p(-1)
     MK_LBUTTON = 0x0001
+    SW_SHOW = 5
     SW_RESTORE = 9
     SWP_NOSIZE = 0x0001
     SWP_NOMOVE = 0x0002
@@ -1611,6 +1612,10 @@ class WindowsCapture:
     def _bind_functions(self):
         self.user32.IsWindowVisible.argtypes = [ctypes.c_void_p]
         self.user32.IsWindowVisible.restype = ctypes.c_int
+        self.user32.IsIconic.argtypes = [ctypes.c_void_p]
+        self.user32.IsIconic.restype = ctypes.c_int
+        self.user32.IsZoomed.argtypes = [ctypes.c_void_p]
+        self.user32.IsZoomed.restype = ctypes.c_int
         self.user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
         self.user32.GetWindowRect.restype = ctypes.c_int
         self.user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
@@ -1786,8 +1791,12 @@ class WindowsCapture:
 
     def _prepare_capture_window(self, hwnd):
         hwnd_ptr = ctypes.c_void_p(hwnd)
-        self.user32.ShowWindow(hwnd_ptr, self.SW_RESTORE)
-        self.user32.SetWindowPos(hwnd_ptr, self.HWND_TOPMOST, 0, 0, 0, 0, self.SWP_NOMOVE | self.SWP_NOSIZE | self.SWP_SHOWWINDOW)
+        # Repeated restore/show requests can animate an already settled client before the screen capture.
+        if self.user32.IsIconic(hwnd_ptr) or self.user32.IsZoomed(hwnd_ptr):
+            self.user32.ShowWindow(hwnd_ptr, self.SW_RESTORE)
+        elif not self.user32.IsWindowVisible(hwnd_ptr):
+            self.user32.ShowWindow(hwnd_ptr, self.SW_SHOW)
+        self.user32.SetWindowPos(hwnd_ptr, self.HWND_TOPMOST, 0, 0, 0, 0, self.SWP_NOMOVE | self.SWP_NOSIZE)
         self.user32.SetForegroundWindow(hwnd_ptr)
         time.sleep(0.1)
 
@@ -2221,6 +2230,9 @@ def capture_resized_window(args, backend, handle, process, log_directory, log_ba
     ensure_process_running(process, "before client resize")
     if backend.client_size(handle) != original_size:
         raise SmokeFailure("client extent changed during the original-size settle interval")
+    settled_before = capture_render_ready_window(before_args, backend, handle, process)
+    if (settled_before.width, settled_before.height) != original_size or backend.client_size(handle) != original_size:
+        raise SmokeFailure("settled original client/capture extent does not match the original extent")
 
     backend.resize_client(handle, *target_size)
     marker = f"GraphicsRuntime: Back buffer resized to {target_size[0]}x{target_size[1]}"

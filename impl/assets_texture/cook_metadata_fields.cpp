@@ -31,8 +31,6 @@ namespace TextureCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextureFormat::ComputeMipPlaneBlockLayout;
-using TextureFormat::ComputeMipSliceCount;
 using TextureFormat::s_Texture2DDimension;
 using TextureFormat::s_Texture3DDimension;
 using TextureFormat::s_TextureCubeDimension;

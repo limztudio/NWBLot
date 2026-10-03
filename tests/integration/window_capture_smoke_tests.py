@@ -1138,6 +1138,75 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
         )
 
 
+    def test_visible_normal_capture_does_not_restart_restore_or_show_on_repeated_preparation(self):
+        hwnd = 0xF234567887654321
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+        capture.user32 = mock.Mock()
+        capture.gdi32 = mock.Mock()
+        capture._bind_functions()
+        capture.user32.IsIconic.return_value = 0
+        capture.user32.IsZoomed.return_value = 0
+        capture.user32.IsWindowVisible.return_value = 1
+        capture._client_rect = mock.Mock(return_value=object())
+        capture._capture_screen_rect = mock.Mock(return_value=LIT_CAPTURE)
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP):
+            capture.capture_window(hwnd, Path(LIT_CAPTURE_BMP))
+            capture.capture_window(hwnd, Path(LIT_CAPTURE_BMP))
+        capture.user32.ShowWindow.assert_not_called()
+        self.assertEqual(capture.user32.SetForegroundWindow.call_count, 2)
+        self.assertEqual(capture.user32.SetWindowPos.call_count, 2)
+        for call in capture.user32.SetWindowPos.call_args_list:
+            self.assertEqual(call.args[0].value, hwnd)
+            self.assertEqual(call.args[1:6], (capture.HWND_TOPMOST, 0, 0, 0, 0))
+            self.assertEqual(call.args[6], capture.SWP_NOMOVE | capture.SWP_NOSIZE)
+        for query in (capture.user32.IsIconic, capture.user32.IsZoomed, capture.user32.IsWindowVisible):
+            self.assertEqual(query.argtypes, [ctypes.c_void_p])
+            self.assertIs(query.restype, ctypes.c_int)
+            self.assertEqual([call.args[0].value for call in query.call_args_list], [hwnd, hwnd])
+
+    def test_minimized_or_maximized_preparation_restores_once_then_preserves_normal_state(self):
+        hwnd = 0xF234567887654321
+        for iconic, zoomed in ((1, 0), (0, 1)):
+            with self.subTest(iconic=iconic, zoomed=zoomed):
+                capture = object.__new__(window_capture_smoke.WindowsCapture)
+                capture.user32 = mock.Mock()
+                capture.user32.IsIconic.return_value = iconic
+                capture.user32.IsZoomed.return_value = zoomed
+                capture.user32.IsWindowVisible.return_value = 1
+                def restore(window, action):
+                    self.assertEqual(window.value, hwnd)
+                    self.assertEqual(action, capture.SW_RESTORE)
+                    capture.user32.IsIconic.return_value = 0
+                    capture.user32.IsZoomed.return_value = 0
+                capture.user32.ShowWindow.side_effect = restore
+                with mock.patch.object(window_capture_smoke.time, LIT_SLEEP):
+                    capture.prepare_window(hwnd)
+                    capture.prepare_window(hwnd)
+                capture.user32.ShowWindow.assert_called_once()
+                self.assertEqual(capture.user32.SetForegroundWindow.call_count, 2)
+                self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW
+                    for call in capture.user32.SetWindowPos.call_args_list))
+
+    def test_hidden_preparation_shows_current_geometry_once_without_restore(self):
+        hwnd = 0xF234567887654321
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+        capture.user32 = mock.Mock()
+        capture.user32.IsIconic.return_value = 0
+        capture.user32.IsZoomed.return_value = 0
+        capture.user32.IsWindowVisible.return_value = 0
+        def show(window, action):
+            self.assertEqual(window.value, hwnd)
+            self.assertEqual(action, capture.SW_SHOW)
+            capture.user32.IsWindowVisible.return_value = 1
+        capture.user32.ShowWindow.side_effect = show
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP):
+            capture.prepare_window(hwnd)
+            capture.prepare_window(hwnd)
+        capture.user32.ShowWindow.assert_called_once()
+        self.assertTrue(all(not call.args[6] & capture.SWP_SHOWWINDOW
+            for call in capture.user32.SetWindowPos.call_args_list))
+
+
 class LinuxCaptureFallbackTests(unittest.TestCase):
     def test_white_direct_capture_defers_to_render_readiness_without_root_fallback(self):
         window = 0x4A
@@ -1411,19 +1480,19 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         return SimpleNamespace(output=Path(LIT_CAPTURE_BMP), resize_client=[1001, 701], settle_seconds=2.0,
             resize_settle_seconds=3.0, render_ready_timeout=1.0)
 
-    def test_resize_waits_for_original_render_then_runtime_ack_and_final_render(self):
+    def test_resize_recaptures_settled_original_before_request_then_waits_for_runtime_ack(self):
         args = self.make_args()
         events = []
         backend = mock.Mock()
         backend.prepare_window.side_effect = lambda handle: events.append(LIT_PREPARE)
-        backend.client_size.side_effect = [(1280, 900), (1280, 900), (1001, 701), (1001, 701), (1001, 701)]
+        backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), (1001, 701), (1001, 701), (1001, 701)]
         backend.resize_client.side_effect = lambda *values: events.append((LIT_RESIZE, values))
         process = SimpleNamespace(poll=lambda: None)
         before = SimpleNamespace(width=1280, height=900)
         after = SimpleNamespace(width=1001, height=701)
         def capture(capture_args, *_):
             events.append((LIT_CAPTURE, capture_args.output))
-            return before if len([event for event in events if isinstance(event, tuple) and event[0] == LIT_CAPTURE]) == 1 else after
+            return before if len([event for event in events if isinstance(event, tuple) and event[0] == LIT_CAPTURE]) < 3 else after
         with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=capture), \
              mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, side_effect=["", LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO]), \
              mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
@@ -1433,14 +1502,15 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
         self.assertIs(result, after)
         backend.resize_client.assert_called_once_with(42, 1001, 701)
         self.assertEqual(events, [LIT_PREPARE, (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_SLEEP, 2.0),
-            (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1), (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
+            (LIT_CAPTURE, Path("capture.before-resize.bmp")), (LIT_RESIZE, (42, 1001, 701)), (LIT_SLEEP, 0.1),
+            (LIT_SLEEP, 3.0), (LIT_CAPTURE, Path(LIT_CAPTURE_BMP))])
 
     def test_resize_requires_both_client_extent_and_renderer_acknowledgement(self):
         for client, log in (((1280, 900), LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), ((1001, 701), "")):
             with self.subTest(client=client, log=log):
                 args = self.make_args()
                 backend = mock.Mock()
-                backend.client_size.side_effect = [(1280, 900), (1280, 900), client]
+                backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), client]
                 with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
                      mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=log), \
                      mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
@@ -1453,7 +1523,7 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
     def test_final_capture_cannot_keep_the_old_extent(self):
         args = self.make_args()
         backend = mock.Mock()
-        backend.client_size.side_effect = [(1280, 900), (1280, 900), (1001, 701)]
+        backend.client_size.side_effect = [(1280, 900), (1280, 900), (1280, 900), (1001, 701)]
         with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, return_value=SimpleNamespace(width=1280, height=900)), \
              mock.patch.object(window_capture_smoke, LIT_COLLECT_LOG_DELTA, return_value=LIT_GRAPHICSRUNTIME_BACK_BUFFER_RESIZED_TO), \
              mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
@@ -1461,6 +1531,24 @@ class ResizeCaptureLifecycleTests(unittest.TestCase):
              mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
              self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "final client/capture extent"):
             window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None), Path(LIT_LOGS), {}, LIT_LOG)
+
+    def test_settled_original_capture_or_client_extent_change_prevents_resize(self):
+        original = SimpleNamespace(width=1280, height=900)
+        changed = SimpleNamespace(width=1279, height=900)
+        for capture_changed in (True, False):
+            with self.subTest(capture_changed=capture_changed):
+                args = self.make_args()
+                backend = mock.Mock()
+                settled_client = (1280, 900) if capture_changed else (1279, 900)
+                backend.client_size.side_effect = [(1280, 900), (1280, 900), settled_client]
+                settled = changed if capture_changed else original
+                with mock.patch.object(window_capture_smoke, LIT_CAPTURE_RENDER_READY_WINDOW, side_effect=[original, settled]), \
+                     mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS), \
+                     mock.patch.object(window_capture_smoke.time, LIT_SLEEP), \
+                     self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "settled original client/capture extent"):
+                    window_capture_smoke.capture_resized_window(args, backend, 42, SimpleNamespace(poll=lambda: None),
+                        Path(LIT_LOGS), {}, LIT_LOG)
+                backend.resize_client.assert_not_called()
 
     def test_noop_resize_is_rejected_before_sleep_or_window_mutation(self):
         args = self.make_args()

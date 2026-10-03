@@ -61,8 +61,6 @@ using CookHashSet = ShaderCook::CookHashSet<T>;
 using ScratchString = AString<Alloc::ScratchArena>;
 template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena>;
-template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -428,10 +426,6 @@ static bool PrepareBomStrippedCompilerInputs(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
 
 
 bool SlangShaderCompiler::extractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind){

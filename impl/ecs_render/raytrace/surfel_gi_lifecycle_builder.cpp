@@ -36,7 +36,6 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
     const SurfelGiLifecycleInputs& inputs,
     SurfelGiLifecycleResult& outResult
 ){
-    using namespace RendererTaskGraphDetail;
     outResult = SurfelGiLifecycleResult{};
     if(
         !inputs.targets

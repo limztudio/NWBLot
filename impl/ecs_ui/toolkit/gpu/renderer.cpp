@@ -291,10 +291,6 @@ void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mo
     m_state->m_recordingMode = mode;
 }
 
-GpuCommandRecordingMode::Enum GpuRenderer::commandRecordingMode()const{
-    return m_state->m_recordingMode;
-}
-
 bool GpuRenderer::hasPendingFrame()const{
     return m_state->m_pending != nullptr;
 }

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise reflection image oracles against correct geometry and false-positive failures."""
 
+from html.parser import HTMLParser
+import json
 import os
 from pathlib import Path
 import sys
@@ -14,9 +16,10 @@ from reflection_smoke import (  # noqa: E402
     BASELINE_CAPTURES, BUDGET_CAPTURES, CAPTURES, DEFAULT_RAY_BUDGET,
     FOREGROUND_REGION, GLASS_REGION, OPAQUE_REGION, SCREEN_CAPTURES, STATISTICS_FIELDS,
     SmokeFailure, analyze_markers, analyze_panels, capture, capture_environment, compare_marker_motion,
-    compare_hybrid_statistics, compare_opaque_glass, compare_panel_motion, parse_statistics,
+    compare_hybrid_statistics, compare_opaque_glass, compare_panel_motion, parse_statistics, write_report,
     region_pixels, validate_statistics,
 )
+from window_capture_smoke import write_bmp_24  # noqa: E402
 
 # Shared literals (no inline hardcodes below this block).
 LIT_ONSCREEN = "onscreen"
@@ -286,6 +289,25 @@ class ReflectionSmokeAnalysisTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_ENABLED, result)
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, result)
         self.assertNotIn(LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F, result)
+
+    def test_report_resolves_escaped_log_links_to_manifest_capture_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            args = SimpleNamespace(output_directory=root, frames=16, require_hardware=True,
+                application_arg=[], suite="baseline")
+            path = root / "odd&case_hybrid.bmp"
+            write_bmp_24(path, 1, 1, [[(20, 40, 60)]])
+            write_report(args, [("odd&case", LIT_HYBRID, DEFAULT_RAY_BUDGET)])
+            manifest = json.loads((root / "reflection_manifest.json").read_text(encoding=LIT_UTF_8))
+            document = (root / "reflection.html").read_text(encoding=LIT_UTF_8)
+            elements = []
+            parser = HTMLParser()
+            parser.handle_starttag = lambda tag, attributes: elements.append((tag, dict(attributes)))
+            parser.feed(document)
+            links = [attributes["href"] for tag, attributes in elements if tag == "a"]
+            self.assertEqual(links, [manifest["captures"][0]["file"], manifest["captures"][0]["log"]])
+            self.assertIn('href="odd&amp;case_hybrid.log"', document)
+            self.assertIn(("meta", {"charset": LIT_UTF_8}), elements)
 
 
 class ReflectionCompletedStatisticsTests(unittest.TestCase):

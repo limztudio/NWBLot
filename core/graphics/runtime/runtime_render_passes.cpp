@@ -44,7 +44,6 @@ void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
 }
 
 void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
-    waitTasks();
     const bool deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
     NWB_FATAL_ASSERT_MSG(

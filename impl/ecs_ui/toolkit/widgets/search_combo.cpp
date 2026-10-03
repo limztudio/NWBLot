@@ -137,7 +137,6 @@ bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSou
     state.m_viewCount = filtered.count;
     state.m_queryGeneration = query.generation;
     state.m_queryExternalRevision = query.externalRevision;
-    state.m_queryRevision = query.revision;
     state.m_filterValid = true;
     return true;
 }

@@ -84,7 +84,6 @@ inline constexpr u32 s_ComputeQueueIndex = 0;
 inline constexpr u32 s_TransferQueueIndex = 0;
 inline constexpr u32 s_PresentQueueIndex = 0;
 inline constexpr u32 s_MaxMutableSwapChainFormats = 2;
-inline constexpr usize s_MaxRetryCountAcquireNextImage = 3;
 
 // Query and raster defaults.
 inline constexpr u32 s_TimerQueryTimestampCount = 2;
@@ -101,8 +100,6 @@ inline constexpr usize s_ParallelCoopVecThreshold = 128;
 inline constexpr usize s_ParallelSpecializationThreshold = 256;
 inline constexpr usize s_ParallelInputLayoutThreshold = 128;
 inline constexpr usize s_InputLayoutGrainSize = 64;
-inline constexpr usize s_ParallelConvertThreshold = 256;
-inline constexpr usize s_ConvertGrainSize = 64;
 inline constexpr usize s_ParallelGeometryThreshold = 256;
 inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
@@ -117,7 +114,6 @@ inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 
 // Scratch arena presets for transient Vulkan-side CPU allocations.
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
-inline constexpr usize s_DescriptorBindingScratchArenaBytes = 4096;
 inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
 
 

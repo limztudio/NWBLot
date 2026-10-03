@@ -38,6 +38,7 @@ LIT_NWB_SURFEL_GI_RESOLVE_RESOLUTION = "NWB_SURFEL_GI_RESOLVE_RESOLUTION"
 LIT_VERIFIED = "verified"
 LIT_SOFTWARE_SHADOW_CAPTURE_CADENCE = "--software-shadow-capture-cadence"
 LIT_REUSE_ONE_FRAME = "reuse_one_frame"
+SOFTWARE_SHADOW_ONE_FRAME_REUSE = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=2)"
 LIT_NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE = "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"
 LIT_ACCEPTED_REUSE_VERIFIED = "accepted_reuse_verified"
 LIT_REUSE_TWO_FRAMES = "reuse_two_frames"
@@ -282,7 +283,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         env = smoke.launch_environment({LIT_NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE: LIT_EVERY_FRAME}, args, self.output)
         self.assertEqual(env[LIT_NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE], LIT_REUSE_ONE_FRAME)
         record = shadow_record(capture_cadence=1)
-        marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE
+        marker = SOFTWARE_SHADOW_ONE_FRAME_REUSE
         observed = smoke.verify_software_shadow_settings(record + "\n" + marker, args)
         self.assertTrue(observed[LIT_ACCEPTED_REUSE_VERIFIED])
         for text in (record, record + "\n" + marker + "\n" + marker, shadow_record() + "\n" + marker):
@@ -296,8 +297,8 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         record = shadow_record(capture_cadence=2)
         marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=3)"
         self.assertTrue(smoke.verify_software_shadow_settings(record + "\n" + marker, args)[LIT_ACCEPTED_REUSE_VERIFIED])
-        for text in (record, record + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE,
-            record + "\n" + marker + "\n" + marker, record + "\n" + marker + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE,
+        for text in (record, record + "\n" + SOFTWARE_SHADOW_ONE_FRAME_REUSE,
+            record + "\n" + marker + "\n" + marker, record + "\n" + marker + "\n" + SOFTWARE_SHADOW_ONE_FRAME_REUSE,
             record + "\n" + marker + " malformed", shadow_record(capture_cadence=1) + "\n" + marker):
             with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_software_shadow_settings(text, args)
@@ -312,7 +313,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         observed = smoke.verify_software_shadow_settings(shadow_record(), args)
         self.assertFalse(observed[LIT_ACCEPTED_REUSE_VERIFIED])
         with self.assertRaises(smoke.SmokeFailure):
-            smoke.verify_software_shadow_settings(shadow_record() + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE, args)
+            smoke.verify_software_shadow_settings(shadow_record() + "\n" + SOFTWARE_SHADOW_ONE_FRAME_REUSE, args)
         for name in ("2", "REUSE_ONE_FRAME", LIT_INVALID):
             with self.assertRaises(SystemExit):
                 smoke.parse_args(self.argv + [LIT_SOFTWARE_SHADOW_CAPTURE_CADENCE, name])

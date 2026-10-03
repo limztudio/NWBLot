@@ -390,11 +390,6 @@ public:
         return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
     }
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
-    // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share
-    // a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
-    [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
-        return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
-    }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
     [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
@@ -434,8 +429,6 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
-    // Writes descriptor-buffer entries, including TLAS handles.
-    [[nodiscard]] DescriptorBufferManager& getDescriptorBufferManager(){ return m_descriptorBufferManager; }
 
 
 private:

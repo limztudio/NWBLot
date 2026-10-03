@@ -3,8 +3,10 @@
 
 import argparse
 import base64
+from html.parser import HTMLParser
 import json
 from pathlib import Path
+import re
 import struct
 import sys
 import tempfile
@@ -126,6 +128,16 @@ class RefractionGalleryTests(unittest.TestCase):
             self.assertEqual(path.read_bytes(), original)
             self.assertNotIn(LIT_IMAGE, json.loads((root / "gallery_manifest.json").read_text())[LIT_CASES][0][LIT_CAPTURES][0])
             self.assertNotIn('src="https://', html)
+            elements = []
+            parser = HTMLParser()
+            parser.handle_starttag = lambda tag, attributes: elements.append((tag, dict(attributes)))
+            parser.feed(html)
+            identifiers = [attributes["id"] for _, attributes in elements if "id" in attributes]
+            script_targets = set(re.findall(r"byId\('([^']+)'\)", html))
+            self.assertFalse(script_targets - set(identifiers), "gallery script references missing controls")
+            self.assertEqual(len(identifiers), len(set(identifiers)))
+            self.assertIn(("meta", {"charset": LIT_UTF_8}), elements)
+            self.assertIn(("option", {"value": "single"}), elements)
 
 
 if __name__ == LIT_MAIN:

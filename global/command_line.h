@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "text_utils.h"
+#include "basic_string.h"
 #include "type.h"
 
 
@@ -17,12 +17,6 @@ template<typename StringT>
     StringT message(prefix.data(), prefix.size());
     message += options;
     return message;
-}
-
-template<typename EnumT, typename ParseFunction, typename StringT>
-[[nodiscard]] inline bool ParseOptionText(const StringT& value, EnumT& outValue, ParseFunction parseValue){
-    const StringT normalized = NormalizeOptionText(value);
-    return parseValue(AStringView(normalized.data(), normalized.size()), outValue);
 }
 
 

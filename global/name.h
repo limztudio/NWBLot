@@ -749,20 +749,6 @@ template<typename CharT, typename ArenaT>
     return DeriveName(baseName, BasicStringView<CharT>(suffix));
 }
 
-
-template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicString<CharT, ArenaT> EncodeNameHash(ArenaT& arena, const Name& name){
-    BasicString<CharT, ArenaT> encoded{arena};
-    encoded.reserve(NameDetail::s_EncodedNameHashLength);
-
-    const NameHash& hash = name.hash();
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
-        AppendHexU64<CharT>(hash.qwords[lane], encoded);
-
-    return encoded;
-}
-
-
 template<typename CharT>
 [[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName){
     if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)

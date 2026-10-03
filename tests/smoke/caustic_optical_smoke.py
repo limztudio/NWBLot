@@ -244,7 +244,7 @@ def write_report(args, frames, metrics=None):
         "optical_validation": "software_contributions" if args.software_ray_tracing else "hardware_contributions_and_exterior_radiometry",
         "variants": list(frames), "metrics": metrics, "scope": note}
     (args.output_directory / "caustic_optical_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding=LIT_UTF_8)
-    document = '<!doctype html><html lang="en"><meta charset=LIT_UTF_8><title>Combined optical caustic scene</title>'
+    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Combined optical caustic scene</title>'
     document += '<style>body{font:16px system-ui;background:#141922;color:#eee;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#8cf}pre{white-space:pre-wrap}</style>'
     document += '<h1>Caustics, camera refraction and reflection</h1><p>' + html.escape(note) + '</p><main>' + ''.join(cards) + '</main><pre>'
     document += html.escape(json.dumps(metrics, indent=2) if metrics else 'Visual acceptance pending.') + '</pre></html>'

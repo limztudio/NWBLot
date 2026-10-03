@@ -30,13 +30,9 @@ namespace __hidden_encode{
 
 using EncodeBackendDetail::ImagePlanes;
 using EncodeBackendDetail::VolumeMips;
-using EncodeBackendDetail::HdrImagePlanes;
-using EncodeBackendDetail::HdrVolumeMips;
-using EncodeBackendDetail::s_InvalidBackendSlice;
 using EncodeBackendDetail::s_BasisEncoderWorkerCount;
 using EncodeBackendDetail::s_BasisColorChannelMax;
 using EncodeBackendDetail::s_BasisColorChannelRoundingBias;
-using EncodeBackendDetail::s_UastcHdrMaximum;
 using EncodeBackendDetail::s_HdrChannelCount;
 using EncodeBackendDetail::s_BasisResampleBoxFilter;
 using EncodeBackendDetail::s_BasisResampleFilterScale;

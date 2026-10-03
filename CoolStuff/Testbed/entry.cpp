@@ -142,7 +142,6 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(rendererSystem);
     context.graphics.removeRenderPass(uiLayerSystem);
 
-    context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),

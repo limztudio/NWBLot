@@ -31,7 +31,6 @@ inline constexpr AStringView s_VertexRefSkinName = "skin";
 inline constexpr TStringView s_PositionStreamLabel = NWB_TEXT("position");
 inline constexpr TStringView s_NormalStreamLabel = NWB_TEXT("normal");
 inline constexpr TStringView s_TangentStreamLabel = NWB_TEXT("tangent");
-inline constexpr TStringView s_ColorStreamLabel = NWB_TEXT("color");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

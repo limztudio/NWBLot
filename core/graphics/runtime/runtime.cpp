@@ -148,7 +148,6 @@ GraphicsRuntime::GraphicsRuntime(
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
     , m_gpuTasks(gpuTasks)
-    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(GraphicsProfileScope::s_GraphicsSetupTaskProfileName))
     , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(GraphicsProfileScope::s_GraphicsFrameTaskProfileName))
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
@@ -164,27 +163,26 @@ GraphicsRuntime::GraphicsRuntime(
         m_frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);
 }
 GraphicsRuntime::~GraphicsRuntime()noexcept(false){
-    // An active unwind is already terminal. Retire CPU captures and the borrowed device binding without native
+    // An active unwind is already terminal. Detach the borrowed device binding without native
     // callbacks or a GPU join, so the original exception reaches the application-entry boundary.
-    const auto retireTasks = [this]()noexcept{
-        m_tasks.drain();
+    const auto detachDevice = [this]()noexcept{
         if(auto* device = m_backend->getDevice(); device && m_gpuTasks.isAttachedTo(*device)){
             if(!m_gpuTasks.detachDevice(*device))
                 TerminateInvariant();
         }
     };
     if(UncaughtExceptionCount() > 0){
-        retireTasks();
+        detachDevice();
         return;
     }
 
-    ScopeExit drainOnFailure(retireTasks);
+    ScopeExit detachOnFailure(detachDevice);
 
     NWB_FATAL_ASSERT_MSG(
         destroy(),
         NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss")
     );
-    drainOnFailure.release();
+    detachOnFailure.release();
 }
 
 bool GraphicsRuntime::init(const Common::FrameData& data){
@@ -316,7 +314,6 @@ bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisibl
 
 bool GraphicsRuntime::destroy(){
     m_lastPresentationReceipt.reset();
-    waitTasks();
 
     SwapChainTransitionTicket transitionTicket;
     if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)){
@@ -489,7 +486,7 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
         .priority = CpuTaskPriority::Critical,
         .target = CpuTaskTarget::MainThread,
     };
-    TaskHandle previous;
+    CpuTaskHandle previous;
     for(auto* renderPass : m_renderPasses){
         previous = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
             if(m_deviceRecreationRequested || device.requiresRecreation()){
@@ -525,17 +522,6 @@ void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTimi
             throw RuntimeException("CPU task scheduler rejected a render pass");
     }
     frameTasks.wait();
-}
-
-void GraphicsRuntime::updateAverageFrameTime(f64 elapsedTime){
-    m_frameTimeSum += elapsedTime;
-    m_numberOfAccumulatedFrames += 1;
-
-    if(m_frameTimeSum > m_averageTimeUpdateInterval && m_numberOfAccumulatedFrames > 0){
-        m_averageFrameTime = m_frameTimeSum / static_cast<f64>(m_numberOfAccumulatedFrames);
-        m_numberOfAccumulatedFrames = 0;
-        m_frameTimeSum = 0.0;
-    }
 }
 
 void GraphicsRuntime::notifyPointerScaleChanged()const{
@@ -638,123 +624,121 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         if(phaseTiming)
             phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsAnimateCpuTimingScope, animateBegin, m_cpuTiming);
 
-        if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
-            Timer beginFrameBegin;
-            if(phaseTiming)
-                beginFrameBegin = TimerNow();
-            BeginFrameResult beginFrameResult;
-            for(usize attempt = 0u; attempt < __hidden_graphics_lifecycle::s_MaxBeginFrameResizeAttempts; ++attempt){
-                beginFrameResult = m_backend->beginFrame();
-                if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
-                    break;
-                if(
-                    beginFrameResult.suggestedWidth == 0u
-                    || beginFrameResult.suggestedHeight == 0u
-                    || !resizeBackBuffer(
-                        beginFrameResult.suggestedWidth,
-                        beginFrameResult.suggestedHeight,
-                        m_requestedVSync
-                    )
+        Timer beginFrameBegin;
+        if(phaseTiming)
+            beginFrameBegin = TimerNow();
+        BeginFrameResult beginFrameResult;
+        for(usize attempt = 0u; attempt < __hidden_graphics_lifecycle::s_MaxBeginFrameResizeAttempts; ++attempt){
+            beginFrameResult = m_backend->beginFrame();
+            if(beginFrameResult.status != BeginFrameStatus::ResizeRequired)
+                break;
+            if(
+                beginFrameResult.suggestedWidth == 0u
+                || beginFrameResult.suggestedHeight == 0u
+                || !resizeBackBuffer(
+                    beginFrameResult.suggestedWidth,
+                    beginFrameResult.suggestedHeight,
+                    m_requestedVSync
                 )
-                    break;
-            }
-            if(phaseTiming)
-                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin, m_cpuTiming);
-            if(!beginFrameResult.acquired()){
-                if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
-                    NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
-                else
-                    NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to acquire a presentation frame; requesting device recreation."));
+            )
+                break;
+        }
+        if(phaseTiming)
+            phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin, m_cpuTiming);
+        if(!beginFrameResult.acquired()){
+            if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)
+                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: swap-chain resize retries were exhausted; requesting device recreation."));
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: failed to acquire a presentation frame; requesting device recreation."));
+            requestDeviceRecreation();
+            return false;
+        }
+        AcquiredBackBuffer acquiredBackBuffer = Move(beginFrameResult.backBuffer);
+        if(acquiredBackBuffer.valid()){
+            const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
+            if(
+                acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
+                || !m_swapChainFramebuffers[acquiredBackBufferIndex]
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
+                if(!m_backend->abandonAcquiredFrame())
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
                 requestDeviceRecreation();
                 return false;
             }
-            AcquiredBackBuffer acquiredBackBuffer = Move(beginFrameResult.backBuffer);
-            if(acquiredBackBuffer.valid()){
-                const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
-                if(
-                    acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
-                    || !m_swapChainFramebuffers[acquiredBackBufferIndex]
-                ){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image has no matching framebuffer; requesting recreation."));
-                    if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
-                    requestDeviceRecreation();
-                    return false;
-                }
 
-                Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
-                const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
-                if(
-                    acquiredFramebufferDesc.colorAttachments.size() != 1u
-                    || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
-                ){
-                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
-                    if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
-                    requestDeviceRecreation();
-                    return false;
-                }
-
-                m_acquiredPresentationFrame = {
-                    .backBuffer = Move(acquiredBackBuffer),
-                    .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex],
-                };
-                const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
-
-                Timer framePreambleBegin;
-                if(phaseTiming)
-                    framePreambleBegin = TimerNow();
-                const bool preamblePrepared = prepareFramePreamble();
-                if(phaseTiming)
-                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
-                if(!preamblePrepared){
-                    // prepareFramePreamble() returns false only after the device requires recreation. Do not issue
-                    // recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
-                    requestDeviceRecreation();
-                    return false;
-                }
-
-                Timer renderBegin;
-                if(phaseTiming)
-                    renderBegin = TimerNow();
-                renderWithPhaseTiming(phaseTiming);
-                if(phaseTiming)
-                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
-
-                if(m_deviceRecreationRequested || device.requiresRecreation()){
-                    if(device.requiresRecreation())
-                        requestDeviceRecreation();
-                    else if(!m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the aborted acquired frame; device teardown is required."));
-                    return false;
-                }
-
-                Timer presentBegin;
-                if(phaseTiming)
-                    presentBegin = TimerNow();
-                bool presentationAccepted = false;
-                const bool presented = m_backend->present(presentationAccepted);
-                m_lastPresentationReceipt.record(m_acquiredPresentationFrame.backBuffer, presentationAccepted);
-                if(presentationAccepted)
-                    ++m_successfulPresentationCount;
-                if(phaseTiming)
-                    phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
-                if(!presented){
-                    // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
-                    // healthy unconsumed failure is drained and quarantined before recreation.
-                    if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
-                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
-                    requestDeviceRecreation();
-                    return false;
-                }
-
-                if(device.requiresRecreation()){
-                    requestDeviceRecreation();
-                    return false;
-                }
-
-                m_hasPresentedFrame = true;
+            Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
+            const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
+            if(
+                acquiredFramebufferDesc.colorAttachments.size() != 1u
+                || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
+                if(!m_backend->abandonAcquiredFrame())
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                requestDeviceRecreation();
+                return false;
             }
+
+            m_acquiredPresentationFrame = {
+                .backBuffer = Move(acquiredBackBuffer),
+                .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex],
+            };
+            const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+
+            Timer framePreambleBegin;
+            if(phaseTiming)
+                framePreambleBegin = TimerNow();
+            const bool preamblePrepared = prepareFramePreamble();
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin, m_cpuTiming);
+            if(!preamblePrepared){
+                // prepareFramePreamble() returns false only after the device requires recreation. Do not issue
+                // recovery GPU work; required device teardown owns the unresolved acquired image and synchronization.
+                requestDeviceRecreation();
+                return false;
+            }
+
+            Timer renderBegin;
+            if(phaseTiming)
+                renderBegin = TimerNow();
+            renderWithPhaseTiming(phaseTiming);
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin, m_cpuTiming);
+
+            if(m_deviceRecreationRequested || device.requiresRecreation()){
+                if(device.requiresRecreation())
+                    requestDeviceRecreation();
+                else if(!m_backend->abandonAcquiredFrame())
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the aborted acquired frame; device teardown is required."));
+                return false;
+            }
+
+            Timer presentBegin;
+            if(phaseTiming)
+                presentBegin = TimerNow();
+            bool presentationAccepted = false;
+            const bool presented = m_backend->present(presentationAccepted);
+            m_lastPresentationReceipt.record(m_acquiredPresentationFrame.backBuffer, presentationAccepted);
+            if(presentationAccepted)
+                ++m_successfulPresentationCount;
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin, m_cpuTiming);
+            if(!presented){
+                // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
+                // healthy unconsumed failure is drained and quarantined before recreation.
+                if(!device.requiresRecreation() && !m_backend->abandonAcquiredFrame())
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("GraphicsRuntime: failed to quarantine the unpresented acquired frame; device teardown is required."));
+                requestDeviceRecreation();
+                return false;
+            }
+
+            if(device.requiresRecreation()){
+                requestDeviceRecreation();
+                return false;
+            }
+
+            m_hasPresentedFrame = true;
         }
     }
 
@@ -771,7 +755,6 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
         return false;
     }
 
-    updateAverageFrameTime(elapsedTime);
     m_previousFrameTimestamp = now;
 
     ++m_frameIndex;

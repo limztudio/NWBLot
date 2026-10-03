@@ -172,7 +172,6 @@ inline void FinishDestroyingSmokeWorld(
     ProjectRuntimeContext& context,
     NotNullUniquePtr<Core::ECS::World>& world
 ){
-    context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),

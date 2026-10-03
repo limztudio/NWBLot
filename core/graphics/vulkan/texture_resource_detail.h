@@ -193,13 +193,6 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc){
     }
 }
 
-inline VkImageType TextureDimensionToImageType(const TextureDimension::Enum dimension){
-    VkImageType imageType = VK_IMAGE_TYPE_MAX_ENUM;
-    if(TryTextureDimensionToImageType(dimension, imageType))
-        return imageType;
-    return VK_IMAGE_TYPE_2D;
-}
-
 inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
     switch(dimension){
     case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;

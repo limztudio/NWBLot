@@ -296,16 +296,6 @@ static_assert(
     }
 }
 
-[[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromResourceKind(
-    const MaterialResourceKind::Enum resourceKind
-){
-    switch(resourceKind){
-    case MaterialResourceKind::SampledImage2D: return MaterialLayoutFieldType::SampledImage2D;
-    case MaterialResourceKind::Sampler: return MaterialLayoutFieldType::Sampler;
-    default: return MaterialLayoutFieldType::None;
-    }
-}
-
 [[nodiscard]] inline u32 MaterialLayoutFieldComponentCount(const MaterialLayoutFieldType::Enum fieldType){
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return 0u;

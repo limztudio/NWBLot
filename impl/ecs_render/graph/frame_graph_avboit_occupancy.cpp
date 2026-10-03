@@ -44,7 +44,6 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
     FrameGraphAvboitOccupancyUploadResult& outResult
 ){
     outResult = FrameGraphAvboitOccupancyUploadResult{};
-    using namespace RendererTaskGraphDetail;
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& avboitOccupancyPayload = occupancyPayload;
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& avboitOccupancyComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = *inputs.targets;

@@ -64,7 +64,6 @@ from window_capture_smoke import (  # noqa: E402
 )
 
 # Shared literals (no inline hardcodes below this block).
-LIT_TESTS = "tests"
 LIT_RENDER_FRAME = "render.frame"
 LIT_RENDER_ASYNC_SHADOW = "render.async_shadow"
 LIT_RENDER_ASYNC_FINAL = "render.async_final"

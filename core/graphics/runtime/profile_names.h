@@ -25,7 +25,6 @@ namespace GraphicsProfileScope{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Name s_GraphicsSetupTaskProfileName("cpu.task.graphics.setup");
 inline constexpr Name s_GraphicsFrameTaskProfileName("cpu.task.graphics.frame");
 
 

@@ -136,8 +136,6 @@ public:
             if(!model->setText("callback"))
                 return false;
         }
-        if(!filterSucceeds)
-            return false;
         const AStringView previous{ m_query.data(), m_query.size() };
         if(previous != query){
             m_query.assign(query.data(), query.size());
@@ -161,7 +159,6 @@ public:
     EditModel* filterMutation = nullptr;
     mutable EditModel* fullMutation = nullptr;
     u64 filterCalls = 0u;
-    bool filterSucceeds = true;
     bool alternateView = false;
 };
 

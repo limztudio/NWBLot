@@ -61,7 +61,7 @@ static constexpr AStringView s_MaterialConstantAttribute = "material_constant";
 static constexpr AStringView s_MaterialMutableAttribute = "material_mutable";
 static constexpr AStringView s_DefaultAttribute = "default";
 
-// Cross-TU helpers (defined de-static'd in their domain .cpp).
+// Shared binder and source-parser attribute.
 static constexpr AStringView s_FixtureAttribute = "fixture";
 
 static constexpr AStringView s_BindFieldTypeTexture2D = "texture2d";
@@ -71,7 +71,7 @@ static constexpr AStringView s_BindFieldTypeSampler = "sampler";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cross-TU helper declarations (definitions de-static'd in their domain .cpp).
+// Shared binder, source-parser, and typed-layout helpers.
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
 

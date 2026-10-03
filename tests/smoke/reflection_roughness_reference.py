@@ -16,7 +16,6 @@ LIT_GREEN = "green"
 LIT_MEASURED = "measured"
 
 
-CAMERA = (0.0, 1.4, -6.0)
 EMITTERS = ((-1.6, 1.4, -8.0), (1.6, 1.4, -8.0))
 EMITTER_HALF_SIZE = 0.75
 MIRROR_F0 = 0.95

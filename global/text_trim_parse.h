@@ -142,12 +142,6 @@ template<typename CharT, typename ArenaT>
     return output;
 }
 
-template<typename CharT, typename ArenaT>
-inline void TrimTrailingCarriageReturn(BasicString<CharT, ArenaT>& inOutLine){
-    if(!inOutLine.empty() && inOutLine.back() == CharT('\r'))
-        inOutLine.pop_back();
-}
-
 template<typename CharT>
 [[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text){
     for(usize i = 1u; i < text.size(); ++i){

@@ -314,7 +314,6 @@ void DestroyUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::EC
     auto* const layer = world->getSystem<Impl::UiLayerSystem>();
     NWB_FATAL_ASSERT(layer);
     context.graphics.removeRenderPass(*layer);
-    context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();
     NWB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), NWB_TEXT("UI smoke teardown requires device idle or terminal loss"));
     world->clear();

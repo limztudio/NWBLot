@@ -17,7 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_model_cook_normalization_tests{
+namespace __hidden_model_cook_metadata_tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +25,7 @@ namespace __hidden_model_cook_normalization_tests{
 
 static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
-static constexpr AStringView s_TESTS_MODEL_COOK_NORMALIZATION_MESH = "tests/model_cook_normalization/mesh";
+static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh";
 static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = NWB_TEXT("targets a missing skeleton object");
 static constexpr AStringView s_SHARED = "shared";
 static constexpr AStringView s_RIG_A = "rig_a";
@@ -43,13 +43,13 @@ using Core::Metascript::Value;
 
 
 struct ModelMetadata{
-    Core::Metascript::MetaArena metadataArena{ Name("tests/model_cook_normalization/metadata") };
-    Core::Assets::AssetArena outputArena{ Name("tests/model_cook_normalization/output") };
-    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_cook_normalization/scratch") };
+    Core::Metascript::MetaArena metadataArena{ Name("tests/model_cook_metadata/metadata") };
+    Core::Assets::AssetArena outputArena{ Name("tests/model_cook_metadata/output") };
+    Core::Alloc::ScratchArena scratchArena{ Name("tests/model_cook_metadata/scratch") };
     Value asset{ metadataArena };
     ModelCookEntry entry{ outputArena };
     HashMap<Name, Name, Core::Metascript::MetaArena> expectedSkeletons{ metadataArena };
-    const NWB::Path path{ outputArena, "tests/model_cook_normalization/model.nwb" };
+    const NWB::Path path{ outputArena, "tests/model_cook_metadata/model.nwb" };
 
 
     ModelMetadata(){
@@ -63,14 +63,14 @@ struct ModelMetadata{
 
     void addSkinnedMesh(const AStringView objectName, const AStringView skeleton, const AStringView expectedObject){
         Value& object = asset.field(s_SKINNED_MESHES).field(objectName);
-        object.field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
-        object.field("skin").setString("tests/model_cook_normalization/skin");
+        object.field("mesh").setString(s_MeshVirtualPath);
+        object.field("skin").setString("tests/model_cook_metadata/skin");
         object.field(s_SKELETON).setString(skeleton);
         expectedSkeletons.insert_or_assign(Name(objectName), Name(expectedObject));
     }
 
     [[nodiscard]] bool parse(){
-        return ParseModelCookMetadata(Name("tests/model_cook_normalization/model"), path, asset, entry, scratchArena);
+        return ParseModelCookMetadata(Name("tests/model_cook_metadata/model"), path, asset, entry, scratchArena);
     }
 
     void verifyObjectReferences()const{
@@ -79,8 +79,8 @@ struct ModelMetadata{
             const auto expected = expectedSkeletons.find(object.name);
             ASSERT_NE(expected, expectedSkeletons.end());
             EXPECT_EQ(object.skeletonObject, expected->second);
-            EXPECT_EQ(object.mesh.name(), Name(s_TESTS_MODEL_COOK_NORMALIZATION_MESH));
-            EXPECT_EQ(object.skin.name(), Name("tests/model_cook_normalization/skin"));
+            EXPECT_EQ(object.mesh.name(), Name(s_MeshVirtualPath));
+            EXPECT_EQ(object.skin.name(), Name("tests/model_cook_metadata/skin"));
         }
     }
 };
@@ -92,7 +92,7 @@ struct ModelMetadata{
 static void AddIndexedObjects(ModelMetadata& metadata, const usize skeletonCount, const usize meshCount){
     for(usize index = 0u; index < skeletonCount; ++index){
         const auto objectName = StringFormat(metadata.metadataArena, "rig_{}", index);
-        const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_normalization/skeleton_{}", index);
+        const auto assetName = StringFormat(metadata.metadataArena, "tests/model_cook_metadata/skeleton_{}", index);
         metadata.addSkeleton(objectName, assetName);
     }
     for(usize index = 0u; index < meshCount; ++index){
@@ -139,7 +139,7 @@ static void BenchmarkObjectReferences(const usize count, const usize iterations 
 
 TEST(ModelCookMetadata, LocalObjectNamesStayDistinctFromCollidingAssetIdentities){
     ModelMetadata metadata;
-    metadata.addSkeleton(s_SHARED, "tests/model_cook_normalization/direct");
+    metadata.addSkeleton(s_SHARED, "tests/model_cook_metadata/direct");
     metadata.addSkeleton("other_a", "SHARED");
     metadata.addSkeleton("other_b", s_SHARED);
     metadata.addSkinnedMesh("direct_mesh", "ShArEd", s_SHARED);
@@ -156,7 +156,7 @@ TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRec
         AddIndexedObjects(metadata, skeletonCount, 257u);
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
-        const AStringView assetPath = "tests/model_cook_normalization/skeleton_0";
+        const AStringView assetPath = "tests/model_cook_metadata/skeleton_0";
         metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString(assetPath);
         metadata.expectedSkeletons.at(Name("mesh_0")) = Name(assetPath);
         EXPECT_FALSE(metadata.parse());
@@ -175,9 +175,9 @@ TEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_RIG_A, "tests/model_cook_normalization/shared");
-    metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_NORMALIZATION/SHARED");
-    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_normalization/shared", "tests/model_cook_normalization/shared");
+    metadata.addSkeleton(s_RIG_A, "tests/model_cook_metadata/shared");
+    metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_METADATA/SHARED");
+    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/shared", "tests/model_cook_metadata/shared");
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
@@ -192,8 +192,8 @@ TEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_RIG, "tests/model_cook_normalization/known");
-    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_normalization/unknown", "tests/model_cook_normalization/unknown");
+    metadata.addSkeleton(s_RIG, "tests/model_cook_metadata/known");
+    metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/unknown", "tests/model_cook_metadata/unknown");
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
@@ -204,8 +204,8 @@ TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.addSkeleton(s_RIG, "tests/model_cook_normalization/first");
-    metadata.addSkeleton("RIG", "tests/model_cook_normalization/second");
+    metadata.addSkeleton(s_RIG, "tests/model_cook_metadata/first");
+    metadata.addSkeleton("RIG", "tests/model_cook_metadata/second");
     metadata.addSkinnedMesh(s_BODY, "RiG", s_RIG);
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
@@ -217,7 +217,7 @@ TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
-    metadata.asset.field("static_meshes").field("prop").field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
+    metadata.asset.field("static_meshes").field("prop").field("mesh").setString(s_MeshVirtualPath);
     ASSERT_TRUE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skeletonObjects.empty());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
@@ -233,7 +233,7 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndTh
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
     Value& object = metadata.asset.field("static_meshes").field("prop");
-    object.field("mesh").setString(s_TESTS_MODEL_COOK_NORMALIZATION_MESH);
+    object.field("mesh").setString(s_MeshVirtualPath);
     Value& transform = object.field("transform");
     transform.makeList();
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){

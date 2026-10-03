@@ -238,18 +238,6 @@ u32 DescriptorBufferManager::getMaxTexelBufferElements()const{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
 }
 
-VkDescriptorBufferBindingInfoEXT DescriptorBufferManager::getResourceBindingInfo()const{
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-
-    return m_enabled ? m_resourceSegment.bindingInfo : VkDescriptorBufferBindingInfoEXT{};
-}
-
-VkDescriptorBufferBindingInfoEXT DescriptorBufferManager::getSamplerBindingInfo()const{
-    ScopedLock lifecycleLock(m_lifecycleMutex);
-
-    return m_enabled ? m_samplerSegment.bindingInfo : VkDescriptorBufferBindingInfoEXT{};
-}
-
 DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
     return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
 }

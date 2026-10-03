@@ -127,7 +127,7 @@ u64 RadioSource::rawCount()const{
 
 u64 RadioSource::rawKey(const u64 index)const{
     const u64 count = rawCount();
-    if(index >= count || m_zero)
+    if(index >= count)
         return 0u;
     if(m_duplicate)
         return 10u;

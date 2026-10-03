@@ -49,10 +49,6 @@ using CookMap = ShaderCook::CookMap<T, V>;
 template<typename T>
 using CookHashSet = ShaderCook::CookHashSet<T>;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
-template<typename T>
-using ScratchVector = Vector<T, Core::Alloc::ScratchArena>;
-template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Core::Alloc::ScratchArena>;
 
 struct NormalizedDependencyRootAlias{
     Path root;

@@ -122,7 +122,7 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cross-TU helpers (defined de-static'd in their domain .cpp).
+// Shared material metadata, validation, and generated-source helpers.
 
 bool ResolveMaterialBindDependencyInterface(
     const AStringView shaderName,

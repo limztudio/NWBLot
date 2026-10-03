@@ -383,7 +383,7 @@ def write_report(args, completed, evidence, metrics=None):
         name = html.escape(spec.name)
         cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Completed-frame log</a>'
             f'<img alt="Actual {name} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = '<!doctype html><html lang="en"><meta charset=LIT_UTF_8><title>Reflection roughness and history evidence</title>'
+    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection roughness and history evidence</title>'
     document += '<style>body{background:#141922;color:#eee;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{width:100%}a{color:#88c9ff}pre{white-space:pre-wrap}</style>'
     document += '<h1>Actual reflection framebuffer captures</h1><p>' + html.escape(metadata[LIT_LIMITATIONS]) + '</p><main>'
     document += ''.join(cards) + '</main><pre>' + html.escape(json.dumps(metrics, indent=2) if metrics else 'Visual analysis pending.') + '</pre></html>'

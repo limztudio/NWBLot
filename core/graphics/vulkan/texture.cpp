@@ -167,15 +167,6 @@ bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)no
     return (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0 || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0;
 }
 
-bool ValidateBufferImageCopyAspectMask(const VkImageAspectFlags aspectMask, TStringView operationName){
-    if(!IsBufferImageCopyAspectMaskSupported(aspectMask)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: combined depth/stencil formats are not supported by buffer-image copy paths"), operationName);
-        return false;
-    }
-
-    return true;
-}
-
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, const MipLevel mipLevel){
     VkExtent3D extent{};
     extent.width = Max<u32>(desc.width >> mipLevel, 1u);

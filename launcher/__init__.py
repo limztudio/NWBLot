@@ -50,11 +50,8 @@ PROFILE_LOG_DRY_RUN_PORT = 7117
 PROFILE_LOG_CONNECT_TIMEOUT_SECONDS = 0.25
 PROFILE_LOG_READY_POLL_SECONDS = 0.05
 OS_WINDOWS = "nt"
-OS_POSIX_SPAWN = "posix"
 PRESET_NAME_FORMAT = "{platform_name}-{toolchain}-{arch}"
 PRESET_NAME_DOMAIN_FORMAT = "{platform_name}-{toolchain}-{domain}-{arch}"
-BUILD_PRESET_FORMAT = "{platform_name}-{toolchain}{arch_suffix}-{config}"
-BUILD_PRESET_DOMAIN_FORMAT = "{platform_name}-{toolchain}-{domain}{arch_suffix}-{config}"
 PRESET_PREFIX_FORMAT = "{platform_name}-{toolchain}-"
 FILE_API_OBJECTS_KEY = "objects"
 PROFILE_REQUIRED_DEFINES = {
@@ -73,7 +70,6 @@ PLATFORM_DARWIN = "darwin"
 PLATFORM_WINDOWS_SYSTEM = "Windows"
 PLATFORM_LINUX_SYSTEM = "Linux"
 PLATFORM_DARWIN_SYSTEM = "Darwin"
-FALLBACK_PLATFORM_X64 = ARCH_X64
 ENGINE_DOMAIN = "engine"
 NWB_TARGET_PREFIX = "nwb_"
 CMAKE_CACHE_FILE = "CMakeCache.txt"
@@ -199,7 +195,6 @@ MSG_LEAVING_APP = "leaving app running; close the window when done"
 MSG_UNKNOWN_LAUNCHER = f"unknown {{directory.name}} launcher '{{values[0]}}' (valid: {{valid}})"
 MSG_BUILD_USAGE = "  build <targets...> [build options]"
 MSG_RUN_USAGE = "  run <cmake-target> [launcher options] [-- application arguments]"
-MSG_RUNNABLE_COMMANDS = "runnable commands:"
 MSG_CMAKE_DEFINE_USAGE = "CMake define must be KEY=VALUE: {entry}"
 MSG_CMAKE_DEFINE_EMPTY = "CMake define key must not be empty: {entry}"
 ARG_REPO_ROOT = "--repo-root"
@@ -488,13 +483,6 @@ def default_configure_preset_name(platform_name: str, domain: str, arch: str) ->
     if domain == DEFAULT_DOMAIN:
         return PRESET_NAME_FORMAT.format(platform_name=platform_name, toolchain=PRESET_TOOLCHAIN, arch=arch)
     return PRESET_NAME_DOMAIN_FORMAT.format(platform_name=platform_name, toolchain=PRESET_TOOLCHAIN, domain=domain, arch=arch)
-
-
-def default_build_preset_name(platform_name: str, domain: str, config: str, arch: str = ARCH_X64) -> str:
-    arch_suffix = EMPTY_STRING if arch == ARCH_X64 else PRESET_ARCH_SEPARATOR + arch
-    if domain == DEFAULT_DOMAIN:
-        return BUILD_PRESET_FORMAT.format(platform_name=platform_name, toolchain=PRESET_TOOLCHAIN, arch_suffix=arch_suffix, config=config)
-    return BUILD_PRESET_DOMAIN_FORMAT.format(platform_name=platform_name, toolchain=PRESET_TOOLCHAIN, domain=domain, arch_suffix=arch_suffix, config=config)
 
 
 def default_build_dir(root: Path, platform_name: str, domain: str, arch: str) -> Path:

@@ -37,12 +37,10 @@ inline constexpr u32 s_TextureClearUploadAlignment = 4u;
 inline constexpr u32 s_BCSingleClearBlockBytes = 8u;
 inline constexpr u32 s_BCDoubleClearBlockBytes = 16u;
 inline constexpr u32 s_BC4EndpointByteCount = 2u;
-inline constexpr u32 s_BC2AlphaTexelCount = 16u;
 inline constexpr u32 s_RGB565RedBitCount = 5u;
 inline constexpr u32 s_RGB565GreenBitCount = 6u;
 inline constexpr u32 s_RGB565RedBitShift = 11u;
 inline constexpr u32 s_RGB565GreenBitShift = 5u;
-inline constexpr u32 s_BC1TransparencyBitCount = 1u;
 inline constexpr u32 s_BC1TransparentColorIndices = Limit<u32>::s_Max;
 inline constexpr u32 s_D24ClearValueMask = 0x00ffffffu;
 inline constexpr f32 s_ClearFloatRoundingBias = 0.5f;
@@ -325,20 +323,11 @@ inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxVal
     return VectorGetX(VectorClamp(VectorReplicate(value), VectorReplicate(minValue), VectorReplicate(maxValue)));
 }
 
-inline u32 RoundClearFloatToUInt(const f32 value){
-    return static_cast<u32>(VectorGetX(VectorFloor(VectorAdd(VectorReplicate(value), VectorReplicate(s_ClearFloatRoundingBias)))));
-}
-
 inline u32 FloatToUNormClearValue(const f32 value, const u32 maxValue){
     const SIMDVector clamped = VectorSaturate(VectorReplicate(value));
     const SIMDVector scaled = VectorMultiply(clamped, VectorReplicate(static_cast<f32>(maxValue)));
     const SIMDVector rounded = VectorFloor(VectorAdd(scaled, VectorReplicate(s_ClearFloatRoundingBias)));
     return static_cast<u32>(VectorGetX(VectorMin(rounded, VectorReplicate(static_cast<f32>(maxValue)))));
-}
-
-inline u32 FloatToUNormClearBits(const f32 value, const u32 bits){
-    const u32 maxValue = (1u << bits) - 1u;
-    return FloatToUNormClearValue(value, maxValue);
 }
 
 inline SIMDVector QuantizeUNormClearVector(const SIMDVector saturated01, const f32 maxValue){
@@ -361,10 +350,6 @@ inline SIMDVector LinearToSRGBClearVector(const SIMDVector linear){
     const SIMDVector power = VectorPow(clamped, VectorReplicate(1.0f / s_SRGBClearNonlinearExponent));
     const SIMDVector nonlinearPart = VectorSubtract(VectorMultiply(VectorReplicate(s_SRGBClearNonlinearScale), power), VectorReplicate(s_SRGBClearNonlinearOffset));
     return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(clamped, threshold));
-}
-
-inline f32 LinearToSRGBClearValue(const f32 value){
-    return VectorGetX(LinearToSRGBClearVector(VectorReplicate(value)));
 }
 
 inline void WriteBC1ColorClearBlock(u8* outPattern, const f32 r, const f32 g, const f32 b, const f32 a, const bool srgb){

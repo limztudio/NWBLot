@@ -80,8 +80,6 @@ LIT_CASE = "case"
 LIT_HARDWARE_BUDGET = "hardware_budget"
 LIT_FILE = "file"
 LIT_LIMITATIONS = "limitations"
-LIT_HTML_ESCAPE_ITEM = "{html.escape(item["
-LIT_EMPTY = "])}"
 LIT_ALL = "all"
 LIT_BASELINE = "baseline"
 LIT_BUDGET = "budget"
@@ -96,7 +94,6 @@ LIT_STORE_TRUE = "store_true"
 LIT_APPEND = "append"
 
 
-CASES = (LIT_OFFSCREEN, LIT_MOVED, LIT_OPAQUE_GLASS, LIT_ONSCREEN, LIT_ONSCREEN_MOVED, LIT_BOUNDARY, LIT_FLOOR)
 MODES = (LIT_DISABLED, LIT_SCREEN, LIT_HARDWARE, LIT_HYBRID)
 BASELINE_CAPTURES = ((LIT_OFFSCREEN, LIT_DISABLED), (LIT_OFFSCREEN, LIT_SCREEN), (LIT_OFFSCREEN, LIT_HARDWARE),
     (LIT_MOVED, LIT_DISABLED), (LIT_MOVED, LIT_HARDWARE), (LIT_OPAQUE_GLASS, LIT_DISABLED), (LIT_OPAQUE_GLASS, LIT_HARDWARE),
@@ -516,9 +513,9 @@ def write_report(args, captures, metrics=None, statistics=None):
         bmp.with_suffix(".png").write_bytes(png)
         label = html.escape(item[LIT_CASE] + " / " + item[LIT_MODE] + " / budget " + str(item[LIT_HARDWARE_BUDGET]))
         cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item[LIT_FILE])}">Raw BMP</a>'
-            f' / <a href=LIT_HTML_ESCAPE_ITEMlogLIT_EMPTY>Completed-frame log</a>'
+            f' / <a href="{html.escape(item["log"])}">Completed-frame log</a>'
             f'<img alt="Actual {label} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    document = '<!doctype html><html lang="en"><meta charset=LIT_UTF_8><title>Reflection smoke captures</title>'
+    document = f'<!doctype html><html lang="en"><meta charset="{LIT_UTF_8}"><title>Reflection smoke captures</title>'
     document += '<style>body{background:#141922;color:#e7edf5;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{display:block;width:100%;margin-top:12px}a{color:#88c9ff}pre{white-space:pre-wrap}h2{font-size:19px}</style>'
     document += '<h1>Reflection smoke - actual renderer captures</h1><p>' + html.escape(metadata[LIT_LIMITATIONS]) + '</p>'
     document += '<p>Images contain unchanged framebuffer RGB pixels, converted losslessly to PNG. Raw BMPs remain beside this report. Glass uses IOR 3.8 and its matching dielectric Fresnel F0.</p><main>'

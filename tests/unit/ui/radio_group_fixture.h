@@ -76,7 +76,6 @@ public:
     u64 m_disabled = 30u;
     bool m_reverse = false;
     bool m_duplicate = false;
-    bool m_zero = false;
     bool m_allDisabled = false;
     mutable u64 m_calls = 0u;
     mutable u64 m_textCalls = 0u;

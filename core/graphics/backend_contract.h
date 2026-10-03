@@ -359,7 +359,6 @@ concept FramebufferApi = DescribedResourceApi<T, FramebufferDesc> && requires(co
 
 template<typename T>
 concept RayTracingOpacityMicromapApi = DescribedResourceApi<T, RayTracingOpacityMicromapDesc> && requires(const T& micromap){
-    { micromap.isCompacted() }->SameAs<bool>;
     { micromap.getDeviceAddress() }->SameAs<u64>;
 };
 

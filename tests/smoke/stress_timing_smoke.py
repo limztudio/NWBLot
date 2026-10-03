@@ -131,7 +131,6 @@ SOFTWARE_SHADOW_COVERAGE = {LIT_REFERENCE: 0, "fitted_volume": 1}
 SOFTWARE_SHADOW_BLOCKER_SEARCH = {LIT_REFERENCE_GRID9: 0, "compact_cross5": 1, "center1": 2}
 SOFTWARE_SHADOW_CAPTURE_CADENCE = {LIT_EVERY_FRAME: 0, "reuse_one_frame": 1, "reuse_two_frames": 2}
 SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX = "RendererSystem: accepted light-space capture reuse "
-SOFTWARE_SHADOW_CAPTURE_REUSE = SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=2)"
 
 CSG_PROFILE = "StressTestSmokeProject: CSG "
 CSG_DISPATCH = "RendererSystem: dispatched CSG light-space shadows "
@@ -217,7 +216,6 @@ def parse_reflection_diagnostics(lines, requested):
     pattern += " " + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_SCREEN_FIELDS)
     sums = dict.fromkeys(REFLECTION_COUNTERS, 0)
     screen_sums = dict.fromkeys(REFLECTION_SCREEN_FIELDS, 0)
-    screen_samples = 0
     maximum_frame_average_iterations = 0.0
     seen = set()
     ranges = {}
@@ -238,7 +236,6 @@ def parse_reflection_diagnostics(lines, requested):
         if (screen[LIT_SCREEN_HITS] > screen[LIT_SCREEN_RETURNS] or screen[LIT_SCREEN_RETURNS] > attempts
                 or screen[LIT_SCREEN_LIMIT_MISSES] > attempts or screen[LIT_SCREEN_ITERATIONS] > attempts * 256):
             raise SmokeFailure("screen reflection counters exceed their attempted ray population or maximum budget")
-        screen_samples += 1
         for field in REFLECTION_SCREEN_FIELDS:
             screen_sums[field] += screen[field]
         maximum_frame_average_iterations = max(maximum_frame_average_iterations,
@@ -300,7 +297,7 @@ def parse_reflection_diagnostics(lines, requested):
         "unsupported_ratio": sums[LIT_UNSUPPORTED_PATHS] / rays if rays else None,
         "exterior_eligible_ratio": sums[LIT_EXTERIOR_ELIGIBLE_RAYS] / rays if rays else None,
         "queries_per_hardware_ray": sums[LIT_HARDWARE_QUERIES] / rays if rays else None,
-        LIT_SCREEN: {LIT_SAMPLE_COUNT: screen_samples, LIT_SUMS: screen_sums,
+        LIT_SCREEN: {LIT_SAMPLE_COUNT: len(records), LIT_SUMS: screen_sums,
             LIT_MAXIMUM_FRAME_AVERAGE_ITERATIONS: maximum_frame_average_iterations,
             "iterations_per_attempt": screen_sums[LIT_SCREEN_ITERATIONS] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,
             "limit_miss_ratio": screen_sums[LIT_SCREEN_LIMIT_MISSES] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,

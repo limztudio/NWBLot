@@ -122,8 +122,6 @@ inline constexpr u32 s_MaxVertexAttributes = 16;
 inline constexpr usize s_MaxProgrammableSamplePositions = 16u;
 inline constexpr u32 s_MaxBindingLayouts = 8;
 inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
-inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;
-inline constexpr u32 s_MaxVolatileConstantBuffers = 32;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
 inline constexpr i32 s_WindowPositionAuto = -1;
@@ -132,7 +130,6 @@ inline constexpr u32 s_BackBufferHeight = 720;
 inline constexpr u32 s_SwapChainBufferCount = 3;
 inline constexpr u32 s_MaxFramesInFlight = 2;
 inline constexpr f32 s_DepthClearValue = 1.0f;
-inline constexpr f64 s_AverageFrameTimeUpdateIntervalSeconds = 0.5;
 
 using GraphicsArena = Alloc::GlobalArena;
 using GraphicsString = AString<GraphicsArena>;

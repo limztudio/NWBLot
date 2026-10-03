@@ -32,9 +32,6 @@ namespace __hidden_texture_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using TextureFormat::s_UastcBlockHeight;
-using TextureFormat::s_UastcBlockWidth;
-using TextureFormat::s_UastcBytesPerBlock;
 static_assert(sizeof(basist::half_float) == sizeof(u16), "Basis HDR output must use 16-bit half components");
 static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport =
     Core::FormatSupport::Texture

@@ -5,7 +5,7 @@
 #include "optical_scene_resources.h"
 
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

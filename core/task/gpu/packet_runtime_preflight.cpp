@@ -6,10 +6,9 @@
 #include "packet_runtime_initial_state_validation.h"
 #include "task_graph.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/queue_sharing.h>
-#include <core/graphics/vulkan/buffer_resource_detail.h>
-#include <core/graphics/vulkan/texture_resource_detail.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -142,19 +141,19 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         )
             return false;
 
-        const u32 destinationFamily = m_device.getQueueFamilyIndex(packet.queue);
-        const u32 sourceFamily = ownerQueue.valid()
-            ? m_device.getQueueFamilyIndex(ownerQueue)
-            : VK_QUEUE_FAMILY_IGNORED
+        const u32 destinationDomain = GraphicsBackend::GetQueueOwnershipDomain(m_device, packet.queue);
+        const u32 sourceDomain = ownerQueue.valid()
+            ? GraphicsBackend::GetQueueOwnershipDomain(m_device, ownerQueue)
+            : GraphicsBackend::s_InvalidQueueOwnershipDomain
         ;
-        if(destinationFamily == VK_QUEUE_FAMILY_IGNORED)
+        if(destinationDomain == GraphicsBackend::s_InvalidQueueOwnershipDomain)
             return false;
         if(!releaseDestinationQueue.valid())
-            return !ownerQueue.valid() || sourceFamily == destinationFamily;
+            return !ownerQueue.valid() || sourceDomain == destinationDomain;
 
         return ownerQueue.valid()
-            && sourceFamily != VK_QUEUE_FAMILY_IGNORED
-            && m_device.getQueueFamilyIndex(releaseDestinationQueue) == destinationFamily
+            && sourceDomain != GraphicsBackend::s_InvalidQueueOwnershipDomain
+            && GraphicsBackend::GetQueueOwnershipDomain(m_device, releaseDestinationQueue) == destinationDomain
         ;
     };
     Optional<GpuInitialStateHandoffValidation> initialStateValidation;
@@ -179,12 +178,9 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         if(state == ResourceStates::Unknown)
             return m_device.isTextureReadyForGpuUse(texture);
-        if(!GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state))
+        if(!GraphicsBackend::IsTextureResourceStateMaskValid(state))
             return false;
-        return m_device.isTextureReadyForGpuUse(
-            texture,
-            GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state)
-        );
+        return GraphicsBackend::IsTextureReadyForState(m_device, texture, state);
     };
     const auto validateBufferForState = [&](Buffer* const buffer, const ResourceStates::Mask state){
         if(!buffer)
@@ -193,17 +189,14 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
         const BufferDesc& description = buffer->getCreationDescription();
         if(
-            !GraphicsBackend::VulkanBufferDetail::IsBufferResourceStateMaskValid(state)
-            || !GraphicsBackend::VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(
+            !GraphicsBackend::IsBufferResourceStateMaskValid(state)
+            || !GraphicsBackend::IsBufferDescriptionCompatibleWithResourceStates(
                 description,
                 state
             )
         )
             return false;
-        return m_device.isBufferReadyForGpuUse(
-            buffer,
-            GraphicsBackend::VulkanBufferDetail::RequiredBufferUsageForResourceStates(description, state)
-        );
+        return GraphicsBackend::IsBufferReadyForState(m_device, buffer, state);
     };
 
     if(initialStates){

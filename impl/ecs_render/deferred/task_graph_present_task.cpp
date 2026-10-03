@@ -8,7 +8,7 @@
 #include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

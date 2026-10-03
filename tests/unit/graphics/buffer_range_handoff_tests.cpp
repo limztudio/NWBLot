@@ -35,7 +35,7 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 using namespace NWB;
 namespace Core = NWB::Core;
-using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Core::GraphicsBackend::BackendTestDispatchAccess;
 using Handoff = Core::CommandListResourceStateHandoff;
 
 inline constexpr u16 s_DeviceGeneration = 17u;

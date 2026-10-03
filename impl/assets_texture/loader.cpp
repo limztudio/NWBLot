@@ -9,7 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 
 #include <global/scope_exit.h>
 #include <global/sync.h>

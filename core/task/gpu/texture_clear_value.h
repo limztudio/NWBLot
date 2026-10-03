@@ -7,8 +7,8 @@
 
 #include "task_desc.h"
 
-#include <core/graphics/vulkan/backend_context.h>
-#include <core/graphics/vulkan/texture_clear_contract.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/texture_clear_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,20 +28,20 @@ namespace GpuTaskGraphClearDetail{
 
 [[nodiscard]] inline bool TryMapTextureClearValueKind(
     const GpuClearTextureTaskValueType::Enum valueType,
-    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum& outValueKind
+    GraphicsBackend::TextureClearValueKind::Enum& outValueKind
 )noexcept{
-    outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Float;
+    outValueKind = GraphicsBackend::TextureClearValueKind::Float;
     switch(valueType){
     case GpuClearTextureTaskValueType::Float:
         return true;
     case GpuClearTextureTaskValueType::UInt:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt;
+        outValueKind = GraphicsBackend::TextureClearValueKind::UInt;
         return true;
     case GpuClearTextureTaskValueType::Int:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Int;
+        outValueKind = GraphicsBackend::TextureClearValueKind::Int;
         return true;
     case GpuClearTextureTaskValueType::DepthStencil:
-        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::DepthStencil;
+        outValueKind = GraphicsBackend::TextureClearValueKind::DepthStencil;
         return true;
     default:
         return false;

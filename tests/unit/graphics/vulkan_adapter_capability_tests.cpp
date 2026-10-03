@@ -5,7 +5,7 @@
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
-#include <core/graphics/vulkan/backend_context_capabilities.h>
+#include <core/graphics/backend_selection/test/backend_context_capabilities.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 

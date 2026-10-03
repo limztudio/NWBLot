@@ -5,7 +5,7 @@
 #include "runtime.h"
 #include "runtime_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 #include <core/common/log.h>
 #include <core/task/gpu/scheduler.h>
 #include <core/telemetry/session.h>

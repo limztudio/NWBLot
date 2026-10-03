@@ -10,7 +10,7 @@
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/compiler_internal.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

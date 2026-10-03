@@ -9,7 +9,7 @@
 
 #include "generated_geometry_reuse.h"
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/material/material_system.h>

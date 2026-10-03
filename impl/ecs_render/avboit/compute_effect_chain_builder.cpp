@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/avboit/compute_effect_chain_builder.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>

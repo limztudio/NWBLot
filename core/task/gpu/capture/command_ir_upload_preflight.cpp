@@ -4,7 +4,8 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 #include <core/task/gpu/task_graph.h>
 #include <core/task/gpu/task_graph_builtin_internal.h>
 
@@ -151,7 +152,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         || record.blobSizeBytes > static_cast<u64>(Limit<usize>::s_Max)
         || (record.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (record.blobSizeBytes & (sizeof(u32) - 1u)) != 0u
-        || !GraphicsBackend::VulkanDetail::IsBufferRangeInBounds(
+        || !GraphicsBackend::IsBufferRangeInBounds(
             description,
             record.destinationOffsetBytes,
             record.blobSizeBytes

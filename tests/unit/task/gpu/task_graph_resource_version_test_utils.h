@@ -13,7 +13,7 @@
 #include <gtest/gtest.h>
 
 #include <core/task/gpu/compiler_internal.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

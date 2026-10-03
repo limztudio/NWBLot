@@ -30,7 +30,7 @@ namespace __hidden_light_space_capture_graph_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 using TestArena = Tests::TestArena<struct LightSpaceCaptureGraphTestsTag>;
-using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Core::GraphicsBackend::BackendTestDispatchAccess;
 
 // This fixture declares the production graph with metadata-only resources; no native device or GPU work is created.
 struct CaptureContext{

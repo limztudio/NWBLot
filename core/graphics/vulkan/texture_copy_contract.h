@@ -41,14 +41,21 @@ struct TextureCopyContract{
     TextureCopyQueueRequirement::Enum queueRequirement = TextureCopyQueueRequirement::Transfer;
 };
 
-[[nodiscard]] inline bool ResolveTextureCopyContract(
+template<typename Contract>
+[[nodiscard]] inline bool ResolveTextureCopyContractWithMetadata(
     const TextureDesc& sourceDesc,
     const TextureSlice& sourceSlice,
     const TextureDesc& destinationDesc,
     const TextureSlice& destinationSlice,
-    TextureCopyContract& outContract
+    Contract& outContract,
+    VulkanDetail::TextureFormatBlockLayout& formatLayout,
+    VkImageType& imageType,
+    VkImageAspectFlags& aspectMask
 )noexcept{
     outContract = {};
+    formatLayout = {};
+    imageType = VK_IMAGE_TYPE_MAX_ENUM;
+    aspectMask = 0u;
     if(!IsTextureDescShapeValid(sourceDesc) || !IsTextureDescShapeValid(destinationDesc))
         return false;
 
@@ -66,18 +73,18 @@ struct TextureCopyContract{
         || sourceImageType != destinationImageType
         || !VulkanDetail::GetTextureFormatBlockLayout(
             GetFormatInfo(sourceDesc.format),
-            outContract.formatLayout
+            formatLayout
         )
         || !VulkanDetail::IsTextureSliceInBounds(
             sourceDesc,
             sourceSlice,
-            outContract.formatLayout,
+            formatLayout,
             &outContract.sourceSlice
         )
         || !VulkanDetail::IsTextureSliceInBounds(
             destinationDesc,
             destinationSlice,
-            outContract.formatLayout,
+            formatLayout,
             &outContract.destinationSlice
         )
     )
@@ -90,8 +97,8 @@ struct TextureCopyContract{
             || (PickImageFlags(destinationDesc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
             || sourceDesc.mipLevels != 1u
             || destinationDesc.mipLevels != 1u
-            || outContract.formatLayout.blockWidth != 1u
-            || outContract.formatLayout.blockHeight != 1u
+            || formatLayout.blockWidth != 1u
+            || formatLayout.blockHeight != 1u
         )
             return false;
     }
@@ -132,19 +139,32 @@ struct TextureCopyContract{
         && outContract.destinationSlice.depth == destinationMipExtent.depth
     ;
 
-    outContract.imageType = sourceImageType;
-    outContract.aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(sourceDesc.format));
-    if(outContract.aspectMask == 0u)
+    imageType = sourceImageType;
+    aspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(sourceDesc.format));
+    if(aspectMask == 0u)
         return false;
     if(
         sourceDesc.sampleCount > 1u
-        && (outContract.aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
+        && (aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
     )
-        outContract.queueRequirement = TextureCopyQueueRequirement::Graphics;
+        outContract.queueRequirement = static_cast<decltype(outContract.queueRequirement)>(TextureCopyQueueRequirement::Graphics);
     else if(!sourceWholeMip || !destinationWholeMip)
-        outContract.queueRequirement = TextureCopyQueueRequirement::ComputeOrGraphics;
+        outContract.queueRequirement = static_cast<decltype(outContract.queueRequirement)>(TextureCopyQueueRequirement::ComputeOrGraphics);
 
     return true;
+}
+
+[[nodiscard]] inline bool ResolveTextureCopyContract(
+    const TextureDesc& sourceDesc,
+    const TextureSlice& sourceSlice,
+    const TextureDesc& destinationDesc,
+    const TextureSlice& destinationSlice,
+    TextureCopyContract& outContract
+)noexcept{
+    [[clang::always_inline]] return ResolveTextureCopyContractWithMetadata(
+        sourceDesc, sourceSlice, destinationDesc, destinationSlice,
+        outContract, outContract.formatLayout, outContract.imageType, outContract.aspectMask
+    );
 }
 
 

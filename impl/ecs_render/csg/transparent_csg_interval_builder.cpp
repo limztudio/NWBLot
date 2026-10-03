@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/csg_system.h>

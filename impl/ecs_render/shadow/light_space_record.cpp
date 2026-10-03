@@ -7,7 +7,7 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/gpu_timing.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/algorithm.h>
 

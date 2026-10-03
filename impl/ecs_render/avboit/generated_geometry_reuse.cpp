@@ -7,7 +7,7 @@
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

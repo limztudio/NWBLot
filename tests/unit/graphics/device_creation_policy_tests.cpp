@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <core/graphics/rhi/device.h>
-#include <core/graphics/vulkan/device_extension_policy.h>
+#include <core/graphics/backend_selection/test/device_extension_policy.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

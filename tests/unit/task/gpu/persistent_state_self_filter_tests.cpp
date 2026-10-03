@@ -22,7 +22,7 @@ namespace __hidden_persistent_state_self_filter_tests{
 
 using namespace NWB;
 namespace Core = NWB::Core;
-using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Core::GraphicsBackend::BackendTestDispatchAccess;
 using Handoff = Core::CommandListResourceStateHandoff;
 using Cache = Core::GpuPersistentResourceStateCache;
 

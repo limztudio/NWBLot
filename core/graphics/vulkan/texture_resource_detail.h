@@ -167,30 +167,23 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc){
     return dimensionValid && desc.mipLevels <= GetMaxMipLevels(desc);
 }
 
-[[nodiscard]] inline bool TryTextureDimensionToImageType(
+[[nodiscard]] constexpr VkImageType GetTextureImageType(const TextureDimension::Enum dimension)noexcept{
+    return dimension == TextureDimension::Texture1D || dimension == TextureDimension::Texture1DArray
+        ? VK_IMAGE_TYPE_1D
+        : dimension == TextureDimension::Texture2D || dimension == TextureDimension::Texture2DArray
+            || dimension == TextureDimension::TextureCube || dimension == TextureDimension::TextureCubeArray
+            || dimension == TextureDimension::Texture2DMS || dimension == TextureDimension::Texture2DMSArray
+            ? VK_IMAGE_TYPE_2D
+            : dimension == TextureDimension::Texture3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_MAX_ENUM
+    ;
+}
+
+[[nodiscard]] constexpr bool TryTextureDimensionToImageType(
     const TextureDimension::Enum dimension,
     VkImageType& outImageType
 )noexcept{
-    switch(dimension){
-    case TextureDimension::Texture1D:
-    case TextureDimension::Texture1DArray:
-        outImageType = VK_IMAGE_TYPE_1D;
-        return true;
-    case TextureDimension::Texture2D:
-    case TextureDimension::Texture2DArray:
-    case TextureDimension::TextureCube:
-    case TextureDimension::TextureCubeArray:
-    case TextureDimension::Texture2DMS:
-    case TextureDimension::Texture2DMSArray:
-        outImageType = VK_IMAGE_TYPE_2D;
-        return true;
-    case TextureDimension::Texture3D:
-        outImageType = VK_IMAGE_TYPE_3D;
-        return true;
-    default:
-        outImageType = VK_IMAGE_TYPE_MAX_ENUM;
-        return false;
-    }
+    outImageType = GetTextureImageType(dimension);
+    return outImageType != VK_IMAGE_TYPE_MAX_ENUM;
 }
 
 inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){

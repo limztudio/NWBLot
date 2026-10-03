@@ -7,7 +7,7 @@
 #include "task_graph_postprocess.h"
 #include "sampling_sequence.h"
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 

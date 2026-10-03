@@ -4,8 +4,8 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/vulkan/host_readback_sync.h>
-#include <core/graphics/vulkan/state_tracking_detail.h>
+#include <core/graphics/backend_selection/test/host_readback_sync.h>
+#include <core/graphics/backend_selection/test/state_tracking_detail.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

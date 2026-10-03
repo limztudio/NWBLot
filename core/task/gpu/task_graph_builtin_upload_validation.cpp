@@ -4,7 +4,7 @@
 
 #include "task_graph_builtin_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +102,7 @@ namespace GpuTaskGraphBuiltinDetail{
     )
         return false;
 
-    // These pitches become VkBufferImageCopy's 32-bit texel fields in CommandList::writeTexture. Validate them at
+    // The native texture-copy contract uses 32-bit texel pitch fields in CommandList::writeTexture. Validate them at
     // declaration time so an accepted graph upload cannot lower to a native no-op after the command list rejects it.
     const u64 bufferRowBlocks = effectiveRowPitch / aspectLayout.bytesPerBlock;
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;

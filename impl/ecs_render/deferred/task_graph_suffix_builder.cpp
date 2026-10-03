@@ -8,7 +8,7 @@
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
 #include <impl/ecs_render/kernel/task_graph_frame_timing_end_task.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 

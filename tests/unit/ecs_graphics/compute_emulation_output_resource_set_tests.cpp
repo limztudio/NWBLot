@@ -3,7 +3,7 @@
 
 
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>

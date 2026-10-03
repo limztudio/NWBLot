@@ -7,7 +7,7 @@
 #include <impl/ecs_render/kernel/frame_graph_runtime_statistics.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/frame_graph_nodes.h>
 
 namespace __hidden_frame_telemetry{

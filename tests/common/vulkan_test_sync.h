@@ -6,7 +6,7 @@
 
 
 #include <global/global.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/resource_state_selection.h>
 
 
@@ -25,7 +25,7 @@ namespace Core::GraphicsBackend{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class VulkanTestDispatchAccess final{
+class BackendTestDispatchAccess final{
 public:
     [[nodiscard]] static usize initialResourceSelectionBucketCount()noexcept{
         return CommandListResourceSelection::s_InlineCapacity * 4u;

@@ -7,7 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <core/graphics/api.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/sync.h>
 #include <global/thread.h>

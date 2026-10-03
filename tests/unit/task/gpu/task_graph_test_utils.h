@@ -19,10 +19,7 @@
 #include <core/task/gpu/compiler_internal.h>
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>
-#include <core/graphics/vulkan/backend.h>
-#include <core/graphics/vulkan/command_validation.h>
-#include <core/graphics/vulkan/device_detail.h>
-#include <core/graphics/vulkan/state_tracking_detail.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>

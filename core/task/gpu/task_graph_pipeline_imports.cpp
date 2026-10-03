@@ -4,7 +4,7 @@
 
 #include "task_graph.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/allocation_size.h>
 #include <global/hash_utils.h>

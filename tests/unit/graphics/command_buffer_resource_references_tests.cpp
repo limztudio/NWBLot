@@ -6,7 +6,7 @@
 #include <tests/common/test_context.h>
 #include <tests/common/vulkan_test_sync.h>
 
-#include <core/graphics/vulkan/command_buffer_resource_references.h>
+#include <core/graphics/backend_selection/test/command_buffer_resource_references.h>
 
 #include <global/text_utils.h>
 #include <global/timer.h>
@@ -32,7 +32,7 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 namespace Core = NWB::Core;
 namespace Graphics = Core::GraphicsBackend;
-using Access = Graphics::VulkanTestDispatchAccess;
+using Access = Graphics::BackendTestDispatchAccess;
 using TestArena = NWB::Tests::TestArena<struct CommandBufferResourceReferencesTestsTag>;
 
 

@@ -4,7 +4,8 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 #include <core/graphics/rhi/queue_sharing.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
@@ -68,14 +69,13 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(
     Buffer* const buffer,
     const ResourceStates::Mask requiredState,
-    const VkBufferUsageFlags requiredUsage,
     CommandList& commandList,
     const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
     if(!buffer)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
     if(
-        !commandList.getDevice().isBufferReadyForGpuUse(buffer, requiredUsage)
+        !GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), buffer, requiredState)
         || !ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), commandQueue)
     )
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -89,14 +89,13 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureBackendOperand(
     Texture* const texture,
     const ResourceStates::Mask requiredState,
-    const VkImageUsageFlags requiredUsage,
     CommandList& commandList,
     const GpuPhysicalQueueInfo& commandQueue
 )noexcept{
     if(!texture)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
     if(
-        !commandList.getDevice().isTextureReadyForGpuUse(texture, requiredUsage)
+        !GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), texture, requiredState)
         || !ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), commandQueue)
     )
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -121,7 +120,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             return ValidateBufferBackendOperand(
                 source,
                 ResourceStates::CopySource | ResourceStates::CopyDest,
-                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 commandList,
                 commandQueue
             );
@@ -130,7 +128,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(
             source,
             ResourceStates::CopySource,
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             commandList,
             commandQueue
         );
@@ -139,7 +136,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateBufferBackendOperand(
             destination,
             ResourceStates::CopyDest,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             commandList,
             commandQueue
         );
@@ -148,7 +144,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(
             graph.textureForResource(record.source),
             ResourceStates::CopySource,
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             commandList,
             commandQueue
         );
@@ -157,7 +152,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateTextureBackendOperand(
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             commandList,
             commandQueue
         );
@@ -166,7 +160,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateBufferBackendOperand(
             graph.bufferForResource(record.destination),
             ResourceStates::CopyDest,
-            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             commandList,
             commandQueue
         );
@@ -175,7 +168,6 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateTextureBackendOperand(
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             commandList,
             commandQueue
         );
@@ -330,7 +322,7 @@ static void LowerOperation(
 }
 
 // Direct lowering supports one opcode; scan the packet before emitting any native command.
-[[nodiscard]] static GpuCommandIrReplayResult ValidateDirectVulkanOpcodeSupport(
+[[nodiscard]] static GpuCommandIrReplayResult ValidateDirectBackendOpcodeSupport(
     const BinaryByteView bytes,
     const GpuSubmissionPacketId packet,
     const GpuCommandIrStreamValidationResult& expectedStreamValidation
@@ -364,7 +356,7 @@ static void LowerOperation(
 
         if(record.packet == packet && record.opcode != GpuCommandIrOpcode::CopyBuffer){
             return ReplayFailure(
-                GpuCommandIrReplayError::UnsupportedDirectVulkanOpcode,
+                GpuCommandIrReplayError::UnsupportedDirectBackendOpcode,
                 expectedStreamValidation,
                 recordIndex
             );
@@ -553,7 +545,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     return ReplayPacketImpl(stream.bytes(), &stream, graph, compiledGraph, packet, commandList);
 }
 
-GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
+GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectBackend(
     const BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
@@ -564,7 +556,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     if(!result.valid())
         return result;
 
-    result = __hidden_gpu_command_ir_replay_lowering::ValidateDirectVulkanOpcodeSupport(
+    result = __hidden_gpu_command_ir_replay_lowering::ValidateDirectBackendOpcodeSupport(
         bytes,
         packet,
         result.streamValidation
@@ -631,7 +623,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
 
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
 
-    // Barriers are already lowered; bypass copyBuffer to exercise raw Vulkan emission only.
+    // Barriers are already lowered; bypass copyBuffer to exercise direct native copy emission only.
     GpuCommandIrStreamReader reader(bytes);
     GpuCommandIrBuiltinTaskRecord record;
     u64 recordIndex = 0u;
@@ -668,7 +660,8 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
                 recordIndex
             );
         }
-        const bool lowered = commandList.recordPreflightedCopyBufferDirectVulkan(
+        const bool lowered = GraphicsBackend::RecordPreflightedCopyBuffer(
+            commandList,
             *graph.bufferForResource(record.destination),
             record.destinationOffsetBytes,
             *graph.bufferForResource(record.source),
@@ -684,7 +677,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
         }
         if(!lowered){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
-                GpuCommandIrReplayError::DirectVulkanLoweringFailed,
+                GpuCommandIrReplayError::DirectBackendLoweringFailed,
                 result.streamValidation,
                 recordIndex
             );

@@ -10,7 +10,7 @@
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <global/algorithm.h>
 

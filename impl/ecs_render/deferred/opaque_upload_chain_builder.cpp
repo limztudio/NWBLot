@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>

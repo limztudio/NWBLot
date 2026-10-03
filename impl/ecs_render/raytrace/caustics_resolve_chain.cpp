@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>

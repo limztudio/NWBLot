@@ -8,7 +8,7 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/alloc/scratch.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/algorithm.h>
 

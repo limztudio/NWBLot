@@ -4,7 +4,8 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 #include <core/graphics/rhi/queue_sharing.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -35,7 +36,7 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
         if(!destination)
             return GpuCommandIrReplayError::StreamChangedDuringReplay;
         if(
-            !commandList.getDevice().isBufferReadyForGpuUse(destination, VK_BUFFER_USAGE_TRANSFER_DST_BIT)
+            !GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest)
             || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue)
         )
             return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -49,7 +50,7 @@ GpuCommandIrReplayError::Enum ValidateUploadBackendOperand(
         if(!destination)
             return GpuCommandIrReplayError::StreamChangedDuringReplay;
         if(
-            !commandList.getDevice().isTextureReadyForGpuUse(destination, VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+            !GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), destination, ResourceStates::CopyDest)
             || !ResourceQueueAdmissionAdmitsQueue(destination->getQueueAdmissionSnapshot(), queue)
         )
             return GpuCommandIrReplayError::BackendResourceNotReady;

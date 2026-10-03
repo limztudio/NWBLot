@@ -4,9 +4,10 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 #include <core/graphics/rhi/queue_sharing.h>
-#include <core/graphics/vulkan/command_validation.h>
+#include <core/graphics/backend_selection/raster_validation.h>
 #include <core/task/gpu/task_graph.h>
 
 
@@ -28,11 +29,10 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBuffer(
     Buffer* const buffer,
     const ResourceStates::Mask state,
-    const VkBufferUsageFlags usage,
     const GpuPhysicalQueueInfo& queue,
     CommandList& commandList
 )noexcept{
-    if(!buffer || !commandList.getDevice().isBufferReadyForGpuUse(buffer, usage))
+    if(!buffer || !GraphicsBackend::IsBufferReadyForState(commandList.getDevice(), buffer, state))
         return GpuCommandIrReplayError::BackendResourceNotReady;
     if(!ResourceQueueAdmissionAdmitsQueue(buffer->getQueueAdmissionSnapshot(), queue))
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -47,7 +47,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     const GpuPhysicalQueueInfo& queue,
     CommandList& commandList
 )noexcept{
-    if(!texture || !commandList.getDevice().isTextureReadyForGpuUse(texture, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
+    if(!texture || !GraphicsBackend::IsTextureReadyForState(commandList.getDevice(), texture, ResourceStates::RenderTarget))
         return GpuCommandIrReplayError::BackendResourceNotReady;
     if(!ResourceQueueAdmissionAdmitsQueue(texture->getQueueAdmissionSnapshot(), queue))
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -77,14 +77,12 @@ namespace __hidden_gpu_command_ir_raster_lowering{
 
     Device& device = commandList.getDevice();
     if(
-        !GraphicsBackend::VulkanDetail::IsViewportValid(record.viewport, device.getPhysicalDeviceLimits())
-        || (!record.hasScissor && !GraphicsBackend::VulkanDetail::IsImplicitScissorValid(record.viewport))
+        !GraphicsBackend::IsViewportValid(record.viewport, device)
+        || (!record.hasScissor && !GraphicsBackend::IsImplicitScissorValid(record.viewport))
     )
         return GpuCommandIrReplayError::InvalidRasterState;
     if(
-        owner.pipeline->getDeviceGeneration() != device.getDeviceGeneration()
-        || owner.pipeline->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Pipeline).integer == 0u
-        || owner.pipeline->m_pipelineLayout == VK_NULL_HANDLE
+        !GraphicsBackend::IsGraphicsPipelineReady(*owner.pipeline, device)
         || owner.pipeline->getFramebufferInfo() != owner.framebuffer->getFramebufferInfo()
     )
         return GpuCommandIrReplayError::BackendResourceNotReady;
@@ -101,7 +99,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
     if(
         !color
         || !color->getDescription().isRenderTarget
-        || !GraphicsBackend::VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(
+        || !GraphicsBackend::IsFramebufferAttachmentSubresourceSetValid(
             color->getDescription(), framebuffer.colorAttachments[0u].subresources
         )
     )
@@ -122,12 +120,8 @@ namespace __hidden_gpu_command_ir_raster_lowering{
             ? ResourceStates::VertexBuffer | ResourceStates::IndexBuffer
             : ResourceStates::VertexBuffer
         ;
-        const VkBufferUsageFlags requiredUsage = sharedIndex
-            ? VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT
-            : VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
-        ;
         const GpuCommandIrReplayError::Enum bufferError = ValidateBuffer(
-            buffer, requiredState, requiredUsage, queue, commandList
+            buffer, requiredState, queue, commandList
         );
         if(bufferError != GpuCommandIrReplayError::None)
             return bufferError;
@@ -147,7 +141,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         if(vertex.get() == index)
             return GpuCommandIrReplayError::None;
     }
-    return ValidateBuffer(index, ResourceStates::IndexBuffer, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, queue, commandList);
+    return ValidateBuffer(index, ResourceStates::IndexBuffer, queue, commandList);
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateDraw(
@@ -160,8 +154,8 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         Buffer* const index = owner.indexBuffer.get();
         if(!index)
             return GpuCommandIrReplayError::InvalidRasterDraw;
-        const u32 indexBytes = GraphicsBackend::VulkanDetail::GetIndexElementByteSize(stateRecord.indexFormat);
-        if(!GraphicsBackend::VulkanDetail::IsIndexDrawRangeValid(
+        const u32 indexBytes = GraphicsBackend::GetIndexElementByteSize(stateRecord.indexFormat);
+        if(!GraphicsBackend::IsIndexDrawRangeValid(
             index->getDescription(), stateRecord.indexOffset,
             record.drawArguments.startIndexLocation, record.drawArguments.vertexCount, indexBytes
         ))
@@ -173,14 +167,14 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         return GpuCommandIrReplayError::None;
 
     for(u32 requiredIndex = 0u; requiredIndex < inputLayout->getNumBindings(); ++requiredIndex){
-        const VkVertexInputBindingDescription* const required = inputLayout->getBindingDescription(requiredIndex);
-        if(!required)
+        const GraphicsBackend::VertexInputBinding required = GraphicsBackend::GetVertexInputBinding(*inputLayout, requiredIndex);
+        if(!required.valid)
             return GpuCommandIrReplayError::BackendResourceNotReady;
 
         usize bindingIndex = 0u;
         while(
             bindingIndex < stateRecord.vertexBuffers.size()
-            && stateRecord.vertexBuffers[bindingIndex].slot != required->binding
+            && stateRecord.vertexBuffers[bindingIndex].slot != required.slot
         )
             ++bindingIndex;
         if(bindingIndex == stateRecord.vertexBuffers.size())
@@ -190,7 +184,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         bool foundAttribute = false;
         for(u32 matchingIndex = 0u; matchingIndex < inputLayout->getNumAttributes(); ++matchingIndex){
             const VertexAttributeDesc* const matching = inputLayout->getAttributeDescription(matchingIndex);
-            if(!matching || matching->bufferIndex != required->binding)
+            if(!matching || matching->bufferIndex != required.slot)
                 continue;
             foundAttribute = true;
             const FormatInfo& format = GetFormatInfo(matching->format);
@@ -203,7 +197,7 @@ namespace __hidden_gpu_command_ir_raster_lowering{
         }
         if(!foundAttribute)
             return GpuCommandIrReplayError::InvalidRasterDraw;
-        const bool instanceRate = required->inputRate == VK_VERTEX_INPUT_RATE_INSTANCE;
+        const bool instanceRate = required.instanceRate;
         if(indexed && !instanceRate)
             continue;
         const u32 first = instanceRate
@@ -215,9 +209,9 @@ namespace __hidden_gpu_command_ir_raster_lowering{
             : record.drawArguments.vertexCount
         ;
         const GpuCommandIrRasterVertexBinding& binding = stateRecord.vertexBuffers[bindingIndex];
-        if(!GraphicsBackend::VulkanDetail::IsStridedBufferRangeValid(
+        if(!GraphicsBackend::IsStridedBufferRangeValid(
             owner.vertexBuffers[bindingIndex]->getDescription(), binding.offset,
-            first, count, required->stride, requiredBytes
+            first, count, required.stride, requiredBytes
         ))
             return GpuCommandIrReplayError::InvalidRasterDraw;
     }

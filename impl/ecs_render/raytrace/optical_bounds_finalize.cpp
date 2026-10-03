@@ -8,7 +8,7 @@
 #include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
 
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 namespace __hidden_optical_shader{
 static constexpr StringView s_DefaultShaderVariant = "default";

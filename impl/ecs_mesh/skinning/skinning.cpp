@@ -9,7 +9,7 @@
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>

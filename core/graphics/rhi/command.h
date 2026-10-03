@@ -21,7 +21,7 @@ class GpuNativePacketRecorder;
 class CommandListResourceSelection;
 
 namespace GraphicsBackend{
-    class VulkanTestDispatchAccess;
+    class BackendTestDispatchAccess;
 };
 
 
@@ -31,14 +31,14 @@ namespace CommandQueue{
     enum Enum : u8{
         Graphics = s_CommandQueueGraphicsBase,
         Compute,
-        // Optional copy transport, only when Vulkan exposes a distinct transfer-only family.
+        // Optional copy transport, only when the selected backend exposes a distinct transfer-only queue.
         Transfer,
 
         kCount
     };
 };
 
-// Native recording names the exact Vulkan queue owning the command pool and timeline. IDs are scoped to one logical-device generation; an invalid ID is never an ownership or retirement key.
+// Native recording names the exact backend queue owning the command pool and completion timeline. IDs are scoped to one logical-device generation; an invalid ID is never an ownership or retirement key.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -239,7 +239,7 @@ class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
     friend class GpuInitialStateHandoffValidation;
-    friend class GraphicsBackend::VulkanTestDispatchAccess;
+    friend class GraphicsBackend::BackendTestDispatchAccess;
 
 private:
     struct TextureState{

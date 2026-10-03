@@ -484,8 +484,8 @@ namespace GpuCommandIrReplayError{
         CommandListRenderPassActive,
         CommandListQueueMismatch,
         StreamChangedDuringReplay,
-        UnsupportedDirectVulkanOpcode,
-        DirectVulkanLoweringFailed,
+        UnsupportedDirectBackendOpcode,
+        DirectBackendLoweringFailed,
         CommandListRecordingFailed,
         BackendResourceNotReady,
         PermanentResourceStateMismatch,
@@ -500,7 +500,7 @@ namespace GpuCommandIrReplayError{
 };
 
 static_assert(static_cast<u8>(GpuCommandIrReplayError::StreamChangedDuringReplay) == 24u);
-static_assert(static_cast<u8>(GpuCommandIrReplayError::DirectVulkanLoweringFailed) == 26u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::DirectBackendLoweringFailed) == 26u);
 static_assert(static_cast<u8>(GpuCommandIrReplayError::CommandListRecordingFailed) == 27u);
 static_assert(static_cast<u8>(GpuCommandIrReplayError::BackendResourceNotReady) == 28u);
 static_assert(static_cast<u8>(GpuCommandIrReplayError::PermanentResourceStateMismatch) == 29u);
@@ -549,9 +549,9 @@ struct GpuCommandIrReplayResult{
     CommandList& commandList
 )noexcept;
 
-// Experimental Vulkan-only CopyBuffer-only packet lowerer: graph-aware preflight, rejects unlowerable opcodes first.
+// Experimental selected-backend CopyBuffer-only packet lowerer: graph-aware preflight, rejects unlowerable opcodes first.
 // Caller pre-applies seed + barriers on the packet's exact queue (no render pass); bypasses copy-state tracking.
-[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectBackend(
     BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,

@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/task/gpu/task_desc.h>
 #include <core/task/gpu/task_graph.h>
 

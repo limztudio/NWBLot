@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 class Device;
-class VulkanTestDispatchAccess;
+class BackendTestDispatchAccess;
 class Queue;
 class TrackedCommandBuffer;
 class StateTracker;

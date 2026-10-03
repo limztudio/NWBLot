@@ -33,7 +33,7 @@ namespace __hidden_task_graph_packet_preflight_tests{
 
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
-using Access = Graphics::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Graphics::GraphicsBackend::BackendTestDispatchAccess;
 using Validation = Graphics::GpuInitialStateHandoffValidation;
 
 constexpr usize s_BenchmarkRepetitions = 8u;

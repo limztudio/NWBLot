@@ -4,12 +4,13 @@
 
 #include "command_ir_internal.h"
 
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/backend_selection/resource_validation.h>
 #include <core/task/gpu/texture_clear_value.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
-#include <core/graphics/vulkan/texture_clear_contract.h>
-#include <core/graphics/vulkan/texture_copy_contract.h>
+#include <core/graphics/backend_selection/texture_clear_contract.h>
+#include <core/graphics/backend_selection/texture_copy_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,7 +69,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     const u64 sizeBytes
 )noexcept{
     if(
-        !GraphicsBackend::VulkanDetail::IsBufferRangeInBounds(description, offsetBytes, sizeBytes)
+        !GraphicsBackend::IsBufferRangeInBounds(description, offsetBytes, sizeBytes)
         || declaration.byteOffset > description.byteSize
     )
         return false;
@@ -262,7 +263,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         )
         || (
             source == destination
-            && GraphicsBackend::VulkanDetail::BufferRangesOverlap(
+            && GraphicsBackend::BufferRangesOverlap(
                 record.sourceOffsetBytes,
                 record.dataSizeBytes,
                 record.destinationOffsetBytes,
@@ -317,8 +318,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
     const TextureDesc& sourceDescription = source->getCreationDescription();
     const TextureDesc& destinationDescription = destination->getCreationDescription();
-    GraphicsBackend::VulkanTextureDetail::TextureCopyContract contract;
-    if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
+    GraphicsBackend::TextureCopyContract contract;
+    if(!GraphicsBackend::ResolveTextureCopyContract(
         sourceDescription,
         record.sourceSlice,
         destinationDescription,
@@ -361,12 +362,12 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(
         (
             contract.queueRequirement
-            == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics
+            == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics
             && !taskAndQueueShareComputeOrGraphics
         )
         || (
             contract.queueRequirement
-            == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Graphics
+            == GraphicsBackend::TextureCopyQueueRequirement::Graphics
             && (!taskHasGraphics || !queueHasGraphics)
         )
     )
@@ -436,8 +437,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getCreationDescription();
-    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
-    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    GraphicsBackend::TextureClearValueKind::Enum valueKind;
+    GraphicsBackend::TextureClearContract clearContract;
     if(
         !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
         || !TextureSubresourcesContain(
@@ -446,7 +447,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             record.destinationSubresources
         )
         || !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType, valueKind)
-        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+        || !GraphicsBackend::ResolveTextureClearContract(
             description,
             record.destinationSubresources,
             valueKind,
@@ -455,7 +456,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             clearContract
         )
         || clearContract.subresources != record.destinationSubresources
-        || !GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirementSatisfied(
+        || !GraphicsBackend::TextureClearQueueRequirementSatisfied(
             clearContract.queueRequirement,
             task.commands.allowedCapabilities(),
             queue.capabilities
@@ -492,7 +493,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getCreationDescription();
-    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    GraphicsBackend::TextureClearContract clearContract;
     const Box clearBox(record.clearRect, 0, Limit<i32>::s_Max);
     if(
         record.clearRect.maxX <= record.clearRect.minX
@@ -504,17 +505,17 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             description,
             record.destinationSubresources
         )
-        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+        || !GraphicsBackend::ResolveTextureClearContract(
             description,
             record.destinationSubresources,
-            GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt,
+            GraphicsBackend::TextureClearValueKind::UInt,
             false,
             false,
             clearContract
         )
         || clearContract.subresources != record.destinationSubresources
-        || !GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirementSatisfied(
-            GraphicsBackend::VulkanTextureDetail::TextureClearBoxQueueRequirement(
+        || !GraphicsBackend::TextureClearQueueRequirementSatisfied(
+            GraphicsBackend::TextureClearBoxQueueRequirement(
                 description,
                 clearContract.subresources,
                 clearBox

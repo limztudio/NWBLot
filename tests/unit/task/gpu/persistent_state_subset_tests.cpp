@@ -40,7 +40,7 @@ constexpr u32 s_ThirdElementIndex = 2u;
 
 using namespace NWB;
 namespace Core = NWB::Core;
-using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Core::GraphicsBackend::BackendTestDispatchAccess;
 using Handoff = Core::CommandListResourceStateHandoff;
 using Cache = Core::GpuPersistentResourceStateCache;
 using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;

@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/avboit/compute_emulation_record.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>

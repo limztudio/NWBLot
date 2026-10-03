@@ -94,7 +94,7 @@ namespace __hidden_gpu_packet_initial_state_seed_tests{
 
 using namespace NWB;
 using namespace Tests::TaskGraphTestUtils;
-using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
+using Access = Core::GraphicsBackend::BackendTestDispatchAccess;
 using SeedAccess = Core::GpuPacketInitialStateSeedTestAccess;
 using Handoff = Core::CommandListResourceStateHandoff;
 

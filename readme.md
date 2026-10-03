@@ -1,6 +1,6 @@
 # NWBLot
 
-NWBLot is a C++ Vulkan engine with an asset cooker, runtime loader, ECS renderer, developer tools, automated tests, and a runnable Testbed. CMake, Ninja, and LLVM/Clang are the supported build stack.
+NWBLot is a C++ engine with a Vulkan graphics backend, an asset cooker, runtime loader, ECS renderer, developer tools, automated tests, and a runnable Testbed. CMake, Ninja, and LLVM/Clang are the supported build stack.
 
 ## Supported targets
 
@@ -98,6 +98,10 @@ Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime a
 Building `testbed` also cooks its required assets into the matching runtime `res` directory.
 
 ## Rendering portability
+
+Graphics providers are selected at compile time. The `NWB_GRAPHICS_BACKEND` CMake cache setting defaults to `Vulkan`, which is the only implemented provider. `Metal` is reserved for a future provider and currently fails configuration. CMake publishes matching `NWB_GRAPHICS_BACKEND_VULKAN=1` and `NWB_GRAPHICS_BACKEND_METAL=0` definitions.
+
+Graphics consumers use neutral contracts from `core/graphics/rhi/` and the narrow headers under `core/graphics/backend_selection/`. `backend_selection.h` selects the full context; `backend_selection/backend.h` selects device and resource definitions. Native Vulkan headers stay inside the provider and selection boundary. Selection preserves concrete calls and resource layouts without adding runtime dispatch, per-resource storage, or allocations. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture) for ownership and include boundaries.
 
 The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 uses the compute-emulation mesh path by default; a qualified adapter can opt into native mesh shaders before graphics instance creation.
 

@@ -439,7 +439,7 @@ TEST(GpuTaskGraph, CompilesWholeAccelStructInitialOwnerHandoffFromImmutableSnaps
     );
     ASSERT_TRUE(completion.valid());
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-    Graphics::GraphicsBackend::VulkanTestDispatchAccess::validateStateHandoff(stateSource, queues[0u].id.deviceGeneration);
+    Graphics::GraphicsBackend::BackendTestDispatchAccess::validateStateHandoff(stateSource, queues[0u].id.deviceGeneration);
     Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
         Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
             .range = {},
@@ -461,7 +461,7 @@ TEST(GpuTaskGraph, CompilesWholeAccelStructInitialOwnerHandoffFromImmutableSnaps
     ASSERT_TRUE(resource.valid());
     stateSource.reset();
     const u16 staleGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u);
-    Graphics::GraphicsBackend::VulkanTestDispatchAccess::validateStateHandoff(stateSource, staleGeneration);
+    Graphics::GraphicsBackend::BackendTestDispatchAccess::validateStateHandoff(stateSource, staleGeneration);
     sources[0u].destinationQueue = queues[0u].id;
     sources[0u].minimumCompletionToken = {};
     sources[0u].stateSource = nullptr;
@@ -566,8 +566,8 @@ TEST(GpuTaskGraph, RejectsNonWholeOrOverlappingAccelStructInitialOwnerHandoffs){
     ASSERT_TRUE(computeCompletion.valid());
     Graphics::CommandListResourceStateHandoff graphicsState(testArena.arena);
     Graphics::CommandListResourceStateHandoff computeState(testArena.arena);
-    Graphics::GraphicsBackend::VulkanTestDispatchAccess::validateStateHandoff(graphicsState, graphicsQueue.id.deviceGeneration);
-    Graphics::GraphicsBackend::VulkanTestDispatchAccess::validateStateHandoff(computeState, computeQueue.id.deviceGeneration);
+    Graphics::GraphicsBackend::BackendTestDispatchAccess::validateStateHandoff(graphicsState, graphicsQueue.id.deviceGeneration);
+    Graphics::GraphicsBackend::BackendTestDispatchAccess::validateStateHandoff(computeState, computeQueue.id.deviceGeneration);
     Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
         Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
             .range = {},

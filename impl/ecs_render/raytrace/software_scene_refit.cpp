@@ -7,7 +7,7 @@
 #include <impl/ecs_render/shader/shader_system.h>
 
 #include <core/graphics/runtime/runtime.h>
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 namespace __hidden_refit_shader{
 static constexpr StringView s_DefaultShaderVariant = "default";

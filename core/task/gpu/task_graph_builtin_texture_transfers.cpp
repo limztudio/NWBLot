@@ -7,9 +7,9 @@
 #include "task_graph_builtin_internal.h"
 
 #include <core/task/gpu/capture/command_ir.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
-#include <core/graphics/vulkan/texture_copy_contract.h>
+#include <core/graphics/backend_selection/texture_copy_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,18 +126,8 @@ struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTask
     TextureSubresourceSet& outResolvedSourceSubresources,
     TextureSubresourceSet& outResolvedDestinationSubresources
 )noexcept{
-    VkImageType sourceImageType = VK_IMAGE_TYPE_MAX_ENUM;
-    VkImageType destinationImageType = VK_IMAGE_TYPE_MAX_ENUM;
     if(
-        !GraphicsBackend::VulkanTextureDetail::TryTextureDimensionToImageType(
-            sourceDesc.dimension,
-            sourceImageType
-        )
-        || !GraphicsBackend::VulkanTextureDetail::TryTextureDimensionToImageType(
-            destinationDesc.dimension,
-            destinationImageType
-        )
-        || sourceImageType != destinationImageType
+        !GraphicsBackend::AreTextureCopyDimensionsCompatible(sourceDesc.dimension, destinationDesc.dimension)
         || sourceDesc.sampleCount <= 1u
         || destinationDesc.sampleCount != 1u
         || sourceDesc.format != destinationDesc.format
@@ -263,7 +253,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         }
         const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
         const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
-        GraphicsBackend::VulkanTextureDetail::TextureCopyContract contract;
+        GraphicsBackend::TextureCopyContract contract;
         valid = region.source != region.destination
             && sourceResource.type == GpuGraphResourceType::Texture
             && destinationResource.type == GpuGraphResourceType::Texture
@@ -279,7 +269,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
                 destinationResource.initialState,
                 destinationResource.externalFinalState
             )
-            && GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
+            && GraphicsBackend::ResolveTextureCopyContract(
                 sourceResource.texture->getCreationDescription(),
                 region.sourceSlice,
                 destinationResource.texture->getCreationDescription(),
@@ -306,14 +296,14 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         ;
         if(valid){
             requiresTransferCapability = requiresTransferCapability
-                || contract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Transfer
+                || contract.queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Transfer
             ;
             requiresGraphicsCapability = requiresGraphicsCapability
-                || contract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Graphics
+                || contract.queueRequirement == GraphicsBackend::TextureCopyQueueRequirement::Graphics
             ;
             requiresComputeOrGraphicsCapability = requiresComputeOrGraphicsCapability
                 || contract.queueRequirement
-                    == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics
+                    == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics
             ;
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,

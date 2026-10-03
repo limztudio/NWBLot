@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>

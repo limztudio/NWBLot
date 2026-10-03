@@ -8,9 +8,9 @@
 #include "texture_clear_value.h"
 
 #include <core/task/gpu/capture/command_ir.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection/backend.h>
 #include <core/graphics/rhi/command.h>
-#include <core/graphics/vulkan/texture_clear_contract.h>
+#include <core/graphics/backend_selection/texture_clear_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,16 +29,16 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 
 
 [[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(
-    const GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Enum requirement)noexcept{
+    const GraphicsBackend::TextureClearQueueRequirement::Enum requirement)noexcept{
     GpuTaskCommandRequirements commands;
     switch(requirement){
-    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Transfer:
+    case GraphicsBackend::TextureClearQueueRequirement::Transfer:
         commands.requiredCapabilities = GpuQueueCapability::Transfer;
         break;
-    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Graphics:
+    case GraphicsBackend::TextureClearQueueRequirement::Graphics:
         commands.requiredCapabilities = GpuQueueCapability::Graphics;
         break;
-    case GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics:
+    case GraphicsBackend::TextureClearQueueRequirement::ComputeOrGraphics:
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
         break;
     default:
@@ -363,11 +363,11 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         )
     )
         return {};
-    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
-    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    GraphicsBackend::TextureClearValueKind::Enum valueKind;
+    GraphicsBackend::TextureClearContract clearContract;
     if(
         !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
-        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+        || !GraphicsBackend::ResolveTextureClearContract(
             destinationResource.texture->getCreationDescription(),
             clearDesc.subresources,
             valueKind,
@@ -445,11 +445,11 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         )
     )
         return {};
-    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
-    if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+    GraphicsBackend::TextureClearContract clearContract;
+    if(!GraphicsBackend::ResolveTextureClearContract(
         destinationResource.texture->getCreationDescription(),
         clearDesc.subresources,
-        GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt,
+        GraphicsBackend::TextureClearValueKind::UInt,
         false,
         false,
         clearContract
@@ -477,8 +477,8 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     };
     GpuTaskDesc resolvedDesc = desc;
     const Box clearBox(clearDesc.rect, 0, Limit<i32>::s_Max);
-    const GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Enum queueRequirement =
-        GraphicsBackend::VulkanTextureDetail::TextureClearBoxQueueRequirement(
+    const GraphicsBackend::TextureClearQueueRequirement::Enum queueRequirement =
+        GraphicsBackend::TextureClearBoxQueueRequirement(
             destinationResource.texture->getCreationDescription(),
             resolvedSubresources,
             clearBox

@@ -24,7 +24,7 @@ struct RetainedBufferStateCommit{
 class CommandBufferResourceReferences final : NoCopy{
     friend class CommandList;
     friend class TrackedCommandBuffer;
-    friend class VulkanTestDispatchAccess;
+    friend class BackendTestDispatchAccess;
 
 
 private:

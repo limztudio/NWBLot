@@ -5,7 +5,7 @@
 #include "task_graph_scene_resources.h"
 #include "task_graph_optical_scene_upload.h"
 
-#include <core/graphics/vulkan/backend.h>
+#include <core/graphics/backend_selection/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>

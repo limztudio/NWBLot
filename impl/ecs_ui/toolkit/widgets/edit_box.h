@@ -7,6 +7,7 @@
 
 #include "style.h"
 #include "edit_caret_geometry.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 #include <impl/ecs_ui/toolkit/edit/model.h>
 #include <impl/ecs_ui/toolkit/edit/grapheme.h>
@@ -34,12 +35,12 @@ struct EditBoxPlacement{
 };
 
 struct EditBoxStyle{
-    Name normal = Name("edit.normal");
-    Name hover = Name("edit.hover");
-    Name focused = Name("edit.focused");
-    Name disabled = Name("edit.disabled");
-    Name fallback = Name("button.normal");
-    Name focus = Name("focus.overlay");
+    Name normal = UiSkinToolkitRegions::s_EditNormalRegionName;
+    Name hover = UiSkinToolkitRegions::s_EditHoverRegionName;
+    Name focused = UiSkinToolkitRegions::s_EditFocusedRegionName;
+    Name disabled = UiSkinToolkitRegions::s_EditDisabledRegionName;
+    Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
+    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
     Color background = { 0.08f, 0.10f, 0.14f, 1.0f };
     Color text = { 0.92f, 0.94f, 0.98f, 1.0f };
     Color disabledText = { 0.48f, 0.50f, 0.55f, 1.0f };

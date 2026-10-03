@@ -14,6 +14,7 @@
 
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
+#include <impl/assets_material/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <core/assets/volume/volume_prepare_registry.h>
@@ -289,6 +290,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
 
     // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered,
     // mirroring `interface` -> .bind resolution).
+    static constexpr AStringView s_BxdfSourceLabel = "bxdf";
+    static constexpr AStringView s_SurfaceSourceLabel = "surface";
     const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
         if(virtualSource.empty())
             return true;
@@ -318,9 +321,9 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     };
     for(auto& materialEntry : materialEntries){
         const AStringView materialName(materialEntry.virtualPath);
-        if(!resolveMaterialVirtualSource(materialEntry.bxdfSource, AStringView("bxdf"), materialName))
+        if(!resolveMaterialVirtualSource(materialEntry.bxdfSource, s_BxdfSourceLabel, materialName))
             return false;
-        if(!resolveMaterialVirtualSource(materialEntry.surfaceSource, AStringView("surface"), materialName))
+        if(!resolveMaterialVirtualSource(materialEntry.surfaceSource, s_SurfaceSourceLabel, materialName))
             return false;
     }
 
@@ -353,12 +356,13 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored
     // ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
+    static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
     MaterialCookVector<GeneratedMaterialPixelShader> generatedPixelShaders(materialCookArena);
     if(!EmitMaterialPixelShaders(
         materialCookArena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
-        AStringView("engine/graphics/mesh/shared_ms"),
+        s_SharedMeshProgramName,
         materialEntries,
         generatedPixelShaders,
         context.scratchArena
@@ -408,14 +412,19 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
-        if(!pixelShaderEntry.stage.assign(AStringView("ps")) ||
-           !pixelShaderEntry.archiveStage.assign(AStringView("ps"))){
+        if(!pixelShaderEntry.stage.assign(MaterialShaderStageNames::s_PixelArchiveStageText) ||
+           !pixelShaderEntry.archiveStage.assign(MaterialShaderStageNames::s_PixelArchiveStageText)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
             return false;
         }
-        pixelShaderEntry.targetProfile = "spirv_1_5";
+        static constexpr AStringView s_Spirv15TargetProfile = MaterialShaderStageNames::s_Spirv15TargetProfileText;
+        static constexpr AStringView s_EngineGraphicsIncludeRoot = "engine/graphics";
+        if(!pixelShaderEntry.targetProfile.assign(s_Spirv15TargetProfile)){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
+            return false;
+        }
         pixelShaderEntry.optimizationLevel = optimizationLevel;
-        pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(AStringView("engine/graphics"), shaderCookArena));
+        pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
         const AssetsGraphicsCookDetail::PreparedShaderKey shaderIdentityKey{

@@ -215,19 +215,19 @@ void CommandList::releaseTextureOwnership(
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
     if(!texture)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("set permanent texture state")))
+    if(!validateCommandRecordingScope(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
     if(!isTextureReadyForCommandQueue(texture)){
-        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){
         rejectCommandRecording(
-            NWB_TEXT("set permanent texture state"),
+            VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
             NWB_TEXT("permanent state conflicts with the retained initial state")
         );
         return;
@@ -236,7 +236,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(
-            NWB_TEXT("set permanent texture state"),
+            VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
             NWB_TEXT("a different permanent state is already tracked")
         );
         return;
@@ -244,7 +244,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         if(it->first.texture == texture){
             rejectCommandRecording(
-                NWB_TEXT("set permanent texture state"),
+                VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
                 NWB_TEXT("texture already has a pending ownership release")
             );
             return;

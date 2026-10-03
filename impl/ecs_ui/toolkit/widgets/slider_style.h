@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,14 +19,14 @@ NWB_IMPL_UI_BEGIN
 
 
 struct SliderStyle{
-    Name track = Name("slider.track");
-    Name normal = Name("slider.thumb.normal");
-    Name hover = Name("slider.thumb.hover");
-    Name pressed = Name("slider.thumb.pressed");
-    Name disabled = Name("slider.thumb.disabled");
-    Name trackFallback = Name("scrollbar.track");
-    Name thumbFallback = Name("scrollbar.thumb.normal");
-    Name focus = Name("focus.overlay");
+    Name track = UiSkinToolkitRegions::s_SliderTrackRegionName;
+    Name normal = UiSkinToolkitRegions::s_SliderThumbNormalRegionName;
+    Name hover = UiSkinToolkitRegions::s_SliderThumbHoverRegionName;
+    Name pressed = UiSkinToolkitRegions::s_SliderThumbPressedRegionName;
+    Name disabled = UiSkinToolkitRegions::s_SliderThumbDisabledRegionName;
+    Name trackFallback = UiSkinToolkitRegions::s_ScrollbarTrackRegionName;
+    Name thumbFallback = UiSkinToolkitRegions::s_ScrollbarThumbNormalRegionName;
+    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
     Color hoverTint = { 1.08f, 1.08f, 1.08f, 1.0f };
     Color pressedTint = { 0.85f, 0.85f, 0.85f, 1.0f };
     Color disabledTint = { 0.55f, 0.55f, 0.55f, 0.6f };

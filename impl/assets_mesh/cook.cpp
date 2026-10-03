@@ -82,8 +82,16 @@ static bool ValidateMeshAssetFields(
     return Core::Assets::ValidateMetadataAssetFields(
         discoveredFile.filePath,
         asset,
-        "Mesh meta",
-        { "positions", "normals", "tangents", "uv0", "colors", "vertex_refs", "indices" }
+        s_MeshMetaText,
+        {
+            MeshCookMetadata::s_PositionsFieldNameView,
+            MeshCookMetadata::s_NormalsFieldNameView,
+            MeshCookMetadata::s_TangentsFieldNameView,
+            MeshCookMetadata::s_Uv0FieldNameView,
+            MeshCookMetadata::s_ColorsFieldNameView,
+            MeshCookMetadata::s_VertexRefsFieldNameView,
+            MeshCookMetadata::s_IndicesFieldNameView,
+        }
     );
 }
 
@@ -97,10 +105,10 @@ static bool ParseMeshMeta(
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
 
-    if(!Core::Assets::CheckMetadataAssetMap(discoveredFile.filePath, asset, "Mesh meta"))
+    if(!Core::Assets::CheckMetadataAssetMap(discoveredFile.filePath, asset, s_MeshMetaText))
         return false;
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, discoveredFile.filePath, "Mesh meta"))
+    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, discoveredFile.filePath, s_MeshMetaText))
         return false;
     if(!ValidateMeshAssetFields(discoveredFile, asset))
         return false;

@@ -63,6 +63,9 @@ inline constexpr AStringView s_VolumeOpScanSegmentsIsRegularFile = "scanSegments
 inline constexpr AStringView s_VolumeOpCreateSegmentOpen = "createSegment:open";
 inline constexpr AStringView s_VolumeOpCreateSegmentSeek = "createSegment:seek";
 inline constexpr AStringView s_VolumeOpCreateSegmentWrite = "createSegment:write";
+inline constexpr AStringView s_VolumeDetailSegmentSizeZero = "segment size is zero";
+inline constexpr AStringView s_VolumeDetailNoMountedSegmentsOrSizeZero = "no mounted segments or segment size is zero";
+inline constexpr AStringView s_VolumeDetailNotWritableOrSizeZero = "filesystem is not writable or segment size is zero";
 inline constexpr char s_VolumeMagic[] = "NWBVOL1";
 inline constexpr usize s_VolumeMagicByteCount = sizeof(s_VolumeMagic);
 

@@ -6,6 +6,7 @@
 
 
 #include "style.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,27 +19,27 @@ NWB_IMPL_UI_BEGIN
 
 
 struct SelectableStyle{
-    Name normal = Name("list.row.normal");
-    Name hover = Name("list.row.hover");
-    Name selected = Name("list.row.selected");
-    Name disabled = Name("list.row.disabled");
-    Name fallback = Name("button.normal");
-    Name hoverFallback = Name("button.hover");
-    Name selectedFallback = Name("button.pressed");
-    Name disabledFallback = Name("button.disabled");
-    Name focus = Name("focus.overlay");
+    Name normal = UiSkinToolkitRegions::s_ListRowNormalRegionName;
+    Name hover = UiSkinToolkitRegions::s_ListRowHoverRegionName;
+    Name selected = UiSkinToolkitRegions::s_ListRowSelectedRegionName;
+    Name disabled = UiSkinToolkitRegions::s_ListRowDisabledRegionName;
+    Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
+    Name hoverFallback = UiSkinToolkitRegions::s_ButtonHoverRegionName;
+    Name selectedFallback = UiSkinToolkitRegions::s_ButtonPressedRegionName;
+    Name disabledFallback = UiSkinToolkitRegions::s_ButtonDisabledRegionName;
+    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
     Insets padding = { 8.0f, 4.0f, 8.0f, 4.0f };
 };
 
 struct ListStyle{
     SelectableStyle row;
-    Name background = Name("list.background");
-    Name backgroundFallback = Name("panel.normal");
-    Name track = Name("scroll.track");
-    Name trackFallback = Name("panel.normal");
-    Name thumb = Name("scroll.thumb");
-    Name thumbFallback = Name("button.normal");
-    Name thumbHover = Name("button.hover");
+    Name background = UiSkinToolkitRegions::s_ListBackgroundRegionName;
+    Name backgroundFallback = UiSkinToolkitRegions::s_PanelNormalRegionName;
+    Name track = UiSkinToolkitRegions::s_ScrollTrackRegionName;
+    Name trackFallback = UiSkinToolkitRegions::s_PanelNormalRegionName;
+    Name thumb = UiSkinToolkitRegions::s_ScrollThumbRegionName;
+    Name thumbFallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
+    Name thumbHover = UiSkinToolkitRegions::s_ButtonHoverRegionName;
     Insets padding = { 4.0f, 4.0f, 4.0f, 4.0f };
     f32 scrollbarWidth = 14.0f;
     f32 minimumThumb = 20.0f;

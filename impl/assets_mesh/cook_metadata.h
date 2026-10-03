@@ -65,9 +65,11 @@ namespace MetadataU32ValueFailure{
 
 
 static constexpr TStringView s_MeshMetaKind = NWB_TEXT("Mesh");
+static constexpr AStringView s_MeshMetaText = "Mesh meta";
 
 
 static constexpr usize s_MetadataTupleAlignment = 16u;
+static constexpr usize s_IndexedLabelBracketReserve = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,6 +77,13 @@ static constexpr usize s_MetadataTupleAlignment = 16u;
 
 class MeshCookMetadata final : NoCopy{
 public:
+    static constexpr AStringView s_IndicesFieldNameView = "indices";
+    static constexpr AStringView s_VertexRefsFieldNameView = "vertex_refs";
+    static constexpr AStringView s_PositionsFieldNameView = "positions";
+    static constexpr AStringView s_NormalsFieldNameView = "normals";
+    static constexpr AStringView s_TangentsFieldNameView = "tangents";
+    static constexpr AStringView s_Uv0FieldNameView = "uv0";
+    static constexpr AStringView s_ColorsFieldNameView = "colors";
     static bool BuildDiscoveredNwbFile(
     const Path& assetRoot,
     const AStringView virtualRoot,
@@ -299,7 +308,7 @@ bool MeshCookMetadata::ParseMetadataIndexField(
 ){
     outIndices.clear();
 
-    const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, "indices");
+    const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_IndicesFieldNameView);
     if(!field)
         return false;
 
@@ -313,7 +322,7 @@ bool MeshCookMetadata::ParseMetadataIndexField(
     }
 
     outIndices.reserve(indexCount);
-    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, "indices", outIndices, scratchArena)){
+    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, MeshCookMetadata::s_IndicesFieldNameView, outIndices, scratchArena)){
         outIndices.clear();
         return false;
     }

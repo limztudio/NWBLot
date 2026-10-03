@@ -532,7 +532,7 @@ private:
 
             if(val.isInteger()){
                 if(NegateOverflows<i64>(val.asInteger())){
-                    error("integer overflow");
+                    error(MetascriptArenaScope::s_IntegerOverflowText);
                     return Value(m_arena);
                 }
                 return Value(-val.asInteger(), m_arena);
@@ -948,11 +948,11 @@ private:
             return false;
         }
         if(rejectZeroDivisor && isZero(rhs)){
-            error(line, column, "division by zero");
+            error(line, column, MetascriptArenaScope::s_DivisionByZeroText);
             return false;
         }
         if(lhs.isInteger() && rhs.isInteger() && BinaryI64Overflows(op, lhs.asInteger(), rhs.asInteger())){
-            error(line, column, "integer overflow");
+            error(line, column, MetascriptArenaScope::s_IntegerOverflowText);
             return false;
         }
         return true;
@@ -965,14 +965,14 @@ private:
                 return validateNumericOperands(op, lhs, rhs, line, column, {});
             if(lhs.isString() && rhs.isString()){
                 if(AddOverflows<usize>(lhs.asString().size(), rhs.asString().size())){
-                    error(line, column, "string concatenation size overflow");
+                    error(line, column, MetascriptArenaScope::s_StringConcatenationSizeOverflowText);
                     return false;
                 }
                 return true;
             }
             if(lhs.isList() && rhs.isList()){
                 if(AddOverflows<usize>(lhs.asList().size(), rhs.asList().size())){
-                    error(line, column, "list concatenation size overflow");
+                    error(line, column, MetascriptArenaScope::s_ListConcatenationSizeOverflowText);
                     return false;
                 }
                 return true;
@@ -1002,7 +1002,7 @@ private:
                 return validateNumericOperands(op, target, rhs, line, column, {});
             if(target.isString() && rhs.isString()){
                 if(AddOverflows<usize>(target.asString().size(), rhs.asString().size())){
-                    error(line, column, "string append size overflow");
+                    error(line, column, MetascriptArenaScope::s_StringAppendSizeOverflowText);
                     return false;
                 }
                 return true;
@@ -1010,7 +1010,7 @@ private:
             if(target.isList()){
                 const usize addedElements = rhs.isList() ? rhs.asList().size() : 1u;
                 if(AddOverflows<usize>(target.asList().size(), addedElements)){
-                    error(line, column, "list append size overflow");
+                    error(line, column, MetascriptArenaScope::s_ListAppendSizeOverflowText);
                     return false;
                 }
                 return true;

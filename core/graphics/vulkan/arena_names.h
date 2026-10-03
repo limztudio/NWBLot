@@ -24,6 +24,25 @@ namespace VulkanArenaScope{
 
 
 inline constexpr Name s_InstanceCreateArena("core/graphics/backend_instance_create");
+inline constexpr TStringView s_TaskStageLabel = NWB_TEXT("task");
+inline constexpr TStringView s_MeshStageLabel = NWB_TEXT("mesh");
+inline constexpr TStringView s_FragmentStageLabel = NWB_TEXT("fragment");
+inline constexpr TStringView s_BufferResourceLabel = NWB_TEXT("buffer");
+inline constexpr TStringView s_TextureResourceLabel = NWB_TEXT("texture");
+inline constexpr TStringView s_WriteBufferCommandLabel = NWB_TEXT("write buffer");
+inline constexpr TStringView s_SetComputeStateCommandLabel = NWB_TEXT("set compute state");
+inline constexpr TStringView s_SetPermanentTextureStateCommandLabel = NWB_TEXT("set permanent texture state");
+inline constexpr TStringView s_DispatchMeshCommandLabel = NWB_TEXT("dispatch mesh");
+inline constexpr TStringView s_DispatchIndirectCommandLabel = NWB_TEXT("dispatch indirect");
+inline constexpr AStringView s_PresentationSignalCancellationContext = "presentation signal cancellation";
+inline constexpr AStringView s_AcquireSlotReuseContext = "acquire slot reuse";
+inline constexpr AStringView s_AcquireNextImageContext = "acquire next image";
+inline constexpr AStringView s_QueueSubmitContext = "queue submit";
+inline constexpr AStringView s_NativePresentAdmissionContext = "native present admission";
+inline constexpr AStringView s_AcquiredImageSemaphoreBridgeContext = "acquired image semaphore bridge";
+inline constexpr AStringView s_AbandonedPresentationSignalIdleContext = "abandoned presentation signal idle";
+inline constexpr AStringView s_UnconsumedPresentationSignalIdleContext = "unconsumed presentation signal idle";
+inline constexpr AStringView s_PresentContext = "present";
 inline constexpr Name s_QueueFamilyQueryArena("core/graphics/backend_queue_family_query");
 inline constexpr Name s_PhysicalDeviceSelectArena("core/graphics/backend_physical_device_select");
 inline constexpr Name s_DeviceCreateArena("core/graphics/backend_device_create");

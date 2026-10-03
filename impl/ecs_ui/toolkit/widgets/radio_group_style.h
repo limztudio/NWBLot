@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,16 +19,16 @@ NWB_IMPL_UI_BEGIN
 
 
 struct RadioGroupStyle{
-    Name normal = Name("radio.normal");
-    Name hover = Name("radio.hover");
-    Name pressed = Name("radio.pressed");
-    Name checked = Name("radio.checked");
-    Name disabled = Name("radio.disabled");
-    Name mark = Name("radio.mark");
-    Name fallback = Name("checkbox.normal");
-    Name checkedFallback = Name("checkbox.checked");
-    Name markFallback = Name("checkbox.mark");
-    Name focus = Name("focus.overlay");
+    Name normal = UiSkinToolkitRegions::s_RadioNormalRegionName;
+    Name hover = UiSkinToolkitRegions::s_RadioHoverRegionName;
+    Name pressed = UiSkinToolkitRegions::s_RadioPressedRegionName;
+    Name checked = UiSkinToolkitRegions::s_RadioCheckedRegionName;
+    Name disabled = UiSkinToolkitRegions::s_RadioDisabledRegionName;
+    Name mark = UiSkinToolkitRegions::s_RadioMarkRegionName;
+    Name fallback = UiSkinToolkitRegions::s_CheckboxNormalRegionName;
+    Name checkedFallback = UiSkinToolkitRegions::s_CheckboxCheckedRegionName;
+    Name markFallback = UiSkinToolkitRegions::s_CheckboxMarkRegionName;
+    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
     Color hoverTint = { 1.08f, 1.08f, 1.08f, 1.0f };
     Color pressedTint = { 0.85f, 0.85f, 0.85f, 1.0f };
     Color disabledTint = { 0.55f, 0.55f, 0.55f, 0.6f };

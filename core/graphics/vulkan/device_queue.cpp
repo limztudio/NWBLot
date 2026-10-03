@@ -376,7 +376,7 @@ u64 Device::executeCommandLists(
 
     submissionWorkspaceLock.unlock();
     if(nativeSubmissionResult == VK_ERROR_DEVICE_LOST)
-        captureDeviceLoss("queue submit");
+        captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);
 
     return submittedID;
 }
@@ -714,7 +714,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
 
     submissionWorkspaceLock.unlock();
     if(nativeSubmissionResult == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
-        captureDeviceLoss("queue submit");
+        captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);
 
     if(!submissionAccepted)
         return {};

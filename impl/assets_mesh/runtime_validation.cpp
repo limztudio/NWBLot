@@ -5,6 +5,7 @@
 #include "runtime_validation.h"
 
 #include "arena_names.h"
+#include "binary_payload_io.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,7 +109,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("position"),
+            MeshAssetBinaryPayload::s_PositionsStreamLabel,
             i,
             NWB_TEXT("contains non-finite data")
         );
@@ -120,7 +121,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("normal"),
+            MeshAssetBinaryPayload::s_NormalsStreamLabel,
             i,
             NWB_TEXT("is invalid")
         );
@@ -132,7 +133,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("tangent"),
+            MeshAssetBinaryPayload::s_TangentsStreamLabel,
             i,
             NWB_TEXT("is invalid")
         );
@@ -144,7 +145,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("uv0"),
+            MeshAssetBinaryPayload::s_Uv0StreamLabel,
             i,
             NWB_TEXT("contains non-finite data")
         );
@@ -156,7 +157,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("color"),
+            MeshAssetBinaryPayload::s_ColorsStreamLabel,
             i,
             NWB_TEXT("contains non-finite data")
         );

@@ -30,6 +30,17 @@ using TextWrite::WriteVec3;
 using TextWrite::WriteVec4;
 using TextWrite::s_OutputFloatPrecision;
 
+static constexpr AStringView s_ListOpenText = "[\n";
+static constexpr AStringView s_ListCloseText = "]";
+static constexpr AStringView s_ListItemIndentText = "    ";
+static constexpr AStringView s_ListItemSuffixText = ",\n";
+static constexpr AStringView s_RowOpenText = "    [";
+static constexpr AStringView s_RowItemSeparatorText = ", ";
+static constexpr AStringView s_RowSuffixText = "],\n";
+static constexpr AStringView s_SkinJointsOpenText = "    { \"joints\": [";
+static constexpr AStringView s_SkinWeightsSeparatorText = "], \"weights\": [";
+static constexpr AStringView s_SkinRowSuffixText = "] },\n";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -141,65 +152,65 @@ template<typename Value, typename WriteValue>
 [[nodiscard]] AString WriteValueList(const UtilityVector<Value>& values, WriteValue&& writeValue){
     AStringStream out;
     out.precision(s_OutputFloatPrecision);
-    out << "[\n";
+    out << s_ListOpenText;
     for(const Value& value : values){
-        out << "    ";
+        out << s_ListItemIndentText;
         writeValue(out, value);
-        out << ",\n";
+        out << s_ListItemSuffixText;
     }
-    out << "]";
+    out << s_ListCloseText;
     return out.str();
 }
 
 [[nodiscard]] AString WriteIndexList(const UtilityVector<u32>& indices){
     AStringStream out;
     out.precision(s_OutputFloatPrecision);
-    out << "[\n";
+    out << s_ListOpenText;
     for(usize i = 0u; i < indices.size(); i += s_TriangleIndexCount)
-        out << "    [" << indices[i] << ", " << indices[i + 1u] << ", " << indices[i + 2u] << "],\n";
-    out << "]";
+        out << s_RowOpenText << indices[i] << s_RowItemSeparatorText << indices[i + 1u] << s_RowItemSeparatorText << indices[i + 2u] << s_RowSuffixText;
+    out << s_ListCloseText;
     return out.str();
 }
 
 [[nodiscard]] AString WriteVertexRefList(const UtilityVector<SourceVertexRef>& refs){
     AStringStream out;
     out.precision(s_OutputFloatPrecision);
-    out << "[\n";
+    out << s_ListOpenText;
     for(const SourceVertexRef& ref : refs){
         out
-            << "    ["
-            << ref.position << ", "
-            << ref.normal << ", "
-            << ref.tangent << ", "
-            << ref.uv0 << ", "
+            << s_RowOpenText
+            << ref.position << s_RowItemSeparatorText
+            << ref.normal << s_RowItemSeparatorText
+            << ref.tangent << s_RowItemSeparatorText
+            << ref.uv0 << s_RowItemSeparatorText
             << ref.color
-            << "],\n"
+            << s_RowSuffixText
         ;
     }
-    out << "]";
+    out << s_ListCloseText;
     return out.str();
 }
 
 [[nodiscard]] AString WriteSkinInfluenceList(const UtilityVector<MeshSkinInfluence>& influences){
     AStringStream out;
     out.precision(s_OutputFloatPrecision);
-    out << "[\n";
+    out << s_ListOpenText;
     for(const MeshSkinInfluence& influence : influences){
-        out << "    { \"joints\": [";
+        out << s_SkinJointsOpenText;
         for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
             if(i != 0u)
-                out << ", ";
+                out << s_RowItemSeparatorText;
             out << influence.joint[i];
         }
-        out << "], \"weights\": [";
+        out << s_SkinWeightsSeparatorText;
         for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
             if(i != 0u)
-                out << ", ";
+                out << s_RowItemSeparatorText;
             WriteFloat(out, influence.weight.raw[i]);
         }
-        out << "] },\n";
+        out << s_SkinRowSuffixText;
     }
-    out << "]";
+    out << s_ListCloseText;
     return out.str();
 }
 
@@ -231,15 +242,15 @@ template<typename Value, typename WriteValue>
     const SourceMeshStreams& before,
     const SourceMeshStreams& after
 ){
-    if(before.positions.size() != after.positions.size() && !AddReplacement(replacements, source, variableName, "positions", WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+    if(before.positions.size() != after.positions.size() && !AddReplacement(replacements, source, variableName, s_PositionsStreamLabel, WriteValueList(after.positions, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
-    if(before.normals.size() != after.normals.size() && !AddReplacement(replacements, source, variableName, "normals", WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
+    if(before.normals.size() != after.normals.size() && !AddReplacement(replacements, source, variableName, s_NormalsStreamLabel, WriteValueList(after.normals, [](AStringStream& out, const Vec3& value){ WriteVec3(out, value); })))
         return false;
-    if(before.tangents.size() != after.tangents.size() && !AddReplacement(replacements, source, variableName, "tangents", WriteValueList(after.tangents, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.tangents.size() != after.tangents.size() && !AddReplacement(replacements, source, variableName, s_TangentsStreamLabel, WriteValueList(after.tangents, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
         return false;
-    if(before.uv0.size() != after.uv0.size() && !AddReplacement(replacements, source, variableName, "uv0", WriteValueList(after.uv0, [](AStringStream& out, const Vec2& value){ WriteVec2(out, value); })))
+    if(before.uv0.size() != after.uv0.size() && !AddReplacement(replacements, source, variableName, s_Uv0StreamLabel, WriteValueList(after.uv0, [](AStringStream& out, const Vec2& value){ WriteVec2(out, value); })))
         return false;
-    if(before.colors.size() != after.colors.size() && !AddReplacement(replacements, source, variableName, "colors", WriteValueList(after.colors, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
+    if(before.colors.size() != after.colors.size() && !AddReplacement(replacements, source, variableName, s_ColorsStreamLabel, WriteValueList(after.colors, [](AStringStream& out, const Vec4& value){ WriteVec4(out, value); })))
         return false;
 
     const bool componentRefsChanged =
@@ -250,9 +261,9 @@ template<typename Value, typename WriteValue>
         || before.colors.size() != after.colors.size()
         || before.vertexRefs.size() != after.vertexRefs.size()
     ;
-    if(componentRefsChanged && !AddReplacement(replacements, source, variableName, "vertex_refs", WriteVertexRefList(after.vertexRefs)))
+    if(componentRefsChanged && !AddReplacement(replacements, source, variableName, s_VertexRefsStreamLabel, WriteVertexRefList(after.vertexRefs)))
         return false;
-    if(before.vertexRefs.size() != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, "indices", WriteIndexList(after.indices)))
+    if(before.vertexRefs.size() != after.vertexRefs.size() && !AddReplacement(replacements, source, variableName, s_IndicesStreamLabel, WriteIndexList(after.indices)))
         return false;
 
     return true;

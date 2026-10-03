@@ -129,7 +129,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             return false;
         }
         if(discoveredHeader.segmentSize == 0){
-            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, "segment size is zero");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
             unmountLocked();
             return false;
         }
@@ -143,7 +143,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 if(errorCode)
                     FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, errorCode);
                 else
-                    FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, "segment size is zero");
+                    FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMountFileSize, segmentPath, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
                 unmountLocked();
                 return false;
             }

@@ -4,6 +4,7 @@
 
 #include "runtime_cache.h"
 #include "arena_names.h"
+#include "resource_names.h"
 
 #include <core/assets/manager.h>
 #include <core/alloc/scratch.h>
@@ -242,7 +243,7 @@ template<typename MeshT, typename SkinStreamT>
     NameHash derivedHash = {};
     if(
         !BeginDerivedNameHash(meshName, derivedHash)
-        || !UpdateDerivedNameHashText(derivedHash, AStringView(":skin:"))
+        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_SkinBindingSeparator)
         || !UpdateDerivedNameHashText(derivedHash, skinName.resolvedText())
     )
         return NAME_NONE;
@@ -368,7 +369,7 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
         meshAsset.name(),
         loadedMeshAsset,
         NWB_TEXT("MeshSkinningRuntimeCache"),
-        "mesh"
+        Mesh::s_AssetTypeText
     );
     if(!loadedMesh)
         return false;

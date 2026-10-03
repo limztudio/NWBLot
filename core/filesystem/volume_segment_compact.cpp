@@ -79,7 +79,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     if(byteCount == 0 || destinationOffset == sourceOffset)
         return true;
     if(m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
     }
 
@@ -167,7 +167,7 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     ErrorCode errorCode;
 
     if(!m_writable || m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "filesystem is not writable or segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, FilesystemVolumeDetail::s_VolumeDetailNotWritableOrSizeZero);
         return false;
     }
     if(m_segmentPaths.empty()){

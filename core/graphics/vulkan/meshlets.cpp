@@ -72,9 +72,9 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return false;
     };
     if(
-        !validateShaderOwner(desc.AS.get(), NWB_TEXT("task"))
-        || !validateShaderOwner(desc.MS.get(), NWB_TEXT("mesh"))
-        || !validateShaderOwner(desc.PS.get(), NWB_TEXT("fragment"))
+        !validateShaderOwner(desc.AS.get(), VulkanArenaScope::s_TaskStageLabel)
+        || !validateShaderOwner(desc.MS.get(), VulkanArenaScope::s_MeshStageLabel)
+        || !validateShaderOwner(desc.PS.get(), VulkanArenaScope::s_FragmentStageLabel)
     )
         return nullptr;
 
@@ -244,7 +244,7 @@ void CommandList::setMeshletState(const MeshletState& state){
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("dispatch mesh")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, VulkanArenaScope::s_DispatchMeshCommandLabel))
         return;
 
     MeshletPipeline* const pipeline = m_currentMeshletState.pipeline;
@@ -256,7 +256,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         || pipeline->m_framebufferInfo != m_renderPassFramebuffer->m_framebufferInfo
     ){
         rejectCommandRecording(
-            NWB_TEXT("dispatch mesh"),
+            VulkanArenaScope::s_DispatchMeshCommandLabel,
             NWB_TEXT("no compatible meshlet pipeline and render pass are active")
         );
         return;
@@ -266,7 +266,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         || m_currentMeshletState.viewport.scissorRects.size() > 1u
     ){
         rejectCommandRecording(
-            NWB_TEXT("dispatch mesh"),
+            VulkanArenaScope::s_DispatchMeshCommandLabel,
             NWB_TEXT("mesh dispatch requires one viewport and at most one explicit scissor")
         );
         return;
@@ -276,7 +276,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         || m_context.meshShaderFeatures.meshShader != VK_TRUE
         || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
     ){
-        rejectCommandRecording(NWB_TEXT("dispatch mesh"), NWB_TEXT("mesh shader feature or entry point is unavailable"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh shader feature or entry point is unavailable"));
         return;
     }
 
@@ -291,7 +291,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         dispatchLimits.maximumGroupCounts,
         dispatchLimits.maximumTotalGroupCount
     )){
-        rejectCommandRecording(NWB_TEXT("dispatch mesh"), NWB_TEXT("mesh dispatch group counts exceed device limits"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchMeshCommandLabel, NWB_TEXT("mesh dispatch group counts exceed device limits"));
         return;
     }
 

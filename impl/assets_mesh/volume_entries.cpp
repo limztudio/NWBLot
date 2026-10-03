@@ -10,6 +10,8 @@
 
 #include "cook.h"
 #include "skin_cook.h"
+#include "binary_payload.h"
+#include "skin_binary_payload.h"
 
 #include <core/assets/cook_entry_registry.h>
 
@@ -107,14 +109,14 @@ static bool ParseSkinValue(
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
         registry,
-        NWB_TEXT("mesh"),
+        MeshBinaryPayload::s_MeshAssetKindLabel,
         &ParseMeshDocument,
         &ParseMeshValue,
         [](MeshCookEntry& entry, Mesh& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMeshAsset); }
     )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
             registry,
-            NWB_TEXT("skin"),
+            SkinBinaryPayload::s_SkinAssetKindLabel,
             &ParseSkinDocument,
             &ParseSkinValue,
             [](SkinCookEntry& entry, Skin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkinAsset); }

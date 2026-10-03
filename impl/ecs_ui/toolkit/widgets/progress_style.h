@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,10 +19,10 @@ NWB_IMPL_UI_BEGIN
 
 
 struct ProgressStyle{
-    Name track = Name("progress.track");
-    Name fill = Name("progress.fill");
-    Name trackFallback = Name("scrollbar.track");
-    Name fillFallback = Name("scrollbar.thumb.normal");
+    Name track = UiSkinToolkitRegions::s_ProgressTrackRegionName;
+    Name fill = UiSkinToolkitRegions::s_ProgressFillRegionName;
+    Name trackFallback = UiSkinToolkitRegions::s_ScrollbarTrackRegionName;
+    Name fillFallback = UiSkinToolkitRegions::s_ScrollbarThumbNormalRegionName;
     Insets padding;
     Color trackTint;
     Color fillTint;

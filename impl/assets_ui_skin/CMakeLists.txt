@@ -6,6 +6,7 @@ target_sources(nwb_assets_ui_skin PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.h"
+    "${CMAKE_CURRENT_LIST_DIR}/region_names.h"
 )
 target_link_libraries(nwb_assets_ui_skin PUBLIC nwb_assets)
 
@@ -23,6 +24,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/toolkit_contract.h"
+    "${CMAKE_CURRENT_LIST_DIR}/region_names.h"
     )
     target_link_libraries(nwb_assets_ui_skin_cook PUBLIC nwb_assets nwb_metascript)
     target_compile_definitions(nwb_assets_ui_skin_cook PRIVATE NWB_COOK=1)

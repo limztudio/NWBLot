@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 #include "buffer_resource_detail.h"
 
 #include <core/common/log.h>
@@ -429,26 +430,26 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
     if(dataSize == 0)
         return false;
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("write buffer")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, VulkanArenaScope::s_WriteBufferCommandLabel))
         return false;
     if(!data){
-        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("data is null"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("data is null"));
         return false;
     }
 
     const BufferDesc& desc = buffer.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
-        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("destination range is outside the buffer"));
         return false;
     }
     if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
-        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("copy offset and size must be 4-byte aligned"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
     if(!validateBufferForGpuState(
         &buffer,
         ResourceStates::CopyDest,
-        NWB_TEXT("write buffer"),
+        VulkanArenaScope::s_WriteBufferCommandLabel,
         VK_BUFFER_USAGE_TRANSFER_DST_BIT
     ))
         return false;
@@ -456,7 +457,7 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset)){
-        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("staging allocation failed"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("staging allocation failed"));
         return false;
     }
 

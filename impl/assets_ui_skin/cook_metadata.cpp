@@ -46,6 +46,38 @@ static constexpr AStringView s_ColorNames[] = {
 };
 static_assert(LengthOf(s_ColorNames) == UiSkinColorRole::Count, "UI skin color names must match palette roles");
 
+static constexpr AStringView s_NameField = "name";
+static constexpr AStringView s_RectField = "rect";
+static constexpr AStringView s_DrawModeField = "draw_mode";
+static constexpr AStringView s_SliceField = "slice";
+static constexpr AStringView s_PaddingField = "padding";
+static constexpr AStringView s_MinimumSizeField = "minimum_size";
+static constexpr AStringView s_ColorsField = "colors";
+static constexpr AStringView s_RgbaField = "rgba";
+static constexpr AStringView s_TypographyField = "typography";
+static constexpr AStringView s_DefaultFontSizeField = "default_font_size";
+static constexpr AStringView s_SchemaVersionField = "schema_version";
+static constexpr AStringView s_TextureField = "texture";
+static constexpr AStringView s_AtlasExtentField = "atlas_extent";
+static constexpr AStringView s_ReferenceDensityField = "reference_density";
+static constexpr AStringView s_ToolkitContractField = "toolkit_contract";
+static constexpr AStringView s_RegionsField = "regions";
+static constexpr AStringView s_WidgetsV1Contract = "widgets_v1";
+static constexpr AStringView s_DrawModeHint = "must be 'sprite' or 'nine_slice'";
+
+static constexpr usize s_RectComponentCount = 4u;
+static constexpr usize s_SliceComponentCount = 4u;
+static constexpr usize s_PaddingComponentCount = 4u;
+static constexpr usize s_MinimumSizeComponentCount = 2u;
+static constexpr usize s_AtlasExtentComponentCount = 2u;
+static constexpr usize s_RgbaComponentCount = 4u;
+static constexpr usize s_AlphaComponentIndex = 3u;
+static constexpr f32 s_PaletteChannelMin = 0.0f;
+static constexpr f32 s_PaletteRgbMax = 16.0f;
+static constexpr f32 s_PaletteAlphaMax = 1.0f;
+static constexpr f32 s_MinDefaultFontSize = 1.0f / 64.0f;
+static constexpr f32 s_MaxDefaultFontSize = 2048.0f;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -117,35 +149,35 @@ template<usize Count>
         path,
         object,
         s_DiagnosticPrefix,
-        { "name", "rect", "draw_mode", "slice", "padding", "minimum_size" }
+        { s_NameField, s_RectField, s_DrawModeField, s_SliceField, s_PaddingField, s_MinimumSizeField }
     ))
         return false;
-    if(!Core::Assets::ReadMetadataNameField(path, object, s_DiagnosticPrefix, "name", true, outRegion.name))
+    if(!Core::Assets::ReadMetadataNameField(path, object, s_DiagnosticPrefix, s_NameField, true, outRegion.name))
         return false;
 
-    if(FindField(object, "draw_mode")){
+    if(FindField(object, s_DrawModeField)){
         if(!Core::Assets::ParseNamedMetadataEnumField(
             path,
             object,
             s_DiagnosticPrefix,
-            "draw_mode",
+            s_DrawModeField,
             s_DrawModeCases,
             LengthOf(s_DrawModeCases),
             outRegion.drawMode,
-            "must be 'sprite' or 'nine_slice'"
+            s_DrawModeHint
         ))
             return false;
     }
 
-    u32 rectangle[4u] = {};
-    u32 slice[4u] = {};
-    f32 padding[4u] = {};
-    f32 minimumSize[2u] = {};
+    u32 rectangle[s_RectComponentCount] = {};
+    u32 slice[s_SliceComponentCount] = {};
+    f32 padding[s_PaddingComponentCount] = {};
+    f32 minimumSize[s_MinimumSizeComponentCount] = {};
     if(
-        !ReadU32List(path, object, "rect", true, rectangle)
-        || !ReadU32List(path, object, "slice", outRegion.drawMode == UiSkinDrawMode::NineSlice, slice)
-        || !ReadLogicalList(path, object, "padding", padding)
-        || !ReadLogicalList(path, object, "minimum_size", minimumSize)
+        !ReadU32List(path, object, s_RectField, true, rectangle)
+        || !ReadU32List(path, object, s_SliceField, outRegion.drawMode == UiSkinDrawMode::NineSlice, slice)
+        || !ReadLogicalList(path, object, s_PaddingField, padding)
+        || !ReadLogicalList(path, object, s_MinimumSizeField, minimumSize)
     )
         return false;
 
@@ -158,7 +190,7 @@ template<usize Count>
 }
 
 [[nodiscard]] static bool ParsePalette(const Path& path, const Value& asset, UiSkinPalette& outPalette){
-    const Value* colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, "colors");
+    const Value* colors = Core::Assets::FindMetadataListField(path, asset, s_DiagnosticPrefix, s_ColorsField);
     if(!colors)
         return false;
     if(colors->asList().size() != UiSkinColorRole::Count){
@@ -173,10 +205,10 @@ template<usize Count>
     Array<bool, UiSkinColorRole::Count> seen{};
     for(const Value& value : colors->asList()){
         if(!Core::Assets::CheckMetadataAssetMap(path, value, s_DiagnosticPrefix)
-            || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { "name", "rgba" }))
+            || !Core::Assets::ValidateMetadataAssetFields(path, value, s_DiagnosticPrefix, { s_NameField, s_RgbaField }))
             return false;
         AStringView name;
-        if(!Core::Assets::ReadMetadataStringField(path, value, s_DiagnosticPrefix, "name", true, name))
+        if(!Core::Assets::ReadMetadataStringField(path, value, s_DiagnosticPrefix, s_NameField, true, name))
             return false;
         usize role = UiSkinColorRole::Count;
         for(usize index = 0u; index < UiSkinColorRole::Count; ++index){
@@ -193,8 +225,8 @@ template<usize Count>
             );
             return false;
         }
-        const Value* rgba = FindField(value, "rgba");
-        if(!rgba || !rgba->isList() || rgba->asList().size() != 4u){
+        const Value* rgba = FindField(value, s_RgbaField);
+        if(!rgba || !rgba->isList() || rgba->asList().size() != s_RgbaComponentCount){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs four RGBA components")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(path)
@@ -202,11 +234,11 @@ template<usize Count>
             );
             return false;
         }
-        f32 components[4u] = {};
-        for(usize index = 0u; index < 4u; ++index){
-            if(!Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_DiagnosticPrefix, "rgba", components[index]))
+        f32 components[s_RgbaComponentCount] = {};
+        for(usize index = 0u; index < s_RgbaComponentCount; ++index){
+            if(!Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_DiagnosticPrefix, s_RgbaField, components[index]))
                 return false;
-            if(components[index] < 0.0f || components[index] > (index == 3u ? 1.0f : 16.0f)){
+            if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_PaletteRgbMax)){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]")
                     , StringConvert(s_DiagnosticPrefix)
                     , PathToString<tchar>(path)
@@ -222,7 +254,7 @@ template<usize Count>
 }
 
 [[nodiscard]] static bool ParseTypography(const Path& path, const Value& asset, UiSkinTypography& outTypography){
-    const Value* typography = FindField(asset, "typography");
+    const Value* typography = FindField(asset, s_TypographyField);
     if(!typography){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': version-3 skins require typography.default_font_size")
             , StringConvert(s_DiagnosticPrefix)
@@ -231,13 +263,13 @@ template<usize Count>
         return false;
     }
     if(!Core::Assets::CheckMetadataAssetMap(path, *typography, s_DiagnosticPrefix)
-        || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { "default_font_size" }))
+        || !Core::Assets::ValidateMetadataAssetFields(path, *typography, s_DiagnosticPrefix, { s_DefaultFontSizeField }))
         return false;
     if(!Core::Assets::ReadMetadataFiniteF32Field(
-        path, *typography, s_DiagnosticPrefix, "default_font_size", true, outTypography.defaultFontSize
+        path, *typography, s_DiagnosticPrefix, s_DefaultFontSizeField, true, outTypography.defaultFontSize
     ))
         return false;
-    if(outTypography.defaultFontSize < 1.0f / 64.0f || outTypography.defaultFontSize > 2048.0f){
+    if(outTypography.defaultFontSize < s_MinDefaultFontSize || outTypography.defaultFontSize > s_MaxDefaultFontSize){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
@@ -274,13 +306,13 @@ bool ParseUiSkinCookMetadata(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        { "schema_version", "texture", "atlas_extent", "reference_density", "toolkit_contract", "regions", "colors", "typography" }
+        { s_SchemaVersionField, s_TextureField, s_AtlasExtentField, s_ReferenceDensityField, s_ToolkitContractField, s_RegionsField, s_ColorsField, s_TypographyField }
     ))
         return false;
 
-    const Value* schema = FindField(asset, "schema_version");
+    const Value* schema = FindField(asset, s_SchemaVersionField);
     u32 schemaVersion = 0u;
-    if(!schema || !ReadU32Value(nwbFilePath, *schema, "schema_version", schemaVersion)
+    if(!schema || !ReadU32Value(nwbFilePath, *schema, s_SchemaVersionField, schemaVersion)
         || schemaVersion != UiSkinBinaryPayload::s_UiSkinVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': schema_version must be {}")
             , StringConvert(s_DiagnosticPrefix)
@@ -293,24 +325,24 @@ bool ParseUiSkinCookMetadata(
         return false;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, parsed.virtualPath, scratchArena))
         return false;
-    if(!Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_DiagnosticPrefix, "texture", true, parsed.texture))
+    if(!Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_DiagnosticPrefix, s_TextureField, true, parsed.texture))
         return false;
 
-    u32 extent[2u] = {};
-    if(!ReadU32List(nwbFilePath, asset, "atlas_extent", true, extent))
+    u32 extent[s_AtlasExtentComponentCount] = {};
+    if(!ReadU32List(nwbFilePath, asset, s_AtlasExtentField, true, extent))
         return false;
     parsed.atlasWidth = extent[0u];
     parsed.atlasHeight = extent[1u];
-    if(!Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, "reference_density", true, parsed.referenceDensity))
+    if(!Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_ReferenceDensityField, true, parsed.referenceDensity))
         return false;
 
     AStringView toolkitContract;
     bool hasToolkitContract = false;
     if(!Core::Assets::ReadMetadataStringField(
-        nwbFilePath, asset, s_DiagnosticPrefix, "toolkit_contract", false, toolkitContract, &hasToolkitContract
+        nwbFilePath, asset, s_DiagnosticPrefix, s_ToolkitContractField, false, toolkitContract, &hasToolkitContract
     ))
         return false;
-    if(hasToolkitContract && toolkitContract != "widgets_v1"){
+    if(hasToolkitContract && toolkitContract != s_WidgetsV1Contract){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': toolkit_contract must be 'widgets_v1'")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
@@ -319,7 +351,7 @@ bool ParseUiSkinCookMetadata(
     }
     parsed.completeToolkitSkin = hasToolkitContract;
 
-    const Value* regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, "regions");
+    const Value* regions = Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_RegionsField);
     if(!regions)
         return false;
     if(regions->asList().size() > s_UiSkinMaxRegionCount){

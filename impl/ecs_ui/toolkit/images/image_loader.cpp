@@ -27,7 +27,7 @@ SharedImageSource LoadImageSource(
         identity.name(),
         loadedAsset,
         NWB_TEXT("LoadImageSource"),
-        "texture"
+        Texture::s_AssetTypeText
     );
     if(!texture)
         return {};

@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,8 +19,8 @@ NWB_IMPL_UI_BEGIN
 
 
 struct PopupStyle{
-    Name background = Name("popup.normal");
-    Name fallback = Name("panel.normal");
+    Name background = UiSkinToolkitRegions::s_PopupNormalRegionName;
+    Name fallback = UiSkinToolkitRegions::s_PanelNormalRegionName;
     Insets padding = { 8.0f, 8.0f, 8.0f, 8.0f };
     Color backdrop = { 0.0f, 0.0f, 0.0f, 0.4f };
 };

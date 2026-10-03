@@ -58,12 +58,12 @@ bool Mesh::validatePayload()const{
 
 
 bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!checkVirtualPath(NWB_TEXT("Mesh::loadBinary")))
+    if(!checkVirtualPath(MeshBinaryPayload::s_MeshLoadBinaryContext))
         return false;
 
     clearGeometryPayload();
 
-    const TStringView loadFailureContext = NWB_TEXT("Mesh::loadBinary");
+    const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
     MeshBinaryPayload::MeshHeaderBinary header;
     if(!Core::Assets::ReadMagicHeaderPayload(
@@ -72,7 +72,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         header,
         MeshBinaryPayload::s_MeshMagic,
         loadFailureContext,
-        NWB_TEXT("mesh")
+        MeshBinaryPayload::s_MeshAssetKindLabel
     ))
         return false;
 

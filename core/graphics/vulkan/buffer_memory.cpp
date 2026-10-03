@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 #include "buffer_resource_detail.h"
 
 #include <core/common/log.h>
@@ -312,7 +313,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         offset,
         VulkanDetail::HeapBindingResourceClass::Buffer,
         NWB_TEXT("bind buffer memory"),
-        NWB_TEXT("buffer"),
+        VulkanArenaScope::s_BufferResourceLabel,
         bindingRange
     ))
         return false;

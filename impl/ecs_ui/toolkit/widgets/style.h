@@ -6,6 +6,7 @@
 
 
 #include "../layout/tree.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,23 +20,23 @@ NWB_IMPL_UI_BEGIN
 
 // Semantic atlas names let another skin replace imagery and control metrics without application changes.
 struct WidgetStyle{
-    Name panel = Name("panel.normal");
-    Name window = Name("window.normal");
-    Name windowTitle = Name("window.title");
-    Name windowCollapse = Name("window.collapse");
-    Name windowResize = Name("window.resize");
-    Name separator = Name("separator");
-    Name white = Name("white");
-    Name button = Name("button.normal");
-    Name buttonHover = Name("button.hover");
-    Name buttonPressed = Name("button.pressed");
-    Name buttonDisabled = Name("button.disabled");
-    Name checkbox = Name("checkbox.normal");
-    Name checkboxHover = Name("checkbox.hover");
-    Name checkboxChecked = Name("checkbox.checked");
-    Name checkboxDisabled = Name("checkbox.disabled");
-    Name checkboxMark = Name("checkbox.mark");
-    Name focus = Name("focus.overlay");
+    Name panel = UiSkinToolkitRegions::s_PanelNormalRegionName;
+    Name window = UiSkinToolkitRegions::s_WindowNormalRegionName;
+    Name windowTitle = UiSkinToolkitRegions::s_WindowTitleRegionName;
+    Name windowCollapse = UiSkinToolkitRegions::s_WindowCollapseRegionName;
+    Name windowResize = UiSkinToolkitRegions::s_WindowResizeRegionName;
+    Name separator = UiSkinToolkitRegions::s_SeparatorRegionName;
+    Name white = UiSkinToolkitRegions::s_WhiteRegionName;
+    Name button = UiSkinToolkitRegions::s_ButtonNormalRegionName;
+    Name buttonHover = UiSkinToolkitRegions::s_ButtonHoverRegionName;
+    Name buttonPressed = UiSkinToolkitRegions::s_ButtonPressedRegionName;
+    Name buttonDisabled = UiSkinToolkitRegions::s_ButtonDisabledRegionName;
+    Name checkbox = UiSkinToolkitRegions::s_CheckboxNormalRegionName;
+    Name checkboxHover = UiSkinToolkitRegions::s_CheckboxHoverRegionName;
+    Name checkboxChecked = UiSkinToolkitRegions::s_CheckboxCheckedRegionName;
+    Name checkboxDisabled = UiSkinToolkitRegions::s_CheckboxDisabledRegionName;
+    Name checkboxMark = UiSkinToolkitRegions::s_CheckboxMarkRegionName;
+    Name focus = UiSkinToolkitRegions::s_FocusOverlayRegionName;
     Color text = { 0.92f, 0.94f, 0.98f, 1.0f };
     Color disabledText = { 0.48f, 0.50f, 0.55f, 1.0f };
     f32 fontSize = 16.0f;

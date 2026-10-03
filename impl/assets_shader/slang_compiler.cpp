@@ -13,6 +13,8 @@
 #include "arena_names.h"
 #include "binary_payload.h"
 
+#include <impl/assets_material/shader_stage_names.h>
+
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <global/hash_utils.h>
@@ -757,16 +759,16 @@ bool SlangShaderCompiler::tryMapStageToSlangStage(const AStringView stage, AStri
     };
 
     static constexpr SlangStageMapping s_StageMappings[] = {
-        { "vs", "vertex" },
-        { "ps", "fragment" },
-        { "cs", "compute" },
-        { "mesh", "mesh" },
-        { "rgen", "raygeneration" },
-        { "rmiss", "miss" },
-        { "rchit", "closesthit" },
-        { "rahit", "anyhit" },
-        { "rint", "intersection" },
-        { "rcall", "callable" },
+        { MaterialShaderStageNames::s_VertexArchiveStageText, "vertex" },
+        { MaterialShaderStageNames::s_PixelArchiveStageText, "fragment" },
+        { MaterialShaderStageNames::s_ComputeArchiveStageText, "compute" },
+        { MaterialShaderStageNames::s_MeshArchiveStageText, "mesh" },
+        { MaterialShaderStageNames::s_RayGenerationArchiveStageText, "raygeneration" },
+        { MaterialShaderStageNames::s_RayMissArchiveStageText, "miss" },
+        { MaterialShaderStageNames::s_RayClosestHitArchiveStageText, "closesthit" },
+        { MaterialShaderStageNames::s_RayAnyHitArchiveStageText, "anyhit" },
+        { MaterialShaderStageNames::s_RayIntersectionArchiveStageText, "intersection" },
+        { MaterialShaderStageNames::s_RayCallableArchiveStageText, "callable" },
     };
 
     for(const SlangStageMapping& mapping : s_StageMappings){
@@ -792,13 +794,13 @@ bool SlangShaderCompiler::tryMapTargetProfileToSlangArguments(
     outSlangProfile = {};
     outSlangCapability = {};
 
-    if(targetProfile == "spirv_1_5"){
+    if(targetProfile == MaterialShaderStageNames::s_Spirv15TargetProfileText){
         outSlangProfile = targetProfile;
         return true;
     }
-    if(targetProfile == "spirv_1_5+spvrayquerykhr"){
-        outSlangProfile = "spirv_1_5";
-        outSlangCapability = "spvRayQueryKHR";
+    if(targetProfile == MaterialShaderStageNames::s_Spirv15RayQueryTargetProfileText){
+        outSlangProfile = MaterialShaderStageNames::s_Spirv15TargetProfileText;
+        outSlangCapability = MaterialShaderStageNames::s_SpvRayQueryCapabilityText;
         return true;
     }
 

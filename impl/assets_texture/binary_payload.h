@@ -28,6 +28,9 @@ inline constexpr u32 s_TextureVersionV2 = 2u;
 inline constexpr u32 s_TextureVersion = 3u;
 inline constexpr usize s_TextureHeaderPrefixBytes = 8u;
 inline constexpr usize s_TextureHeaderV2Bytes = 48u;
+inline constexpr TStringView s_TextureLoadBinaryContext = NWB_TEXT("Texture::loadBinary");
+inline constexpr TStringView s_TextureValidatePayloadContext = NWB_TEXT("Texture::validatePayload");
+inline constexpr TStringView s_TextureAssetKindLabel = NWB_TEXT("texture");
 
 #pragma pack(push, 1)
 struct HeaderPrefix{

@@ -181,7 +181,7 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
     outEntry = sourceEntry;
     if(!outEntry.archiveStage.assign(MaterialShaderStageNames::MeshComputeArchiveStageText()))
         return false;
-    if(!outEntry.stage.assign("cs"))
+    if(!outEntry.stage.assign(MaterialShaderStageNames::s_ComputeArchiveStageText))
         return false;
     outEntry.targetProfile = sourceEntry.targetProfile;
 
@@ -529,13 +529,13 @@ bool PrepareShaderEntriesForCook(
         // when depending on a material interface; the generic mesh shader stays interface-free.
         const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage.view();
         const bool preparedEntryStageReadsTypedMaterial =
-            preparedEntryArchiveStage == "mesh"
-            || preparedEntryArchiveStage == "ps"
-            || preparedEntryArchiveStage == "cs"
-            || preparedEntryArchiveStage == "rgen"
-            || preparedEntryArchiveStage == "rahit"
-            || preparedEntryArchiveStage == "rchit"
-            || preparedEntryArchiveStage == "rmiss"
+            preparedEntryArchiveStage == MaterialShaderStageNames::s_MeshArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_PixelArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_ComputeArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayGenerationArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayAnyHitArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayClosestHitArchiveStageText
+            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayMissArchiveStageText
         ;
         preparedEntry.usesMaterialTypedBinding =
             preparedEntryStageReadsTypedMaterial
@@ -572,7 +572,7 @@ bool PrepareShaderEntriesForCook(
         if(!Core::Assets::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
-        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.entry.emitMeshComputeShadow;
+        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == MaterialShaderStageNames::s_MeshArchiveStageText && preparedEntry.entry.emitMeshComputeShadow;
         const usize meshEntryIndex = outPreparedPlan.preparedEntries.size();
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
         if(!AppendMeshObjectShaderEntries(cookArena, shaderCook, resolvedPaths, outPreparedPlan.preparedEntries[meshEntryIndex], outPreparedPlan, scratchArena))

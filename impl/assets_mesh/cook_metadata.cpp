@@ -66,7 +66,7 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(
     NWB_ASSERT(!indexText.empty());
 
     ScratchString label{arena};
-    label.reserve(baseLabel.size() + indexText.size() + 2u);
+    label.reserve(baseLabel.size() + indexText.size() + s_IndexedLabelBracketReserve);
     label.append(baseLabel.data(), baseLabel.size());
     label += '[';
     label.append(indexText.data(), indexText.size());

@@ -23,6 +23,7 @@ namespace SkinningResourceNamesDetail{
 inline constexpr AStringView s_RuntimePrefix = ":runtime_";
 inline constexpr AStringView s_RevisionSeparator = "_revision_";
 inline constexpr AStringView s_OwnerSeparator = "_";
+inline constexpr AStringView s_SkinBindingSeparator = ":skin:";
 };
 
 

@@ -128,7 +128,7 @@ using TextureFormat::ComputeMipSliceCount;
 
 
 bool Texture::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("Texture::validatePayload")))
+    if(!checkVirtualPath(TextureBinaryPayload::s_TextureValidatePayloadContext))
         return false;
     if(!IsValidTextureColorSpace(m_colorSpace)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space")
@@ -258,7 +258,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     m_mipLevels.clear();
     m_payloadBytes.clear();
 
-    if(!checkVirtualPath(NWB_TEXT("Texture::loadBinary")))
+    if(!checkVirtualPath(TextureBinaryPayload::s_TextureLoadBinaryContext))
         return false;
 
     usize prefixCursor = 0u;
@@ -268,8 +268,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         prefixCursor,
         headerPrefix,
         TextureBinaryPayload::s_TextureMagic,
-        NWB_TEXT("Texture::loadBinary"),
-        NWB_TEXT("texture")
+        TextureBinaryPayload::s_TextureLoadBinaryContext,
+        TextureBinaryPayload::s_TextureAssetKindLabel
     ))
         return false;
     if(
@@ -298,8 +298,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
             cursor,
             header,
             TextureBinaryPayload::s_TextureMagic,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("texture")
+            TextureBinaryPayload::s_TextureLoadBinaryContext,
+            TextureBinaryPayload::s_TextureAssetKindLabel
         ))
             return false;
         if(
@@ -327,8 +327,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
             cursor,
             header,
             TextureBinaryPayload::s_TextureMagic,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("texture")
+            TextureBinaryPayload::s_TextureLoadBinaryContext,
+            TextureBinaryPayload::s_TextureAssetKindLabel
         ))
             return false;
         if(
@@ -376,7 +376,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         mipCount,
         mipBinaries,
-        NWB_TEXT("Texture::loadBinary"),
+        TextureBinaryPayload::s_TextureLoadBinaryContext,
         NWB_TEXT("mip levels")
     ))
         return false;
@@ -412,7 +412,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is malformed"));
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Texture::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, TextureBinaryPayload::s_TextureLoadBinaryContext))
         return false;
 
     m_colorSpace = static_cast<TextureColorSpace::Enum>(colorSpace);

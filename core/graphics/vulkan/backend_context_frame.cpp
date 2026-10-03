@@ -4,6 +4,7 @@
 
 #include "backend_context.h"
 #include "backend_context_detail.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,7 +235,7 @@ bool BackendContext::cancelFramePresentationSignal(const QueueSubmissionPreSubmi
     if(lifecycleLock.owns_lock())
         lifecycleLock.unlock();
     if(!result && device && device->isDeviceLost())
-        device->captureDeviceLoss("presentation signal cancellation");
+        device->captureDeviceLoss(VulkanArenaScope::s_PresentationSignalCancellationContext);
     return result;
 }
 

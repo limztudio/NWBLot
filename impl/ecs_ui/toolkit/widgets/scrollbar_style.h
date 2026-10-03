@@ -6,6 +6,7 @@
 
 
 #include "style.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,13 +19,13 @@ NWB_IMPL_UI_BEGIN
 
 
 struct ScrollbarStyle{
-    Name track = Name("scroll.track");
-    Name trackFallback = Name("panel.normal");
-    Name thumb = Name("scroll.thumb");
-    Name thumbHover = Name("button.hover");
-    Name thumbPressed = Name("button.pressed");
-    Name thumbDisabled = Name("button.disabled");
-    Name thumbFallback = Name("button.normal");
+    Name track = UiSkinToolkitRegions::s_ScrollTrackRegionName;
+    Name trackFallback = UiSkinToolkitRegions::s_PanelNormalRegionName;
+    Name thumb = UiSkinToolkitRegions::s_ScrollThumbRegionName;
+    Name thumbHover = UiSkinToolkitRegions::s_ButtonHoverRegionName;
+    Name thumbPressed = UiSkinToolkitRegions::s_ButtonPressedRegionName;
+    Name thumbDisabled = UiSkinToolkitRegions::s_ButtonDisabledRegionName;
+    Name thumbFallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
     Color trackColor = { 0.08f, 0.10f, 0.14f, 1.0f };
     Color thumbColor = { 0.35f, 0.40f, 0.48f, 1.0f };
     Color disabledColor = { 0.25f, 0.28f, 0.32f, 1.0f };

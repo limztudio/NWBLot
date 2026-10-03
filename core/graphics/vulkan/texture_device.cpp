@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 #include "texture_resource_detail.h"
 #include "native_sharing_validation.h"
 
@@ -172,7 +173,7 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
         offset,
         VulkanDetail::HeapBindingResourceClass::OptimalImage,
         NWB_TEXT("bind texture memory"),
-        NWB_TEXT("texture"),
+        VulkanArenaScope::s_TextureResourceLabel,
         bindingRange
     ))
         return false;

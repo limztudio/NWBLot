@@ -6,6 +6,7 @@
 
 
 #include "style.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,14 +19,14 @@ NWB_IMPL_UI_BEGIN
 
 
 struct ComboStyle{
-    Name normal = Name("combo.normal");
-    Name hover = Name("combo.hover");
-    Name open = Name("combo.open");
-    Name focused = Name("combo.focused");
-    Name disabled = Name("combo.disabled");
-    Name fallback = Name("button.normal");
-    Name arrow = Name("combo.arrow");
-    Name arrowFallback = Name("window.collapse");
+    Name normal = UiSkinToolkitRegions::s_ComboNormalRegionName;
+    Name hover = UiSkinToolkitRegions::s_ComboHoverRegionName;
+    Name open = UiSkinToolkitRegions::s_ComboOpenRegionName;
+    Name focused = UiSkinToolkitRegions::s_ComboFocusedRegionName;
+    Name disabled = UiSkinToolkitRegions::s_ComboDisabledRegionName;
+    Name fallback = UiSkinToolkitRegions::s_ButtonNormalRegionName;
+    Name arrow = UiSkinToolkitRegions::s_ComboArrowRegionName;
+    Name arrowFallback = UiSkinToolkitRegions::s_WindowCollapseRegionName;
     Insets padding = { 8.0f, 6.0f, 8.0f, 6.0f };
     f32 arrowExtent = 20.0f;
     f32 arrowGap = 8.0f;

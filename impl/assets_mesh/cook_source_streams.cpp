@@ -28,6 +28,10 @@ inline constexpr AStringView s_VertexRefTangentName = "tangent";
 inline constexpr AStringView s_VertexRefUvName = "uv0";
 inline constexpr AStringView s_VertexRefColorName = "color";
 inline constexpr AStringView s_VertexRefSkinName = "skin";
+inline constexpr TStringView s_PositionStreamLabel = NWB_TEXT("position");
+inline constexpr TStringView s_NormalStreamLabel = NWB_TEXT("normal");
+inline constexpr TStringView s_TangentStreamLabel = NWB_TEXT("tangent");
+inline constexpr TStringView s_ColorStreamLabel = NWB_TEXT("color");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,7 +57,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
         nwbFilePath,
         asset,
         metaKind,
-        "vertex_refs"
+        MeshCookMetadata::s_VertexRefsFieldNameView
     );
     if(!field)
         return false;
@@ -75,7 +79,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
 
         MeshVertexRef ref;
         const auto& components = value.asList();
-        const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, "vertex_refs", vertexRefIndex);
+        const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
         const AStringView componentNames[] = {
             __hidden_mesh_source_streams::s_VertexRefPositionName,
             __hidden_mesh_source_streams::s_VertexRefNormalName,
@@ -176,18 +180,18 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(
     const usize skinCount
 ){
     for(const MeshVertexRef& ref : streams.vertexRefs){
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "position", ref.position, streams.positions.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "normal", ref.normal, streams.normals.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefNormalName, ref.normal, streams.normals.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "tangent", ref.tangent, streams.tangents.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefTangentName, ref.tangent, streams.tangents.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "uv0", ref.uv0, streams.uv0.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefUvName, ref.uv0, streams.uv0.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "color", ref.color, streams.colors.size()))
+        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
             return false;
         if(includeSkin){
-            if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, "skin", ref.skin, skinCount))
+            if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefSkinName, ref.skin, skinCount))
                 return false;
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
@@ -215,7 +219,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile.filePath,
         asset,
         metaKind,
-        "positions",
+        MeshCookMetadata::s_PositionsFieldNameView,
         streams.positions,
         scratchArena
     ))
@@ -224,7 +228,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile.filePath,
         asset,
         metaKind,
-        "normals",
+        MeshCookMetadata::s_NormalsFieldNameView,
         streams.normals,
         scratchArena
     ))
@@ -233,7 +237,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile.filePath,
         asset,
         metaKind,
-        "tangents",
+        MeshCookMetadata::s_TangentsFieldNameView,
         streams.tangents,
         scratchArena
     ))
@@ -242,7 +246,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile.filePath,
         asset,
         metaKind,
-        "uv0",
+        MeshCookMetadata::s_Uv0FieldNameView,
         streams.uv0,
         scratchArena
     ))
@@ -252,7 +256,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile.filePath,
         asset,
         metaKind,
-        "colors",
+        MeshCookMetadata::s_ColorsFieldNameView,
         streams.colors,
         scratchArena
     ))

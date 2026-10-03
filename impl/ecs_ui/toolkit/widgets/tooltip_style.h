@@ -6,6 +6,7 @@
 
 
 #include "../paint.h"
+#include <impl/assets_ui_skin/region_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,8 +19,8 @@ NWB_IMPL_UI_BEGIN
 
 
 struct TooltipStyle{
-    Name background{ "tooltip.normal" };
-    Name fallback{ "panel.normal" };
+    Name background{ UiSkinToolkitRegions::s_TooltipNormalRegionName };
+    Name fallback{ UiSkinToolkitRegions::s_PanelNormalRegionName };
     Insets padding{ 8.0f, 6.0f, 8.0f, 6.0f };
     Color text;
 };

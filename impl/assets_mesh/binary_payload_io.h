@@ -24,6 +24,16 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_PositionsStreamName = "positions";
+inline constexpr AStringView s_NormalsStreamName = "normals";
+inline constexpr AStringView s_TangentsStreamName = "tangents";
+inline constexpr AStringView s_Uv0StreamName = "uv0";
+inline constexpr AStringView s_ColorsStreamName = "colors";
+inline constexpr TStringView s_PositionStreamNameView = NWB_TEXT("position");
+inline constexpr TStringView s_NormalStreamNameView = NWB_TEXT("normal");
+inline constexpr TStringView s_TangentStreamNameView = NWB_TEXT("tangent");
+inline constexpr TStringView s_Uv0StreamNameView = NWB_TEXT("uv0");
+inline constexpr TStringView s_ColorStreamNameView = NWB_TEXT("color");
 inline constexpr TStringView s_PositionsStreamLabel = NWB_TEXT("positions");
 inline constexpr TStringView s_NormalsStreamLabel = NWB_TEXT("normals");
 inline constexpr TStringView s_TangentsStreamLabel = NWB_TEXT("tangents");

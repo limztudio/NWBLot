@@ -294,7 +294,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         meshPath,
         loadedAsset,
         NWB_TEXT("RendererSystem"),
-        "mesh"
+        Mesh::s_AssetTypeText
     );
     if(!loadedMesh)
         return false;
@@ -325,9 +325,9 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         m_graphics,
         meshPath,
         createdMesh.positionBuffer,
-        AStringView(":positions"),
+        RendererArenaScope::s_PositionsBufferName,
         mesh.positionStream(),
-        NWB_TEXT("position"),
+        RendererArenaScope::s_PositionBufferLabel,
         true,
         rtSupported
     ) && uploaded;
@@ -335,49 +335,49 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         m_graphics,
         meshPath,
         createdMesh.normalBuffer,
-        AStringView(":normals"),
+        RendererArenaScope::s_NormalsBufferName,
         mesh.normalStream(),
-        NWB_TEXT("normal")
+        RendererArenaScope::s_NormalBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
         m_graphics,
         meshPath,
         createdMesh.tangentBuffer,
-        AStringView(":tangents"),
+        RendererArenaScope::s_TangentsBufferName,
         mesh.tangentStream(),
-        NWB_TEXT("tangent")
+        RendererArenaScope::s_TangentBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Float2U>(
         m_graphics,
         meshPath,
         createdMesh.uv0Buffer,
-        AStringView(":uv0"),
+        RendererArenaScope::s_Uv0BufferName,
         mesh.uv0Stream(),
-        NWB_TEXT("uv0")
+        RendererArenaScope::s_Uv0BufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<Half4U>(
         m_graphics,
         meshPath,
         createdMesh.colorBuffer,
-        AStringView(":colors"),
+        RendererArenaScope::s_ColorsBufferName,
         mesh.colorStream(),
-        NWB_TEXT("color")
+        RendererArenaScope::s_ColorBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletDesc>(
         m_graphics,
         meshPath,
         createdMesh.meshletDescBuffer,
-        AStringView(":meshlets"),
+        RendererArenaScope::s_MeshletsBufferName,
         mesh.meshlets(),
-        NWB_TEXT("meshlet descriptor")
+        RendererArenaScope::s_MeshletDescriptorBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletBounds>(
         m_graphics,
         meshPath,
         createdMesh.meshletBoundsBuffer,
-        AStringView(":meshlet_bounds"),
+        RendererArenaScope::s_MeshletBoundsBufferName,
         mesh.meshletBounds(),
-        NWB_TEXT("meshlet bounds"),
+        RendererArenaScope::s_MeshletBoundsBufferLabel,
         true
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
@@ -385,35 +385,35 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         m_arena,
         meshPath,
         createdMesh.meshletPositionRefDeltaBuffer,
-        AStringView(":meshlet_position_ref_deltas"),
+        RendererArenaScope::s_MeshletPositionRefDeltasBufferName,
         mesh.meshletPositionRefDeltas(),
-        NWB_TEXT("meshlet position ref delta")
+        RendererArenaScope::s_MeshletPositionRefDeltaBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
         m_arena,
         meshPath,
         createdMesh.meshletAttributeRefDeltaBuffer,
-        AStringView(":meshlet_attribute_ref_deltas"),
+        RendererArenaScope::s_MeshletAttributeRefDeltasBufferName,
         mesh.meshletAttributeRefDeltas(),
-        NWB_TEXT("meshlet attribute ref delta")
+        RendererArenaScope::s_MeshletAttributeRefDeltaBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
         m_graphics,
         meshPath,
         createdMesh.meshletLocalVertexRefBuffer,
-        AStringView(":meshlet_local_vertex_refs"),
+        RendererArenaScope::s_MeshletLocalVertexRefsBufferName,
         mesh.meshletLocalVertexRefs(),
-        NWB_TEXT("meshlet local vertex ref")
+        RendererArenaScope::s_MeshletLocalVertexRefBufferLabel
     ) && uploaded;
     uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         m_graphics,
         m_arena,
         meshPath,
         createdMesh.meshletPrimitiveIndexBuffer,
-        AStringView(":meshlet_primitive_indices"),
+        RendererArenaScope::s_MeshletPrimitiveIndicesBufferName,
         mesh.meshletPrimitiveIndices(),
-        NWB_TEXT("meshlet primitive index")
+        RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
     ) && uploaded;
     if(!uploaded)
         return false;
@@ -434,7 +434,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             return false;
         }
 
-        const Name indexBufferName = DeriveName(meshPath, AStringView(":rt_triangle_indices"));
+        const Name indexBufferName = DeriveName(meshPath, RendererArenaScope::s_RtTriangleIndicesBufferName);
         if(!indexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
@@ -488,7 +488,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             return false;
         }
 
-        const Name attributeBufferName = DeriveName(meshPath, AStringView(":rt_triangle_attributes"));
+        const Name attributeBufferName = DeriveName(meshPath, RendererArenaScope::s_RtTriangleAttributesBufferName);
         if(!attributeBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
@@ -615,7 +615,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,
         createdMesh.meshName,
-        NWB_TEXT("meshlet primitive index")
+        RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
     ))
         return false;
     NWB_ASSERT(createdMesh.valid());

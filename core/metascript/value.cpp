@@ -3,6 +3,7 @@
 
 
 #include "value.h"
+#include "arena_names.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -84,7 +85,7 @@ Value& Value::operator=(Value&& other)noexcept{
 Value Value::operator+(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
@@ -97,7 +98,7 @@ Value Value::operator+(const Value& rhs)const{
         const auto lsv = asString();
         const auto rsv = rhs.asString();
         if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
-            NWB_ASSERT_MSG(false, NWB_TEXT("string concatenation size overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
 
@@ -117,7 +118,7 @@ Value Value::operator+(const Value& rhs)const{
         v.makeList();
         auto& dst = *v.m_data.m_list;
         if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
-            NWB_ASSERT_MSG(false, NWB_TEXT("list concatenation size overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
@@ -133,7 +134,7 @@ Value Value::operator+(const Value& rhs)const{
 Value Value::operator-(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer - rhs.m_data.m_integer, m_arena);
@@ -149,7 +150,7 @@ Value Value::operator-(const Value& rhs)const{
 Value Value::operator*(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer * rhs.m_data.m_integer, m_arena);
@@ -165,11 +166,11 @@ Value Value::operator*(const Value& rhs)const{
 Value Value::operator/(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
-            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
         if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer / rhs.m_data.m_integer, m_arena);
@@ -177,7 +178,7 @@ Value Value::operator/(const Value& rhs)const{
 
     if(isNumeric() && rhs.isNumeric()){
         if(rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
         return Value(toDouble() / rhs.toDouble(), m_arena);
@@ -190,7 +191,7 @@ Value Value::operator/(const Value& rhs)const{
 Value& Value::operator+=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer += rhs.m_data.m_integer;
@@ -204,7 +205,7 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
-            NWB_ASSERT_MSG(false, NWB_TEXT("string append size overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringAppendSizeOverflowMessage);
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
@@ -218,7 +219,7 @@ Value& Value::operator+=(const Value& rhs){
             // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
-                NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize appendCount = sourceList.size();
@@ -228,7 +229,7 @@ Value& Value::operator+=(const Value& rhs){
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
-                NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
@@ -248,7 +249,7 @@ Value& Value::operator+=(const Value& rhs){
 Value& Value::operator-=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer -= rhs.m_data.m_integer;
@@ -267,7 +268,7 @@ Value& Value::operator-=(const Value& rhs){
 Value& Value::operator*=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer *= rhs.m_data.m_integer;
@@ -286,11 +287,11 @@ Value& Value::operator*=(const Value& rhs){
 Value& Value::operator/=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
-            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
         if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            NWB_ASSERT_MSG(false, NWB_TEXT("integer overflow"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer /= rhs.m_data.m_integer;
@@ -299,7 +300,7 @@ Value& Value::operator/=(const Value& rhs){
 
     if(isNumeric() && rhs.isNumeric()){
         if(rhs.toDouble() == 0.0){
-            NWB_ASSERT_MSG(false, NWB_TEXT("division by zero"));
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
         setDouble(toDouble() / rhs.toDouble());
@@ -440,7 +441,7 @@ void Value::append(Value&& val){
 
     const usize listSize = m_data.m_list->size();
     if(listSize == Limit<usize>::s_Max){
-        NWB_ASSERT_MSG(false, NWB_TEXT("list append size overflow"));
+        NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
         return;
     }
 

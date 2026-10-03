@@ -7,6 +7,7 @@
 
 #include "cook.h"
 #include "cook_metadata.h"
+#include "binary_payload_io.h"
 #include "meshlet_payload_packing.h"
 
 #include <core/common/log.h>
@@ -193,7 +194,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("normal"),
+                MeshAssetBinaryPayload::s_NormalStreamNameView,
                 entry.normals,
                 reorder.normalRemap,
                 reorder.normals,
@@ -203,7 +204,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("tangent"),
+                MeshAssetBinaryPayload::s_TangentStreamNameView,
                 entry.tangents,
                 reorder.tangentRemap,
                 reorder.tangents,
@@ -213,7 +214,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("uv0"),
+                MeshAssetBinaryPayload::s_Uv0StreamNameView,
                 entry.uv0,
                 reorder.uv0Remap,
                 reorder.uv0,
@@ -223,7 +224,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("color"),
+                MeshAssetBinaryPayload::s_ColorStreamNameView,
                 entry.colors,
                 reorder.colorRemap,
                 reorder.colors,
@@ -250,7 +251,7 @@ bool MeshCookStreamReorder::RemapMeshletPositionRefs(
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("position"),
+                MeshAssetBinaryPayload::s_PositionStreamNameView,
                 entry.positions,
                 reorder.positionRemap,
                 reorder.positions,

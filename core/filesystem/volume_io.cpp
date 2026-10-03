@@ -134,7 +134,7 @@ static bool ForEachSegmentChunk(
     const u64 byteCount,
     ChunkFunc&& chunkFunc){
     if(segmentSize == 0){
-        LogFailure(volumeName, operation, "segment size is zero");
+        LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
     }
 
@@ -398,7 +398,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
     if(m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegment, "segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpCreateSegment, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
     }
 
@@ -467,7 +467,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
 
 bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     if(m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, "segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
     }
 
@@ -511,7 +511,7 @@ bool VolumeFileSystem::computePhysicalCapacityLocked(u64& outCapacityBytes)const
     outCapacityBytes = 0;
 
     if(m_segmentPaths.empty() || m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "no mounted segments or segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, FilesystemVolumeDetail::s_VolumeDetailNoMountedSegmentsOrSizeZero);
         return false;
     }
 

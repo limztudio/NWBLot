@@ -283,7 +283,7 @@ struct RayTracingGeometryDesc{
         : geometryData{}
     {}
 
-    RayTracingGeometryDesc& setTransform(const AffineTransform& value){ GLOBAL_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    RayTracingGeometryDesc& setTransform(const AffineTransform& value){ GLB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value){ flags = value; return *this; }
     constexpr RayTracingGeometryDesc& setTriangles(const RayTracingGeometryTriangles& value){ geometryData.triangles = value; geometryType = RayTracingGeometryType::Triangles; return *this; }
     constexpr RayTracingGeometryDesc& setAABBs(const RayTracingGeometryAABBs& value){ geometryData.aabbs = value; geometryType = RayTracingGeometryType::AABBs; return *this; }
@@ -333,7 +333,7 @@ struct RayTracingInstanceDesc{
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceContributionToHitGroupIndex(u32 value){ instanceContributionToHitGroupIndex = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value){ instanceMask = value; return *this; }
-    RayTracingInstanceDesc& setTransform(const AffineTransform& value){ GLOBAL_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    RayTracingInstanceDesc& setTransform(const AffineTransform& value){ GLB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value){ flags = value; return *this; }
     constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value){ bottomLevelAS = value; return *this; }
 };

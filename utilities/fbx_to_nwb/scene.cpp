@@ -116,7 +116,7 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error)));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error)));
         return false;
     }
 
@@ -176,7 +176,7 @@ bool SelectMeshInstances(
     }
     if(normalized == s_FirstMeshSelectorText){
         if(instances.empty()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
+            NWB_LOGGER_WARNING(GLB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
             return false;
         }
         outSelection.push_back(0u);
@@ -186,7 +186,7 @@ bool SelectMeshInstances(
     usize parsedIndex = 0u;
     if(__hidden_scene::ParseIndexSelector(normalized, parsedIndex)){
         if(parsedIndex >= instances.size()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Invalid mesh selector '{}': mesh index is out of range"), StringConvert(selector));
+            NWB_LOGGER_WARNING(GLB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), StringConvert(selector));
             return false;
         }
         outSelection.push_back(parsedIndex);
@@ -221,7 +221,7 @@ bool SelectMeshInstances(
         return true;
     }
 
-    NWB_LOGGER_WARNING(GLOBAL_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), StringConvert(selector));
+    NWB_LOGGER_WARNING(GLB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), StringConvert(selector));
     return false;
 }
 

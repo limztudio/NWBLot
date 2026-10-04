@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
+#if defined(GLB_PLATFORM_LINUX) && defined(NWB_WITH_WAYLAND)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -396,16 +396,16 @@ static void AttachSeatListener(WaylandContext& context);
 static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version){
     auto& context = *static_cast<WaylandContext*>(data);
 
-    if(GLOBAL_STRCMP(interfaceName, wl_compositor_interface.name) == 0){
+    if(GLB_STRCMP(interfaceName, wl_compositor_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandCompositorBindVersion ? version : s_WaylandCompositorBindVersion;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
     }
-    else if(GLOBAL_STRCMP(interfaceName, wl_output_interface.name) == 0 && !context.output){
+    else if(GLB_STRCMP(interfaceName, wl_output_interface.name) == 0 && !context.output){
         const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
         wl_output_add_listener(context.output, &s_OutputListener, &context);
     }
-    else if(GLOBAL_STRCMP(interfaceName, wl_seat_interface.name) == 0 && !context.seat){
+    else if(GLB_STRCMP(interfaceName, wl_seat_interface.name) == 0 && !context.seat){
         const u32 bindVersion = version < s_WaylandSeatBindVersion ? version : s_WaylandSeatBindVersion;
         context.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, bindVersion));
         context.seatVersion = bindVersion;
@@ -416,7 +416,7 @@ static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const 
         if(ITextInputService* const textInput = context.frame->tryTextInput())
             AttachWaylandTextInputSeat(*textInput, context.seat, name);
     }
-    else if(GLOBAL_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
+    else if(GLB_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandWmBaseBindVersion ? version : s_WaylandWmBaseBindVersion;
         context.wmBase = static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, bindVersion));
     }
@@ -431,7 +431,7 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
     context.inputSerial = 0u;
     if(ITextInputService* const textInput = context.frame->tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
         AttachWaylandTextInputSeat(*textInput, nullptr, 0u);
     }
     context.frame->input().windowFocusUpdate(false);
@@ -507,7 +507,7 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
     context.frame->input().pointerLeave();
     if(ITextInputService* const textInput = context.frame->tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
     context.shouldClose = true;
     context.visible = false;
@@ -668,7 +668,7 @@ static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 
     char* map = static_cast<char*>(mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0));
     if(map == MAP_FAILED){
         close(fd);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland keymap mmap failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland keymap mmap failed"));
         return;
     }
 
@@ -677,14 +677,14 @@ static void OnKeyboardKeymap(void* data, wl_keyboard* keyboard, u32 format, i32 
     close(fd);
 
     if(!keymap){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland keymap creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland keymap creation failed"));
         return;
     }
 
     xkb_state* state = xkb_state_new(keymap);
     if(!state){
         xkb_keymap_unref(keymap);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland keyboard state creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland keyboard state creation failed"));
         return;
     }
 
@@ -708,7 +708,7 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     context.keyboardFocused = true;
     if(ITextInputService* const textInput = context.frame->tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, true))
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, true);
@@ -727,7 +727,7 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     context.inputSerial = 0u;
     if(ITextInputService* const textInput = context.frame->tryTextInput()){
         if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, false);
@@ -832,7 +832,7 @@ static const wl_seat_listener s_SeatListener = {
 
 static void AttachSeatListener(WaylandContext& context){
     if(wl_seat_add_listener(context.seat, &s_SeatListener, &context) != 0)
-        GLOBAL_FATAL_ASSERT(false);
+        GLB_FATAL_ASSERT(false);
 }
 
 static const wl_pointer_listener s_PointerListener = {
@@ -890,7 +890,7 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
         context.inputSerial = 0u;
         if(ITextInputService* const textInput = context.frame->tryTextInput()){
             if(!SetWaylandTextInputKeyboardFocus(*textInput, false))
-                GLOBAL_FATAL_ASSERT(false);
+                GLB_FATAL_ASSERT(false);
         }
         if(IClipboardService* const clipboard = context.frame->tryClipboard())
             SetWaylandClipboardKeyboardFocus(*clipboard, false);
@@ -902,7 +902,7 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
 
 static bool RoundtripDisplay(wl_display* display, const TStringView operation){
     if(wl_display_roundtrip(display) == -1){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland {} failed"), operation);
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland {} failed"), operation);
         return false;
     }
     return true;
@@ -910,20 +910,20 @@ static bool RoundtripDisplay(wl_display* display, const TStringView operation){
 
 static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
     if(wl_display_dispatch_pending(context.display) == -1){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland dispatch pending failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland dispatch pending failed"));
         return false;
     }
 
     while(wl_display_prepare_read(context.display) != 0){
         if(wl_display_dispatch_pending(context.display) == -1){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland dispatch pending during prepare_read failed"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland dispatch pending during prepare_read failed"));
             return false;
         }
     }
 
     if(wl_display_flush(context.display) == -1 && errno != EAGAIN){
         wl_display_cancel_read(context.display);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland display flush failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland display flush failed"));
         return false;
     }
 
@@ -937,7 +937,7 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
         if(errno == EINTR)
             return true;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland poll failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland poll failed"));
         return false;
     }
 
@@ -948,13 +948,13 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
 
     if((fd.revents & (POLLERR | POLLHUP | POLLNVAL)) != 0){
         wl_display_cancel_read(context.display);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland display connection closed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland display connection closed"));
         return false;
     }
 
     if((fd.revents & POLLIN) != 0){
         if(wl_display_read_events(context.display) == -1){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland read events failed"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland read events failed"));
             return false;
         }
     }
@@ -963,7 +963,7 @@ static bool PumpEvents(WaylandContext& context, i32 timeoutMs){
     }
 
     if(wl_display_dispatch_pending(context.display) == -1){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland dispatch pending after poll failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland dispatch pending after poll failed"));
         return false;
     }
 
@@ -1014,7 +1014,7 @@ bool InitWaylandFrame(Frame& frame){
 
     context->display = wl_display_connect(nullptr);
     if(!context->display){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland display connection failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland display connection failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1022,26 +1022,26 @@ bool InitWaylandFrame(Frame& frame){
 
     context->xkbContext = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     if(!context->xkbContext){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland xkb context creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland xkb context creation failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
 
     context->registry = wl_display_get_registry(context->display);
     if(!context->registry){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland registry acquisition failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland registry acquisition failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
     wl_registry_add_listener(context->registry, &s_RegistryListener, context);
 
-    if(!RoundtripDisplay(context->display, GLOBAL_TEXT("registry roundtrip"))){
+    if(!RoundtripDisplay(context->display, GLB_TEXT("registry roundtrip"))){
         CleanupWaylandFrame(frame);
         return false;
     }
 
     if(!context->compositor || !context->wmBase){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland compositor/xdg-shell globals are unavailable"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1050,7 +1050,7 @@ bool InitWaylandFrame(Frame& frame){
 
     context->surface = wl_compositor_create_surface(context->compositor);
     if(!context->surface){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland surface creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland surface creation failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1059,7 +1059,7 @@ bool InitWaylandFrame(Frame& frame){
 
     context->xdgSurface = xdg_wm_base_get_xdg_surface(context->wmBase, context->surface);
     if(!context->xdgSurface){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland xdg_surface creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland xdg_surface creation failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1067,7 +1067,7 @@ bool InitWaylandFrame(Frame& frame){
 
     context->toplevel = xdg_surface_get_toplevel(context->xdgSurface);
     if(!context->toplevel){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland toplevel creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland toplevel creation failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1088,20 +1088,20 @@ bool InitWaylandFrame(Frame& frame){
 
     wl_surface_commit(context->surface);
     if(wl_display_flush(context->display) == -1 && errno != EAGAIN){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland initial display flush failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland initial display flush failed"));
         CleanupWaylandFrame(frame);
         return false;
     }
 
     for(u32 i = 0u; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
-        if(!RoundtripDisplay(context->display, GLOBAL_TEXT("initial configure roundtrip"))){
+        if(!RoundtripDisplay(context->display, GLB_TEXT("initial configure roundtrip"))){
             CleanupWaylandFrame(frame);
             return false;
         }
     }
 
     if(!context->configured){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland compositor did not send an initial configure"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland compositor did not send an initial configure"));
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1112,7 +1112,7 @@ bool InitWaylandFrame(Frame& frame){
 
 GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame){
     WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
-    GLOBAL_FATAL_ASSERT(context && context->display);
+    GLB_FATAL_ASSERT(context && context->display);
     auto service = CreateWaylandClipboardService(frame.projectObjectArena(), *context->display);
     if(service){
         AttachWaylandClipboardSeat(*service, context->seat, context->seatGlobalName);
@@ -1125,13 +1125,13 @@ GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame){
 
 GlobalUniquePtr<ITextInputService> CreateWaylandFrameTextInput(Frame& frame){
     WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
-    GLOBAL_FATAL_ASSERT(context && context->display && context->surface);
+    GLB_FATAL_ASSERT(context && context->display && context->surface);
     auto service = CreateWaylandTextInputService(frame.projectObjectArena(), *context->display, *context->surface);
     if(service){
         AttachWaylandTextInputSeat(*service, context->seat, context->seatGlobalName);
         SetWaylandTextInputBufferScale(*service, context->bufferScale);
         if(!SetWaylandTextInputKeyboardFocus(*service, context->keyboardFocused))
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
     return service;
 }
@@ -1147,7 +1147,7 @@ bool RunWaylandFrame(Frame& frame){
     auto& frameData = frame.data<Common::LinuxFrame>();
     auto* context = GetWaylandContext(frameData);
     if(!context || !context->display){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame Wayland backend is not initialized"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame Wayland backend is not initialized"));
         return false;
     }
 

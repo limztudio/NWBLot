@@ -193,7 +193,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
                 const VkResult faultResult = m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
-                    const AStringView faultDescription(faultInfo.description, GLOBAL_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
+                    const AStringView faultDescription(faultInfo.description, GLB_STRNLEN(faultInfo.description, VK_MAX_DESCRIPTION_SIZE));
                     report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
                     if(vendorBinaryByteSize != 0u){
                         if(!vendorBinary.empty()){
@@ -221,7 +221,7 @@ void Device::captureDeviceLoss(const AStringView context){
 
                     for(u32 i = 0u; i < faultCounts.vendorInfoCount; ++i){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
-                        const AStringView vendorDescription(vendorInfo.description, GLOBAL_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
+                        const AStringView vendorDescription(vendorInfo.description, GLB_STRNLEN(vendorInfo.description, VK_MAX_DESCRIPTION_SIZE));
                         report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
                             , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)
@@ -250,7 +250,7 @@ void Device::captureDeviceLoss(const AStringView context){
             ));
     }
 
-    NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context), StringConvert(report.details));
+    NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context), StringConvert(report.details));
 
     // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){

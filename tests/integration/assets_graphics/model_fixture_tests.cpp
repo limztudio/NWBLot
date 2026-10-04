@@ -349,7 +349,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
 }
 
 TEST(AssetsGraphics, ModelBunchRejectsFourRowTransform){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -388,11 +388,11 @@ asset_bunch bunch = [
         root,
         outputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("must be a 3x4 affine matrix")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("must be a 3x4 affine matrix")));
 #endif
 }
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
 static bool ExpandModelBunchFixture(
     TestArena& testArena,
     const AStringView meta,
@@ -418,7 +418,7 @@ static bool ExpandModelBunchFixture(
 #endif
 
 TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -453,13 +453,13 @@ asset_bunch bunch = [
         scratchArena
     );
     EXPECT_FALSE(expanded);
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("variable 'mesh' is listed more than once")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("variable 'mesh' is listed more than once")));
 #else
 #endif
 }
 
 TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 

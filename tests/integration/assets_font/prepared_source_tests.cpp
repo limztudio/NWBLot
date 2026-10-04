@@ -170,7 +170,7 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
             imageOffset += fixture.groups[index].pixels.size();
     }
     EXPECT_EQ(logger.errorCount(), LengthOf(s_Filenames));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("image content hash differs")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("image content hash differs")));
 }
 
 TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModesWithoutReplacingSource){
@@ -199,7 +199,7 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModesWithoutRe
         }
     }
     EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("SFNT content hash differs")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("SFNT content hash differs")));
 }
 
 TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadAllocation){

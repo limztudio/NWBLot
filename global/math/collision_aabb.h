@@ -56,7 +56,7 @@ void SIMDCALL ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE bool SIMDCALL AabbTests::Valid(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] GLB_INLINE bool SIMDCALL AabbTests::Valid(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return
         !Vector3IsNaN(minBounds)
         && !Vector3IsInfinite(minBounds)
@@ -70,7 +70,7 @@ void SIMDCALL ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE void SIMDCALL AabbTests::Reset(SIMDVector& outMinBounds, SIMDVector& outMaxBounds)noexcept{
+GLB_INLINE void SIMDCALL AabbTests::Reset(SIMDVector& outMinBounds, SIMDVector& outMaxBounds)noexcept{
     outMinBounds = VectorReplicate(s_MaxF32);
     outMaxBounds = VectorReplicate(-s_MaxF32);
 }
@@ -79,7 +79,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::Reset(SIMDVector& outMinBounds, SIMDVecto
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE void SIMDCALL AabbTests::Expand(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
+GLB_INLINE void SIMDCALL AabbTests::Expand(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
     CollisionDetail::ExpandMinMax(point, inOutMinBounds, inOutMaxBounds);
 }
 
@@ -87,7 +87,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::Expand(const SIMDVector point, SIMDVector
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
+GLB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2,
@@ -103,7 +103,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE bool SIMDCALL AabbTests::Intersects(
+[[nodiscard]] GLB_INLINE bool SIMDCALL AabbTests::Intersects(
     const SIMDVector lhsMinBounds,
     const SIMDVector lhsMaxBounds,
     const SIMDVector rhsMinBounds,
@@ -120,7 +120,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL AabbTests::Center(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL AabbTests::Center(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half), 0.0f);
 }
 
@@ -128,7 +128,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL AabbTests::Extents(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL AabbTests::Extents(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half), 0.0f);
 }
 
@@ -136,7 +136,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE f32 SIMDCALL AabbTests::SurfaceArea(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] GLB_INLINE f32 SIMDCALL AabbTests::SurfaceArea(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     const SIMDVector extent = VectorSubtract(maxBounds, minBounds);
     const SIMDVector pairProducts = VectorMultiply(extent, VectorSwizzle<1, 2, 0, 3>(extent));
     const SIMDVector area = VectorScale(
@@ -153,7 +153,7 @@ GLOBAL_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+[[nodiscard]] GLB_INLINE f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorGetX(Vector3Length(AabbTests::Extents(minBounds, maxBounds)));
 }
 

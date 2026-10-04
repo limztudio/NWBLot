@@ -176,7 +176,7 @@ bool GpuRenderer::validateResources(const u32 width, const u32 height){
         GpuRendererTimingScope::s_Frame.identity, m_state->m_graphics.getDevice(), 2u
     );
     if(!m_state->m_frameTimingScopePrepared)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
+        NWB_LOGGER_WARNING(GLB_TEXT("GpuRenderer: could not prepare standalone frame timing scope"));
     if(m_state->m_width == width && m_state->m_height == height && m_state->m_resources)
         return true;
     if(m_state->m_pending)
@@ -237,7 +237,7 @@ bool GpuRenderer::setSkin(
     }
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Texture* texture = m_state->m_assets.loadTypedSync<Texture>(
-        binding.texture.name(), loadedAsset, GLOBAL_TEXT("GpuRenderer"), "UI atlas texture"
+        binding.texture.name(), loadedAsset, GLB_TEXT("GpuRenderer"), "UI atlas texture"
     );
     if(!texture || !skin.validateTexture(*texture))
         return false;
@@ -246,7 +246,7 @@ bool GpuRenderer::setSkin(
         return false;
     version->m_binding = binding;
     if(!TextureAssetLoader::Create(
-        version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, GLOBAL_TEXT("GpuRenderer")
+        version->m_texture, *texture, Name("ui.atlas"), m_state->m_graphics, GLB_TEXT("GpuRenderer")
     ))
         return false;
     if(!version->m_texture.readinessToken.valid() || !version->m_texture.readinessToken.hasPhysicalQueueIdentity())
@@ -314,7 +314,7 @@ bool GpuRenderer::declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph, Core::G
 void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken){
     if(!m_state->m_pending || m_state->m_pending->m_snapshot.generation() != frameGeneration)
         return;
-    GLOBAL_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
+    GLB_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
     m_state->m_pending->m_finalConsumer = submissionToken;
     m_state->m_lastAcceptedAcquired = m_state->m_pending->m_acquired;
     m_state->m_lastAcceptedGeneration = frameGeneration;

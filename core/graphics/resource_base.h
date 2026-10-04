@@ -47,8 +47,8 @@ static_assert(alignof(Object) == alignof(u64), "Object alignment must match its 
 static_assert(IsStandardLayout_V<Object>, "Object must remain layout-stable across graphics module boundaries");
 static_assert(IsTriviallyCopyable_V<Object>, "Object must remain trivially copyable across graphics module boundaries");
 
-GLOBAL_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
-GLOBAL_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
+GLB_INLINE bool operator==(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer == rhs.integer; }
+GLB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return lhs.integer != rhs.integer; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

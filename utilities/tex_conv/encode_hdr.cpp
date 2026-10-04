@@ -58,19 +58,19 @@ namespace EncodeBackendDetail{
     const u32 width = planes.front().get_width();
     const u32 height = planes.front().get_height();
     if(width == 0u || height == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR image has an invalid resolution."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR image has an invalid resolution."));
         return false;
     }
     for(const basisu::imagef& plane : planes){
         if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR image planes have inconsistent dimensions."));
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR image planes have inconsistent dimensions."));
             return false;
         }
         for(u32 y = 0u; y < height; ++y){
             for(u32 x = 0u; x < width; ++x){
                 const basisu::vec4F& color = plane(x, y);
                 if(!ValidHdrRgb(VectorSet(color[0u], color[1u], color[2u], 0.0f))){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR RGB input must contain finite values in [0, 65216]."));
+                    NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR RGB input must contain finite values in [0, 65216]."));
                     return false;
                 }
             }
@@ -91,7 +91,7 @@ namespace EncodeBackendDetail{
     const u32 height = inOutPlanes.front().get_height();
     for(const basisu::imagef& plane : inOutPlanes){
         if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR texture inputs have inconsistent resolutions."));
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR texture inputs have inconsistent resolutions."));
             return false;
         }
     }
@@ -100,12 +100,12 @@ namespace EncodeBackendDetail{
     if(alphaSource.mode == AlphaSourceMode::Image && !LoadAlphaMask(alphaSource, width, height, alphaMask))
         return false;
     if(alphaSource.mode == AlphaSourceMode::Constant && !IsFinite(alphaSource.constant)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: alpha constant must be finite."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: alpha constant must be finite."));
         return false;
     }
 
     if(alphaSource.mode != AlphaSourceMode::Original && alphaSource.mode != AlphaSourceMode::Constant && alphaSource.mode != AlphaSourceMode::Image){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: unsupported alpha source."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: unsupported alpha source."));
         return false;
     }
     const SIMDVector saturatedConstantAlpha = VectorSaturate(VectorReplicate(alphaSource.constant));
@@ -120,7 +120,7 @@ namespace EncodeBackendDetail{
                     const f32 alpha2 = plane(x + 2u, y)[3u];
                     const f32 alpha3 = plane(x + 3u, y)[3u];
                     if(!IsFinite(alpha0) || !IsFinite(alpha1) || !IsFinite(alpha2) || !IsFinite(alpha3)){
-                        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
+                        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
                         return false;
                     }
                     const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
@@ -148,7 +148,7 @@ namespace EncodeBackendDetail{
                 if(alphaSource.mode == AlphaSourceMode::Original){
                     alpha = plane(x, y)[3u];
                     if(!IsFinite(alpha)){
-                        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
+                        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
                         return false;
                     }
                 }
@@ -178,7 +178,7 @@ namespace EncodeBackendDetail{
         basisu::imagef& target = outPlanes[planeIndex];
         target.resize(targetWidth, targetHeight);
         if(!basisu::image_resample(source, target, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to generate an HDR mip level."));
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to generate an HDR mip level."));
             return false;
         }
     }
@@ -220,7 +220,7 @@ namespace EncodeBackendDetail{
                 s_BasisResampleFilterChannelStart,
                 s_HdrChannelCount
             )){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to generate an HDR volume mip level."));
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to generate an HDR volume mip level."));
                 return false;
             }
         }
@@ -283,7 +283,7 @@ namespace EncodeBackendDetail{
                     basisu::vec4F& hdrColor = hdrPlane(x, y);
                     const f32 alpha = hdrColor[3u];
                     if(!IsFinite(alpha)){
-                        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
+                        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
                         return false;
                     }
                     const SIMDVector quantizedAlphaLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
@@ -357,12 +357,12 @@ namespace EncodeBackendDetail{
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: Basis Universal failed to initialize an HDR mip encoder."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal failed to initialize an HDR mip encoder."));
         return false;
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: UASTC HDR mip encoding failed (Basis Universal error {}).")
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC HDR mip encoding failed (Basis Universal error {}).")
             , static_cast<u32>(encodeResult)
         );
         return false;
@@ -373,7 +373,7 @@ namespace EncodeBackendDetail{
         !ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_HDR_4x4)
         || backendOutput.m_slice_desc.size() != planes.size()
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR mip."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR mip."));
         return false;
     }
     return AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload);
@@ -390,12 +390,12 @@ namespace EncodeBackendDetail{
     const u32 width = planes.front().get_width();
     const u32 height = planes.front().get_height();
     if(width == 0u || height == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR alpha mip has an invalid resolution."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR alpha mip has an invalid resolution."));
         return false;
     }
     for(const basisu::image& plane : planes){
         if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR alpha mip planes have inconsistent dimensions."));
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR alpha mip planes have inconsistent dimensions."));
             return false;
         }
     }
@@ -421,12 +421,12 @@ namespace EncodeBackendDetail{
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: Basis Universal failed to initialize an HDR alpha mip encoder."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal failed to initialize an HDR alpha mip encoder."));
         return false;
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: UASTC HDR alpha mip encoding failed (Basis Universal error {}).")
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC HDR alpha mip encoding failed (Basis Universal error {}).")
             , static_cast<u32>(encodeResult)
         );
         return false;
@@ -437,7 +437,7 @@ namespace EncodeBackendDetail{
         !ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4)
         || backendOutput.m_slice_desc.size() != planes.size()
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR alpha mip."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC HDR alpha mip."));
         return false;
     }
     return AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload);
@@ -451,7 +451,7 @@ namespace EncodeBackendDetail{
         primaryPayload.bytes.size() != alphaPayload.bytes.size()
         || primaryPayload.mips.size() != alphaPayload.mips.size()
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: UASTC HDR alpha payload does not match the RGB payload size."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC HDR alpha payload does not match the RGB payload size."));
         return false;
     }
     for(usize mipIndex = 0u; mipIndex < primaryPayload.mips.size(); ++mipIndex){
@@ -467,7 +467,7 @@ namespace EncodeBackendDetail{
             || primaryMip.sizeBytes != alphaMip.sizeBytes
             || primaryMip.sliceCount != alphaMip.sliceCount
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: UASTC HDR alpha payload mip layout does not match RGB."));
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC HDR alpha payload mip layout does not match RGB."));
             return false;
         }
     }
@@ -569,13 +569,13 @@ namespace EncodeBackendDetail{
     const u32 width = sourcePlanes.front().get_width();
     const u32 height = sourcePlanes.front().get_height();
     if(dimension == TextureDimension::TextureCube && width != height){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR cubemap faces must be square."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR cubemap faces must be square."));
         return false;
     }
 
     u32 mipCount = 0u;
     if(!TextureFormat::ComputeCompleteMipCount(dimension, width, height, 1u, mipCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR texture dimensions cannot form a complete mip chain."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR texture dimensions cannot form a complete mip chain."));
         return false;
     }
 
@@ -607,7 +607,7 @@ namespace EncodeBackendDetail{
     const u32 depth = static_cast<u32>(sourcePlanes.size());
     u32 mipCount = 0u;
     if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: HDR volume dimensions cannot form a complete mip chain."));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: HDR volume dimensions cannot form a complete mip chain."));
         return false;
     }
 

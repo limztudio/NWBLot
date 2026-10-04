@@ -57,7 +57,7 @@
 53. Vulkan ray tracing shader tables own GPU SBT buffers and must retain their parent pipeline; command buffers must retain the shader table while ray dispatch commands are in flight.
 54. Generic integer alignment helpers belong in `global/algorithm.h`; Vulkan code should use `AlignUp`, `AlignUpChecked`, or the typed wrappers instead of keeping local duplicate align-up helpers.
 55. Vulkan ray tracing arbitrary procedural primitives are represented by AABB build geometry plus an intersection shader. Native spheres/LSS are a separate `VK_NV_ray_tracing_linear_swept_spheres` path and must stay feature-gated through the device feature struct and pipeline create flag.
-56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `NWB_DEBUG` / optimization-mode checks.
+56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `GLB_DEBUG` / optimization-mode checks.
 57. `GraphicsRuntime` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
 58. ECS infrastructure that owns persistent containers must be constructed with an explicit caller-owned arena. Do not add module-local default arenas or default constructors that hide allocator ownership.
 59. `utilities/fbx_to_nwb` owns a standalone logger at entry, links `nwb_logclient`, routes non-interactive status/error/list output through `NWB_LOGGER_*`, and keeps prompts/help/pause/logger-init fallback on direct console streams. Its validation/build/write helpers should log failures in-place instead of propagating diagnostic-only `AString& outError` parameters.

@@ -151,7 +151,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
             + sizeof("Lighting Pass"));
 
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLOBAL_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
     EXPECT_EQ(header.runtimeStatisticsCount, s_ExpectedDualCount);
     EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
@@ -174,9 +174,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     EXPECT_EQ(first.planGeneration, 52u);
     EXPECT_EQ(first.recordingAttemptGeneration, 53u);
     EXPECT_EQ(first.deviceGeneration, 17u);
-    EXPECT_EQ(GLOBAL_MEMCMP(&first.compile, &expected.compile, sizeof(expected.compile)), 0);
-    EXPECT_EQ(GLOBAL_MEMCMP(&first.recording, &expected.recording, sizeof(expected.recording)), 0);
-    EXPECT_EQ(GLOBAL_MEMCMP(&first.submission, &expected.submission, sizeof(expected.submission)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&first.compile, &expected.compile, sizeof(expected.compile)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&first.recording, &expected.recording, sizeof(expected.recording)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&first.submission, &expected.submission, sizeof(expected.submission)), 0);
     EXPECT_EQ(first.submission.recoverySubmissionCount, 5u);
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& second =
         parsed.physicalQueueRuntimeStatistics[1u].statistics
@@ -192,9 +192,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     EXPECT_EQ(second.planGeneration, 52u);
     EXPECT_EQ(second.recordingAttemptGeneration, 53u);
     EXPECT_EQ(second.deviceGeneration, 17u);
-    EXPECT_EQ(GLOBAL_MEMCMP(&second.compile, &expectedSecond.compile, sizeof(expectedSecond.compile)), 0);
-    EXPECT_EQ(GLOBAL_MEMCMP(&second.recording, &expectedSecond.recording, sizeof(expectedSecond.recording)), 0);
-    EXPECT_EQ(GLOBAL_MEMCMP(&second.submission, &expectedSecond.submission, sizeof(expectedSecond.submission)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&second.compile, &expectedSecond.compile, sizeof(expectedSecond.compile)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&second.recording, &expectedSecond.recording, sizeof(expectedSecond.recording)), 0);
+    EXPECT_EQ(GLB_MEMCMP(&second.submission, &expectedSecond.submission, sizeof(expectedSecond.submission)), 0);
     EXPECT_EQ(second.submission.recoverySubmissionCount, 3u);
 
     const usize physicalQueueRuntimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
@@ -206,27 +206,27 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     ;
     const auto readU8 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         u8 value = 0u;
-        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readU16 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         u16 value = 0u;
-        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readU32 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         u32 value = 0u;
-        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readU64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         u64 value = 0u;
-        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readF64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         f64 value = 0.0;
-        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
 
@@ -363,14 +363,14 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         SCOPED_TRACE(mutationIndex);
         ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
         Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-        GLOBAL_MEMCPY(
+        GLB_MEMCPY(
             &encodedStatistics,
             sizeof(encodedStatistics),
             payload.data() + statisticsOffset,
             sizeof(encodedStatistics)
         );
         s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[mutationIndex](encodedStatistics);
-        GLOBAL_MEMCPY(
+        GLB_MEMCPY(
             payload.data() + statisticsOffset,
             payload.size() - statisticsOffset,
             &encodedStatistics,
@@ -384,14 +384,14 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics)
     ;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-    GLOBAL_MEMCPY(
+    GLB_MEMCPY(
         &encodedStatistics,
         sizeof(encodedStatistics),
         payload.data() + secondStatisticsOffset,
         sizeof(encodedStatistics)
     );
     encodedStatistics.queue.index = 1u;
-    GLOBAL_MEMCPY(
+    GLB_MEMCPY(
         payload.data() + secondStatisticsOffset,
         payload.size() - secondStatisticsOffset,
         &encodedStatistics,
@@ -401,9 +401,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLOBAL_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.physicalQueueRuntimeStatisticsCount;
-    GLOBAL_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));

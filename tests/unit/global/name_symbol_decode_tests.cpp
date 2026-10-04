@@ -128,7 +128,7 @@ TEST(NameSymbolDecodeTests, PlainNarrowTextDoesNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnchangedText<char>();
 }
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 TEST(NameSymbolDecodeTests, PlainWideTextDoesNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnchangedText<wchar>();
 }
@@ -138,7 +138,7 @@ TEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnknownAndBoundaryTokens<char>();
 }
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnknownAndBoundaryTokens<wchar>();
 }
@@ -148,7 +148,7 @@ TEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText){
     __hidden_name_symbol_decode_tests::VerifyResolvedSpans<char>();
 }
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){
     __hidden_name_symbol_decode_tests::VerifyResolvedSpans<wchar>();
 }

@@ -40,7 +40,7 @@ inline T checked_cast(U u){
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);
-    GLOBAL_ASSERT(t);
+    GLB_ASSERT(t);
     return t;
 }
 

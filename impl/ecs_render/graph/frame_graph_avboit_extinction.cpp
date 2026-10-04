@@ -79,7 +79,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
         MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
         InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
         CsgFrameGpuData extinctionCsgFrameData{ extinctionUploadScratch };
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector extinctionMaterialTypedRanges{ extinctionUploadScratch };
 #endif
         MaterialTypedByteDataVector extinctionMaterialTypedBytes{ extinctionUploadScratch };
@@ -103,19 +103,19 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
             extinctionDrawItems,
             extinctionInstanceData,
             extinctionCsgFrameData,
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
             extinctionMaterialTypedRanges,
 #endif
             extinctionMaterialTypedBytes,
             extinctionUploadResult
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
             return false;
         }
 
         const bool extinctionHasCsgDrawItems = extinctionUploadResult.hasCsgDrawItems;
         if(extinctionHasCsgDrawItems && !intervalOutputsGraphOwned){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: clipped AVBOIT extinction draws require prepared interval outputs"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: clipped AVBOIT extinction draws require prepared interval outputs"));
             return false;
         }
         if(extinctionUploadResult.hasDrawItems){
@@ -145,16 +145,16 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
             extinctionMaterialSampledTexturesCollected = extinctionGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData, csgResources);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
             if(
                 extinctionInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
                 || extinctionCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
                 || extinctionCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: AVBOIT extinction upload size overflows graph blob capacity"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: AVBOIT extinction upload size overflows graph blob capacity"));
                 return false;
             }
-            GLOBAL_ASSERT(extinctionInstanceData.size() == extinctionMaterialTypedRanges.size());
+            GLB_ASSERT(extinctionInstanceData.size() == extinctionMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
                 extinctionMaterialTypedRanges,
                 extinctionMaterialTypedBytes
@@ -185,7 +185,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 extinctionUploadTask,
                 extinctionCsgStreamsUploaded
             )){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT extinction material upload"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT extinction material upload"));
                 return false;
             }
 

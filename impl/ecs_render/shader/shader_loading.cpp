@@ -36,7 +36,7 @@ bool RendererShaderSystem::loadShader(
         m_graphics,
         m_assetManager,
         m_shaderPathResolver,
-        GLOBAL_TEXT("RendererSystem"),
+        GLB_TEXT("RendererSystem"),
         archiveStageName
     );
 }

@@ -5,7 +5,7 @@
 #include "text_input.h"
 #include "text_input_service.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include "win32/text_input_service.h"
 #endif
 
@@ -45,7 +45,7 @@ public:
 
 
 GlobalUniquePtr<ITextInputService> CreateTextInputService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(nativeWindowHandle)
         return MakeGlobalUnique<Win32TextInputService>(arena, arena, MakeNotNull(nativeWindowHandle));
 #else

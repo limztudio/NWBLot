@@ -33,7 +33,7 @@ bool ApplyCausticQualitySmokeSettings(
     }
     if(!renderer.setCausticQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticQualitySmoke: requested photon_grid_divisor={}"), settings.photonGridDivisor);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CausticQualitySmoke: requested photon_grid_divisor={}"), settings.photonGridDivisor);
     return true;
 }
 

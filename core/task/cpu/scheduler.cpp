@@ -330,7 +330,7 @@ void CpuTaskScheduler::releaseReservation(const TaskHandle handle)noexcept{
         ScopedLock lock(m_mutex);
         node = resolveLocked(handle);
     }
-    GLOBAL_ASSERT(node);
+    GLB_ASSERT(node);
     node->function.reset();
     ScopedLock lock(m_mutex);
     node->state = TaskState::Free;
@@ -527,7 +527,7 @@ void CpuTaskScheduler::execute(
                 m_aborting = true;
                 node->canceled = true;
             }
-            GLOBAL_ASSERT(node->state == TaskState::Running);
+            GLB_ASSERT(node->state == TaskState::Running);
             readyToRetire = node->children == 0u;
             node->state = readyToRetire ? TaskState::Retiring : TaskState::Children;
         }
@@ -548,7 +548,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
     TaskNode* node = &first;
     while(node){
         // The locked Retiring transition transfers exclusive retirement ownership to this caller.
-        GLOBAL_ASSERT(node->state == TaskState::Retiring);
+        GLB_ASSERT(node->state == TaskState::Retiring);
         // Tasks retain callables until descendants complete; destruction precedes publication.
         node->function.reset();
         TaskHandle parentHandle;
@@ -564,7 +564,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
                 if(!dependent)
                     continue;
                 dependent->canceled = dependent->canceled || node->canceled;
-                GLOBAL_ASSERT(dependent->dependencies > 0u);
+                GLB_ASSERT(dependent->dependencies > 0u);
                 if(--dependent->dependencies == 0u){
                     enqueueLocked(dependentHandle.index);
                     madeReady = true;
@@ -572,7 +572,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             if(TaskNode* parent = resolveLocked(node->parent)){
                 parent->canceled = parent->canceled || node->canceled;
-                GLOBAL_ASSERT(parent->children > 0u);
+                GLB_ASSERT(parent->children > 0u);
                 if(--parent->children == 0u && parent->state == TaskState::Children){
                     parent->state = TaskState::Retiring;
                     parentHandle = node->parent;
@@ -589,7 +589,7 @@ void CpuTaskScheduler::retire(TaskHandle handle, TaskNode& first)noexcept{
             }
             else
                 ++m_statistics.completedTasks;
-            GLOBAL_ASSERT(m_outstanding > 0u);
+            GLB_ASSERT(m_outstanding > 0u);
             --m_outstanding;
             node->dependents.clear();
             node->scope = nullptr;

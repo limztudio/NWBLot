@@ -48,7 +48,7 @@ public:
             m_recordingAttemptGeneration,
             m_submissionBinding
         );
-        GLOBAL_FATAL_ASSERT_MSG(abandoned, "throwing discard observer must leave an abandonable graph packet");
+        GLB_FATAL_ASSERT_MSG(abandoned, "throwing discard observer must leave an abandonable graph packet");
         if(!abandoned)
             TerminateInvariant();
         m_transaction.completeRejectedPacketWithinSubmissionOperation(
@@ -94,7 +94,7 @@ public:
     ~RejectingSubmissionUnwindScope()noexcept{
         if(UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
-        GLOBAL_FATAL_ASSERT_MSG(!m_lease.valid(), "throwing submission discard observer must consume its graph lease");
+        GLB_FATAL_ASSERT_MSG(!m_lease.valid(), "throwing submission discard observer must consume its graph lease");
         if(m_lease.valid())
             TerminateInvariant();
         m_transaction.completeRejectedPacketWithinSubmissionOperation(
@@ -494,7 +494,7 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
             lease.m_submissionBinding
         )
     ;
-    GLOBAL_FATAL_ASSERT_MSG(inputValid, "pre-submit exception cleanup must retain its exact transaction submission lease");
+    GLB_FATAL_ASSERT_MSG(inputValid, "pre-submit exception cleanup must retain its exact transaction submission lease");
     if(!inputValid)
         TerminateInvariant();
 
@@ -505,14 +505,14 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
             && packetID.index < m_packets.size()
             && m_packets[packetID.index].state == PacketRuntimeState::Submitting
         ;
-        GLOBAL_FATAL_ASSERT_MSG(runtimeValid, "pre-submit exception cleanup must retain its submitting packet runtime");
+        GLB_FATAL_ASSERT_MSG(runtimeValid, "pre-submit exception cleanup must retain its submitting packet runtime");
         if(!runtimeValid)
             TerminateInvariant();
         m_packets[packetID.index].state = PacketRuntimeState::Rejecting;
     }
 
     const bool abandoned = graph.abandonPacketSubmissionWithoutCallbacks(compiledGraph, planAccess, packetID, lease);
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         abandoned && !lease.valid(),
         "pre-submit exception cleanup must consume its exact graph submission lease without observers"
     );
@@ -534,7 +534,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
         && planAccess.validFor(compiledGraph)
         && packetView.valid()
     ;
-    GLOBAL_FATAL_ASSERT_MSG(inputValid, "rejected packet completion requires its exact transaction operation and packet");
+    GLB_FATAL_ASSERT_MSG(inputValid, "rejected packet completion requires its exact transaction operation and packet");
     if(!inputValid)
         TerminateInvariant();
 
@@ -544,7 +544,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
         && packetID.index < m_packets.size()
         && m_packets[packetID.index].state == PacketRuntimeState::Rejecting
     ;
-    GLOBAL_FATAL_ASSERT_MSG(runtimeValid, "rejected packet completion must retain its rejecting transaction state");
+    GLB_FATAL_ASSERT_MSG(runtimeValid, "rejected packet completion must retain its rejecting transaction state");
     if(!runtimeValid)
         TerminateInvariant();
     PacketRuntime& runtime = m_packets[packetID.index];
@@ -565,7 +565,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
     const bool operationValid = SubmissionOperation::activeExclusiveFor(*this)
         && planAccess.validFor(compiledGraph)
     ;
-    GLOBAL_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");
+    GLB_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");
     if(!operationValid)
         TerminateInvariant();
 
@@ -579,7 +579,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
                 && m_recordingAttemptGeneration != 0u
                 && packetIndex < m_packets.size()
             ;
-            GLOBAL_FATAL_ASSERT_MSG(transactionValid, "exception cleanup must retain its graph submission binding");
+            GLB_FATAL_ASSERT_MSG(transactionValid, "exception cleanup must retain its graph submission binding");
             if(!transactionValid)
                 TerminateInvariant();
 
@@ -587,7 +587,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
             if(runtime.state == PacketRuntimeState::Accepted || runtime.state == PacketRuntimeState::Rejected)
                 continue;
             const bool packetReady = runtime.state == PacketRuntimeState::Declared;
-            GLOBAL_FATAL_ASSERT_MSG(packetReady, "exception cleanup cannot cross an active packet operation");
+            GLB_FATAL_ASSERT_MSG(packetReady, "exception cleanup cannot cross an active packet operation");
             if(!packetReady)
                 TerminateInvariant();
             runtime.state = PacketRuntimeState::Rejecting;
@@ -603,7 +603,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
             recordingAttemptGeneration,
             submissionBinding
         );
-        GLOBAL_FATAL_ASSERT_MSG(abandoned, "exception cleanup must terminalize every unaccepted graph packet");
+        GLB_FATAL_ASSERT_MSG(abandoned, "exception cleanup must terminalize every unaccepted graph packet");
         if(!abandoned)
             TerminateInvariant();
 
@@ -616,7 +616,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
             && packetIndex < m_packets.size()
             && m_packets[packetIndex].state == PacketRuntimeState::Rejecting
         ;
-        GLOBAL_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
+        GLB_FATAL_ASSERT_MSG(runtimeValid, "exception cleanup must retain its packet transaction state");
         if(!runtimeValid)
             TerminateInvariant();
         PacketRuntime& runtime = m_packets[packetIndex];
@@ -628,7 +628,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
     NothrowScopedLock lock(m_mutex);
     resolveSubmissionBindingIfTerminalLocked(graph, compiledGraph);
     const bool resolutionValid = allPacketsTerminalLocked() && m_submissionBindingResolved;
-    GLOBAL_FATAL_ASSERT_MSG(resolutionValid, "exception cleanup must resolve its complete graph submission attempt");
+    GLB_FATAL_ASSERT_MSG(resolutionValid, "exception cleanup must resolve its complete graph submission attempt");
     if(!resolutionValid)
         TerminateInvariant();
 }

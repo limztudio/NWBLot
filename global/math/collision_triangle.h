@@ -77,7 +77,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL TriangleTests::EdgeCross2D(
+[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL TriangleTests::EdgeCross2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -91,7 +91,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL TriangleTests::SignedArea2D(
+[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL TriangleTests::SignedArea2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -103,7 +103,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL TriangleTests::AreaNormal(
+[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL TriangleTests::AreaNormal(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
@@ -115,7 +115,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE bool SIMDCALL TriangleTests::ContainsPoint2D(
+[[nodiscard]] GLB_INLINE bool SIMDCALL TriangleTests::ContainsPoint2D(
     const SIMDVector point,
     const SIMDVector a,
     const SIMDVector b,

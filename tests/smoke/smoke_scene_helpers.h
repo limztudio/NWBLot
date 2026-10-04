@@ -138,21 +138,21 @@ struct SmokeRenderSystems{
         context.assetManager,
         context.shaderPathResolver
     );
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic),
-        GLOBAL_TEXT("Invalid caustic quality smoke settings")
+        GLB_TEXT("Invalid caustic quality smoke settings")
     );
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         ApplySurfelGiQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.surfelGi),
-        GLOBAL_TEXT("Invalid surfel GI quality smoke settings")
+        GLB_TEXT("Invalid surfel GI quality smoke settings")
     );
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow),
-        GLOBAL_TEXT("Invalid software shadow smoke settings")
+        GLB_TEXT("Invalid software shadow smoke settings")
     );
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.shadow),
-        GLOBAL_TEXT("Invalid shadow quality smoke settings")
+        GLB_TEXT("Invalid shadow quality smoke settings")
     );
     return { meshSystem, rendererSystem };
 }
@@ -173,9 +173,9 @@ inline void FinishDestroyingSmokeWorld(
     NotNullUniquePtr<Core::ECS::World>& world
 ){
     const bool deviceIdle = context.graphics.waitForIdle();
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),
-        GLOBAL_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss")
+        GLB_TEXT("Smoke-world destruction requires either a completed device join or terminal device loss")
     );
 
     world->clear();
@@ -187,7 +187,7 @@ inline void RemoveSmokeRendererSystem(
     Core::ECS::World& world
 ){
     auto* rendererSystemPtr = world.getSystem<Impl::RendererSystem>();
-    GLOBAL_ASSERT(rendererSystemPtr);
+    GLB_ASSERT(rendererSystemPtr);
     Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
     context.graphics.removeRenderPass(rendererSystem);

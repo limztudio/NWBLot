@@ -58,11 +58,11 @@ bool StressCsgScene::initialize(
     if(!ReadSmokeEnvironmentText("NWB_STRESS_CSG_PROFILE", value) || AStringView(value.data(), value.size()) == "none")
         return true;
     if(AStringView(value.data(), value.size()) != "waist_bands"){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
+        NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
         return false;
     }
     if(!owners || ownerCount != __hidden_stress_csg_scene::s_BodyCount || opaqueOnly){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class"));
+        NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: waist_bands requires twenty bodies with ten per material class"));
         return false;
     }
     Core::ECS::EntityID meshes[__hidden_stress_csg_scene::s_BodyCount] = {};
@@ -71,7 +71,7 @@ bool StressCsgScene::initialize(
             world, owners[index], __hidden_stress_csg_scene::s_MeshObject, Impl::ModelObjectKind::SkinnedMesh
         );
         if(!meshes[index].valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: CSG receiver mesh child missing for body {}"), index);
             return false;
         }
     }
@@ -92,8 +92,8 @@ bool StressCsgScene::initialize(
     m_enabled = true;
     if(!update(world, 0.0f))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}")
-        GLOBAL_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: CSG profile=waist_bands receivers={} transparent={} opaque={} cutters={}")
+        GLB_TEXT(" half_x={} half_y={} half_z={} center_y={} amplitude_y={} front_z={} back_z={} motion=crowd_yaw")
         , ownerCount
         , ownerCount / LengthOf(m_cutters)
         , ownerCount / LengthOf(m_cutters)
@@ -113,13 +113,13 @@ bool StressCsgScene::update(Core::ECS::World& world, const f32 yaw){
     if(!m_enabled)
         return true;
     if(!IsFinite(yaw)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressTestSmokeProject: nonfinite CSG cutter yaw"));
+        NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: nonfinite CSG cutter yaw"));
         return false;
     }
     for(usize row = 0u; row < LengthOf(m_cutters); ++row){
         auto* cutter = world.tryGetComponent<Impl::CsgCutterComponent>(m_cutters[row]);
         if(!cutter){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
+            NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: CSG cutter disappeared"));
             return false;
         }
         const f32 phase = yaw + (row == 0u ? 0.0f : s_PI);

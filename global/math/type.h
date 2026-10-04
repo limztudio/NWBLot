@@ -20,7 +20,7 @@ namespace MathTypeDetail{
 
 
 template<typename Value, usize Count>
-[[nodiscard]] GLOBAL_INLINE bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
+[[nodiscard]] GLB_INLINE bool EqualArray(const Value& lhs, const Value& rhs)noexcept{
     for(usize i = 0u; i < Count; ++i){
         if(lhs.raw[i] != rhs.raw[i])
             return false;
@@ -29,7 +29,7 @@ template<typename Value, usize Count>
 }
 
 template<typename Value, usize Count>
-[[nodiscard]] GLOBAL_INLINE usize HashArray(const Value& value)noexcept{
+[[nodiscard]] GLB_INLINE usize HashArray(const Value& value)noexcept{
     usize seed = 0u;
     for(usize i = 0u; i < Count; ++i)
         HashCombine(seed, value.raw[i]);
@@ -37,7 +37,7 @@ template<typename Value, usize Count>
 }
 
 template<typename Value, usize Count>
-[[nodiscard]] GLOBAL_INLINE usize HashFloatArray(const Value& value)noexcept{
+[[nodiscard]] GLB_INLINE usize HashFloatArray(const Value& value)noexcept{
     usize seed = 0u;
     for(usize i = 0u; i < Count; ++i)
         ::HashCombineFloat(seed, value.raw[i]);
@@ -516,72 +516,72 @@ struct UInt4U{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Half2U& lhs, const Half2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half2U, 2u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Half2U& lhs, const Half2U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Half2U& lhs, const Half2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half2U, 2u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Half2U& lhs, const Half2U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Half4U& lhs, const Half4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half4U, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Half4U& lhs, const Half4U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Half4U& lhs, const Half4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Half4U, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Half4U& lhs, const Half4U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float4& lhs, const Float4& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float4& lhs, const Float4& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float4& lhs, const Float4& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float4& lhs, const Float4& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float34& lhs, const Float34& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34, 12u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float34& lhs, const Float34& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float34& lhs, const Float34& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34, 12u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float34& lhs, const Float34& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float44& lhs, const Float44& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44, 16u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float44& lhs, const Float44& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float44& lhs, const Float44& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44, 16u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float44& lhs, const Float44& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Int4& lhs, const Int4& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Int4& lhs, const Int4& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Int4& lhs, const Int4& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Int4& lhs, const Int4& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const UInt4& lhs, const UInt4& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const UInt4& lhs, const UInt4& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const UInt4& lhs, const UInt4& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const UInt4& lhs, const UInt4& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float3Int& lhs, const Float3Int& rhs)noexcept{
+[[nodiscard]] GLB_INLINE bool operator==(const Float3Int& lhs, const Float3Int& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float3Int& lhs, const Float3Int& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float3Int& lhs, const Float3Int& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{
+[[nodiscard]] GLB_INLINE bool operator==(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z && lhs.w == rhs.w;
 }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float3UInt& lhs, const Float3UInt& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float2U& lhs, const Float2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float2U, 2u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float2U& lhs, const Float2U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float2U& lhs, const Float2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float2U, 2u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float2U& lhs, const Float2U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float3U& lhs, const Float3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float3U, 3u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float3U& lhs, const Float3U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float3U& lhs, const Float3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float3U, 3u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float3U& lhs, const Float3U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float4U& lhs, const Float4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4U, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float4U& lhs, const Float4U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float4U& lhs, const Float4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float4U, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float4U& lhs, const Float4U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float33U& lhs, const Float33U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float33U, 9u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float33U& lhs, const Float33U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float33U& lhs, const Float33U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float33U, 9u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float33U& lhs, const Float33U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float34U& lhs, const Float34U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34U, 12u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float34U& lhs, const Float34U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float34U& lhs, const Float34U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float34U, 12u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float34U& lhs, const Float34U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Float44U& lhs, const Float44U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44U, 16u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Float44U& lhs, const Float44U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Float44U& lhs, const Float44U& rhs)noexcept{ return MathTypeDetail::EqualArray<Float44U, 16u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Float44U& lhs, const Float44U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Int2U& lhs, const Int2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int2U, 2u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Int2U& lhs, const Int2U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Int2U& lhs, const Int2U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int2U, 2u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Int2U& lhs, const Int2U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Int3U& lhs, const Int3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int3U, 3u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Int3U& lhs, const Int3U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Int3U& lhs, const Int3U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int3U, 3u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Int3U& lhs, const Int3U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const Int4U& lhs, const Int4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4U, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const Int4U& lhs, const Int4U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const Int4U& lhs, const Int4U& rhs)noexcept{ return MathTypeDetail::EqualArray<Int4U, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const Int4U& lhs, const Int4U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt2U, 2u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt2U, 2u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const UInt2U& lhs, const UInt2U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt3U, 3u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt3U, 3u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const UInt3U& lhs, const UInt3U& rhs)noexcept{ return !(lhs == rhs); }
 
-[[nodiscard]] GLOBAL_INLINE bool operator==(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4U, 4u>(lhs, rhs); }
-[[nodiscard]] GLOBAL_INLINE bool operator!=(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return !(lhs == rhs); }
+[[nodiscard]] GLB_INLINE bool operator==(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return MathTypeDetail::EqualArray<UInt4U, 4u>(lhs, rhs); }
+[[nodiscard]] GLB_INLINE bool operator!=(const UInt4U& lhs, const UInt4U& rhs)noexcept{ return !(lhs == rhs); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -722,7 +722,7 @@ struct hash<UInt4U>{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_HAS_SCALAR)
+#if defined(GLB_HAS_SCALAR)
 struct FPUVector4{
     union{
         f32 f[4];
@@ -731,21 +731,21 @@ struct FPUVector4{
 };
 #endif
 
-#if defined(GLOBAL_HAS_NEON)
+#if defined(GLB_HAS_NEON)
 using SIMDVector = float32x4_t;
-#elif defined(GLOBAL_HAS_SCALAR)
+#elif defined(GLB_HAS_SCALAR)
 using SIMDVector = FPUVector4;
 #else
 using SIMDVector = __m128;
 #endif
 
-#if defined(GLOBAL_HAS_SCALAR)
+#if defined(GLB_HAS_SCALAR)
 struct SIMDMatrix
 #else
 struct alignas(16) SIMDMatrix
 #endif
 {
-#if defined(GLOBAL_HAS_SCALAR)
+#if defined(GLB_HAS_SCALAR)
     union{
         struct{
             f32 _11, _12, _13, _14;

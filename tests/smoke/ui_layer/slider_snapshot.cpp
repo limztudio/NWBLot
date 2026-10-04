@@ -34,13 +34,13 @@ namespace __hidden_ui_slider_snapshot{
 
 
 static constexpr Array<TStringView, 29u> s_RectNames{
-    GLOBAL_TEXT("before"), GLOBAL_TEXT("after"), GLOBAL_TEXT("open"), GLOBAL_TEXT("parent"), GLOBAL_TEXT("popup_close"),
-    GLOBAL_TEXT("main_bounds"), GLOBAL_TEXT("main_clip"), GLOBAL_TEXT("main_travel"), GLOBAL_TEXT("main_track"),
-    GLOBAL_TEXT("main_center"), GLOBAL_TEXT("main_thumb"), GLOBAL_TEXT("disabled_bounds"), GLOBAL_TEXT("disabled_clip"),
-    GLOBAL_TEXT("disabled_travel"), GLOBAL_TEXT("disabled_track"), GLOBAL_TEXT("disabled_center"), GLOBAL_TEXT("disabled_thumb"),
-    GLOBAL_TEXT("constant_bounds"), GLOBAL_TEXT("constant_clip"), GLOBAL_TEXT("constant_travel"), GLOBAL_TEXT("constant_track"),
-    GLOBAL_TEXT("constant_center"), GLOBAL_TEXT("constant_thumb"), GLOBAL_TEXT("popup_bounds"), GLOBAL_TEXT("popup_clip"),
-    GLOBAL_TEXT("popup_travel"), GLOBAL_TEXT("popup_track"), GLOBAL_TEXT("popup_center"), GLOBAL_TEXT("popup_thumb")
+    GLB_TEXT("before"), GLB_TEXT("after"), GLB_TEXT("open"), GLB_TEXT("parent"), GLB_TEXT("popup_close"),
+    GLB_TEXT("main_bounds"), GLB_TEXT("main_clip"), GLB_TEXT("main_travel"), GLB_TEXT("main_track"),
+    GLB_TEXT("main_center"), GLB_TEXT("main_thumb"), GLB_TEXT("disabled_bounds"), GLB_TEXT("disabled_clip"),
+    GLB_TEXT("disabled_travel"), GLB_TEXT("disabled_track"), GLB_TEXT("disabled_center"), GLB_TEXT("disabled_thumb"),
+    GLB_TEXT("constant_bounds"), GLB_TEXT("constant_clip"), GLB_TEXT("constant_travel"), GLB_TEXT("constant_track"),
+    GLB_TEXT("constant_center"), GLB_TEXT("constant_thumb"), GLB_TEXT("popup_bounds"), GLB_TEXT("popup_clip"),
+    GLB_TEXT("popup_travel"), GLB_TEXT("popup_track"), GLB_TEXT("popup_center"), GLB_TEXT("popup_thumb")
 };
 
 
@@ -126,20 +126,20 @@ void UiSliderSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSliderSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSliderSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight
             , current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSliderSmoke: state sequence={} values={},{},{},{},{},{},{},{},"
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSliderSmoke: state sequence={} values={},{},{},{},{},{},{},{},"
         "{},{},{},{},{},{},{},{} bits={},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
         , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
         , current.bits[0], current.bits[1], current.bits[2], current.bits[3]
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(GLOBAL_TEXT("UiSliderSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(GLB_TEXT("UiSliderSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiSliderSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

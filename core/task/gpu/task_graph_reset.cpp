@@ -27,7 +27,7 @@ GpuTaskGraph::ResetCompletionScope::~ResetCompletionScope(){
 
 void GpuTaskGraph::ResetCompletionScope::activateWithinLock()noexcept{
     const bool activationValid = !m_active && m_graph.m_teardownInProgress;
-    GLOBAL_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
+    GLB_FATAL_ASSERT_MSG(activationValid, "GPU task graph reset completion requires fresh teardown ownership");
     if(!activationValid)
         TerminateInvariant();
     m_active = true;
@@ -81,13 +81,13 @@ void GpuTaskGraph::reset(){
     if(tryReset())
         return;
 
-    GLOBAL_FATAL_ASSERT_MSG(false, "GpuTaskGraph::reset requires every bound or in-flight task to resolve first");
+    GLB_FATAL_ASSERT_MSG(false, "GpuTaskGraph::reset requires every bound or in-flight task to resolve first");
     TerminateInvariant();
 }
 
 void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
     const bool taskPayloadsDestroyed = destroyTaskPayloadsWithoutCallbacks();
-    GLOBAL_FATAL_ASSERT_MSG(taskPayloadsDestroyed, "GPU task graph reset cleanup requires terminal task payloads");
+    GLB_FATAL_ASSERT_MSG(taskPayloadsDestroyed, "GPU task graph reset cleanup requires terminal task payloads");
     if(!taskPayloadsDestroyed)
         TerminateInvariant();
 
@@ -105,7 +105,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
                 m_activeRecordingPlanGeneration,
                 m_activeRecordingAttemptGeneration
             );
-            GLOBAL_FATAL_ASSERT_MSG(
+            GLB_FATAL_ASSERT_MSG(
                 recordingAttemptResolved,
                 "GPU task graph reset cleanup must release its exact recording-plan lease"
             );
@@ -148,7 +148,7 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_activeRecordingAttemptGeneration = allocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
         m_activeRecordingPreparationSerial = 0u;
-        GLOBAL_FATAL_ASSERT_MSG(
+        GLB_FATAL_ASSERT_MSG(
             m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) == 0u,
             "GPU task graph reset publication requires every packet recording claim to drain"
         );

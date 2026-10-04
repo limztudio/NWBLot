@@ -48,7 +48,7 @@ void Session::ensureMemoryScopes(){
         ;
         const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
         if(!scope.valid()){
-            GLOBAL_ASSERT(false);
+            GLB_ASSERT(false);
             continue;
         }
     }

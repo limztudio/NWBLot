@@ -40,7 +40,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -64,12 +64,12 @@ static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
 static constexpr AStringView s_GRAPHICSVOLUME = "GraphicsVolume";
 static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 static constexpr AStringView s_BIN_SH = "/bin/sh";
 static constexpr AStringView s_C = "-c";
 #endif
-static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = GLOBAL_TEXT("parallel logger message");
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = GLB_TEXT("parallel logger message");
+#if defined(GLB_PLATFORM_WINDOWS)
 static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
 #endif
 static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
@@ -536,7 +536,7 @@ TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 TEST(Global, WindowsProcessInputsSupportBoundedViews){
     NWB::Tests::TestArena<> testArena;
     ::AString<NWB::Core::Alloc::GlobalArena> executableText(testArena.arena);
@@ -586,7 +586,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
 TEST(Global, SharedLibraryAcceptsBoundedNamesAndResetsFailedSymbols){
     NWB::Tests::TestArena<> testArena;
     SharedLibrary library;
-    constexpr TStringView s_LibraryName = GLOBAL_TEXT("kernel32.dll.trailing");
+    constexpr TStringView s_LibraryName = GLB_TEXT("kernel32.dll.trailing");
     ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
     using CurrentProcessIdFn = DWORD(WINAPI*)();
     CurrentProcessIdFn currentProcessId = nullptr;
@@ -653,7 +653,7 @@ TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
     }
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
-#if defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLB_BUILD_SYMBOLS)
     EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
@@ -675,7 +675,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
-#if defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLB_BUILD_SYMBOLS)
     EXPECT_EQ(literal.hash(), literal.identityHash());
     EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
 #endif
@@ -692,7 +692,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     EXPECT_EQ(runtimeName.resolvedText(), s_RUNTIME_GENERATED);
 
     const Name literalName{"Literal\\Name"};
-#if defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLB_BUILD_SYMBOLS)
     EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, "literal/name");
 #else
@@ -704,7 +704,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
     const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     EXPECT_EQ(binaryName.resolvedText(), hashView);
     EXPECT_EQ(formattedName.view(), hashView);
 #else
@@ -725,7 +725,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
     for(char& character : source)
         character = 'x';
     const Name name{AStringView(source, sizeof(source))};
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
 #else
     SetNameSymbolResolveCallback([](const NameHash&, char* outText, const usize outTextSize, void*){
@@ -780,7 +780,7 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
 
     ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
     NameSymbols::Serialize(namesymText);
-#if defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLB_BUILD_SYMBOLS)
     EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -802,14 +802,14 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     NameSymbolTestPath executableName(liveOwner);
     ASSERT_TRUE(GetExecutableName(executableName));
     NameSymbolTestPath namesymPath = executableDirectory / executableName;
-    namesymPath.replace_extension(GLOBAL_TEXT(".namesym"));
+    namesymPath.replace_extension(GLB_TEXT(".namesym"));
     // The application exception path exports after its scoped runtime callbacks have already detached.
     NameSymbols::UninstallRuntimeRegistry();
     ASSERT_TRUE(NameSymbols::WriteDefaultFile());
     NameSymbols::InstallRuntimeRegistry();
     namesymText.clear();
     ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
-#if defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLB_BUILD_SYMBOLS)
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
@@ -866,12 +866,12 @@ TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
 
 TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance){
     NWB::Tests::TestArena<> testArena;
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./한글/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLOBAL_TEXT("C:\\"), GLOBAL_TEXT("Root"), GLOBAL_TEXT("."), GLOBAL_TEXT("한글"), GLOBAL_TEXT("File.TXT") };
+    constexpr TStringView s_Expected[]{ GLB_TEXT("C:\\"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("한글"), GLB_TEXT("File.TXT") };
 #else
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./한글/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLOBAL_TEXT("/"), GLOBAL_TEXT("Root"), GLOBAL_TEXT("."), GLOBAL_TEXT("한글"), GLOBAL_TEXT("File.TXT") };
+    constexpr TStringView s_Expected[]{ GLB_TEXT("/"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("한글"), GLB_TEXT("File.TXT") };
 #endif
     auto componentIt = path.begin();
     const TStringView first = componentIt.nativeComponent();
@@ -924,7 +924,7 @@ TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
         ++componentIt;
         EXPECT_NE(componentIt.nativeComponent().data(), retained.data());
     }
-    EXPECT_EQ(retained, TStringView(GLOBAL_TEXT("First_component_long_enough_to_require_owning_storage")));
+    EXPECT_EQ(retained, TStringView(GLB_TEXT("First_component_long_enough_to_require_owning_storage")));
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(after.allocationCount, before.allocationCount);
     EXPECT_EQ(after.reallocationCount, before.reallocationCount);
@@ -1003,7 +1003,7 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_EQ(value, 42u);
 }
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const AStringView argv[] = {
         s_BIN_SH,
@@ -1101,7 +1101,7 @@ TEST(Global, FilesystemMovePathToDirectory){
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
@@ -1339,11 +1339,11 @@ TEST(Global, CompressedPairSwapUsesMove){
 #if !defined(_MSC_VER)
 TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
     char truncatedText[4] = {};
-    EXPECT_NE(GLOBAL_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
+    EXPECT_NE(GLB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
     EXPECT_STREQ(truncatedText, "abc");
 
     char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
-    EXPECT_NE(GLOBAL_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
+    EXPECT_NE(GLB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 }
 #endif
@@ -1354,30 +1354,30 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 
     bool elseBranchRan = false;
     if(false)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("unreachable"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("unreachable"));
     else
         elseBranchRan = true;
 
     EXPECT_TRUE(elseBranchRan);
     EXPECT_EQ(logger.messageCount(), 0u);
 
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("macro {}"), 42);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("macro {}"), 42);
 
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_TRUE(logger.sawMessageContaining(GLOBAL_TEXT("macro 42")));
+    EXPECT_TRUE(logger.sawMessageContaining(GLB_TEXT("macro 42")));
 
     const AString rawMessage(s_RAW_CONVERTED_WARNING);
     NWB_LOGGER_WARNING(StringConvert(rawMessage));
 
-#if GLOBAL_OCCUR_WARNING
+#if GLB_OCCUR_WARNING
     EXPECT_EQ(logger.messageCount(), s_ExpectedDualCount);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE(logger.sawMessageContaining(GLOBAL_TEXT("raw converted warning")));
+    EXPECT_TRUE(logger.sawMessageContaining(GLB_TEXT("raw converted warning")));
 #else
     EXPECT_EQ(logger.messageCount(), 1u);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_FALSE(logger.sawMessageContaining(GLOBAL_TEXT("raw converted warning")));
+    EXPECT_FALSE(logger.sawMessageContaining(GLB_TEXT("raw converted warning")));
 #endif
 }
 

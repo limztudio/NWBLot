@@ -116,7 +116,7 @@ bool ShaderCook::computeDependencyChecksum(
     outChecksum = s_Fnv64OffsetBasis;
 
     if(dependencyRootAliases.size() == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Dependency checksum requires at least one dependency root alias"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Dependency checksum requires at least one dependency root alias"));
         return false;
     }
 
@@ -124,7 +124,7 @@ bool ShaderCook::computeDependencyChecksum(
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Dependency checksum requires non-empty dependency root aliases"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Dependency checksum requires non-empty dependency root aliases"));
             return false;
         }
 
@@ -132,7 +132,7 @@ bool ShaderCook::computeDependencyChecksum(
         errorCode.clear();
         normalizedAlias.root = __hidden_cook_checksum::NormalizeDependencyRootAliasPath(AbsolutePath(rootAlias.root, errorCode));
         if(errorCode){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to resolve dependency root alias '{}' : {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve dependency root alias '{}' : {}")
                 , PathToString<tchar>(rootAlias.root)
                 , StringConvert(errorCode.message())
             );
@@ -142,7 +142,7 @@ bool ShaderCook::computeDependencyChecksum(
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
         if(normalizedAlias.key.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
             return false;
         }
         normalizedAlias.depth = __hidden_cook_checksum::PathDepth(normalizedAlias.root);
@@ -156,7 +156,7 @@ bool ShaderCook::computeDependencyChecksum(
         errorCode.clear();
         Path normalizedDependency = AbsolutePath(dependency, errorCode).lexically_normal();
         if(errorCode){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to resolve dependency path '{}' : {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependency)
                 , StringConvert(errorCode.message())
             );
@@ -171,7 +171,7 @@ bool ShaderCook::computeDependencyChecksum(
                 bestRootAlias = &rootAlias;
         }
         if(!bestRootAlias){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases")
+            NWB_LOGGER_ERROR(GLB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases")
                 , PathToString<tchar>(dependency)
             );
             return false;
@@ -200,13 +200,13 @@ bool ShaderCook::computeDependencyChecksum(
         errorCode.clear();
         if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to read dependency file '{}' : {}")
+                NWB_LOGGER_ERROR(GLB_TEXT("Failed to read dependency file '{}' : {}")
                     , PathToString<tchar>(item.path)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
+                NWB_LOGGER_ERROR(GLB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
             }
             return false;
         }

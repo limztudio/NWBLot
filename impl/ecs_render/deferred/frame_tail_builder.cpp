@@ -71,7 +71,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
             }
         );
         if(!outResult.historyCopyTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
             return false;
         }
     }
@@ -83,7 +83,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
         HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
     );
     if(!recoveryDomain.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
         return false;
     }
 
@@ -112,7 +112,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
         }
     );
     if(!outResult.recoveryTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
         return false;
     }
 

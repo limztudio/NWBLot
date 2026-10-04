@@ -16,18 +16,18 @@
 #include <climits>
 #include <ctime>
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 #include <poll.h>
 #include <signal.h>
 #endif
-#if !defined(GLOBAL_PLATFORM_WINDOWS)
+#if !defined(GLB_PLATFORM_WINDOWS)
 #include <unistd.h>
 #endif
 
@@ -80,7 +80,7 @@ struct NativeProcessArguments{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -140,7 +140,7 @@ inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStrin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,7 +176,7 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -279,7 +279,7 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
 template<typename ArenaT>
 [[nodiscard]] inline bool ExecutableAvailableInPath(ArenaT& arena, const AStringView searchPath, const AStringView executableName){
     const char separator =
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         ';'
 #else
         ':'
@@ -301,7 +301,7 @@ template<typename ArenaT>
 
         candidate /= executableName;
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         if(PathIsRegularFile(candidate))
             return true;
 #else
@@ -329,7 +329,7 @@ template<typename ArenaT>
         *outExitCodeQueryFailed = false;
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
         return -1;
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(!ProcessExecutionDetail::AreProcessArgumentsValid(arguments))
         return -1;
     const AString<ArenaT> nativeExecutable(arguments.front(), arena);
@@ -341,7 +341,7 @@ template<typename ArenaT>
 #endif
     const AString<ArenaT> nativeOutputPath(outputPath, arena);
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
@@ -393,7 +393,7 @@ template<typename ArenaT>
     CloseHandle(processInfo.hThread);
     CloseHandle(processInfo.hProcess);
     return static_cast<int>(exitCode);
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
     static_cast<void>(arena);
 
     const int outputFileDescriptor = ::open(
@@ -438,7 +438,7 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

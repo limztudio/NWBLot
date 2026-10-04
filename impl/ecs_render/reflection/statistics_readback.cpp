@@ -271,7 +271,7 @@ bool ReflectionStatisticsReadback::prepareResources(){
     if(!m_control)
         m_control = CreateReflectionStatisticsControl(m_arena, deviceGeneration);
     if(!m_control){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Reflection statistics: failed to allocate readback control"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Reflection statistics: failed to allocate readback control"));
         return false;
     }
     static constexpr Name s_Names[] = {
@@ -313,12 +313,12 @@ void ReflectionStatisticsReadback::pollCompleted(){
             continue;
         const auto* const counters = static_cast<const u32*>(device.mapBuffer(*m_buffers[index], Core::CpuAccessMode::Read));
         if(!counters){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Reflection statistics: failed to map a completed readback"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Reflection statistics: failed to map a completed readback"));
             m_control->complete(key, token, nullptr);
             continue;
         }
         u32 completedCounters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)];
-        GLOBAL_MEMCPY(completedCounters, sizeof(completedCounters), counters, sizeof(completedCounters));
+        GLB_MEMCPY(completedCounters, sizeof(completedCounters), counters, sizeof(completedCounters));
         device.unmapBuffer(*m_buffers[index]);
         m_control->complete(key, token, completedCounters);
     }

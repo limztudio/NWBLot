@@ -153,7 +153,7 @@ private:
             || parsedFrameCount == 0u
             || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: capture frame count must be a positive u32"), projectName);
+            NWB_LOGGER_ERROR(GLB_TEXT("{}: capture frame count must be a positive u32"), projectName);
             return false;
         }
         captureFrameCount = static_cast<u32>(parsedFrameCount);

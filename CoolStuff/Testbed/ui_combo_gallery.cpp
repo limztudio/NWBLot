@@ -26,14 +26,14 @@ void TestbedUiComboGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
     options.popupHeight = 220.0f;
     const ComboResult result = ui.comboBox("choice", m_source, m_state, options);
     if(result.committed)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom combo selected key={}"), m_state.selectedKey());
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom combo selected key={}"), m_state.selectedKey());
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/combo_caption"));
     const auto text = StringFormat(scratchArena, "Selected: {}", m_state.selectedKey());
     valid = ui.label("selected", { text.data(), text.size() }, caption) && result.valid && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom combo declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom combo declaration failed"));
 }
 
 

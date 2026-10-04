@@ -346,7 +346,7 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
         meshletAttributeRefDeltas,
         false
     );
-    GLOBAL_FATAL_ASSERT(meshletRefsEncoded);
+    GLB_FATAL_ASSERT(meshletRefsEncoded);
 
     mesh.setPayload(
         Move(positions),

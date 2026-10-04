@@ -152,7 +152,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         || accumExtinctionFormat == Core::Format::UNKNOWN
         || transmittanceFormat == Core::Format::UNKNOWN
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to find supported AVBOIT framebuffer formats"));
         return false;
     }
 
@@ -168,7 +168,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         DivideUp(static_cast<u64>(createdTargets.height), static_cast<u64>(ECSRenderAvboitDetail::s_AvboitDownsample))
     );
     if(lowWidth > Limit<u32>::s_Max || lowHeight > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: AVBOIT low-resolution dimensions exceed u32 limits"));
         return false;
     }
     avboitTargets.lowWidth = static_cast<u32>(lowWidth);
@@ -190,7 +190,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         transparentBlack
     );
     if(!avboitTargets.lowRasterTarget){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT low-resolution raster target"));
         return false;
     }
 
@@ -204,7 +204,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         true
     );
     if(!avboitTargets.accumColor){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
         return false;
     }
 
@@ -218,7 +218,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         true
     );
     if(!avboitTargets.accumExtinction){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));
         return false;
     }
 
@@ -275,7 +275,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources);
     avboitTargets.lowFramebuffer = device.createFramebuffer(lowFramebufferDesc);
     if(!avboitTargets.lowFramebuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
         return false;
     }
 
@@ -306,7 +306,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     );
     avboitTargets.accumulationFramebuffer = device.createFramebuffer(accumulationFramebufferDesc);
     if(!avboitTargets.accumulationFramebuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
         return false;
     }
 
@@ -315,7 +315,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     const u64 depthWarpBytes = static_cast<u64>(avboitTargets.virtualSliceCount) * sizeof(u32);
     const u64 lowPixelCount = static_cast<u64>(avboitTargets.lowWidth) * avboitTargets.lowHeight;
     if(lowPixelCount > static_cast<u64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: AVBOIT low-resolution pixel count exceeds u32 limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: AVBOIT low-resolution pixel count exceeds u32 limits"));
         return false;
     }
     const u32 physicalExtinctionWordCount = DivideUp(
@@ -323,7 +323,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         ECSRenderAvboitDetail::s_AvboitExtinctionSlicesPerWord
     );
     if(physicalExtinctionWordCount == 0 || lowPixelCount > static_cast<u64>(Limit<u32>::s_Max) / physicalExtinctionWordCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: AVBOIT packed extinction word count exceeds u32 limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: AVBOIT packed extinction word count exceeds u32 limits"));
         return false;
     }
     const u64 extinctionWordCount = lowPixelCount * physicalExtinctionWordCount;
@@ -336,7 +336,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         "engine/avboit/depth_coverage"
     );
     if(!avboitTargets.coverageBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT coverage buffer"));
         return false;
     }
 
@@ -346,7 +346,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         "engine/avboit/depth_warp_lut"
     );
     if(!avboitTargets.depthWarpBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT depth warp buffer"));
         return false;
     }
 
@@ -356,7 +356,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         "engine/avboit/control"
     );
     if(!avboitTargets.controlBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT control buffer"));
         return false;
     }
 
@@ -366,7 +366,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         "engine/avboit/packed_extinction_volume"
     );
     if(!avboitTargets.extinctionBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT extinction volume"));
         return false;
     }
 
@@ -376,7 +376,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         "engine/avboit/extinction_overflow_depth"
     );
     if(!avboitTargets.extinctionOverflowBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT extinction overflow buffer"));
         return false;
     }
 
@@ -388,7 +388,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         avboitTargets.transmittanceFormat
     );
     if(!avboitTargets.transmittanceTexture){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create AVBOIT transmittance volume"));
         return false;
     }
 

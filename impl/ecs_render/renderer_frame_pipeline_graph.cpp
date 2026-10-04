@@ -229,7 +229,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Preflight froze the mesh tables; import each buffer once and fan out IDs.
     Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
     if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(traceGeometryScratchArena)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
         return;
     }
     const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry =
@@ -256,7 +256,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         desc.setInitialState(preparedBuffer.initialState);
         const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.importBuffer(preparedBuffer.buffer, desc);
         if(!resource.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
             return;
         }
         traceGeometryResources.push_back(resource);
@@ -287,13 +287,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     case SampledTextureImportResult::Success:
         break;
     case SampledTextureImportResult::GraphUnavailable:
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared trace material texture graph was unavailable"));
         return;
     case SampledTextureImportResult::MissingIdentity:
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
         return;
     case SampledTextureImportResult::ImportFailed:
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
         return;
     }
     Core::GpuGraphResourceSetId shadowTraceGeometrySet;
@@ -326,7 +326,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 )
         );
         if(!traceMaterialSampledTextureSet.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
             return;
         }
     }
@@ -373,7 +373,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometryScratchArena,
         softwareBvhBuildStateResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import shared software BVH build state"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import shared software BVH build state"));
         return;
     }
     softwareBvhBuildStateResources = Move(softwareBvhBuildStateResult.buildStateResources);
@@ -396,7 +396,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         },
         deferredGraphResources
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
         return;
     }
     const Core::GpuGraphResourceId albedo = deferredGraphResources.albedo;
@@ -480,7 +480,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         softwareTraceResourcesPrepared,
         shadowPrepareTimingTicket
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
     const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareAccelStructFinalizeTask.valid()
@@ -495,7 +495,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         meshViewState,
         meshViewUploadRequired
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not prepare immutable mesh-view upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not prepare immutable mesh-view upload data"));
         return;
     }
 
@@ -555,7 +555,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         asyncPrefixTimingSpansOnePacket,
         reflectionContentStamp.lighting
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
     }
 
@@ -570,7 +570,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena
         );
         if(!sceneReads.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import hardware transparent shadow scene reads"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import hardware transparent shadow scene reads"));
             return;
         }
     }
@@ -586,7 +586,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             lightingHistoryReadReadyDesc
         );
         if(!m_deferredLightingHistoryReadReadyCompletion.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
             return;
         }
     }
@@ -602,7 +602,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             lightingHistoryWriterDrainDesc
         );
         if(!m_deferredLightingHistoryWriterDrainCompletion.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
             return;
         }
     }
@@ -621,7 +621,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             surfelCounterReadbackCompletionDesc
         );
         if(!m_deferredSurfelGiCounterReadbackCompletion.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import surfel counter-readback completion"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import surfel counter-readback completion"));
             return;
         }
     }
@@ -761,7 +761,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             },
             hardwareCausticsStageResult
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare hardware-caustics stage"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare hardware-caustics stage"));
             return;
         }
         m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult.causticIrradianceClearTask;
@@ -830,7 +830,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         transparentCsgIntervalClearTimingState,
         transparentCsgIntervalResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG interval producer"));
         return;
     }
     FrameGraphTransparentCsgTasks transparentCsgTasks(
@@ -884,7 +884,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitCsgIntervalCombinePayload,
         transparentCsgTaskResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG interval graph tasks"));
         return;
     }
     const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult.intervalCompletionTask;
@@ -939,7 +939,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         generatedGeometry,
         occupancyUploadChainResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT occupancy upload chain"));
         return;
     }
     const Core::GpuTaskId occupancyUploadTask = occupancyUploadChainResult.uploadTask;
@@ -980,7 +980,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitClearTimingState,
         avboitClearChainResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
         return;
     }
     Core::GpuTaskId avboitClearTask = avboitClearChainResult.clearTask;
@@ -1043,7 +1043,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitOccupancyComputeEmulationPayload,
         avboitOccupancyRecordResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
         return;
     }
     if(occupancyProducesReusableGeometry){
@@ -1074,7 +1074,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         },
         avboitDepthWarpStageResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
         return;
     }
     const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult.completionTask;
@@ -1120,7 +1120,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         generatedGeometry,
         extinctionUploadChainResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT extinction upload chain"));
         return;
     }
     const Core::GpuTaskId extinctionUploadTask = extinctionUploadChainResult.uploadTask;
@@ -1197,7 +1197,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitExtinctionComputeEmulationPayload,
         avboitExtinctionRecordResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return;
     }
     if(extinctionProducesReusableGeometry){
@@ -1223,7 +1223,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         },
         avboitIntegrationStageResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return;
     }
 
@@ -1267,7 +1267,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         generatedGeometry,
         accumulationUploadChainResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT accumulation upload chain"));
         return;
     }
     const Core::GpuTaskId accumulationUploadTask = accumulationUploadChainResult.uploadTask;
@@ -1348,7 +1348,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitAccumulationComputeEmulationPayload,
         avboitAccumulationRecordResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
         return;
     }
     if(accumulationProducesReusableGeometry){
@@ -1400,7 +1400,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         lightingTimingTicket,
         deferredLightingStageResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
         return;
     }
     m_deferredLightingTask = deferredLightingStageResult.lightingTask;
@@ -1460,7 +1460,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         traceGeometryScratchArena,
         reflectionResolveResult
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare reflection graph tasks"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare reflection graph tasks"));
         return;
     }
     const ReflectionGraphResult reflectionGraph = reflectionResolveResult.reflectionGraph;

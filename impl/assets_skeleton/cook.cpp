@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("SkeletonAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLB_TEXT("SkeletonAssetCodec::serialize")))
         return false;
 
     const Skeleton& skeleton = static_cast<const Skeleton&>(asset);
@@ -61,8 +61,8 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     return Core::Assets::AppendVectorPayload(
         outBinary,
         jointBinaries,
-        GLOBAL_TEXT("SkeletonAssetCodec::serialize"),
-        GLOBAL_TEXT("joints")
+        GLB_TEXT("SkeletonAssetCodec::serialize"),
+        GLB_TEXT("joints")
     );
 }
 
@@ -148,7 +148,7 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
         return true;
     }
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
+    NWB_LOGGER_ERROR(GLB_TEXT("Skeleton meta '{}': joint '{}' references missing or later parent '{}'")
         , StringConvert(skeletonEntry.virtualPath.resolvedText())
         , StringConvert(skeletonEntry.joints[jointIndex].name.resolvedText())
         , StringConvert(parent.resolvedText())
@@ -177,7 +177,7 @@ static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
             return false;
         }
         if(!outJointIndices.emplace(cookJoint.name, static_cast<u32>(outJoints.size())).second){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Skeleton meta '{}': duplicate joint name '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton meta '{}': duplicate joint name '{}'")
                 , StringConvert(skeletonEntry.virtualPath.resolvedText())
                 , StringConvert(cookJoint.name.resolvedText())
             );
@@ -229,7 +229,7 @@ bool ParseSkeletonCookMetadata(
     for(usize jointIndex = 0u; jointIndex < jointList.size(); ++jointIndex){
         const Value& jointValue = jointList[jointIndex];
         if(!jointValue.isMap()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Skeleton meta '{}': joints[{}] must be a map")
+            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton meta '{}': joints[{}] must be a map")
                 , PathToString<tchar>(nwbFilePath)
                 , jointIndex
             );

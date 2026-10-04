@@ -84,13 +84,13 @@ static bool RetrievePipelineCacheData(
         size_t cacheSize = 0;
         VkResult res = deviceDispatch.vkGetPipelineCacheData(device, pipelineCache, &cacheSize, nullptr);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to query pipeline cache data size. {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to query pipeline cache data size. {}"), ResultToString(res));
             return false;
         }
         if(cacheSize == 0)
             return true;
         if(cacheSize > static_cast<size_t>(Limit<usize>::s_Max)){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}.")
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Pipeline cache data size {} exceeds runtime buffer limit {}.")
                 , static_cast<u64>(cacheSize)
                 , static_cast<u64>(Limit<usize>::s_Max)
             );
@@ -103,7 +103,7 @@ static bool RetrievePipelineCacheData(
         if(res == VK_SUCCESS){
             if(retrievedSize > cacheSize || retrievedSize > static_cast<size_t>(Limit<usize>::s_Max)){
                 outData.clear();
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Driver returned an invalid pipeline cache data size while serializing."));
+                NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Driver returned an invalid pipeline cache data size while serializing."));
                 return false;
             }
 
@@ -114,12 +114,12 @@ static bool RetrievePipelineCacheData(
             continue;
 
         outData.clear();
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to retrieve pipeline cache data. {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to retrieve pipeline cache data. {}"), ResultToString(res));
         return false;
     }
 
     outData.clear();
-    NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Pipeline cache data kept changing while serializing."));
+    NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Pipeline cache data kept changing while serializing."));
     return false;
 }
 
@@ -158,7 +158,7 @@ PipelineCacheDataValidation::Enum ValidatePipelineCacheData(
     const u32 deviceId = __hidden_vulkan_device_pipeline_cache::ReadPipelineCacheU32(cacheData, __hidden_vulkan_device_pipeline_cache::s_PipelineCacheDeviceIdOffset);
     if(vendorId != properties.vendorID || deviceId != properties.deviceID)
         return PipelineCacheDataValidation::Incompatible;
-    if(GLOBAL_MEMCMP(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheUuidOffset, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0)
+    if(GLB_MEMCMP(cacheData.data() + __hidden_vulkan_device_pipeline_cache::s_PipelineCacheUuidOffset, properties.pipelineCacheUUID, VK_UUID_SIZE) != 0)
         return PipelineCacheDataValidation::Incompatible;
 
     return PipelineCacheDataValidation::Usable;
@@ -192,7 +192,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
             volume
         )
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'.")
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' from '{}'.")
             , StringConvert(m_pipelineCacheVolumeName)
             , PathToString<tchar>(m_pipelineCacheDirectory)
         );
@@ -204,7 +204,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
         return false;
     if(!volume->readFile(cachePath, outData)){
         outData.clear();
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to read pipeline cache data from runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
     const VulkanDetail::PipelineCacheDataValidation::Enum validation = VulkanDetail::ValidatePipelineCacheData(
@@ -214,11 +214,11 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
         outData.clear();
         if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Ignoring malformed pipeline cache data in runtime volume '{}'.")
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Ignoring malformed pipeline cache data in runtime volume '{}'.")
                 , StringConvert(m_pipelineCacheVolumeName)
             );
         else
-            NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Discarding incompatible pipeline cache data in runtime volume '{}'; starting empty.")
+            NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Discarding incompatible pipeline cache data in runtime volume '{}'; starting empty.")
                 , StringConvert(m_pipelineCacheVolumeName)
             );
         return false;
@@ -226,11 +226,11 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
 
     if(!volume->unmount()){
         outData.clear();
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return false;
     }
 
-    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes).")
+    NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Loaded pipeline cache runtime volume '{}' ({} bytes).")
         , StringConvert(m_pipelineCacheVolumeName)
         , outData.size()
     );
@@ -254,9 +254,9 @@ void Device::savePipelineCacheData(){
     );
     if(validation != VulkanDetail::PipelineCacheDataValidation::Usable){
         if(validation == VulkanDetail::PipelineCacheDataValidation::Malformed)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Driver returned malformed pipeline cache data; skipping cache write."));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Driver returned malformed pipeline cache data; skipping cache write."));
         else
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping cache write."));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Driver returned incompatible pipeline cache data; skipping cache write."));
         return;
     }
 
@@ -271,14 +271,14 @@ void Device::savePipelineCacheData(){
             volume
         )
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'.")
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to mount pipeline cache runtime volume '{}' for write at '{}'.")
             , StringConvert(m_pipelineCacheVolumeName)
             , PathToString<tchar>(m_pipelineCacheDirectory)
         );
         if(m_filesystemFactory)
             return;
         if(!Filesystem::RemoveVolumeSegments(m_pipelineCacheDirectory, m_pipelineCacheVolumeName)){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to remove unusable pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }
         if(
@@ -291,26 +291,26 @@ void Device::savePipelineCacheData(){
                 volume
             )
         ){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to recreate pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
             return;
         }
     }
 
     const Name cachePath(VulkanDetail::s_PipelineCacheVirtualPath);
     if(!volume->writeFile(cachePath, cacheData)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to write pipeline cache data to runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
     if(!volume->flush()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to flush pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to flush pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
     if(!volume->unmount()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to unmount pipeline cache runtime volume '{}'."), StringConvert(m_pipelineCacheVolumeName));
         return;
     }
 
-    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes).")
+    NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Saved pipeline cache runtime volume '{}' ({} bytes).")
         , StringConvert(m_pipelineCacheVolumeName)
         , cacheData.size()
     );

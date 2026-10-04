@@ -41,52 +41,52 @@ namespace FrustumPlaneIndex{
     };
 };
 
-[[nodiscard]] GLOBAL_INLINE bool Vector3AnyTrue(const SIMDVector value)noexcept{
+[[nodiscard]] GLB_INLINE bool Vector3AnyTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZ) != 0u;
 }
 
-[[nodiscard]] GLOBAL_INLINE bool Vector4AllTrue(const SIMDVector value)noexcept{
+[[nodiscard]] GLB_INLINE bool Vector4AllTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW;
 }
 
-[[nodiscard]] GLOBAL_INLINE bool Vector4AnyTrue(const SIMDVector value)noexcept{
+[[nodiscard]] GLB_INLINE bool Vector4AnyTrue(const SIMDVector value)noexcept{
     return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) != 0u;
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector Vector3MaxComponent(const SIMDVector value)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector Vector3MaxComponent(const SIMDVector value)noexcept{
     return VectorMax(VectorSplatX(value), VectorMax(VectorSplatY(value), VectorSplatZ(value)));
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector Vector3SignedUnitMask(const SIMDVector position, const SIMDVector componentMask)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector Vector3SignedUnitMask(const SIMDVector position, const SIMDVector componentMask)noexcept{
     const SIMDVector sign = VectorSelect(s_SIMDNegativeOne, s_SIMDOne, VectorGreaterOrEqual(position, VectorZero()));
     return VectorAndInt(sign, componentMask);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector CapsuleYSegmentPoint(const SIMDVector position, const SIMDVector radiusHalfHeight)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector CapsuleYSegmentPoint(const SIMDVector position, const SIMDVector radiusHalfHeight)noexcept{
     const SIMDVector halfHeight = VectorSplatY(radiusHalfHeight);
     const SIMDVector clampedY = VectorClamp(VectorSplatY(position), VectorNegate(halfHeight), halfHeight);
     return VectorAndInt(clampedY, s_SIMDMaskY);
 }
 
-[[nodiscard]] GLOBAL_INLINE const Float3U* StrideFloat3Pointer(const Float3U* points, const usize stride, const usize index)noexcept{
+[[nodiscard]] GLB_INLINE const Float3U* StrideFloat3Pointer(const Float3U* points, const usize stride, const usize index)noexcept{
     return reinterpret_cast<const Float3U*>(reinterpret_cast<const u8*>(points) + stride * index);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SphereCenter(const SIMDVector centerRadius)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector SphereCenter(const SIMDVector centerRadius)noexcept{
     return VectorSetW(centerRadius, 0.0f);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SphereRadius(const SIMDVector centerRadius)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector SphereRadius(const SIMDVector centerRadius)noexcept{
     return VectorSplatW(centerRadius);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const SIMDVector radius)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const SIMDVector radius)noexcept{
     return VectorSelect(center, radius, s_SIMDMaskW);
 }
 
 [[nodiscard]] inline SIMDVector CreateSphereFromVectorPoints(const SIMDVector* points, const usize count)noexcept{
-    GLOBAL_ASSERT(points != nullptr);
-    GLOBAL_ASSERT(count > 0u);
+    GLB_ASSERT(points != nullptr);
+    GLB_ASSERT(count > 0u);
 
     SIMDVector centerVector = VectorZero();
     for(usize pointIndex = 0u; pointIndex < count; ++pointIndex)
@@ -102,7 +102,7 @@ namespace FrustumPlaneIndex{
     return SphereCenterRadius(centerVector, VectorSqrt(radiusSq));
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector BoxCornerOffset(const u32 index)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector BoxCornerOffset(const u32 index)noexcept{
     return VectorSet(
         (index & s_BoxCornerXSelectBit) ? 1.0f : -1.0f,
         (index & s_BoxCornerYSelectBit) ? 1.0f : -1.0f,
@@ -111,20 +111,20 @@ namespace FrustumPlaneIndex{
     );
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector PlaneNormalizeSafe(const SIMDVector plane)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector PlaneNormalizeSafe(const SIMDVector plane)noexcept{
     const SIMDVector length = Vector3Length(plane);
     if(Vector4LessOrEqual(length, VectorReplicate(s_PlaneEpsilon)))
         return plane;
     return VectorDivide(plane, length);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector TransformPlane(const SIMDVector plane, const SIMDVector rotation, const SIMDVector translation)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector TransformPlane(const SIMDVector plane, const SIMDVector rotation, const SIMDVector translation)noexcept{
     const SIMDVector normal = Vector3Rotate(plane, rotation);
     const SIMDVector distance = VectorSubtract(VectorSplatW(plane), Vector3Dot(normal, translation));
     return VectorSelect(normal, distance, s_SIMDMaskW);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector PlaneDistance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector PlaneDistance(const SIMDVector plane, const SIMDVector point)noexcept{
     return VectorAdd(Vector3Dot(plane, point), VectorSplatW(plane));
 }
 
@@ -157,7 +157,7 @@ namespace FrustumPlaneIndex{
     return true;
 }
 
-GLOBAL_INLINE void MinMaxFromCenterExtents(
+GLB_INLINE void MinMaxFromCenterExtents(
     const SIMDVector center,
     const SIMDVector extents,
     SIMDVector& outMinBounds,
@@ -167,7 +167,7 @@ GLOBAL_INLINE void MinMaxFromCenterExtents(
     outMaxBounds = VectorAdd(center, extents);
 }
 
-GLOBAL_INLINE void CenterExtentsFromMinMax(
+GLB_INLINE void CenterExtentsFromMinMax(
     const SIMDVector minBounds,
     const SIMDVector maxBounds,
     SIMDVector& outCenter,
@@ -177,12 +177,12 @@ GLOBAL_INLINE void CenterExtentsFromMinMax(
     outExtents = VectorSetW(VectorMultiply(VectorSubtract(maxBounds, minBounds), VectorReplicate(CollisionDetail::s_Half)), 0.0f);
 }
 
-GLOBAL_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
+GLB_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
     inOutMinBounds = VectorMin(inOutMinBounds, point);
     inOutMaxBounds = VectorMax(inOutMaxBounds, point);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector ClosestPointOnMinMax(
+[[nodiscard]] GLB_INLINE SIMDVector ClosestPointOnMinMax(
     const SIMDVector point,
     const SIMDVector minBounds,
     const SIMDVector maxBounds
@@ -190,7 +190,7 @@ GLOBAL_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBoun
     return VectorMin(VectorMax(point, minBounds), maxBounds);
 }
 
-[[nodiscard]] GLOBAL_INLINE bool MinMaxIntersects(
+[[nodiscard]] GLB_INLINE bool MinMaxIntersects(
     const SIMDVector lhsMinBounds,
     const SIMDVector lhsMaxBounds,
     const SIMDVector rhsMinBounds,
@@ -200,7 +200,7 @@ GLOBAL_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBoun
     return !Vector3AnyTrue(disjoint);
 }
 
-GLOBAL_INLINE void FastIntersectSpherePlane(
+GLB_INLINE void FastIntersectSpherePlane(
     const SIMDVector center,
     const SIMDVector radius,
     const SIMDVector plane,
@@ -212,7 +212,7 @@ GLOBAL_INLINE void FastIntersectSpherePlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-GLOBAL_INLINE void FastIntersectAxisAlignedBoxPlane(
+GLB_INLINE void FastIntersectAxisAlignedBoxPlane(
     const SIMDVector center,
     const SIMDVector extents,
     const SIMDVector plane,
@@ -225,7 +225,7 @@ GLOBAL_INLINE void FastIntersectAxisAlignedBoxPlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-GLOBAL_INLINE void FastIntersectOrientedBoxPlane(
+GLB_INLINE void FastIntersectOrientedBoxPlane(
     const SIMDVector center,
     const SIMDVector extents,
     const SIMDVector axis0,
@@ -251,8 +251,8 @@ inline void FastIntersectPointsPlane(
     SIMDVector& outOutside,
     SIMDVector& outInside
 )noexcept{
-    GLOBAL_ASSERT(points != nullptr);
-    GLOBAL_ASSERT(pointCount > 0u);
+    GLB_ASSERT(points != nullptr);
+    GLB_ASSERT(pointCount > 0u);
 
     SIMDVector minDistance = PlaneDistance(plane, points[0]);
     SIMDVector maxDistance = minDistance;
@@ -389,7 +389,7 @@ inline void FastIntersectPointsPlane(
     return true;
 }
 
-GLOBAL_INLINE void ObbAxes(
+GLB_INLINE void ObbAxes(
     const SIMDVector orientation,
     SIMDVector& outAxis0,
     SIMDVector& outAxis1,
@@ -400,7 +400,7 @@ GLOBAL_INLINE void ObbAxes(
     outAxis2 = Vector3Rotate(s_SIMDIdentityR2, orientation);
 }
 
-[[nodiscard]] GLOBAL_INLINE SIMDVector PointToObbLocal(
+[[nodiscard]] GLB_INLINE SIMDVector PointToObbLocal(
     const SIMDVector point,
     const SIMDVector center,
     const SIMDVector orientation
@@ -408,7 +408,7 @@ GLOBAL_INLINE void ObbAxes(
     return Vector3InverseRotate(VectorSubtract(point, center), orientation);
 }
 
-[[nodiscard]] GLOBAL_INLINE bool PointInsideObb(
+[[nodiscard]] GLB_INLINE bool PointInsideObb(
     const SIMDVector point,
     const SIMDVector center,
     const SIMDVector extents,

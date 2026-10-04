@@ -33,13 +33,13 @@ bool GpuTaskGraph::appendMarkerLabel(const AStringView text, u32& outOffset, u32
     outSize = static_cast<u32>(text.size());
     const usize nextSize = m_markerText.size() + text.size();
     m_markerText.resize(nextSize);
-    GLOBAL_MEMCPY(m_markerText.data() + outOffset, outSize, text.data(), text.size());
+    GLB_MEMCPY(m_markerText.data() + outOffset, outSize, text.data(), text.size());
     return true;
 }
 
 AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
-    GLOBAL_ASSERT(offset <= m_markerText.size());
-    GLOBAL_ASSERT(size <= m_markerText.size() - offset);
+    GLB_ASSERT(offset <= m_markerText.size());
+    GLB_ASSERT(size <= m_markerText.size() - offset);
     return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);
 }
 

@@ -31,9 +31,9 @@ void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear(){
 void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets){
-    GLOBAL_ASSERT(targets.bindless.valid());
+    GLB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    GLOBAL_ASSERT(heap.isInitialized());
+    GLB_ASSERT(heap.isInitialized());
 
     // The graph declares the writable geometry cache and its later sampled handoff.
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
@@ -64,9 +64,9 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
 void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets){
-    GLOBAL_ASSERT(targets.bindless.valid());
+    GLB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    GLOBAL_ASSERT(heap.isInitialized());
+    GLB_ASSERT(heap.isInitialized());
 
     // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);

@@ -65,17 +65,17 @@ bool UiInteractiveSmokeScene::paint(Impl::UiPaintContext& context){
     const WidgetOptions increase{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f }, m_enabled };
     if(ui.button("increase", "Increase", increase)){
         m_count = Min(m_count + 1u, 255u);
-        logAction(GLOBAL_TEXT("increase"));
+        logAction(GLB_TEXT("increase"));
     }
     const WidgetOptions checkbox{ { LayoutSizePolicy::Fixed, 140.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
     if(ui.checkbox("enabled", "Enabled", m_enabled, checkbox))
-        logAction(GLOBAL_TEXT("enabled"));
+        logAction(GLB_TEXT("enabled"));
     if(!ui.endContainer())
         return false;
     const WidgetOptions reset{ { LayoutSizePolicy::Fixed, 130.0f }, { LayoutSizePolicy::Fixed, 36.0f } };
     if(ui.button("reset", "Reset", reset)){
         m_count = 0u;
-        logAction(GLOBAL_TEXT("reset"));
+        logAction(GLB_TEXT("reset"));
     }
     if(!ui.endPanel())
         return false;
@@ -90,14 +90,14 @@ void UiInteractiveSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& dis
     )
         return;
     m_lastDisplay = display;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiInteractiveSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiInteractiveSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
 
 void UiInteractiveSmokeScene::logAction(const TStringView action){
     ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiInteractiveSmoke: action={} count={} enabled={} actions={}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiInteractiveSmoke: action={} count={} enabled={} actions={}")
         , action, m_count, static_cast<u32>(m_enabled), m_actions
     );
 }

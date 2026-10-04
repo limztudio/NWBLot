@@ -42,12 +42,12 @@ static void SelectMime(const AStringView mime, u8& rank){
 
 
 NotNull<const char*> WaylandClipboardService::nativeMimeForRank(const u8 rank){
-    GLOBAL_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
+    GLB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
     return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
 }
 
 void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
-    GLOBAL_ASSERT(isOwnerThread());
+    GLB_ASSERT(isOwnerThread());
     const bool focused = seat && seat == m_seat && seatGlobalName == m_seatName && m_focused;
     releaseDevices();
     m_seat = seat;
@@ -59,14 +59,14 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
         m_device = wl_data_device_manager_get_data_device(m_manager, seat);
         static const wl_data_device_listener listener{ onDataOffer, onEnter, onLeave, onMotion, onDrop, onSelection };
         if(m_device && wl_data_device_add_listener(m_device, &listener, this) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(m_primaryManager){
         m_primaryDevice = zwp_primary_selection_device_manager_v1_get_device(m_primaryManager, seat);
         static const zwp_primary_selection_device_v1_listener listener{ onPrimaryOffer, onPrimarySelection };
         if(m_primaryDevice && zwp_primary_selection_device_v1_add_listener(m_primaryDevice, &listener, this) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
 #endif
 }
@@ -131,13 +131,13 @@ void WaylandClipboardService::addOffer(void* const handle, const ClipboardChanne
     if(channel == ClipboardChannel::Clipboard){
         static const wl_data_offer_listener listener{ onOfferMime, onOfferActions, onOfferAction };
         if(wl_data_offer_add_listener(static_cast<wl_data_offer*>(handle), &listener, offer.get()) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     else{
         static const zwp_primary_selection_offer_v1_listener listener{ onPrimaryMime };
         if(zwp_primary_selection_offer_v1_add_listener(static_cast<zwp_primary_selection_offer_v1*>(handle), &listener, offer.get()) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
     }
 #endif
     m_offers.push_back(Move(offer));
@@ -157,7 +157,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         auto* const native = static_cast<wl_data_source*>(source->handle);
         static const wl_data_source_listener listener{ onSourceTarget, onSourceSend, onSourceCancelled, onSourceDrop, onSourceFinished, onSourceAction };
         if(wl_data_source_add_listener(native, &listener, source.get()) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
             wl_data_source_offer(native, mime.data());
         wl_data_device_set_selection(m_device, native, m_serial);
@@ -170,7 +170,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         auto* const native = static_cast<zwp_primary_selection_source_v1*>(source->handle);
         static const zwp_primary_selection_source_v1_listener listener{ onPrimarySend, onPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &listener, source.get()) != 0)
-            GLOBAL_FATAL_ASSERT(false);
+            GLB_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
             zwp_primary_selection_source_v1_offer(native, mime.data());
         zwp_primary_selection_device_v1_set_selection(m_primaryDevice, native, m_serial);

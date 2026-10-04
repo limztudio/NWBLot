@@ -40,7 +40,7 @@ concept PathSourceLike =
 template<typename CharT>
 [[nodiscard]] inline bool IsSeparator(const CharT ch)noexcept{
     return ch == static_cast<CharT>('/')
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         || ch == static_cast<CharT>('\\')
 #endif
     ;
@@ -48,7 +48,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline CharT PreferredSeparator()noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return static_cast<CharT>('\\');
 #else
     return static_cast<CharT>('/');
@@ -57,7 +57,7 @@ template<typename CharT>
 
 template<typename CharT>
 [[nodiscard]] inline usize RootNameLength(const BasicStringView<CharT> text)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(text.size() >= 2u && text[1] == static_cast<CharT>(':'))
         return 2u;
 #else
@@ -153,7 +153,7 @@ public:
 
         // Requires a non-end iterator. The view borrows the source path and survives iterator advancement; mutating or destroying the source path invalidates it.
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
-            GLOBAL_ASSERT(m_path != nullptr && !m_atEnd);
+            GLB_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);
         }
 
@@ -172,7 +172,7 @@ public:
             }
 
             const native_string_view text = m_path->native();
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
             const usize rootDirectoryLength = GlobalFilesystemPathDetail::RootDirectoryLength(text);
             if(rootDirectoryLength != 0u){
                 m_begin = 0u;
@@ -309,7 +309,7 @@ public:
         if(m_text.empty())
             return false;
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         const usize rootNameLength = rootNameLengthInText();
         if(rootNameLength != 0u && rootDirectoryLengthInText() > rootNameLength)
             return true;
@@ -402,15 +402,15 @@ public:
 
         for(; baseIt != baseEnd; ++baseIt){
             const Path component = *baseIt;
-            if(component.native() == native_string_view(GLOBAL_TEXT("/"), 1u))
+            if(component.native() == native_string_view(GLB_TEXT("/"), 1u))
                 continue;
-            output.appendComponent(native_string_view(GLOBAL_TEXT(".."), 2u));
+            output.appendComponent(native_string_view(GLB_TEXT(".."), 2u));
         }
         for(; pathIt != pathEnd; ++pathIt)
             output.appendComponent((*pathIt).native());
 
         if(output.empty())
-            output.assignSource(native_string_view(GLOBAL_TEXT("."), 1u));
+            output.assignSource(native_string_view(GLB_TEXT("."), 1u));
         return output;
     }
 
@@ -487,7 +487,7 @@ private:
         if(component.empty())
             return;
         if(!m_text.empty() && !GlobalFilesystemPathDetail::IsSeparator(m_text.back())){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
             if(m_text.size() == rootNameLengthInText()){
                 m_text.append(component.data(), component.size());
                 return;
@@ -543,7 +543,7 @@ private:
 
         for(const Path component : *this){
             const native_string_view text = component.native();
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
             if(rootDirectoryLength != 0u && text == native_string_view(m_text.data(), rootDirectoryLength))
                 continue;
             if(rootDirectoryLength == 0u && rootNameLength != 0u && text == native_string_view(m_text.data(), rootNameLength))

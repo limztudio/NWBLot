@@ -44,7 +44,7 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
         payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex()
         || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < 12u
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
     const u32 tableCount = (static_cast<u32>(source[4u]) << 8u) | source[5u];
@@ -79,14 +79,14 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
                 break;
             }
         }
-        if(!exported || exported->bytes.size() != length || GLOBAL_MEMCMP(exported->bytes.data(), source.data() + offset, length) != 0){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
+        if(!exported || exported->bytes.size() != length || GLB_MEMCMP(exported->bytes.data(), source.data() + offset, length) != 0){
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }
         ++matched;
     }
     if(!hasHead || !hasMaxp || matched != payload.positioningTables.size()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas source match failed: atlas contains a positioning table absent from the font"));
         return false;
     }
     return true;

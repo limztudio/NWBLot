@@ -122,7 +122,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         || !causticResolveGeometry.valid()
         || !sceneGeometryDomain.valid()
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import deferred software-caustics graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred software-caustics graph resources"));
         return false;
     }
 
@@ -398,7 +398,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         )
     ;
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
         return false;
     }
     photonResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
@@ -486,7 +486,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         irradianceClear
     );
     if(!irradianceClearTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear"));
         return false;
     }
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
@@ -517,7 +517,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             accumulatorNonTemporalClear
         );
         if(!accumulatorNonTemporalClearTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics non-temporal accumulator clear"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics non-temporal accumulator clear"));
             return false;
         }
         m_deferredCausticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
@@ -554,7 +554,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             accumulatorBootstrapClear
         );
         if(!accumulatorBootstrapClearTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear"));
             return false;
         }
         m_deferredCausticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
@@ -602,7 +602,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             &causticPhotonTiming
         );
         if(!accumulatorDecayTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay"));
             return false;
         }
         m_deferredCausticAccumulatorDecayTask = accumulatorDecayTask;
@@ -641,7 +641,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         &m_deferredCausticProducerDispatched
     );
     if(!m_deferredCausticPhotonTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
         return false;
     }
 
@@ -665,7 +665,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         &causticResolveTiming
     );
     if(!m_deferredCausticGeometryTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));
         return false;
     }
 
@@ -688,7 +688,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     resolveChainInputs.resolveTiming = &causticResolveTiming;
     SoftwareCausticsResolveChainResult resolveChainResult;
     if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, scratchArena)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));
         return false;
     }
     m_deferredCausticResolvePrepareTask = resolveChainResult.causticResolvePrepareTask;

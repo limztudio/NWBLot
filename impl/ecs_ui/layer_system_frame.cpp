@@ -33,7 +33,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
             UniquePtr<Core::Assets::IAsset> candidateAsset;
             const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-                ref.name(), candidateAsset, GLOBAL_TEXT("UiLayerSystem"), "UI skin"
+                ref.name(), candidateAsset, GLB_TEXT("UiLayerSystem"), "UI skin"
             );
             if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;
@@ -42,20 +42,20 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         }
     );
     if(skinChange == UiSkinChangeResult::Failed)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
+        NWB_LOGGER_WARNING(GLB_TEXT("UiLayerSystem: UI skin request failed; retaining the selected skin"));
     if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
         return;
     if(m_frameGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_frameGeneration;
     const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
-    GLOBAL_FATAL_ASSERT(skin);
+    GLB_FATAL_ASSERT(skin);
     if(!m_context.beginFrame(m_frameGeneration))
         TerminateInvariant();
     const f32 frameDelta = m_frameDelta.consume();
     m_editHost.beginFrame(m_frameGeneration, m_display);
     if(m_editHost.takeClipboardFailure())
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("UiLayerSystem: clipboard publication failed"));
+        NWB_LOGGER_WARNING(GLB_TEXT("UiLayerSystem: clipboard publication failed"));
     m_ui.reset();
     m_ui.setSkin(*skin);
     m_paint.begin(
@@ -88,7 +88,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
             break;
     }
     if(!m_context.finishFrame()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
         m_context.abandonFrame();
         m_editHost.reset();
         m_blockCommandChars = false;
@@ -97,7 +97,7 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     }
     m_editHost.finishFrame();
     if(!m_renderer.submit(m_paint.freeze())){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
         m_context.abandonFrame();
         m_editHost.reset();
         m_blockCommandChars = false;
@@ -136,7 +136,7 @@ void UiLayerSystem::synchronizeInput(){
         const auto status = m_renderer.lastAcceptedPresentationStatus();
         if(status == Core::PresentationReceiptStatus::Accepted){
             const bool committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
-            GLOBAL_FATAL_ASSERT(committed);
+            GLB_FATAL_ASSERT(committed);
             m_editHost.commitFrame(m_renderer.lastAcceptedGeneration());
         }
         else if(status == Core::PresentationReceiptStatus::Rejected){

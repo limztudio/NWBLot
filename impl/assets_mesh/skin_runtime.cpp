@@ -38,22 +38,22 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 
 
 bool Skin::validatePayload()const{
-    if(!checkVirtualPath(GLOBAL_TEXT("Skin::validatePayload")))
+    if(!checkVirtualPath(GLB_TEXT("Skin::validatePayload")))
         return false;
     if(!m_mesh.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Skin::validatePayload failed: mesh reference is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Skin::validatePayload failed: mesh reference is empty"));
         return false;
     }
     if(!m_skeleton.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Skin::validatePayload failed: skeleton reference is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Skin::validatePayload failed: skeleton reference is empty"));
         return false;
     }
     if(m_influences.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Skin::validatePayload failed: skin influence stream is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Skin::validatePayload failed: skin influence stream is empty"));
         return false;
     }
     if(m_inverseBindMatrices.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Skin::validatePayload failed: inverse bind matrix stream is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Skin::validatePayload failed: inverse bind matrix stream is empty"));
         return false;
     }
     return true;
@@ -72,8 +72,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkinBinaryPayload::s_SkinMagic,
-        GLOBAL_TEXT("Skin::loadBinary"),
-        GLOBAL_TEXT("skin")
+        GLB_TEXT("Skin::loadBinary"),
+        GLB_TEXT("skin")
     ))
         return false;
 
@@ -85,8 +85,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.influenceCount,
         m_influences,
-        GLOBAL_TEXT("Skin::loadBinary"),
-        GLOBAL_TEXT("influences")
+        GLB_TEXT("Skin::loadBinary"),
+        GLB_TEXT("influences")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -94,12 +94,12 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.inverseBindMatrixCount,
         m_inverseBindMatrices,
-        GLOBAL_TEXT("Skin::loadBinary"),
-        GLOBAL_TEXT("inverse bind matrices")
+        GLB_TEXT("Skin::loadBinary"),
+        GLB_TEXT("inverse bind matrices")
     ))
         return false;
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, GLOBAL_TEXT("Skin::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, GLB_TEXT("Skin::loadBinary"))
         && validatePayload()
     ;
 }

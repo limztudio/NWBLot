@@ -133,7 +133,7 @@ static_assert(alignof(SceneLightGpuData) >= alignof(Float4), "SceneLightGpuData 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
+GLB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
@@ -168,7 +168,7 @@ GLOBAL_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     return pushConstants;
 }
 
-GLOBAL_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
+GLB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const u32 meshletCount,
     const u32 instanceIndex,
     const u32 materialConstantByteOffset,
@@ -196,7 +196,7 @@ GLOBAL_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     return pushConstants;
 }
 
-GLOBAL_INLINE void SetShaderDrivenPushConstants(
+GLB_INLINE void SetShaderDrivenPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
@@ -216,7 +216,7 @@ GLOBAL_INLINE void SetShaderDrivenPushConstants(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-GLOBAL_INLINE void SetTransparentDrawPushConstants(
+GLB_INLINE void SetTransparentDrawPushConstants(
     Core::CommandList& commandList,
     const u32 meshletCount,
     const u32 instanceIndex,
@@ -244,7 +244,7 @@ GLOBAL_INLINE void SetTransparentDrawPushConstants(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }
 
-GLOBAL_INLINE void SetEmulatedVertexAttribute(
+GLB_INLINE void SetEmulatedVertexAttribute(
     Core::VertexAttributeDesc& attribute,
     const Core::Format::Enum format,
     const u32 offsetByteCount,

@@ -184,7 +184,7 @@ bool Recorder::appendUnlocked(
     if(payloadBytes != 0u){
         auto& destination = lease.m_slot->record.payload;
         destination.resize(payloadBytes);
-        GLOBAL_MEMCPY(destination.data(), destination.size(), payload, payloadBytes);
+        GLB_MEMCPY(destination.data(), destination.size(), payload, payloadBytes);
     }
 
     publishSlotUnlocked(lease, header);

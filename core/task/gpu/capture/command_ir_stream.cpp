@@ -462,7 +462,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
         break;
     }
     default:
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Known command IR opcode lost its decoder"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Known command IR opcode lost its decoder"));
         fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
         return GpuCommandIrStreamReadStatus::Error;
     }
@@ -504,7 +504,7 @@ GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(const BinaryByteVi
         case GpuCommandIrStreamReadStatus::Error:
             return reader.validation();
         default:
-            GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Unknown command IR reader status"));
+            GLB_ASSERT_MSG(false, GLB_TEXT("Unknown command IR reader status"));
             return reader.validation();
         }
     }

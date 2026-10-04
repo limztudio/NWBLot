@@ -7,7 +7,7 @@
 
 #include "basic_string.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -35,7 +35,7 @@ public:
             return false;
 
         const TString<ArenaT> nativeName(name, arena);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         m_handle = ::LoadLibrary(nativeName.c_str());
 #else
         m_handle = ::dlopen(nativeName.c_str(), RTLD_NOW | RTLD_LOCAL);
@@ -49,7 +49,7 @@ public:
         if(!m_handle)
             return;
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         ::FreeLibrary(static_cast<HMODULE>(m_handle));
 #else
         ::dlclose(m_handle);
@@ -71,7 +71,7 @@ private:
             return nullptr;
 
         const AString<ArenaT> nativeSymbolName(symbolName, arena);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         return reinterpret_cast<void*>(::GetProcAddress(static_cast<HMODULE>(m_handle), nativeSymbolName.c_str()));
 #else
         return ::dlsym(m_handle, nativeSymbolName.c_str());

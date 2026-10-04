@@ -218,7 +218,7 @@ TEST_F(ImageLoaderTests, EmptyReferenceFailsBeforeReadingTheBinarySource){
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, AssetRef<Texture>{}));
     EXPECT_EQ(m_source.m_readCount, 0u);
     EXPECT_EQ(m_source.m_lastReadPath, NAME_NONE);
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("texture asset reference is empty")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("texture asset reference is empty")));
 }
 
 TEST_F(ImageLoaderTests, MissingPathAndFailedBinaryReadReturnNoSource){
@@ -230,14 +230,14 @@ TEST_F(ImageLoaderTests, MissingPathAndFailedBinaryReadReturnNoSource){
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 2u);
     EXPECT_EQ(m_source.m_lastReadPath, m_identity.name());
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("failed to read binary")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("failed to read binary")));
 }
 
 TEST_F(ImageLoaderTests, MissingTextureCodecFailsAfterReadingAValidBinary){
     ASSERT_TRUE(m_registry.unregisterCodec(Texture::AssetTypeName()));
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 1u);
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("failed to deserialize")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("failed to deserialize")));
 }
 
 TEST_F(ImageLoaderTests, RealTextureCodecRejectsWrongMagicTruncationAndTrailingBytes){
@@ -250,23 +250,23 @@ TEST_F(ImageLoaderTests, RealTextureCodecRejectsWrongMagicTruncationAndTrailingB
     m_source.m_binary.push_back(0u);
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 3u);
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("invalid texture asset format")));
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("texture payload is truncated")));
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("trailing bytes detected")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("invalid texture asset format")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("texture payload is truncated")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("trailing bytes detected")));
 }
 
 TEST_F(ImageLoaderTests, CodecReturningARealDifferentAssetTypeIsRejectedByTheTypedManager){
     ASSERT_TRUE(m_registry.registerCodec(MakeUnique<MisdirectedImageCodec>(true), true));
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 1u);
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("is not a texture")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("is not a texture")));
 }
 
 TEST_F(ImageLoaderTests, CodecReturningAValidTextureAtAnotherIdentityIsRejected){
     ASSERT_TRUE(m_registry.registerCodec(MakeUnique<MisdirectedImageCodec>(false), true));
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 1u);
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLOBAL_TEXT("loaded texture identity does not match")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("loaded texture identity does not match")));
 }
 
 TEST_F(ImageLoaderTests, RepeatedLoadsOfIdenticalBytesOwnDistinctFreshVersions){

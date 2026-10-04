@@ -93,7 +93,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
 
     const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
-    GLOBAL_ASSERT(
+    GLB_ASSERT(
         !hasCsgIntervalReads
         || (
             extinctionPayload.extinctionPhasePrepared
@@ -138,7 +138,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         extinctionComputeEmulationPlanCaptured
         && !extinctionComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT(
+        NWB_LOGGER_WARNING(GLB_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Extinction compute-emulation output states"
         ));
     }
@@ -156,7 +156,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         inputs.sharedComputeEmulationPlanCaptured
         && !extinctionSharedComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT(
+        NWB_LOGGER_WARNING(GLB_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Extinction shared compute-emulation output"
         ));
     }
@@ -393,7 +393,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             Move(computeEmulationPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT(
+            NWB_LOGGER_WARNING(GLB_TEXT(
                 "RendererSystem: could not declare AVBOIT Extinction compute-emulation producer"
             ));
             return false;
@@ -532,10 +532,10 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
                 inputs.sharedComputeEmulationPlan.drawCount
             )
         ;
-        GLOBAL_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+        GLB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
             inputs.sharedComputeEmulationPlan.drawCount
         ));
-        GLOBAL_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
+        GLB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         for(usize phaseIndex = 0u;
             phaseIndex < extinctionSharedComputeEmulationPhaseCount;
@@ -560,7 +560,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
                 )
             ;
             if(!m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex].valid()){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT(
+                NWB_LOGGER_WARNING(GLB_TEXT(
                     "RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"
                 ));
                 return false;
@@ -593,7 +593,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         Move(extinctionPayload)
     );
     if(!m_avboitSystem.taskGraphStage().m_extinctionTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return false;
     }
     }

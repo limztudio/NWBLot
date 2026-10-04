@@ -28,8 +28,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
 
     if(!hasCausticWork(meshView))
         return false;
-    GLOBAL_ASSERT(meshView.bindingValid());
-    GLOBAL_ASSERT(targets.bindless.valid());
+    GLB_ASSERT(meshView.bindingValid());
+    GLB_ASSERT(targets.bindless.valid());
     const f32 temporalDecay = causticTemporalDecay();
     if(
         !m_rayTracingState.m_swCausticPipeline
@@ -67,7 +67,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         computeState.setPipeline(m_rayTracingState.m_swCausticPipeline.get());
         commandList.setComputeState(computeState);
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-        GLOBAL_ASSERT(heap.isInitialized());
+        GLB_ASSERT(heap.isInitialized());
         heap.bindCompute(commandList, *m_rayTracingState.m_swCausticPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(DivideUp(photonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
@@ -92,7 +92,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
 
     if(!m_rayTracingState.m_swCausticDispatchLogged){
         m_rayTracingState.m_swCausticDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: dispatched software caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RendererSystem: dispatched software caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
             , static_cast<u64>(photonCount)
             , static_cast<u64>(temporalPhaseCount)
             , static_cast<u64>(photonBudget.fullGridCount)

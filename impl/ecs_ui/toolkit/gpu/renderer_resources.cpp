@@ -93,7 +93,7 @@ struct TargetReadyTask{
     const Core::ShaderType::Mask stage){
     return ShaderAssetLoader::Load(
         shader, identity, Core::ShaderArchive::s_DefaultVariant, stage, identity,
-        state.m_graphics, state.m_assets, state.m_resolver, GLOBAL_TEXT("GpuRenderer")
+        state.m_graphics, state.m_assets, state.m_resolver, GLB_TEXT("GpuRenderer")
     );
 }
 

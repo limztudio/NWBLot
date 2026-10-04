@@ -46,7 +46,7 @@ template<typename ShaderPathResolver>
     if(outShader)
         return true;
     if(!shaderName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: shader name is empty"), ownerName);
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: shader name is empty"), ownerName);
         return false;
     }
 
@@ -55,22 +55,22 @@ template<typename ShaderPathResolver>
         : Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType)
     ;
     if(!stageName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: unsupported shader stage {}"), ownerName, static_cast<u32>(shaderType));
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: unsupported shader stage {}"), ownerName, static_cast<u32>(shaderType));
         return false;
     }
 
     if(variantName.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: shader variant is empty"), ownerName);
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: shader variant is empty"), ownerName);
         return false;
     }
     if(!shaderPathResolver){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: shader path resolver is null"), ownerName);
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: shader path resolver is null"), ownerName);
         return false;
     }
 
     Name shaderVirtualPath = NAME_NONE;
     if(!shaderPathResolver(shaderName, variantName, stageName, shaderVirtualPath)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.resolvedText())
             , StringConvert(variantName)
@@ -79,7 +79,7 @@ template<typename ShaderPathResolver>
         return false;
     }
     if(!shaderVirtualPath){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.resolvedText())
             , StringConvert(variantName)
@@ -101,7 +101,7 @@ template<typename ShaderPathResolver>
     const Shader& shaderAsset = *loadedShader;
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
     // Shader::loadBinary already ran DecodeAssetPayload; keep a debug-only invariant here.
-    GLOBAL_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
+    GLB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
 
     Core::ShaderDesc shaderDesc;
     shaderDesc.setShaderType(shaderType);
@@ -111,7 +111,7 @@ template<typename ShaderPathResolver>
     auto& device = graphics.getDevice();
     outShader = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());
     if(!outShader){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to create shader '{}' from asset '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to create shader '{}' from asset '{}'")
             , ownerName
             , StringConvert(debugName.resolvedText())
             , StringConvert(shaderVirtualPath.resolvedText())

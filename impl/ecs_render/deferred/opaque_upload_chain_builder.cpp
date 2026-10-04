@@ -50,7 +50,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         || !inputs.drawItems
         || !inputs.instanceData
         || !inputs.csgFrameData
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         || !inputs.materialTypedRanges
 #endif
         || !inputs.materialTypedBytes
@@ -83,10 +83,10 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         )
             return false;
         m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData, csgResources);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData))
             return false;
-        GLOBAL_ASSERT(instanceData.size() == inputs.materialTypedRanges->size());
+        GLB_ASSERT(instanceData.size() == inputs.materialTypedRanges->size());
         ECSRenderDetail::AssertMaterialTypedUploadRanges(*inputs.materialTypedRanges, materialTypedBytes);
 #endif
 
@@ -158,7 +158,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             || !csgResources.frameReady(csgFrameData)
         )
             return false;
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         if(
             csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
             || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)

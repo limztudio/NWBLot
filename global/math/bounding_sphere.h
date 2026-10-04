@@ -473,8 +473,8 @@ inline void BoundingSphere::createFromPoints( // beginner: streams point storage
     const Float3U* points,
     const usize stride
 )noexcept{
-    GLOBAL_ASSERT(points != nullptr);
-    GLOBAL_ASSERT(count > 0u);
+    GLB_ASSERT(points != nullptr);
+    GLB_ASSERT(count > 0u);
     SIMDVector centerVector = VectorZero();
     for(usize i = 0u; i < count; ++i)
         centerVector = VectorAdd(centerVector, LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, i)));

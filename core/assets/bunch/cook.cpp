@@ -124,7 +124,7 @@ private:
     const usize itemIndex
 ){
     if(!item.isReference()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': item {} must be a declared asset reference")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': item {} must be a declared asset reference")
             , PathToString<tchar>(nwbFilePath)
             , itemIndex
         );
@@ -135,7 +135,7 @@ private:
     if(const Metascript::Document::Declaration* declaration = declarations.find(itemReference))
         return declaration;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'")
+    NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': item {} references undeclared asset variable '{}'")
         , PathToString<tchar>(nwbFilePath)
         , itemIndex
         , StringConvert(itemReference)
@@ -252,7 +252,7 @@ private:
     const Metascript::MStringView reference = source.asReference();
     const Metascript::Document::Declaration* declaration = declarations.find(reference);
     if(!declaration){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': reference '{}' does not target a declared asset")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(AStringView(reference.data(), reference.size()))
         );
@@ -262,7 +262,7 @@ private:
     const NameHash variableHash = DeclarationVariableHash(*declaration);
     if(assetVariableHashes.find(variableHash) == assetVariableHashes.end()){
         if(!resolvingVariableHashes.insert(variableHash).second){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': cyclic local metadata reference '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(AStringView(reference.data(), reference.size()))
             );
@@ -271,7 +271,7 @@ private:
 
         const Metascript::Value* localValue = doc.findVariable(DeclarationVariableMetaView(*declaration));
         if(!localValue){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': reference '{}' targets a missing local variable")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(AStringView(reference.data(), reference.size()))
             );
@@ -296,7 +296,7 @@ private:
     ScratchString virtualPathText(scratchArena);
     Name virtualPath = NAME_NONE;
     if(!BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), virtualPathText, virtualPath, scratchArena)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(AStringView(reference.data(), reference.size()))
         );
@@ -415,7 +415,7 @@ bool ExpandAssetBunch(
         if(!IsAssetBunchType(DeclarationType(declaration)))
             continue;
         if(bunchDeclaration){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': multiple asset_bunch declarations are not allowed")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': multiple asset_bunch declarations are not allowed")
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
@@ -423,7 +423,7 @@ bool ExpandAssetBunch(
         bunchDeclaration = &declaration;
     }
     if(!bunchDeclaration){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': missing asset_bunch declaration")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': missing asset_bunch declaration")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -431,7 +431,7 @@ bool ExpandAssetBunch(
 
     const Metascript::Value* bunchValue = doc.findVariable(DeclarationVariableMetaView(*bunchDeclaration));
     if(!bunchValue || !bunchValue->isList()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': declaration must be initialized with a list")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': declaration must be initialized with a list")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -439,7 +439,7 @@ bool ExpandAssetBunch(
 
     const auto& list = bunchValue->asList();
     if(list.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': list must contain at least one asset")
+        NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': list must contain at least one asset")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -469,7 +469,7 @@ bool ExpandAssetBunch(
 
         const AStringView variableName = DeclarationVariable(*itemDeclaration);
         if(!usedVariables.insert(ComputeNameHash(variableName)).second){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': variable '{}' is listed more than once")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': variable '{}' is listed more than once")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(variableName)
             );
@@ -488,7 +488,7 @@ bool ExpandAssetBunch(
         const AStringView variableName = DeclarationVariable(*itemDeclaration);
         const Metascript::Value* assetValue = doc.findVariable(DeclarationVariableMetaView(*itemDeclaration));
         if(!assetValue){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': references missing variable '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': references missing variable '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(variableName)
             );
@@ -518,7 +518,7 @@ bool ExpandAssetBunch(
             virtualPath,
             scratchArena
         )){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': failed to build virtual path for variable '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(variableName)
             );

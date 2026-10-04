@@ -62,19 +62,19 @@ bool BackendContext::createVulkanDevice(){
     uint32_t extCount = 0;
     res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to enumerate device extension count. {}"), ResultToString(res));
         return false;
     }
     Vector<VkExtensionProperties, Alloc::ScratchArena> deviceExtensions(extCount, scratchArena);
     res = m_instanceDispatch.vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, deviceExtensions.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to enumerate device extensions. {}"), ResultToString(res));
         return false;
     }
 
     const bool swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     for(const auto& ext : deviceExtensions){
-        const AStringView name(ext.extensionName, GLOBAL_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
+        const AStringView name(ext.extensionName, GLB_STRNLEN(ext.extensionName, VK_MAX_EXTENSION_NAME_SIZE));
         bool enableExtension = false;
         DeviceExtensionFeature::Enum enabledFeature = DeviceExtensionFeature::None;
 
@@ -112,7 +112,7 @@ bool BackendContext::createVulkanDevice(){
 
     const AStringView deviceName(
         physicalDeviceProperties.deviceName,
-        GLOBAL_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE)
+        GLB_STRNLEN(physicalDeviceProperties.deviceName, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE)
     );
     m_rendererString = StringConvert(m_arena, deviceName);
 
@@ -127,7 +127,7 @@ bool BackendContext::createVulkanDevice(){
     // Configure process-global NVIDIA Aftermath before device creation.
     const bool aftermathActive = aftermathRequested && Aftermath::Initialize();
     if(aftermathRequested && !aftermathActive)
-        NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
+        NWB_LOGGER_INFO(GLB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
 
     m_swapChainMutableFormatSupported = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME);
 
@@ -148,7 +148,7 @@ bool BackendContext::createVulkanDevice(){
         featureSupport
     );
     if(const AStringView missingFeature = VulkanDetail::FindMissingMandatoryPhysicalDeviceFeature(featureSupport); !missingFeature.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Required device feature '{}' is not supported by the selected GPU."), StringConvert(missingFeature));
         return false;
     }
 
@@ -205,10 +205,10 @@ bool BackendContext::createVulkanDevice(){
     for(const auto& name : unsupportedFeatureExtensions){
         const auto extensionIt = m_enabledExtensions.device.find(name);
         if(extensionIt != m_enabledExtensions.device.end() && extensionIt.value() == DeviceExtensionFeature::DescriptorBuffer){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), StringConvert(name));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), StringConvert(name));
             return false;
         }
-        NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
+        NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
         m_enabledExtensions.device.erase(name);
     }
 
@@ -216,7 +216,7 @@ bool BackendContext::createVulkanDevice(){
         constexpr AStringView s_SamplerFilterMinmaxExtensionName = VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME;
         const auto samplerFilterMinmaxIt = m_enabledExtensions.device.find(s_SamplerFilterMinmaxExtensionName);
         if(samplerFilterMinmaxIt != m_enabledExtensions.device.end() && supportedVulkan12Features.samplerFilterMinmax != VK_TRUE){
-            NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(s_SamplerFilterMinmaxExtensionName));
+            NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Disabling device extension '{}' because samplerFilterMinmax is not supported."), StringConvert(s_SamplerFilterMinmaxExtensionName));
             m_enabledExtensions.device.erase(s_SamplerFilterMinmaxExtensionName);
         }
     }
@@ -228,7 +228,7 @@ bool BackendContext::createVulkanDevice(){
             meshShaderIt != m_enabledExtensions.device.end()
             && physicalDeviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_CPU
         ){
-            NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
+            NWB_LOGGER_INFO(GLB_TEXT("Vulkan: Disabling device extension '{}' on CPU Vulkan device '{}' so renderer uses compute emulation instead of native mesh shaders.")
                 , StringConvert(s_MeshShaderExtensionName)
                 , StringConvert(physicalDeviceProperties.deviceName)
             );
@@ -383,7 +383,7 @@ bool BackendContext::createVulkanDevice(){
     ){
         for(const SameClassQueueRequest& existing : sameClassQueueRequests){
             if(existing.family == family && existing.queueIndex == queueIndex){
-                GLOBAL_ASSERT(existing.queueClass == queueClass);
+                GLB_ASSERT(existing.queueClass == queueClass);
                 return;
             }
         }
@@ -607,7 +607,7 @@ bool BackendContext::createVulkanDevice(){
 
     res = m_instanceDispatch.vkCreateDevice(m_vulkanPhysicalDevice, &deviceCreateInfo, nullptr, &m_vulkanDevice);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create logical device. {}"), ResultToString(res));
         return false;
     }
 
@@ -623,7 +623,7 @@ bool BackendContext::createVulkanDevice(){
             VkQueue queue = VK_NULL_HANDLE;
             m_deviceDispatch.vkGetDeviceQueue(m_vulkanDevice, queueInfo.queueFamilyIndex, nativeQueueOffset, &queue);
             if(queue == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Created native queue could not be retrieved."));
+                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Created native queue could not be retrieved."));
                 return false;
             }
             m_nativeQueues.push_back(VulkanNativeQueueDesc{
@@ -654,7 +654,7 @@ bool BackendContext::createVulkanDevice(){
             && findNativeQueueIndex(static_cast<u32>(m_transferQueueFamily), s_TransferQueueIndex) == Limit<u32>::s_Max
         )
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Required scheduler queue is absent from the canonical native registry."));
         return false;
     }
     if(!m_deviceParams.headlessDevice){
@@ -663,7 +663,7 @@ bool BackendContext::createVulkanDevice(){
             s_PresentQueueIndex
         );
         if(m_presentNativeQueueIndex == Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Present queue is absent from the canonical native registry."));
             return false;
         }
     }
@@ -673,7 +673,7 @@ bool BackendContext::createVulkanDevice(){
             queueFamily == s_InvalidQueueFamilyIndex
             || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
         ){
-            GLOBAL_ASSERT(false);
+            GLB_ASSERT(false);
             return GpuQueueCapability::None;
         }
         return VulkanDetail::QueueCapabilitiesForQueueFlags(
@@ -699,7 +699,7 @@ bool BackendContext::createVulkanDevice(){
                 request.queueIndex
             );
             if(nativeQueueIndex == Limit<u32>::s_Max){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
+                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Same-class queue is absent from the canonical native registry."));
                 return false;
             }
 

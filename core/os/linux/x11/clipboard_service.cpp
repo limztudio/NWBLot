@@ -39,7 +39,7 @@ X11ClipboardService::~X11ClipboardService(){
         X11CheckedOperation operation(m_display);
         XDestroyWindow(&m_display, m_ownerWindow);
         if(!operation.succeeded())
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("X11 clipboard: owner window destruction failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("X11 clipboard: owner window destruction failed"));
     }
 }
 
@@ -69,7 +69,7 @@ bool X11ClipboardService::initialize(){
 }
 
 bool X11ClipboardService::handleEvent(const XEvent& event){
-    GLOBAL_ASSERT(isOwnerThread());
+    GLB_ASSERT(isOwnerThread());
     if(event.type == SelectionRequest && event.xselectionrequest.owner == m_ownerWindow){
         answerSelection(event.xselectionrequest);
         return true;
@@ -154,7 +154,7 @@ void X11ClipboardService::startNativeRequest(
         }
         if(owner == m_ownerWindow){
             const OwnedSelection* const selection = ownedSelection(m_operationSelection);
-            GLOBAL_FATAL_ASSERT(selection);
+            GLB_FATAL_ASSERT(selection);
             finishOperation(ClipboardStatus::Success, selection->utf8);
             return;
         }
@@ -211,7 +211,7 @@ void X11ClipboardService::releaseOperation(){
         X11CheckedOperation checked(m_display);
         XDestroyWindow(&m_display, m_operationWindow);
         if(!checked.succeeded())
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("X11 clipboard: request window destruction failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("X11 clipboard: request window destruction failed"));
     }
     m_operationWindow = 0u;
     m_operationToken = {};
@@ -223,7 +223,7 @@ void X11ClipboardService::releaseOperation(){
 
 void X11ClipboardService::finishOperation(const ClipboardStatus::Enum status, const AStringView text){
     if(m_operationToken.valid() && !completeNativeRequest(m_operationToken, status, text))
-        GLOBAL_FATAL_ASSERT(false);
+        GLB_FATAL_ASSERT(false);
     releaseOperation();
 }
 
@@ -234,7 +234,7 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
         return;
     }
     OwnedSelection* const selection = ownedSelection(m_operationSelection);
-    GLOBAL_FATAL_ASSERT(selection);
+    GLB_FATAL_ASSERT(selection);
     bool acquired = false;
     {
         X11CheckedOperation checked(m_display);
@@ -259,7 +259,7 @@ void X11ClipboardService::receiveTimestamp(const Time timestamp){
 GlobalUniquePtr<IClipboardService> CreateX11ClipboardService(Alloc::GlobalArena& arena, _XDisplay& display){
     auto service = MakeGlobalUnique<X11ClipboardService>(arena, arena, display);
     if(!service->initialize()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("X11 clipboard initialization failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("X11 clipboard initialization failed"));
         return {};
     }
     return service;

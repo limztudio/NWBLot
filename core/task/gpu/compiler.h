@@ -179,7 +179,7 @@ struct GpuTaskGraphSchedulingTaskIndexView{
 
     [[nodiscard]] bool empty()const noexcept{ return taskCount == 0u; }
     [[nodiscard]] u32 operator[](const usize index)const noexcept{
-        GLOBAL_ASSERT(index < taskCount);
+        GLB_ASSERT(index < taskCount);
         return taskIndices[index];
     }
 };

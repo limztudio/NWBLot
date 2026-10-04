@@ -464,7 +464,7 @@ bool ValidateFontAtlasPositioningTable(const FontAtlasPositioningTable& table, c
         : table.tag == s_FontAtlasGdefTag ? validator.gdef()
         : false;
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_atlas: invalid or over-budget raw positioning table {}"), table.tag);
+        NWB_LOGGER_ERROR(GLB_TEXT("font_atlas: invalid or over-budget raw positioning table {}"), table.tag);
     return valid;
 }
 

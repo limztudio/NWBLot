@@ -61,12 +61,12 @@ bool WaylandTextInputService::initialize(){
 }
 
 void WaylandTextInputService::attachSeat(wl_seat* const seat, const u32 seatGlobalName){
-    GLOBAL_ASSERT(isOwnerThread());
+    GLB_ASSERT(isOwnerThread());
     if(seat == m_seat && seatGlobalName == m_seatName)
         return;
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !cancelSession(token, TextInputCancelReason::NativeCancelled))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Wayland text input: seat removal could not cancel current session"));
+        NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: seat removal could not cancel current session"));
     releaseDevice();
     m_seat = seat;
     m_seatName = seat ? seatGlobalName : 0u;
@@ -83,7 +83,7 @@ void WaylandTextInputService::attachSeat(wl_seat* const seat, const u32 seatGlob
 #endif
     };
     if(zwp_text_input_v3_add_listener(m_input, &listener, this) != 0)
-        GLOBAL_FATAL_ASSERT(false);
+        GLB_FATAL_ASSERT(false);
 #endif
 }
 
@@ -93,7 +93,7 @@ bool WaylandTextInputService::setKeyboardFocused(const bool focused){
 }
 
 void WaylandTextInputService::setBufferScale(const i32 scale){
-    GLOBAL_ASSERT(isOwnerThread());
+    GLB_ASSERT(isOwnerThread());
     const i32 newScale = Max(scale, 1);
     if(newScale == m_bufferScale)
         return;
@@ -103,7 +103,7 @@ void WaylandTextInputService::setBufferScale(const i32 scale){
 }
 
 bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
-    GLOBAL_ASSERT(isOwnerThread());
+    GLB_ASSERT(isOwnerThread());
     const TextInputSessionToken token = activeSession();
     if(!token.valid())
         return false;
@@ -178,7 +178,7 @@ void WaylandTextInputService::endNativeSession(const TextInputSessionToken token
         zwp_text_input_v3_disable(m_input);
         commitState({}, 0u);
         if(!flush())
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Wayland text input: disabling native session failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: disabling native session failed"));
     }
     m_serials.reset();
     m_wireState.reset();
@@ -268,7 +268,7 @@ void WaylandTextInputService::clearPending(){
 void WaylandTextInputService::nativeFailure(){
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !cancelSession(token, TextInputCancelReason::NativeFailure))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Wayland text input: native failure could not cancel current session"));
+        NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: native failure could not cancel current session"));
 }
 
 bool WaylandTextInputService::flush(){

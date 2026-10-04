@@ -61,7 +61,7 @@ struct OpticalUploadTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(!payload.reservation.accept(token))
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Ray optical scene: accepted upload has invalid residency provenance"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: accepted upload has invalid residency provenance"));
     }
 
     static void discarded(Payload& payload){

@@ -38,7 +38,7 @@ int Run(const int argc, char** argv){
             [&](){
                 app.parse(argc, argv);
                 if(rendererArgument != "bitmap" && rendererArgument != "outline"){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("font_builder: unknown renderer; choose bitmap or outline"));
                     return 1;
                 }
                 options.outline = rendererArgument == "outline";
@@ -49,21 +49,21 @@ int Run(const int argc, char** argv){
                 ErrorCode error;
                 const bool exists = FileExists(options.output, error);
                 if(error || (exists && !options.overwrite)){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: cannot replace output metadata without --overwrite"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
                     return 1;
                 }
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
                 Impl::FontAtlasPayload payload(UtilityDetail::Arena());
                 if(!Bake(options, payload, scratch) || !WriteOutputs(options, payload))
                     return 1;
-                NWB_LOGGER_INFO(GLOBAL_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups")
+                NWB_LOGGER_INFO(GLB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups")
                     , PathToString<tchar>(options.output)
                     , payload.glyphs.size()
                     , payload.groups.size()
                 );
                 return 0;
             },
-            [&](const CLI::ParseError& error){ return app.exit(error, GLOBAL_COUT, GLOBAL_CERR); },
+            [&](const CLI::ParseError& error){ return app.exit(error, GLB_COUT, GLB_CERR); },
             [](){ return -1; }
         )
     ;

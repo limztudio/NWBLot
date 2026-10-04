@@ -11,21 +11,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorLerp(SIMDVector v0, SIMDVector v1, f32 t)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorLerp(SIMDVector v0, SIMDVector v1, f32 t)noexcept{
     return VectorMultiplyAdd(VectorSubtract(v1, v0), VectorReplicate(t), v0);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorLerpV(SIMDVector v0, SIMDVector v1, SIMDVector t)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorLerpV(SIMDVector v0, SIMDVector v1, SIMDVector t)noexcept{
     return VectorMultiplyAdd(VectorSubtract(v1, v0), t, v0);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept;
+GLB_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept;
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorHermite(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, f32 t)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorHermite(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, f32 t)noexcept{
     return VectorHermiteV(position0, tangent0, position1, tangent1, VectorReplicate(t));
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept{
     const SIMDVector catMulT2 = VectorSet(-3.0f, -2.0f, 3.0f, -1.0f);
     const SIMDVector catMulT3 = VectorSet(2.0f, 1.0f, -2.0f, 1.0f);
     SIMDVector t2 = VectorMultiply(t, t);
@@ -41,11 +41,11 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVecto
     return VectorMultiplyAdd(VectorSplatW(t3), tangent1, result);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept;
+GLB_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept;
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCatmullRom(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, f32 t)noexcept{ return VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(t)); }
+GLB_INLINE SIMDVector SIMDCALL VectorCatmullRom(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, f32 t)noexcept{ return VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(t)); }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept{
     const SIMDVector three = VectorReplicate(3.0f);
     const SIMDVector five = VectorReplicate(5.0f);
     SIMDVector t2 = VectorMultiply(t, t);
@@ -63,14 +63,14 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1
     return VectorMultiply(result, s_SIMDOneHalf);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorBaryCentric(SIMDVector p0, SIMDVector p1, SIMDVector p2, f32 f, f32 g)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorBaryCentric(SIMDVector p0, SIMDVector p1, SIMDVector p2, f32 f, f32 g)noexcept{
     const SIMDVector p10 = VectorSubtract(p1, p0);
     const SIMDVector p20 = VectorSubtract(p2, p0);
     SIMDVector result = VectorMultiplyAdd(p10, VectorReplicate(f), p0);
     return VectorMultiplyAdd(p20, VectorReplicate(g), result);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorBaryCentricV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector f, SIMDVector g)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorBaryCentricV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector f, SIMDVector g)noexcept{
     const SIMDVector p10 = VectorSubtract(p1, p0);
     const SIMDVector p20 = VectorSubtract(p2, p0);
     SIMDVector result = VectorMultiplyAdd(p10, f, p0);

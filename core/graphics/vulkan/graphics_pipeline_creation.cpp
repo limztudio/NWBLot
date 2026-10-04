@@ -56,19 +56,19 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
         Texture* const texture = desc.colorAttachments[i].texture;
         if(texture && &texture->m_context != &m_context){
             NWB_LOGGER_ERROR(
-                GLOBAL_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."),
+                GLB_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."),
                 i
             );
             return nullptr;
         }
     }
     if(desc.depthAttachment.texture && &desc.depthAttachment.texture->m_context != &m_context){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
         return nullptr;
     }
     if(desc.shadingRateAttachment.texture && &desc.shadingRateAttachment.texture->m_context != &m_context){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device.")
+            GLB_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device.")
         );
         return nullptr;
     }
@@ -80,7 +80,7 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
     const u32 colorAttachmentCount = Min<u32>(static_cast<u32>(desc.colorAttachments.size()), s_MaxColorAttachments);
     if(desc.colorAttachments.size() > s_MaxColorAttachments)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxColorAttachments, s_MaxColorAttachments);
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), s_MaxColorAttachments, s_MaxColorAttachments);
 
     fb->m_resources.reserve(
         static_cast<usize>(colorAttachmentCount)
@@ -103,34 +103,34 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
     if(!m_context.extensions.KHR_dynamic_rendering){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
         return nullptr;
     }
     if(fbinfo.colorFormats.size() > m_context.physicalDeviceProperties.limits.maxColorAttachments){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline color count exceeds the device limit."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline color count exceeds the device limit."));
         return nullptr;
     }
     const VkPrimitiveTopology primitiveTopology = VulkanDetail::GetPrimitiveTopology(desc.primType);
     if(primitiveTopology == VK_PRIMITIVE_TOPOLOGY_MAX_ENUM){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline primitive topology is invalid."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline primitive topology is invalid."));
         return nullptr;
     }
     if(desc.renderState.rasterState.depthBiasClamp != 0.0f){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Graphics pipeline depthBiasClamp requires an unsupported logical-device feature.")
+            GLB_TEXT("Vulkan: Graphics pipeline depthBiasClamp requires an unsupported logical-device feature.")
         );
         return nullptr;
     }
     if(desc.shadingRateState.enabled){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline variable-rate shading is not implemented."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline variable-rate shading is not implemented."));
         return nullptr;
     }
     if(desc.renderState.singlePassStereo.enabled){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline single-pass stereo is not implemented."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline single-pass stereo is not implemented."));
         return nullptr;
     }
     if(!desc.VS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
         return nullptr;
     }
 
@@ -142,12 +142,12 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         if(!shader)
             return true;
         if(&shader->m_context != &m_context){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline {} shader belongs to another device."), stageName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline {} shader belongs to another device."), stageName);
             return false;
         }
         if(shader->m_shaderModule == VK_NULL_HANDLE || shader->m_desc.shaderType != expectedType){
             NWB_LOGGER_ERROR(
-                GLOBAL_TEXT("Vulkan: Graphics pipeline {} shader has an invalid module or stage."),
+                GLB_TEXT("Vulkan: Graphics pipeline {} shader has an invalid module or stage."),
                 stageName
             );
             return false;
@@ -155,15 +155,15 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return true;
     };
     if(
-        !validateShader(desc.VS.get(), ShaderType::Vertex, GLOBAL_TEXT("vertex"))
-        || !validateShader(desc.HS.get(), ShaderType::Hull, GLOBAL_TEXT("hull"))
-        || !validateShader(desc.DS.get(), ShaderType::Domain, GLOBAL_TEXT("domain"))
-        || !validateShader(desc.GS.get(), ShaderType::Geometry, GLOBAL_TEXT("geometry"))
-        || !validateShader(desc.PS.get(), ShaderType::Pixel, GLOBAL_TEXT("pixel"))
+        !validateShader(desc.VS.get(), ShaderType::Vertex, GLB_TEXT("vertex"))
+        || !validateShader(desc.HS.get(), ShaderType::Hull, GLB_TEXT("hull"))
+        || !validateShader(desc.DS.get(), ShaderType::Domain, GLB_TEXT("domain"))
+        || !validateShader(desc.GS.get(), ShaderType::Geometry, GLB_TEXT("geometry"))
+        || !validateShader(desc.PS.get(), ShaderType::Pixel, GLB_TEXT("pixel"))
     )
         return nullptr;
     if(desc.inputLayout && &desc.inputLayout->m_context != &m_context){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Graphics pipeline input layout belongs to another device."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline input layout belongs to another device."));
         return nullptr;
     }
 
@@ -178,28 +178,28 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     const bool usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader || desc.primType == PrimitiveType::PatchList || desc.patchControlPoints > 0;
 
     if(hasTessellationControlShader != hasTessellationEvaluationShader){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(usesTessellation){
         if(!hasTessellationControlShader || !hasTessellationEvaluationShader){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
             DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.primType != PrimitiveType::PatchList){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
             DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.patchControlPoints == 0){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
             DestroyArenaObject(m_context.objectArena, pso);
             return nullptr;
         }
         if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}")
                 , desc.patchControlPoints
                 , m_context.physicalDeviceProperties.limits.maxTessellationPatchSize
             );
@@ -225,14 +225,14 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         appendPipelineShaderStage(*desc.PS, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(shaderStages.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
-        GLOBAL_TEXT("graphics pipeline"),
+        GLB_TEXT("graphics pipeline"),
         *pso,
         scratchArena
     ))
@@ -280,7 +280,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
         dynamicStates,
         static_cast<u32>(LengthOf(dynamicStates)),
-        GLOBAL_TEXT("graphics pipeline"),
+        GLB_TEXT("graphics pipeline"),
         *pso,
         fixedState
     ))
@@ -297,7 +297,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 
-    if(!createPipelineOrDestroy(GLOBAL_TEXT("graphics pipeline"), *pso, pipelineInfo))
+    if(!createPipelineOrDestroy(GLB_TEXT("graphics pipeline"), *pso, pipelineInfo))
         return nullptr;
 
     return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);

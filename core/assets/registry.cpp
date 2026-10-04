@@ -26,13 +26,13 @@ AssetRegistry::AssetRegistry(AssetArena& arena)
 
 bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool replaceExisting){
     if(!codec){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetRegistry: rejected null codec registration"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetRegistry: rejected null codec registration"));
         return false;
     }
 
     const Name typeName = codec->assetType();
     if(!typeName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetRegistry: rejected codec registration with empty asset type"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetRegistry: rejected codec registration with empty asset type"));
         return false;
     }
 
@@ -41,7 +41,7 @@ bool AssetRegistry::registerCodec(UniquePtr<IAssetCodec>&& codec, const bool rep
     const auto found = m_codecs.find(typeName);
     if(found != m_codecs.end()){
         if(!replaceExisting){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetRegistry: codec for type '{}' is already registered")
+            NWB_LOGGER_ERROR(GLB_TEXT("AssetRegistry: codec for type '{}' is already registered")
                 , StringConvert(typeName.resolvedText())
             );
             return false;
@@ -72,7 +72,7 @@ bool AssetRegistry::deserializeAsset(
     outAsset.reset();
 
     if(!assetType){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetRegistry: asset type is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetRegistry: asset type is empty"));
         return false;
     }
 
@@ -88,7 +88,7 @@ bool AssetRegistry::deserializeAssetByName(
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
     if(found == m_codecs.end()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.resolvedText()));
         return false;
     }
     const NotNull<IAssetCodec*> codec(found.value().get());

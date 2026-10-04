@@ -41,7 +41,7 @@ struct ViewTupleAccess{
     }
 
     static EntityID entityAt(const ViewEntityVector& entities, const usize denseIndex){
-        GLOBAL_ASSERT(denseIndex < entities.size());
+        GLB_ASSERT(denseIndex < entities.size());
         return entities[denseIndex];
     }
 

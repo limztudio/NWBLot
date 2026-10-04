@@ -22,7 +22,7 @@ u64 ComputeSceneLightingContentHash(
     const ECSRenderDetail::SceneShadingGpuData& shading,
     const ECSRenderDetail::SceneLightGpuData* lights,
     const u32 lightCount){
-    GLOBAL_ASSERT(lightCount == 0u || lights);
+    GLB_ASSERT(lightCount == 0u || lights);
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, shading.cameraPositionLightCount);
     Fnv64AppendValue(hash, lightCount);

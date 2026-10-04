@@ -142,7 +142,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry")
     );
     if(!surfelIrradianceHalf.valid() || !sceneGeometryDomain.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred surfel-GI graph resources"));
         return false;
     }
 
@@ -345,7 +345,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
         return false;
     }
 
@@ -369,7 +369,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         && rayTracingResources.surfelSplitGraphPipelinesReady
     ;
     if(hasSurfelWork && !graphOwnsSurfelGiResolve){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: active surfel GI has no complete prepared graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: active surfel GI has no complete prepared graph resources"));
         return false;
     }
     if(graphOwnsSurfelGiResolve){
@@ -445,7 +445,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     surfelGiLifecycleInputs.hasWork = hasSurfelWork;
     SurfelGiLifecycleResult surfelGiLifecycleResult;
     if(!surfelGiLifecycleBuilder.declare(surfelGiLifecycleInputs, surfelGiLifecycleResult)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI lifecycle"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI lifecycle"));
         return false;
     }
     m_deferredSurfelGiPreparationTask = surfelGiLifecycleResult.preparationTask;
@@ -481,7 +481,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
     );
     if(!surfelIrradianceClearTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
         return false;
     }
     m_deferredSurfelGiIrradianceClearTask = surfelIrradianceClearTask;
@@ -523,7 +523,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             asyncTiming
         );
         if(!m_deferredSurfelGiAgeFreeTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
             return false;
         }
 
@@ -546,7 +546,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             }
         );
         if(!m_deferredSurfelGiCellHeadClearTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
             return false;
         }
 
@@ -570,7 +570,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &asyncTiming
         );
         if(!m_deferredSurfelGiHashBuildTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
             return false;
         }
 
@@ -601,7 +601,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &asyncTiming
         );
         if(!m_deferredSurfelGiSpawnTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
             return false;
         }
 
@@ -629,7 +629,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &asyncTiming
         );
         if(!m_deferredSurfelGiTraceBuildArgsTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
             return false;
         }
 
@@ -658,7 +658,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &asyncTiming
         );
         if(!m_deferredSurfelGiTraceTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
             return false;
         }
 
@@ -683,7 +683,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &asyncTiming
         );
         if(!m_deferredSurfelGiResolveTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
             return false;
         }
         surfelGiDependency = m_deferredSurfelGiResolveTask;
@@ -722,7 +722,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         graphOwnsSurfelGiResolve ? &asyncTiming : nullptr
     );
     if(!m_deferredSurfelGiTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
         return false;
     }
     return true;

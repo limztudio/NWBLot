@@ -35,17 +35,17 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
     if(!desc.CS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
         return nullptr;
     }
 
     auto* cs = desc.CS.get();
     if(&cs->m_context != &m_context){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create compute pipeline: compute shader belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create compute pipeline: compute shader belongs to another device"));
         return nullptr;
     }
     if(cs->m_shaderModule == VK_NULL_HANDLE || cs->m_desc.shaderType != ShaderType::Compute){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create compute pipeline: compute shader has an invalid module or stage"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create compute pipeline: compute shader has an invalid module or stage"));
         return nullptr;
     }
 
@@ -70,7 +70,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
-        GLOBAL_TEXT("compute pipeline"),
+        GLB_TEXT("compute pipeline"),
         *pso,
         scratchArena
     ))
@@ -80,7 +80,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     pipelineInfo.stage = shaderStages[0];
     VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso);
 
-    if(!createPipelineOrDestroy(GLOBAL_TEXT("compute pipeline"), *pso, pipelineInfo))
+    if(!createPipelineOrDestroy(GLB_TEXT("compute pipeline"), *pso, pipelineInfo))
         return nullptr;
 
     return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -94,17 +94,17 @@ void CommandList::setComputeState(const ComputeState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, VulkanArenaScope::s_SetComputeStateCommandLabel))
         return;
     if(!state.pipeline){
-        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, GLOBAL_TEXT("compute pipeline is null"));
+        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, GLB_TEXT("compute pipeline is null"));
         return;
     }
     if(&state.pipeline->m_context != &m_context){
-        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, GLOBAL_TEXT("compute pipeline belongs to another device"));
+        rejectCommandRecording(VulkanArenaScope::s_SetComputeStateCommandLabel, GLB_TEXT("compute pipeline belongs to another device"));
         return;
     }
     if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
         rejectCommandRecording(
             VulkanArenaScope::s_SetComputeStateCommandLabel,
-            GLOBAL_TEXT("compute pipeline has no valid native pipeline or layout")
+            GLB_TEXT("compute pipeline has no valid native pipeline or layout")
         );
         return;
     }
@@ -117,7 +117,7 @@ void CommandList::setComputeState(const ComputeState& state){
     ){
         rejectCommandRecording(
             VulkanArenaScope::s_SetComputeStateCommandLabel,
-            GLOBAL_TEXT("indirect buffer has no valid native buffer or indirect-argument usage")
+            GLB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage")
         );
         return;
     }
@@ -151,16 +151,16 @@ void CommandList::setComputeState(const ComputeState& state){
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, GLOBAL_TEXT("dispatch")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, GLB_TEXT("dispatch")))
         return;
     if(!m_currentComputeState.pipeline){
-        rejectCommandRecording(GLOBAL_TEXT("dispatch"), GLOBAL_TEXT("no compute pipeline is bound"));
+        rejectCommandRecording(GLB_TEXT("dispatch"), GLB_TEXT("no compute pipeline is bound"));
         return;
     }
 
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(!VulkanDetail::AreDispatchGroupCountsValid(groupsX, groupsY, groupsZ, limits.maxComputeWorkGroupCount)){
-        rejectCommandRecording(GLOBAL_TEXT("dispatch"), GLOBAL_TEXT("group counts exceed device limits"));
+        rejectCommandRecording(GLB_TEXT("dispatch"), GLB_TEXT("group counts exceed device limits"));
         return;
     }
 
@@ -171,21 +171,21 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, VulkanArenaScope::s_DispatchIndirectCommandLabel))
         return;
     if(!m_currentComputeState.pipeline){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLOBAL_TEXT("no compute pipeline is bound"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLB_TEXT("no compute pipeline is bound"));
         return;
     }
     if(!m_currentComputeState.indirectParams){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLOBAL_TEXT("no indirect buffer is bound"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLB_TEXT("no indirect buffer is bound"));
         return;
     }
 
     auto* buffer = m_currentComputeState.indirectParams;
     if((offsetBytes & s_BufferAlignmentMask) != 0u){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLOBAL_TEXT("indirect argument offset is not 4-byte aligned"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLB_TEXT("indirect argument offset is not 4-byte aligned"));
         return;
     }
     if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_creationDesc, offsetBytes, sizeof(DispatchIndirectArguments))){
-        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLOBAL_TEXT("indirect argument range is outside the buffer"));
+        rejectCommandRecording(VulkanArenaScope::s_DispatchIndirectCommandLabel, GLB_TEXT("indirect argument range is outside the buffer"));
         return;
     }
 

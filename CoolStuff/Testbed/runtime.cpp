@@ -56,11 +56,11 @@ static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"
 static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
 static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
 static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
-static constexpr TStringView s_DefaultSceneDescription = GLOBAL_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
-static constexpr TStringView s_InitWorldFailedText = GLOBAL_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
-static constexpr TStringView s_CharacterInvalidText = GLOBAL_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
-static constexpr TStringView s_StartupSceneText = GLOBAL_TEXT("ProjectTestbed: startup scene created ({})");
-static constexpr TStringView s_ShutdownText = GLOBAL_TEXT("ProjectTestbed: shutdown");
+static constexpr TStringView s_DefaultSceneDescription = GLB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
+static constexpr TStringView s_InitWorldFailedText = GLB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
+static constexpr TStringView s_CharacterInvalidText = GLB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
+static constexpr TStringView s_StartupSceneText = GLB_TEXT("ProjectTestbed: startup scene created ({})");
+static constexpr TStringView s_ShutdownText = GLB_TEXT("ProjectTestbed: shutdown");
 static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
 
 
@@ -88,13 +88,13 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    GLOBAL_ASSERT(ui);
+    GLB_ASSERT(ui);
     return ui->wantsKeyboard();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    GLOBAL_ASSERT(ui);
+    GLB_ASSERT(ui);
     return ui->wantsPointer();
 }
 
@@ -190,7 +190,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 delta
 ){
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
-    GLOBAL_ASSERT(cameraView.valid());
+    GLB_ASSERT(cameraView.valid());
 
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;
@@ -238,7 +238,7 @@ static void ApplyFlyCameraInputToMainCamera(
 
 static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
     const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModel, s_GroundPlaneMaterial);
-    GLOBAL_FATAL_ASSERT(groundEntity.valid());
+    GLB_FATAL_ASSERT(groundEntity.valid());
 }
 
 
@@ -288,8 +288,8 @@ bool ProjectTestbed::onStartup(){
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
-    GLOBAL_ASSERT(activeCamera.camera.valid());
-    GLOBAL_ASSERT(cameraTransform);
+    GLB_ASSERT(activeCamera.camera.valid());
+    GLB_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
@@ -312,7 +312,7 @@ bool ProjectTestbed::onStartup(){
     if(!createDefaultScene())
         return false;
     auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
-    GLOBAL_ASSERT(modelSystemPtr);
+    GLB_ASSERT(modelSystemPtr);
     NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
     modelSystem.syncModelRuntimes();
     registerInputHandler();

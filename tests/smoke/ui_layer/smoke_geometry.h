@@ -36,7 +36,7 @@ namespace Tests::Smoke{
 }
 
 inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStringView name, const Impl::Ui::Rect& rectangle){
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("{}: geometry sequence={} {}={},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("{}: geometry sequence={} {}={},{},{},{}")
         , tag, sequence, name, rectangle.x, rectangle.y, rectangle.width, rectangle.height
     );
 }
@@ -72,11 +72,11 @@ inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, cons
     const auto& bounds = placement.bounds;
     const auto& content = placement.content;
     const auto& caret = placement.caret;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("{}: geometry sequence={} field={} bounds={},{},{},{} content={},{},{},{}")
         , tag, sequence, field, bounds.x, bounds.y, bounds.width, bounds.height
         , content.x, content.y, content.width, content.height
     );
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("{}: selection sequence={} field={} caret={},{},{},{} selection={},{},{},{} scroll={}")
         , tag, sequence, field, caret.x, caret.y, caret.width, caret.height
         , selection.x, selection.y, selection.width, selection.height, placement.scroll
     );

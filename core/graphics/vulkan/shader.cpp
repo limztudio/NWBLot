@@ -37,7 +37,7 @@ template<typename WordVector>
 
     const usize wordCount = binarySize / sizeof(u32);
     outWords.resize(wordCount);
-    GLOBAL_MEMCPY(outWords.data(), binarySize, binary, binarySize);
+    GLB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
 
     if(!IsValidSpirvModuleWords(outWords.data(), outWords.size())){
         outWords.clear();
@@ -57,17 +57,17 @@ inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u
 
     const FormatInfo& formatInfo = GetFormatInfo(attr.format);
     if(formatInfo.bytesPerBlock == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
         return false;
     }
     if(attr.arraySize > Limit<u64>::s_Max / static_cast<u64>(formatInfo.bytesPerBlock)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
         return false;
     }
 
     outBytes = static_cast<u64>(formatInfo.bytesPerBlock) * static_cast<u64>(attr.arraySize);
     if(outBytes == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
         return false;
     }
 
@@ -88,7 +88,7 @@ inline bool ResolveShaderEntryPoint(
         return true;
 
     case SpirvEntryPointLookupResult::NotFound:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}")
             , StringConvert(entryName)
             , static_cast<u32>(shaderType)
             , StringConvert(errorContext)
@@ -96,7 +96,7 @@ inline bool ResolveShaderEntryPoint(
         return false;
 
     case SpirvEntryPointLookupResult::InvalidSpirv:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}")
             , StringConvert(entryName)
             , static_cast<u32>(shaderType)
             , StringConvert(errorContext)
@@ -183,7 +183,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     Shader* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc.shaderType = shaderType;
     shader->m_desc.entryName = entryName;
-    GLOBAL_ASSERT(!m_spirvWords.empty());
+    GLB_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
 
     if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library", shader->m_entryPointName)){
@@ -198,7 +198,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader module for entry '{}': {}"), StringConvert(shader->m_entryPointName), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -220,7 +220,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
     if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, shader->m_spirvWords)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Invalid shader bytecode payload"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Invalid shader bytecode payload"));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -239,7 +239,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader module: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -248,27 +248,27 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
 
 ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants){
     if(numConstants > 0 && !constants){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
         return nullptr;
     }
     if(numConstants > Limit<u32>::s_Max / sizeof(u32)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader specialization: constant count {} is too large"), numConstants);
         return nullptr;
     }
 
     Shader& base = baseShader;
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = base.m_desc;
-    GLOBAL_ASSERT(!base.m_spirvWords.empty());
+    GLB_ASSERT(!base.m_spirvWords.empty());
     shader->m_spirvWords = base.m_spirvWords;
     // The validated name starts at a SPIR-V word and keeps its offset in the byte-for-byte module copy.
     const u32* const entryPointWords = reinterpret_cast<const u32*>(base.m_entryPointName.data());
-    GLOBAL_ASSERT(entryPointWords >= base.m_spirvWords.data() && entryPointWords < base.m_spirvWords.data() + base.m_spirvWords.size());
+    GLB_ASSERT(entryPointWords >= base.m_spirvWords.data() && entryPointWords < base.m_spirvWords.data() + base.m_spirvWords.size());
     const usize entryPointWordOffset = static_cast<usize>(entryPointWords - base.m_spirvWords.data());
-    GLOBAL_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
-    GLOBAL_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
+    GLB_ASSERT(entryPointWordOffset < shader->m_spirvWords.size());
+    GLB_ASSERT(base.m_entryPointName.size() < (shader->m_spirvWords.size() - entryPointWordOffset) * sizeof(u32));
     shader->m_entryPointName = AStringView(reinterpret_cast<const char*>(shader->m_spirvWords.data() + entryPointWordOffset), base.m_entryPointName.size());
-    GLOBAL_ASSERT(shader->m_entryPointName.data()[shader->m_entryPointName.size()] == '\0');
+    GLB_ASSERT(shader->m_entryPointName.data()[shader->m_entryPointName.size()] == '\0');
     shader->m_desc.entryName = shader->m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
@@ -278,7 +278,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
 
     const VkResult res = m_context.deviceDispatch.vkCreateShaderModule(m_context.device, &createInfo, m_context.allocationCallbacks, &shader->m_shaderModule);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader module for specialization: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
@@ -293,7 +293,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
             entry.offset = static_cast<u32>(i * sizeof(u32));
             entry.size = sizeof(u32);
 
-            GLOBAL_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
+            GLB_MEMCPY(shader->m_specializationData.data() + i, sizeof(u32), &constants[i].value, sizeof(u32));
         };
 
         if(taskScheduler().isParallelEnabled() && numConstants >= s_ParallelSpecializationThreshold)
@@ -310,7 +310,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
     auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
     if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, lib->m_spirvWords)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Invalid shader library bytecode payload"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Invalid shader library bytecode payload"));
         DestroyArenaObject(m_context.objectArena, lib);
         return nullptr;
     }
@@ -336,12 +336,12 @@ InputLayout::InputLayout(const VulkanContext& context)
 
 InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*){
     if(attributeCount > 0 && !d){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute data is null for {} attributes"), attributeCount);
         return nullptr;
     }
     const auto& limits = m_context.physicalDeviceProperties.limits;
     if(attributeCount > limits.maxVertexInputAttributes){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute count {} exceeds device limit {}")
             , attributeCount
             , limits.maxVertexInputAttributes
         );
@@ -367,15 +367,15 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     for(u32 i = 0u; i < attributeCount; ++i){
         const VertexAttributeDesc& attr = d[i];
         if(ConvertFormat(attr.format) == VK_FORMAT_UNDEFINED){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} has unsupported vertex format"), i);
             return nullptr;
         }
         if(attr.arraySize == 0){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} has zero array size"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero array size"), i);
             return nullptr;
         }
         if(attr.bufferIndex >= limits.maxVertexInputBindings){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} buffer index {} exceeds device binding limit {}")
                 , i
                 , attr.bufferIndex
                 , limits.maxVertexInputBindings
@@ -383,7 +383,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
         if(attr.offset > limits.maxVertexInputAttributeOffset){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} offset {} exceeds device limit {}")
                 , i
                 , attr.offset
                 , limits.maxVertexInputAttributeOffset
@@ -395,13 +395,13 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         if(!__hidden_vulkan_shader::ComputeVertexAttributeBytes(attr, i, attributeBytes))
             return nullptr;
         if(static_cast<u64>(attr.offset) > Limit<u64>::s_Max - attributeBytes){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
             return nullptr;
         }
 
         const u64 attributeEnd = static_cast<u64>(attr.offset) + attributeBytes;
         if(attr.elementStride != 0 && attributeEnd > static_cast<u64>(attr.elementStride)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}")
                 , i
                 , attributeEnd
                 , attr.elementStride
@@ -414,14 +414,14 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
         if(bindingInfoInsert.second)
             bindingInfo.isInstanced = attr.isInstanced;
         if(bindingInfo.isInstanced != attr.isInstanced){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"), attr.bufferIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: buffer binding {} mixes vertex and instance input rates"), attr.bufferIndex);
             return nullptr;
         }
 
         bindingInfo.requiredStride = Max(bindingInfo.requiredStride, attributeEnd);
         if(attr.elementStride != 0){
             if(bindingInfo.hasExplicitStride && bindingInfo.explicitStride != attr.elementStride){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}")
+                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: buffer binding {} uses conflicting explicit strides {} and {}")
                     , attr.bufferIndex
                     , bindingInfo.explicitStride
                     , attr.elementStride
@@ -437,7 +437,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     for(const auto& [bufferIndex, bindingInfo] : bindingInfos){
         const u64 stride = bindingInfo.hasExplicitStride ? static_cast<u64>(bindingInfo.explicitStride) : bindingInfo.requiredStride;
         if(stride == 0 || stride > limits.maxVertexInputBindingStride){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: buffer binding {} stride {} is outside device limit {}")
                 , bufferIndex
                 , stride
                 , limits.maxVertexInputBindingStride
@@ -445,7 +445,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
         if(bindingInfo.requiredStride > stride){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create input layout: buffer binding {} requires {} bytes but explicit stride is {}")
                 , bufferIndex
                 , bindingInfo.requiredStride
                 , stride

@@ -76,7 +76,7 @@ private:
             }
 
             T& value(){
-                GLOBAL_ASSERT(m_value.has_value());
+                GLB_ASSERT(m_value.has_value());
                 return *m_value;
             }
 

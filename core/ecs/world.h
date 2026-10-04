@@ -88,7 +88,7 @@ public:
 private:
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){
-        GLOBAL_ASSERT(m_entityManager.alive(entityId));
+        GLB_ASSERT(m_entityManager.alive(entityId));
         ComponentPool<T>& pool = assurePool<T>();
         if(T* existing = pool.tryGet(entityId))
             return *existing;
@@ -110,13 +110,13 @@ private:
 
     template<typename T>
     T& getComponent(EntityID entityId){
-        GLOBAL_ASSERT(m_entityManager.alive(entityId));
+        GLB_ASSERT(m_entityManager.alive(entityId));
         return requirePool<T>().get(entityId);
     }
 
     template<typename T>
     const T& getComponent(EntityID entityId)const{
-        GLOBAL_ASSERT(m_entityManager.alive(entityId));
+        GLB_ASSERT(m_entityManager.alive(entityId));
         return requirePool<T>().get(entityId);
     }
 
@@ -230,14 +230,14 @@ private:
     template<typename T>
     ComponentPool<T>& requirePool(){
         auto* pool = getPool<T>();
-        GLOBAL_ASSERT(pool);
+        GLB_ASSERT(pool);
         return *pool;
     }
 
     template<typename T>
     const ComponentPool<T>& requirePool()const{
         auto* pool = getPool<T>();
-        GLOBAL_ASSERT(pool);
+        GLB_ASSERT(pool);
         return *pool;
     }
 

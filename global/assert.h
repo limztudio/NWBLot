@@ -16,16 +16,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_AssertColon = GLOBAL_TEXT(":");
-inline constexpr TStringView s_AssertNewline = GLOBAL_TEXT("\n");
-inline constexpr TStringView s_AssertLabel = GLOBAL_TEXT("ASSERT ");
-inline constexpr TStringView s_FatalAssertLabel = GLOBAL_TEXT("FATAL ASSERT ");
+inline constexpr TStringView s_AssertColon = GLB_TEXT(":");
+inline constexpr TStringView s_AssertNewline = GLB_TEXT("\n");
+inline constexpr TStringView s_AssertLabel = GLB_TEXT("ASSERT ");
+inline constexpr TStringView s_FatalAssertLabel = GLB_TEXT("FATAL ASSERT ");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
+#define GLB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
         .event = ::DiagnosticEventName::s_Assert,                                        \
         .category = categoryValue,                                                       \
@@ -36,24 +36,24 @@ inline constexpr TStringView s_FatalAssertLabel = GLOBAL_TEXT("FATAL ASSERT ");
         .terminatesProcess = true,                                                       \
     })
 
-#define GLOBAL_DETAIL_ASSERT_ABORT(label)                                                   \
-    GLOBAL_TCERR << label << GLOBAL_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
+#define GLB_DETAIL_ASSERT_ABORT(label)                                                   \
+    GLB_TCERR << label << GLB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
     ::std::abort()
 
-#define GLOBAL_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
+#define GLB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
 {                                                                                        \
     if(!(condition)){                                                                    \
-        GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
-        GLOBAL_DETAIL_ASSERT_ABORT(label);                                                  \
+        GLB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
+        GLB_DETAIL_ASSERT_ABORT(label);                                                  \
     }                                                                                    \
 }
 
-#define GLOBAL_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
+#define GLB_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
 {                                                                                        \
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
-        GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
-        GLOBAL_TCERR << label << GLOBAL_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
+        GLB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
+        GLB_TCERR << label << GLB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \
 }
@@ -62,24 +62,24 @@ inline constexpr TStringView s_FatalAssertLabel = GLOBAL_TEXT("FATAL ASSERT ");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if GLOBAL_OCCUR_ASSERT
-#define GLOBAL_ASSERT(condition) GLOBAL_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
-#define GLOBAL_ASSERT_MSG(condition, ...) GLOBAL_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
+#if GLB_OCCUR_ASSERT
+#define GLB_ASSERT(condition) GLB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
+#define GLB_ASSERT_MSG(condition, ...) GLB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
 #else
-#define GLOBAL_ASSERT(condition)
-#define GLOBAL_ASSERT_MSG(condition, ...)
+#define GLB_ASSERT(condition)
+#define GLB_ASSERT_MSG(condition, ...)
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if GLOBAL_OCCUR_FATAL_ASSERT
-#define GLOBAL_FATAL_ASSERT(condition) GLOBAL_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
-#define GLOBAL_FATAL_ASSERT_MSG(condition, ...) GLOBAL_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
+#if GLB_OCCUR_FATAL_ASSERT
+#define GLB_FATAL_ASSERT(condition) GLB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
+#define GLB_FATAL_ASSERT_MSG(condition, ...) GLB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
 #else
-#define GLOBAL_FATAL_ASSERT(condition)
-#define GLOBAL_FATAL_ASSERT_MSG(condition, ...)
+#define GLB_FATAL_ASSERT(condition)
+#define GLB_FATAL_ASSERT_MSG(condition, ...)
 #endif
 
 

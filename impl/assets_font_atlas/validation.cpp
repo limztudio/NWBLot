@@ -48,7 +48,7 @@ namespace __hidden_font_atlas_validation{
                     if(word == last / 64u)
                         mask &= Limit<u64>::s_Max >> (63u - last % 64u);
                     if((occupied[word] & mask) != 0u){
-                        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: glyph {} overlaps another guarded region"), glyph.glyphId);
+                        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: glyph {} overlaps another guarded region"), glyph.glyphId);
                         return false;
                     }
                     occupied[word] |= mask;
@@ -71,14 +71,14 @@ namespace __hidden_font_atlas_validation{
 
 bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
     if(!payload.font || payload.fontSha256 == Sha256Digest{} || payload.faceIndex != 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: missing font identity/hash or unsupported face"));
         return false;
     }
     if(
         payload.unitsPerEm < 16u || payload.unitsPerEm > 16384u || payload.sourceGlyphCount == 0u
         || payload.sourceGlyphCount > s_FontAtlasMaxGlyphCount || payload.glyphs.size() != payload.sourceGlyphCount
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid face metrics or incomplete all-glyph policy"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid face metrics or incomplete all-glyph policy"));
         return false;
     }
     if(
@@ -86,18 +86,18 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
         || payload.spreadPixels < s_FontAtlasMinSpreadPixels || payload.spreadPixels > s_FontAtlasMaxSpreadPixels
         || payload.guardTexels != 1u || payload.rasterMode > FontAtlasRasterMode::Bitmap
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: unsupported bake size, spread, guard, or raster mode"));
         return false;
     }
     if(
         !IsFinite(payload.ascenderUnits) || !IsFinite(payload.descenderUnits) || !IsFinite(payload.lineGapUnits)
         || payload.ascenderUnits <= payload.descenderUnits || payload.lineGapUnits < 0.f
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: nonfinite or invalid vertical metrics"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: nonfinite or invalid vertical metrics"));
         return false;
     }
     if(payload.groups.empty() || payload.groups.size() > s_FontAtlasMaxGroupCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid image group count"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid image group count"));
         return false;
     }
     u64 pixelBytes = 0u;
@@ -106,16 +106,16 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
             || group.channelCount == 0u || group.channelCount > 4u
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid extent or channel count"));
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid extent or channel count"));
             return false;
         }
         const u64 byteCount = static_cast<u64>(group.width) * group.height * group.channelCount;
         if(group.pixels.size() != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid extent, payload size, or byte budget"));
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid extent, payload size, or byte budget"));
             return false;
         }
         if(ComputeSha256({ group.pixels.data(), group.pixels.size() }) != group.sha256){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: pixel content hash mismatch"));
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: pixel content hash mismatch"));
             return false;
         }
         pixelBytes += byteCount;
@@ -126,7 +126,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             glyph.glyphId != index || glyph.drawable > 1u || !IsFinite(glyph.advanceUnits)
             || !IsFinite(glyph.planeLeft) || !IsFinite(glyph.planeTop) || !IsFinite(glyph.planeRight) || !IsFinite(glyph.planeBottom)
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid glyph ID, flags, or metrics at {}"), index);
             return false;
         }
         if(glyph.drawable == 0u){
@@ -134,7 +134,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
                 glyph.group != 0u || glyph.channel != 0u || glyph.x != 0u || glyph.y != 0u || glyph.width != 0u || glyph.height != 0u
                 || glyph.planeLeft != 0.f || glyph.planeTop != 0.f || glyph.planeRight != 0.f || glyph.planeBottom != 0.f
             ){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: nondrawable glyph {} carries a bitmap"), index);
+                NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: nondrawable glyph {} carries a bitmap"), index);
                 return false;
             }
             continue;
@@ -143,7 +143,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             glyph.group >= payload.groups.size() || glyph.width == 0u || glyph.height == 0u
             || glyph.planeLeft >= glyph.planeRight || glyph.planeTop >= glyph.planeBottom
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: invalid glyph {} page or padded bounds"), index);
             return false;
         }
         const f32 unitsPerPixel = static_cast<f32>(payload.unitsPerEm) / static_cast<f32>(payload.bakePpem);
@@ -153,7 +153,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             Abs((glyph.planeRight - glyph.planeLeft) - expectedWidth) > expectedWidth * 0.0001f
             || Abs((glyph.planeBottom - glyph.planeTop) - expectedHeight) > expectedHeight * 0.0001f
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: glyph {} plane bounds disagree with bitmap size"), index);
             return false;
         }
         const FontAtlasGroup& group = payload.groups[glyph.group];
@@ -162,14 +162,14 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             || glyph.x >= group.width || glyph.y >= group.height
             || glyph.width >= group.width - glyph.x || glyph.height >= group.height - glyph.y
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: glyph {} exceeds guarded page bounds"), index);
             return false;
         }
     }
     if(!__hidden_font_atlas_validation::CheckGuardedOverlap(payload))
         return false;
     if(payload.positioningTables.size() > 3u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: positioning table count exceeds kern/GPOS/GDEF"));
         return false;
     }
     u64 positioningBytes = 0u;
@@ -181,7 +181,7 @@ bool ValidateFontAtlasPayload(const FontAtlasPayload& payload){
             || ComputeSha256({ table.bytes.data(), table.bytes.size() }) != table.sha256
             || !ValidateFontAtlasPositioningTable(table, payload.sourceGlyphCount)
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas validation failed: positioning order, bounds, hash, or structure"));
+            NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas validation failed: positioning order, bounds, hash, or structure"));
             return false;
         }
         previousTag = table.tag;

@@ -17,7 +17,7 @@
 #include "type.h"
 #include "container/adaptor.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -108,7 +108,7 @@ struct ConstWString{
     constexpr operator WStringView()const{ return WStringView(data, N - 1u); }
     constexpr const wchar* c_str()const{ return data; }
 };
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 template<usize N>
 using ConstTString = ConstWString<N>;
 #else
@@ -120,7 +120,7 @@ template<usize N>
 constexpr auto MakeConstString(const char(&str)[N]){ return ConstString<N>(str); }
 template<usize N>
 constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(str); }
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 #define MakeConstTString MakeConstWString
 #else
 #define MakeConstTString MakeConstString
@@ -354,7 +354,7 @@ inline void WriteConvertedText(Out& out, const In& input){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 template<typename ArenaT, typename In> requires BasicStringDetail::FromCharView<In>
 inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     AStringView src(raw);
@@ -362,14 +362,14 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     if(src.empty())
         return dst;
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
-    GLOBAL_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+#if defined(GLB_PLATFORM_WINDOWS)
+    GLB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
     const int inputLength = static_cast<int>(src.length());
     const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, nullptr, 0);
-    GLOBAL_FATAL_ASSERT(len != 0);
+    GLB_FATAL_ASSERT(len != 0);
     dst.resize(len);
     const auto written = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, dst.data(), len);
-    GLOBAL_FATAL_ASSERT(written == len);
+    GLB_FATAL_ASSERT(written == len);
     return dst;
 #else
     dst.resize(src.size());
@@ -390,15 +390,15 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
     if(src.empty())
         return TString<ArenaT>{arena};
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
-    GLOBAL_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+#if defined(GLB_PLATFORM_WINDOWS)
+    GLB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
     const int inputLength = static_cast<int>(src.length());
     const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, nullptr, 0, nullptr, nullptr);
-    GLOBAL_FATAL_ASSERT(len != 0);
+    GLB_FATAL_ASSERT(len != 0);
     TString<ArenaT> dst{arena};
     dst.resize(len);
     const auto written = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, dst.data(), len, nullptr, nullptr);
-    GLOBAL_FATAL_ASSERT(written == len);
+    GLB_FATAL_ASSERT(written == len);
     return dst;
 #else
     return BasicStringDetail::WideToUtf8(arena, src);

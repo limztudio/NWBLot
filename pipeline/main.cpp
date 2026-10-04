@@ -14,21 +14,21 @@
 
 static int RunTool(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(GLOBAL_TEXT(NWB_PIPELINE_TOOL_NAME))){
-        GLOBAL_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
+    if(!logger.init(GLB_TEXT(NWB_PIPELINE_TOOL_NAME))){
+        GLB_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
         return s_PipelineExitFatal;
     }
     NWB::Log::ClientLoggerRegistrationGuard guard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
     return RunPipelineTool(argc, argv);
 }
 
-#if !defined(GLOBAL_PLATFORM_WINDOWS) || !defined(GLOBAL_UNICODE)
+#if !defined(GLB_PLATFORM_WINDOWS) || !defined(GLB_UNICODE)
 static int EntryPoint(const isize argc, char** argv, void*){
     return RunTool(static_cast<int>(argc), argv);
 }
 #endif
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 static int EntryPoint(const isize argc, wchar** argv, void*){
     return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, RunTool);
 }

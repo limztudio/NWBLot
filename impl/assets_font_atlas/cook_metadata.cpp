@@ -50,7 +50,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
         outValue = static_cast<u32>(value->asInteger());
         return true;
     }
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}")
+    NWB_LOGGER_ERROR(GLB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}")
         , PathToString<tchar>(path)
         , StringConvert(field)
         , minimum
@@ -112,7 +112,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     else if(rasterMode == "outline")
         payload.rasterMode = FontAtlasRasterMode::Outline;
     else{
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(GLB_TEXT("Font atlas meta '{}': unsupported raster_mode"), PathToString<tchar>(path));
         return false;
     }
     return true;
@@ -187,7 +187,7 @@ bool ParseFontAtlasCookMetadataValue(
     Font font(outEntry.arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
     if(!ReadSourceFaceMetrics(font, candidate.payload)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     if(

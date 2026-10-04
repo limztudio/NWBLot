@@ -80,7 +80,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 };
 
 [[nodiscard]] static TStringView CsgVisibleFpsLabel(){
-    return GLOBAL_TEXT("CsgVisibleSmokeProject");
+    return GLB_TEXT("CsgVisibleSmokeProject");
 }
 
 
@@ -233,19 +233,19 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
         if(!world){
-            NWB_LOGGER_FATAL(GLOBAL_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
+            NWB_LOGGER_FATAL(GLB_TEXT("CsgVisibleSmokeProject initialization failed: ECS world allocation failed"));
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
         if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(GLOBAL_TEXT("CsgVisibleSmokeProject initialization failed: shader path resolver callback is null"));
+            NWB_LOGGER_FATAL(GLB_TEXT("CsgVisibleSmokeProject initialization failed: shader path resolver callback is null"));
             throw RuntimeException("CsgVisibleSmokeProject initialization failed");
         }
 
         if(context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets)){
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
-                GLOBAL_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable")
+                GLB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable")
             );
         }
 
@@ -314,18 +314,18 @@ public:
         bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
             allEntitiesValid = allEntitiesValid && m_receivers[shapeSlot].valid() && m_cutters[shapeSlot].valid();
-        GLOBAL_FATAL_ASSERT_MSG(
+        GLB_FATAL_ASSERT_MSG(
             allEntitiesValid,
-            GLOBAL_TEXT("CsgVisibleSmokeProject failed to create all scene entities")
+            GLB_TEXT("CsgVisibleSmokeProject failed to create all scene entities")
         );
 
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgVisibleSmokeProject: visible CSG interval receiver scene created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CsgVisibleSmokeProject: visible CSG interval receiver scene created"));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgVisibleSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CsgVisibleSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -376,7 +376,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return GLOBAL_TEXT("NWB CSG Visible Smoke");
+    return GLB_TEXT("NWB CSG Visible Smoke");
 }
 
 

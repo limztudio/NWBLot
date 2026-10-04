@@ -11,7 +11,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 #include <sys/types.h>
 #include <unistd.h>
 #endif
@@ -34,7 +34,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,7 +100,7 @@ static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom){
 }
 
 static void ResetKeyStates(){
-    GLOBAL_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
+    GLB_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
 }
 
 static i32 TranslateModifiers(u32 state){
@@ -264,7 +264,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     case DestroyNotify:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                GLOBAL_FATAL_ASSERT(false);
+                GLB_FATAL_ASSERT(false);
         }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
@@ -274,7 +274,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     case UnmapNotify:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                GLOBAL_FATAL_ASSERT(false);
+                GLB_FATAL_ASSERT(false);
         }
         frame.input().pointerCaptureLost();
         frame.input().pointerLeave();
@@ -283,7 +283,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     case FocusIn:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(true))
-                GLOBAL_FATAL_ASSERT(false);
+                GLB_FATAL_ASSERT(false);
         }
         frameData.setActive(true);
         frame.input().windowFocusUpdate(true);
@@ -292,7 +292,7 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
     case FocusOut:
         if(ITextInputService* const textInput = frame.tryTextInput()){
             if(!textInput->setFocused(false))
-                GLOBAL_FATAL_ASSERT(false);
+                GLB_FATAL_ASSERT(false);
         }
         frameData.setActive(false);
         ResetKeyStates();
@@ -362,7 +362,7 @@ static bool QueryWindowState(Frame& frame, u32& width, u32& height, bool& window
 
     XWindowAttributes attributes = {};
     if(XGetWindowAttributes(GetX11Display(frameData), GetX11Window(frameData), &attributes) == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame window attribute query failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame window attribute query failed"));
         return false;
     }
 
@@ -408,7 +408,7 @@ bool InitX11Frame(Frame& frame){
 
     SetX11Display(frameData, XOpenDisplay(nullptr));
     if(!GetX11Display(frameData)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame X11 display connection failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame X11 display connection failed"));
         return false;
     }
 
@@ -420,13 +420,13 @@ bool InitX11Frame(Frame& frame){
     const u16 windowWidth = ClampInitialWindowDimension(requestedWidth, displayWidth);
     const u16 windowHeight = ClampInitialWindowDimension(requestedHeight, displayHeight);
     if(windowWidth == 0u || windowHeight == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame X11 display dimensions are invalid: {}x{}"), displayWidth, displayHeight);
         CleanupX11Frame(frame);
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLOBAL_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"),
+            GLB_TEXT("Frame X11 client size clamped from {}x{} to {}x{} for display {}x{}"),
             requestedWidth,
             requestedHeight,
             windowWidth,
@@ -455,7 +455,7 @@ bool InitX11Frame(Frame& frame){
         WhitePixel(GetX11Display(frameData), screen)
     ));
     if(GetX11Window(frameData) == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame X11 window creation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame X11 window creation failed"));
         CleanupX11Frame(frame);
         return false;
     }
@@ -489,13 +489,13 @@ bool InitX11Frame(Frame& frame){
     SetDeleteWindowMessage(frameData, XInternAtom(GetX11Display(frameData), "WM_DELETE_WINDOW", False));
     if(GetDeleteWindowMessage(frameData) == None){
         CleanupX11Frame(frame);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame X11 window close protocol registration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame X11 window close protocol registration failed"));
         return false;
     }
     Atom deleteWindowMessage = GetDeleteWindowMessage(frameData);
     if(XSetWMProtocols(GetX11Display(frameData), GetX11Window(frameData), &deleteWindowMessage, 1) == 0){
         CleanupX11Frame(frame);
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame X11 window close protocol installation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame X11 window close protocol installation failed"));
         return false;
     }
 
@@ -591,17 +591,17 @@ bool RunX11Frame(Frame& frame){
 
 GlobalUniquePtr<IClipboardService> CreateX11FrameClipboard(Frame& frame){
     Display* const display = GetX11Display(frame.data<Common::LinuxFrame>());
-    GLOBAL_FATAL_ASSERT(display);
+    GLB_FATAL_ASSERT(display);
     return CreateX11ClipboardService(frame.projectObjectArena(), *display);
 }
 
 GlobalUniquePtr<ITextInputService> CreateX11FrameTextInput(Frame& frame){
     const auto& frameData = frame.data<Common::LinuxFrame>();
     Display* const display = GetX11Display(frameData);
-    GLOBAL_FATAL_ASSERT(display && GetX11Window(frameData));
+    GLB_FATAL_ASSERT(display && GetX11Window(frameData));
     auto service = CreateX11TextInputService(frame.projectObjectArena(), *display, frameData.nativeWindowHandle());
     if(service && !service->setFocused(frameData.isActive()))
-        GLOBAL_FATAL_ASSERT(false);
+        GLB_FATAL_ASSERT(false);
     return service;
 }
 

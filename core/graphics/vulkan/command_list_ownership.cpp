@@ -62,7 +62,7 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
     const bool ownershipMatches = m_commandList.m_graphPublicationState.load(MemoryOrder::acquire)
         == s_GraphPublicationReading
     ;
-    GLOBAL_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
+    GLB_FATAL_ASSERT_MSG(ownershipMatches, "command-list diagnostic read lost its exact publication capability");
     if(!ownershipMatches)
         TerminateInvariant();
     m_commandList.m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
@@ -131,7 +131,7 @@ bool CommandList::GraphRecordingOwnership::finish(
 }
 
 void CommandList::GraphRecordingOwnership::publish()noexcept{
-    GLOBAL_FATAL_ASSERT_MSG(m_acquired, "task-graph command recording publication requires its exact capability");
+    GLB_FATAL_ASSERT_MSG(m_acquired, "task-graph command recording publication requires its exact capability");
     if(!m_acquired)
         TerminateInvariant();
     m_commandList.publishGraphRecordingOwnership(m_recordingLeaseSerial);
@@ -149,7 +149,7 @@ void CommandList::GraphRecordingOwnership::release()noexcept{
 }
 
 void CommandList::GraphRecordingOwnership::attachCapability()noexcept{
-    GLOBAL_FATAL_ASSERT_MSG(!m_capabilityAttached, "task-graph recording capability cannot be attached twice");
+    GLB_FATAL_ASSERT_MSG(!m_capabilityAttached, "task-graph recording capability cannot be attached twice");
     if(m_capabilityAttached)
         TerminateInvariant();
 
@@ -169,7 +169,7 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
     while(*capability && *capability != &m_capability)
         capability = &(*capability)->previous;
     const bool capabilityFound = *capability == &m_capability;
-    GLOBAL_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
+    GLB_FATAL_ASSERT_MSG(capabilityFound, "task-graph recording capability left its owning thread-local stack");
     if(!capabilityFound)
         TerminateInvariant();
     *capability = m_capability.previous;

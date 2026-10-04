@@ -116,7 +116,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, GLOBAL_TEXT("SoftShadowTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("SoftShadowTestSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
 
@@ -271,7 +271,7 @@ public:
             tintApplied
         );
         if(!tintApplied)
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
         // A GLASS (transparent) `body` caster front-LEFT, beside the opaque one: the same body model with a refractive
         // material + a coloured tint. Its shadow is the COLORED transparent soft shadow -- the light passing through the
@@ -291,13 +291,13 @@ public:
             glassTintApplied
         );
         if(!glassTintApplied)
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));
 
         SyncSmokeModelRuntimes(*m_world);
 
-        GLOBAL_FATAL_ASSERT_MSG(
+        GLB_FATAL_ASSERT_MSG(
             activeCamera.valid() && m_groundEntity.valid() && m_characterOwner.valid() && m_glassOwner.valid(),
-            GLOBAL_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
+            GLB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
         );
 
         if(m_timingEnabled){
@@ -305,24 +305,24 @@ public:
             for(const auto lightEntity : lights){
                 const auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity);
                 if(!light || light->enableCaustics){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("ShadowTimingProbe: timing light policy unavailable"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("ShadowTimingProbe: timing light policy unavailable"));
                     return false;
                 }
             }
             const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
                 && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: natural shadow route {}")
-                , hardwareAvailable ? GLOBAL_TEXT("hardware") : GLOBAL_TEXT("software")
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: natural shadow route {}")
+                , hardwareAvailable ? GLB_TEXT("hardware") : GLB_TEXT("software")
             );
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: caustic emission 0"));
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: caustic emission 0"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
                 , static_cast<f64>(configuredAngularRadius())
                 , static_cast<f64>(configuredSourceRadius())
             );
         }
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLOBAL_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
+            GLB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
             , static_cast<f64>(configuredAngularRadius())
         );
         return true;
@@ -333,7 +333,7 @@ public:
         m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SoftShadowTestSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SoftShadowTestSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -345,7 +345,7 @@ public:
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(
-                    GLOBAL_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"),
+                    GLB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"),
                     m_rendererBaselineRenderedFrameCount
                 );
             }
@@ -376,11 +376,11 @@ public:
 
         static constexpr usize s_TitleCapacity = 256u;
         tchar title[s_TitleCapacity];
-        GLOBAL_TSPRINTF(
+        GLB_TSPRINTF(
             title, s_TitleCapacity,
-            GLOBAL_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
+            GLB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
             static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, configuredSourceRadius(),
-            m_yaw.manualControl() ? GLOBAL_TEXT("  [manual: <- ->]") : GLOBAL_TEXT("")
+            m_yaw.manualControl() ? GLB_TEXT("  [manual: <- ->]") : GLB_TEXT("")
         );
         m_context.graphics.setWindowTitle(TStringView(title));
     }
@@ -393,8 +393,8 @@ private:
     NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::ShadowTimingRenderPass m_timingRenderPass{ m_context.graphics };
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ GLOBAL_TEXT("SoftShadowTestSmokeProject") };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ GLOBAL_TEXT("SoftShadowTestSmokeProject") };
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ GLB_TEXT("SoftShadowTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ GLB_TEXT("SoftShadowTestSmokeProject") };
     bool m_timingEnabled = false;
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
@@ -418,7 +418,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return GLOBAL_TEXT("NWB Soft Shadow Test");
+    return GLB_TEXT("NWB Soft Shadow Test");
 }
 
 

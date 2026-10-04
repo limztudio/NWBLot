@@ -45,7 +45,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
 
         for(const auto& [virtualPath, payloadBytes] : files){
             if(virtualPath.empty()){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("BuildVolume: virtual path is empty"));
+                NWB_LOGGER_ERROR(GLB_TEXT("BuildVolume: virtual path is empty"));
                 return false;
             }
             if(!filesystem.writeFileDeferred(Name(AStringView(virtualPath.data(), virtualPath.size())), payloadBytes))

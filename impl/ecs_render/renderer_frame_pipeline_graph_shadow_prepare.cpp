@@ -79,7 +79,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             alignof(DeferredBindlessResourceSlots)
         );
         if(!bindlessSlotsBlob.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain deferred bindless selector upload data"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain deferred bindless selector upload data"));
             return false;
         }
 
@@ -103,7 +103,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_deferredBindlessSlotsUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred bindless selector upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred bindless selector upload"));
             return false;
         }
     }
@@ -111,7 +111,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     // Trace buffers finalized by preflight; retain slots before compile.
     RayTraceMaterialContextSlots rayTraceMaterialContextSlots;
     if(!m_raytracingSystem.snapshotRayTraceMaterialContextSlots(rayTraceMaterialContextSlots)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
         return false;
     }
     const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
@@ -120,7 +120,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         alignof(RayTraceMaterialContextSlots)
     );
     if(!rayTraceMaterialContextSlotsBlob.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain ray-trace material-context selector upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain ray-trace material-context selector upload data"));
         return false;
     }
 
@@ -151,7 +151,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
     );
     if(!m_rayTraceMaterialContextSlotsUploadTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare ray-trace material-context selector upload"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare ray-trace material-context selector upload"));
         return false;
     }
 
@@ -172,7 +172,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         : Core::GpuGraphResourceId{}
     ;
     if(rayTracingResources.causticEmissionTargetBuffer && !causticEmissionTargets.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted caustic emission targets"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted caustic emission targets"));
         return false;
     }
 
@@ -181,14 +181,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         m_deferredLightingTaskGraph,
         causticEmissionTargetsBlob
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain preflighted caustic emission-target upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain preflighted caustic emission-target upload data"));
         return false;
     }
 
     Core::GpuTaskId shadowPrepareDependency = m_rayTraceMaterialContextSlotsUploadTask;
     if(causticEmissionTargetsBlob.valid()){
         if(!causticEmissionTargets.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: caustic emission-target upload has no imported destination"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: caustic emission-target upload has no imported destination"));
             return false;
         }
 
@@ -214,7 +214,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_causticEmissionTargetsUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare caustic emission-target upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare caustic emission-target upload"));
             return false;
         }
         shadowPrepareDependency = m_causticEmissionTargetsUploadTask;
@@ -229,7 +229,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         : Core::GpuGraphResourceId{}
     ;
     if(rayTracingResources.surfelFrameConstantsBuffer && !surfelFrameConstants.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted surfel constants"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted surfel constants"));
         return false;
     }
 
@@ -239,12 +239,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         deferredTargets,
         surfelFrameConstantsBlob
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain preflighted surfel-frame constants upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain preflighted surfel-frame constants upload data"));
         return false;
     }
     if(surfelFrameConstantsBlob.valid()){
         if(!surfelFrameConstants.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: surfel-frame constants upload has no imported destination"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: surfel-frame constants upload has no imported destination"));
             return false;
         }
 
@@ -270,7 +270,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_surfelFrameConstantsUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare surfel-frame constants upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare surfel-frame constants upload"));
             return false;
         }
         shadowPrepareDependency = m_surfelFrameConstantsUploadTask;
@@ -305,7 +305,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         || (rayTracingResources.shadowInstanceBuffer && !shadowInstances.valid())
         || (rayTracingResources.shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
         return false;
     }
 
@@ -318,7 +318,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowInstancesBlob,
         shadowMaterialTypedBlob
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain preflighted shadow material-context upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain preflighted shadow material-context upload data"));
         return false;
     }
     const bool shadowMaterialContextBatchGraphOwned = shadowInstanceMaterialsBlob.valid();
@@ -326,12 +326,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid()
         || shadowMaterialContextBatchGraphOwned != shadowMaterialTypedBlob.valid()
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: incomplete frozen shadow material-context upload batch"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: incomplete frozen shadow material-context upload batch"));
         return false;
     }
     if(shadowMaterialContextBatchGraphOwned){
         if(!shadowInstanceMaterials.valid() || !shadowInstances.valid() || !shadowMaterialTyped.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen shadow material-context batch has no imported destination"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen shadow material-context batch has no imported destination"));
             return false;
         }
 
@@ -357,7 +357,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_shadowInstanceMaterialUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shadow instance-material upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare shadow instance-material upload"));
             return false;
         }
 
@@ -377,7 +377,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_shadowInstanceUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shadow instance upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare shadow instance upload"));
             return false;
         }
 
@@ -397,7 +397,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_shadowMaterialTypedUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shadow typed-material upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare shadow typed-material upload"));
             return false;
         }
         shadowPrepareDependency = m_shadowMaterialTypedUploadTask;
@@ -423,7 +423,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         (rayTracingResources.sceneBvhNodeBuffer && !sceneBvhNodes.valid())
         || (rayTracingResources.sceneInstanceBuffer && !sceneBvhInstances.valid())
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted software scene-BVH buffers"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted software scene-BVH buffers"));
         return false;
     }
 
@@ -434,17 +434,17 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         sceneBvhNodesBlob,
         sceneBvhInstancesBlob
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain preflighted software scene-BVH upload data"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain preflighted software scene-BVH upload data"));
         return false;
     }
     const bool sceneBvhBatchGraphOwned = sceneBvhNodesBlob.valid();
     if(sceneBvhBatchGraphOwned != sceneBvhInstancesBlob.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: incomplete frozen software scene-BVH upload pair"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: incomplete frozen software scene-BVH upload pair"));
         return false;
     }
     if(sceneBvhBatchGraphOwned){
         if(!sceneBvhNodes.valid() || !sceneBvhInstances.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene-BVH pair has no imported destination"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene-BVH pair has no imported destination"));
             return false;
         }
 
@@ -471,7 +471,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_sceneBvhNodesUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare software scene-BVH node upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare software scene-BVH node upload"));
             return false;
         }
 
@@ -491,7 +491,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             }
         );
         if(!m_sceneBvhInstancesUploadTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare software scene-BVH instance upload"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare software scene-BVH instance upload"));
             return false;
         }
         shadowPrepareDependency = m_sceneBvhInstancesUploadTask;
@@ -501,23 +501,23 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     // Hardware TLAS builds retain their preflight instance stream; the first Graphics packet owns the native build.
     const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
     if(sceneTlasBuildGraphOwned && !rayTracingShadowResources.sceneTlas){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
         return false;
     }
     const bool meshBlasBuildsGraphOwned = m_raytracingSystem.preparedMeshBlasBuildsReady();
     const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds = m_raytracingSystem.preparedMeshBlasBuilds();
     if(meshBlasBuildsGraphOwned && preparedMeshBlasBuilds.empty()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
         return false;
     }
     if(meshBlasBuildsGraphOwned && !rayTracingShadowResources.sceneTlas){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
         return false;
     }
     const bool meshSwBvhBuildsGraphOwned = m_raytracingSystem.preparedMeshSwBvhBuildsReady();
     const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds = m_raytracingSystem.preparedMeshSwBvhBuilds();
     if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuilds.empty()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
     const bool meshBlasGeometryBuildInputStatesGraphOwned =
@@ -583,7 +583,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     bool resourcesImported = true;
     if(!geometryResources.gatherBuildInputs(m_deferredLightingTaskGraph)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen BLAS geometry inputs are missing graph resources"));
         return false;
     }
     if(meshBlasBuildsGraphOwned){
@@ -741,7 +741,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
     }
     if(!resourcesImported){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
         return false;
     }
 
@@ -749,7 +749,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     if(pureSoftwareMeshSwBvhBuildsGraphOwned && !ResolvePreparedSoftwareBvhGraphResources(
         m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, pureSoftwareMeshSwBvhGraphResources
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
         return false;
     }
 
@@ -811,7 +811,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
                         BvhNodeIndex::Invalid
                     ))
                 ){
-                    NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
+                    NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
                     return false;
                 }
             }
@@ -821,7 +821,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
                 resources.visitCounter,
                 0u
             ))){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
                 return false;
             }
 
@@ -853,7 +853,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
                 }
             );
             if(!buildTask.valid()){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
                 return false;
             }
             buildDependency = buildTask;
@@ -863,7 +863,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
             || !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
         ){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
             return false;
         }
         shadowPrepareDependency = buildDependency;
@@ -931,7 +931,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
     }
     const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
@@ -944,7 +944,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             (sceneTlasBuildGraphOwned && !sceneTlas.valid())
             || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount
         ){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
             return false;
         }
         Core::GpuGraphResourceSetId accelStructFinalizeSet;
@@ -999,7 +999,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
         );
         if(!m_deferredShadowPrepareAccelStructFinalizeTask.valid()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
             return false;
         }
     }

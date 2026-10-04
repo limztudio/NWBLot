@@ -213,11 +213,11 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
     if(desc.dataSize == 0)
         return true;
     if(!desc.data){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload data is null"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload data is null"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
         return false;
     }
     if(desc.destOffsetBytes > desc.bufferDesc.byteSize || static_cast<u64>(desc.dataSize) > desc.bufferDesc.byteSize - desc.destOffsetBytes){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload range offset {} size {} exceeds buffer size {}")
             , StringConvert(desc.bufferDesc.debugName.resolvedText())
             , desc.destOffsetBytes
             , static_cast<u64>(desc.dataSize)
@@ -229,7 +229,7 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
     // cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either
     // a native command list or a graph packet.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned")
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up buffer '{}': upload offset and size must be 4-byte aligned")
             , StringConvert(desc.bufferDesc.debugName.resolvedText())
         );
         return false;
@@ -237,7 +237,7 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
     // A retained buffer must publish a concrete state. Unknown would be restored at native close without a
     // graph-visible final-state contract for the next consumer.
     if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state")
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state")
             , StringConvert(desc.bufferDesc.debugName.resolvedText())
         );
         return false;
@@ -250,7 +250,7 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
     if(!desc.data && desc.uploadDataSize == 0)
         return true;
     if(!desc.data || desc.uploadDataSize == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data and size must both be provided"), StringConvert(desc.textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data and size must both be provided"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
 
@@ -258,24 +258,24 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
     TextureUploadAspect::Enum resolvedAspect;
     if(!ResolveTextureUploadAspect(formatInfo, desc.aspect, resolvedAspect)){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
+            GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
             , StringConvert(desc.textureDesc.name.resolvedText())
         );
         return false;
     }
     usize requiredBytes = 0;
     if(!__hidden_graphics_setup::ComputeTextureUploadByteSize(desc, requiredBytes)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
     // A retained texture must publish a concrete state. Leaving it Unknown makes command-list close restore an
     // untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
     if(desc.textureDesc.keepInitialState && desc.textureDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
     if(desc.uploadDataSize < requiredBytes){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}")
             , StringConvert(desc.textureDesc.name.resolvedText())
             , desc.uploadDataSize
             , requiredBytes
@@ -288,33 +288,33 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
 
 bool ValidateMeshSetupDesc(const GraphicsRuntime::MeshSetupDesc& desc){
     if(!desc.vertexData || desc.vertexDataSize == 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex data is missing"), StringConvert(desc.vertexBufferName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex data is missing"), StringConvert(desc.vertexBufferName.resolvedText()));
         return false;
     }
     if(desc.vertexStride == 0 || (desc.vertexDataSize % static_cast<usize>(desc.vertexStride)) != 0){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex data size is not aligned to vertex stride"), StringConvert(desc.vertexBufferName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex data size is not aligned to vertex stride"), StringConvert(desc.vertexBufferName.resolvedText()));
         return false;
     }
 
     const usize vertexCount = desc.vertexDataSize / static_cast<usize>(desc.vertexStride);
     if(vertexCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex count exceeds u32 range"), StringConvert(desc.vertexBufferName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': vertex count exceeds u32 range"), StringConvert(desc.vertexBufferName.resolvedText()));
         return false;
     }
 
     if((desc.indexData == nullptr) != (desc.indexDataSize == 0)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': index data and size must both be provided"), StringConvert(desc.indexBufferName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': index data and size must both be provided"), StringConvert(desc.indexBufferName.resolvedText()));
         return false;
     }
     if(desc.indexDataSize > 0){
         const usize indexStride = desc.use32BitIndices ? sizeof(u32) : sizeof(u16);
         if((desc.indexDataSize % indexStride) != 0){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': index data size is not aligned to index stride"), StringConvert(desc.indexBufferName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': index data size is not aligned to index stride"), StringConvert(desc.indexBufferName.resolvedText()));
             return false;
         }
         const usize indexCount = desc.indexDataSize / indexStride;
         if(indexCount > static_cast<usize>(Limit<u32>::s_Max)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh '{}': index count exceeds u32 range"), StringConvert(desc.indexBufferName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh '{}': index count exceeds u32 range"), StringConvert(desc.indexBufferName.resolvedText()));
             return false;
         }
     }
@@ -359,7 +359,7 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     );
     BufferHandle buffer = device.createBuffer(uploadDesc);
     if(!buffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
         return {};
     }
 
@@ -383,7 +383,7 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.resolvedText()));
         return {};
     }
     if(desc.acceptedToken)
@@ -405,7 +405,7 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
         desc.textureDesc.keepInitialState
         && (desc.textureDesc.arraySize != 1u || desc.textureDesc.mipLevels != 1u)
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch")
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch")
             , StringConvert(desc.textureDesc.name.resolvedText())
         );
         return {};
@@ -431,7 +431,7 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     );
     TextureHandle texture = device.createTexture(uploadDesc);
     if(!texture){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
         return {};
     }
 
@@ -455,7 +455,7 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.resolvedText()));
         return {};
     }
     if(desc.acceptedToken)
@@ -486,7 +486,7 @@ GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh(const MeshSetupDesc& de
 
         output.vertexBuffer = setupBuffer(vertexSetup);
         if(!output.vertexBuffer){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh vertex buffer '{}'"), StringConvert(desc.vertexBufferName.resolvedText()));
             return MeshResource{};
         }
     }
@@ -506,7 +506,7 @@ GraphicsRuntime::MeshResource GraphicsRuntime::setupMesh(const MeshSetupDesc& de
 
         output.indexBuffer = setupBuffer(indexSetup);
         if(!output.indexBuffer){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to set up mesh index buffer '{}'"), StringConvert(desc.indexBufferName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to set up mesh index buffer '{}'"), StringConvert(desc.indexBufferName.resolvedText()));
             return MeshResource{};
         }
     }

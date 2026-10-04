@@ -178,7 +178,7 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
     if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset))
         return false;
-    GLOBAL_ASSERT(modelAsset);
+    GLB_ASSERT(modelAsset);
     const NWB::Impl::Model* modelPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
     if(!modelPtr)
         return false;
@@ -188,7 +188,7 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
     if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name(), skeletonAsset))
         return false;
-    GLOBAL_ASSERT(skeletonAsset);
+    GLB_ASSERT(skeletonAsset);
     const NWB::Impl::Skeleton* skeletonPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
     if(!skeletonPtr)
         return false;

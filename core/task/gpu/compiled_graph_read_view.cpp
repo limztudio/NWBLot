@@ -70,7 +70,7 @@ void GpuCompiledGraph::ReadView::release()noexcept{
     if(!m_graph)
         return;
 
-    GLOBAL_FATAL_ASSERT_MSG(s_activeView == this, "GpuCompiledGraph read views must unwind in lexical order");
+    GLB_FATAL_ASSERT_MSG(s_activeView == this, "GpuCompiledGraph read views must unwind in lexical order");
     if(s_activeView != this)
         TerminateInvariant();
     s_activeView = m_previousView;
@@ -81,7 +81,7 @@ void GpuCompiledGraph::ReadView::release()noexcept{
                 (planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u
                 || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u
             ){
-                GLOBAL_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
+                GLB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph plan read admission must retain its exact reader claim");
                 TerminateInvariant();
             }
             if(m_graph->m_planAccessState.compare_exchange_weak(

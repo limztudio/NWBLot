@@ -30,7 +30,7 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
 
 [[nodiscard]] static u64 NewIdentity(){
     const u64 identity = s_NextAtlasIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    GLOBAL_FATAL_ASSERT_MSG(identity != 0u, GLOBAL_TEXT("UI glyph atlas identity overflow"));
+    GLB_FATAL_ASSERT_MSG(identity != 0u, GLB_TEXT("UI glyph atlas identity overflow"));
     return identity;
 }
 
@@ -123,7 +123,7 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
         static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
     for(u32 row = 0u; row < m_bitmap.height; ++row){
         const usize destination = static_cast<usize>(y + row + 1u) * s_GlyphAtlasPageExtent + x + 1u;
-        GLOBAL_MEMCPY(
+        GLB_MEMCPY(
             page.pixels.data() + destination,
             m_bitmap.width,
             m_bitmap.pixels.data() + static_cast<usize>(row) * m_bitmap.width,

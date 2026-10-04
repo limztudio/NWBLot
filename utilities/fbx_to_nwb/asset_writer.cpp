@@ -143,12 +143,12 @@ bool ValidatePlainMeshAsset(const SourceMeshStreams& mesh){
     if(!AssetWriterSkeletonDetail::ValidateMeshGeometry(mesh, s_Context))
         return false;
     if(!mesh.skin.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB mesh: mesh asset cannot contain a source skin stream"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB mesh: mesh asset cannot contain a source skin stream"));
         return false;
     }
     for(const SourceVertexRef& ref : mesh.vertexRefs){
         if(ref.skin != s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB mesh: mesh asset vertex_ref cannot contain a skin index"));
             return false;
         }
     }
@@ -170,7 +170,7 @@ bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
     if(EnsureDirectories(parentPath, errorCode))
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}")
+    NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}")
         , StringConvert(assetKind)
         , PathToString<tchar>(parentPath)
         , StringConvert(errorCode.message())
@@ -243,7 +243,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     NwbTextOutputStream file(rawFile);
@@ -253,7 +253,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     WriteMeshAssetBody(file, mesh);
 
     if(!file){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB mesh: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -377,7 +377,7 @@ bool WriteSkeletonAsset(
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB skeleton: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB skeleton: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     NwbTextOutputStream file(rawFile);
@@ -387,7 +387,7 @@ bool WriteSkeletonAsset(
     WriteSkeletonAssetBody(file, s_AssetVariableName, joints, bindPoseMatrices);
 
     if(!file){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB skeleton: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB skeleton: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -437,7 +437,7 @@ bool WriteSkinAsset(
     const UtilityVector<JointMatrix>& inverseBindMatrices
 ){
     if(influences.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB skin: no skin influences were produced"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB skin: no skin influences were produced"));
         return false;
     }
     if(!EnsureOutputDirectory(outputPath, s_SkinAssetKindText))
@@ -445,7 +445,7 @@ bool WriteSkinAsset(
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB skin: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB skin: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     NwbTextOutputStream file(rawFile);
@@ -455,7 +455,7 @@ bool WriteSkinAsset(
     WriteSkinAssetBody(file, s_AssetVariableName, meshName, skeletonName, influences, inverseBindMatrices);
 
     if(!file){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB skin: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB skin: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -514,7 +514,7 @@ bool WriteModelAsset(
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB model: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB model: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     NwbTextOutputStream file(rawFile);
@@ -524,7 +524,7 @@ bool WriteModelAsset(
     WriteModelAssetBody(file, s_AssetVariableName, meshName, skinName, skeletonName);
 
     if(!file){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB model: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB model: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -545,7 +545,7 @@ bool WriteAssetBunch(
 
     BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
     if(!rawFile){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     NwbTextOutputStream file(rawFile);
@@ -594,7 +594,7 @@ bool WriteAssetBunch(
     file << "];\n";
 
     if(!file){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB asset bunch: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB asset bunch: failed while writing output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
     return true;
@@ -622,18 +622,18 @@ bool WriteNwbAsset(
 ){
     OutputAssetType::Enum assetType = OutputAssetType::Mesh;
     if(!ParseAssetTypeText(assetTypeText, assetType)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText()));
         return false;
     }
 
     if(separateAssets && assetType != OutputAssetType::Bunch){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'"));
         return false;
     }
 
     if(assetType == OutputAssetType::Mesh){
         if(!skeletonJoints.empty() || !skeletonBindPoseMatrices.empty() || !inverseBindMatrices.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB mesh: mesh output cannot write split skeleton/skin payload"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB mesh: mesh output cannot write split skeleton/skin payload"));
             return false;
         }
         return __hidden_asset_writer::WriteMeshAsset(outputPath, mesh);
@@ -656,7 +656,7 @@ bool WriteNwbAsset(
 
     if(!skinnedModel){
         if(assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write NWB asset: requested asset type requires a skinned source mesh"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to write NWB asset: requested asset type requires a skinned source mesh"));
             return false;
         }
         if(assetType == OutputAssetType::Bunch && !separateAssets)

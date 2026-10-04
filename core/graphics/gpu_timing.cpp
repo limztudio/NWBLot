@@ -595,7 +595,7 @@ bool GpuTimingRecorder::collectLocked(
 
 bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){
     const GpuPhysicalQueueId physicalQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
-    GLOBAL_ASSERT(static_cast<usize>(physicalQueue.index) < m_queueCompletions.size());
+    GLB_ASSERT(static_cast<usize>(physicalQueue.index) < m_queueCompletions.size());
     if(static_cast<usize>(physicalQueue.index) >= m_queueCompletions.size())
         return false;
 

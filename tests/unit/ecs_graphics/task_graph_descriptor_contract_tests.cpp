@@ -294,7 +294,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(
         heap,
         "if(m_activePendingRecordingLeaseCount != 0u){\n"
-        "        NWB_LOGGER_ERROR(GLOBAL_TEXT(\"Vulkan: GpuDescriptorHeap initialization rejected while pending-recording leases are active.\"));"
+        "        NWB_LOGGER_ERROR(GLB_TEXT(\"Vulkan: GpuDescriptorHeap initialization rejected while pending-recording leases are active.\"));"
     ));
     EXPECT_TRUE(ContainsText(
         heap,

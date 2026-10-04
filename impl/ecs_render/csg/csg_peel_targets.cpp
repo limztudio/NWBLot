@@ -38,22 +38,22 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     targets.csgRemovedIntervalData.reset();
     targets.csgRemovedIntervalCount.reset();
 
-    GLOBAL_ASSERT(targets.width > 0u && targets.height > 0u);
-    GLOBAL_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgReceiverEventDataFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgReceiverEventCountFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgReceiverSpanDataFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgReceiverSpanCountFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgRemovedIntervalDataFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgRemovedIntervalCountFormat != Core::Format::UNKNOWN);
-    GLOBAL_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
-    GLOBAL_ASSERT(targets.csgReceiverEventLayerCount == ECSRenderDetail::s_CsgReceiverEventLayerCount);
-    GLOBAL_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
-    GLOBAL_ASSERT(targets.csgRemovedIntervalLayerCount == ECSRenderDetail::s_CsgRemovedIntervalLayerCount);
+    GLB_ASSERT(targets.width > 0u && targets.height > 0u);
+    GLB_ASSERT(targets.csgCapNormalFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgIntervalDepthFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgIntervalIdFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgReceiverEventDataFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgReceiverEventCountFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgReceiverSpanDataFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgReceiverSpanCountFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgRemovedIntervalDataFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgRemovedIntervalCountFormat != Core::Format::UNKNOWN);
+    GLB_ASSERT(targets.csgPeelLayerCount == ECSRenderDetail::s_CsgPeelLayerCount);
+    GLB_ASSERT(targets.csgReceiverEventLayerCount == ECSRenderDetail::s_CsgReceiverEventLayerCount);
+    GLB_ASSERT(targets.csgReceiverSpanLayerCount == ECSRenderDetail::s_CsgReceiverSpanLayerCount);
+    GLB_ASSERT(targets.csgRemovedIntervalLayerCount == ECSRenderDetail::s_CsgRemovedIntervalLayerCount);
 
     auto createCsgTexture = [&](const Core::Format::Enum format, const Name& name, const u32 layerCount, const bool renderTarget){
         Core::TextureDesc desc;
@@ -94,19 +94,19 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
 
     targets.csgCapBackNormal = createPeelTexture(targets.csgCapNormalFormat, Name("engine/deferred/csg_cap_back_normal"));
     if(!targets.csgCapBackNormal){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG cap back-normal peel target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG cap back-normal peel target"));
         return false;
     }
 
     targets.csgIntervalDepth = createPeelTexture(targets.csgIntervalDepthFormat, Name("engine/deferred/csg_interval_depth"));
     if(!targets.csgIntervalDepth){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG interval depth peel target"));
         return false;
     }
 
     targets.csgIntervalId = createPeelTexture(targets.csgIntervalIdFormat, Name("engine/deferred/csg_interval_id"));
     if(!targets.csgIntervalId){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG interval id peel target"));
         return false;
     }
 
@@ -115,7 +115,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_receiver_event_data")
     );
     if(!targets.csgReceiverEventData){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG receiver event data target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG receiver event data target"));
         return false;
     }
 
@@ -124,7 +124,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_receiver_event_count")
     );
     if(!targets.csgReceiverEventCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG receiver event count target"));
         return false;
     }
 
@@ -133,7 +133,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_receiver_span_data")
     );
     if(!targets.csgReceiverSpanData){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG receiver span data target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG receiver span data target"));
         return false;
     }
 
@@ -142,7 +142,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_receiver_span_count")
     );
     if(!targets.csgReceiverSpanCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG receiver span count target"));
         return false;
     }
 
@@ -151,7 +151,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_removed_interval_depth")
     );
     if(!targets.csgRemovedIntervalDepth){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG removed interval depth target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG removed interval depth target"));
         return false;
     }
 
@@ -160,7 +160,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_removed_interval_cap_normal")
     );
     if(!targets.csgRemovedIntervalCapNormal){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG removed interval cap-normal target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG removed interval cap-normal target"));
         return false;
     }
 
@@ -169,7 +169,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_removed_interval_data")
     );
     if(!targets.csgRemovedIntervalData){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG removed interval data target"));
         return false;
     }
 
@@ -178,7 +178,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
         Name("engine/deferred/csg_removed_interval_count")
     );
     if(!targets.csgRemovedIntervalCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred CSG removed interval count target"));
         return false;
     }
 

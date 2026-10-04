@@ -93,24 +93,24 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         UiSkinBinaryPayload::s_UiSkinMagic,
-        GLOBAL_TEXT("UiSkin::loadBinary"),
-        GLOBAL_TEXT("UI skin")
+        GLB_TEXT("UiSkin::loadBinary"),
+        GLB_TEXT("UI skin")
     ))
         return false;
     if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
     }
     if(header.reserved0 != 0u || header.reserved1 != 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: header contains unsupported flags"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: header contains unsupported flags"));
         return false;
     }
     if(header.regionCount > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: region count {} exceeds schema limit {}"), header.regionCount, s_UiSkinMaxRegionCount);
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: region count {} exceeds schema limit {}"), header.regionCount, s_UiSkinMaxRegionCount);
         return false;
     }
     if(header.regionCount == 0u || header.regionCount > (binary.size() - cursor) / sizeof(UiSkinBinaryPayload::RegionBinary)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: region count is empty or exceeds the payload"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: region count is empty or exceeds the payload"));
         return false;
     }
 
@@ -123,11 +123,11 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     for(u32 index = 0u; index < header.regionCount; ++index){
         UiSkinBinaryPayload::RegionBinary packed;
         if(!ReadPOD(binary, cursor, packed)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
             return false;
         }
         if(packed.reserved != 0u || packed.drawMode > static_cast<u32>(UiSkinDrawMode::NineSlice)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
             return false;
         }
 
@@ -145,7 +145,7 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
         UiSkinBinaryPayload::ColorBinary packed;
         if(!ReadPOD(binary, cursor, packed)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
         }
         palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
@@ -153,11 +153,11 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     candidate.setPalette(palette);
     UiSkinBinaryPayload::TypographyBinary typography;
     if(!ReadPOD(binary, cursor, typography)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
         return false;
     }
     candidate.setTypography({ typography.defaultFontSize });
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, GLOBAL_TEXT("UiSkin::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, GLB_TEXT("UiSkin::loadBinary")))
         return false;
     candidate.rebuildRegionIndex();
     if(!candidate.validatePayload())
@@ -168,10 +168,10 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 bool UiSkin::validatePayload()const{
-    if(!checkVirtualPath(GLOBAL_TEXT("UiSkin::validatePayload")))
+    if(!checkVirtualPath(GLB_TEXT("UiSkin::validatePayload")))
         return false;
     if(m_regions.size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: region count {} exceeds schema limit {}"), m_regions.size(), s_UiSkinMaxRegionCount);
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: region count {} exceeds schema limit {}"), m_regions.size(), s_UiSkinMaxRegionCount);
         return false;
     }
     if(
@@ -182,13 +182,13 @@ bool UiSkin::validatePayload()const{
         || !IsFinite(static_cast<f32>(m_atlasHeight) / m_referenceDensity)
         || m_regions.empty()
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: texture reference, atlas extent, reference density, or region count is invalid"));
         return false;
     }
     for(usize index = 0u; index < m_regions.size(); ++index){
         const UiSkinRegion& region = m_regions[index];
         if(!__hidden_ui_skin_runtime::IsValidRegion(region, m_atlasWidth, m_atlasHeight)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics")
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: region {} '{}' has invalid bounds, slice borders, draw mode, or logical metrics")
                 , index
                 , StringConvert(region.name.resolvedText())
             );
@@ -198,7 +198,7 @@ bool UiSkin::validatePayload()const{
     for(usize index = 1u; index < m_regionIndex.size(); ++index){
         const Name& name = m_regions[m_regionIndex[index]].name;
         if(name == m_regions[m_regionIndex[index - 1u]].name){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: duplicate region '{}'"), StringConvert(name.resolvedText()));
             return false;
         }
     }
@@ -210,13 +210,13 @@ bool UiSkin::validatePayload()const{
             || !IsFinite(color.b) || color.b < 0.0f || color.b > 16.0f
             || !IsFinite(color.a) || color.a < 0.0f || color.a > 1.0f
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: palette color {} needs finite RGB in [0, 16] and alpha in [0, 1]"), index);
             return false;
         }
     }
     if(!IsFinite(m_typography.defaultFontSize)
         || m_typography.defaultFontSize < 1.0f / 64.0f || m_typography.defaultFontSize > 2048.0f){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validatePayload failed: typography needs a default font size in [1/64, 2048]"));
         return false;
     }
     return true;
@@ -230,7 +230,7 @@ bool UiSkin::validateTexture(const Texture& texture)const{
         || texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u
         || texture.width() != m_atlasWidth || texture.height() != m_atlasHeight
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiSkin::validateTexture failed: texture identity, 2D dimension, or extent does not match the atlas"));
         return false;
     }
     return true;

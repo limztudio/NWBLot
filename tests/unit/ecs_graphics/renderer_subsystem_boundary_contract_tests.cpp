@@ -1272,7 +1272,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
 
     EXPECT_TRUE(ContainsText(compactFrameTypes, "constECSRenderDetail::MeshFrameBindingSnapshot&frameBindings;"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "boolRendererMaterialSystem::setMaterialPassDrawPushConstants("));
-    EXPECT_TRUE(ContainsText(compactMaterialDraw, "GLOBAL_ASSERT(csgContextHeapSlotReady);"));
+    EXPECT_TRUE(ContainsText(compactMaterialDraw, "GLB_ASSERT(csgContextHeapSlotReady);"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!csgContextHeapSlotReady)returnfalse;"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!frameHeapSlotsReady)returnfalse;"));
     EXPECT_EQ(CountText(compactMaterialDraw, "if(!setMaterialPassDrawPushConstants(context,drawItem,mesh))"), s_ExpectedDualCount);
@@ -2086,7 +2086,7 @@ TEST(EcsGraphics, RendererCMakeListsIncludesEverySourceFileOnce){
 
         const TestPath extension = entry.path().extension();
         const TStringView extensionText = extension.native();
-        if(extensionText != GLOBAL_TEXT(".h") && extensionText != GLOBAL_TEXT(".cpp"))
+        if(extensionText != GLB_TEXT(".h") && extensionText != GLB_TEXT(".cpp"))
             continue;
 
         const TestPath relativePath = entry.path().lexically_relative(rendererDirectory);

@@ -42,7 +42,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 inline void YieldThread()noexcept{ SwitchToThread(); }
 #else
 inline void YieldThread()noexcept{ std::this_thread::yield(); }
@@ -50,7 +50,7 @@ inline void YieldThread()noexcept{ std::this_thread::yield(); }
 
 
 inline void MachinePause(i32 delay)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS) && defined(_M_ARM64)
+#if defined(GLB_PLATFORM_WINDOWS) && defined(_M_ARM64)
     while(delay > 0){
         __yield();
         --delay;

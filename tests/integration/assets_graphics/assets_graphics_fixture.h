@@ -233,7 +233,7 @@ public:
     )"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_DEFAULT_COLOR_VERTEX_REFS
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_INDICES;
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_TriangleNormalField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_NORMALS;
     static constexpr AStringView s_TriangleTangentField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_TANGENTS;
     static constexpr AStringView s_TriangleVertexRefsField = NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_VERTEX_REFS;
@@ -634,7 +634,7 @@ public:
     }
 
     )NWB_SLANG";
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
     #include "project/material_interfaces/other_surface.bind"
 
@@ -646,7 +646,7 @@ public:
 
     )NWB_SLANG";
     #endif
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_UnboundMaterialShaderProbeSource =
     "#define NWB_MESH_GBUFFER_BASE_COLOR_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION) "\n"
     "#define NWB_MESH_GBUFFER_NORMAL_LOCATION " NWB_ASSETS_GRAPHICS_TEST_STRINGIFY(NWB_MESH_GBUFFER_NORMAL_LOCATION) "\n"
@@ -813,7 +813,7 @@ public:
     };
 
     )NWB_META";
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_RefractiveMaterialMeta = R"NWB_META(material asset;
 
     asset.interface = "project/material_interfaces/test_surface.bind";
@@ -836,7 +836,7 @@ public:
 
     )NWB_META";
     #endif
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_ExplicitTransparentMaterialMeta = R"NWB_META(material asset;
 
     asset.interface = "project/material_interfaces/test_surface.bind";
@@ -868,7 +868,7 @@ public:
 
     )NWB_META";
     #endif
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_MissingInterfaceMaterialMeta = R"NWB_META(material asset;
 
     asset.shaders = {
@@ -895,7 +895,7 @@ public:
 
     )NWB_META";
     #endif
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_UnknownInterfaceParameterMaterialMeta = R"NWB_META(material asset;
 
     asset.interface = "project/material_interfaces/test_surface.bind";
@@ -979,7 +979,7 @@ public:
 
     )NWB_META";
     #endif
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_DuplicateFieldMaterialBindSource = R"NWB_BIND([material_constant]
     struct NwbTestSurfaceMaterial{
     float base_color;
@@ -1000,7 +1000,7 @@ public:
     NwbTestSurfaceMaterial surface;
 
     )NWB_BIND";
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_SurfaceOnlyMaterialBindSource = R"NWB_BIND([material_constant]
     struct NwbTestSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
@@ -1137,7 +1137,7 @@ public:
     NwbTestSurfaceMaterial surface;
 
     )NWB_BIND";
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static constexpr AStringView s_UnsupportedMeshFieldsMeta = R"(mesh asset;
 
     asset.vertex_stride = 24;
@@ -1183,7 +1183,7 @@ public:
     }
     static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena);
     static void AppendTestMeta(AString& inOutMeta, const AStringView text);
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     static AString BuildTriangleMeta(
         const AStringView assetHeader,
         const AStringView normalField,
@@ -1283,7 +1283,7 @@ public:
         Path& outRoot,
         NWB::Core::Alloc::ScratchArena& scratchArena
     );
-    #if defined(GLOBAL_FINAL)
+    #if defined(GLB_FINAL)
     static bool CookDuplicateGeneratedMaterialBindIncludePath(
         const AStringView caseName,
         TestArena& testArena,
@@ -1498,7 +1498,7 @@ public:
         if(offset > binary.size() || sizeof(value) > binary.size() - offset)
             return false;
 
-        GLOBAL_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
+        GLB_MEMCPY(binary.data() + offset, sizeof(value), &value, sizeof(value));
         return true;
     }
     static bool FindMaterialBinaryTypedLayoutOffsets(

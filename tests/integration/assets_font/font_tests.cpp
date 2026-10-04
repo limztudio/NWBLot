@@ -208,7 +208,7 @@ TEST(AssetsFont, OversizedCountIsRejectedBeforeSourceAllocation){
     Font font(testArena.arena, Name("project/fonts/test"));
     EXPECT_FALSE(font.loadBinary(binary));
     EXPECT_TRUE(font.fontBytes().empty());
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("source size must be 1..33554432 bytes")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("source size must be 1..33554432 bytes")));
     header.byteCount = Limit<u64>::s_Max;
     binary.clear();
     AppendPOD(binary, header);

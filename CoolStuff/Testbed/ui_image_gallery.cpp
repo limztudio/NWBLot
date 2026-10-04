@@ -43,7 +43,7 @@ void TestbedUiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
     valid = ui.label("hint", "Texture, sprite and nine-slice") && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom image declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom image declaration failed"));
 }
 
 

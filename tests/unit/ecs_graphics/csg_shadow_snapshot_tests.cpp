@@ -71,7 +71,7 @@ public:
 
 void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     cutter.parameterBytes.resize(sizeof(parameter));
-    GLOBAL_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
+    GLB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
 [[nodiscard]] bool CustomBounds(
@@ -312,7 +312,7 @@ TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMet
     EXPECT_EQ(s_InstanceOffset % alignof(Float4), 0u);
     ASSERT_EQ(state.bytes.size(), s_InstanceOffset + NWB_CSG_SHADOW_INSTANCE_BYTES);
     u32 header[NWB_CSG_SHADOW_CONTEXT_BYTES / sizeof(u32)] = {};
-    GLOBAL_MEMCPY(header, sizeof(header), state.bytes.data(), sizeof(header));
+    GLB_MEMCPY(header, sizeof(header), state.bytes.data(), sizeof(header));
     EXPECT_EQ(header[0], 1u);
     EXPECT_EQ(header[1], s_RangeOffset);
     EXPECT_EQ(header[2], s_CutterOffset);
@@ -321,7 +321,7 @@ TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMet
     for(usize index = 5u; index < LengthOf(header); ++index)
         EXPECT_EQ(header[index], 0u);
     LightSpaceCsgInstanceGpu instance;
-    GLOBAL_MEMCPY(&instance, sizeof(instance), state.bytes.data() + s_InstanceOffset, sizeof(instance));
+    GLB_MEMCPY(&instance, sizeof(instance), state.bytes.data() + s_InstanceOffset, sizeof(instance));
     EXPECT_TRUE(MatrixIsIdentity(LoadFloat(instance.worldToObject)));
     EXPECT_EQ(instance.primitiveCount, 1u);
     EXPECT_EQ(instance.localMin, Float4(-2.f, -2.f, -2.f, 0.f));

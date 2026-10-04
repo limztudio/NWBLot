@@ -30,7 +30,7 @@ void GraphicsRuntime::addRenderPassToFront(IRenderPass& pass){
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
     if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("GraphicsRuntime: front render pass failed to validate resources after registration"));
+        NWB_LOGGER_WARNING(GLB_TEXT("GraphicsRuntime: front render pass failed to validate resources after registration"));
 }
 
 void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
@@ -40,15 +40,15 @@ void GraphicsRuntime::addRenderPassToBack(IRenderPass& pass){
     pass.backBufferResizing();
     pass.backBufferResized(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount);
     if(!pass.validateResources(m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight, m_deviceCreationParams.swapChainSampleCount))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
+        NWB_LOGGER_WARNING(GLB_TEXT("GraphicsRuntime: back render pass failed to validate resources after registration"));
 }
 
 void GraphicsRuntime::removeRenderPass(IRenderPass& pass){
     const bool deviceIdle = waitForIdle();
     GraphicsBackend::Device* const device = m_backend->getDevice();
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         deviceIdle || (device && device->isDeviceLost()),
-        GLOBAL_TEXT("Render-pass removal requires either a completed device join or terminal device loss")
+        GLB_TEXT("Render-pass removal requires either a completed device join or terminal device loss")
     );
 
     pass.invalidateResources();

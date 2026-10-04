@@ -284,11 +284,11 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, device, s_PerRuntimeMeshTimingQueries)
     ;
     if(!timingReady)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+        NWB_LOGGER_WARNING(GLB_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     // Pipeline creation lives in resource validation, never in the per-frame prepare path below; prepare only consumes the handles created here.
     if(!ensureSkinningPipeline() || !ensureBoundsPipeline() || !ensureLocalBoundsPipeline() || !ensureRepackPipeline()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
         return false;
     }
     return true;
@@ -312,7 +312,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
             MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
-            GLOBAL_ASSERT(instance->valid());
+            GLB_ASSERT(instance->valid());
 
             const SkeletonJointPaletteComponent* jointPalette = nullptr;
             const SkeletonPoseComponent* skeletonPose = nullptr;
@@ -326,7 +326,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
         m_acceptedSkinningState.valid()
         && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
         return false;
     }
 
@@ -366,7 +366,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: cannot declare graph-owned skinning without a physical queue topology"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: cannot declare graph-owned skinning without a physical queue topology"));
         return false;
     }
 
@@ -404,7 +404,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
             if(!instance)
                 return;
-            GLOBAL_ASSERT(instance->valid());
+            GLB_ASSERT(instance->valid());
 
             const SkeletonJointPaletteComponent* jointPalette = nullptr;
             const SkeletonPoseComponent* skeletonPose = nullptr;
@@ -424,7 +424,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 return;
 
             if(foundResources == m_runtimeResources.end()){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
+                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no prepared graph resources"), instance->handle.value);
                 declarationFailed = true;
                 return;
             }
@@ -450,12 +450,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 || resources.bindlessHeapHandles.resourceSlots.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
                 || !m_boundsComputePipeline || !m_localBoundsComputePipeline
             ){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete graph-owned dispatch state"), instance->handle.value);
+                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete graph-owned dispatch state"), instance->handle.value);
                 declarationFailed = true;
                 return;
             }
             if(hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer || !m_skinningComputePipeline)){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: active runtime mesh '{}' has no graph-owned skinning pipeline or payload"), instance->handle.value);
+                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: active runtime mesh '{}' has no graph-owned skinning pipeline or payload"), instance->handle.value);
                 declarationFailed = true;
                 return;
             }
@@ -482,7 +482,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             plan.bindlessResourceSlotsPayload = resources.bindlessResourceSlots;
 
             if(plan.repacksNormals && !m_repackComputePipeline){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' requires a missing normal-repack pipeline"), instance->handle.value);
+                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires a missing normal-repack pipeline"), instance->handle.value);
                 declarationFailed = true;
                 return;
             }
@@ -608,7 +608,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 ))
             ;
             if(!importsValid){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource"), instance->handle.value);
+                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable dispatch resource"), instance->handle.value);
                 declarationFailed = true;
                 return;
             }
@@ -626,7 +626,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     alignof(MeshSkinningBindlessResourceSlots)
                 );
                 if(!uploadIdentity || !selectorSource.valid()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to retain graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to retain graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -650,7 +650,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     }
                 );
                 if(!selectorUploadTask.valid()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -668,7 +668,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     || normalBytes == 0u
                     || tangentBytes == 0u
                 ){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -702,7 +702,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!copyDesc.identity){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
                     declarationFailed = true;
                     return;
                 }
@@ -717,7 +717,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     }
                 );
                 if(!copyTask.valid()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -730,7 +730,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     payload.jointMatrices.size() > Limit<usize>::s_Max / sizeof(SkeletonJointMatrix)
                     || (jointPaletteBytes = payload.jointMatrices.size() * sizeof(SkeletonJointMatrix)) == 0u
                 ){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: joint palette payload byte size overflows"));
                     declarationFailed = true;
                     return;
                 }
@@ -740,7 +740,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     alignof(SkeletonJointMatrix)
                 );
                 if(!jointPaletteSource.valid()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to retain graph-owned joint palette data for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to retain graph-owned joint palette data for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -757,7 +757,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!jointPaletteUploadDesc.identity){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to derive graph identity for joint palette upload"));
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to derive graph identity for joint palette upload"));
                     declarationFailed = true;
                     return;
                 }
@@ -773,7 +773,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     }
                 );
                 if(!jointPaletteUploadTask.valid()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned joint palette upload for runtime mesh '{}'"), instance->handle.value);
+                    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned joint palette upload for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
                     return;
                 }
@@ -861,7 +861,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             Move(deformationPayload)
         );
         if(!deformationTask.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning deformation"));
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning deformation"));
             return false;
         }
         postDispatchDependency = deformationTask;
@@ -887,7 +887,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         Move(postDispatchPayload)
     );
     if(!postDispatchTask.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning bounds/repack"));
         return false;
     }
 
@@ -903,7 +903,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         localBoundsDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
     const Core::GpuTaskId localBoundsTask = graph.addTask<MeshSkinningLocalBoundsTask>(localBoundsDesc, Move(localBoundsPayload));
     if(!localBoundsTask.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
         return false;
     }
 
@@ -919,7 +919,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         Move(finalizerPayload)
     );
     if(!finalizerTask.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final-state handoff"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final-state handoff"));
         return false;
     }
     terminalTask = finalizerTask;
@@ -942,26 +942,26 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         scratchArena,
         compileOptions
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
         return false;
     }
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
     if(!declarations.valid() || !compiledPlan.validFor(declarations)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
         return false;
     }
 
     if(compiledPlan.packetCount() != 1u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: graph-owned skinning work did not merge into one primary Graphics packet"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph-owned skinning work did not merge into one primary Graphics packet"));
         return false;
     }
 
     const Core::GpuPhysicalQueueInfo* const terminalQueue = compiledPlan.queueInfoForTask(terminalTask);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(!terminalQueue || terminalQueue->id != graphicsQueue){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
         return false;
     }
 
@@ -1063,21 +1063,21 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         ))
             m_graphics.requestDeviceRecreation();
         if(!skinningState.preparationInvoked)
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
         else if(!skinningState.statePrepared)
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning frame state"));
         else
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }
     if(!skinningGraphAccepted || !skinningState.stateAccepted){
         m_graphics.requestDeviceRecreation();
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
         return false;
     }
     if(!skinningToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
         m_graphics.requestDeviceRecreation();
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
         return false;
     }
     return true;
@@ -1087,7 +1087,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
     if(!submitFrameSkinningGraph())
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
+        NWB_LOGGER_WARNING(GLB_TEXT("MeshSkinningSystem: skipped skinning because graph-owned work was not accepted"));
 }
 
 void MeshSkinningSystem::pruneRuntimeResources(){
@@ -1121,7 +1121,7 @@ void MeshSkinningSystem::resetFrameTaskGraph(){
                     recordingAttemptGeneration
                 )
             ){
-                GLOBAL_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
+                GLB_FATAL_ASSERT_MSG(false, "skinning task-graph reset must resolve every unaccepted packet");
                 TerminateInvariant();
             }
             m_frameSubmissionTransaction.reset(m_frameCompiledGraph);

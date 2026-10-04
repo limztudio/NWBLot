@@ -62,7 +62,7 @@ public:
         if(m_committed)
             return;
         if(m_container.size() < m_initialSize){
-            GLOBAL_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
+            GLB_FATAL_ASSERT_MSG(false, "GPU graph declaration rollback cannot restore removed storage");
             TerminateInvariant();
         }
         while(m_container.size() > m_initialSize)
@@ -101,7 +101,7 @@ GpuTaskGraph::TaskPayloadDestroyScope::~TaskPayloadDestroyScope(){
 
 void GpuTaskGraph::TaskPayloadDestroyScope::activateWithinLock()noexcept{
     if(m_active){
-        GLOBAL_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
+        GLB_FATAL_ASSERT_MSG(false, "GPU task payload destruction ownership cannot be activated twice");
         TerminateInvariant();
     }
     m_active = true;

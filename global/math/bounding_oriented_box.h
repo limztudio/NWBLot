@@ -110,7 +110,7 @@ inline void SIMDCALL BoundingOrientedBox::cornersValue(SIMDVector boxCenter, SIM
 
 
 inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{ // beginner: Loads box once, Streams corners out.
-    GLOBAL_ASSERT(corners != nullptr);
+    GLB_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
     cornersValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)

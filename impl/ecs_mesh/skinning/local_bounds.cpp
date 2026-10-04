@@ -55,13 +55,13 @@ static_assert(offsetof(LocalBoundsPushConstants, bindlessResourceSlots) == sizeo
 bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance){
     instance.deformationState.invalidateCurrent();
     if(instance.meshlets.empty() || instance.meshlets.size() > Limit<u32>::s_Max / NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime local bounds partial count is empty or exceeds shader addressing"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime local bounds partial count is empty or exceeds shader addressing"));
         return false;
     }
     const Name partialName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "meshlet_local_bounds");
     const Name outputName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "local_bounds");
     if(!partialName || !outputName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to derive runtime local bounds buffer names"));
         return false;
     }
     Core::BufferDesc desc;
@@ -74,13 +74,13 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
     ;
     Core::BufferHandle partials = graphics.createBuffer(desc);
     if(!partials){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to create runtime local bounds partials"));
         return false;
     }
     desc.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setDebugName(outputName);
     Core::BufferHandle output = graphics.createBuffer(desc);
     if(!output){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to create runtime local bounds output"));
         return false;
     }
     instance.meshletLocalBoundsBuffer = Move(partials);

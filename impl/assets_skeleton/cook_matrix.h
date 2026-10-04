@@ -43,7 +43,7 @@ namespace AssetsSkeletonCookDetail{
     outMatrix = ::Float34Identity();
 
     if(!value.isList() || value.asList().size() != 3u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix")
             , StringConvert(metaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -55,7 +55,7 @@ namespace AssetsSkeletonCookDetail{
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
         const Core::Metascript::Value& row = rows[rowIndex];
         if(!row.isList() || row.asList().size() != 4u){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' row {} must have 4 numeric values")
                 , StringConvert(metaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)
@@ -70,7 +70,7 @@ namespace AssetsSkeletonCookDetail{
             const Core::Metascript::Value& column = columns[columnIndex];
             if(!Core::Assets::TryDecodeMetadataFiniteF32(column, rowValues[columnIndex])){
                 if(!column.isNumeric()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': '{}' row {} column {} must be numeric")
+                    NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric")
                         , StringConvert(metaKind)
                         , PathToString<tchar>(nwbFilePath)
                         , StringConvert(label)
@@ -80,7 +80,7 @@ namespace AssetsSkeletonCookDetail{
                     return false;
                 }
 
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range")
+                NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range")
                     , StringConvert(metaKind)
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(label)

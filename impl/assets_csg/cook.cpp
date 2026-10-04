@@ -84,7 +84,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     if(!present)
         return true;
     if(TrimView(text).empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -111,7 +111,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     ))
         return false;
     if(TrimView(text).empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -128,14 +128,14 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     ScratchArena& scratchArena
 ){
     if(includePath.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
         return false;
     }
     if(includePath.find('\\') != AStringView::npos){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must use '/' path separators")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must use '/' path separators")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -144,7 +144,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
     const ::Path<ScratchArena> includePathValue(scratchArena, includePath);
     if(includePathValue.is_absolute() || includePathValue.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must be a relative include path")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must be a relative include path")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -154,7 +154,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
         ScratchString componentText = PathToString(scratchArena, component);
         CanonicalizeTextInPlace(componentText);
         if(componentText.empty() || GlobalFilesystemPathDetail::IsDot(AStringView(componentText.data(), componentText.size())) || GlobalFilesystemPathDetail::IsDotDot(AStringView(componentText.data(), componentText.size()))){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(fieldName)
                 , StringConvert(includePath)
@@ -181,7 +181,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     ScratchArena& scratchArena
 ){
     if(!Core::Assets::HasReservedAssetVirtualRoot(includePath, scratchArena)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must be a project/- or engine/-rooted virtual path "
             "(e.g. 'engine/csg/box/eval.slangi')")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -252,14 +252,14 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     const Path outputPath = includeRoot / moduleInclude;
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parent_path())
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(!WriteTextFile(outputPath, AStringView(scratchSource))){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: failed to write generated include '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;
@@ -272,7 +272,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parent_path())
             , StringConvert(errorCode.message())
         );
@@ -283,7 +283,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
         "// Generated by AssetBuilder; no CSG shape assets were discovered.\n"
     ;
     if(!WriteTextFile(outputPath, s_EmptyGeneratedModule)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: failed to write generated include '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;
@@ -364,7 +364,7 @@ bool ParseCsgShapeCookMetadata(
     if(!ParseOptionalStringField(nwbFilePath, asset, s_ModuleIncludeField, outEntry.moduleInclude))
         return false;
     if(outEntry.moduleInclude.empty() && !BuildDefaultCsgShapeModuleInclude(cookArena, outEntry.shaderModule, outEntry.moduleInclude)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(outEntry.shaderModule.resolvedText())
         );
@@ -375,14 +375,14 @@ bool ParseCsgShapeCookMetadata(
     if(!ValidateIncludePath(nwbFilePath, s_ModuleIncludeField, AStringView(outEntry.moduleInclude), scratchArena))
         return false;
     if(!HasSlangIncludeExtension(AStringView(outEntry.evalInclude), scratchArena)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_EvalField)
         );
         return false;
     }
     if(!HasSlangIncludeExtension(AStringView(outEntry.moduleInclude), scratchArena)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
+        NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_ModuleIncludeField)
         );
@@ -407,20 +407,20 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
 
     for(usize index = 0u; index < csgShapeEntries.size(); ++index){
         if(index >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape cook: too many CSG shape assets"));
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape cook: too many CSG shape assets"));
             return false;
         }
 
         CsgShapeCookEntry& entry = csgShapeEntries[index];
         const CsgShapeTypeId shapeTypeId = CsgShapeTypeIdFromName(entry.shapeName);
         if(shapeTypeId == s_InvalidCsgShapeTypeId){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), StringConvert(entry.shapeName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), StringConvert(entry.shapeName.resolvedText()));
             return false;
         }
 
         const auto foundShapeId = shapeIdNames.find(shapeTypeId);
         if(foundShapeId != shapeIdNames.end()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}")
                 , StringConvert(foundShapeId.value().resolvedText())
                 , StringConvert(entry.shapeName.resolvedText())
                 , shapeTypeId
@@ -461,7 +461,7 @@ bool EmitCsgShapeModuleIncludes(
     seenShapeNames.reserve(csgShapeEntries.size());
     for(const CsgShapeCookEntry& entry : csgShapeEntries){
         if(!seenShapeNames.insert(entry.shapeName.hash()).second){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: duplicate shape '{}'"), StringConvert(entry.shapeName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: duplicate shape '{}'"), StringConvert(entry.shapeName.resolvedText()));
             return false;
         }
     }
@@ -490,7 +490,7 @@ bool EmitCsgShapeModuleIncludes(
             if(entry.moduleInclude == moduleEntry.moduleInclude)
                 continue;
 
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: module '{}' uses multiple generated include paths ('{}' and '{}')")
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: module '{}' uses multiple generated include paths ('{}' and '{}')")
                 , StringConvert(moduleEntry.shaderModule.resolvedText())
                 , StringConvert(moduleEntry.moduleInclude)
                 , StringConvert(entry.moduleInclude)
@@ -505,7 +505,7 @@ bool EmitCsgShapeModuleIncludes(
             moduleEntry.shaderModule
         );
         if(!generatedIncludeOwner.second && generatedIncludeOwner.first.value() != moduleEntry.shaderModule){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'")
                 , StringConvert(moduleEntry.moduleInclude)
                 , StringConvert(generatedIncludeOwner.first.value().resolvedText())
                 , StringConvert(moduleEntry.shaderModule.resolvedText())

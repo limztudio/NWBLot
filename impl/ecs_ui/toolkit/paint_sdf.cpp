@@ -26,7 +26,7 @@ bool PaintBuilder::drawSdfGlyph(
     const Rect& rectangle,
     const Rect& uv,
     const Color& tint){
-    GLOBAL_ASSERT(m_recording);
+    GLB_ASSERT(m_recording);
     if(
         !page || channel >= page->binding().channelCount || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
@@ -46,7 +46,7 @@ bool PaintBuilder::drawSdfGlyph(
                 break;
         }
     }
-    GLOBAL_ASSERT(index < m_snapshot.m_sdfPages.size());
+    GLB_ASSERT(index < m_snapshot.m_sdfPages.size());
     emitQuad(rectangle, uv, tint, PaintMaterial::SdfGlyph, Limit<u32>::s_Max, index, channel);
     return true;
 }

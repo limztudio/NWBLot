@@ -38,7 +38,7 @@ bool Mesh::validatePayload()const{
     const TString<Core::Alloc::ScratchArena> meshPathText = Core::Assets::AssetVirtualPathText(scratchArena, *this);
 
     if(hasIncompleteGeometryPayload()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload")
+        NWB_LOGGER_ERROR(GLB_TEXT("Mesh::validatePayload failed: mesh '{}' has incomplete payload")
             , meshPathText
         );
         return false;
@@ -48,7 +48,7 @@ bool Mesh::validatePayload()const{
         *this,
         0u,
         false,
-        GLOBAL_TEXT("Mesh::validatePayload"),
+        GLB_TEXT("Mesh::validatePayload"),
         meshPathText
     ))
         return false;
@@ -77,15 +77,15 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     if(header.meshClass != Core::Mesh::MeshClass::Static){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Mesh::loadBinary failed: invalid mesh class"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Mesh::loadBinary failed: invalid mesh class"));
         return false;
     }
     if(!MeshAssetBinaryPayload::MeshBaseHeaderComplete(header)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Mesh::loadBinary failed: mesh payload is incomplete"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Mesh::loadBinary failed: mesh payload is incomplete"));
         return false;
     }
     if(header.skinCount != 0u || header.skeletonJointCount != 0u || header.inverseBindMatrixCount != 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Mesh::loadBinary failed: static mesh contains skinned payload"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Mesh::loadBinary failed: static mesh contains skinned payload"));
         return false;
     }
 

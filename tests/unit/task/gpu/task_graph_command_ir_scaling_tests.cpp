@@ -145,14 +145,14 @@ TEST(GpuCommandIrCapture, MixedRecordGrowthRollbackAndRefillPreserveTheExactPref
     EXPECT_EQ(capture.recordingAttemptGeneration(), 31u);
     const BinaryByteView prefix = capture.commandBytes();
     const usize headerSize = sizeof(Graphics::GpuCommandIrStreamHeader);
-    EXPECT_EQ(GLOBAL_MEMCMP(prefix.data() + headerSize, original.data() + headerSize, prefix.size() - headerSize), 0);
+    EXPECT_EQ(GLB_MEMCMP(prefix.data() + headerSize, original.data() + headerSize, prefix.size() - headerSize), 0);
     const usize prefixBytes = prefix.size();
     capture.rollback(130u);
     EXPECT_EQ(capture.commandBytes().size(), prefixBytes);
     VerifyMixedRecords(capture, 129u);
     ASSERT_TRUE(AppendMixedRecords(capture, 129u, 257u));
     ASSERT_EQ(capture.commandBytes().size(), original.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
     VerifyMixedRecords(capture, 257u);
 }
 
@@ -205,7 +205,7 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     ));
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
     ASSERT_EQ(capture.commandBytes().size(), original.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(capture.commandBytes().data(), original.data(), original.size()), 0);
     VerifyMixedRecords(capture, 129u);
     capture.rollback(0u);
     ASSERT_TRUE(capture.beginRecordingAttempt(32u));

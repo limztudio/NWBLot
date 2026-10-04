@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     if(!m_currentCmdBuf){
         NWB_LOGGER_CRITICAL_WARNING(
-            GLOBAL_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable")
+            GLB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable")
         );
         return false;
     }
@@ -29,7 +29,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture)){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue")
+                GLB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for this exact command queue")
             );
             return false;
         }
@@ -42,7 +42,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
         Texture* const texture = it.value().texture.get();
         if(!isTextureReadyForCommandQueue(texture)){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for this exact command queue")
+                GLB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for this exact command queue")
             );
             return false;
         }
@@ -50,7 +50,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
         if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue")
+                GLB_TEXT("Vulkan: Failed to submit command list: descriptor heap contains a resource unavailable to this exact command queue")
             );
             return false;
         }
@@ -58,7 +58,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer)){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue")
+                GLB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for this exact command queue")
             );
             return false;
         }
@@ -70,7 +70,7 @@ bool CommandList::validateTrackedResourcesReadyForSubmission()const{
     ){
         if(!isBufferReadyForCommandQueue(it.value().buffer.get())){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue")
+                GLB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for this exact command queue")
             );
             return false;
         }
@@ -175,8 +175,8 @@ bool CommandList::validateCommandRecordingScope(const TStringView operationName)
         return true;
 
     NWB_LOGGER_CRITICAL_WARNING(
-        GLOBAL_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})"),
-        !operationName.empty() ? operationName : GLOBAL_TEXT("unnamed command"),
+        GLB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})"),
+        !operationName.empty() ? operationName : GLB_TEXT("unnamed command"),
         m_creationDesc.physicalQueue.index,
         m_creationDesc.physicalQueue.deviceGeneration,
         static_cast<u32>(m_creationDesc.queueType),
@@ -193,7 +193,7 @@ bool CommandList::recordAndValidateCommandCapability(
 ){
     if(!publicCommandStateAccessible())
         return false;
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     // Diagnostics must record the attempted operation even when its physical queue rejects it.
     if(m_taskCapabilityTracking){
         m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(
@@ -232,8 +232,8 @@ bool CommandList::recordAndValidateCommandCapability(
         return true;
 
     NWB_LOGGER_CRITICAL_WARNING(
-        GLOBAL_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})"),
-        !operationName.empty() ? operationName : GLOBAL_TEXT("unnamed command"),
+        GLB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})"),
+        !operationName.empty() ? operationName : GLB_TEXT("unnamed command"),
         m_creationDesc.physicalQueue.index,
         m_creationDesc.physicalQueue.deviceGeneration,
         static_cast<u32>(m_creationDesc.queueType),
@@ -260,7 +260,7 @@ bool CommandList::recordAndValidateAnyCommandCapability(
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     u8 selectableBits = availableBits & alternativeBits;
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     if(m_taskCapabilityTracking){
         const u8 declaredSelectableBits = selectableBits & static_cast<u8>(m_taskDeclaredCapabilities);
         if(declaredSelectableBits != 0u)
@@ -282,9 +282,9 @@ void CommandList::rejectCommandRecording(const TStringView operationName, const 
         return;
     if(!m_commandRecordingFailed){
         NWB_LOGGER_CRITICAL_WARNING(
-            GLOBAL_TEXT("Vulkan: Rejecting {} command recording: {}"),
-            !operationName.empty() ? operationName : GLOBAL_TEXT("unnamed command"),
-            !reason.empty() ? reason : GLOBAL_TEXT("invalid command semantics")
+            GLB_TEXT("Vulkan: Rejecting {} command recording: {}"),
+            !operationName.empty() ? operationName : GLB_TEXT("unnamed command"),
+            !reason.empty() ? reason : GLB_TEXT("invalid command semantics")
         );
     }
     invalidateCommandRecording();
@@ -302,7 +302,7 @@ void CommandList::discardInvalidCommandBuffer(){
     if(!m_currentCmdBuf)
         return;
 
-    NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Discarding a command list after command recording failed"));
+    NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Discarding a command list after command recording failed"));
     if(m_isRecording){
         endActiveRenderPass();
         resetMarkerState();
@@ -311,7 +311,7 @@ void CommandList::discardInvalidCommandBuffer(){
         m_isRecording = false;
         if(invalidEndResult != VK_SUCCESS){
             NWB_LOGGER_WARNING(
-                GLOBAL_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"),
+                GLB_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"),
                 ResultToString(invalidEndResult)
             );
         }
@@ -333,7 +333,7 @@ void CommandList::discardInvalidCommandBuffer(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -342,7 +342,7 @@ void CommandList::discardInvalidCommandBuffer(){
 void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask declaredCapabilities){
     if(!publicCommandStateAccessible())
         return;
-    GLOBAL_ASSERT(!m_taskCapabilityTracking);
+    GLB_ASSERT(!m_taskCapabilityTracking);
     m_taskCapabilitiesUsed = GpuQueueCapability::None;
     m_taskDeclaredCapabilities = declaredCapabilities;
     m_taskCapabilityTracking = true;
@@ -351,7 +351,7 @@ void CommandList::beginTaskCapabilityTracking(const GpuQueueCapability::Mask dec
 GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
     if(!publicCommandStateAccessible())
         return GpuQueueCapability::None;
-    GLOBAL_ASSERT(m_taskCapabilityTracking);
+    GLB_ASSERT(m_taskCapabilityTracking);
     m_taskCapabilityTracking = false;
     m_taskDeclaredCapabilities = GpuQueueCapability::None;
     return m_taskCapabilitiesUsed;

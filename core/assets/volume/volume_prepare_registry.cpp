@@ -66,8 +66,8 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
         __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(),
         context,
         functions,
-        [](){ NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: collected null volume prepare function")); },
-        [](){ NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to run auto-collected volume prepare step")); }
+        [](){ NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: collected null volume prepare function")); },
+        [](){ NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to run auto-collected volume prepare step")); }
     );
 }
 

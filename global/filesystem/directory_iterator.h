@@ -76,8 +76,8 @@ public:
 
 private:
     void collect(const Path<ArenaT>& path, ErrorCode& outError){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
-        Path<ArenaT> pattern = path / GLOBAL_TEXT("*");
+#if defined(GLB_PLATFORM_WINDOWS)
+        Path<ArenaT> pattern = path / GLB_TEXT("*");
         WIN32_FIND_DATA data = {};
         HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
         if(findHandle == INVALID_HANDLE_VALUE){
@@ -87,7 +87,7 @@ private:
 
         for(;;){
             const TStringView fileName(data.cFileName);
-            if(fileName != GLOBAL_TEXT(".") && fileName != GLOBAL_TEXT(".."))
+            if(fileName != GLB_TEXT(".") && fileName != GLB_TEXT(".."))
                 this->m_entries.emplace_back(path / fileName);
 
             if(FindNextFile(findHandle, &data))

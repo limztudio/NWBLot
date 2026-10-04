@@ -93,7 +93,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, GLOBAL_TEXT("FlickerTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("FlickerTestSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -209,17 +209,17 @@ public:
             transparentTintApplied
         );
         if(!opaqueTintApplied || !transparentTintApplied)
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueTintApplied, transparentTintApplied);
+            NWB_LOGGER_ERROR(GLB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueTintApplied, transparentTintApplied);
 
         SyncSmokeModelRuntimes(*m_world);
 
-        GLOBAL_FATAL_ASSERT_MSG(
+        GLB_FATAL_ASSERT_MSG(
             activeCamera.valid() && m_groundEntity.valid() && m_opaqueOwner.valid() && m_transparentOwner.valid(),
-            GLOBAL_TEXT("FlickerTestSmokeProject failed to create all scene entities")
+            GLB_TEXT("FlickerTestSmokeProject failed to create all scene entities")
         );
 
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLOBAL_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light")
+            GLB_TEXT("FlickerTestSmokeProject: spawned one opaque + one transparent character over an opaque ground plane, directional + point light")
         );
         return true;
     }
@@ -227,7 +227,7 @@ public:
     virtual void onShutdown()override{
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("FlickerTestSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("FlickerTestSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -250,7 +250,7 @@ private:
     NWB::Core::ECS::EntityID m_opaqueOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_transparentOwner = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ GLOBAL_TEXT("FlickerTestSmokeProject") };
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ GLB_TEXT("FlickerTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
 };
@@ -271,7 +271,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return GLOBAL_TEXT("NWB Flicker Test");
+    return GLB_TEXT("NWB Flicker Test");
 }
 
 

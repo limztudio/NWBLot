@@ -145,7 +145,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     // their command union and external ownership facts constrain the whole chain, while packetization retains its frontier checks.
     for(const GpuTaskQueuePlacementGroup& group : groups){
         const GpuPhysicalQueueInfo* const selectedQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, group);
-        GLOBAL_ASSERT(selectedQueue);
+        GLB_ASSERT(selectedQueue);
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
             if(
@@ -271,7 +271,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 }
             }
         }
-        GLOBAL_ASSERT(selectedQueue);
+        GLB_ASSERT(selectedQueue);
         scoredQueues[groupIndex] = selectedQueue->id;
         scoredReasons[groupIndex] = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics)
             ? GpuTaskQueueAssignmentReason::RequiredGraphics
@@ -283,7 +283,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     for(usize groupIndex = 0u; groupIndex < groups.size(); ++groupIndex){
         const GpuTaskQueuePlacementGroup& group = groups[groupIndex];
         const GpuPhysicalQueueInfo* const selectedQueue = FindPhysicalQueueInfo(topology, scoredQueues[groupIndex]);
-        GLOBAL_ASSERT(selectedQueue);
+        GLB_ASSERT(selectedQueue);
         for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
             GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset + taskOffset];
             assignment.initialQueue = selectedQueue->id;
@@ -311,7 +311,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             const usize assignmentIndex = group.assignmentOffset;
             GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[assignmentIndex];
             const GpuPhysicalQueueInfo* selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-            GLOBAL_ASSERT(selectedQueue);
+            GLB_ASSERT(selectedQueue);
             if(group.assignmentCount == 1u && !group.initialOwnershipQueue.valid() && !group.diagnosticOverrideQueue.valid()){
                 const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
                 if(task.scheduling.allowSameClassQueueRouting && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing){
@@ -376,7 +376,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                 topology,
                 outAssignments.m_assignments[group.assignmentOffset].queue
             );
-            GLOBAL_ASSERT(staticQueue);
+            GLB_ASSERT(staticQueue);
             GpuPhysicalQueueId diagnosticTimingQueue;
             GpuTaskId diagnosticTimingTask;
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
@@ -476,7 +476,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     for(GpuTaskQueueAssignment& assignment : outAssignments.m_assignments){
         const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
         const GpuPhysicalQueueInfo* const selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-        GLOBAL_ASSERT(selectedQueue);
+        GLB_ASSERT(selectedQueue);
         assignment.score = BuildQueueAssignmentScore(
             graph,
             analysis,

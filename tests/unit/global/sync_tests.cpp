@@ -38,7 +38,7 @@ TEST(GlobalSync, WindowsArm64UsesProcessorYieldIntrinsic){
     ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "global" / "sync.h", source));
 
     const AStringView sourceView(source.data(), source.size());
-    const usize branchBegin = sourceView.find("#if defined(GLOBAL_PLATFORM_WINDOWS) && defined(_M_ARM64)");
+    const usize branchBegin = sourceView.find("#if defined(GLB_PLATFORM_WINDOWS) && defined(_M_ARM64)");
     const usize branchEnd = sourceView.find("#elif defined(__ARM_ARCH_7A__) || defined(__aarch64__)", branchBegin);
     ASSERT_NE(branchBegin, AStringView::npos);
     ASSERT_NE(branchEnd, AStringView::npos);

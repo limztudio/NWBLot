@@ -103,7 +103,7 @@ TEST(VulkanQueueFamilySelection, RejectsMissingRequiredRolesAndIgnoresEmptyFamil
 
 TEST(VulkanAdapterSelection, ExtensionLookupHonorsNonTerminatedViewBounds){
     VkExtensionProperties extensions[1] = {};
-    GLOBAL_STRCPY(extensions[0].extensionName, VK_MAX_EXTENSION_NAME_SIZE, "VK_EXT_sample");
+    GLB_STRCPY(extensions[0].extensionName, VK_MAX_EXTENSION_NAME_SIZE, "VK_EXT_sample");
     constexpr char nameWithSuffix[] = "VK_EXT_sample_suffix";
     constexpr usize extensionNameLength = sizeof("VK_EXT_sample") - 1u;
     EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix, extensionNameLength)));

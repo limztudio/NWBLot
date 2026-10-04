@@ -107,7 +107,7 @@ bool IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const
     if(!fileSize(virtualPath, size))
         return false;
     if(size > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Filesystem: file exceeds the runtime buffer limit"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Filesystem: file exceeds the runtime buffer limit"));
         return false;
     }
 

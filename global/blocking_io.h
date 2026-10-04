@@ -9,9 +9,9 @@
 #include "platform.h"
 #include "type.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
 template<typename PointerT, typename OperationT>
 [[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept{
     usize remaining = byteCount;
@@ -66,7 +66,7 @@ template<typename PointerT, typename OperationT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 [[nodiscard]] inline bool ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
     usize remaining = byteCount;

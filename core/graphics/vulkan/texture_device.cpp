@@ -54,7 +54,7 @@ namespace __hidden_texture_device{
 
 TextureHandle Device::createTexture(const TextureDesc& d){
     VulkanTextureDetail::TextureCreateMetadata metadata;
-    if(!VulkanTextureDetail::ValidateTextureCreateDesc(d, GLOBAL_TEXT("create texture"), true, metadata))
+    if(!VulkanTextureDetail::ValidateTextureCreateDesc(d, GLB_TEXT("create texture"), true, metadata))
         return nullptr;
 
     VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(d, metadata);
@@ -80,14 +80,14 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     else
         res = m_allocator.createTexture(*texture, imageInfo);
     if(res != VK_SUCCESS){
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create image"));
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create image"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create image: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create texture: native image identity is already registered"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: A newly created texture duplicated a live native image identity"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create texture: native image identity is already registered"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: A newly created texture duplicated a live native image identity"));
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
@@ -97,17 +97,17 @@ TextureHandle Device::createTexture(const TextureDesc& d){
 
 MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get texture memory requirements: texture belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get texture memory requirements: texture belongs to another device"));
         return {};
     }
     if(!texture.m_managed || !texture.m_creationDesc.isVirtual || texture.m_allocation != nullptr){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Failed to get texture memory requirements: texture is not a managed virtual texture")
+            GLB_TEXT("Vulkan: Failed to get texture memory requirements: texture is not a managed virtual texture")
         );
         return {};
     }
     if(texture.m_image == VK_NULL_HANDLE || texture.m_imageInfo.tiling != VK_IMAGE_TILING_OPTIMAL){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get texture memory requirements: native optimal image is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get texture memory requirements: native optimal image is invalid"));
         return {};
     }
 
@@ -126,31 +126,31 @@ MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
 
 bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: texture belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: texture belongs to another device"));
         return false;
     }
     if(!texture.m_managed || !texture.m_creationDesc.isVirtual || texture.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: texture is not a managed virtual texture"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: texture is not a managed virtual texture"));
         return false;
     }
     if(texture.m_image == VK_NULL_HANDLE || texture.m_imageInfo.tiling != VK_IMAGE_TILING_OPTIMAL){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: native optimal image is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: native optimal image is invalid"));
         return false;
     }
 
     Heap& memoryHeap = heap;
     if(&memoryHeap.m_context != &m_context || &memoryHeap.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: heap belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: heap belongs to another device"));
         return false;
     }
     if(memoryHeap.m_allocation == nullptr || memoryHeap.m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
         return false;
     }
     HeapHandle retainedHeap(&heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
     NothrowScopedLock resourceLock(texture.m_memoryBindingMutex);
     if(texture.m_boundHeap){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: texture memory was already bound"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: texture memory was already bound"));
         return false;
     }
 
@@ -172,7 +172,7 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
         dedicatedRequirements,
         offset,
         VulkanDetail::HeapBindingResourceClass::OptimalImage,
-        GLOBAL_TEXT("bind texture memory"),
+        GLB_TEXT("bind texture memory"),
         VulkanArenaScope::s_TextureResourceLabel,
         bindingRange
     ))
@@ -187,7 +187,7 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     const VkResult res = m_allocator.bindHeapTextureMemory(texture, memoryHeap, offset);
     if(res != VK_SUCCESS){
         memoryHeap.m_bindingReservations.pop_back();
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind texture memory: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind texture memory: {}"), ResultToString(res));
         return false;
     }
     texture.m_heapBindingRange = bindingRange;
@@ -237,20 +237,20 @@ TextureHandle Device::createHandleForNativeTexture(
     const NativeTextureProvenance& nativeProvenance
 ){
     if(objectType != ObjectTypes::VK_Image){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
     }
 
     auto* nativeImage = static_cast<VkImage>(static_cast<VkImage_T*>(nativeTextureHandle));
     if(nativeImage == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return nullptr;
     }
     VulkanTextureDetail::TextureCreateMetadata metadata;
-    if(!VulkanTextureDetail::ValidateTextureCreateDesc(desc, GLOBAL_TEXT("create texture handle for native texture"), false, metadata))
+    if(!VulkanTextureDetail::ValidateTextureCreateDesc(desc, GLB_TEXT("create texture handle for native texture"), false, metadata))
         return nullptr;
     if(nativeProvenance.usage == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create texture handle for native texture: native usage is zero"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create texture handle for native texture: native usage is zero"));
         return nullptr;
     }
     if(!__hidden_texture_device::ValidateNativeTextureSharing(
@@ -270,7 +270,7 @@ TextureHandle Device::createHandleForNativeTexture(
     imageInfo.pQueueFamilyIndices = nativeProvenance.queueFamilyIndices;
     if(!VulkanTextureDetail::IsTextureImageInfoConsistent(desc, imageInfo)){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state")
+            GLB_TEXT("Vulkan: Failed to create texture handle for native texture: native provenance contradicts the logical description or declared initial state")
         );
         return nullptr;
     }
@@ -290,7 +290,7 @@ TextureHandle Device::createHandleForNativeTexture(
 
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
         NWB_LOGGER_WARNING(
-            GLOBAL_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists")
+            GLB_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists")
         );
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
@@ -305,7 +305,7 @@ TextureHandle Device::createHandleForNativeTexture(
 
 SamplerHandle Device::createSampler(const SamplerDesc& d){
     if(d.reductionType != SamplerReductionType::Standard && d.reductionType != SamplerReductionType::Comparison){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create sampler: unsupported reduction type {}"), static_cast<u32>(d.reductionType));
         return nullptr;
     }
 
@@ -323,8 +323,8 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
 
     const VkResult res = m_context.deviceDispatch.vkCreateSampler(m_context.device, &samplerInfo, m_context.allocationCallbacks, &sampler->m_sampler);
     if(res != VK_SUCCESS){
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create sampler"));
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create sampler"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create sampler: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, sampler);
         return nullptr;
     }

@@ -24,7 +24,7 @@ bool BuildPreparedFont(const BakeOptions& options, const Impl::FontAtlasPayload&
     if(!ReadFontSourceInput(options.source, source))
         return false;
     if(ComputeSha256({ source.data(), source.size() }) != atlas.fontSha256){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: source changed during bake"));
+        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: source changed during bake"));
         return false;
     }
 

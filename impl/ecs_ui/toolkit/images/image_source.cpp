@@ -30,7 +30,7 @@ static Atomic<u64> s_NextGeneration{ 1u };
 
 [[nodiscard]] static u64 NewGeneration(){
     const u64 generation = s_NextGeneration.fetch_add(1u, MemoryOrder::relaxed);
-    GLOBAL_FATAL_ASSERT_MSG(generation != 0u, GLOBAL_TEXT("UI image source generation overflow"));
+    GLB_FATAL_ASSERT_MSG(generation != 0u, GLB_TEXT("UI image source generation overflow"));
     return generation;
 }
 
@@ -74,7 +74,7 @@ ImageSource::ImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture
 
 SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture& texture){
     if(texture.dimension() != TextureDimension::Texture2D || texture.depth() != 1u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MakeImageSource: texture '{}' must be a static 2D image with depth one")
+        NWB_LOGGER_ERROR(GLB_TEXT("MakeImageSource: texture '{}' must be a static 2D image with depth one")
             , StringConvert(texture.virtualPath().resolvedText())
         );
         return {};

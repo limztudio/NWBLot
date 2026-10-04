@@ -20,20 +20,20 @@ NWB_VULKAN_BEGIN
 
 void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAccess){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: invalid CPU access mode"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: invalid CPU access mode"));
         return nullptr;
     }
 
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: buffer belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: buffer belongs to another device"));
         return nullptr;
     }
     if(!buffer.m_managed){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: native buffer memory is not managed by this device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: native buffer memory is not managed by this device"));
         return nullptr;
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: native buffer is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: native buffer is null"));
         return nullptr;
     }
     CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
@@ -45,18 +45,18 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
         )
         || effectiveAccess == CpuAccessMode::None
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
         return nullptr;
     }
     if(requestedAccess != effectiveAccess){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: requested access does not match the buffer CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: requested access does not match the buffer CPU access"));
         return nullptr;
     }
 
     NothrowScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: virtual buffer has no mapped heap binding"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: virtual buffer has no mapped heap binding"));
             return nullptr;
         }
 
@@ -73,7 +73,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
                 heap.m_desc.type
             )
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: virtual buffer heap binding is invalid"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: virtual buffer heap binding is invalid"));
             return nullptr;
         }
 
@@ -84,7 +84,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
                 buffer.m_heapBindingRange.size
             );
             if(res != VK_SUCCESS){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to invalidate readback heap mapping: {}"), ResultToString(res));
+                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to invalidate readback heap mapping: {}"), ResultToString(res));
                 return nullptr;
             }
         }
@@ -92,7 +92,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
     }
 
     if(buffer.m_allocation == nullptr){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer: buffer has no allocation"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer: buffer has no allocation"));
         return nullptr;
     }
 
@@ -102,7 +102,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
 
         const VkResult res = m_allocator.invalidateBufferMemory(buffer);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
             return false;
         }
         return true;
@@ -117,7 +117,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
     void* data = nullptr;
     const VkResult res = m_allocator.mapBufferMemory(buffer, &data);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
         return nullptr;
     }
 
@@ -132,15 +132,15 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
 
 void Device::unmapBuffer(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: buffer belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: buffer belongs to another device"));
         return;
     }
     if(!buffer.m_managed){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: native buffer memory is not managed by this device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: native buffer memory is not managed by this device"));
         return;
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: native buffer is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: native buffer is null"));
         return;
     }
     CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
@@ -152,14 +152,14 @@ void Device::unmapBuffer(Buffer& buffer){
         )
         || effectiveAccess == CpuAccessMode::None
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: buffer was created without CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: buffer was created without CPU access"));
         return;
     }
 
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: virtual buffer has no mapped heap binding"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: virtual buffer has no mapped heap binding"));
             return;
         }
 
@@ -176,14 +176,14 @@ void Device::unmapBuffer(Buffer& buffer){
                 heap.m_desc.type
             )
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: virtual buffer heap binding is invalid"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: virtual buffer heap binding is invalid"));
             return;
         }
         return;
     }
 
     if(buffer.m_allocation == nullptr || !buffer.m_mappedMemory){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap buffer: buffer memory is not mapped"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap buffer: buffer memory is not mapped"));
         return;
     }
 
@@ -195,15 +195,15 @@ void Device::unmapBuffer(Buffer& buffer){
 
 MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
         return {};
     }
     if(!buffer.m_managed || !buffer.m_creationDesc.isVirtual || buffer.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is not a managed virtual buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is not a managed virtual buffer"));
         return {};
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get buffer memory requirements: native buffer is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get buffer memory requirements: native buffer is null"));
         return {};
     }
 
@@ -228,7 +228,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
         m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
         result
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to get buffer memory requirements: padded requirements overflow"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to get buffer memory requirements: padded requirements overflow"));
         return {};
     }
     return result;
@@ -236,31 +236,31 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
 
 bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
         return false;
     }
     if(!buffer.m_managed || !buffer.m_creationDesc.isVirtual || buffer.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: buffer is not a managed virtual buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: buffer is not a managed virtual buffer"));
         return false;
     }
     if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: native buffer is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: native buffer is null"));
         return false;
     }
 
     Heap& memoryHeap = heap;
     if(&memoryHeap.m_context != &m_context || &memoryHeap.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: heap belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: heap belongs to another device"));
         return false;
     }
     if(memoryHeap.m_allocation == nullptr || memoryHeap.m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
         return false;
     }
     HeapHandle retainedHeap(&heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_boundHeap){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: buffer memory was already bound"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: buffer memory was already bound"));
         return false;
     }
     if(!VulkanDetail::IsBufferHeapTypeCompatible(
@@ -268,7 +268,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         buffer.m_creationDesc.isVolatile,
         memoryHeap.m_desc.type
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: CPU access is incompatible with heap type"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: CPU access is incompatible with heap type"));
         return false;
     }
 
@@ -294,7 +294,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
         bindingRequirements
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: padded requirements overflow"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: padded requirements overflow"));
         return false;
     }
     memoryRequirements.memoryRequirements.size = bindingRequirements.size;
@@ -302,7 +302,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
 
     ScopedLock heapLock(memoryHeap.m_bindingMutex);
     if(memoryHeap.m_desc.type != HeapType::DeviceLocal && !memoryHeap.m_mappedMemory){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: CPU-visible heap is not mapped"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: CPU-visible heap is not mapped"));
         return false;
     }
     VulkanDetail::HeapBindingRange bindingRange;
@@ -312,7 +312,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         dedicatedRequirements,
         offset,
         VulkanDetail::HeapBindingResourceClass::Buffer,
-        GLOBAL_TEXT("bind buffer memory"),
+        GLB_TEXT("bind buffer memory"),
         VulkanArenaScope::s_BufferResourceLabel,
         bindingRange
     ))
@@ -327,7 +327,7 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     const VkResult res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);
     if(res != VK_SUCCESS){
         memoryHeap.m_bindingReservations.pop_back();
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
         return false;
     }
     if(m_context.extensions.bufferDeviceAddress){
@@ -403,15 +403,15 @@ bool Device::validateHeapMemoryBinding(
 )const{
     outRange = {};
     if(&heap.m_context != &m_context || &heap.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: heap belongs to another device"), operationName);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: heap belongs to another device"), operationName);
         return false;
     }
     if(heap.m_allocation == nullptr || heap.m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
         return false;
     }
     if(!VulkanDetail::AllowsGenericHeapBinding(dedicatedRequirements)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to {}: the {} requires a dedicated allocation")
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to {}: the {} requires a dedicated allocation")
             , operationName
             , resourceName
         );
@@ -423,7 +423,7 @@ bool Device::validateHeapMemoryBinding(
         memoryRequirements.memoryTypeBits
     )){
         NWB_LOGGER_WARNING(
-            GLOBAL_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"),
+            GLB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"),
             operationName,
             resourceName
         );
@@ -437,7 +437,7 @@ bool Device::validateHeapMemoryBinding(
         memoryRequirements.alignment,
         outRange
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: offset {} size {} is misaligned or outside heap capacity {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: offset {} size {} is misaligned or outside heap capacity {}")
             , operationName
             , offset
             , static_cast<u64>(memoryRequirements.size)
@@ -456,7 +456,7 @@ bool Device::validateHeapMemoryBinding(
         ))
             continue;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: the {} heap range conflicts with a live binding")
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: the {} heap range conflicts with a live binding")
             , operationName
             , resourceName
         );

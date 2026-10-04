@@ -493,7 +493,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         if(logicalOwnershipTransfers){
             for(usize transferIndex = 0u; transferIndex < logicalOwnershipTransferCount; ++transferIndex){
                 const Core::GpuCompiledOwnershipTransfer& transfer = logicalOwnershipTransfers[transferIndex];
-                GLOBAL_ASSERT(transfer.valid());
+                GLB_ASSERT(transfer.valid());
 
                 StringAppendFormat(
                     m_frameGraphRendererLabel,
@@ -598,7 +598,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
         : physicalQueueRuntimeStatistics
     ){
         if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
-            GLOBAL_ASSERT(false);
+            GLB_ASSERT(false);
             return false;
         }
     }
@@ -607,7 +607,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)
         ;
         if(!builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)){
-            GLOBAL_ASSERT(false);
+            GLB_ASSERT(false);
             return false;
         }
     }
@@ -736,7 +736,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             m_deferredLightingSubmissionTransaction,
             scratchArena
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
         }
         else{
             const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
@@ -750,7 +750,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 scratchArena,
                 deferredLightingTelemetryOptions
             ))
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
         }
     }
 

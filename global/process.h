@@ -11,9 +11,9 @@
 
 #include <cstdlib>
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <processthreadsapi.h>
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
 #include <sys/syscall.h>
 #include <unistd.h>
 #endif
@@ -32,7 +32,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline int RunSystemCommand(const AString<ArenaT>& command){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     AString<ArenaT> systemCommand("\"", command.get_allocator());
     systemCommand += command;
     systemCommand += '"';
@@ -43,9 +43,9 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] inline u32 CurrentProcessId()noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return static_cast<u32>(GetCurrentProcessId());
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
     return static_cast<u32>(getpid());
 #else
     return 0u;
@@ -53,7 +53,7 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] inline u32 CurrentThreadId()noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return static_cast<u32>(GetCurrentThreadId());
 #elif defined(SYS_gettid)
     return static_cast<u32>(syscall(SYS_gettid));

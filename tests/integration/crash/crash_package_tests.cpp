@@ -11,9 +11,9 @@
 #include <global/filesystem/operations.h>
 #include <global/thread.h>
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
@@ -121,11 +121,11 @@ static void BuildCrashIdForProcess(char (&outCrashId)[N], const u32 processId, c
 }
 
 [[nodiscard]] static NWB::Core::Crash::Detail::PlatformKind::Enum CurrentCrashPlatformKind()noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return NWB::Core::Crash::Detail::PlatformKind::Windows;
-#elif defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_ANDROID)
     return NWB::Core::Crash::Detail::PlatformKind::Android;
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
     return NWB::Core::Crash::Detail::PlatformKind::Linux;
 #else
     return NWB::Core::Crash::Detail::PlatformKind::Unknown;
@@ -370,7 +370,7 @@ TEST(Crash, FlushReportsFailsWhenUploadingRecoveryIsBlocked){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -417,7 +417,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
 }
 #endif
 
-#if defined(GLOBAL_PLATFORM_WINDOWS) || (defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID))
+#if defined(GLB_PLATFORM_WINDOWS) || (defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID))
 TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -463,7 +463,7 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
     EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
     EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
     // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
     // this guards that .eh_frame-based capture keeps producing a full callstack.
@@ -582,7 +582,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
 }
 #endif
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     TestArena testArena;
     auto& arena = testArena.arena;

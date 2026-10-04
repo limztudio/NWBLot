@@ -36,7 +36,7 @@ struct OpaqueUploadChainInputs{
     const MaterialPassDrawItemPartitions* drawItems = nullptr;
     InstanceGpuDataVector* instanceData = nullptr;
     const CsgFrameGpuData* csgFrameData = nullptr;
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     const ECSRenderDetail::MaterialTypedInstanceRangeVector* materialTypedRanges = nullptr;
 #endif
     const MaterialTypedByteDataVector* materialTypedBytes = nullptr;

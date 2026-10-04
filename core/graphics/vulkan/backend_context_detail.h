@@ -14,7 +14,7 @@
 
 #include <sstream>
 
-#ifdef GLOBAL_PLATFORM_WINDOWS
+#ifdef GLB_PLATFORM_WINDOWS
 #include <windows.h>
 #endif
 
@@ -304,12 +304,12 @@ inline void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhy
     outAdapter.deviceID = properties.deviceID;
     outAdapter.dedicatedVideoMemory = GetDeviceLocalMemoryBytes(instanceDispatch, physicalDevice);
 
-    GLOBAL_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
+    GLB_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
     outAdapter.hasUUID = true;
     outAdapter.luid = {};
     outAdapter.hasLUID = false;
     if(idProperties.deviceLUIDValid){
-        GLOBAL_MEMCPY(outAdapter.luid.data(), outAdapter.luid.size(), idProperties.deviceLUID, outAdapter.luid.size());
+        GLB_MEMCPY(outAdapter.luid.data(), outAdapter.luid.size(), idProperties.deviceLUID, outAdapter.luid.size());
         outAdapter.hasLUID = true;
     }
 }
@@ -419,7 +419,7 @@ inline VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     const AStringView messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
     const AStringView message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
     NWB_LOGGER_WARNING(
-        GLOBAL_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
+        GLB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
         StringConvert(DebugUtilsSeverityToString(severity)),
         static_cast<u32>(types),
         messageId,

@@ -103,7 +103,7 @@ struct CandidateEqual{
             lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
             && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
             && (lhs->mutableTypedByteCount == 0u
-                || GLOBAL_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
+                || GLB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
         );
     }
 };
@@ -227,7 +227,7 @@ void RendererOpticalVolumeSelection::select(
         if(replace)
             entry.value() = current;
         if(!m_suppressed.insert(suppressed).second){
-            GLOBAL_ASSERT(false);
+            GLB_ASSERT(false);
             continue;
         }
     }

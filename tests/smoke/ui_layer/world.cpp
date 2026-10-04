@@ -72,12 +72,12 @@ static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"e
 bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
     outWorld.reset();
     if(!context.shaderPathResolver){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: shader path resolver is unavailable"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: shader path resolver is unavailable"));
         return false;
     }
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: ECS world allocation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: ECS world allocation failed"));
         return false;
     }
 
@@ -114,34 +114,34 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         || (textureImageSmoke && IsUiLayerTextureImageSkinSmokeEnabled());
     const auto& skin = alternateSkin ? __hidden_ui_layer_smoke_world::s_AlternateSkin : __hidden_ui_layer_smoke_world::s_DefaultSkin;
     if(windowSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(popupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiPopupSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(listSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiListSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiListSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(comboSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiComboSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiComboSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(searchComboSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSearchComboSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSearchComboSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(popupToolsSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupToolsSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiPopupToolsSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(nestedPopupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiNestedPopupSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNestedPopupSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(numericEditSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiNumericEditSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNumericEditSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(textAreaSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextAreaSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiTextAreaSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(radioGroupSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiRadioGroupSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiRadioGroupSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(sliderSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSliderSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSliderSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(progressSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiProgressSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiProgressSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(imageSmoke)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiImageSmoke: skin={}"), alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiImageSmoke: skin={}"), alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default"));
     if(textureImageSmoke){
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextureImageSmoke: skin={}")
-            , alternateSkin ? GLOBAL_TEXT("alternate") : GLOBAL_TEXT("default")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiTextureImageSmoke: skin={}")
+            , alternateSkin ? GLB_TEXT("alternate") : GLB_TEXT("default")
         );
     }
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
@@ -169,14 +169,14 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         bindings.push_back({ .key = Core::Key::R, .command = Impl::Ui::InputCommand::FocusNext });
         bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
         if(!layer.setInputBindings(bindings.data(), bindings.size())){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
+            NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound"));
     }
     if(ReadSmokeEnvironmentFlag("NWB_UI_IR_REPLAY")){
         layer.setGpuCommandRecordingMode(Impl::Ui::GpuCommandRecordingMode::CommandIrReplay);
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiLayerSmokeProject: command IR replay enabled"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiLayerSmokeProject: command IR replay enabled"));
     }
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
@@ -186,105 +186,105 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         );
         paint.paint = [scene](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: texture-image UI paint failed"));
         };
     }
     else if(imageSmoke){
         paint.paint = [scene = CreateUiImageSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: image UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: image UI paint failed"));
         };
     }
     else if(progressSmoke){
         paint.paint = [scene = CreateUiProgressSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: progress UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: progress UI paint failed"));
         };
     }
     else if(sliderSmoke){
         paint.paint = [scene = CreateUiSliderSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: slider UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: slider UI paint failed"));
         };
     }
     else if(radioGroupSmoke){
         paint.paint = [scene = CreateUiRadioGroupSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: radio group UI paint failed"));
         };
     }
     else if(textAreaSmoke){
         paint.paint = [scene = CreateUiTextAreaSmokeScene(context.objectArena, context.clipboard)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: text area UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: text area UI paint failed"));
         };
     }
     else if(numericEditSmoke){
         paint.paint = [scene = CreateUiNumericEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: numeric editor UI paint failed"));
         };
     }
     else if(nestedPopupSmoke){
         paint.paint = [scene = CreateUiNestedPopupSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: nested popup UI paint failed"));
         };
     }
     else if(popupToolsSmoke){
         paint.paint = [scene = CreateUiPopupToolsSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: tooltip/context menu UI paint failed"));
         };
     }
     else if(searchComboSmoke){
         paint.paint = [scene = CreateUiSearchComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: searchable combo UI paint failed"));
         };
     }
     else if(comboSmoke){
         paint.paint = [scene = CreateUiComboSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: combo UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: combo UI paint failed"));
         };
     }
     else if(listSmoke){
         paint.paint = [scene = CreateUiListSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: virtual list paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: virtual list paint failed"));
         };
     }
     else if(popupSmoke){
         const auto scene = CreateUiPopupSmokeScene(context.objectArena, context.input);
         paint.paint = [scene](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: popup UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: popup UI paint failed"));
         };
         auto laterEntity = world->createEntity();
         auto& laterPaint = laterEntity.addComponent<Impl::UiPaintComponent>();
         laterPaint.order = 100;
         laterPaint.paint = [scene](Impl::UiPaintContext& paintContext){
             if(!scene->paintLaterRoot(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: later popup root paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: later popup root paint failed"));
         };
     }
     else if(IsUiLayerEditSmokeEnabled()){
         paint.paint = [scene = CreateUiEditSmokeScene(context.objectArena, context.input)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: edit UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: edit UI paint failed"));
         };
     }
     else if(windowSmoke){
         paint.paint = [scene = CreateUiWindowSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: window UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: window UI paint failed"));
         };
     }
     else if(IsUiLayerInteractionSmokeEnabled()){
         paint.paint = [scene = CreateUiInteractiveSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
             if(!scene->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
         };
     }
     else{
@@ -293,11 +293,11 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
                 ++paintFrame;
                 if(paintFrame <= 2u)
                     return;
-                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
+                NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
             }
             PaintUiLayerSmokeScene(paintContext);
             if(!textSamples->paint(paintContext))
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
+                NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
         };
     }
 
@@ -312,10 +312,10 @@ void DestroyUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::EC
 
     world->taskScope().wait();
     auto* const layer = world->getSystem<Impl::UiLayerSystem>();
-    GLOBAL_FATAL_ASSERT(layer);
+    GLB_FATAL_ASSERT(layer);
     context.graphics.removeRenderPass(*layer);
     const bool deviceIdle = context.graphics.waitForIdle();
-    GLOBAL_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), GLOBAL_TEXT("UI smoke teardown requires device idle or terminal loss"));
+    GLB_FATAL_ASSERT_MSG(deviceIdle || context.graphics.isDeviceLost(), GLB_TEXT("UI smoke teardown requires device idle or terminal loss"));
     world->clear();
     world.reset();
 }

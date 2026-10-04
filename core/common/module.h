@@ -133,7 +133,7 @@ public:
         return true;
     }
     inline void release(){
-        GLOBAL_ASSERT(m_activeCount > 0u);
+        GLB_ASSERT(m_activeCount > 0u);
         if(m_activeCount == 0u)
             return;
 
@@ -218,7 +218,7 @@ public:
     inline u16& height(){ return m_data.u16[1]; }
     inline const u16& height()const{ return m_data.u16[1]; }
 };
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
 class WinFrame : public FrameData{
 private:
@@ -237,7 +237,7 @@ public:
     inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
     inline void setHwnd(HWND value){ m_data.ptr[s_WindowPointerSlot] = value; }
 };
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
     static constexpr u8 s_LinuxFrameBackendNoneBase = 0;
     enum Enum : u8{

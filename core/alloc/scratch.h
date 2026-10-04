@@ -177,7 +177,7 @@ public:
 
 public:
     inline void* allocate(usize align, usize size){
-        GLOBAL_ASSERT_MSG(IsValidAlignment(align), GLOBAL_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
 
@@ -200,7 +200,7 @@ public:
     // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate);
     // resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
     inline void* reallocate(void* p, usize align, usize size){
-        GLOBAL_ASSERT_MSG(IsValidAlignment(align), GLOBAL_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align))
             return nullptr;
         if(!p)
@@ -208,7 +208,7 @@ public:
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
-        GLOBAL_ASSERT_MSG(bucket.active != nullptr, GLOBAL_TEXT("Attempted to reallocate before allocating"));
+        GLB_ASSERT_MSG(bucket.active != nullptr, GLB_TEXT("Attempted to reallocate before allocating"));
         if(!bucket.active)
             return nullptr;
 
@@ -216,7 +216,7 @@ public:
 
         Chunk* chunk = bucket.active;
         const usize oldSize = chunk->lifoTopSpan(p);
-        GLOBAL_ASSERT_MSG(oldSize != 0, GLOBAL_TEXT("ScratchArena can only reallocate its most-recent allocation"));
+        GLB_ASSERT_MSG(oldSize != 0, GLB_TEXT("ScratchArena can only reallocate its most-recent allocation"));
         if(oldSize == 0)
             return nullptr;
 
@@ -231,7 +231,7 @@ public:
         if(!next)
             return nullptr;
 
-        GLOBAL_MEMCPY(next, size, p, oldSize);
+        GLB_MEMCPY(next, size, p, oldSize);
         if(chunk->tryPopLifo(p, oldSize)){
             m_memoryStats.recordDeallocation(oldSize);
             if(chunk->m_remaining == chunk->m_size)
@@ -243,13 +243,13 @@ public:
     // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation;
     // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
-        GLOBAL_ASSERT_MSG(IsValidAlignment(align), GLOBAL_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
         if(!IsValidAlignment(align) || size == 0u)
             return;
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
-        GLOBAL_ASSERT_MSG(bucket.active != nullptr, GLOBAL_TEXT("Attempted to deallocate before allocating"));
+        GLB_ASSERT_MSG(bucket.active != nullptr, GLB_TEXT("Attempted to deallocate before allocating"));
         if(!bucket.active)
             return;
 
@@ -300,13 +300,13 @@ private:
     }
 
     void cacheEmptyChunk(ChunkWrapper& bucket, Chunk& chunk, Chunk* newer)noexcept{
-        GLOBAL_ASSERT(chunk.m_remaining == chunk.m_size);
+        GLB_ASSERT(chunk.m_remaining == chunk.m_size);
         if(newer){
-            GLOBAL_ASSERT(newer->m_next == &chunk);
+            GLB_ASSERT(newer->m_next == &chunk);
             newer->m_next = chunk.m_next;
         }
         else{
-            GLOBAL_ASSERT(bucket.active == &chunk);
+            GLB_ASSERT(bucket.active == &chunk);
             bucket.active = chunk.m_next;
         }
         chunk.m_next = bucket.cached;

@@ -34,7 +34,7 @@ bool PaintBuilder::prepareGlyphPages(const SharedGlyphPage* const pages, const u
 }
 
 bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){
-    GLOBAL_ASSERT(m_recording);
+    GLB_ASSERT(m_recording);
     if(
         !page || !IsFinite(uv.x) || !IsFinite(uv.y) || !IsFinite(uv.width) || !IsFinite(uv.height)
         || uv.x < 0.0f || uv.y < 0.0f || uv.width <= 0.0f || uv.height <= 0.0f
@@ -54,7 +54,7 @@ bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle,
                 break;
         }
     }
-    GLOBAL_ASSERT(index < m_snapshot.m_glyphPages.size());
+    GLB_ASSERT(index < m_snapshot.m_glyphPages.size());
     emitQuad(rectangle, uv, tint, PaintMaterial::Glyph, index);
     return true;
 }

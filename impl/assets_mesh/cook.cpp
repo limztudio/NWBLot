@@ -205,7 +205,7 @@ bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
 
 
 bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("MeshAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLB_TEXT("MeshAssetCodec::serialize")))
         return false;
 
     const Mesh& mesh = static_cast<const Mesh&>(asset);
@@ -223,7 +223,7 @@ bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     MeshAssetBinaryPayload::FillMeshBaseHeader(header, mesh);
     AppendPOD(outBinary, header);
 
-    const TStringView serializeFailureContext = GLOBAL_TEXT("MeshAssetCodec::serialize");
+    const TStringView serializeFailureContext = GLB_TEXT("MeshAssetCodec::serialize");
     if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(outBinary, mesh, serializeFailureContext))
         return false;
     return MeshAssetBinaryPayload::AppendMeshletStreams(outBinary, mesh, serializeFailureContext);

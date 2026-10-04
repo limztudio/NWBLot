@@ -146,7 +146,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
         ;
         cache.buffer = m_graphics.createBuffer(desc);
         if(!cache.buffer){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
         cache.indexByteOffset = layout.indexByteOffset;

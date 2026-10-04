@@ -20,7 +20,7 @@ namespace __hidden_gpu_pass_timing_probe_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_PUBLISHED_WINDOWS_2 = GLOBAL_TEXT("published_windows=2");
+static constexpr TStringView s_PUBLISHED_WINDOWS_2 = GLB_TEXT("published_windows=2");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,7 +44,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
     }
     recorder.publishFrame(1u);
     const Core::Perf::TimingView view(recorder);
-    Tests::Smoke::GpuPassTimingProbe probe(GLOBAL_TEXT("Probe regression"));
+    Tests::Smoke::GpuPassTimingProbe probe(GLB_TEXT("Probe regression"));
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger);
 
@@ -53,7 +53,7 @@ TEST(GpuPassTimingProbe, ReportsEveryRegisteredScopeBeyondSixtyFour){
 
     EXPECT_EQ(logger.messageCount(), s_ScopeCount + 1u);
     const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(
-        testArena.arena, GLOBAL_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.resolvedText())
+        testArena.arena, GLB_TEXT("  {}: gpu_window_ms"), StringConvert(lastScope.resolvedText())
     );
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
     EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));
@@ -68,7 +68,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     recorder.recordSample(firstScope, 0.003, 1u);
     recorder.publishFrame(1u);
     const Core::Perf::TimingView view(recorder);
-    Tests::Smoke::GpuPassTimingProbe probe(GLOBAL_TEXT("Probe growth"));
+    Tests::Smoke::GpuPassTimingProbe probe(GLB_TEXT("Probe growth"));
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger);
 
@@ -96,7 +96,7 @@ TEST(GpuPassTimingProbe, GrowthPreservesAccumulationAndWatermarksAcrossIntervals
     probe.recordFrame(0.25f, view);
     EXPECT_EQ(logger.messageCount(), 6u);
     const TString<Core::Alloc::GlobalArena> lastScopeText = StringFormat(
-        testArena.arena, GLOBAL_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).resolvedText())
+        testArena.arena, GLB_TEXT("  {}: gpu_window_ms"), StringConvert(recorder.scopeNameAt(s_AddedScopes).resolvedText())
     );
     EXPECT_TRUE(logger.sawMessageContaining(lastScopeText));
     EXPECT_FALSE(logger.sawMessageContaining(s_PUBLISHED_WINDOWS_2));

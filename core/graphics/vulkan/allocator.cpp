@@ -210,7 +210,7 @@ inline VkResult InvalidateAllocation(
 }
 
 inline void UnmapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation){
-    GLOBAL_ASSERT(allocation);
+    GLB_ASSERT(allocation);
     vmaUnmapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation));
 }
 
@@ -268,7 +268,7 @@ inline void DestroyBufferAllocation(
         allocation = nullptr;
     }
     else{
-        GLOBAL_ASSERT(buffer == VK_NULL_HANDLE);
+        GLB_ASSERT(buffer == VK_NULL_HANDLE);
     }
 
     buffer = VK_NULL_HANDLE;
@@ -315,7 +315,7 @@ bool VulkanAllocator::initialize(){
     VmaAllocator allocator = nullptr;
     VkResult res = vmaCreateAllocator(&allocatorInfo, &allocator);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create VMA allocator: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create VMA allocator: {}"), ResultToString(res));
         m_allocator = nullptr;
         return false;
     }
@@ -341,7 +341,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     );
     if(res == VK_SUCCESS){
         buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         if(buffer.m_creationDesc.debugName)
             vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_creationDesc.debugName.logText().data());
 #endif
@@ -391,7 +391,7 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
     );
     if(res == VK_SUCCESS){
         texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         if(texture.m_creationDesc.name)
             vmaSetAllocationName(
                 __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
@@ -412,7 +412,7 @@ void VulkanAllocator::destroyTexture(Texture& texture){
         );
     }
     else{
-        GLOBAL_ASSERT(texture.m_image == VK_NULL_HANDLE);
+        GLB_ASSERT(texture.m_image == VK_NULL_HANDLE);
     }
 
     texture.m_image = VK_NULL_HANDLE;

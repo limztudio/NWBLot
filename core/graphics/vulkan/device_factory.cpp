@@ -30,7 +30,7 @@ DeviceHandle CreateDevice(const DeviceDesc& desc){
         || !desc.instanceDispatch.vkGetPhysicalDeviceProperties
         || !desc.deviceDispatch.vkDestroyDevice
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Device creation requires non-empty native and physical queue registries."));
         return {};
     }
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);

@@ -319,7 +319,7 @@ static bool RecoverUploadingPackageDirectories(ArenaT& arena, const ::Path<Arena
     return ok;
 }
 
-#if defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_ANDROID)
 static void WriteAndroidCollectionNote(Alloc::PersistentArena& arena, const CrashRequest& request){
     CrashStringT<Alloc::PersistentArena> text{arena};
     text += "application_exit_info=not_collected_by_native_layer\n";
@@ -341,7 +341,7 @@ static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
 
     CrashRequest request;
     const usize offset = bytes.size() - sizeof(CrashRequest);
-    GLOBAL_MEMCPY(&request, sizeof(request), bytes.data() + offset, sizeof(request));
+    GLB_MEMCPY(&request, sizeof(request), bytes.data() + offset, sizeof(request));
     if(request.magic == s_RequestMagic && request.version == s_RequestVersion){
         if(WriteCrashPackage(request))
             WriteAndroidCollectionNote(dumpArena, request);

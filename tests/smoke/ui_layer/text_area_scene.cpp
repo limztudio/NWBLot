@@ -99,7 +99,7 @@ bool UiTextAreaSmokeScene::paint(Impl::UiPaintContext& context){
 
 void UiTextAreaSmokeScene::resetModel(){
     const bool initialized = m_model.setText("abcdef\nx\nabcdef\n한국어") && m_model.setSelection(5u, 5u);
-    GLOBAL_FATAL_ASSERT(initialized);
+    GLB_FATAL_ASSERT(initialized);
     m_state.reset();
     m_enabled = true;
     m_readOnly = false;
@@ -109,7 +109,7 @@ void UiTextAreaSmokeScene::resetModel(){
 
 void UiTextAreaSmokeScene::longDocument(){
     const bool replaced = m_model.setText(m_longText) && m_model.setSelection(1039u, 1039u);
-    GLOBAL_FATAL_ASSERT(replaced);
+    GLB_FATAL_ASSERT(replaced);
     m_longDocument = true;
 }
 

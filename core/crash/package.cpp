@@ -6,7 +6,7 @@
 
 #include <global/diagnostics.h>
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <dbghelp.h>
 #include <windows.h>
 #endif
@@ -297,7 +297,7 @@ static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 template<typename ArenaT>
 static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> dumpPath = RequestPendingDirectory(arena, request) / PackageNames::s_ProcessDumpFileName;
@@ -334,7 +334,7 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 }
 #endif
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 template<typename ArenaT>
 static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const AStringView sourcePath, const AStringView outputName){
     InputFileStream input(sourcePath.data(), s_FileOpenBinary);
@@ -365,7 +365,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
     if(!WriteCrashPackageBasics(arena, request))
         return false;
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(request.platform == PlatformKind::Windows){
         const bool dumpWritten = WriteWindowsMinidump(arena, request);
         if(!WriteCrashTextFile(
@@ -379,7 +379,7 @@ static bool WriteCrashPackageWithArena(ArenaT& arena, const CrashRequest& reques
         ))
             return false;
     }
-#elif defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     if(request.platform == PlatformKind::Linux){
         CopyProcFile(arena, request, PackageNames::s_ProcAuxvName, PackageNames::s_ProcAuxvFileName);
         CopyProcFile(arena, request, PackageNames::s_ProcCmdlineName, PackageNames::s_ProcCmdlineFileName);

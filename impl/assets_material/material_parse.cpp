@@ -76,7 +76,7 @@ bool ValidateMaterialCookInterfaces(
         materialEntry.resourceReferences.clear();
 
         if(materialEntry.materialInterface.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material '{}' is missing required material interface")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' is missing required material interface")
                 , StringConvert(AStringView(materialEntry.virtualPath))
             );
             return false;
@@ -86,7 +86,7 @@ bool ValidateMaterialCookInterfaces(
         const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material '{}' references unknown material interface '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' references unknown material interface '{}'")
                 , StringConvert(AStringView(materialEntry.virtualPath))
                 , StringConvert(AStringView(materialEntry.materialInterface))
             );
@@ -104,7 +104,7 @@ bool ValidateMaterialCookInterfaces(
         ))
             return false;
         if(!layout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
                 , StringConvert(AStringView(materialEntry.virtualPath))
                 , StringConvert(AStringView(materialEntry.materialInterface))
             );
@@ -132,7 +132,7 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.typedLayoutFields,
             materialEntry.resourceReferences
         )){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters")
                 , StringConvert(AStringView(materialEntry.virtualPath))
             );
             return false;

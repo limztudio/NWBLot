@@ -122,7 +122,7 @@ struct ShadowVisibilityOpaqueGraphTask{
             ;
         }
         if(!opaqueRecorded){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
             payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
             // The following graph callbacks declare the output as UAV. Keep the command-list tracker aligned with
             // their declared no-op handoffs even when this fallback only recorded a typed clear.
@@ -238,7 +238,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             return Core::FinishSplitGpuTimingMarker(payload.opaqueResolveTiming);
         }
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility"));
         payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
         // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned
         // with their no-op graph handoff after the typed fallback clear.
@@ -324,7 +324,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
             return true;
         }
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility"));
         payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
         commandList.setTextureState(
             payload.targets->shadowVisibility.get(),
@@ -405,7 +405,7 @@ struct ShadowTransparentSoftTraceGraphTask{
             true,
             &payload.lightSpace
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility"));
             return true;
         }
         *payload.transparentTraceProduced = true;
@@ -500,7 +500,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             return Core::FinishSplitGpuTimingMarker(payload.transparentResolveTiming);
         }
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow temporal merge failed; preserving opaque visibility"));
         *payload.transparentTraceProduced = false;
         payload.transparentResolveTiming->value().discardTiming();
         payload.transparentResolveTiming->reset();
@@ -591,7 +591,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             );
         }
         else if(!payload.transparentResolveTiming->has_value()){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope; preserving opaque visibility"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow wavelet lost its temporal timing envelope; preserving opaque visibility"));
             *payload.transparentTraceProduced = false;
             return true;
         }
@@ -608,7 +608,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             return true;
         }
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow first wavelet failed; preserving opaque visibility"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow first wavelet failed; preserving opaque visibility"));
         *payload.transparentTraceProduced = false;
         if(payload.transparentResolveTiming->has_value()){
             payload.transparentResolveTiming->value().discardTiming();
@@ -695,7 +695,7 @@ struct ShadowTransparentSoftFoldGraphTask{
                 payload.transparentResolveTiming->reset();
             }
             else{
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility"));
                 *payload.transparentTraceProduced = false;
                 payload.transparentResolveTiming->value().discardTiming();
                 payload.transparentResolveTiming->reset();
@@ -705,7 +705,7 @@ struct ShadowTransparentSoftFoldGraphTask{
                 payload.transparentResolveTiming->value().discardTiming();
                 payload.transparentResolveTiming->reset();
             }
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility"));
         }
 
         // Fusion deferred the opaque upsample, so a failed transparent phase must still publish opaque visibility.
@@ -800,7 +800,7 @@ struct ShadowVisibilityGraphTask{
                 payload.deferredLightingResources
             );
             if(!shadowVisibilityWritten)
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
         else if(payload.prepared && *payload.prepared){
             shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(

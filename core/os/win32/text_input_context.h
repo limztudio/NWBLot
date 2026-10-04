@@ -28,7 +28,7 @@ public:
     {}
     ~Win32TextInputContextGuard(){
         if(!ImmReleaseContext(m_window, m_context))
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Text input: ImmReleaseContext failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("Text input: ImmReleaseContext failed"));
     }
 
 

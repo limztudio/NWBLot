@@ -192,7 +192,7 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
             const u64 expectedBytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };
             ASSERT_NE(storedBytes, nullptr);
             ASSERT_EQ(byteSize, sizeof(expectedBytes));
-            EXPECT_EQ(GLOBAL_MEMCMP(storedBytes, expectedBytes, sizeof(expectedBytes)), 0);
+            EXPECT_EQ(GLB_MEMCMP(storedBytes, expectedBytes, sizeof(expectedBytes)), 0);
         }
     }
     graph.reset();

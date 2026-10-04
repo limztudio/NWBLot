@@ -69,7 +69,7 @@ inline void DestroySmokeSkinnedRenderWorld(
         return;
 
     auto* meshSkinningSystemPtr = world->getSystem<Impl::MeshSkinningSystem>();
-    GLOBAL_ASSERT(meshSkinningSystemPtr);
+    GLB_ASSERT(meshSkinningSystemPtr);
     Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
     context.graphics.removeRenderPass(meshSkinningSystem);
 
@@ -79,7 +79,7 @@ inline void DestroySmokeSkinnedRenderWorld(
 
 inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     auto* modelSystemPtr = world.getSystem<Impl::ModelSystem>();
-    GLOBAL_ASSERT(modelSystemPtr);
+    GLB_ASSERT(modelSystemPtr);
     Impl::ModelSystem& modelSystem = *modelSystemPtr;
     modelSystem.syncModelRuntimes();
 }

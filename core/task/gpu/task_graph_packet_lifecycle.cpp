@@ -30,7 +30,7 @@ void GpuTaskGraph::DiscardNotificationScope::complete()noexcept{
         return;
 
     NothrowScopedLock lock(m_graph.m_lifecycleMutex);
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(
         m_graph.m_activeDiscardNotificationCount != 0u,
         "GPU task discard notification ownership must remain balanced"
     );
@@ -45,8 +45,8 @@ void GpuTaskGraph::DiscardNotificationScope::complete()noexcept{
 }
 
 void GpuTaskGraph::DiscardNotificationScope::activateWithinLock()noexcept{
-    GLOBAL_FATAL_ASSERT_MSG(!m_active, "GPU task discard notification ownership cannot be activated twice");
-    GLOBAL_FATAL_ASSERT_MSG(
+    GLB_FATAL_ASSERT_MSG(!m_active, "GPU task discard notification ownership cannot be activated twice");
+    GLB_FATAL_ASSERT_MSG(
         m_graph.m_activeDiscardNotificationCount != Limit<u32>::s_Max,
         "GPU task discard notification ownership overflowed"
     );
@@ -61,7 +61,7 @@ void GpuTaskGraph::DiscardNotificationScope::adoptPacketRecordingClaimWithinLock
         && !m_ownsPacketRecordingClaim
         && m_graph.m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed) != 0u
     ;
-    GLOBAL_FATAL_ASSERT_MSG(adoptionValid, "packet recording discard notification must adopt one exact live claim");
+    GLB_FATAL_ASSERT_MSG(adoptionValid, "packet recording discard notification must adopt one exact live claim");
     if(!adoptionValid)
         TerminateInvariant();
     m_ownsPacketRecordingClaim = true;
@@ -70,7 +70,7 @@ void GpuTaskGraph::DiscardNotificationScope::adoptPacketRecordingClaimWithinLock
 
 void GpuTaskGraph::releasePacketRecordingClaimWithinLock()const noexcept{
     const u32 activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed);
-    GLOBAL_FATAL_ASSERT_MSG(activeClaimCount != 0u, "GPU packet recording claim ownership must remain balanced");
+    GLB_FATAL_ASSERT_MSG(activeClaimCount != 0u, "GPU packet recording claim ownership must remain balanced");
     if(activeClaimCount == 0u)
         TerminateInvariant();
     m_activePacketRecordingClaimCount.store(activeClaimCount - 1u, MemoryOrder::release);
@@ -93,7 +93,7 @@ GpuTaskGraph::PacketRecordingAbort::PacketRecordingAbort(PacketRecordingAbort&& 
 
 GpuTaskGraph::PacketRecordingAbort::~PacketRecordingAbort(){
     if(valid()){
-        GLOBAL_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
+        GLB_FATAL_ASSERT_MSG(false, "GPU task packet recording abort must be consumed before destruction");
         TerminateInvariant();
     }
 }
@@ -127,7 +127,7 @@ public:
             && m_graph.m_tasks[m_task.index].recordThunkInProgress
         ;
         if(!claimValid){
-            GLOBAL_FATAL_ASSERT_MSG(false, "record thunk unwind must retain its exact graph recording claim");
+            GLB_FATAL_ASSERT_MSG(false, "record thunk unwind must retain its exact graph recording claim");
             TerminateInvariant();
         }
         m_graph.m_tasks[m_task.index].recordThunkInProgress = false;
@@ -137,7 +137,7 @@ public:
 public:
     void complete()noexcept{
         if(!m_active){
-            GLOBAL_FATAL_ASSERT_MSG(false, "record thunk claim guard may complete exactly once");
+            GLB_FATAL_ASSERT_MSG(false, "record thunk claim guard may complete exactly once");
             TerminateInvariant();
         }
         m_active = false;
@@ -174,7 +174,7 @@ public:
         if(!m_active)
             return;
         if(!m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration)){
-            GLOBAL_FATAL_ASSERT_MSG(false, "terminal packet recording abort must resolve its exact graph attempt");
+            GLB_FATAL_ASSERT_MSG(false, "terminal packet recording abort must resolve its exact graph attempt");
             TerminateInvariant();
         }
         m_active = false;
@@ -417,7 +417,7 @@ bool GpuTaskGraph::beginPacketRecording(
         return false;
     const u32 activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed);
     if(activeClaimCount == Limit<u32>::s_Max){
-        GLOBAL_FATAL_ASSERT_MSG(false, "GPU packet recording claim count overflowed");
+        GLB_FATAL_ASSERT_MSG(false, "GPU packet recording claim count overflowed");
         TerminateInvariant();
     }
     m_activePacketRecordingClaimCount.store(activeClaimCount + 1u, MemoryOrder::release);
@@ -583,12 +583,12 @@ void GpuTaskGraph::abortPacketRecording(
     const u64 recordingAttemptGeneration = lease.m_recordingAttemptGeneration;
     PacketRecordingAbort abort;
     if(!deferPacketRecordingAbort(compiledGraph, planAccess, packet, lease, abort)){
-        GLOBAL_FATAL_ASSERT_MSG(false, "active packet recording abort must retain its exact lease");
+        GLB_FATAL_ASSERT_MSG(false, "active packet recording abort must retain its exact lease");
         TerminateInvariant();
     }
     RecordingAttemptResolutionGuard resolution(*this, compiledGraph, recordingAttemptGeneration);
     if(!completePacketRecordingAbort(compiledGraph, planAccess, abort)){
-        GLOBAL_FATAL_ASSERT_MSG(false, "active packet recording abort must complete before attempt resolution");
+        GLB_FATAL_ASSERT_MSG(false, "active packet recording abort must complete before attempt resolution");
         TerminateInvariant();
     }
     resolution.complete();

@@ -299,7 +299,7 @@ private:
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, GLOBAL_TEXT("SkinningCullingBenchmark"));
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, GLB_TEXT("SkinningCullingBenchmark"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -325,13 +325,13 @@ private:
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name(), loadedModelAsset)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
-        GLOBAL_ASSERT(loadedModelAsset);
+        GLB_ASSERT(loadedModelAsset);
         const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset.get());
         if(!model){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark model has unexpected type"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark model has unexpected type"));
             return false;
         }
         const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
@@ -344,23 +344,23 @@ private:
         if(!skeletonObject && !model->skeletonObjects().empty())
             skeletonObject = &model->skeletonObjects().front();
         if(!skeletonObject || !skeletonObject->skeleton.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark model has no skeleton object"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark model has no skeleton object"));
             return false;
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name(), loadedSkeletonAsset)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
-        GLOBAL_ASSERT(loadedSkeletonAsset);
+        GLB_ASSERT(loadedSkeletonAsset);
         const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset.get());
         if(!skeleton){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark skeleton has unexpected type"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark skeleton has unexpected type"));
             return false;
         }
         if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
             return false;
         }
         m_bindJoints.clear();
@@ -371,7 +371,7 @@ private:
                 NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
                 NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon
             )){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
+                NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
                 return false;
             }
 
@@ -430,7 +430,7 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}")
             , m_repeatIndex + 1u
             , repeatCount()
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
@@ -440,7 +440,7 @@ private:
 
     void finishCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
             , m_repeatIndex + 1u
             , repeatCount()
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
@@ -450,7 +450,7 @@ private:
     }
 
     void finishBenchmark(){
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}")
             , repeatCount()
             , static_cast<u32>(caseCount())
             , warmupFrameCount()
@@ -524,14 +524,14 @@ public:
             m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
 
         if(!loadSkeletonBindJoints()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
             requestQuit();
             return true;
         }
         auto* meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
         auto* meshSkinningSystemPtr = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
         if(!meshSystemPtr || !meshSkinningSystemPtr || !m_runtimeMeshProvider.install(*meshSystemPtr, *meshSkinningSystemPtr)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: failed to install benchmark runtime mesh provider"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to install benchmark runtime mesh provider"));
             requestQuit();
             return true;
         }
@@ -550,7 +550,7 @@ public:
         );
 
         if(!activeCamera.camera.valid() || !directionalLight.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+            NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
             requestQuit();
             return true;
         }
@@ -585,7 +585,7 @@ public:
                 NWB::Impl::ModelObjectKind::Skeleton
             );
             if(!skeletonEntity.valid()){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
+                NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to find spawned benchmark skeleton object"));
                 requestQuit();
                 return true;
             }
@@ -596,21 +596,21 @@ public:
         if(m_staticPreview){
             m_runtimeMeshProvider.setMode(BenchmarkMode::NoCulling);
             configureCamera(BenchmarkView::Front);
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: static preview enabled; close the window manually when done"));
         }
         else{
             configureCase();
         }
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: spawned {} characters with {} joints each"), characterCount, static_cast<u32>(m_bindJoints.size()));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinningCullingBenchmark: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SkinningCullingBenchmark: shutdown"));
         if(!m_staticPreview){
             if(!m_context.flushTelemetryUpload(true))
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown"));
+                NWB_LOGGER_WARNING(GLB_TEXT("SkinningCullingBenchmark: failed to flush telemetry upload during shutdown"));
         }
     }
 
@@ -680,7 +680,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return GLOBAL_TEXT("NWB Skinning Culling Benchmark");
+    return GLB_TEXT("NWB Skinning Culling Benchmark");
 }
 
 

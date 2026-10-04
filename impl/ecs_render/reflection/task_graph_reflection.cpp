@@ -37,7 +37,7 @@ namespace __hidden_reflection_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_DisabledReflectionRoute = GLOBAL_TEXT("disabled");
+inline constexpr TStringView s_DisabledReflectionRoute = GLB_TEXT("disabled");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -229,7 +229,7 @@ struct DispatchTask{
         payload.feedbackReservation.accept(token, sceneReady);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Reflection resolve: hardware"));
+                NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Reflection resolve: hardware"));
                 *payload.hardwareDispatchLogged = true;
             }
         }
@@ -237,10 +237,10 @@ struct DispatchTask{
             if(payload.fallbackDispatchLogged && !*payload.fallbackDispatchLogged){
                 const u32 mode = payload.resources.parameters.traceMode;
                 const bool screen = mode == NWB_REFLECTION_MODE_SCREEN || mode == NWB_REFLECTION_MODE_HYBRID;
-                TStringView route = screen ? GLOBAL_TEXT("screen-space") : GLOBAL_TEXT("environment");
+                TStringView route = screen ? GLB_TEXT("screen-space") : GLB_TEXT("environment");
                 if(mode == NWB_REFLECTION_MODE_DISABLED)
                     route = s_DisabledReflectionRoute;
-                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Reflection resolve: {}"), route);
+                NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Reflection resolve: {}"), route);
                 *payload.fallbackDispatchLogged = true;
             }
         }

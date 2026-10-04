@@ -59,7 +59,7 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
         return;
 
     if(!guard->capture(record))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Telemetry: diagnostic event record dropped"));
+        NWB_LOGGER_WARNING(GLB_TEXT("Telemetry: diagnostic event record dropped"));
 }
 
 
@@ -196,8 +196,8 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
                 nullptr,
                 MemoryOrder::acq_rel
             )){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
-                GLOBAL_ASSERT(false);
+                NWB_LOGGER_WARNING(GLB_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
+                GLB_ASSERT(false);
             }
         }
     }
@@ -217,8 +217,8 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         nullptr,
         MemoryOrder::acq_rel
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Telemetry: diagnostic callback ownership changed before capture guard destruction"));
-        GLOBAL_ASSERT(false);
+        NWB_LOGGER_WARNING(GLB_TEXT("Telemetry: diagnostic callback ownership changed before capture guard destruction"));
+        GLB_ASSERT(false);
     }
 
     DiagnosticCaptureGuard* expected = this;
@@ -227,8 +227,8 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         nullptr,
         MemoryOrder::acq_rel
     )){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
-        GLOBAL_ASSERT(false);
+        NWB_LOGGER_WARNING(GLB_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
+        GLB_ASSERT(false);
     }
 
     ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);

@@ -8,10 +8,10 @@
 #include "simplemath.h"
 #include "thread.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 #include <cerrno>
 #include <cstdio>
 #include <sched.h>
@@ -52,7 +52,7 @@ void classifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,7 +171,7 @@ static constexpr u32 s_QueryRetryCount = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,7 +198,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 [[nodiscard]] u32 queryLinuxCapacity(u32 processorIndex){
     char path[s_SysfsCapacityPathCapacity];
-    const int pathLength = GLOBAL_SPRINTF(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
+    const int pathLength = GLB_SPRINTF(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
     if(pathLength <= 0 || static_cast<usize>(pathLength) >= sizeof(path))
         return 0u;
     InputFileStream stream(path);
@@ -253,9 +253,9 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
     outPlacements.clear();
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     const bool queried = __hidden_cpu_topology::queryWindowsPlacements(outPlacements);
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
     const bool queried = __hidden_cpu_topology::queryLinuxPlacements(outPlacements);
 #else
     const bool queried = false;
@@ -272,14 +272,14 @@ bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
 bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     if(!placement.valid())
         return false;
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(placement.processorGroup >= GetActiveProcessorGroupCount() || placement.logicalProcessorIndex >= sizeof(KAFFINITY) * __hidden_cpu_topology::s_BitsPerByte)
         return false;
     GROUP_AFFINITY affinity{};
     affinity.Group = static_cast<WORD>(placement.processorGroup);
     affinity.Mask = static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex;
     return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != FALSE;
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
     InteropVector<usize> affinityWords;
     if(placement.processorGroup != 0u || !__hidden_cpu_topology::queryLinuxAffinity(affinityWords))
         return false;

@@ -433,7 +433,7 @@ struct MaterialResourceReference{
         reference.samplerAsset.virtualPath = resourceName;
         return true;
     default:
-        GLOBAL_ASSERT(false);
+        GLB_ASSERT(false);
         return false;
     }
 }

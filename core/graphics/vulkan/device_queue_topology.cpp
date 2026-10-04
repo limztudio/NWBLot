@@ -83,7 +83,7 @@ GpuQueueTimelineSnapshot Device::getQueueTimelineSnapshot(const GpuPhysicalQueue
     if(result == VK_ERROR_DEVICE_LOST)
         captureDeviceLoss("queue timeline snapshot");
     if(result != VK_SUCCESS){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
         return {};
     }
     return snapshot;

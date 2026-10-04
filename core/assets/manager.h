@@ -98,7 +98,7 @@ public:
         const AStringView assetKindText
     ){
         if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
+            NWB_LOGGER_ERROR(GLB_TEXT("{}: {} asset reference is empty"), owner, StringConvert(assetKindText));
             return false;
         }
         return !resource.valid();
@@ -113,7 +113,7 @@ public:
         const AStringView assetKindText
     )const{
         if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to load {} asset '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName
                 , StringConvert(assetKindText)
                 , StringConvert(virtualPath.resolvedText())
@@ -122,7 +122,7 @@ public:
         }
         const AssetT* typedAsset = CastAsset<AssetT>(outLoadedAsset.get());
         if(!typedAsset){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: asset '{}' is not a {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("{}: asset '{}' is not a {}")
                 , ownerName
                 , StringConvert(virtualPath.resolvedText())
                 , StringConvert(assetKindText)

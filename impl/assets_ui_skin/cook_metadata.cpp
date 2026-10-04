@@ -82,7 +82,7 @@ static constexpr f32 s_MaxDefaultFontSize = 2048.0f;
 
 [[nodiscard]] static bool ReadU32Value(const Path& path, const Value& value, const AStringView fieldName, u32& outValue){
     if(!value.isInteger() || !FitsU32(value.asInteger())){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must contain integers in the u32 range")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must contain integers in the u32 range")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
             , StringConvert(fieldName)
@@ -104,7 +104,7 @@ template<usize Count>
     if(!field && !required)
         return true;
     if(!field || !field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be a {}-component integer list")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a {}-component integer list")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
             , StringConvert(fieldName)
@@ -125,7 +125,7 @@ template<usize Count>
     if(!field)
         return true;
     if(!field->isList() || field->asList().size() != Count){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be a {}-component numeric list")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a {}-component numeric list")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
             , StringConvert(fieldName)
@@ -197,7 +197,7 @@ template<usize Count>
     if(!colors)
         return false;
     if(colors->asList().size() != UiSkinColorRole::Count){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': colors must contain exactly {} named RGBA roles")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': colors must contain exactly {} named RGBA roles")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
             , static_cast<u32>(UiSkinColorRole::Count)
@@ -221,7 +221,7 @@ template<usize Count>
             }
         }
         if(role == UiSkinColorRole::Count || seen[role]){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': unknown or duplicate palette role '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': unknown or duplicate palette role '{}'")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(path)
                 , StringConvert(name)
@@ -230,7 +230,7 @@ template<usize Count>
         }
         const Value* rgba = FindField(value, s_RgbaField);
         if(!rgba || !rgba->isList() || rgba->asList().size() != s_RgbaComponentCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': palette role '{}' needs four RGBA components")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': palette role '{}' needs four RGBA components")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(path)
                 , StringConvert(name)
@@ -242,7 +242,7 @@ template<usize Count>
             if(!Core::Assets::ReadMetadataFiniteF32Value(path, rgba->asList()[index], s_DiagnosticPrefix, s_RgbaField, components[index]))
                 return false;
             if(components[index] < s_PaletteChannelMin || components[index] > (index == s_AlphaComponentIndex ? s_PaletteAlphaMax : s_PaletteRgbMax)){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]")
+                NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': palette role '{}' needs RGB in [0, 16] and alpha in [0, 1]")
                     , StringConvert(s_DiagnosticPrefix)
                     , PathToString<tchar>(path)
                     , StringConvert(name)
@@ -259,7 +259,7 @@ template<usize Count>
 [[nodiscard]] static bool ParseTypography(const Path& path, const Value& asset, UiSkinTypography& outTypography){
     const Value* typography = FindField(asset, s_TypographyField);
     if(!typography){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': skins require typography.default_font_size")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': skins require typography.default_font_size")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
         );
@@ -273,7 +273,7 @@ template<usize Count>
     ))
         return false;
     if(outTypography.defaultFontSize < s_MinDefaultFontSize || outTypography.defaultFontSize > s_MaxDefaultFontSize){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': typography.default_font_size must be in [1/64, 2048]")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(path)
         );
@@ -335,7 +335,7 @@ bool ParseUiSkinCookMetadata(
     ))
         return false;
     if(hasToolkitContract && toolkitContract != s_WidgetsContract){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': toolkit_contract must be 'widgets'")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': toolkit_contract must be 'widgets'")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -347,7 +347,7 @@ bool ParseUiSkinCookMetadata(
     if(!regions)
         return false;
     if(regions->asList().size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': regions exceed schema limit {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': regions exceed schema limit {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , s_UiSkinMaxRegionCount
@@ -355,7 +355,7 @@ bool ParseUiSkinCookMetadata(
         return false;
     }
     if(regions->asList().empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': regions must be nonempty and fit the supported count")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': regions must be nonempty and fit the supported count")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );

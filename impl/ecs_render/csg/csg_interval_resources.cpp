@@ -164,11 +164,11 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     if(!createCsgClipResources())
         return false;
     if(!m_csgState.m_clipBindingLayout){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG interval peel requires a CSG clip binding layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG interval peel requires a CSG clip binding layout"));
         return false;
     }
     if(!m_meshSystem.meshViewBufferSnapshot().valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG interval peel requires a mesh view buffer"));
         return false;
     }
     if(
@@ -188,7 +188,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         || targets.csgReceiverSpanLayerCount == 0u
         || targets.csgRemovedIntervalLayerCount == 0u
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG interval peel requires valid peel targets"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG interval peel requires valid peel targets"));
         return false;
     }
 
@@ -201,7 +201,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_intervalPeelBindingLayout,
         Core::ShaderType::Compute
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval peel binding layout"));
         return false;
     }
 
@@ -211,7 +211,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_receiverSpanBuildBindingLayout,
         Core::ShaderType::Compute
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG receiver span build binding layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG receiver span build binding layout"));
         return false;
     }
 
@@ -221,7 +221,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_intervalCombineBindingLayout,
         Core::ShaderType::Compute
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval combine binding layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval combine binding layout"));
         return false;
     }
 
@@ -280,7 +280,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_intervalPeelComputeShader,
         m_csgState.m_intervalPeelBindingLayout
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval peel pipeline"));
         return false;
     }
 
@@ -290,7 +290,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_receiverSpanBuildComputeShader,
         m_csgState.m_receiverSpanBuildBindingLayout
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG receiver span build pipeline"));
         return false;
     }
 
@@ -300,7 +300,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_intervalCombineComputeShader,
         m_csgState.m_intervalCombineBindingLayout
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval combine pipeline"));
         return false;
     }
 
@@ -312,7 +312,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         m_csgState.m_clipBindingLayout,
         targets.framebuffer->getFramebufferInfo()
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));
         return false;
     }
 
@@ -324,7 +324,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     if(!m_meshSystem.meshViewBufferSnapshot().valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
         return false;
     }
     if(
@@ -337,7 +337,7 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         || targets.csgReceiverEventLayerCount == 0u
         || targets.csgRemovedIntervalLayerCount == 0u
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG interval sampling requires valid peel targets"));
         return false;
     }
 
@@ -362,7 +362,7 @@ bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
 
     m_csgState.m_intervalSampleStateBuffer = m_graphics.createBuffer(bufferDesc);
     if(!m_csgState.m_intervalSampleStateBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create CSG interval sample state buffer"));
         return false;
     }
 

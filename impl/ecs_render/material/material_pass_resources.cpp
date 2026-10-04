@@ -39,7 +39,7 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
         ;
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
         if(!m_materialState.m_materialPassBindingLayout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
             return false;
         }
     }
@@ -58,7 +58,7 @@ bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
         auto& device = m_graphics.getDevice();
         m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_materialState.m_computeBindingLayout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
         }
     }
@@ -127,7 +127,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             m_materialState.m_emulationVertexShader.get()
         );
         if(!m_materialState.m_emulationInputLayout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create compute-emulation input layout"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create compute-emulation input layout"));
             return false;
         }
     }
@@ -188,14 +188,14 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
 bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceCount){
     if(instanceCount == 0)
         return true;
-    GLOBAL_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    GLB_ASSERT(instanceCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount)
         return true;
 
     const usize capacity = ::NextGrowingCapacity(m_materialState.m_instanceBufferCapacity, instanceCount);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     if(capacity > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: instance buffer capacity overflows addressable memory"));
         return false;
     }
 #endif
@@ -210,7 +210,7 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
     ;
     Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create instance data buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create instance data buffer"));
         return false;
     }
 
@@ -221,13 +221,13 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
 
 bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
     if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material typed buffer request overflows alignment"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
         return false;
     }
     if(requiredByteCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
         return false;
     }
 #else
@@ -247,7 +247,7 @@ bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byte
     ;
     Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create material typed buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create material typed buffer"));
         return false;
     }
 
@@ -289,7 +289,7 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
         return false;
 
     const usize requiredMaterialTypedBytes = Max<usize>(materialTypedByteCount, sizeof(u32));
-    GLOBAL_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
+    GLB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
     return
         (instanceCount == 0u || (m_materialState.m_instanceBuffer && m_materialState.m_instanceBufferCapacity >= instanceCount))

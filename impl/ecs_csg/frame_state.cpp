@@ -152,7 +152,7 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
                 return;
 
             const usize cutterIndex = static_cast<usize>(range.firstCutter + writtenCount);
-            GLOBAL_ASSERT(cutterIndex < m_cutterRefs.size());
+            GLB_ASSERT(cutterIndex < m_cutterRefs.size());
             m_cutterRefs[cutterIndex] = CsgFrameCutterRef{ entity, &cutter };
             ++writtenCount;
         }

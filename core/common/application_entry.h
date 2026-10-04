@@ -72,7 +72,7 @@ template<typename EntryPoint, typename CharT>
     return InvokeWithInitializedCommon([entryPoint, argc, argv, instance](){ return entryPoint(argc, argv, instance); });
 }
 
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 template<typename Run>
 [[nodiscard]] inline int InvokeWithUtf8Args(const isize argc, wchar** argv, Run&& run){
     const usize argCount = argc > 0 ? static_cast<usize>(argc) : 0;
@@ -114,10 +114,10 @@ NWB_COMMON_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <stdlib.h>
 #include <windows.h>
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 #include <shellapi.h>
 
 
@@ -220,7 +220,7 @@ NWB_COMMON_END
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, GetModuleHandleA(nullptr)); \
     }
 #endif
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
 #define NWB_DEFINE_APPLICATION_ENTRY_POINT(entryPoint) \
     int main(int argc, char** argv){ \
         return ::NWB::Core::Common::ApplicationEntryDetail::InvokeEntryPoint(static_cast<::NWB::Core::Common::ApplicationEntryDetail::AnsiEntryPointFn>(entryPoint), static_cast<isize>(argc), argv, nullptr); \

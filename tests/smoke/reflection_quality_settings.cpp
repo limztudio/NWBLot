@@ -31,7 +31,7 @@ bool ApplyReflectionQualitySmokeSettings(
     }
     if(!renderer.setReflectionSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionQualitySmoke: requested screen_max_steps={}"), settings.screenMaxSteps);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionQualitySmoke: requested screen_max_steps={}"), settings.screenMaxSteps);
     return true;
 }
 

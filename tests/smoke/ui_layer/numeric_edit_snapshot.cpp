@@ -32,10 +32,10 @@ namespace __hidden_ui_numeric_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RectNames[]{ GLOBAL_TEXT("integer_bounds"), GLOBAL_TEXT("integer_content"),
-    GLOBAL_TEXT("integer_caret"), GLOBAL_TEXT("integer_selection"), GLOBAL_TEXT("float_bounds"), GLOBAL_TEXT("float_content"),
-    GLOBAL_TEXT("float_caret"), GLOBAL_TEXT("float_selection"), GLOBAL_TEXT("clipboard_bounds"), GLOBAL_TEXT("clipboard_content"),
-    GLOBAL_TEXT("clipboard_caret"), GLOBAL_TEXT("clipboard_selection") };
+static constexpr TStringView s_RectNames[]{ GLB_TEXT("integer_bounds"), GLB_TEXT("integer_content"),
+    GLB_TEXT("integer_caret"), GLB_TEXT("integer_selection"), GLB_TEXT("float_bounds"), GLB_TEXT("float_content"),
+    GLB_TEXT("float_caret"), GLB_TEXT("float_selection"), GLB_TEXT("clipboard_bounds"), GLB_TEXT("clipboard_content"),
+    GLB_TEXT("clipboard_caret"), GLB_TEXT("clipboard_selection") };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -100,19 +100,19 @@ void UiNumericEditSmokeScene::observeState(const Impl::Ui::DisplayMetrics& displ
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiNumericEditSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNumericEditSmoke: display logical={}x{} scale={}x{}")
             , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
         );
     }
     const auto& value = m_snapshot.values;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiNumericEditSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNumericEditSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , m_snapshot.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
         , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
         , value[16], value[17], value[18], value[19], value[20], value[21], value[22], value[23]
         , value[24], value[25], value[26], value[27], value[28], value[29]
     );
     for(usize index = 0u; index < m_snapshot.rectangles.size(); ++index)
-        LogSmokeRect(GLOBAL_TEXT("UiNumericEditSmoke"), m_snapshot.sequence, s_RectNames[index], m_snapshot.rectangles[index]);
+        LogSmokeRect(GLB_TEXT("UiNumericEditSmoke"), m_snapshot.sequence, s_RectNames[index], m_snapshot.rectangles[index]);
 }
 
 void UiNumericEditSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

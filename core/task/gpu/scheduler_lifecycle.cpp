@@ -32,7 +32,7 @@ GpuTaskScheduler::DeviceOperation::~DeviceOperation()noexcept{
         return;
     NothrowScopedLock lock(m_scheduler.m_lifecycleMutex);
 
-    GLOBAL_ASSERT(m_scheduler.m_activeOperations != 0u);
+    GLB_ASSERT(m_scheduler.m_activeOperations != 0u);
     --m_scheduler.m_activeOperations;
 }
 
@@ -87,7 +87,7 @@ bool GpuTaskScheduler::wait(const QueueSubmissionToken& token)const{
 
 
 Device& GpuTaskScheduler::device()const noexcept{
-    GLOBAL_ASSERT(m_device);
+    GLB_ASSERT(m_device);
     return *m_device;
 }
 

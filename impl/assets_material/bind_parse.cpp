@@ -171,7 +171,7 @@ static bool ParseMaterialBindStringField(
 
     const Metascript::Value* value = map.findField(fieldName);
     if(!value || !value->isString()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': {} field '{}' must be a string")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': {} field '{}' must be a string")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(contextLabel)
             , StringConvert(fieldName)
@@ -200,7 +200,7 @@ static bool ParseMaterialBindAttributeList(
         return true;
 
     if(!attributesValue->isList()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': {} attributes must be a list")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': {} attributes must be a list")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(contextLabel)
         );
@@ -211,7 +211,7 @@ static bool ParseMaterialBindAttributeList(
     outAttributes.reserve(attributeList.size());
     for(const Metascript::Value& attributeValue : attributeList){
         if(!attributeValue.isMap()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': {} attribute entries must be maps")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': {} attribute entries must be maps")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(contextLabel)
             );
@@ -222,7 +222,7 @@ static bool ParseMaterialBindAttributeList(
         if(!ParseMaterialBindStringField(bindFilePath, attributeValue, "name", contextLabel, attribute.name))
             return false;
         if(!IsMaterialBindIdentifier(attribute.name)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': invalid attribute name '{}' in {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': invalid attribute name '{}' in {}")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(attribute.name)
                 , StringConvert(contextLabel)
@@ -233,7 +233,7 @@ static bool ParseMaterialBindAttributeList(
         const Metascript::Value* argumentsValue = attributeValue.findField("arguments");
         if(argumentsValue){
             if(!argumentsValue->isList()){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': attribute '{}' arguments must be a list")
+                NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': attribute '{}' arguments must be a list")
                     , PathToString<tchar>(bindFilePath)
                     , StringConvert(attribute.name)
                 );
@@ -244,7 +244,7 @@ static bool ParseMaterialBindAttributeList(
             attribute.arguments.reserve(argumentList.size());
             for(const Metascript::Value& argumentValue : argumentList){
                 if(!argumentValue.isString()){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': attribute '{}' arguments must be strings")
+                    NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': attribute '{}' arguments must be strings")
                         , PathToString<tchar>(bindFilePath)
                         , StringConvert(attribute.name)
                     );
@@ -274,7 +274,7 @@ static bool ValidateMaterialBindStructAttributes(
 
     for(const MaterialBindAttribute& attribute : bindStruct.attributes){
         if(attribute.name != s_MaterialConstantAttribute && attribute.name != s_MaterialMutableAttribute){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(attribute.name)
@@ -282,7 +282,7 @@ static bool ValidateMaterialBindStructAttributes(
             return false;
         }
         if(!attribute.arguments.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' block class attribute '{}' must not have arguments")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(attribute.name)
@@ -290,7 +290,7 @@ static bool ValidateMaterialBindStructAttributes(
             return false;
         }
         if(foundBlockClass){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' declares more than one block class attribute")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' declares more than one block class attribute")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
             );
@@ -303,7 +303,7 @@ static bool ValidateMaterialBindStructAttributes(
     if(foundBlockClass)
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' must declare a material block class attribute")
+    NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' must declare a material block class attribute")
         , PathToString<tchar>(bindFilePath)
         , StringConvert(bindStruct.name)
     );
@@ -326,7 +326,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
 
     for(const MaterialBindAttribute& attribute : field.attributes){
         if(attribute.name != requiredAttribute){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
@@ -335,7 +335,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             return false;
         }
         if(foundRequiredAttribute){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' declares {} more than once")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
@@ -344,7 +344,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             return false;
         }
         if(attribute.arguments.size() != 1u || attribute.arguments[0].empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
@@ -356,7 +356,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     }
 
     if(!foundRequiredAttribute){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)
@@ -370,7 +370,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     const AStringView fixtureName = field.fixtureArgument();
     if(IsKnownMaterialResourceFixture(resourceKind, fixtureName))
         return true;
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' fixture '{}' is not supported for resource type '{}'")
+    NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' fixture '{}' is not supported for resource type '{}'")
         , PathToString<tchar>(bindFilePath)
         , StringConvert(bindStruct.name)
         , StringConvert(field.name)
@@ -392,7 +392,7 @@ static bool ParseMaterialBindField(
     MaterialBindField& outField
 ){
     if(!fieldValue.isMap()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' field entries must be maps")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' field entries must be maps")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
         );
@@ -410,7 +410,7 @@ static bool ParseMaterialBindField(
     if(!IsMaterialBindIdentifier(outField.type)
         || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(outField.type), fieldType, fieldComponentCount))
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(outField.name)
@@ -419,7 +419,7 @@ static bool ParseMaterialBindField(
         return false;
     }
     if(isResourceField && bindStruct.findAttribute(s_MaterialMutableAttribute)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(outField.name)
@@ -427,7 +427,7 @@ static bool ParseMaterialBindField(
         return false;
     }
     if(!IsMaterialBindIdentifier(outField.name)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': field '{}.{}' has invalid name")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': field '{}.{}' has invalid name")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(outField.name)
@@ -454,7 +454,7 @@ static bool ParseMaterialBindStruct(
     MaterialBindStruct& outStruct
 ){
     if(!structValue.isMap()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' must be a map")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' must be a map")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(AStringView(structName.data(), structName.size()))
         );
@@ -463,7 +463,7 @@ static bool ParseMaterialBindStruct(
 
     outStruct.name.assign(structName.data(), structName.size());
     if(!IsMaterialBindIdentifier(outStruct.name)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': invalid struct name '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': invalid struct name '{}'")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(outStruct.name)
         );
@@ -476,14 +476,14 @@ static bool ParseMaterialBindStruct(
 
     const Metascript::Value* fieldsValue = structValue.findField("fields");
     if(!fieldsValue || !fieldsValue->isList()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' fields must be a list")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' fields must be a list")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(outStruct.name)
         );
         return false;
     }
     if(fieldsValue->asList().empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': struct '{}' must declare at least one field")
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': struct '{}' must declare at least one field")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(outStruct.name)
         );
@@ -497,7 +497,7 @@ static bool ParseMaterialBindStruct(
             return false;
 
         if(outStruct.findField(AStringView(field.name))){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': duplicate field '{}.{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': duplicate field '{}.{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(outStruct.name)
                 , StringConvert(field.name)
@@ -520,13 +520,13 @@ static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript:
 
     const Metascript::Value* structsValue = asset.findField("structs");
     if(!structsValue || !structsValue->isMap()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
     const auto& structsMap = structsValue->asMap();
     if(structsMap.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': asset.structs must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': asset.structs must not be empty"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
@@ -553,18 +553,18 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
 
     const Metascript::Value* instancesValue = asset.findField("instances");
     if(!instancesValue || !instancesValue->isList()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': asset.instances must be a list"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': asset.instances must be a list"), PathToString<tchar>(bindFilePath));
         return false;
     }
     if(instancesValue->asList().empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': asset.instances must not be empty"), PathToString<tchar>(bindFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': asset.instances must not be empty"), PathToString<tchar>(bindFilePath));
         return false;
     }
 
     outEntry.instances.reserve(instancesValue->asList().size());
     for(const Metascript::Value& instanceValue : instancesValue->asList()){
         if(!instanceValue.isMap()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': asset.instances entries must be maps"), PathToString<tchar>(bindFilePath));
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': asset.instances entries must be maps"), PathToString<tchar>(bindFilePath));
             return false;
         }
 
@@ -574,7 +574,7 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         if(!ParseMaterialBindStringField(bindFilePath, instanceValue, "name", "instance", instance.name))
             return false;
         if(!IsMaterialBindIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(instance.name)
                 , StringConvert(instance.type)
@@ -582,14 +582,14 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
             return false;
         }
         if(!IsMaterialBindIdentifier(instance.name)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': invalid instance name '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': invalid instance name '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(instance.name)
             );
             return false;
         }
         if(outEntry.findInstance(AStringView(instance.name))){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind '{}': duplicate instance name '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Material bind '{}': duplicate instance name '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(instance.name)
             );

@@ -352,7 +352,7 @@ static ValueType LoadMaterialTypedLayoutDefaultPOD(
     const usize byteOffset = static_cast<usize>(componentIndex) * sizeof(ValueType);
     if(byteOffset <= sizeof(field.defaultValue) && sizeof(value) <= sizeof(field.defaultValue) - byteOffset){
         const u8* bytes = reinterpret_cast<const u8*>(&field.defaultValue);
-        GLOBAL_MEMCPY(&value, sizeof(value), bytes + byteOffset, sizeof(value));
+        GLB_MEMCPY(&value, sizeof(value), bytes + byteOffset, sizeof(value));
     }
     return value;
 }
@@ -411,7 +411,7 @@ static bool LoadMaterialTypedBlockPOD(
             )
                 return false;
 
-            GLOBAL_MEMCPY(&outValue, sizeof(outValue), material.typedBlockBytes().data() + valueOffset, sizeof(outValue));
+            GLB_MEMCPY(&outValue, sizeof(outValue), material.typedBlockBytes().data() + valueOffset, sizeof(outValue));
             return true;
         }
 
@@ -1120,7 +1120,7 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
 }
 
 TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1148,14 +1148,14 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
     ));
 
     EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "AVBOIT pixel shaders must be present if and only if it is transparent"
     )));
 #endif
 }
 
 TEST(AssetsGraphics, MaterialMetadataRejectsMissingShaderVariant){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1178,12 +1178,12 @@ asset.shaders = {
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, materialEntry, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("field 'shader_variant' is required")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("field 'shader_variant' is required")));
 #endif
 }
 
 TEST(AssetsGraphics, MaterialMetadataRejectsMissingRenderProperties){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1206,12 +1206,12 @@ asset.shader_variant = "default";
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, materialEntry, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'refractive' is required and must be 0 or 1")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("'refractive' is required and must be 0 or 1")));
 #endif
 }
 
 TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1220,7 +1220,7 @@ TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
     const auto expectRejected = [&](const AStringView metaText){
         NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
         EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, materialEntry, scratchArena));
-        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
             "explicit 'shaders' cannot be used with transparent/refractive materials"
         )));
     };
@@ -1231,7 +1231,7 @@ TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
 }
 
 TEST(AssetsGraphics, MaterialMetadataRejectsEngineRootedPolicySelectors){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1303,10 +1303,10 @@ asset.shader_variant = "default";
         EXPECT_TRUE(logger.sawErrorContaining(expectedError));
     };
 
-    expectRejected(s_EngineRootedInterfaceMeta, GLOBAL_TEXT("interface must use the project/ virtual root"));
-    expectRejected(s_EngineRootedSurfaceMeta, GLOBAL_TEXT("field 'surface' must use the project/ virtual root"));
-    expectRejected(s_EngineRootedBxdfMeta, GLOBAL_TEXT("field 'bxdf' must use the project/ virtual root"));
-    expectRejected(s_EngineRootedStageShaderMeta, GLOBAL_TEXT("shader stage 'mesh' must use the project/ virtual root"));
+    expectRejected(s_EngineRootedInterfaceMeta, GLB_TEXT("interface must use the project/ virtual root"));
+    expectRejected(s_EngineRootedSurfaceMeta, GLB_TEXT("field 'surface' must use the project/ virtual root"));
+    expectRejected(s_EngineRootedBxdfMeta, GLB_TEXT("field 'bxdf' must use the project/ virtual root"));
+    expectRejected(s_EngineRootedStageShaderMeta, GLB_TEXT("shader stage 'mesh' must use the project/ virtual root"));
     EXPECT_EQ(logger.errorCount(), 4u);
 #endif
 }
@@ -1356,11 +1356,11 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
 
         material.setTransparent(true);
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
         NWB::Core::Assets::AssetBytes invalidBinary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         EXPECT_FALSE(codec.serialize(material, invalidBinary));
         EXPECT_TRUE(invalidBinary.empty());
-        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
             "AVBOIT pixel shaders must be present if and only if the material is transparent"
         )));
 #endif
@@ -1417,14 +1417,14 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             CheckMixedHalfMaterialTypedLayoutAndBlockBytes(loadedMixedHalfMaterial);
         }
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
         EXPECT_EQ(logger.errorCount(), 1u);
 #else
         EXPECT_EQ(logger.errorCount(), 0u);
 #endif
     }
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     {
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -1467,11 +1467,11 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), missingOccupancyBinary);
 
         EXPECT_EQ(logger.errorCount(), 3u);
-        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("typed layout hash mismatch")));
-        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("typed layout hash mismatch")));
+        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
             "typed block byte count does not match typed layout"
         )));
-        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
             "AVBOIT pixel shaders must be present if and only if the material is transparent"
         )));
     }
@@ -1600,37 +1600,37 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     expectParseFailure(
         AssetsGraphicsFixture::s_UnknownBlockClassMaterialBindSource,
         "material_bind_unknown_block_class",
-        GLOBAL_TEXT("unsupported attribute 'material_project'")
+        GLB_TEXT("unsupported attribute 'material_project'")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_UnsupportedFieldTypeMaterialBindSource,
         "material_bind_unsupported_field_type",
-        GLOBAL_TEXT("unsupported type 'double'")
+        GLB_TEXT("unsupported type 'double'")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_InvalidDefaultMaterialBindSource,
         "material_bind_invalid_default",
-        GLOBAL_TEXT("attribute 'default' requires one non-empty string argument")
+        GLB_TEXT("attribute 'default' requires one non-empty string argument")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_MissingDefaultMaterialBindSource,
         "material_bind_missing_default",
-        GLOBAL_TEXT("must declare a default attribute")
+        GLB_TEXT("must declare a default attribute")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_ResourceAttributeMaterialBindSource,
         "material_bind_resource_attribute",
-        GLOBAL_TEXT("has unsupported attribute 'texture_asset'")
+        GLB_TEXT("has unsupported attribute 'texture_asset'")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_DuplicateInstanceMaterialBindSource,
         "material_bind_duplicate_instance",
-        GLOBAL_TEXT("duplicate struct instance declaration")
+        GLB_TEXT("duplicate struct instance declaration")
     );
     expectParseFailure(
         AssetsGraphicsFixture::s_InstanceOverrideMaterialBindSource,
         "material_bind_instance_override",
-        GLOBAL_TEXT("unsupported asset field 'instance_override'")
+        GLB_TEXT("unsupported asset field 'instance_override'")
     );
 
     Path float1DefaultRoot(testArena.arena);
@@ -1660,7 +1660,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             generatedSource,
             scratchArena
         ));
-        EXPECT_TRUE(failureLogger.sawErrorContaining(GLOBAL_TEXT("default 'float1(1.0)'")));
+        EXPECT_TRUE(failureLogger.sawErrorContaining(GLB_TEXT("default 'float1(1.0)'")));
     }
 
     const Name cacheInterface("project/material_interfaces/test_surface");
@@ -1682,7 +1682,7 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             cachedLayout,
             scratchArena
         ));
-        EXPECT_TRUE(failureLogger.sawErrorContaining(GLOBAL_TEXT("default 'float1(1.0)'")));
+        EXPECT_TRUE(failureLogger.sawErrorContaining(GLB_TEXT("default 'float1(1.0)'")));
     }
     EXPECT_EQ(cachedLayout, nullptr);
     EXPECT_TRUE(layoutCache.entries.empty());
@@ -2270,7 +2270,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(RemoveAllIfExists(resourceRoot, errorCode));
     EXPECT_TRUE(RemoveAllIfExists(fixtureRoot, errorCode));
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     Path invalidRoot(testArena.arena);
     Path invalidOutputDirectory(testArena.arena);
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
@@ -2281,7 +2281,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         invalidRoot,
         invalidOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "parameter 'surface.missing' is not declared by interface"
     )));
 
@@ -2298,7 +2298,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         flatRoot,
         flatOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "interface parameter 'runtime.fade_alpha' must be declared inside a block map"
     )));
 
@@ -2315,7 +2315,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         untypedParameterRoot,
         untypedParameterOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "has invalid value '0.25, 0.5, 0.75, 1.0'"
     )));
 
@@ -2332,7 +2332,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         vectorAliasParameterRoot,
         vectorAliasParameterOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "has invalid value 'vec4(0.25, 0.5, 0.75, 1.0)'"
     )));
 
@@ -2349,7 +2349,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         unsupportedFieldRoot,
         unsupportedFieldOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("unsupported asset field 'compiler'")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field 'compiler'")));
 
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
@@ -2364,7 +2364,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         incompleteBindRoot,
         incompleteBindOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "typed parameter 'runtime.fade_alpha' is not declared by interface"
     )));
 
@@ -2393,7 +2393,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceShaderMismatchOutputDirectory,
         { interfaceShaderMismatchAssetRoot }
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("does not include a generated material bind")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("does not include a generated material bind")));
 
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
@@ -2424,7 +2424,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         interfaceIdentityMismatchOutputDirectory,
         { interfaceIdentityMismatchAssetRoot }
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "includes generated material bind interface 'project/material_interfaces/other_surface'"
     )));
 
@@ -2578,7 +2578,7 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
 }
 
 TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -2605,7 +2605,7 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
         outputDirectory,
         { assetRoot }
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("interface is required")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("interface is required")));
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
@@ -2799,7 +2799,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(shaderProbeRoot, errorCode));
 
-#if defined(GLOBAL_FINAL)
+#if defined(GLB_FINAL)
     Path duplicateIncludeRoot(testArena.arena);
     Path duplicateIncludeOutputDirectory(testArena.arena);
     EXPECT_FALSE(AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
@@ -2808,7 +2808,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
         duplicateIncludeRoot,
         duplicateIncludeOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
         "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"
     )));
 
@@ -2824,7 +2824,7 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
         invalidRoot,
         invalidOutputDirectory
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("duplicate struct field declaration")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate struct field declaration")));
 
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(invalidRoot, errorCode));

@@ -9,7 +9,7 @@
 #include <global/blocking_io.h>
 #include <logger/client/logger.h>
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 #include <fcntl.h>
 #endif
 
@@ -64,14 +64,14 @@ public:
         if(m_owned){
             ErrorCode error;
             if(!RemoveFile(m_path, error) && error)
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("font_builder: cannot remove unpublished temporary '{}'"), PathToString<tchar>(m_path));
+                NWB_LOGGER_WARNING(GLB_TEXT("font_builder: cannot remove unpublished temporary '{}'"), PathToString<tchar>(m_path));
         }
     }
 
 
 public:
     [[nodiscard]] bool stage(const u8* data, const usize count){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         const HANDLE handle = CreateFile(m_path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         if(handle == INVALID_HANDLE_VALUE)
             return false;
@@ -99,7 +99,7 @@ public:
             const usize remaining = count - offset;
             const usize chunk = remaining < sizeof(buffer) ? remaining : sizeof(buffer);
             stream.read(reinterpret_cast<char*>(buffer), static_cast<StreamSize>(chunk));
-            if(stream.gcount() != static_cast<StreamSize>(chunk) || GLOBAL_MEMCMP(buffer, expected + offset, chunk) != 0)
+            if(stream.gcount() != static_cast<StreamSize>(chunk) || GLB_MEMCMP(buffer, expected + offset, chunk) != 0)
                 return false;
             offset += chunk;
         }
@@ -148,7 +148,7 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
     for(u32 index = count; index > 0u; --index){
         ErrorCode error;
         if(!RenamePath(*backups[index - 1u], *outputs[index - 1u], error))
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index - 1u]));
+            NWB_LOGGER_ERROR(GLB_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index - 1u]));
     }
 }
 
@@ -178,7 +178,7 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
             for(u32 index = published; index > 0u; --index){
                 ErrorCode removalError;
                 if(!RemoveFile(*outputs[index - 1u], removalError))
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index - 1u]));
+                    NWB_LOGGER_ERROR(GLB_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index - 1u]));
             }
             RestoreBackups(outputs, backups, backedUp);
             return false;
@@ -188,7 +188,7 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
     for(u32 index = 0u; index < backedUp; ++index){
         ErrorCode error;
         if(!RemoveFile(*backups[index], error))
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("font_builder: published pair but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
+            NWB_LOGGER_WARNING(GLB_TEXT("font_builder: published pair but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
     }
     return true;
 }
@@ -215,7 +215,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
     bool present = false;
     if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite, present)
         || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
+        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
         return false;
     }
     ErrorCode error;
@@ -232,11 +232,11 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         || !stagedFont.verify(fontBinary.data(), fontBinary.size())
         || !stagedMetadata.verify(metadataBytes, metadata.size())
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
+        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));
         return false;
     }
     if(!__hidden_font_builder_writer::Publish(paths, stagedFont, stagedMetadata, options.overwrite)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: pair publication failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: pair publication failed"));
         return false;
     }
     return true;

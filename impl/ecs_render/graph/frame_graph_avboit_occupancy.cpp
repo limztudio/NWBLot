@@ -77,7 +77,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
         MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
         InstanceGpuDataVector occupancyInstanceData{ occupancyUploadScratch };
         CsgFrameGpuData occupancyCsgFrameData{ occupancyUploadScratch };
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector occupancyMaterialTypedRanges{ occupancyUploadScratch };
 #endif
         MaterialTypedByteDataVector occupancyMaterialTypedBytes{ occupancyUploadScratch };
@@ -101,19 +101,19 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
             occupancyDrawItems,
             occupancyInstanceData,
             occupancyCsgFrameData,
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
             occupancyMaterialTypedRanges,
 #endif
             occupancyMaterialTypedBytes,
             occupancyUploadResult
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
             return false;
         }
 
         const bool occupancyHasCsgDrawItems = occupancyUploadResult.hasCsgDrawItems;
         if(occupancyHasCsgDrawItems && !intervalOutputsGraphOwned){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: clipped AVBOIT occupancy draws require prepared interval outputs"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: clipped AVBOIT occupancy draws require prepared interval outputs"));
             return false;
         }
         if(occupancyUploadResult.hasDrawItems){
@@ -143,16 +143,16 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
             occupancyMaterialSampledTexturesCollected = occupancyGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData, csgResources);
-#if defined(GLOBAL_DEBUG)
+#if defined(GLB_DEBUG)
             if(
                 occupancyInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
                 || occupancyCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
                 || occupancyCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: AVBOIT occupancy upload size overflows graph blob capacity"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: AVBOIT occupancy upload size overflows graph blob capacity"));
                 return false;
             }
-            GLOBAL_ASSERT(occupancyInstanceData.size() == occupancyMaterialTypedRanges.size());
+            GLB_ASSERT(occupancyInstanceData.size() == occupancyMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
                 occupancyMaterialTypedRanges,
                 occupancyMaterialTypedBytes
@@ -183,7 +183,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 occupancyUploadTask,
                 occupancyCsgStreamsUploaded
             )){
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT occupancy material upload"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT occupancy material upload"));
                 return false;
             }
 

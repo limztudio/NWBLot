@@ -117,13 +117,13 @@ bool RendererRayTracingSystem::capturePreparedSceneBvh(
 
     m_preparedSceneBvhNodeBytes.resize(nodeByteCount);
     m_preparedSceneBvhInstanceBytes.resize(instanceByteCount);
-    GLOBAL_MEMCPY(
+    GLB_MEMCPY(
         m_preparedSceneBvhNodeBytes.data(),
         m_preparedSceneBvhNodeBytes.size(),
         nodeData,
         nodeByteCount
     );
-    GLOBAL_MEMCPY(
+    GLB_MEMCPY(
         m_preparedSceneBvhInstanceBytes.data(),
         m_preparedSceneBvhInstanceBytes.size(),
         instanceData,
@@ -321,7 +321,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         || !validStorageHandle(state.m_shadowInstanceHeapHandle)
         || !validStorageHandle(state.m_shadowMaterialTypedHeapHandle)
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
         return rejectPreparedTraversal();
     }
     if(
@@ -329,7 +329,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         || m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
         || m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
         return rejectPreparedTraversal();
     }
 
@@ -369,7 +369,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         if(!m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName, mesh) || !matchesMesh(mesh, prepared)){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.resolvedText()));
             return rejectPreparedTraversal();
         }
     }
@@ -387,7 +387,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         && state.m_swShadowMeshAttributeHandles.size() == m_preparedSceneSwBvhMeshes.size()
     ;
     if(!tablesMatch){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene traversal table changed after graph preflight"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene traversal table changed after graph preflight"));
         return rejectPreparedTraversal();
     }
     for(usize index = 0u; index < m_preparedSceneSwBvhMeshes.size(); ++index){
@@ -402,7 +402,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
             || state.m_swShadowMeshIndexHandles[index] != prepared.triangleIndexHeapHandle
             || state.m_swShadowMeshAttributeHandles[index] != prepared.attributeHeapHandle
         ){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen software scene traversal table no longer matches preflight"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen software scene traversal table no longer matches preflight"));
             return rejectPreparedTraversal();
         }
     }
@@ -432,7 +432,7 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
         || !state.m_sceneInstanceHeapHandle.valid()
         || state.m_sceneInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
         return false;
     }
     if(!m_preparedSceneBvhUploadRequired){
@@ -442,7 +442,7 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
             || state.m_sceneSwBvhStaticSceneHash != m_preparedSceneBvhStaticSceneHash
             || state.m_sceneBvhInstanceCount != m_preparedSceneBvhInstanceCount
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: frozen software scene-BVH cache identity is no longer accepted"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: frozen software scene-BVH cache identity is no longer accepted"));
             return false;
         }
         return true;
@@ -453,7 +453,7 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
         || m_preparedSceneBvhNodeBytes.size() != m_preparedSceneBvhNodeCount * sizeof(NwbBvhNodeGpu)
         || m_preparedSceneBvhInstanceBytes.size() != m_preparedSceneBvhInstanceCount * sizeof(SceneSwBvhInstanceGpu)
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: frozen software scene-BVH payload is incomplete"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: frozen software scene-BVH payload is incomplete"));
         return false;
     }
 
@@ -551,7 +551,7 @@ bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
         || !state.m_tlasHeapHandle.valid()
         || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
         return false;
     }
     for(usize index = 0u; index < m_preparedSceneTlasInstances.size(); ++index){
@@ -559,7 +559,7 @@ bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
             !m_preparedSceneTlasBlases[index]
             || m_preparedSceneTlasInstances[index].bottomLevelAS != m_preparedSceneTlasBlases[index].get()
         ){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
             return false;
         }
     }
@@ -672,7 +672,7 @@ void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
     for(PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
         if(resource.buffer && resource.normalizationPending){
-            GLOBAL_ASSERT(m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity());
+            GLB_ASSERT(m_acceptedShadowTraceGeometryBuffers.size() < m_acceptedShadowTraceGeometryBuffers.capacity());
             m_acceptedShadowTraceGeometryBuffers.push_back(resource.buffer);
             resource.normalizationPending = false;
         }
@@ -763,7 +763,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 
     // Caustic target storage is selected before graph compilation. Uploading the gathered payload remains in the graph-owned preparation packet.
     if(!prepareCausticEmissionTargetResources(scratchArena))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: caustic emission-target gather failed"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: caustic emission-target gather failed"));
 
     m_shadowVisibilityHardwareSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
@@ -788,7 +788,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         }
         // Hardware shadows and optical effects share one immutable TLAS/material context.
         if(!capturePreparedMeshBlasBuilds(scratchArena)){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
             clearPreparedSceneTlasBuild();
             return false;
         }
@@ -805,7 +805,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             && ensureSoftShadowResolvePipeline()
         ;
         if(backendReady && !m_rayTracingState.m_softShadowReady)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
 
         // Soft opaque shadow TEMPORAL accumulation (shared reproject-merge): same as the SW branch.
         // Non-fatal: a failure leaves m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
@@ -814,7 +814,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             && ensureShadowReprojectMergePipeline()
         ;
         if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
         // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
         // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
@@ -825,7 +825,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             && ensureSoftTransparentResolvePipeline()
         ;
         if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && !m_rayTracingState.m_softTransparentReady)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
 
         m_rayTracingState.m_softTransparentTemporalReady =
             m_rayTracingState.m_softTransparentReady
@@ -836,7 +836,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 
         // Build the hardware caustic producer resources alongside the shadow ones. Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW-branch prepareGpuBvhCausticResources call below.
         if(!prepareHwCausticResources(targets))
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
         // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels run on real RT hardware.
         // Gated on the HW shadow backend being ready + a non-empty TLAS. m_tlasInstanceCount is the HW instance count. Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
@@ -844,7 +844,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_rayTracingState.m_surfelEnabled = true;
             m_rayTracingState.m_surfelUseHwTrace = true;
             if(!prepareSurfelResources(targets))
-                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: HW surfel GI resource preparation failed"));
+                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: HW surfel GI resource preparation failed"));
         }
 
         if(!ensureRayTraceMaterialContextSlotsHeapHandle())
@@ -852,7 +852,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityPreparedTargets = &targets;
         preflightLightSpaceShadowResources();
         if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG shadow map preparation failed"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG shadow map preparation failed"));
             return false;
         }
         m_shadowVisibilityResourcesPreflighted = true;
@@ -862,9 +862,9 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then build the per-frame software scene/instance BVH over them before the render pass consumes it.
     const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
     if(!meshResourcesReady)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
     if(!meshResourcesReady || !prepareSceneSwBvhResources(scratchArena)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software shadow scene BVH build failed"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software shadow scene BVH build failed"));
         m_shadowVisibilityPreparedTargets = &targets;
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
@@ -876,7 +876,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_rayTracingState.m_surfelEnabled = true;
         m_rayTracingState.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
         if(!prepareSurfelResources(targets))
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: surfel GI resource preparation failed"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: surfel GI resource preparation failed"));
     }
 
     if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
@@ -888,7 +888,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     }
     // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal hardware fallback.
     if(!capturePreparedMeshSwBvhBuilds(scratchArena)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
         return false;
     }
     m_shadowVisibilityTraceResourcesPreflighted = true;
@@ -903,7 +903,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         && ensureSoftShadowResolvePipeline()
     ;
     if(backendReady && !m_rayTracingState.m_softShadowReady)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
 
     // Temporal accumulation: reproject-merge plus SOFT_HALF variants; falls back to spatial.
     m_rayTracingState.m_softShadowTemporalReady =
@@ -911,7 +911,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         && ensureShadowReprojectMergePipeline()
     ;
     if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
     // Colored transparent shadow: RGB resolve gated on opaque path; falls back to coarse/adaptive.
     m_rayTracingState.m_softTransparentReady =
@@ -919,7 +919,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         && ensureSoftTransparentResolvePipeline()
     ;
     if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softTransparentReady)
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame"));
 
     m_rayTracingState.m_softTransparentTemporalReady =
         m_rayTracingState.m_softTransparentReady
@@ -931,14 +931,14 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH + per-mesh geometry).
     // Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
     if(!prepareGpuBvhCausticResources(targets))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software caustic producer resource preparation failed"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software caustic producer resource preparation failed"));
 
     if(!ensureRayTraceMaterialContextSlotsHeapHandle())
         return false;
     m_shadowVisibilityPreparedTargets = &targets;
     preflightLightSpaceShadowResources();
     if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG shadow map preparation failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: CSG shadow map preparation failed"));
         return false;
     }
     m_shadowVisibilityResourcesPreflighted = true;
@@ -975,13 +975,13 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     if(!m_preparedMeshSwBvhBuildPlanFrozen || (meshSwBvhBuildsGraphOwned && !preparedMeshSwBvhBuildsRecordedByGraph)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
         return false;
     }
     // Pure software frames have no opaque-HW fallback. Fresh uploads and accepted cache reuse both retain their matching traversal snapshot,
     // recording validates that exact plan without regathering scene/material data. A missing or stale plan rejects the packet
     if(!m_preparedSceneSwBvhReady){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
         return false;
     }
     if(!recordPreparedSceneSwBvhTraversal())

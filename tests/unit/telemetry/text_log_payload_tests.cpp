@@ -42,7 +42,7 @@ void CheckPayload(const Telemetry::TelemetryBytes& payload, const LogType::Enum 
 TEST(Telemetry, TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    constexpr tchar s_Message[] = GLOBAL_TEXT("A\u00e9\ud55c\U0001f642\0Z");
+    constexpr tchar s_Message[] = GLB_TEXT("A\u00e9\ud55c\U0001f642\0Z");
     constexpr u8 s_Expected[] = { 0x41u, 0xc3u, 0xa9u, 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u, 0u, 0x5au };
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena, LogType::Warning, TStringView(s_Message, LengthOf(s_Message) - 1u), payload
@@ -53,7 +53,7 @@ TEST(Telemetry, TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes){
 TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 #if WCHAR_MAX <= 0xffff
     constexpr tchar s_Message[] = { static_cast<tchar>(0xd800u), static_cast<tchar>('X'), static_cast<tchar>(0xdc00u) };
 #else
@@ -97,14 +97,14 @@ TEST(Telemetry, TextLogPayloadReusesWarmDestinationWithoutTransientAllocations){
 TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    constexpr tchar s_Message[] = GLOBAL_TEXT("captured \ud55c\U0001f642");
+    constexpr tchar s_Message[] = GLB_TEXT("captured \ud55c\U0001f642");
     constexpr u8 s_Expected[] = {
         'c', 'a', 'p', 't', 'u', 'r', 'e', 'd', ' ', 0xedu, 0x95u, 0x9cu, 0xf0u, 0x9fu, 0x99u, 0x82u
     };
     constexpr usize s_Offset = sizeof(tchar);
     constexpr usize s_MessageBytes = sizeof(s_Message) - sizeof(tchar);
     payload.resize(s_Offset + s_MessageBytes);
-    GLOBAL_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message, s_MessageBytes);
+    GLB_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message, s_MessageBytes);
     const TStringView aliased(reinterpret_cast<const tchar*>(payload.data() + s_Offset), LengthOf(s_Message) - 1u);
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Error, aliased, payload));
     CheckPayload(payload, LogType::Error, s_Expected, LengthOf(s_Expected));
@@ -113,7 +113,7 @@ TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
 TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Warning, GLOBAL_TEXT("retained log"), payload));
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Warning, GLB_TEXT("retained log"), payload));
     const Telemetry::TelemetryBytes current = payload;
     const u16 unsupportedVersions[] = {
         0u,
@@ -128,7 +128,7 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
         usize cursor = 0u;
         ASSERT_TRUE(ReadPOD(current, cursor, header));
         header.version = version;
-        GLOBAL_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
         EXPECT_TRUE(parsed.messageUtf8.empty());
         ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size(), parsed));
@@ -139,7 +139,7 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes){
     TestArena testArena;
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Info, GLOBAL_TEXT("old payload"), payload));
+    ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Info, GLB_TEXT("old payload"), payload));
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::EssentialInfo, {}, payload));
     CheckPayload(payload, LogType::EssentialInfo, nullptr, 0u);
     EXPECT_FALSE(Telemetry::BuildTextLogPayload(testArena.arena, static_cast<LogType::Enum>(0xffu), {}, payload));

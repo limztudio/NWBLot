@@ -34,7 +34,7 @@ static bool ValidateManifestVirtualPath(const Name& virtualPath){
     if(virtualPath)
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: tried to append an unnamed manifest entry"));
+    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: tried to append an unnamed manifest entry"));
     return false;
 }
 
@@ -74,7 +74,7 @@ static bool ValidatePayloadIdentity(
     if(identity.cookKeyHash != 0u)
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key")
+    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: manifest entry '{}' has an empty cook key")
         , StringConvert(virtualPath.resolvedText())
     );
     return false;
@@ -83,7 +83,7 @@ static bool ValidatePayloadIdentity(
 bool ReserveAssetVolumePackManifest(AssetVolumePackManifest& manifest, const u64 plannedFileCount){
     manifest.plannedFileCount = plannedFileCount;
     if(plannedFileCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: planned manifest entry count exceeds container capacity"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: planned manifest entry count exceeds container capacity"));
         return false;
     }
 
@@ -102,7 +102,7 @@ bool AppendObjectFilePayloadToManifest(
     if(!ValidatePayloadIdentity(virtualPath, identity))
         return false;
     if(objectPath.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: object manifest entry '{}' has an empty cache path")
             , StringConvert(virtualPath.resolvedText())
         );
         return false;
@@ -128,7 +128,7 @@ bool AppendPayloadBytesToManifest(
     if(!ValidateManifestVirtualPath(virtualPath))
         return false;
     if(payloadByteCount > 0u && payloadBytes == nullptr){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: payload manifest entry '{}' has null bytes")
             , StringConvert(virtualPath.resolvedText())
         );
         return false;

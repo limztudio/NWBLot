@@ -65,7 +65,7 @@ static void InitializeRecord(
     const GpuPhysicalQueueId queue
 )noexcept{
     static_assert(IsStandardLayout_V<RecordT> && IsTriviallyCopyable_V<RecordT>);
-    GLOBAL_MEMSET(&record, 0, sizeof(record));
+    GLB_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;
     record.header.byteSize = static_cast<u16>(sizeof(record));
     record.context = EncodeContext(task, packet, queue);
@@ -216,11 +216,11 @@ bool GpuCommandIrCapture::appendRasterBytes(
 
     const usize oldCommandSize = m_commandBytes.size();
     m_commandBytes.resize(oldCommandSize + encoded.size());
-    GLOBAL_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
+    GLB_MEMCPY(m_commandBytes.data() + oldCommandSize, encoded.size(), encoded.data(), encoded.size());
     if(!blob.empty()){
         const usize oldBlobSize = m_blobBytes.size();
         m_blobBytes.resize(oldBlobSize + blob.size());
-        GLOBAL_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), blob.data(), blob.size());
+        GLB_MEMCPY(m_blobBytes.data() + oldBlobSize, blob.size(), blob.data(), blob.size());
     }
     if(stateOwner){
         GpuCommandIrRasterStateOwner owner = *stateOwner;

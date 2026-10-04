@@ -17,7 +17,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
     SIMDVector x = VectorModAngles(value);
 
     const SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
@@ -28,11 +28,11 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorTrigCanonicalAngle(SIMDVector value, SIM
     return VectorSelect(rflX, x, outCosSignSelect);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorTrigCosSign(SIMDVector cosSignSelect)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorTrigCosSign(SIMDVector cosSignSelect)noexcept{
     return VectorSelect(s_SIMDNegativeOne, s_SIMDOne, cosSignSelect);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorSinPolynomial(SIMDVector x2)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorSinPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDSinCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients0));
@@ -40,7 +40,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorSinPolynomial(SIMDVector x2)noexcept{
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCosPolynomial(SIMDVector x2)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorCosPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDCosCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients0));
@@ -48,19 +48,19 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorCosPolynomial(SIMDVector x2)noexcept{
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorSinEstPolynomial(SIMDVector x2)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorSinEstPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients1));
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCosEstPolynomial(SIMDVector x2)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorCosEstPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients1));
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorArcEstPolynomial(SIMDVector x, SIMDVector root)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorArcEstPolynomial(SIMDVector x, SIMDVector root)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDArcEstCoefficients), x, VectorSplatZ(s_SIMDArcEstCoefficients));
     result = VectorMultiplyAdd(result, x, VectorSplatY(s_SIMDArcEstCoefficients));
     result = VectorMultiplyAdd(result, x, VectorSplatX(s_SIMDArcEstCoefficients));
@@ -77,7 +77,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorArcEstPolynomial(SIMDVector x, SIMDVecto
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
@@ -85,7 +85,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -94,7 +94,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
-GLOBAL_INLINE void SIMDCALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
+GLB_INLINE void SIMDCALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -105,7 +105,7 @@ GLOBAL_INLINE void SIMDCALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos,
     outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
     static const SIMDVectorConstF tanCoefficients0 = { { { 1.0f, -4.667168334e-1f, 2.566383229e-2f, -3.118153191e-4f } } };
     static const SIMDVectorConstF tanCoefficients1 = { { { 4.981943399e-7f, -1.333835001e-1f, 3.424887824e-3f, -1.786170734e-5f } } };
     static const SIMDVectorConstF tanConstants = { { { 1.570796371f, 6.077100628e-11f, 0.000244140625f, 0.63661977228f } } };
@@ -125,9 +125,9 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
     SIMDVector vb = VectorAbs(va);
     vc = VectorNegativeMultiplySubtract(va, c1, vc);
 
-#if defined(GLOBAL_HAS_SSE4)
+#if defined(GLB_HAS_SSE4)
     vb = _mm_castsi128_ps(_mm_cvttps_epi32(vb));
-#elif defined(GLOBAL_HAS_NEON)
+#elif defined(GLB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
     vb = VectorSetInt(
@@ -174,19 +174,19 @@ GLOBAL_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
     return VectorSelect(result, zero, valueIsZero);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorSinH(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorSinH(SIMDVector value)noexcept{
     const SIMDVector e1 = VectorExp(value);
     const SIMDVector e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorSubtract(e1, e2), s_SIMDOneHalf);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorCosH(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorCosH(SIMDVector value)noexcept{
     const SIMDVector e1 = VectorExp(value);
     const SIMDVector e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorAdd(e1, e2), s_SIMDOneHalf);
 }
 
-GLOBAL_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
     const SIMDVector sign = VectorAndInt(value, s_SIMDNegativeZero);
     const SIMDVector absValue = VectorAbs(value);
     const SIMDVector e = VectorExp(VectorNegate(VectorAdd(absValue, absValue)));

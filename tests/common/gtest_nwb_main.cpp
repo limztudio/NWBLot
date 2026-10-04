@@ -43,7 +43,7 @@ inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
 
 
 static bool ConfigureWindowsArm64VulkanLayerPolicy(){
-#if defined(GLOBAL_PLATFORM_WINDOWS) && (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_M_ARM64EC)
+#if defined(GLB_PLATFORM_WINDOWS) && (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_M_ARM64EC)
     char* existingValue = nullptr;
     usize existingValueSize = 0u;
     const errno_t readResult = ::_dupenv_s(&existingValue, &existingValueSize, s_Vkon12DriverSortingDisableKey.data());
@@ -76,13 +76,13 @@ static bool ConfigureWindowsArm64VulkanLayerPolicy(){
 
 static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
     if(!__hidden_gtest_nwb_main::ConfigureWindowsArm64VulkanLayerPolicy()){
-        GLOBAL_CERR << "test Vulkan layer policy initialization failed\n";
+        GLB_CERR << "test Vulkan layer policy initialization failed\n";
         return -1;
     }
 
     Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
-        GLOBAL_CERR << "test common initialization failed\n";
+        GLB_CERR << "test common initialization failed\n";
         return -1;
     }
 

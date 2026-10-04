@@ -214,7 +214,7 @@ usize RendererTaskTimingFeedbackState::findPendingSample(
 }
 
 void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingIndex){
-    GLOBAL_ASSERT(pendingIndex < m_pendingSamples.size());
+    GLB_ASSERT(pendingIndex < m_pendingSamples.size());
     m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
 }
 
@@ -244,7 +244,7 @@ RendererTaskTimingFeedback::RendererTaskTimingFeedback(
     , m_snapshot(arena)
     , m_feedbackCollectionScopes(arena)
 {
-    GLOBAL_ASSERT(feedbackCollectionScopeCount != 0u);
+    GLB_ASSERT(feedbackCollectionScopeCount != 0u);
     const Name* const scopeNames = feedbackCollectionScopes.get();
     m_feedbackCollectionScopes.reserve(feedbackCollectionScopeCount);
     m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);
@@ -271,7 +271,7 @@ void RendererTaskTimingFeedback::activate(){
         .invoke = &onGpuTimingSampleCallback,
     });
     if(!subscription.valid()){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
+        NWB_LOGGER_WARNING(GLB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
         return;
     }
     ScopeExit discardSubscription([&]()noexcept{ timing.unsubscribeSampleListener(subscription); });
@@ -282,7 +282,7 @@ void RendererTaskTimingFeedback::activate(){
             NotNull<const Name*>(m_feedbackCollectionScopes.data()),
             m_feedbackCollectionScopes.size()
         )){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
+            NWB_LOGGER_WARNING(GLB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
             return;
         }
     }
@@ -324,7 +324,7 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
         if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
             return true;
 
-        GLOBAL_ASSERT(m_active && m_subscription.valid());
+        GLB_ASSERT(m_active && m_subscription.valid());
         if(!m_active || !m_subscription.valid()){
             ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, false);
             return false;
@@ -420,7 +420,7 @@ void RendererTaskTimingFeedback::configureCompileOptions(Core::GpuTaskGraphCompi
         }
     }
     if(drainResult.rejectedAssignmentCount != 0u || drainResult.rejectedSampleCount != 0u){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s).")
+        NWB_LOGGER_WARNING(GLB_TEXT("Renderer task timing feedback rejected {} assignment(s) and {} terminal sample(s).")
             , drainResult.rejectedAssignmentCount
             , drainResult.rejectedSampleCount
         );

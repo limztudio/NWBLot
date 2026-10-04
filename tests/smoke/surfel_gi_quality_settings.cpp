@@ -35,7 +35,7 @@ bool ApplySurfelGiQualitySmokeSettings(
     }
     if(!renderer.setSurfelGiQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SurfelGiQualitySmoke: requested resolve_factor={}"), static_cast<u32>(settings.resolveResolution));
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SurfelGiQualitySmoke: requested resolve_factor={}"), static_cast<u32>(settings.resolveResolution));
     return true;
 }
 

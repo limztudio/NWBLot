@@ -28,7 +28,7 @@ TimerQueryHandle Device::createTimerQuery(){
         )
     ){}
     if(priorIncarnation == Limit<u64>::s_Max){
-        NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Timer-query identity space is exhausted"));
+        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Timer-query identity space is exhausted"));
         return nullptr;
     }
     const u64 incarnation = priorIncarnation + 1u;
@@ -158,7 +158,7 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
         if(res == VK_ERROR_DEVICE_LOST)
             captureDeviceLoss("timer query results");
         if(res != VK_NOT_READY)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
         return false;
     }
 

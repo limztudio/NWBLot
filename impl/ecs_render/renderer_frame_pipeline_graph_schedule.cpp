@@ -98,7 +98,7 @@ bool RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTran
         !m_deferredFrameTimingBeginTask.valid()
         || !m_deferredLightingTaskGraph.setNormalExecutionPrelude(m_deferredFrameTimingBeginTask)
     ){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare frame timing prelude"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare frame timing prelude"));
         return false;
     }
     return true;
@@ -136,7 +136,7 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
     )){
         const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
         const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: deferred graph scheduling failed: analysis={} task={} resource={} queue={} queueTask={}")
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: deferred graph scheduling failed: analysis={} task={} resource={} queue={} queueTask={}")
             , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
             , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
         );
@@ -146,11 +146,11 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
     const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
     if(!declarations.valid() || !compiledPlan.validFor(declarations)){
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
         return false;
     }
     if(!prepareDeferredGraphPacketEnvelopeMetrics(declarations, compiledPlan, scratchArena))
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
+        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
 
     m_deferredLightingTaskGraphScheduled = true;
     return true;

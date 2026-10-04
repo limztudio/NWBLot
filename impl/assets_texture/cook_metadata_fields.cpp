@@ -55,7 +55,7 @@ using TextureFormat::s_TextureDataExtension;
     else if(text == s_Texture3DDimension)
         outDimension = TextureDimension::Texture3D;
     else{
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be '{}', '{}', or '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be '{}', '{}', or '{}'")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_DimensionField)
@@ -79,7 +79,7 @@ using TextureFormat::s_TextureDataExtension;
         || dataFileName == ".."
         || dataFileName.find_first_of("/\\:") != AStringView::npos
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be a sidecar filename without path components")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a sidecar filename without path components")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_DataField)
@@ -89,7 +89,7 @@ using TextureFormat::s_TextureDataExtension;
 
     const Path dataPath(nwbFilePath.arena(), dataFileName);
     if(dataPath.is_absolute() || dataPath.filename().native() != dataPath.native()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be a relative sidecar filename")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a relative sidecar filename")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_DataField)
@@ -100,7 +100,7 @@ using TextureFormat::s_TextureDataExtension;
     AString<Core::Alloc::ScratchArena> extension = PathToString(scratchArena, dataPath.extension());
     CanonicalizeTextInPlace(extension);
     if(extension != s_TextureDataExtension){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must reference a .tex sidecar")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must reference a .tex sidecar")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_DataField)

@@ -14,7 +14,7 @@ TestbedUiTextAreaGallery::TestbedUiTextAreaGallery(NWB::Core::Alloc::GlobalArena
     : m_document(arena, {}, NWB::Impl::Ui::EditTextMode::Multiline)
 {
     const bool initialized = m_document.setText("Custom multiline editor\nUp / Down retain the preferred column.\nShift selects; Ctrl+Enter submits.\nClipboard and IME belong to the OS.\n\nLong lines scroll horizontally; longer documents scroll vertically.");
-    GLOBAL_FATAL_ASSERT(initialized);
+    GLB_FATAL_ASSERT(initialized);
 }
 
 void TestbedUiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
@@ -27,7 +27,7 @@ void TestbedUiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f
     const WidgetOptions caption{ {}, { LayoutSizePolicy::Fixed, 20.0f } };
     bool valid = ui.label("title", "Multiline text area", caption);
     if(ui.checkbox("read_only", "Read only", m_readOnly, caption))
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: text area read only={}"), m_readOnly);
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: text area read only={}"), m_readOnly);
     TextAreaOptions options;
     options.readOnly = m_readOnly;
     const EditBoxResult result = ui.textArea("document", m_document, m_state, options);
@@ -35,9 +35,9 @@ void TestbedUiTextAreaGallery::paint(NWB::Impl::UiPaintContext& context, const f
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(result.submitted)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: multiline document submitted, bytes={}"), m_document.text().size());
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: multiline document submitted, bytes={}"), m_document.text().size());
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom text area declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom text area declaration failed"));
 }
 
 

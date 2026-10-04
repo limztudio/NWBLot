@@ -45,17 +45,17 @@ using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 
 
 bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!checkVirtualPath(GLOBAL_TEXT("Model::validatePayload")))
+    if(!checkVirtualPath(GLB_TEXT("Model::validatePayload")))
         return false;
     if(m_skeletonObjects.empty() && m_staticMeshObjects.empty() && m_skinnedMeshObjects.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: model has no objects"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: model has no objects"));
         return false;
     }
 
     usize objectCount = 0u;
     for(const usize count : { m_skeletonObjects.size(), m_staticMeshObjects.size(), m_skinnedMeshObjects.size() }){
         if(count > Limit<usize>::s_Max - objectCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: total object count overflows"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: total object count overflows"));
             return false;
         }
         objectCount += count;
@@ -65,7 +65,7 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     // Larger models build the complete name index once, preserving validation order across all object kinds.
     if(objectCount > 1u){
         if(objectCount > Limit<usize>::s_Max / 2u){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: name index capacity overflows"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: name index capacity overflows"));
             return false;
         }
         // The map's default 0.5 load factor needs two buckets per possible distinct name.
@@ -89,11 +89,11 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     for(usize i = 0u; i < m_skeletonObjects.size(); ++i){
         const ModelSkeletonObject& object = m_skeletonObjects[i];
         if(!object.name || !object.skeleton.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skeleton object {} is incomplete"), i);
             return false;
         }
         if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skeleton object {} name is duplicated in the model"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skeleton object {} name is duplicated in the model"), i);
             return false;
         }
     }
@@ -101,19 +101,19 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     for(usize i = 0u; i < m_staticMeshObjects.size(); ++i){
         const ModelStaticMeshObject& object = m_staticMeshObjects[i];
         if(!object.name || !object.mesh.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} is incomplete"), i);
             return false;
         }
         if(object.material.name() && !object.material.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} has invalid material reference"), i);
             return false;
         }
         if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} name is duplicated in the model"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} name is duplicated in the model"), i);
             return false;
         }
         if(!object.parentObject && object.parentJoint){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} has joint parent without object parent"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} has joint parent without object parent"), i);
             return false;
         }
         if(object.parentObject){
@@ -125,10 +125,10 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
                 parentExists = parent != objectNames->end();
             }
             if(parentExists){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object"), i);
+                NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} parent_object must reference a skeleton object"), i);
             }
             else{
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent"), i);
+                NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: static mesh object {} targets a missing skeleton object parent"), i);
             }
             return false;
         }
@@ -137,24 +137,24 @@ bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
     for(usize i = 0u; i < m_skinnedMeshObjects.size(); ++i){
         const ModelSkinnedMeshObject& object = m_skinnedMeshObjects[i];
         if(!object.name || !object.skin.valid() || !object.skeletonObject){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skinned mesh object {} is incomplete"), i);
             return false;
         }
         if(object.material.name() && !object.material.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skinned mesh object {} has invalid material reference"), i);
             return false;
         }
         if(!nameIsUnique(object.name)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skinned mesh object {} name is duplicated in the model"), i);
             return false;
         }
         if(!objectNames){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
             return false;
         }
         const auto parent = objectNames->find(object.skeletonObject);
         if(parent == objectNames->end() || (parent.value() & __hidden_model_runtime::s_SkeletonObjectName) == 0u){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Model::validatePayload failed: skinned mesh object {} targets a missing skeleton object"), i);
             return false;
         }
     }
@@ -175,8 +175,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         ModelBinaryPayload::s_ModelMagic,
-        GLOBAL_TEXT("Model::loadBinary"),
-        GLOBAL_TEXT("model")
+        GLB_TEXT("Model::loadBinary"),
+        GLB_TEXT("model")
     ))
         return false;
 
@@ -189,8 +189,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skeletonObjectCount,
         skeletonObjectBinaries,
-        GLOBAL_TEXT("Model::loadBinary"),
-        GLOBAL_TEXT("skeleton objects")
+        GLB_TEXT("Model::loadBinary"),
+        GLB_TEXT("skeleton objects")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -198,8 +198,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.staticMeshObjectCount,
         staticMeshObjectBinaries,
-        GLOBAL_TEXT("Model::loadBinary"),
-        GLOBAL_TEXT("static mesh objects")
+        GLB_TEXT("Model::loadBinary"),
+        GLB_TEXT("static mesh objects")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -207,8 +207,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skinnedMeshObjectCount,
         skinnedMeshObjectBinaries,
-        GLOBAL_TEXT("Model::loadBinary"),
-        GLOBAL_TEXT("skinned mesh objects")
+        GLB_TEXT("Model::loadBinary"),
+        GLB_TEXT("skinned mesh objects")
     ))
         return false;
 
@@ -244,7 +244,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         m_skinnedMeshObjects.push_back(object);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, GLOBAL_TEXT("Model::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, GLB_TEXT("Model::loadBinary"))
         && validatePayload(scratchArena)
     ;
 }

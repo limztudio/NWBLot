@@ -54,14 +54,14 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
     sharedInputs.timingTicket = inputs.timingTicket;
     sharedInputs.resolveTiming = inputs.resolveTiming;
     const CausticsResolveChainNaming naming{
-        {Name("render.software_caustics.resolve_prepare"), "Software Caustics Resolve Prepare", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task")},
-        {Name("render.software_caustics.resolve_wavelet"), "Software Caustics Resolve Wavelet", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task")},
-        {Name("render.software_caustics.resolve_second_wavelet"), "Software Caustics Resolve Second Wavelet", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics second-wavelet graph task")},
-        {Name("render.software_caustics.resolve_third_wavelet"), "Software Caustics Resolve Third Wavelet", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task")},
-        {Name("render.software_caustics.resolve_fourth_wavelet"), "Software Caustics Resolve Fourth Wavelet", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics fourth-wavelet graph task")},
-        {Name("render.software_caustics.resolve_fifth_wavelet"), "Software Caustics Resolve Fifth Wavelet", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task")},
-        {Name("render.software_caustics.resolve_upsample"), "Software Caustics Resolve Upsample", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics resolve-upsample graph task")},
-        {Name("render.software_caustics.resolve_timing_close"), "Software Caustics Resolve Timing Close", GLOBAL_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task")},
+        {Name("render.software_caustics.resolve_prepare"), "Software Caustics Resolve Prepare", GLB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task")},
+        {Name("render.software_caustics.resolve_wavelet"), "Software Caustics Resolve Wavelet", GLB_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task")},
+        {Name("render.software_caustics.resolve_second_wavelet"), "Software Caustics Resolve Second Wavelet", GLB_TEXT("RendererSystem: could not declare deferred software-caustics second-wavelet graph task")},
+        {Name("render.software_caustics.resolve_third_wavelet"), "Software Caustics Resolve Third Wavelet", GLB_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task")},
+        {Name("render.software_caustics.resolve_fourth_wavelet"), "Software Caustics Resolve Fourth Wavelet", GLB_TEXT("RendererSystem: could not declare deferred software-caustics fourth-wavelet graph task")},
+        {Name("render.software_caustics.resolve_fifth_wavelet"), "Software Caustics Resolve Fifth Wavelet", GLB_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task")},
+        {Name("render.software_caustics.resolve_upsample"), "Software Caustics Resolve Upsample", GLB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-upsample graph task")},
+        {Name("render.software_caustics.resolve_timing_close"), "Software Caustics Resolve Timing Close", GLB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
     CausticsResolveChainResult sharedResult;

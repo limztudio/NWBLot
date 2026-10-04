@@ -64,7 +64,7 @@ public:
     }
 
     constexpr reference at(size_type pos){
-        GLOBAL_ASSERT(pos < m_currentSize);
+        GLB_ASSERT(pos < m_currentSize);
         if(pos >= m_currentSize)
             throw RuntimeException("FixedVector index out of range");
 
@@ -72,7 +72,7 @@ public:
     }
 
     constexpr const_reference at(size_type pos)const{
-        GLOBAL_ASSERT(pos < m_currentSize);
+        GLB_ASSERT(pos < m_currentSize);
         if(pos >= m_currentSize)
             throw RuntimeException("FixedVector index out of range");
 
@@ -85,14 +85,14 @@ public:
 
 public:
     constexpr reference back(){
-        GLOBAL_ASSERT(m_currentSize > 0);
+        GLB_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
             throw RuntimeException("FixedVector back on empty vector");
 
         return Base::operator[](m_currentSize - 1);
     }
     constexpr const_reference back()const{
-        GLOBAL_ASSERT(m_currentSize > 0);
+        GLB_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
             throw RuntimeException("FixedVector back on empty vector");
 
@@ -128,7 +128,7 @@ public:
     }
 
     constexpr void push_back(const T& value){
-        GLOBAL_ASSERT(m_currentSize < s_MaxElements);
+        GLB_ASSERT(m_currentSize < s_MaxElements);
         if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
@@ -137,7 +137,7 @@ public:
     }
 
     constexpr void push_back(T&& value){
-        GLOBAL_ASSERT(m_currentSize < s_MaxElements);
+        GLB_ASSERT(m_currentSize < s_MaxElements);
         if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 
@@ -146,7 +146,7 @@ public:
     }
 
     constexpr void pop_back(){
-        GLOBAL_ASSERT(m_currentSize > 0);
+        GLB_ASSERT(m_currentSize > 0);
         if(m_currentSize == 0)
             throw RuntimeException("FixedVector pop_back on empty vector");
 
@@ -154,7 +154,7 @@ public:
     }
 
     constexpr void resize(size_type new_size){
-        GLOBAL_ASSERT(new_size <= s_MaxElements);
+        GLB_ASSERT(new_size <= s_MaxElements);
         if(new_size > s_MaxElements)
             throw RuntimeException("FixedVector size exceeds capacity");
 
@@ -168,7 +168,7 @@ public:
 
     template<typename... Args>
     constexpr reference emplace_back(Args&&... args){
-        GLOBAL_ASSERT(m_currentSize < s_MaxElements);
+        GLB_ASSERT(m_currentSize < s_MaxElements);
         if(m_currentSize >= s_MaxElements)
             throw RuntimeException("FixedVector capacity exceeded");
 

@@ -34,10 +34,10 @@ template<typename ValueContainer>
         return true;
 
     if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: malformed '{}' payload"), failureContext, label);
     }
 
     return false;
@@ -53,12 +53,12 @@ template<typename HeaderT>
     const TStringView assetType
 ){
     if(!ReadPOD(binary, inOutCursor, outHeader)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: malformed header"), failureContext);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: malformed header"), failureContext);
         return false;
     }
 
     if(outHeader.magic != expectedMagic){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
         return false;
     }
 
@@ -71,7 +71,7 @@ template<typename HeaderT>
     const TStringView failureContext
 ){
     if(cursor != binary.size()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: trailing bytes detected"), failureContext);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: trailing bytes detected"), failureContext);
         return false;
     }
 
@@ -100,10 +100,10 @@ template<typename ValueContainer>
         return true;
 
     if(failure == BinaryVectorPayloadFailure::CountOverflow){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: '{}' payload overflows output binary"), failureContext, label);
     }
 
     return false;

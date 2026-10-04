@@ -111,7 +111,7 @@ inline bool BuildStagingTextureQueueFamilies(
     outFamilies.clear();
     outMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    GLOBAL_ASSERT(ResourceQueueSharing::IsValid(sharing));
+    GLB_ASSERT(ResourceQueueSharing::IsValid(sharing));
 
     if(sharing == ResourceQueueSharing::Exclusive){
         const GpuPhysicalQueueId primaryGraphics = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
@@ -307,36 +307,36 @@ bool BuildStagingTextureRange(
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
     if(!ResourceQueueSharing::IsValid(d.queueSharing)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: queue sharing contains unknown bits"));
         return nullptr;
     }
     if(cpuAccess != CpuAccessMode::Read && cpuAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: CPU access must be Read or Write"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: CPU access must be Read or Write"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: invalid CPU access"));
         return nullptr;
     }
 
-    if(!VulkanDetail::ValidateTextureShape(d, GLOBAL_TEXT("create staging texture"))){
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
+    if(!VulkanDetail::ValidateTextureShape(d, GLB_TEXT("create staging texture"))){
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
         return nullptr;
     }
     if(d.sampleCount != 1){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: sample count must be 1"));
         return nullptr;
     }
     if(static_cast<u32>(d.format) >= static_cast<u32>(Format::kCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: texture format is out of range"));
         return nullptr;
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
     VulkanDetail::TextureFormatBlockLayout formatLayout;
     if(!VulkanDetail::GetTextureFormatBlockLayout(formatInfo, formatLayout)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         return nullptr;
     }
 
@@ -346,8 +346,8 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         formatLayout.bytesPerBlock,
         bufferOffsetAlignment
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         return nullptr;
     }
 
@@ -367,8 +367,8 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         || !TryMultiply<u64>(arrayByteSize, static_cast<u64>(d.arraySize), totalSize)
         || totalSize == 0u
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return nullptr;
     }
 
@@ -380,14 +380,14 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         admittedFamilies,
         sharingMode
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture: requested queue sharing is unavailable"));
-        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture: requested queue sharing is unavailable"));
+        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
         return nullptr;
     }
 
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     if(!staging){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to allocate staging texture wrapper"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to allocate staging texture wrapper"));
         return nullptr;
     }
 
@@ -403,7 +403,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 
     const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create staging texture buffer: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, staging);
         return nullptr;
     }
@@ -431,25 +431,25 @@ void* Device::mapStagingTexture(
     usize* outRowPitch
 ){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: invalid CPU access mode"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: invalid CPU access mode"));
         return nullptr;
     }
 
     if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: texture belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: texture belongs to another device"));
         return nullptr;
     }
     if(staging.m_buffer == VK_NULL_HANDLE || !staging.m_allocation){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: native buffer or allocation is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: native buffer or allocation is null"));
         return nullptr;
     }
     if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: texture was created without valid CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: texture was created without valid CPU access"));
         return nullptr;
     }
     if(requestedAccess != staging.m_cpuAccess){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Failed to map staging texture: requested access does not match the texture CPU access")
+            GLB_TEXT("Vulkan: Failed to map staging texture: requested access does not match the texture CPU access")
         );
         return nullptr;
     }
@@ -466,7 +466,7 @@ void* Device::mapStagingTexture(
         )
         || expectedTotalByteSize != staging.m_totalByteSize
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: immutable layout provenance is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: immutable layout provenance is invalid"));
         return nullptr;
     }
 
@@ -474,7 +474,7 @@ void* Device::mapStagingTexture(
         slice.mipLevel >= staging.m_creationDesc.mipLevels
         || slice.mipLevel >= staging.m_mipLayouts.size()
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: mip is outside the creation layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: mip is outside the creation layout"));
         return nullptr;
     }
 
@@ -485,7 +485,7 @@ void* Device::mapStagingTexture(
         staging.m_formatLayout,
         &resolvedSlice
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
         return nullptr;
     }
 
@@ -500,13 +500,13 @@ void* Device::mapStagingTexture(
         true,
         range
     )){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: mapped range is invalid"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: mapped range is invalid"));
         return nullptr;
     }
 
     ScopedLock lock(staging.m_mappingMutex);
     if(!staging.m_mappedMemory){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to map staging texture: persistent mapping pointer is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map staging texture: persistent mapping pointer is null"));
         return nullptr;
     }
 
@@ -514,7 +514,7 @@ void* Device::mapStagingTexture(
     if(needsInvalidate){
         const VkResult res = m_allocator.invalidateStagingTextureMemory(staging, range.byteOffset, range.byteSize);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;
         }
     }
@@ -527,21 +527,21 @@ void* Device::mapStagingTexture(
 
 void Device::unmapStagingTexture(StagingTexture& staging){
     if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap staging texture: texture belongs to another device"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap staging texture: texture belongs to another device"));
         return;
     }
     if(staging.m_buffer == VK_NULL_HANDLE || !staging.m_allocation){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap staging texture: native buffer or allocation is null"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap staging texture: native buffer or allocation is null"));
         return;
     }
     if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap staging texture: texture has invalid CPU access"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap staging texture: texture has invalid CPU access"));
         return;
     }
 
     ScopedLock lock(staging.m_mappingMutex);
     if(!staging.m_mappedMemory){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unmap staging texture: texture is not mapped"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to unmap staging texture: texture is not mapped"));
         return;
     }
 

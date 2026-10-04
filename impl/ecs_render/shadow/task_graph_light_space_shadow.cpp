@@ -47,8 +47,8 @@ namespace __hidden_task_graph_light_space_shadow{
     outUses.reserve(capacity);
     const auto appendRead = [&](const Core::GpuTaskResourceUse& use){
         // The light-space scene inputs are whole-resource reads, including material texture sets.
-        GLOBAL_ASSERT(use.access == Core::GpuTaskResourceAccess::Read);
-        GLOBAL_ASSERT(use.range.bufferRange == Core::s_EntireBuffer && use.range.textureSubresources == Core::s_AllSubresources);
+        GLB_ASSERT(use.access == Core::GpuTaskResourceAccess::Read);
+        GLB_ASSERT(use.range.bufferRange == Core::s_EntireBuffer && use.range.textureSubresources == Core::s_AllSubresources);
         for(auto& previous : outUses){
             if(previous.resource == use.resource){
                 previous.requiredState |= use.requiredState;

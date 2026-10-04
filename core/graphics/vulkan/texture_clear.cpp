@@ -20,9 +20,9 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         return;
     if(!clearDepth && !clearStencil)
         return;
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("clear depth/stencil texture");
+    constexpr TStringView s_OperationName = GLB_TEXT("clear depth/stencil texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
     const VkImageUsageFlags requiredUsage = m_renderPassActive
@@ -30,11 +30,11 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     if(!VulkanTextureDetail::TextureDepthStencilClearAspectsAreValid(texture.m_aspectMask, clearDepth, clearStencil)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("requested aspect is not present in the texture format"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("requested aspect is not present in the texture format"));
         return;
     }
 
@@ -43,7 +43,7 @@ void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceS
         TextureSubresourceMipResolve::Range
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or invalid"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("subresource range is empty or invalid"));
         return;
     }
 
@@ -103,9 +103,9 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     TStringView valueName
 ){
     static_cast<void>(valueName);
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("clear color attachment");
+    constexpr TStringView s_OperationName = GLB_TEXT("clear color attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("active rendering with a color attachment is required"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("active rendering with a color attachment is required"));
         return false;
     }
 
@@ -116,7 +116,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
         m_renderPassFramebuffer->getDescription(),
         clearTarget
     )){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("requested subresources are not active color attachments"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("requested subresources are not active color attachments"));
         return false;
     }
 
@@ -128,7 +128,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
         return true;
     if(clearTarget.isReadOnly){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("active color attachment is read-only"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("active color attachment is read-only"));
         return false;
     }
 
@@ -146,7 +146,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
         clearRect,
         m_renderPassFramebuffer->getFramebufferInfo()
     )){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("clear rect is outside the active render area"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("clear rect is outside the active render area"));
         return false;
     }
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
@@ -165,26 +165,26 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
     const bool clearStencil,
     const u8 stencil
 ){
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("clear depth/stencil attachment");
+    constexpr TStringView s_OperationName = GLB_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("active rendering with a depth/stencil attachment is required"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("active rendering with a depth/stencil attachment is required"));
         return false;
     }
 
     const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
     const FramebufferAttachment& attachment = fbDesc.depthAttachment;
     if(attachment.texture != &texture){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not the active depth/stencil attachment"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture is not the active depth/stencil attachment"));
         return false;
     }
     if(attachment.isReadOnly){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("active depth/stencil attachment is read-only"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("active depth/stencil attachment is read-only"));
         return false;
     }
 
     TextureSubresourceSet resolvedAttachmentSubresources;
     if(!VulkanTextureDetail::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources, resolvedAttachmentSubresources)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("requested subresources are not active depth/stencil attachments"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("requested subresources are not active depth/stencil attachments"));
         return false;
     }
 
@@ -206,7 +206,7 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
 
     const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, resolvedAttachmentSubresources, resolvedRect);
     if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("clear rect is outside the active render area"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("clear rect is outside the active render area"));
         return false;
     }
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
@@ -243,20 +243,20 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("clear depth/stencil texture box");
+    constexpr TStringView s_OperationName = GLB_TEXT("clear depth/stencil texture box");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
     if(!VulkanTextureDetail::TextureDepthStencilClearAspectsAreValid(texture.m_aspectMask, clearDepth, clearStencil)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("requested aspect is not present in the texture format"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("requested aspect is not present in the texture format"));
         return;
     }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or invalid"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("subresource range is empty or invalid"));
         return;
     }
 
@@ -273,7 +273,7 @@ void CommandList::clearDepthStencilTextureBox(
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     const f32 clearDepthValue = clearDepth
@@ -281,13 +281,13 @@ void CommandList::clearDepthStencilTextureBox(
         : 0.0f
     ;
     if(!m_renderPassActive && desc.sampleCount != 1u){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("bounded multisampled clears require active rendering"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("bounded multisampled clears require active rendering"));
         return;
     }
     if(m_renderPassActive){
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
         if(baseResolvedBox.minZ != 0 || baseResolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, GLOBAL_TEXT("attachment bounded clears require full attachment depth"));
+            rejectCommandRecording(s_OperationName, GLB_TEXT("attachment bounded clears require full attachment depth"));
             return;
         }
 
@@ -305,7 +305,7 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     }
     if(desc.dimension == TextureDimension::Texture3D){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("bounded clears do not support 3D depth/stencil textures"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("bounded clears do not support 3D depth/stencil textures"));
         return;
     }
 
@@ -320,14 +320,14 @@ void CommandList::clearDepthStencilTextureBox(
             depthPatternSize
         )
     ){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("depth clear pattern is unsupported for the texture format"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("depth clear pattern is unsupported for the texture format"));
         return;
     }
 
     u8 stencilPattern[VulkanTextureDetail::s_TextureClearStencilPatternBytes] = {};
     u32 stencilPatternSize = 0u;
     if(clearStencil && !VulkanTextureDetail::BuildTextureStencilClearPattern(desc.format, stencil, stencilPattern, stencilPatternSize)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("stencil clear pattern is unsupported for the texture format"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("stencil clear pattern is unsupported for the texture format"));
         return;
     }
 
@@ -349,7 +349,7 @@ void CommandList::clearDepthStencilTextureBox(
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
         if(mipPlan.resolvedBox.minZ != 0 || mipPlan.resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, GLOBAL_TEXT("bounded clears require full attachment depth"));
+            rejectCommandRecording(s_OperationName, GLB_TEXT("bounded clears require full attachment depth"));
             return;
         }
 
@@ -362,12 +362,12 @@ void CommandList::clearDepthStencilTextureBox(
                 texelCount, stencilPatternSize, arrayLayerCount, mipPlan.stencilLayout
             ))
         ){
-            rejectCommandRecording(s_OperationName, GLOBAL_TEXT("clear upload layout is not addressable"));
+            rejectCommandRecording(s_OperationName, GLB_TEXT("clear upload layout is not addressable"));
             return;
         }
     }
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("clear depth/stencil texture box through staging")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLB_TEXT("clear depth/stencil texture box through staging")))
         return;
 
     setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
@@ -390,13 +390,13 @@ void CommandList::clearDepthStencilTextureBox(
             void* stagingBytes = nullptr;
             if(!prepareUploadStaging(
                 uploadLayout.clearByteCount,
-                GLOBAL_TEXT("clearDepthStencilTextureBox"),
+                GLB_TEXT("clearDepthStencilTextureBox"),
                 stagingBuffer,
                 stagingOffset,
                 stagingBytes,
                 uploadLayout.stagingAlignment
             )){
-                rejectCommandRecording(s_OperationName, GLOBAL_TEXT("staging allocation failed"));
+                rejectCommandRecording(s_OperationName, GLB_TEXT("staging allocation failed"));
                 return false;
             }
             if(
@@ -408,7 +408,7 @@ void CommandList::clearDepthStencilTextureBox(
                 || static_cast<u64>(uploadLayout.clearByteCount)
                     > stagingBuffer->m_creationDesc.byteSize - stagingOffset
             ){
-                rejectCommandRecording(s_OperationName, GLOBAL_TEXT("staging allocation returned an invalid range"));
+                rejectCommandRecording(s_OperationName, GLB_TEXT("staging allocation returned an invalid range"));
                 return false;
             }
             VulkanTextureDetail::FillTextureClearBytes(

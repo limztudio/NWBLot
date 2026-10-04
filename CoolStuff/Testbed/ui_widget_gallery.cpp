@@ -108,11 +108,11 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: UI gallery selector declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: UI gallery selector declaration failed"));
         return;
     }
     if(previous != selected)
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
     const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
     const f32 x = bounds.x + (bounds.width - width) * 0.5f;
@@ -145,7 +145,7 @@ void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, c
         return;
     bool valid = ui.label("title", "Interactive custom UI");
     if(ui.checkbox("enabled", "Enable counter", m_enabled))
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
     valid = ui.beginRow("actions") && valid;
     WidgetOptions options;
     options.enabled = m_enabled;
@@ -153,7 +153,7 @@ void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, c
     if(ui.button("increase", "Increase", options)){
         if(m_count != Limit<u32>::s_Max)
             ++m_count;
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom UI counter={}"), m_count);
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom UI counter={}"), m_count);
     }
     if(ui.button("reset", "Reset"))
         m_count = 0u;
@@ -165,7 +165,7 @@ void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, c
     valid = ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom UI widget declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom UI widget declaration failed"));
 }
 
 

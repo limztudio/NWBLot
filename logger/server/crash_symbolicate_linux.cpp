@@ -56,7 +56,7 @@ struct LinuxProcessMemoryMapTable{
     {}
 };
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 struct LinuxSymbolFileCacheEntry{
     CrashReportText modulePath;
     CrashReportText symbolPath;
@@ -95,7 +95,7 @@ struct LinuxSymbolFileCache{
     return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
 }
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 [[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
     const AStringView trimmed = TrimView(line);
     return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
@@ -288,7 +288,7 @@ static void AppendLinuxClientCallstack(
 
     outReport += "\n[callstack]\n";
 
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     LinuxSymbolFileCache symbolFileCache(arena);
 #endif
 
@@ -310,7 +310,7 @@ static void AppendLinuxClientCallstack(
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
                 const u64 symbolOffset = moduleOffset + mapEntry.fileOffset;
                 AppendHexAddress(arena, outReport, moduleOffset);
                 CrashReportText symbol{arena};
@@ -389,7 +389,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";
     AppendHexAddress(arena, outReport, instructionPointer - instructionMapEntry.begin);
-#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
     AppendHexAddress(arena, outReport, instructionPointer - instructionMapEntry.begin + instructionMapEntry.fileOffset);
 #endif

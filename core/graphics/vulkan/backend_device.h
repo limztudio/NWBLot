@@ -555,7 +555,7 @@ private:
         if(res == VK_SUCCESS)
             return true;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
@@ -569,7 +569,7 @@ private:
         if(res == VK_SUCCESS)
             return true;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: {}"), operationName, ResultToString(res));
         DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }

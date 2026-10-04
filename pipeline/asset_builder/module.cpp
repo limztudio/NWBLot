@@ -47,7 +47,7 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
     ErrorCode error;
     const Path repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)), error);
     if(error){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to resolve repository root"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve repository root"));
         return false;
     }
     const auto& sources = parsed.assetRoots.empty() ? parsed.inputs : parsed.assetRoots;
@@ -59,7 +59,7 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
         if(parsed.assetRoots.empty()){
             const bool directory = IsDirectory(path, error);
             if(error){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to inspect input '{}'"), StringConvert(input));
+                NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to inspect input '{}'"), StringConvert(input));
                 return false;
             }
             if(!directory)
@@ -82,7 +82,7 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
             return false;
     }
     if(options.assetRoots.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: an empty input list requires --asset-root"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: an empty input list requires --asset-root"));
         return false;
     }
     return true;

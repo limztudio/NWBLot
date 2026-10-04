@@ -42,11 +42,11 @@ void TestbedUiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
             m_popup.close();
     }
     if(ui.checkbox("keep_open", "Keep open on selection", m_keepOpen, row))
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: popup keep open={}"), m_keepOpen);
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: popup keep open={}"), m_keepOpen);
     valid = ui.endPopup() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom popup declaration failed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom popup declaration failed"));
 }
 
 

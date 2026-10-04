@@ -46,7 +46,7 @@ bool PaintBuilder::prepareImages(
     const usize sdfCount,
     const SharedImageSource* const textureImages,
     const usize textureCount){
-    GLOBAL_ASSERT(m_recording);
+    GLB_ASSERT(m_recording);
     if(
         glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages
         || (glyphCount != 0u && !glyphPages) || (sdfCount != 0u && !sdfPages)

@@ -30,7 +30,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     outOwnsPipelineLayout = false;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: descriptor-buffer backend is unavailable."), operationName);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: descriptor-buffer backend is unavailable."), operationName);
         return false;
     }
 
@@ -49,12 +49,12 @@ bool Device::createPipelineLayoutForBindingLayouts(
     for(u32 i = 0u; i < static_cast<u32>(bindingLayouts.size()); ++i){
         auto* layout = bindingLayouts[i].get();
         if(!layout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
             return false;
         }
         if(&layout->m_context != &m_context){
             NWB_LOGGER_ERROR(
-                GLOBAL_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"),
+                GLB_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"),
                 operationName,
                 i
             );
@@ -63,7 +63,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
         pushConstantByteSize = Max<u32>(pushConstantByteSize, layout->m_pushConstantByteSize);
         if(layout->m_descriptorSetLayouts.size() > static_cast<usize>(Limit<u32>::s_Max) - descriptorSetLayoutCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
                 , operationName
             );
             return false;
@@ -74,24 +74,24 @@ bool Device::createPipelineLayoutForBindingLayouts(
     for(const auto& bindingLayout : bindingLayouts){
         const auto* layout = bindingLayout.get();
         if(!layout || !layout->isDescriptorBufferCompatible()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: every binding layout must be descriptor-buffer-compatible."), operationName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: every binding layout must be descriptor-buffer-compatible."), operationName);
             return false;
         }
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
         if(!layout->m_descriptorSetLayouts.empty() && !bindlessDesc){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout.")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout.")
                 , operationName
             );
             return false;
         }
         if(bindlessDesc && layout->m_descriptorSetLayouts.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout.")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout.")
                 , operationName
             );
             return false;
         }
         if(bindlessDesc && bindlessDesc->descriptorSetIndex == Limit<u32>::s_Max){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: {} bindless resource layouts require an explicit set index.")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: {} bindless resource layouts require an explicit set index.")
                 , operationName
             );
             return false;
@@ -101,7 +101,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
     if(bindingLayouts.size() == 1 && descriptorSetLayoutCount == 0u){
         auto* layoutPtr = bindingLayouts[0].get();
         if(!layoutPtr){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: binding layout 0 is invalid"), operationName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: binding layout 0 is invalid"), operationName);
             return false;
         }
         const BindingLayout& layout = *layoutPtr;
@@ -127,12 +127,12 @@ bool Device::createPipelineLayoutForBindingLayouts(
             continue;
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
         if(!bindlessDesc){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
             return false;
         }
         const u32 base = bindlessDesc->descriptorSetIndex;
         if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1u)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
             return false;
         }
         maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
@@ -140,7 +140,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
+            GLB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
             , operationName
             , maxSetIndex
             , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
@@ -159,14 +159,14 @@ bool Device::createPipelineLayoutForBindingLayouts(
             continue;
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
         if(!bindlessDesc){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
             return false;
         }
         const u32 base = bindlessDesc->descriptorSetIndex;
         for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);
             if(descriptorSetLayouts[setIndex] != VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}")
+                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: two binding layouts map to descriptor set {}")
                     , operationName
                     , setIndex
                 );
@@ -178,7 +178,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     for(u32 setIndex = 0u; setIndex < totalSets; ++setIndex){
         if(descriptorSetLayouts[setIndex] == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing")
+            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: {} descriptor layouts must be dense from set 0; set {} is missing")
                 , operationName
                 , setIndex
             );
@@ -214,7 +214,7 @@ bool Device::configurePipelineBindings(
     outBindings.m_bindingLayoutSetIndicesAtCreation = {};
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
         return false;
     }
 
@@ -231,7 +231,7 @@ bool Device::configurePipelineBindings(
     outBindings.m_bindingLayoutsAtCreation = bindingLayouts;
     for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
         const BindingLayout* const layout = bindingLayouts[layoutIndex].get();
-        GLOBAL_ASSERT(layout != nullptr);
+        GLB_ASSERT(layout != nullptr);
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
         outBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
             ? bindlessDesc->descriptorSetIndex

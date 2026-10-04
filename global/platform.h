@@ -12,19 +12,19 @@
 
 
 #if defined(WIN32) || defined(_WIN32)
-#define GLOBAL_PLATFORM_WINDOWS
+#define GLB_PLATFORM_WINDOWS
 #endif
 #if defined(__linux__)
-#define GLOBAL_PLATFORM_LINUX
+#define GLB_PLATFORM_LINUX
 #endif
 #if defined(__unix__)
-#define GLOBAL_PLATFORM_UNIX
+#define GLB_PLATFORM_UNIX
 #endif
 #if defined(__ANDROID__)
-#define GLOBAL_PLATFORM_ANDROID
+#define GLB_PLATFORM_ANDROID
 #endif
 #if defined(__APPLE__)
-#define GLOBAL_PLATFORM_APPLE
+#define GLB_PLATFORM_APPLE
 #endif
 
 

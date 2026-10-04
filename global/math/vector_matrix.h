@@ -11,12 +11,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_HAS_AVX2)
-GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
+#if defined(GLB_HAS_AVX2)
+GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
 #endif
 
-GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
-#if defined(GLOBAL_HAS_NEON)
+GLB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
+#if defined(GLB_HAS_NEON)
     const float32x4x2_t p0 = vzipq_f32(r0, r2);
     const float32x4x2_t p1 = vzipq_f32(r1, r3);
     const float32x4x2_t t0 = vzipq_f32(p0.val[0], p1.val[0]);
@@ -28,14 +28,14 @@ GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1,
     result.v[2] = t1.val[0];
     result.v[3] = t1.val[1];
     return result;
-#elif defined(GLOBAL_HAS_AVX2)
+#elif defined(GLB_HAS_AVX2)
     __m256 t0 = _mm256_castps128_ps256(r0);
     t0 = _mm256_insertf128_ps(t0, r1, 1);
     __m256 t1 = _mm256_castps128_ps256(r2);
     t1 = _mm256_insertf128_ps(t1, r3, 1);
 
     return MatrixTransposePackedRows(t0, t1);
-#elif defined(GLOBAL_HAS_SSE4)
+#elif defined(GLB_HAS_SSE4)
     SIMDVector temp0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 0, 1, 0));
     SIMDVector temp1 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(3, 2, 3, 2));
     SIMDVector temp2 = _mm_shuffle_ps(r2, r3, _MM_SHUFFLE(1, 0, 1, 0));
@@ -69,12 +69,12 @@ GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1,
 #endif
 }
 
-GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
     return MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
-#if defined(GLOBAL_HAS_AVX2)
-GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
+#if defined(GLB_HAS_AVX2)
+GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
     __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
     __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
     __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
@@ -93,8 +93,8 @@ GLOBAL_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1
 }
 #endif
 
-GLOBAL_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
-#if defined(GLOBAL_HAS_SCALAR)
+GLB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+#if defined(GLB_HAS_SCALAR)
     const f32 x = value.f[0];
     const f32 y = value.f[1];
     const f32 z = value.f[2];
@@ -109,7 +109,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, c
         (m0.f[2] * x) + (m1.f[2] * y) + (m2.f[2] * z) + (m3.f[2] * w),
         (m0.f[3] * x) + (m1.f[3] * y) + (m2.f[3] * z) + (m3.f[3] * w)
     );
-#elif defined(GLOBAL_HAS_NEON)
+#elif defined(GLB_HAS_NEON)
     const float32x2_t low = vget_low_f32(value);
     const float32x2_t high = vget_high_f32(value);
     SIMDVector result = vmulq_lane_f32(transposedMatrix.v[0], low, 0);
@@ -121,7 +121,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, c
     SIMDVector y{};
     SIMDVector z{};
     SIMDVector w{};
-#if defined(GLOBAL_HAS_AVX2)
+#if defined(GLB_HAS_AVX2)
 #if defined(__AVX2__) || defined(_M_AVX2)
     x = _mm_broadcastss_ps(value);
 #else
@@ -153,7 +153,7 @@ GLOBAL_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, c
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-GLOBAL_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams storage through pure-SIMD transform lanes; Loads/Stores live only in this loop.
+GLB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams storage through pure-SIMD transform lanes; Loads/Stores live only in this loop.
     OutputT* outputStream,
     usize outputStride,
     const InputT* inputStream,
@@ -162,10 +162,10 @@ GLOBAL_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams 
     const SIMDMatrix& matrix,
     TransformT transform
 )noexcept{
-    GLOBAL_ASSERT(outputStream != nullptr);
-    GLOBAL_ASSERT(inputStream != nullptr);
-    GLOBAL_ASSERT(inputStride >= sizeof(InputT));
-    GLOBAL_ASSERT(outputStride >= sizeof(OutputT));
+    GLB_ASSERT(outputStream != nullptr);
+    GLB_ASSERT(inputStream != nullptr);
+    GLB_ASSERT(inputStride >= sizeof(InputT));
+    GLB_ASSERT(outputStride >= sizeof(OutputT));
 
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
     for(usize i = 0u; i < vectorCount; ++i){
@@ -176,9 +176,9 @@ GLOBAL_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams 
     return outputStream;
 }
 
-#if defined(GLOBAL_HAS_SSE4)
+#if defined(GLB_HAS_SSE4)
 template<int Mask>
-GLOBAL_INLINE SIMDVector SIMDCALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
+GLB_INLINE SIMDVector SIMDCALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
     const SIMDVector x = _mm_dp_ps(matrix.v[0], value, Mask);
     const SIMDVector y = _mm_dp_ps(matrix.v[1], value, Mask);
     const SIMDVector z = _mm_dp_ps(matrix.v[2], value, Mask);

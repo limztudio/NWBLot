@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
         return false;
     }
     BeginMeshHeapHandleGather(m_rayTracingState.m_hwMeshHeapHandleCache);
@@ -132,7 +132,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
                 || !resolveMeshHeapHandle(mesh.positionBuffer, positionHandle)
             ){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_hwMeshHeapHandleCache);
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register HW scene mesh buffers in the global descriptor heap"));
 
                 return false;
             }
@@ -291,7 +291,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
 
     if(m_rayTracingState.m_shadowMeshCount > m_rayTracingState.m_shadowMeshHeapHighWater){
         m_rayTracingState.m_shadowMeshHeapHighWater = m_rayTracingState.m_shadowMeshCount;
-        NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+        NWB_LOGGER_INFO(GLB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(m_rayTracingState.m_shadowMeshCount)
             , static_cast<u64>(m_rayTracingState.m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
@@ -335,7 +335,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         auto& device = m_graphics.getDevice();
         Core::RayTracingAccelStructHandle tlas = device.createAccelStruct(accelStructDesc);
         if(!tlas){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
             return false;
         }
         // Retire the old heap block before replacing the TLAS generation.
@@ -346,7 +346,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         m_rayTracingState.m_tlas = Move(tlas);
         m_rayTracingState.m_tlasBackingFresh = true;
         m_rayTracingState.m_tlasMaxInstances = capacity;
-        NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
+        NWB_LOGGER_INFO(GLB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
     }
 
     m_rayTracingState.m_tlasDeviceAddress = m_rayTracingState.m_tlas->getDeviceAddress();
@@ -362,7 +362,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
             !tlasHeapHandle.valid()
             || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             if(tlasHeapHandle.valid())
                 heap.free(tlasHeapHandle);
             return false;
@@ -426,7 +426,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!canReuseTlas){
         if(!capturePreparedSceneTlasBuild(staticScene, tlasStaticSceneHash, instances, instanceBlases)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: could not freeze scene TLAS build after preflight"));
             return false;
         }
     }

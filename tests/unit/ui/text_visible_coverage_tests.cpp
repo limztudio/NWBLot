@@ -175,7 +175,7 @@ TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsReveal
     EXPECT_GT(revealed.glyphPages()[0u]->binding().generation, original->binding().generation);
     EXPECT_EQ(revealed.vertices().size(), 8u);
     ASSERT_EQ(original->pixels().size(), pixels.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(original->pixels().data(), pixels.data(), pixels.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(original->pixels().data(), pixels.data(), pixels.size()), 0);
 }
 
 TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage){

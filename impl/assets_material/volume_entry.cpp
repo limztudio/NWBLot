@@ -49,7 +49,7 @@ static bool ParseMaterialDocument(
 static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
         registry,
-        GLOBAL_TEXT("material"),
+        GLB_TEXT("material"),
         &ParseMaterialDocument,
         [](MaterialCookEntry& entry, Material& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMaterialAsset); },
         false

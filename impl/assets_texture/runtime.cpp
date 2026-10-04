@@ -46,11 +46,11 @@ using TextureFormat::ComputeMipSliceCount;
     outPrimaryPayloadByteCount = 0u;
     u32 expectedMipCount = 0u;
     if(!ComputeCompleteMipCount(dimension, width, height, depth, expectedMipCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: base resolution is invalid"), failureContext);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: base resolution is invalid"), failureContext);
         return false;
     }
     if(mipLevels.size() != expectedMipCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip count does not describe a complete chain"), failureContext);
+        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip count does not describe a complete chain"), failureContext);
         return false;
     }
 
@@ -71,38 +71,38 @@ using TextureFormat::ComputeMipSliceCount;
             expectedBlockCountY,
             expectedSliceSizeBytes
         )){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext, mipIndex);
             return false;
         }
         u32 expectedSliceCount = 0u;
         if(!ComputeMipSliceCount(dimension, expectedDepth, expectedSliceCount)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
             return false;
         }
         if(expectedSliceSizeBytes > Limit<u64>::s_Max / expectedSliceCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} byte size overflows"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} byte size overflows"), failureContext, mipIndex);
             return false;
         }
         const u64 expectedSizeBytes = expectedSliceSizeBytes * expectedSliceCount;
 
         if(mip.width != expectedWidth || mip.height != expectedHeight){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext, mipIndex);
             return false;
         }
         if(mip.blockCountX != expectedBlockCountX || mip.blockCountY != expectedBlockCountY){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} block grid is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} block grid is invalid"), failureContext, mipIndex);
             return false;
         }
         if(mip.sliceCount != expectedSliceCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
             return false;
         }
         if(mip.offsetBytes != expectedOffsetBytes || mip.sizeBytes != expectedSizeBytes){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext, mipIndex);
             return false;
         }
         if(expectedSizeBytes > Limit<u64>::s_Max - expectedOffsetBytes){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} failed: mip {} byte range overflows"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mip {} byte range overflows"), failureContext, mipIndex);
             return false;
         }
 
@@ -131,56 +131,56 @@ bool Texture::validatePayload()const{
     if(!checkVirtualPath(TextureBinaryPayload::s_TextureValidatePayloadContext))
         return false;
     if(!IsValidTextureColorSpace(m_colorSpace)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(!IsValidTexturePayloadFormat(m_payloadFormat)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an invalid payload format")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid payload format")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(IsHdrTexturePayloadFormat(m_payloadFormat) && m_colorSpace != TextureColorSpace::Linear){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: HDR texture '{}' must use linear color space")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: HDR texture '{}' must use linear color space")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(!IsValidTextureDimension(m_dimension)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an invalid dimension")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid dimension")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(m_width == 0u || m_height == 0u || m_depth == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an empty resolution")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an empty resolution")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(m_dimension != TextureDimension::Texture3D && m_depth != 1u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: non-volume texture '{}' has an invalid depth")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(m_dimension == TextureDimension::TextureCube && m_width != m_height){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: cubemap texture '{}' must have square faces")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: cubemap texture '{}' must have square faces")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(m_mipLevels.empty() || m_payloadBytes.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an incomplete payload")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an incomplete payload")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
 
     if(!IsValidTextureAlphaMode(m_alphaMode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha mode")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha mode")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
@@ -188,13 +188,13 @@ bool Texture::validatePayload()const{
 
     const bool alphaModeHasAlpha = m_alphaMode != TextureAlphaMode::Opaque;
     if(m_hasAlpha != alphaModeHasAlpha){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has inconsistent alpha metadata")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has inconsistent alpha metadata")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
     }
     if(m_alphaMode != TextureAlphaMode::ConstantUnorm8 && m_alphaConstantUnorm8 != TextureFormat::s_OpaqueAlphaUnorm8){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
@@ -206,7 +206,7 @@ bool Texture::validatePayload()const{
         || (IsHdrTexturePayloadFormat(m_payloadFormat)
             && m_alphaMode == TextureAlphaMode::EmbeddedLdr)
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid alpha transport for its payload format")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
@@ -221,14 +221,14 @@ bool Texture::validatePayload()const{
         m_height,
         m_depth,
         primaryPayloadByteCount,
-        GLOBAL_TEXT("Texture::validatePayload")
+        GLB_TEXT("Texture::validatePayload")
     ))
         return false;
 
     u64 expectedPayloadByteCount = primaryPayloadByteCount;
     if(m_alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
         if(primaryPayloadByteCount > Limit<u64>::s_Max - expectedPayloadByteCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' alpha payload size overflows")
+            NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' alpha payload size overflows")
                 , StringConvert(virtualPath().resolvedText())
             );
             return false;
@@ -236,7 +236,7 @@ bool Texture::validatePayload()const{
         expectedPayloadByteCount += primaryPayloadByteCount;
     }
     if(expectedPayloadByteCount != static_cast<u64>(m_payloadBytes.size())){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport")
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::validatePayload failed: texture '{}' byte count does not match its payload transport")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
@@ -273,14 +273,14 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     ))
         return false;
     if(header.version != TextureBinaryPayload::s_TextureVersion){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
         return false;
     }
     if(
         (header.alphaInfo & TextureBinaryPayload::s_AlphaInfoReservedMask) != 0u
         || header.payloadFormat > static_cast<u32>(Limit<u8>::s_Max)
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
         return false;
     }
 
@@ -306,11 +306,11 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         || !IsValidTextureAlphaMode(alphaMode)
         || depth == 0u
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: invalid texture payload dimensions"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: invalid texture payload dimensions"));
         return false;
     }
     if(mipCount == 0u || payloadByteCount64 > Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: texture payload counts exceed runtime limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: texture payload counts exceed runtime limits"));
         return false;
     }
 
@@ -321,13 +321,13 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         mipCount,
         mipBinaries,
         TextureBinaryPayload::s_TextureLoadBinaryContext,
-        GLOBAL_TEXT("mip levels")
+        GLB_TEXT("mip levels")
     ))
         return false;
 
     const usize payloadByteCount = static_cast<usize>(payloadByteCount64);
     if(!BinaryDetail::CanReadBytes(binary, cursor, payloadByteCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: texture payload is truncated"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: texture payload is truncated"));
         return false;
     }
 
@@ -335,7 +335,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     mipLevels.reserve(mipBinaries.size());
     for(const TextureBinaryPayload::MipLevelBinary& mipBinary : mipBinaries){
         if(mipBinary.reserved != 0u){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: invalid texture mip payload flags"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: invalid texture mip payload flags"));
             return false;
         }
 
@@ -353,7 +353,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     Core::Assets::AssetBytes payloadBytes(m_payloadBytes.get_allocator().arena());
     payloadBytes.resize(payloadByteCount);
     if(!BinaryDetail::ReadBytes(binary, cursor, payloadBytes.data(), payloadByteCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Texture::loadBinary failed: texture payload is malformed"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Texture::loadBinary failed: texture payload is malformed"));
         return false;
     }
     if(!Core::Assets::ReadCompletePayload(binary, cursor, TextureBinaryPayload::s_TextureLoadBinaryContext))

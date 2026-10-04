@@ -39,7 +39,7 @@ void StateTracker::reset(){
 }
 
 void StateTracker::beginRecordingAttempt(){
-    GLOBAL_ASSERT(!m_recordingAttemptActive);
+    GLB_ASSERT(!m_recordingAttemptActive);
     m_attemptPermanentTextures.clear();
     m_attemptPermanentBuffers.clear();
     m_recordingAttemptActive = true;
@@ -96,7 +96,7 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     ).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentTextures.pop_back();
-        GLOBAL_ASSERT(false);
+        GLB_ASSERT(false);
     }
 }
 
@@ -120,7 +120,7 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     ).second){
         if(m_recordingAttemptActive)
             m_attemptPermanentBuffers.pop_back();
-        GLOBAL_ASSERT(false);
+        GLB_ASSERT(false);
     }
 }
 
@@ -313,7 +313,7 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableB
             enableBarriers
         }
     ).second)
-        GLOBAL_ASSERT(false);
+        GLB_ASSERT(false);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers){
@@ -330,7 +330,7 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
             enableBarriers
         }
     ).second)
-        GLOBAL_ASSERT(false);
+        GLB_ASSERT(false);
 }
 
 
@@ -340,11 +340,11 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){
     if(!texture)
         return;
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("set texture UAV-barrier policy");
+    constexpr TStringView s_OperationName = GLB_TEXT("set texture UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isTextureReadyForCommandQueue(texture)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
@@ -353,11 +353,11 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
 void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("set buffer UAV-barrier policy");
+    constexpr TStringView s_OperationName = GLB_TEXT("set buffer UAV-barrier policy");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!isBufferReadyForCommandQueue(buffer)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("buffer is not ready for this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("buffer is not ready for this exact command queue"));
         return;
     }
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
@@ -366,11 +366,11 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
 void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!texture)
         return;
-    constexpr TStringView s_OperationName = GLOBAL_TEXT("begin tracking texture state");
+    constexpr TStringView s_OperationName = GLB_TEXT("begin tracking texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("initial state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("initial state cannot be unknown"));
         return;
     }
     if(!validateTextureForGpuState(texture, stateBits, s_OperationName))
@@ -381,7 +381,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
         TextureSubresourceMipResolve::Range
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, GLB_TEXT("subresource range is empty or outside the texture"));
         return;
     }
 

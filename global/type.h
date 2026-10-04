@@ -24,7 +24,7 @@
 
 
 #if defined(UNICODE) || defined(_UNICODE)
-#define GLOBAL_UNICODE
+#define GLB_UNICODE
 #endif
 
 
@@ -50,7 +50,7 @@ typedef float f32;
 typedef double f64;
 
 typedef wchar_t wchar;
-#if defined(GLOBAL_UNICODE)
+#if defined(GLB_UNICODE)
 typedef wchar tchar;
 #else
 typedef char tchar;
@@ -81,36 +81,36 @@ using InitializerList = std::initializer_list<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_UNICODE)
-#define __GLOBAL_TEXT(x) L ## x
+#if defined(GLB_UNICODE)
+#define __GLB_TEXT(x) L ## x
 #else
-#define __GLOBAL_TEXT(x) x
+#define __GLB_TEXT(x) x
 #endif
-#define GLOBAL_TEXT(x) __GLOBAL_TEXT(x)
+#define GLB_TEXT(x) __GLB_TEXT(x)
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
-#if GLOBAL_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
-#define GLOBAL_DLL_EXPORT __declspec(dllexport)
-#define GLOBAL_DLL_IMPORT __declspec(dllimport)
+#if defined(GLB_PLATFORM_WINDOWS)
+#if GLB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
+#define GLB_DLL_EXPORT __declspec(dllexport)
+#define GLB_DLL_IMPORT __declspec(dllimport)
 #elif __has_attribute(dllexport)
-#define GLOBAL_DLL_EXPORT __attribute__((dllexport))
-#define GLOBAL_DLL_IMPORT __attribute__((dllimport))
+#define GLB_DLL_EXPORT __attribute__((dllexport))
+#define GLB_DLL_IMPORT __attribute__((dllimport))
 #else
-#define GLOBAL_DLL_EXPORT
-#define GLOBAL_DLL_IMPORT
+#define GLB_DLL_EXPORT
+#define GLB_DLL_IMPORT
 #endif
-#elif (defined(GLOBAL_PLATFORM_UNIX) || defined(GLOBAL_PLATFORM_APPLE))
-#define GLOBAL_DLL_EXPORT __attribute__((visibility("default")))
-#define GLOBAL_DLL_IMPORT
+#elif (defined(GLB_PLATFORM_UNIX) || defined(GLB_PLATFORM_APPLE))
+#define GLB_DLL_EXPORT __attribute__((visibility("default")))
+#define GLB_DLL_IMPORT
 #else
-#define GLOBAL_DLL_EXPORT
-#define GLOBAL_DLL_IMPORT
+#define GLB_DLL_EXPORT
+#define GLB_DLL_IMPORT
 #endif
 
-#if defined(GLOBAL_EXPORT_DLL)
-#define GLOBAL_DLL_API GLOBAL_DLL_EXPORT
+#if defined(GLB_EXPORT_DLL)
+#define GLB_DLL_API GLB_DLL_EXPORT
 #else
-#define GLOBAL_DLL_API GLOBAL_DLL_IMPORT
+#define GLB_DLL_API GLB_DLL_IMPORT
 #endif
 
 

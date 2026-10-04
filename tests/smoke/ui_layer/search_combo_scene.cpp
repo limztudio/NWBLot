@@ -118,7 +118,7 @@ bool UiSearchComboSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
         break;
     case Core::Key::F7:{
         const bool cleared = m_state.query().setText({});
-        GLOBAL_FATAL_ASSERT(cleared);
+        GLB_FATAL_ASSERT(cleared);
         break;
     }
     case Core::Key::F9:
@@ -138,7 +138,7 @@ void UiSearchComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& dis
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSearchComboSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -195,24 +195,24 @@ void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){
     m_lastBounds = bounds;
     m_lastQueryBounds = m_state.editorState().placement.bounds;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiSearchComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiSearchComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
         , current[16], current[17], current[18], current[19], current[20], current[21]
     );
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("trigger"), bounds);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("popup"), popup.bounds);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("list"), placement.bounds);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("viewport"), placement.viewport);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("track"), placement.track);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("cursor_row"), cursorRow());
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("counter"), __hidden_ui_search_combo_smoke::s_Counter);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("trigger"), bounds);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("popup"), popup.bounds);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("list"), placement.bounds);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("track"), placement.track);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("cursor_row"), cursorRow());
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("counter"), __hidden_ui_search_combo_smoke::s_Counter);
     const auto& editor = m_state.editorState().placement;
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("query"), editor.bounds);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("query_content"), editor.content);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("query_caret"), editor.caret);
-    LogSmokeRect(GLOBAL_TEXT("UiSearchComboSmoke"), m_sequence, GLOBAL_TEXT("query_selection"),
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("query"), editor.bounds);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("query_content"), editor.content);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("query_caret"), editor.caret);
+    LogSmokeRect(GLB_TEXT("UiSearchComboSmoke"), m_sequence, GLB_TEXT("query_selection"),
         CaptureEditSelection(m_arena, text, m_state.query(), editor, 12.0f));
 }
 

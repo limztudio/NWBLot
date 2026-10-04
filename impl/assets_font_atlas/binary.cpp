@@ -50,7 +50,7 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     if(cursor > bytes.size() || count > bytes.size() - cursor)
         return false;
     if(count > 0u)
-        GLOBAL_MEMCPY(destination, count, bytes.data() + cursor, count);
+        GLB_MEMCPY(destination, count, bytes.data() + cursor, count);
     cursor += count;
     return true;
 }
@@ -231,7 +231,7 @@ bool SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::As
 bool DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, FontAtlasPayload& outPayload){
     FontAtlasPayload candidate(outPayload.glyphs.get_allocator().arena());
     if(!__hidden_font_atlas_binary::Deserialize(binary, candidate)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
+        NWB_LOGGER_ERROR(GLB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
         return false;
     }
     outPayload = Move(candidate);

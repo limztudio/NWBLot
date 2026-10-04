@@ -147,9 +147,9 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 ){
     if(!csgFrameData.hasWork())
         return;
-    GLOBAL_ASSERT(m_csgState.m_intervalPeelPipeline);
-    GLOBAL_ASSERT(csgResources.frameReady(csgFrameData));
-    GLOBAL_ASSERT(frameBindings.bindingValid());
+    GLB_ASSERT(m_csgState.m_intervalPeelPipeline);
+    GLB_ASSERT(csgResources.frameReady(csgFrameData));
+    GLB_ASSERT(frameBindings.bindingValid());
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, m_graphics.getDevice(), commandList);
 
@@ -172,8 +172,8 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
 ){
     if(!csgFrameData.hasWork())
         return;
-    GLOBAL_ASSERT(m_csgState.m_receiverSpanBuildPipeline);
-    GLOBAL_ASSERT(csgResources.frameReady(csgFrameData));
+    GLB_ASSERT(m_csgState.m_receiverSpanBuildPipeline);
+    GLB_ASSERT(csgResources.frameReady(csgFrameData));
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, m_graphics.getDevice(), commandList);
 
@@ -196,8 +196,8 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
 ){
     if(!csgFrameData.hasWork())
         return;
-    GLOBAL_ASSERT(m_csgState.m_intervalCombinePipeline);
-    GLOBAL_ASSERT(csgResources.frameReady(csgFrameData));
+    GLB_ASSERT(m_csgState.m_intervalCombinePipeline);
+    GLB_ASSERT(csgResources.frameReady(csgFrameData));
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, m_graphics.getDevice(), commandList);
 
@@ -217,9 +217,9 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
-    GLOBAL_ASSERT(m_csgState.m_intervalCapFillPipeline);
-    GLOBAL_ASSERT(csgResources.frameReady(csgFrameData));
-    GLOBAL_ASSERT(targets.framebuffer);
+    GLB_ASSERT(m_csgState.m_intervalCapFillPipeline);
+    GLB_ASSERT(csgResources.frameReady(csgFrameData));
+    GLB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
 

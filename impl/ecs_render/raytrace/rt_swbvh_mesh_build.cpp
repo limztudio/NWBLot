@@ -62,7 +62,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(
     accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
     Core::RayTracingAccelStructHandle blas = m_graphics.getDevice().createAccelStruct(accelStructDesc);
     if(!blas){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
         return false;
     }
     meshResources.blas = Move(blas);

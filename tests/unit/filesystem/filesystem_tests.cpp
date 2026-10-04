@@ -213,12 +213,12 @@ TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     usize bytesRead = 0;
     ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
     ASSERT_EQ(bytesRead, buffer.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(buffer.data(), payload.data() + 3570, bytesRead), 0);
+    EXPECT_EQ(GLB_MEMCMP(buffer.data(), payload.data() + 3570, bytesRead), 0);
     EXPECT_EQ(cursor.offset, 3634u);
     ASSERT_TRUE(filesystem->seekFile(cursor, -10, FileSeekOrigin::End));
     ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
     EXPECT_EQ(bytesRead, 10u);
-    EXPECT_EQ(GLOBAL_MEMCMP(buffer.data(), payload.data() + 9990, bytesRead), 0);
+    EXPECT_EQ(GLB_MEMCMP(buffer.data(), payload.data() + 9990, bytesRead), 0);
     ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
     EXPECT_EQ(bytesRead, 0u);
     EXPECT_EQ(cursor.offset, 10000u);
@@ -263,7 +263,7 @@ TEST_F(FilesystemVolumeTest, RemountFlushesPendingMetadata){
     VolumeBytes loaded(m_arena);
     ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
     ASSERT_TRUE(filesystem->unmount());
 }
 
@@ -319,7 +319,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
     const Path segmentPath = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
     const auto verifyImage = [&](const usize firstRecord){
         VolumeHeaderDisk header{};
-        GLOBAL_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic));
+        GLB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic));
         header.segmentSize = m_desc.segmentSize;
         header.metadataBytes = m_desc.metadataSize;
         header.fileCount = records.size() - firstRecord;
@@ -335,7 +335,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         ErrorCode error;
         ASSERT_TRUE(ReadBinaryFile(segmentPath, actual, error));
         ASSERT_EQ(actual.size(), expected.size());
-        EXPECT_EQ(GLOBAL_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
+        EXPECT_EQ(GLB_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
     };
     verifyImage(0u);
     ASSERT_TRUE(filesystem->unmount());
@@ -349,7 +349,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
             EXPECT_TRUE(loaded.empty());
         else{
             ASSERT_EQ(loaded.size(), payload.size());
-            EXPECT_EQ(GLOBAL_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+            EXPECT_EQ(GLB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
         }
     }
     ASSERT_TRUE(filesystem->unmount());
@@ -389,7 +389,7 @@ TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){
     VolumeBytes loaded(arena);
     ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
     ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
     FileCursor cursor;
     ASSERT_TRUE(filesystem->openFile(s_TestFile, cursor));
     ASSERT_TRUE(filesystem->seekFile(cursor, -2, FileSeekOrigin::End));

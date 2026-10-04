@@ -64,7 +64,7 @@ static bool ParseSkeletonValue(
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
         registry,
-        GLOBAL_TEXT("skeleton"),
+        GLB_TEXT("skeleton"),
         &ParseSkeletonDocument,
         &ParseSkeletonValue,
         [](SkeletonCookEntry& entry, Skeleton& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkeletonAsset); }

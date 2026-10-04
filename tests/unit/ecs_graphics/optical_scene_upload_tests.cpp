@@ -187,8 +187,8 @@ TEST(OpticalSceneUpload, ByteIdenticalNewIdentityConservativelyReuploadsAndPolic
     const auto duplicateBytes = context.makeUpload(1u, 3);
     const auto changedPriority = context.makeUpload(1u, 4);
     ASSERT_EQ(first->bytes.size(), duplicateBytes->bytes.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(first->bytes.data(), duplicateBytes->bytes.data(), first->bytes.size()), 0);
-    EXPECT_NE(GLOBAL_MEMCMP(first->bytes.data(), changedPriority->bytes.data(), first->bytes.size()), 0);
+    EXPECT_EQ(GLB_MEMCMP(first->bytes.data(), duplicateBytes->bytes.data(), first->bytes.size()), 0);
+    EXPECT_NE(GLB_MEMCMP(first->bytes.data(), changedPriority->bytes.data(), first->bytes.size()), 0);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, s_ExpectedDualCount));
     EXPECT_FALSE(context.control->plan(duplicateBytes).reused);
     EXPECT_FALSE(context.control->plan(changedPriority).reused);
@@ -348,7 +348,7 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     const void* const bytes = view.uploadBlobData({ .generation = view.generation(), .index = 0u }, byteSize);
     ASSERT_NE(bytes, nullptr);
     ASSERT_EQ(byteSize, upload->bytes.size());
-    EXPECT_EQ(GLOBAL_MEMCMP(bytes, upload->bytes.data(), byteSize), 0);
+    EXPECT_EQ(GLB_MEMCMP(bytes, upload->bytes.data(), byteSize), 0);
 }
 
 TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphics){

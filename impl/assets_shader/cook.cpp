@@ -120,7 +120,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexically_normal();
         if(errorCode){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to resolve dependency path '{}' : {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependencyPath)
                 , StringConvert(errorCode.message())
             );
@@ -134,7 +134,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
         sourceText.clear();
         if(!ReadTextFile(absolutePath, sourceText)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to read dependency '{}'"), PathToString<tchar>(absolutePath));
+            NWB_LOGGER_ERROR(GLB_TEXT("Failed to read dependency '{}'"), PathToString<tchar>(absolutePath));
             return false;
         }
         StripUtf8Bom(sourceText);
@@ -156,7 +156,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             ShaderIncludeKind::Enum includeKind = ShaderIncludeKind::Relative;
             if(SlangShaderCompiler::extractIncludeDirective(line, includeName, includeKind)){
                 if(!SlangShaderCompiler::resolveIncludeFile(includeName, includeKind, absolutePath.parent_path(), includeDirectories, includePath)){
-                    NWB_LOGGER_ERROR(GLOBAL_TEXT("Unable to resolve include '{}' from '{}'")
+                    NWB_LOGGER_ERROR(GLB_TEXT("Unable to resolve include '{}' from '{}'")
                         , StringConvert(includeName)
                         , PathToString<tchar>(absolutePath)
                     );
@@ -186,12 +186,12 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
         if(defineValues.empty())
             return true;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant 'default' is only valid when no defines are specified"), StringConvert(contextLabel));
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant 'default' is only valid when no defines are specified"), StringConvert(contextLabel));
         return false;
     }
 
     if(defineValues.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' requires defines to be specified")
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' requires defines to be specified")
             , StringConvert(contextLabel)
             , StringConvert(variantSignature)
         );
@@ -203,7 +203,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     seenDefines.reserve(defineValues.size());
     usize begin = 0;
     const auto logInvalidAssignment = [&](const AStringView segment){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' has invalid assignment '{}'")
             , StringConvert(contextLabel)
             , StringConvert(variantSignature)
             , StringConvert(segment)
@@ -216,7 +216,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 
         const AStringView segment = TrimView(variantSignature.substr(begin, segmentEnd - begin));
         if(segment.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' has invalid empty segment")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' has invalid empty segment")
                 , StringConvert(contextLabel)
                 , StringConvert(variantSignature)
             );
@@ -239,7 +239,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
         CookString lookupDefineName(defineName, defineValues.get_allocator().arena());
         const auto defineIt = defineValues.find(lookupDefineName);
         if(defineIt == defineValues.end()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' references unknown define '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' references unknown define '{}'")
                 , StringConvert(contextLabel)
                 , StringConvert(variantSignature)
                 , StringConvert(defineName)
@@ -255,7 +255,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
             }
         }
         if(!valueFound){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' has unsupported value '{}' for define '{}'")
                 , StringConvert(contextLabel)
                 , StringConvert(variantSignature)
                 , StringConvert(defineValue)
@@ -265,7 +265,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
         }
 
         if(!seenDefines.insert(defineName).second){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' assigns define '{}' more than once")
                 , StringConvert(contextLabel)
                 , StringConvert(variantSignature)
                 , StringConvert(defineName)
@@ -277,7 +277,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     }
 
     if(seenDefines.size() != defineValues.size()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': variant '{}' must assign all defines")
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': variant '{}' must assign all defines")
             , StringConvert(contextLabel)
             , StringConvert(variantSignature)
         );
@@ -323,7 +323,7 @@ static bool ParseOptionalIntegerFlagField(
         return true;
 
     if(!fieldValue->isInteger()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': field '{}' must be 0 or 1")
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': field '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -332,7 +332,7 @@ static bool ParseOptionalIntegerFlagField(
 
     const i64 value = fieldValue->asInteger();
     if(value != 0 && value != 1){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': field '{}' must be 0 or 1")
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': field '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -351,7 +351,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
         return true;
 
     if(!definesVal->isMap()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -359,24 +359,24 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
     outDefineValues.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
         if(AStringView(key.data(), key.size()) == "NWB_BINDLESS_TLAS"){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source")
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
         }
         CookString defineName(key.data(), key.size(), arena);
         if(defineName.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
         ShaderCook::CookVector<CookString> defineValues(arena);
         if(!val.copyStringList(defineValues)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
             return false;
         }
         if(defineValues.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': define '{}' must provide at least one value")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': define '{}' must provide at least one value")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(defineName)
             );
@@ -386,7 +386,7 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             if(!defineValue.empty())
                 continue;
 
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Meta '{}': define '{}' values must not be empty")
+            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': define '{}' values must not be empty")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(defineName)
             );
@@ -494,7 +494,7 @@ bool ShaderCook::parseShaderMeta(
             outEntry.optimizationLevel
         )
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
+        NWB_LOGGER_ERROR(GLB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
             PathToString<tchar>(nwbFilePath),
             StringConvert(optimizationLevelText)
         );
@@ -505,7 +505,7 @@ bool ShaderCook::parseShaderMeta(
         return false;
     outEntry.entryPoint.assign(entryPointText.data(), entryPointText.size());
     if(outEntry.entryPoint.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
@@ -513,14 +513,14 @@ bool ShaderCook::parseShaderMeta(
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
         if(!includeRootsVal->copyStringList(outEntry.includeRoots)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
             return false;
         }
         for(const CookString& includeRoot : outEntry.includeRoots){
             if(!includeRoot.empty())
                 continue;
 
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader meta '{}': include_roots entries must not be empty"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLB_TEXT("Shader meta '{}': include_roots entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
     }
@@ -529,7 +529,7 @@ bool ShaderCook::parseShaderMeta(
         return false;
 
     if(outEntry.stage.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLB_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 

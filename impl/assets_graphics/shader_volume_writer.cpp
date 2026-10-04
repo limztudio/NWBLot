@@ -104,7 +104,7 @@ static CacheReadStatus::Enum TryReadCachedSourceChecksum(
         return CacheReadStatus::Hit;
 
     if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to read checksum cache '{}' for entry '{}': {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to read checksum cache '{}' for entry '{}': {}")
             , PathToString<tchar>(sourceChecksumPath)
             , StringConvert(entry.name)
             , StringConvert(errorCode.message())
@@ -130,7 +130,7 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
     }
 
     if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}")
             , PathToString<tchar>(bytecodePath)
             , StringConvert(entry.name)
             , StringConvert(errorCode.message())
@@ -197,7 +197,7 @@ static bool GetVariantBytecode(
         scratchArena
     );
     if(defineCombo.size() > Limit<usize>::s_Max - entry.implicitDefines.size()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: define count overflow for entry '{}'"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: define count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
     }
 
@@ -210,7 +210,7 @@ static bool GetVariantBytecode(
 
     Vector<ShaderCook::ShaderMacroDefinition, ScratchArena> compileDefines{ scratchArena };
     if(mergedDefines.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: entry '{}' has too many merged defines for shader compilation")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: entry '{}' has too many merged defines for shader compilation")
             , StringConvert(entry.name)
         );
         return false;
@@ -224,7 +224,7 @@ static bool GetVariantBytecode(
 
     errorCode.clear();
     if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
             , PathToString<tchar>(cachePaths.bytecodePath.parent_path())
             , StringConvert(errorCode.message())
         );
@@ -249,7 +249,7 @@ static bool GetVariantBytecode(
         return false;
 
     if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to write cook source checksum '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("Failed to write cook source checksum '{}'")
             , PathToString<tchar>(cachePaths.sourceChecksumPath)
         );
         return false;
@@ -269,13 +269,13 @@ static bool ReserveShaderIndexRecords(
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: shader record count overflow"));
+            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: shader record count overflow"));
             return false;
         }
         shaderRecordCount += preparedEntry.variantCount;
     }
     if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: shader record count exceeds container capacity"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: shader record count exceeds container capacity"));
         return false;
     }
 
@@ -293,7 +293,7 @@ static bool AppendShaderIndexToManifest(
 ){
     const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
             StringConvert(shaderIndexVirtualPath.resolvedText())
         );
         return false;
@@ -301,13 +301,13 @@ static bool AppendShaderIndexToManifest(
 
     Core::GraphicsBytes indexBinary{cookArena};
     if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to serialize shader index"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to serialize shader index"));
         return false;
     }
     if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, indexBinary))
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to append shader index to manifest"));
+    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to append shader index to manifest"));
     return false;
 }
 
@@ -366,7 +366,7 @@ bool AppendPreparedShadersToManifest(
         const Name shaderName = ToName(entry.name);
         const Name stageName = ToName(entry.archiveStage.view());
         if(!shaderName || !stageName || entry.entryPoint.empty()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("Shader cook failed to canonicalize shader identity for '{}' stage '{}' entry point '{}'")
                 , StringConvert(entry.name)
                 , StringConvert(entry.archiveStage.view())
                 , StringConvert(entry.entryPoint)
@@ -416,7 +416,7 @@ bool AppendPreparedShadersToManifest(
 
             const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, generatedVariantName, stageName);
             if(!virtualPath){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
+                NWB_LOGGER_ERROR(GLB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
                     , StringConvert(entry.name)
                     , StringConvert(entry.archiveStage.view())
                     , StringConvert(generatedVariantName)
@@ -426,7 +426,7 @@ bool AppendPreparedShadersToManifest(
 
             const NameHash virtualPathHash = virtualPath.hash();
             if(!inOutSeenVirtualPathHashes.insert(virtualPathHash).second){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
+                NWB_LOGGER_ERROR(GLB_TEXT("Shader cook produced duplicate virtual path '{}' (entry='{}', variant='{}')")
                     , StringConvert(virtualPath.resolvedText())
                     , StringConvert(entry.name)
                     , StringConvert(generatedVariantName)
@@ -446,14 +446,14 @@ bool AppendPreparedShadersToManifest(
                 shaderAssetPayload
             );
             if(payloadFailure != ShaderBinaryPayload::AssetPayloadFailure::None){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to package shader payload '{}' (failure {})")
+                NWB_LOGGER_ERROR(GLB_TEXT("Failed to package shader payload '{}' (failure {})")
                     , StringConvert(virtualPath.resolvedText())
                     , static_cast<u32>(payloadFailure)
                 );
                 return false;
             }
             if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, shaderAssetPayload, cookKeyHash)){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to append shader payload '{}' to manifest"), StringConvert(virtualPath.resolvedText()));
+                NWB_LOGGER_ERROR(GLB_TEXT("Failed to append shader payload '{}' to manifest"), StringConvert(virtualPath.resolvedText()));
                 return false;
             }
 
@@ -465,7 +465,7 @@ bool AppendPreparedShadersToManifest(
             record.bytecodeChecksum = bytecodeChecksum;
             record.virtualPathHash = virtualPathHash;
             if(shaderIndexRecords.size() >= shaderRecordCount){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: shader record count exceeded prepared capacity"));
+                NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: shader record count exceeded prepared capacity"));
                 return false;
             }
             shaderIndexRecords.push_back(Move(record));
@@ -473,7 +473,7 @@ bool AppendPreparedShadersToManifest(
         };
 
         if(!shaderCook.expandDefineCombinations(entry.defineValues, defineCombinations, scratchArena)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: variant combination count exceeds runtime limits for entry '{}'")
                 , StringConvert(entry.name)
             );
             return false;
@@ -497,7 +497,7 @@ bool AppendPreparedShadersToManifest(
     }
 
     if(shaderIndexRecords.size() != shaderRecordCount){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: shader record count mismatch after cook"));
+        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: shader record count mismatch after cook"));
         return false;
     }
     return __hidden_shader_volume_writer::AppendShaderIndexToManifest(

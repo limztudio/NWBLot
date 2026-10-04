@@ -95,7 +95,7 @@ bool GraphicsRuntime::backBufferResized(){
             FramebufferDesc().addColorAttachment(getBackBuffer(index))
         );
         if(!framebuffer){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
+            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to rebuild swap-chain framebuffer {}"), index);
             m_swapChainFramebuffers.clear();
             invalidateRenderPassResources();
             return false;
@@ -104,12 +104,12 @@ bool GraphicsRuntime::backBufferResized(){
     }
 
     if(!validateRenderPassResources()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("GraphicsRuntime: one or more render passes failed to validate resources after back buffer resize"));
+        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: one or more render passes failed to validate resources after back buffer resize"));
         m_swapChainFramebuffers.clear();
         invalidateRenderPassResources();
         return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     return true;
 }
 

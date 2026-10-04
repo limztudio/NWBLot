@@ -19,20 +19,20 @@ SharedImageSource LoadImageSource(
     const Core::Assets::AssetManager& assets,
     const Core::Assets::AssetRef<Texture>& identity){
     if(!identity.valid()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("LoadImageSource: texture asset reference is empty"));
+        NWB_LOGGER_ERROR(GLB_TEXT("LoadImageSource: texture asset reference is empty"));
         return {};
     }
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Texture* texture = assets.loadTypedSync<Texture>(
         identity.name(),
         loadedAsset,
-        GLOBAL_TEXT("LoadImageSource"),
+        GLB_TEXT("LoadImageSource"),
         Texture::s_AssetTypeText
     );
     if(!texture)
         return {};
     if(texture->virtualPath() != identity.name()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("LoadImageSource: loaded texture identity does not match the requested asset"));
+        NWB_LOGGER_ERROR(GLB_TEXT("LoadImageSource: loaded texture identity does not match the requested asset"));
         return {};
     }
     return MakeImageSource(arena, *texture);

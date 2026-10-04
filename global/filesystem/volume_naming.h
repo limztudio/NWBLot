@@ -30,7 +30,7 @@
 [[nodiscard]] inline u64 HashVolumeSegmentFileName(const AStringView volumeName, const usize segmentIndex){
     char segmentIndexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView segmentIndexText = FormatDecimal(segmentIndex, segmentIndexBuffer);
-    GLOBAL_ASSERT(!segmentIndexText.empty());
+    GLB_ASSERT(!segmentIndexText.empty());
 
     u64 hash = s_Fnv64OffsetBasis;
     hash = UpdateFnv64TextExact(hash, volumeName);

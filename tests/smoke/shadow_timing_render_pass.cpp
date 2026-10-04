@@ -55,14 +55,14 @@ bool ShadowTimingRenderPass::start(){
     auto& device = graphics.getDevice();
     for(const Name& scope : scopes){
         if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShadowTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
+            NWB_LOGGER_ERROR(GLB_TEXT("ShadowTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
             return false;
         }
     }
     graphics.addRenderPassToBack(*this);
     m_registered = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: in-flight ranges {}"), s_InFlightRanges);
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ShadowTimingProbe: render unfocused 1"));
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: in-flight ranges {}"), s_InFlightRanges);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: render unfocused 1"));
     return true;
 }
 

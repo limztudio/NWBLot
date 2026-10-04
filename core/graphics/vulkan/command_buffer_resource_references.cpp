@@ -108,7 +108,7 @@ void CommandBufferResourceReferences::appendBufferStateCommit(Buffer& buffer){
     }
 
     const auto found = m_membership->find(&buffer);
-    GLOBAL_ASSERT(found != m_membership->end());
+    GLB_ASSERT(found != m_membership->end());
     u8& membership = found.value();
     if((membership & s_BufferStateCommit) != 0u)
         return;
@@ -166,10 +166,10 @@ void CommandBufferResourceReferences::clear()noexcept{
 
 void CommandBufferResourceReferences::promoteMembershipIndex(){
     using namespace __hidden_command_buffer_resource_references;
-    GLOBAL_ASSERT(!m_membership);
-    GLOBAL_ASSERT(m_resources.size() <= s_LinearCapacity);
-    GLOBAL_ASSERT(m_buffers.size() <= s_LinearCapacity);
-    GLOBAL_ASSERT(m_textures.size() <= s_LinearCapacity);
+    GLB_ASSERT(!m_membership);
+    GLB_ASSERT(m_resources.size() <= s_LinearCapacity);
+    GLB_ASSERT(m_buffers.size() <= s_LinearCapacity);
+    GLB_ASSERT(m_textures.size() <= s_LinearCapacity);
     const usize maximumEntries = m_resources.size() + m_buffers.size() + m_textures.size();
     MembershipIndex membership(maximumEntries * 2u, MembershipIndex::allocator_type(m_arena));
     for(const Handle<GraphicsResource>& resource : m_resources)

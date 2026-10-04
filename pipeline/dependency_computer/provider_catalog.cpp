@@ -29,12 +29,12 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAssetRoot>& roots,
     Assets::ScratchArena& scratchArena){
     Assets::ScratchString pathText = PathToString(scratchArena, path.lexically_normal());
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(pathText);
 #endif
     for(const auto& root : roots){
         Assets::ScratchString existing = PathToString(scratchArena, root.path);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(existing);
 #endif
         if(existing == pathText)
@@ -55,13 +55,13 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
         ErrorCode error;
         NWB::Path path(repoRoot.arena());
         if(!ResolveAbsolutePath(repoRoot, AStringView(source), path, error)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(source));
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(source));
             return false;
         }
         if(options.assetRoots.empty()){
             const bool directory = IsDirectory(path, error);
             if(error){
-                NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(path));
+                NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(path));
                 return false;
             }
             if(!directory)
@@ -83,7 +83,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
         AddRoot(path, roots, scratchArena);
     }
     if(roots.empty()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: no asset roots available for skin dependencies"));
+        NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: no asset roots available for skin dependencies"));
         return false;
     }
     return true;
@@ -94,7 +94,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
     Vector<usize, Assets::ScratchArena>& order,
     Assets::ScratchArena& scratchArena){
     Assets::ScratchString input = PathToString(scratchArena, path);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
 #else
     if(!directory)
@@ -105,7 +105,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
         const auto& file = files[index];
         if(directory){
             Assets::ScratchString physical = PathToString(scratchArena, file.filePath.lexically_normal());
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(physical);
 #endif
             if(!IsPathPrefixText(AStringView(input), AStringView(physical)))
@@ -146,7 +146,7 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
     const AStringView repoText = options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot);
     NWB::Path repoRoot = AbsolutePath(NWB::Path(m_arena, repoText), error);
     if(error){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: failed to resolve repository root"));
+        NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to resolve repository root"));
         return false;
     }
     repoRoot = repoRoot.lexically_normal();
@@ -183,23 +183,23 @@ bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
         ErrorCode error;
         NWB::Path path(m_arena);
         if(!ResolveAbsolutePath(m_repoRoot, AStringView(input), path, error)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to resolve input '{}'"), StringConvert(input));
             return false;
         }
         const bool directory = IsDirectory(path, error);
         if(error || (!directory && !IsRegularFile(path, error))){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return false;
         }
         bool contained = !directory;
         if(directory){
             Assets::ScratchString inputPath = PathToString(scratchArena, path);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(inputPath);
 #endif
             for(const auto& root : m_roots){
                 Assets::ScratchString rootPath = PathToString(scratchArena, root.path);
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
                 CanonicalizeTextInPlace(rootPath);
 #endif
                 if(IsPathPrefixText(AStringView(rootPath), AStringView(inputPath))){
@@ -209,7 +209,7 @@ bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
             }
         }
         if(!contained || (!SelectInput(path, directory, m_files, selected, order, scratchArena) && !directory)){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'")
                 , PathToString<tchar>(path)
             );
             return false;
@@ -250,20 +250,20 @@ bool DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& ass
         if(Name(document.assetType()) != assetType)
             continue;
         if(document.declarations().size() != 1u){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'")
                 , PathToString<tchar>(m_files[index].filePath)
                 , StringConvert(virtualPath)
             );
             return false;
         }
         if(matched != Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: multiple physical providers for '{}'"), StringConvert(virtualPath));
+            NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: multiple physical providers for '{}'"), StringConvert(virtualPath));
             return false;
         }
         matched = index;
     }
     if(matched == Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("DependencyComputer: no typed '{}' provider for '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: no typed '{}' provider for '{}'")
             , StringConvert(assetType)
             , StringConvert(virtualPath)
         );

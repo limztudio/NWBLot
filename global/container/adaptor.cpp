@@ -6,9 +6,9 @@
 #include <global/containers.h>
 #include <global/sync.h>
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_APPLE)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_APPLE)
 #include <unistd.h>
 #endif
 
@@ -34,7 +34,7 @@ struct CacheSize{
     usize m_size = s_DefaultCachelineSize;
 
     void initialize(){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
         DWORD bufferSize = 0;
         GetLogicalProcessorInformation(nullptr, &bufferSize);
         if(bufferSize == 0)

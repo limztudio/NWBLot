@@ -21,7 +21,7 @@ NWB_VULKAN_BEGIN
 Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
     if(!m_device)
         return;
-    GLOBAL_FATAL_ASSERT(activeLease() == this);
+    GLB_FATAL_ASSERT(activeLease() == this);
     if(activeLease() != this)
         TerminateInvariant();
     activeLease() = m_previousActiveLease;
@@ -91,7 +91,7 @@ bool Device::beginLifecycleDrain()noexcept{
     while((state & s_SubmissionOperationCountMask) != 0u){
         m_submissionOperationState.wait(state, MemoryOrder::acquire);
         state = m_submissionOperationState.load(MemoryOrder::acquire);
-        GLOBAL_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
+        GLB_FATAL_ASSERT((state & s_SubmissionDrainBit) != 0u);
         if((state & s_SubmissionDrainBit) == 0u)
             TerminateInvariant();
     }
@@ -101,8 +101,8 @@ bool Device::beginLifecycleDrain()noexcept{
 void Device::endLifecycleDrain()noexcept{
     const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
     const u64 submissionOperationState = m_submissionOperationState.load(MemoryOrder::acquire);
-    GLOBAL_FATAL_ASSERT(!lifecycleDestructionPrepared);
-    GLOBAL_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
+    GLB_FATAL_ASSERT(!lifecycleDestructionPrepared);
+    GLB_FATAL_ASSERT(submissionOperationState == s_SubmissionDrainBit);
     if(lifecycleDestructionPrepared || submissionOperationState != s_SubmissionDrainBit)
         TerminateInvariant();
     m_submissionOperationState.store(0u, MemoryOrder::release);
@@ -164,7 +164,7 @@ bool Device::presentNativeQueue(
         || !m_nativeQueueStates[nativeQueueIndex]
         || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
         return false;
     }
 

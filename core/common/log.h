@@ -313,7 +313,7 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \
-        GLOBAL_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
+        GLB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
         auto& loggerRegistration = *::NWB::Core::Common::LoggerDetail::g_loggerRegistration;                                  \
         auto& logger = loggerRegistration.logger;                                                                              \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessage(logger, ::NWB::Core::Common::LogType::Type, __VA_ARGS__);            \
@@ -321,7 +321,7 @@ NWB_COMMON_END
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Type, BreakMacro, ...)                                                            \
     do{                                                                                                                        \
-        GLOBAL_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
+        GLB_FATAL_ASSERT(::NWB::Core::Common::LoggerDetail::g_loggerRegistration != nullptr);                                  \
         auto& loggerRegistration = *::NWB::Core::Common::LoggerDetail::g_loggerRegistration;                                  \
         auto& logger = loggerRegistration.logger;                                                                              \
         ::NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(                                                           \
@@ -341,33 +341,33 @@ NWB_COMMON_END
     }while(false)
 
 
-#if GLOBAL_OCCUR_INFO
+#if GLB_OCCUR_INFO
 #define NWB_LOGGER_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(Info, __VA_ARGS__)
 #else
 #define NWB_LOGGER_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if GLOBAL_OCCUR_ESSENTIAL_INFO
+#if GLB_OCCUR_ESSENTIAL_INFO
 #define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_ENQUEUE_MESSAGE(EssentialInfo, __VA_ARGS__)
 #else
 #define NWB_LOGGER_ESSENTIAL_INFO(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if GLOBAL_OCCUR_WARNING
+#if GLB_OCCUR_WARNING
 #define NWB_LOGGER_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(Warning, __VA_ARGS__)
 #else
 #define NWB_LOGGER_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if GLOBAL_OCCUR_CRITICAL_WARNING
+#if GLB_OCCUR_CRITICAL_WARNING
 #define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_ENQUEUE_MESSAGE(CriticalWarning, __VA_ARGS__)
 #else
 #define NWB_LOGGER_CRITICAL_WARNING(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #endif
 
-#if GLOBAL_OCCUR_ERROR
-#define NWB_LOGGER_ERROR(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Error, GLOBAL_SOFTBREAK, __VA_ARGS__)
-#define NWB_LOGGER_FATAL(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Fatal, GLOBAL_HARDBREAK, __VA_ARGS__)
+#if GLB_OCCUR_ERROR
+#define NWB_LOGGER_ERROR(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Error, GLB_SOFTBREAK, __VA_ARGS__)
+#define NWB_LOGGER_FATAL(...) NWB_LOGGER_ENQUEUE_MESSAGE_AND_BREAK(Fatal, GLB_HARDBREAK, __VA_ARGS__)
 #else
 #define NWB_LOGGER_ERROR(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)
 #define NWB_LOGGER_FATAL(...) NWB_LOGGER_IGNORE_MESSAGE(__VA_ARGS__)

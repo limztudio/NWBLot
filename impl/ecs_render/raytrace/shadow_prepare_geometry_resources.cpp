@@ -24,7 +24,7 @@ ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(
 {}
 
 void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGraphOwned){
-    GLOBAL_ASSERT(!m_storagePrepared);
+    GLB_ASSERT(!m_storagePrepared);
     if(blasInputStatesGraphOwned){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
             addRequest(build.positionBuffer);
@@ -38,7 +38,7 @@ void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGr
 }
 
 bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph& graph){
-    GLOBAL_ASSERT(m_storagePrepared && !m_inputsGathered);
+    GLB_ASSERT(m_storagePrepared && !m_inputsGathered);
     if(!resolveRequests(graph)){
         clearBuildInputs();
         m_inputsGathered = true;
@@ -58,7 +58,7 @@ bool ShadowPrepareGeometryResources::gatherBuildInputs(const Core::GpuTaskGraph&
 }
 
 bool ShadowPrepareGeometryResources::gatherRemainingTraceResources(){
-    GLOBAL_ASSERT(m_inputsGathered);
+    GLB_ASSERT(m_inputsGathered);
     const bool hasBlasInputs = !m_blasBuildInputs.empty();
     for(usize resourceIndex = 0u; resourceIndex < m_inputs.traceResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = m_inputs.traceResources[resourceIndex];

@@ -25,7 +25,7 @@ bool PaintBuilder::drawImage(
     const Rect& rectangle,
     const Rect& uv,
     const Color& tint){
-    GLOBAL_ASSERT(m_recording);
+    GLB_ASSERT(m_recording);
     if(
         !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)
         || !IsFinite(rectangle.width) || !IsFinite(rectangle.height)
@@ -56,7 +56,7 @@ bool PaintBuilder::drawImage(
         if(bound.identity() == source->identity() && bound.generation() == source->generation())
             break;
     }
-    GLOBAL_ASSERT(index < m_snapshot.m_textureImages.size());
+    GLB_ASSERT(index < m_snapshot.m_textureImages.size());
     emitQuad(rectangle, uv, tint, PaintMaterial::Image, Limit<u32>::s_Max, Limit<u32>::s_Max, 0u, index);
     return true;
 }

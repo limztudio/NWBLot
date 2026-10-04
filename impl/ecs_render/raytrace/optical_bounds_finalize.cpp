@@ -123,7 +123,7 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
         Name("raytrace_optical_resolved_scene"), true
     );
     if(!outputReady){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Ray optical bounds: failed to create finalize buffers"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Ray optical bounds: failed to create finalize buffers"));
         return {};
     }
     RayTracingOpticalBoundsFinalizeHandle snapshot(
@@ -151,7 +151,7 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
             || bounds.buffer->getCreationDescription().byteSize < NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE
             || (gather.instances[bounds.instanceIndex].flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u
         ){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Ray optical bounds: invalid accepted runtime bounds binding"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical bounds: invalid accepted runtime bounds binding"));
             return {};
         }
         previousIndex = bounds.instanceIndex;
@@ -174,7 +174,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
         desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));
         m_bindingLayout = device.createBindingLayout(desc);
         if(!m_bindingLayout){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("Ray optical bounds: failed to create finalize binding layout"));
+            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical bounds: failed to create finalize binding layout"));
             return false;
         }
     }
@@ -192,7 +192,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
     ;
     m_pipeline = device.createComputePipeline(desc);
     if(!m_pipeline)
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Ray optical bounds: failed to create finalize pipeline"));
+        NWB_LOGGER_ERROR(GLB_TEXT("Ray optical bounds: failed to create finalize pipeline"));
     return static_cast<bool>(m_pipeline);
 }
 

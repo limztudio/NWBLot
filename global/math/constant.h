@@ -11,25 +11,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define GLOBAL_SIMD_VECTOR_CONST_CONVERSIONS \
-    GLOBAL_INLINE operator SIMDVector()const noexcept{ return v; } \
-    GLOBAL_INLINE operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
-    GLOBAL_INLINE operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
+#define GLB_SIMD_VECTOR_CONST_CONVERSIONS \
+    GLB_INLINE operator SIMDVector()const noexcept{ return v; } \
+    GLB_INLINE operator int32x4_t()const noexcept{ return vreinterpretq_s32_f32(v); } \
+    GLB_INLINE operator uint32x4_t()const noexcept{ return vreinterpretq_u32_f32(v); }
 
-#define GLOBAL_SIMD_VECTOR_CONST_X86_CONVERSIONS \
-    GLOBAL_INLINE operator SIMDVector()const noexcept{ return v; } \
-    GLOBAL_INLINE operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
-    GLOBAL_INLINE operator __m128d()const noexcept{ return _mm_castps_pd(v); }
+#define GLB_SIMD_VECTOR_CONST_X86_CONVERSIONS \
+    GLB_INLINE operator SIMDVector()const noexcept{ return v; } \
+    GLB_INLINE operator __m128i()const noexcept{ return _mm_castps_si128(v); } \
+    GLB_INLINE operator __m128d()const noexcept{ return _mm_castps_pd(v); }
 
-#define GLOBAL_SIMD_VECTOR_CONST_SCALAR_CONVERSION \
-    GLOBAL_INLINE operator SIMDVector()const noexcept{ return v; }
+#define GLB_SIMD_VECTOR_CONST_SCALAR_CONVERSION \
+    GLB_INLINE operator SIMDVector()const noexcept{ return v; }
 
-#if defined(GLOBAL_HAS_NEON)
-#define GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLOBAL_SIMD_VECTOR_CONST_CONVERSIONS
-#elif !defined(GLOBAL_HAS_SCALAR)
-#define GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLOBAL_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#if defined(GLB_HAS_NEON)
+#define GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLB_SIMD_VECTOR_CONST_CONVERSIONS
+#elif !defined(GLB_HAS_SCALAR)
+#define GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLB_SIMD_VECTOR_CONST_X86_CONVERSIONS
 #else
-#define GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLOBAL_SIMD_VECTOR_CONST_SCALAR_CONVERSION
+#define GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS GLB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
 #endif
 
 struct alignas(16) SIMDVectorConstF{
@@ -38,8 +38,8 @@ struct alignas(16) SIMDVectorConstF{
         SIMDVector v;
     };
 
-    GLOBAL_INLINE operator const f32*()const noexcept{ return f; }
-    GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+    GLB_INLINE operator const f32*()const noexcept{ return f; }
+    GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
 struct alignas(16) SIMDVectorConstI{
@@ -48,7 +48,7 @@ struct alignas(16) SIMDVectorConstI{
         SIMDVector v;
     };
 
-    GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+    GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
 struct alignas(16) SIMDVectorConstU{
@@ -57,7 +57,7 @@ struct alignas(16) SIMDVectorConstU{
         SIMDVector v;
     };
 
-    GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+    GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
 struct alignas(16) SIMDVectorConstB{
@@ -66,13 +66,13 @@ struct alignas(16) SIMDVectorConstB{
         SIMDVector v;
     };
 
-    GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+    GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
 };
 
-#undef GLOBAL_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
-#undef GLOBAL_SIMD_VECTOR_CONST_SCALAR_CONVERSION
-#undef GLOBAL_SIMD_VECTOR_CONST_X86_CONVERSIONS
-#undef GLOBAL_SIMD_VECTOR_CONST_CONVERSIONS
+#undef GLB_SIMD_VECTOR_CONST_SELECTED_CONVERSIONS
+#undef GLB_SIMD_VECTOR_CONST_SCALAR_CONVERSION
+#undef GLB_SIMD_VECTOR_CONST_X86_CONVERSIONS
+#undef GLB_SIMD_VECTOR_CONST_CONVERSIONS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -81,7 +81,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     if(!hasSurfelWork())
         return true;
 
-    GLOBAL_ASSERT(targets.bindless.valid());
+    GLB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -99,7 +99,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         || !m_rayTracingState.m_surfelUpsamplePipeline
         || !m_rayTracingState.m_surfelTraceBuildArgsPipeline
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: active surfel GI phase pipeline is missing"));
         return false;
     }
 
@@ -125,7 +125,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
         || (useHwTrace && (!m_rayTracingState.m_tlas || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;
     }
 
@@ -230,7 +230,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.setComputeState(state);
         // Hardware trace additionally selects the TLAS generation at set 2.
         if(m_rayTracingState.m_surfelUseHwTrace && !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
+            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace
@@ -265,7 +265,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             if(commandList.commandRecordingFailed())
                 return false;
             if(!m_rayTracingState.m_surfelResolveDispatchLogged){
-                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})")
+                NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})")
                     , targets.surfelResolveFactor
                     , targets.width
                     , targets.height
@@ -324,7 +324,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
                 const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
                 m_graphics.getDevice().unmapBuffer(*readback);
-                NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
+                NWB_LOGGER_INFO(GLB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
                     , static_cast<u64>(bumpTop - freeTop)
                     , static_cast<u64>(bumpTop)
                     , static_cast<u64>(freeTop)

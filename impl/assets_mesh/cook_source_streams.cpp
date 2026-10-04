@@ -28,9 +28,9 @@ inline constexpr AStringView s_VertexRefTangentName = "tangent";
 inline constexpr AStringView s_VertexRefUvName = "uv0";
 inline constexpr AStringView s_VertexRefColorName = "color";
 inline constexpr AStringView s_VertexRefSkinName = "skin";
-inline constexpr TStringView s_PositionStreamLabel = GLOBAL_TEXT("position");
-inline constexpr TStringView s_NormalStreamLabel = GLOBAL_TEXT("normal");
-inline constexpr TStringView s_TangentStreamLabel = GLOBAL_TEXT("tangent");
+inline constexpr TStringView s_PositionStreamLabel = GLB_TEXT("position");
+inline constexpr TStringView s_NormalStreamLabel = GLB_TEXT("normal");
+inline constexpr TStringView s_TangentStreamLabel = GLB_TEXT("tangent");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,7 +67,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){
         const Core::Metascript::Value& value = list[vertexRefIndex];
         if(!value.isList() || value.asList().size() != expectedComponentCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
                 , metaKind
                 , PathToString<tchar>(nwbFilePath)
                 , vertexRefIndex
@@ -115,7 +115,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
 
     if(outVertexRefs.empty()){
         NWB_LOGGER_ERROR(
-            GLOBAL_TEXT("{} meta '{}': 'vertex_refs' must not be empty"),
+            GLB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"),
             metaKind,
             PathToString<tchar>(nwbFilePath)
         );
@@ -135,7 +135,7 @@ bool MeshCookSourceStreams::ValidateSourceStreamIndex(
     if(index < streamCount)
         return true;
 
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': vertex_ref {} index is out of range")
+    NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(streamName)
@@ -151,7 +151,7 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(
     const usize vertexRefCount
 ){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': 'indices' must contain whole triangles")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
@@ -161,7 +161,7 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(
         if(index < vertexRefCount)
             continue;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
+        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
@@ -194,7 +194,7 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(
                 return false;
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index")
                 , metaKind
                 , PathToString<tchar>(nwbFilePath)
             );

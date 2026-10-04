@@ -323,7 +323,7 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
             return false;
         if(options.queueAssignments){
             const GpuTaskQueueAssignment* const assignment = options.queueAssignments->find(task.id);
-            GLOBAL_ASSERT(assignment);
+            GLB_ASSERT(assignment);
             const GpuTaskQueueAssignmentTelemetry* const accepted = options.queueAssignmentTelemetry
                 ? options.queueAssignmentTelemetry->find(task.id)
                 : nullptr

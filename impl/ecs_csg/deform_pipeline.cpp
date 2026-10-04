@@ -83,7 +83,7 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
 
     u32 appliedCuts = 0u;
     u32 capTriangles = 0u;
-    GLOBAL_ASSERT(cuts != nullptr || cutCount == 0u);
+    GLB_ASSERT(cuts != nullptr || cutCount == 0u);
     for(usize cutIndex = 0u; cutIndex < cutCount; ++cutIndex){
         const CsgDeformCutDesc& cut = cuts[cutIndex];
         if(!cut.active)

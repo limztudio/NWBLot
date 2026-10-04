@@ -11,7 +11,7 @@
 
 #include "../platform.h"
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
 #include <dirent.h>
@@ -62,7 +62,7 @@ inline void ClearError(ErrorCode& outError)noexcept{
     outError.clear();
 }
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 inline void SetLastSystemError(ErrorCode& outError)noexcept{
     outError = ErrorCode(static_cast<i32>(GetLastError()), std::system_category());
 }
@@ -157,7 +157,7 @@ struct StagedDirectoryPaths{
 
 template<typename ArenaT>
 [[nodiscard]] inline bool ReadSymlink(const Path<ArenaT>& path, Path<ArenaT>& outPath, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     static_cast<void>(path);
     static_cast<void>(outPath);
     GlobalFilesystemDetail::SetUnsupportedError(outError);
@@ -185,7 +185,7 @@ template<typename ArenaT>
 template<typename ArenaT>
 [[nodiscard]] inline bool GetCurrentPath(Path<ArenaT>& outPath, ErrorCode& outError)noexcept{
     TString<ArenaT> buffer(outPath.arena());
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     DWORD capacity = MAX_PATH;
     for(;;){
         buffer.resize(static_cast<usize>(capacity));
@@ -248,7 +248,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool GetExecutablePath(Path<ArenaT>& outPath){
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     constexpr usize s_MaxPathLength = 4096;
     tchar executablePathBuffer[s_MaxPathLength] = {};
     const DWORD copiedLength = GetModuleFileName(nullptr, executablePathBuffer, static_cast<DWORD>(s_MaxPathLength));
@@ -257,7 +257,7 @@ template<typename ArenaT>
 
     outPath = TStringView(executablePathBuffer, static_cast<usize>(copiedLength));
     return true;
-#elif defined(GLOBAL_PLATFORM_LINUX)
+#elif defined(GLB_PLATFORM_LINUX)
     ErrorCode errorCode;
     if(!ReadSymlink(Path<ArenaT>(outPath.arena(), "/proc/self/exe"), outPath, errorCode) || outPath.empty())
         return false;
@@ -300,7 +300,7 @@ namespace GlobalFilesystemDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
 template<typename ArenaT>
 [[nodiscard]] inline DWORD FileAttributes(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
     const DWORD attributes = GetFileAttributes(path.c_str());
@@ -363,7 +363,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool FileExists(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return GlobalFilesystemDetail::FileAttributes(path, outError) != INVALID_FILE_ATTRIBUTES;
 #else
     struct stat pathStat;
@@ -373,7 +373,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool IsDirectory(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     const DWORD attributes = GlobalFilesystemDetail::FileAttributes(path, outError);
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
 #else
@@ -384,7 +384,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool IsDirectoryNoFollow(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     const DWORD attributes = GlobalFilesystemDetail::FileAttributes(path, outError);
     return attributes != INVALID_FILE_ATTRIBUTES
         && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u
@@ -398,7 +398,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool IsRegularFile(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     const DWORD attributes = GlobalFilesystemDetail::FileAttributes(path, outError);
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u;
 #else
@@ -408,7 +408,7 @@ template<typename ArenaT>
 }
 
 [[nodiscard]] inline bool IsMissingPathError(const ErrorCode& error)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     return error.category() == std::system_category()
         && (
             error.value() == ERROR_FILE_NOT_FOUND
@@ -470,7 +470,7 @@ namespace GlobalFilesystemDetail{
 
 template<typename ArenaT>
 [[nodiscard]] inline bool CreateDirectorySingle(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(CreateDirectory(path.c_str(), nullptr)){
         ClearError(outError);
         return true;
@@ -551,7 +551,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool RemoveFile(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLOBAL_PLATFORM_WINDOWS)
+#if defined(GLB_PLATFORM_WINDOWS)
     if(DeleteFile(path.c_str())){
         GlobalFilesystemDetail::ClearError(outError);
         return true;

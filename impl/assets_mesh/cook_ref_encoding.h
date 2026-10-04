@@ -56,7 +56,7 @@ bool MeshCookRefEncoding::EncodeMeshletRefs(
         entry.meshletAttributeRefDeltas,
         skinRequired,
         [&](const usize meshletIndex, const TStringView reason){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': meshlet {} {}")
+            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': meshlet {} {}")
                 , metaKind
                 , StringConvert(entry.virtualPath.resolvedText())
                 , meshletIndex

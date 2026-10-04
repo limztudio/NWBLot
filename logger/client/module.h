@@ -56,7 +56,7 @@ namespace ClientPayloadKind{
     };
 };
 
-inline constexpr TStringView s_ClientName = GLOBAL_TEXT("Client");
+inline constexpr TStringView s_ClientName = GLB_TEXT("Client");
 class Client final : public ClientBase<Client, s_ClientName>{
     template<typename, const TStringView&> friend class LoggerWorkerBase;
     template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;
@@ -125,7 +125,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ClientStandaloneName = GLOBAL_TEXT("ClientStandalone");
+inline constexpr TStringView s_ClientStandaloneName = GLB_TEXT("ClientStandalone");
 class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStandaloneName>{
     template<typename, const TStringView&> friend class LoggerWorkerBase;
     template<typename, const TStringView&> friend class QueuedLoggerWorkerBase;

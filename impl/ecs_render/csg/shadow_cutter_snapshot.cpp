@@ -106,7 +106,7 @@ void AppendReceiverCutters(
         CsgCutterGpuData gpuCutter;
         gpuCutter.shapeType = shapeKind;
         gpuCutter.worldToShape = cutter.worldToShape;
-        GLOBAL_MEMCPY(&gpuCutter.parameter0, sizeof(Float4), parameterBytes, parameterByteCount);
+        GLB_MEMCPY(&gpuCutter.parameter0, sizeof(Float4), parameterBytes, parameterByteCount);
         snapshot.cutters.push_back(gpuCutter);
         ++range.cutterCount;
     });

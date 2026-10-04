@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLOBAL_PLATFORM_LINUX)
+#if defined(GLB_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +54,7 @@ static StringView BackendName(Common::LinuxFrameBackend::Enum backend){
 inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
 static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], usize& count, const Common::LinuxFrameBackend::Enum backend){
-    GLOBAL_ASSERT(count < LengthOf(outOrder));
+    GLB_ASSERT(count < LengthOf(outOrder));
     outOrder[count] = backend;
     ++count;
 }
@@ -81,7 +81,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_Lin
         }
 #endif
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Frame: Ignoring unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(requestedBackend));
+        NWB_LOGGER_WARNING(GLB_TEXT("Frame: Ignoring unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(requestedBackend));
     }
 
 #if defined(NWB_WITH_WAYLAND)
@@ -124,7 +124,7 @@ static bool ShowBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backe
 #endif
     case Common::LinuxFrameBackend::Enum::None:
     default:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame: No Linux window backend has been initialized."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame: No Linux window backend has been initialized."));
         return false;
     }
 }
@@ -139,7 +139,7 @@ static bool RunBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum backen
 #endif
     case Common::LinuxFrameBackend::Enum::None:
     default:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("Frame: No Linux window backend is available for the main loop."));
+        NWB_LOGGER_ERROR(GLB_TEXT("Frame: No Linux window backend is available for the main loop."));
         return false;
     }
 }
@@ -179,7 +179,7 @@ bool Frame::init(){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];
         if(FrameDetail::TryInitBackend(*this, backend)){
             frameData.setBackend(backend);
-            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
+            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Frame: Using Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
 
             if(!startup())
                 return false;
@@ -187,10 +187,10 @@ bool Frame::init(){
             return true;
         }
 
-        NWB_LOGGER_WARNING(GLOBAL_TEXT("Frame: Failed to initialize Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
+        NWB_LOGGER_WARNING(GLB_TEXT("Frame: Failed to initialize Linux {} backend."), StringConvert(FrameDetail::BackendName(backend)));
     }
 
-    NWB_LOGGER_FATAL(GLOBAL_TEXT("Frame: Failed to initialize any Linux window backend."));
+    NWB_LOGGER_FATAL(GLB_TEXT("Frame: Failed to initialize any Linux window backend."));
     return false;
 }
 bool Frame::showFrame(){

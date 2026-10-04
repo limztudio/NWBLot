@@ -31,10 +31,10 @@ namespace __hidden_ui_texture_image_snapshot{
 
 
 static constexpr Array<TStringView, 17u> s_RectNames{
-    GLOBAL_TEXT("before"), GLOBAL_TEXT("after"), GLOBAL_TEXT("default_tile"), GLOBAL_TEXT("alternate_tile"), GLOBAL_TEXT("tinted"),
-    GLOBAL_TEXT("zero_alpha"), GLOBAL_TEXT("frozen"), GLOBAL_TEXT("external"), GLOBAL_TEXT("external_clip"),
-    GLOBAL_TEXT("default_atlas"), GLOBAL_TEXT("alternate_atlas"), GLOBAL_TEXT("skin_fill"), GLOBAL_TEXT("parent_image"),
-    GLOBAL_TEXT("child_image"), GLOBAL_TEXT("parent"), GLOBAL_TEXT("child"), GLOBAL_TEXT("builder_image")
+    GLB_TEXT("before"), GLB_TEXT("after"), GLB_TEXT("default_tile"), GLB_TEXT("alternate_tile"), GLB_TEXT("tinted"),
+    GLB_TEXT("zero_alpha"), GLB_TEXT("frozen"), GLB_TEXT("external"), GLB_TEXT("external_clip"),
+    GLB_TEXT("default_atlas"), GLB_TEXT("alternate_atlas"), GLB_TEXT("skin_fill"), GLB_TEXT("parent_image"),
+    GLB_TEXT("child_image"), GLB_TEXT("parent"), GLB_TEXT("child"), GLB_TEXT("builder_image")
 };
 
 
@@ -107,23 +107,23 @@ void UiTextureImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiTextureImageSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight
             , current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},")
-        GLOBAL_TEXT("{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiTextureImageSmoke: state sequence={} values={},{},{},{},{},{},{},")
+        GLB_TEXT("{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5]
         , value[6], value[7], value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiTextureImageSmoke: sources sequence={} generations={},{},{} same_identity={}")
         , current.sequence, current.generations[0], current.generations[1], current.generations[2]
         , static_cast<u32>(m_replacement->identity().name() == m_default->identity().name())
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(GLOBAL_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(GLB_TEXT("UiTextureImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiTextureImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

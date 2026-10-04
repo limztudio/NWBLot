@@ -102,7 +102,7 @@ TEST(AssetsUiSkinRegionIndex, CanonicalDuplicateKeepsFirstAuthoredMatchAndFailsA
     SetRegions(skin, Move(regions));
     EXPECT_EQ(skin.findRegion(Name("BUTTON/NORMAL")), &skin.regions()[0u]);
     EXPECT_FALSE(skin.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("duplicate region")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate region")));
 }
 
 TEST(AssetsUiSkinRegionIndex, EqualLeadingHashLanesStillResolveDistinctNames){
@@ -193,7 +193,7 @@ TEST(AssetsUiSkinRegionIndex, FailedBinaryLoadPreservesLookupAndAuthoredOrder){
     const UiSkinRegion* retained = loaded.findRegion(Name("last"));
     const usize firstHash = sizeof(UiSkinBinaryPayload::HeaderBinary);
     const usize secondHash = firstHash + sizeof(UiSkinBinaryPayload::RegionBinary);
-    GLOBAL_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
+    GLB_MEMCPY(binary.data() + secondHash, sizeof(NameHash), binary.data() + firstHash, sizeof(NameHash));
     EXPECT_FALSE(loaded.loadBinary(binary));
     EXPECT_EQ(loaded.findRegion(Name("last")), retained);
     EXPECT_EQ(loaded.findRegion(Name("first")), &loaded.regions()[1u]);

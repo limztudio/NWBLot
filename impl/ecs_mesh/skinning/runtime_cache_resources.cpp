@@ -54,23 +54,23 @@ static constexpr AStringView s_MeshletAttributeRefDeltasSuffix = "meshlet_attrib
 static constexpr AStringView s_MeshletLocalVertexRefsSuffix = "meshlet_local_vertex_refs";
 static constexpr AStringView s_MeshletPrimitiveIndicesSuffix = "meshlet_primitive_indices";
 static constexpr AStringView s_AttributeSkinsSuffix = "attribute_skins";
-static constexpr TStringView s_RestPositionLabel = GLOBAL_TEXT("rest position");
-static constexpr TStringView s_RestNormalLabel = GLOBAL_TEXT("rest normal");
-static constexpr TStringView s_RestTangentLabel = GLOBAL_TEXT("rest tangent");
-static constexpr TStringView s_SkinnedPositionLabel = GLOBAL_TEXT("skinned position");
-static constexpr TStringView s_SkinnedNormalLabel = GLOBAL_TEXT("skinned normal");
-static constexpr TStringView s_SkinnedTangentLabel = GLOBAL_TEXT("skinned tangent");
-static constexpr TStringView s_Uv0Label = GLOBAL_TEXT("uv0");
-static constexpr TStringView s_ColorLabel = GLOBAL_TEXT("color");
-static constexpr TStringView s_MeshletDescriptorLabel = GLOBAL_TEXT("meshlet descriptor");
-static constexpr TStringView s_MeshletBoundsLabel = GLOBAL_TEXT("meshlet bounds");
-static constexpr TStringView s_MeshletPositionRefDeltaLabel = GLOBAL_TEXT("meshlet position ref delta");
-static constexpr TStringView s_MeshletAttributeRefDeltaLabel = GLOBAL_TEXT("meshlet attribute ref delta");
-static constexpr TStringView s_MeshletLocalVertexRefLabel = GLOBAL_TEXT("meshlet local vertex ref");
-static constexpr TStringView s_MeshletPrimitiveIndexLabel = GLOBAL_TEXT("meshlet primitive index");
-static constexpr TStringView s_AttributeSkinLabel = GLOBAL_TEXT("attribute skin");
-static constexpr TStringView s_RtTriangleIndexLabel = GLOBAL_TEXT("rt triangle index");
-static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triangle attribute");
+static constexpr TStringView s_RestPositionLabel = GLB_TEXT("rest position");
+static constexpr TStringView s_RestNormalLabel = GLB_TEXT("rest normal");
+static constexpr TStringView s_RestTangentLabel = GLB_TEXT("rest tangent");
+static constexpr TStringView s_SkinnedPositionLabel = GLB_TEXT("skinned position");
+static constexpr TStringView s_SkinnedNormalLabel = GLB_TEXT("skinned normal");
+static constexpr TStringView s_SkinnedTangentLabel = GLB_TEXT("skinned tangent");
+static constexpr TStringView s_Uv0Label = GLB_TEXT("uv0");
+static constexpr TStringView s_ColorLabel = GLB_TEXT("color");
+static constexpr TStringView s_MeshletDescriptorLabel = GLB_TEXT("meshlet descriptor");
+static constexpr TStringView s_MeshletBoundsLabel = GLB_TEXT("meshlet bounds");
+static constexpr TStringView s_MeshletPositionRefDeltaLabel = GLB_TEXT("meshlet position ref delta");
+static constexpr TStringView s_MeshletAttributeRefDeltaLabel = GLB_TEXT("meshlet attribute ref delta");
+static constexpr TStringView s_MeshletLocalVertexRefLabel = GLB_TEXT("meshlet local vertex ref");
+static constexpr TStringView s_MeshletPrimitiveIndexLabel = GLB_TEXT("meshlet primitive index");
+static constexpr TStringView s_AttributeSkinLabel = GLB_TEXT("attribute skin");
+static constexpr TStringView s_RtTriangleIndexLabel = GLB_TEXT("rt triangle index");
+static constexpr TStringView s_RtTriangleAttributeLabel = GLB_TEXT("rt triangle attribute");
 
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
@@ -78,10 +78,10 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
     if(instance.sourceName)
         sourceText = StringConvert(arena, instance.sourceName.resolvedText());
     else
-        sourceText.assign(GLOBAL_TEXT("<unnamed>"));
+        sourceText.assign(GLB_TEXT("<unnamed>"));
 
     if(!Core::Mesh::MeshClassUsesSkinning(instance.meshClass)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has invalid mesh class")
             , TStringView(sourceText)
         );
         return false;
@@ -103,7 +103,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
         || instance.meshletAttributeRefCount == 0u
         || instance.attributeSkins.size() != instance.meshletAttributeRefCount
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has incomplete split mesh payload")
             , TStringView(sourceText)
         );
         return false;
@@ -119,26 +119,26 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
         || !FitsU32(instance.meshletLocalVertexRefs.size())
         || !FitsU32(instance.meshletPrimitiveIndices.size())
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' exceeds u32 payload limits")
             , TStringView(sourceText)
         );
         return false;
     }
     if(instance.skeletonJointCount == 0u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has skin but no skeleton joint count")
             , TStringView(sourceText)
         );
         return false;
     }
     if(instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skeleton joint count {} exceeds skin stream limits")
             , TStringView(sourceText)
             , instance.skeletonJointCount
         );
         return false;
     }
     if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)
         );
         return false;
@@ -148,7 +148,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
         if(MatrixIsInvertibleAffine(inverseBind, SkinValidation::s_Epsilon, SkinValidation::s_Epsilon))
             continue;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")
             , TStringView(sourceText)
         );
         return false;
@@ -164,7 +164,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
         )
             continue;
 
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' skin influence {} is invalid")
             , TStringView(sourceText)
             , skinIndex
         );
@@ -189,7 +189,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
             )
                 continue;
 
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range")
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} position ref {} is out of range")
                 , TStringView(sourceText)
                 , meshletIndex
                 , localPositionIndex
@@ -220,7 +220,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
                 continue;
             }
 
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range")
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' meshlet {} attribute ref {} is out of range")
                 , TStringView(sourceText)
                 , meshletIndex
                 , localAttributeIndex
@@ -229,7 +229,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLOBAL_TEXT("rt triang
         }
     }
     if(logicalAttributeRefIndex != instance.attributeSkins.size()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' has mismatched attribute skin payload")
             , TStringView(sourceText)
         );
         return false;
@@ -257,7 +257,7 @@ template<typename PayloadT, typename PayloadVector>
         suffix
     );
     if(!bufferName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
             , label
             , instance.handle.value
         );
@@ -276,15 +276,15 @@ template<typename PayloadT, typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return buffer;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return {};
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'")
+    NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'")
         , label
         , instance.handle.value
     );
@@ -340,7 +340,7 @@ template<typename PayloadVector>
         suffix
     );
     if(!bufferName){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
             , label
             , instance.handle.value
         );
@@ -361,20 +361,20 @@ template<typename PayloadVector>
     case RuntimeMeshBufferUpload::BufferSetupFailure::None:
         return true;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"),
+        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"),
             label,
             instance.handle.value
         );
         return false;
     }
 
-    GLOBAL_ASSERT(false);
+    GLB_ASSERT(false);
     return false;
 }
 
@@ -556,13 +556,13 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             instance.restPositions.size(),
             triangleIndices
         )){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct ray tracing triangle indices for runtime mesh '{}'")
                 , instance.handle.value
             );
             return false;
         }
         if(triangleIndices.size() != indexCount){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: reconstructed ray tracing index count {} does not match expected {} for runtime mesh '{}'")
                 , static_cast<u64>(triangleIndices.size())
                 , static_cast<u64>(indexCount)
                 , instance.handle.value
@@ -602,7 +602,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             instance.uv0,
             triangleAttributes
         )){
-            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'")
+            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: failed to reconstruct shadow trace triangle attributes for runtime mesh '{}'")
                 , instance.handle.value
             );
             return false;

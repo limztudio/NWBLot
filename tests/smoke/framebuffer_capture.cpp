@@ -139,9 +139,9 @@ FramebufferCapture::FramebufferCapture(
     , m_captureFrameCount(captureFrameCount)
 {
     if(m_outputPath.empty())
-        markFailed(GLOBAL_TEXT("capture output path is empty"));
+        markFailed(GLB_TEXT("capture output path is empty"));
     if(m_captureFrameCount == 0u)
-        markFailed(GLOBAL_TEXT("capture frame count must be greater than zero"));
+        markFailed(GLB_TEXT("capture frame count must be greater than zero"));
 }
 
 FramebufferCapture::~FramebufferCapture(){
@@ -161,7 +161,7 @@ bool FramebufferCapture::start(){
     Core::GraphicsRuntime& graphics = getGraphics();
     Core::IGpuTaskGraphPresentationContributor* const contributor = graphics.taskGraphPresentationContributor();
     if(contributor && contributor != this){
-        markFailed(GLOBAL_TEXT("another task-graph presentation contributor is already registered"));
+        markFailed(GLB_TEXT("another task-graph presentation contributor is already registered"));
         return false;
     }
 
@@ -194,14 +194,14 @@ void FramebufferCapture::update(){
     if(!acceptedToken.valid())
         return;
     if(!acceptedToken.hasPhysicalQueueIdentity()){
-        markFailed(GLOBAL_TEXT("accepted readback submission has no physical queue identity"));
+        markFailed(GLB_TEXT("accepted readback submission has no physical queue identity"));
         requestTerminalQuit();
         return;
     }
 
     Core::GraphicsBackend::Device& device = getGraphics().getDevice();
     if(acceptedToken.deviceGeneration != device.getDeviceGeneration()){
-        markFailed(GLOBAL_TEXT("accepted readback submission belongs to a stale graphics device"));
+        markFailed(GLB_TEXT("accepted readback submission belongs to a stale graphics device"));
         requestTerminalQuit();
         return;
     }
@@ -212,7 +212,7 @@ void FramebufferCapture::update(){
     if(device.queueGetCompletedInstance(physicalQueue) < acceptedToken.value)
         return;
     if(!m_readback){
-        markFailed(GLOBAL_TEXT("accepted readback submission lost its staging texture"));
+        markFailed(GLB_TEXT("accepted readback submission lost its staging texture"));
         requestTerminalQuit();
         return;
     }
@@ -225,7 +225,7 @@ void FramebufferCapture::update(){
         &rowPitch
     ));
     if(!sourceBytes){
-        markFailed(GLOBAL_TEXT("failed to map the completed readback staging texture"));
+        markFailed(GLB_TEXT("failed to map the completed readback staging texture"));
         requestTerminalQuit();
         return;
     }
@@ -234,20 +234,20 @@ void FramebufferCapture::update(){
     const bool captureWritten = writeCapture(sourceBytes, rowPitch, scratchArena);
     device.unmapStagingTexture(*m_readback);
     if(!captureWritten){
-        markFailed(GLOBAL_TEXT("failed to write the framebuffer capture atomically"));
+        markFailed(GLB_TEXT("failed to write the framebuffer capture atomically"));
         requestTerminalQuit();
         return;
     }
 
     m_captureReady = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("FramebufferCapture: capture ready"));
-    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("FramebufferCapture: capture ready"));
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
     if(m_options.quitWhenReady)
         requestTerminalQuit();
 }
 
 void FramebufferCapture::finish(){
-    GLOBAL_ASSERT(m_captureReady);
+    GLB_ASSERT(m_captureReady);
     requestTerminalQuit();
 }
 
@@ -284,12 +284,12 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
     if(!getGraphics().isSwapChainReadbackAvailable()){
         m_skipped = true;
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLOBAL_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable")
+            GLB_TEXT("FramebufferCapture: skipped because swap-chain transfer-source usage is unavailable")
         );
         return true;
     }
     if(!frame.valid()){
-        markFailed(GLOBAL_TEXT("renderer supplied an invalid acquired presentation frame"));
+        markFailed(GLB_TEXT("renderer supplied an invalid acquired presentation frame"));
         return true;
     }
 
@@ -362,7 +362,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
         || frame.backBuffer.index != m_preparedFrame.backBuffer.index
         || frame.framebuffer != m_preparedFrame.framebuffer
     ){
-        markFailed(GLOBAL_TEXT("presentation declaration no longer matches the prepared acquired frame"));
+        markFailed(GLB_TEXT("presentation declaration no longer matches the prepared acquired frame"));
         return {};
     }
 
@@ -380,7 +380,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
             .setType(Core::GpuGraphResourceType::HazardDomain)
     );
     if(!stagingHazard.valid()){
-        markFailed(GLOBAL_TEXT("failed to declare the framebuffer staging hazard domain"));
+        markFailed(GLB_TEXT("failed to declare the framebuffer staging hazard domain"));
         return {};
     }
 
@@ -418,7 +418,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
         }
     );
     if(!readbackTask.valid()){
-        markFailed(GLOBAL_TEXT("failed to declare the framebuffer readback task"));
+        markFailed(GLB_TEXT("failed to declare the framebuffer readback task"));
         return {};
     }
 
@@ -436,7 +436,7 @@ void FramebufferCapture::markFailed(const TStringView reason){
         return;
 
     m_failed = true;
-    NWB_LOGGER_ERROR(GLOBAL_TEXT("FramebufferCapture: {}"), reason);
+    NWB_LOGGER_ERROR(GLB_TEXT("FramebufferCapture: {}"), reason);
 }
 
 void FramebufferCapture::requestTerminalQuit(){
@@ -475,7 +475,7 @@ bool FramebufferCapture::stagingMatches(const Core::TextureDesc& description)con
 
 bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     if(!__hidden_framebuffer_capture::IsSupportedSdrFormat(description.format)){
-        markFailed(GLOBAL_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
+        markFailed(GLB_TEXT("swap-chain format is not SDR RGBA8/BGRA8 UNORM or SRGB"));
         return false;
     }
     if(
@@ -487,7 +487,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
         || description.sampleCount != 1u
         || description.dimension != Core::TextureDimension::Texture2D
     ){
-        markFailed(GLOBAL_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
+        markFailed(GLB_TEXT("swap-chain texture shape cannot be represented by the SDR framebuffer capture"));
         return false;
     }
     if(stagingMatches(description))
@@ -497,7 +497,7 @@ bool FramebufferCapture::prepareReadback(const Core::TextureDesc& description){
     m_captureDescription = description;
     m_readback = getGraphics().getDevice().createStagingTexture(description, Core::CpuAccessMode::Read);
     if(!m_readback){
-        markFailed(GLOBAL_TEXT("failed to allocate the matching framebuffer readback staging texture"));
+        markFailed(GLB_TEXT("failed to allocate the matching framebuffer readback staging texture"));
         return false;
     }
     return true;
@@ -578,19 +578,19 @@ bool FramebufferCapture::writeCapture(
         return false;
 
     ::Path<Core::Alloc::GlobalArena> partialPath(m_outputPath);
-    partialPath += GLOBAL_TEXT(".partial");
+    partialPath += GLB_TEXT(".partial");
     if(!WriteBinaryFile(partialPath, bitmapBytes)){
         ErrorCode cleanupError;
         const bool removed = RemoveFile(partialPath, cleanupError);
         if(!removed && cleanupError)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
+            NWB_LOGGER_WARNING(GLB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
         return false;
     }
     if(!RenamePath(partialPath, m_outputPath, filesystemError)){
         ErrorCode cleanupError;
         const bool removed = RemoveFile(partialPath, cleanupError);
         if(!removed && cleanupError)
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
+            NWB_LOGGER_WARNING(GLB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
         return false;
     }
     return true;

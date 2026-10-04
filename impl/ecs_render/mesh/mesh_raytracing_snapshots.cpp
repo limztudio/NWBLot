@@ -356,7 +356,7 @@ bool RendererMeshSystem::collectSoftwareBvhParentBuildStates(ECSRenderDetail::Me
         if(!mesh.swBvhNodeBuffer && !mesh.swBvhParentBuffer)
             continue;
         if(!mesh.swBvhNodeBuffer || !mesh.swBvhParentBuffer){
-            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
+            NWB_LOGGER_WARNING(GLB_TEXT("RendererMeshSystem: incomplete software BVH state for a live mesh"));
             return false;
         }
         outStates.push_back({

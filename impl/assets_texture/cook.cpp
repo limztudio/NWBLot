@@ -30,14 +30,14 @@ NWB_IMPL_BEGIN
 
 
 bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("TextureAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLB_TEXT("TextureAssetCodec::serialize")))
         return false;
 
     const Texture& texture = static_cast<const Texture&>(asset);
     if(!texture.validatePayload())
         return false;
     if(texture.mipLevels().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("TextureAssetCodec::serialize failed: mip count exceeds cooked payload limits"));
+        NWB_LOGGER_ERROR(GLB_TEXT("TextureAssetCodec::serialize failed: mip count exceeds cooked payload limits"));
         return false;
     }
 
@@ -60,7 +60,7 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary))
         || !AddBinaryReserveBytes(reserveBytes, texture.payloadBytes().size())
     ){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
+        NWB_LOGGER_ERROR(GLB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
         return false;
     }
 
@@ -83,8 +83,8 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!Core::Assets::AppendVectorPayload(
         outBinary,
         mipBinaries,
-        GLOBAL_TEXT("TextureAssetCodec::serialize"),
-        GLOBAL_TEXT("mip levels")
+        GLB_TEXT("TextureAssetCodec::serialize"),
+        GLB_TEXT("mip levels")
     ))
         return false;
 

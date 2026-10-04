@@ -25,12 +25,12 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
         return false;
     }
 
     if(!RayTracingDetail::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
         return false;
     }
     return true;
@@ -40,12 +40,12 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
         return false;
     }
 
     if(!RayTracingDetail::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
         return false;
     }
     return true;
@@ -65,7 +65,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     ;
     m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
         return false;
     }
     return true;
@@ -102,7 +102,7 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
         && resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle, slots.meshInstances)
     ;
     if(!complete){
-        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return false;
     }
 

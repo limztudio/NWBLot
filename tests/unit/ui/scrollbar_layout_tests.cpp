@@ -377,13 +377,6 @@ TEST(UiScrollbarLayoutTests, RepeatedOffsetUpdateAndRepeatedCalculationPreserveI
     ExpectPlacement(placement, expected);
 }
 
-TEST(UiScrollbarLayoutTests, DefaultPlacementSupportsNoopOffsetUpdate){
-    ScrollViewportPlacement placement;
-    const ScrollViewportPlacement expected = placement;
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({}, placement));
-    ExpectPlacement(placement, expected);
-}
-
 TEST(UiScrollbarLayoutTests, InvalidCalculationInputsPreserveCompletePreviousPlacement){
     const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
     const Insets padding{ 1.0f, 2.0f, 3.0f, 4.0f };

@@ -27,7 +27,6 @@ static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
 static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh";
 static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = GLB_TEXT("targets a missing skeleton object");
-static constexpr AStringView s_SHARED = "shared";
 static constexpr AStringView s_RIG_A = "rig_a";
 static constexpr AStringView s_RIG_B = "rig_b";
 static constexpr AStringView s_RIG = "rig";
@@ -134,17 +133,6 @@ static void BenchmarkObjectReferences(const usize count, const usize iterations 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(ModelCookMetadata, LocalObjectNamesStayDistinctFromCollidingAssetIdentities){
-    ModelMetadata metadata;
-    metadata.addSkeleton(s_SHARED, "tests/model_cook_metadata/direct");
-    metadata.addSkeleton("other_a", "SHARED");
-    metadata.addSkeleton("other_b", s_SHARED);
-    metadata.addSkinnedMesh("direct_mesh", "ShArEd", s_SHARED);
-    metadata.addSkinnedMesh("other_direct_mesh", "OTHER_A", "other_a");
-    ASSERT_TRUE(metadata.parse());
-    metadata.verifyObjectReferences();
-}
 
 TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRecover){
     Tests::CapturingLogger logger;

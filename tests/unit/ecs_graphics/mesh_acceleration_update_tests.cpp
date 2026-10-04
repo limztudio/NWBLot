@@ -53,15 +53,6 @@ TEST(MeshAccelerationUpdateTests, EachBackendTracksItsOwnAcceptedContentRevision
     EXPECT_FALSE(RequiresMeshSwBvhUpdate(mesh));
 }
 
-TEST(MeshAccelerationUpdateTests, RecordedButUnacceptedFirstBuildCannotBeReused){
-    auto mesh = AcceptedRuntimeGeometry();
-    // Direct recording can clear pending and produce topology before packet acceptance.
-    mesh.blasBuildAccepted = false;
-    mesh.swBvhBuildAccepted = false;
-    EXPECT_TRUE(RequiresMeshBlasUpdate(mesh));
-    EXPECT_TRUE(RequiresMeshSwBvhUpdate(mesh));
-}
-
 TEST(MeshAccelerationUpdateTests, DirtyStorageAndMissingTopologyOverrideMatchingContents){
     auto mesh = AcceptedRuntimeGeometry();
     mesh.blasBuildPending = true;

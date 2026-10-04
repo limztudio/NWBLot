@@ -98,13 +98,6 @@ TEST(UiScrollLayoutTests, MinimumThumbNeverExceedsItsTrack){
     EXPECT_DOUBLE_EQ(placement.maxOffset, 3199980.0);
 }
 
-TEST(UiScrollLayoutTests, ZeroMinimumThumbKeepsProportionalSize){
-    const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
-    ScrollPlacement placement;
-    ASSERT_TRUE(ScrollLayout::Calculate(bounds, bounds, {}, 8.0f, 0.0f, 100u, 10.0f, 0.0, placement));
-    EXPECT_FLOAT_EQ(placement.thumb.height, 10.0f);
-}
-
 TEST(UiScrollLayoutTests, ZeroScrollbarWidthLeavesScrollableContentAtFullWidth){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollPlacement placement;

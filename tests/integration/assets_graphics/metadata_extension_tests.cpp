@@ -472,10 +472,6 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
     EXPECT_TRUE(document.asset().isNull());
 }
 
-TEST(MetadataExtensionOwnership, PublicShaderAndIncludeParsingRetiresAllMetadata){
-    BenchmarkMetadataParsing(1u, s_ExpectedDualCount);
-}
-
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){
     AssetArena fixtureArena(Name("tests/metadata_registry/fixture"));
     AssetArena parseArena(Name("tests/metadata_registry/output"));

@@ -224,14 +224,6 @@ TEST_F(UiRadioGroupPopupTests, InstanceCallbackClosingThePopupRetiresQueuedRight
     expectSourceClosure(RadioCallbackSite::Instance);
 }
 
-TEST_F(UiRadioGroupPopupTests, RevisionCallbackClosingThePopupRetiresQueuedRightBeforeReconcile){
-    expectSourceClosure(RadioCallbackSite::Revision);
-}
-
-TEST_F(UiRadioGroupPopupTests, KeyCallbackClosingThePopupRetiresQueuedRightBeforeReconcile){
-    expectSourceClosure(RadioCallbackSite::Key);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

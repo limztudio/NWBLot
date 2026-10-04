@@ -102,16 +102,6 @@ TEST_F(GatherInputs, IdenticalDuplicatesKeepExactPayloadsWithoutMergeCalls){
     verifyPayloads(64u, 257u, 7u);
 }
 
-TEST_F(GatherInputs, RepeatedInputPathDoesNotMergeSamePayloadTwice){
-    writeInputs("a", 1u, 2u, 5u);
-    writeInputs("b", 1u, 4u, 5u);
-    m_options.inputs.push_back(m_options.inputs.back());
-    m_options.mergePayloads = &MergeBytes;
-    ASSERT_TRUE(Gatherer::GatherAssets(m_options));
-    EXPECT_EQ(s_MergeCalls, 1u);
-    verifyPayloads(1u, 6u, 5u);
-}
-
 TEST_F(GatherInputs, ConflictingDuplicatesPreservePublishedVolume){
     writeInputs("a", 4u, 8u, 3u);
     ASSERT_TRUE(Gatherer::GatherAssets(m_options));

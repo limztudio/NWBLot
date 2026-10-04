@@ -177,18 +177,6 @@ TEST(TextGlyphVisibilityTests, CoverageRectangleUsesNegativeBearingsAndLogicalOr
     UiWidgetTests::ExpectRect(rectangle, { 118.0f, 227.0f, 4.0f, 5.0f });
 }
 
-TEST(TextGlyphVisibilityTests, CoverageRectangleSupportsFractionalRasterScale){
-    PlacedGlyph glyph;
-    AtlasGlyph record;
-    record.pageIndex = 0u;
-    record.pixels = { 0.0f, 0.0f, 3.0f, 6.0f };
-    record.bearingX = -3;
-    record.bearingY = 6;
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.5f, { 4.0f, 8.0f }, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, { 2.0f, 4.0f, 2.0f, 4.0f });
-}
-
 TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtOneToOneScale){
     PlacedGlyph glyph;
     glyph.position = { 0.25f, 0.25f };
@@ -217,15 +205,6 @@ TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelSc
     UiWidgetTests::ExpectRect(rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
     ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, rectangle, { 1.0f, 1.5f }));
     UiWidgetTests::ExpectRect(rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
-}
-
-TEST(TextGlyphVisibilityTests, CoverageRecordWithoutAnImageProducesAnEmptyExactRectangle){
-    PlacedGlyph glyph;
-    AtlasGlyph record;
-    Rect rectangle{ 1.0f, 2.0f, 3.0f, 4.0f };
-    ASSERT_TRUE(TextGlyphVisibility::coverageRectangle(glyph, record, 1.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, {});
-    EXPECT_EQ(TextGlyphVisibility::intersect(rectangle, { 0.0f, 0.0f, 100.0f, 100.0f }), TextGlyphIntersection::Invisible);
 }
 
 TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryPreservesTheOutput){

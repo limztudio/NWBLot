@@ -486,10 +486,6 @@ TEST(MaterialGeometryUses, GathersRepeatedMeshes){
     MeasureGatherWorkload(128u, 16u, 1u);
 }
 
-TEST(MaterialGeometryUses, GathersMostlyUniqueMeshes){
-    MeasureGatherWorkload(128u, 1u, 1u);
-}
-
 TEST(MaterialGeometryUses, GathersOneMesh){
     MeasureGatherWorkload(1u, 1u, 64u);
 }

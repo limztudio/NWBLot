@@ -13,7 +13,11 @@ python -m launcher build nwb_ui_layer_smoke --configure-preset windows-clang-arm
 ctest --preset windows-clang-arm64-dbg -R '^nwb_ui_layer_' --output-on-failure
 ```
 
-All standalone tests hold the shared `nwb_display` lock and request GPU validation:
+All standalone tests hold the shared `nwb_display` lock. Their CTest commands request GPU validation in `dbg` and `opt`,
+and explicitly disable the request in `fin`. The Python wrappers default validation on for manual captures; pass
+`--no-gpu-validation` with a `fin` executable, which rejects the native `--gpudbg` option.
+
+The standalone workflows are:
 
 - `nwb_ui_layer_framebuffer_smoke` uses the existing `FramebufferCapture` observer to copy a completed 960x540 acquired backbuffer after 60 presentation frames. It stores `ui_layer.bmp`, the collected launch log, and `pixels.json` under `Testing/smoke/<configuration>/ui_layer_framebuffer`.
 - `nwb_ui_layer_resize_smoke` uses the existing desktop capture helper to verify a rendered 960x540 client, resize it to 800x600, confirm the graphics resize marker, and capture the new client. It checks the same pixels before and after resize and stores both BMPs plus `pixels.json` under the corresponding `ui_layer_resize` directory.

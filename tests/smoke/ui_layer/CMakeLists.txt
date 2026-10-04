@@ -97,10 +97,11 @@ if(COMMAND nwb_copy_aftermath_runtime)
 endif()
 if(TARGET nwb_logserver)
     add_dependencies(nwb_ui_layer_smoke nwb_logserver)
-    set(_nwb_ui_smoke_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+    set(_nwb_ui_smoke_capture_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
 else()
-    set(_nwb_ui_smoke_logserver_args)
+    set(_nwb_ui_smoke_capture_args)
 endif()
+list(APPEND _nwb_ui_smoke_capture_args "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>")
 
 file(GLOB_RECURSE _nwb_ui_smoke_asset_inputs CONFIGURE_DEPENDS LIST_DIRECTORIES false
     "${PROJECT_SOURCE_DIR}/impl/assets/*"
@@ -137,7 +138,7 @@ foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
             --working-directory "${_nwb_ui_smoke_runtime_root}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_${_nwb_ui_smoke_mode}"
             --mode "${_nwb_ui_smoke_mode}"
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_smoke_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -153,7 +154,7 @@ add_test(NAME nwb_ui_layer_interaction_smoke
         --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
         --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_interaction"
-        ${_nwb_ui_smoke_logserver_args}
+        ${_nwb_ui_smoke_capture_args}
 )
 set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES
     RESOURCE_LOCK nwb_display
@@ -168,7 +169,7 @@ add_test(NAME nwb_ui_layer_window_smoke
         --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
         --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window"
-        ${_nwb_ui_smoke_logserver_args}
+        ${_nwb_ui_smoke_capture_args}
 )
 set_tests_properties(nwb_ui_layer_window_smoke PROPERTIES
     RESOURCE_LOCK nwb_display
@@ -184,7 +185,7 @@ add_test(NAME nwb_ui_layer_window_skin_smoke
         --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_window_skin"
         --skin alternate
-        ${_nwb_ui_smoke_logserver_args}
+        ${_nwb_ui_smoke_capture_args}
 )
 set_tests_properties(nwb_ui_layer_window_skin_smoke PROPERTIES
     RESOURCE_LOCK nwb_display
@@ -199,7 +200,7 @@ add_test(NAME nwb_ui_layer_edit_smoke
         --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
         --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_edit"
-        ${_nwb_ui_smoke_logserver_args}
+        ${_nwb_ui_smoke_capture_args}
 )
 set_tests_properties(nwb_ui_layer_edit_smoke PROPERTIES
     RESOURCE_LOCK nwb_display
@@ -225,7 +226,7 @@ foreach(_nwb_ui_popup_skin IN ITEMS default alternate)
             --working-directory "${_nwb_ui_smoke_runtime_root}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_popup_${_nwb_ui_popup_skin}"
             --skin "${_nwb_ui_popup_skin}"
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_popup_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -250,7 +251,7 @@ foreach(_nwb_ui_list_skin IN ITEMS default alternate)
             --working-directory "${_nwb_ui_smoke_runtime_root}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_list_${_nwb_ui_list_skin}"
             --skin "${_nwb_ui_list_skin}"
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_list_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -276,7 +277,7 @@ foreach(_nwb_ui_combo_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_combo_${_nwb_ui_combo_skin}"
             --skin "${_nwb_ui_combo_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_combo_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -302,7 +303,7 @@ foreach(_nwb_ui_search_combo_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_search_combo_${_nwb_ui_search_combo_skin}"
             --skin "${_nwb_ui_search_combo_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_search_combo_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -328,7 +329,7 @@ foreach(_nwb_ui_popup_tools_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_popup_tools_${_nwb_ui_popup_tools_skin}"
             --skin "${_nwb_ui_popup_tools_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_popup_tools_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -354,7 +355,7 @@ foreach(_nwb_ui_nested_popup_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_nested_popup_${_nwb_ui_nested_popup_skin}"
             --skin "${_nwb_ui_nested_popup_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_nested_popup_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -380,7 +381,7 @@ foreach(_nwb_ui_numeric_edit_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_numeric_edit_${_nwb_ui_numeric_edit_skin}"
             --skin "${_nwb_ui_numeric_edit_skin}"
             --timeout 240
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_numeric_edit_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -406,7 +407,7 @@ foreach(_nwb_ui_text_area_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_text_area_${_nwb_ui_text_area_skin}"
             --skin "${_nwb_ui_text_area_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_text_area_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -432,7 +433,7 @@ foreach(_nwb_ui_radio_group_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_radio_group_${_nwb_ui_radio_group_skin}"
             --skin "${_nwb_ui_radio_group_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_radio_group_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -458,7 +459,7 @@ foreach(_nwb_ui_slider_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_slider_${_nwb_ui_slider_skin}"
             --skin "${_nwb_ui_slider_skin}"
             --timeout 180
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_slider_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -484,7 +485,7 @@ foreach(_nwb_ui_progress_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_progress_${_nwb_ui_progress_skin}"
             --skin "${_nwb_ui_progress_skin}"
             --timeout 120
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_progress_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -510,7 +511,7 @@ foreach(_nwb_ui_image_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_image_${_nwb_ui_image_skin}"
             --skin "${_nwb_ui_image_skin}"
             --timeout 120
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_image_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -536,7 +537,7 @@ foreach(_nwb_ui_texture_image_skin IN ITEMS default alternate)
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_texture_image_${_nwb_ui_texture_image_skin}"
             --skin "${_nwb_ui_texture_image_skin}"
             --timeout 120
-            ${_nwb_ui_smoke_logserver_args}
+            ${_nwb_ui_smoke_capture_args}
     )
     set_tests_properties("${_nwb_ui_texture_image_test}" PROPERTIES
         RESOURCE_LOCK nwb_display
@@ -553,7 +554,7 @@ add_test(NAME nwb_ui_layer_raster_ir_parity_smoke
         --working-directory "${_nwb_ui_smoke_runtime_root}"
         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_raster_ir_parity"
         --replay-marker "UiGpuRenderer: raster command IR replay active"
-        ${_nwb_ui_smoke_logserver_args}
+        ${_nwb_ui_smoke_capture_args}
 )
 set_tests_properties(nwb_ui_layer_raster_ir_parity_smoke PROPERTIES
     RESOURCE_LOCK nwb_display
@@ -587,7 +588,7 @@ unset(_nwb_ui_text_area_test)
 unset(_nwb_ui_text_area_skin_flag)
 
 unset(_nwb_ui_smoke_runtime_root)
-unset(_nwb_ui_smoke_logserver_args)
+unset(_nwb_ui_smoke_capture_args)
 unset(_nwb_ui_smoke_asset_inputs)
 unset(_nwb_ui_smoke_asset_stamp)
 unset(_nwb_ui_smoke_test)

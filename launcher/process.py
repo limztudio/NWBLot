@@ -134,7 +134,7 @@ class ProcessLauncher:
 
         process: Optional[subprocess.Popen] = None
         try:
-            process = subprocess.Popen(launch, cwd=working_directory, env=env)
+            process = subprocess.Popen(launch, cwd=working_directory, env=env, stdout=sys.stdout, stderr=sys.stderr)
             print(MSG_LAUNCHED_APP.format(executable=executable, process=process), flush=True)
             if args.detach:
                 return 0

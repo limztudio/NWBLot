@@ -209,6 +209,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_smoke")
                 add_test(NAME "${_nwb_csg_shadow_test}"
                     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                        "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
                         --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                         --working-directory "${_nwb_transparent_multi_runtime_root}"
                         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}"
@@ -220,6 +221,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker_smoke")
                 add_test(NAME "${_nwb_csg_shadow_test}"
                     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                        "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
                         --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                         --working-directory "${_nwb_transparent_multi_runtime_root}"
                         --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker"
@@ -232,6 +234,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_analytic_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}"
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                    "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
                     --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_transparent_multi_runtime_root}"
                     --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_analytic"
@@ -245,6 +248,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_approximate_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}"
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                    "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
                     --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
                     --working-directory "${_nwb_transparent_multi_runtime_root}"
                     --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_approximate"
@@ -597,6 +601,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_test(
             NAME nwb_caustic_optical_capture_smoke
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py"
+                "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
                 "--executable" "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
                 "--working-directory" "${_nwb_transparent_multi_runtime_root}"
                 "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/caustic_optical"
@@ -1391,7 +1396,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${_nwb_skinning_culling_runtime_root}"
             "NWB GI Test"
             "--settle-seconds" "12"
-            "--application-arg=--gpudbg"
+            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
             "--timeout" "75"
             "--expect-log-message" "GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"
             "--expect-log-message" "GiTestSmokeProject: shutdown"

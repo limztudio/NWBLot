@@ -10,7 +10,7 @@
 
 namespace __hidden_ui_controls{
 static constexpr StringView s_WindowTitle = "NWB Testbed";
-static constexpr StringView s_RendererLine = "Renderer: mesh shader path with compute emulation fallback";
+static constexpr StringView s_RendererLine = "Renderer: mesh / compute emulation";
 static constexpr StringView s_CharacterLine = "Character: female model";
 };
 

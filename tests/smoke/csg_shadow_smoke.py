@@ -83,7 +83,7 @@ def capture_arm(args, arm):
         LIT_EXPECT_LOG_MESSAGE, f"CsgShadowSmokeProject: light_source={args.light_source} "
             + f"angular_radius={0.005 if args.light_source == 'finite' and args.light == 'directional' else 0.0:.3f} "
             + f"source_radius={0.02 if args.light_source == 'finite' and args.light == 'point' else 0.0:.3f}",
-        "--application-arg=--gpudbg"]
+        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     if args.atlas == LIT_ANALYTIC:
         command += [LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"]
     if arm == "moved":
@@ -145,6 +145,8 @@ def parse_args(argv):
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument(LIT_TIMEOUT, type=float, default=90.0)
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
+        help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 100 or not math.isfinite(args.timeout) or args.timeout <= 0.0:
         parser.error("frames must be at least 100 (60 after cutter motion), and timeout must be finite and positive")

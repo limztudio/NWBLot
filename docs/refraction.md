@@ -26,7 +26,10 @@ context, and retained geometry. It associates the raster entry with a TLAS
 instance, finds the volume exit, and traces the transmitted background. The usual
 path issues three nearest-hit queries; the bounded loop permits at most seven,
 including two internal reflections and two additional ordinary transparent
-background layers. Absorption uses the traveled distance inside the primary
+background layers. Residual total internal reflection at this cap terminates with
+opaque black. Hard-edged glass can therefore show dark facets: the refraction
+resolve has no internal reflected-radiance contribution to recover that energy.
+Absorption uses the traveled distance inside the primary
 volume, with Fresnel transmission at entry and exit. Opaque screen color is reused
 only after validating visibility against the G-buffer. Other hits receive
 simplified direct diffuse lighting. This is not the full camera material shader.

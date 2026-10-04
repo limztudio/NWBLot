@@ -42,6 +42,8 @@ def parse_args(argv):
     parser.add_argument("--mode-environment", default="NWB_UI_IR_REPLAY")
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--timeout", type=float, default=75.0)
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
+        help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must include both empty startup frames and painted UI")
@@ -62,7 +64,7 @@ def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
         "--output", str(path),
         "--window-title", "NWB UI Layer Smoke",
         "--timeout", str(args.timeout),
-        "--application-arg=--gpudbg",
+        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",
         "--expect-log-message", "Loader: project startup complete",
         "--expect-log-message", "UiLayerSmokeProject: shutdown",
     ]

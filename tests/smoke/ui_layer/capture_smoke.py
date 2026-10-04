@@ -28,6 +28,8 @@ def parse_args(argv):
     parser.add_argument("--frames", type=int, default=60)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
+        help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.frames < 3:
         parser.error("--frames must be at least 3 so the empty startup frames precede painted capture")
@@ -48,7 +50,7 @@ def capture_command(args, output):
         "--expect-log-message", "UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2",
         "--expect-log-message", "UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted",
         "--expect-log-message", "UiLayerSmokeProject: shutdown",
-        "--application-arg=--gpudbg",
+        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation",
     ]
     if args.mode == "framebuffer":
         command += ["--application-capture", "--application-capture-frame-count", str(args.frames),

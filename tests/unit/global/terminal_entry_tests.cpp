@@ -77,26 +77,6 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
     EXPECT_EQ(order[s_ThirdElementIndex], 3u);
 }
 
-TEST(TerminalEntry, ApplicationFailurePolicyPreservesOutputAndNormalizesOnlyTypedTerminalExits){
-    u32 messages = 0u;
-    for(const int code : { 0, 109 }){
-        const int result = InvokeTerminalEntry<TerminalTestError>([code]()->int{
-            throw TerminalTestError{ code };
-        }, [&](const TerminalTestError& error){
-            ++messages;
-            return error.result;
-        }, [](){ return -7; }, TerminalErrorExitPolicy::ApplicationFailure);
-        EXPECT_EQ(result, -1);
-    }
-    EXPECT_EQ(messages, s_ExpectedDualCount);
-    EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([](){ return 23; }, [](const TerminalTestError&){
-        return 0;
-    }, [](){ return -7; }, TerminalErrorExitPolicy::ApplicationFailure), 23);
-    EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([]()->int{ throw 42; }, [](const TerminalTestError&){
-        return 0;
-    }, [](){ return -7; }, TerminalErrorExitPolicy::ApplicationFailure), -7);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -514,6 +514,14 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
 
 
 class RuntimeLogValidationTests(unittest.TestCase):
+    def test_gpu_validation_cannot_be_enabled_on_an_existing_window(self):
+        arguments = [LIT_WINDOW_HANDLE, "1", LIT_OUTPUT, LIT_CAPTURE_BMP]
+        args = window_capture_smoke.parse_args(arguments + ["--no-gpu-validation"])
+        self.assertEqual(args.window_handle, 1)
+        with mock.patch(LIT_SYS_STDERR), self.assertRaises(SystemExit) as error:
+            window_capture_smoke.parse_args(arguments + ["--gpu-validation"])
+        self.assertEqual(error.exception.code, 2)
+
     def test_command_line_defaults_reject_every_strict_runtime_failure(self):
         args = window_capture_smoke.parse_args([LIT_WINDOW_HANDLE, "1", LIT_OUTPUT, LIT_CAPTURE_BMP])
 

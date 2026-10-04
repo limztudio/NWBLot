@@ -112,9 +112,7 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
             AStringView(crashUploadToken.data(), crashUploadToken.size()),
             inst
         );
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; },
-        ::TerminalErrorExitPolicy::ApplicationFailure
-    );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }
 
 

@@ -198,9 +198,11 @@ bool LoadShaderArchiveRecords(
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
 }
 
+#if !defined(NWB_FINAL)
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
-    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
+    app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer (dbg/opt builds only)");
 }
+#endif
 
 bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
     if(options.disableHardwareRayTracing){
@@ -220,16 +222,11 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
     }
 
     if(options.enableGpuDebug){
-#if !defined(NWB_FINAL)
         if(!graphics.setDebugRuntimeEnabled(true)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
             return false;
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
-#else
-        // Final builds omit GPU validation; accept the flag so shared smoke invocations run unchanged without it.
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation unavailable in final builds; continuing without validation"));
-#endif
     }
 
     return true;
@@ -506,6 +503,12 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
+    ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{
+        if(crashReportingInstalled){
+            NWB::Core::RegisterGpuCrashSink(nullptr, nullptr);
+            NWB::Core::Crash::UninstallCrashHandler();
+        }
+    });
 
     NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
@@ -518,7 +521,9 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
     app.add_flag(__hidden_loader::s_ForceSdrOutputFlag.data(), options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
     app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
+#if !defined(NWB_FINAL)
     __hidden_loader::AddDebugCommandLineOptions(app, options);
+#endif
 
     return ::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
@@ -528,9 +533,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; },
-        ::TerminalErrorExitPolicy::ApplicationFailure
-    );
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; });
 }
 
 

@@ -344,7 +344,7 @@ class CombinedCausticTests(unittest.TestCase):
         for require_hardware in (False, True):
             args = SimpleNamespace(output_directory=Path(LIT_OUTPUT), executable=Path(LIT_APP_EXE),
                 working_directory=Path(LIT_RUNTIME), logserver_executable=None, timeout=60,
-                require_hardware=require_hardware, software_ray_tracing=False, caustic_photon_grid_divisor=1, application_arg=[])
+                require_hardware=require_hardware, software_ray_tracing=False, caustic_photon_grid_divisor=1, gpu_validation=True, application_arg=[])
             with self.subTest(require_hardware=require_hardware), patch.object(caustic.subprocess, LIT_RUN,
                 return_value=SimpleNamespace(returncode=77)) as run:
                 self.assertIsNone(caustic.capture(args, LIT_COMBINED))
@@ -360,7 +360,7 @@ class CombinedCausticTests(unittest.TestCase):
     def test_disabled_refraction_retains_glass_reflection_composition_pass(self):
         args = SimpleNamespace(output_directory=Path(LIT_OUTPUT), executable=Path(LIT_APP_EXE),
             working_directory=Path(LIT_RUNTIME), logserver_executable=None, timeout=60,
-            require_hardware=True, software_ray_tracing=False, caustic_photon_grid_divisor=1, application_arg=[])
+            require_hardware=True, software_ray_tracing=False, caustic_photon_grid_divisor=1, gpu_validation=True, application_arg=[])
         with patch.object(caustic.subprocess, LIT_RUN, return_value=SimpleNamespace(returncode=77)) as run:
             self.assertIsNone(caustic.capture(args, LIT_REFRACTION_DISABLED))
         command = run.call_args.args[0]
@@ -393,7 +393,7 @@ class CombinedCausticTests(unittest.TestCase):
     def test_capture_software_route_requires_real_disabled_device_for_every_toggle(self):
         args = SimpleNamespace(output_directory=Path(LIT_OUTPUT), executable=Path(LIT_APP_EXE),
             working_directory=Path(LIT_RUNTIME), logserver_executable=None, timeout=150,
-            require_hardware=False, software_ray_tracing=True, caustic_photon_grid_divisor=1, application_arg=[])
+            require_hardware=False, software_ray_tracing=True, caustic_photon_grid_divisor=1, gpu_validation=True, application_arg=[])
         for variant in caustic.VARIANTS:
             with self.subTest(variant=variant), patch.object(caustic.subprocess, LIT_RUN,
                 return_value=SimpleNamespace(returncode=77)) as run:
@@ -401,7 +401,7 @@ class CombinedCausticTests(unittest.TestCase):
             command = run.call_args.args[0]
             pairs = set(zip(command, command[1:]))
             self.assertIn("--application-arg=--disable-hardware-ray-tracing", command)
-            self.assertIn("--application-arg=--gpudbg", command)
+            self.assertIn("--gpu-validation", command)
             self.assertNotIn(LIT_SKIP_LOG_MESSAGE, command)
             self.assertIn((LIT_EXPECT_LOG_MESSAGE,
                 "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"), pairs)

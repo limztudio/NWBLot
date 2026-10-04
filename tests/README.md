@@ -17,6 +17,12 @@ ctest --preset windows-clang-arm64-dbg -R '^nwb_global_tests$' --output-on-failu
 
 `python -m launcher build all --configure-preset windows-clang-arm64 --config dbg` builds the complete configured tree without launching applications. Change the configure preset and configuration for another platform or build variant. The full presets enable tests; with an engine or project preset, add `-D NWB_BUILD_TESTS=ON`. Build-specific options such as `--build-dir`, `--jobs`, and `-D KEY=VALUE` belong before any application separator; the build command accepts no application arguments. CTest execution remains a separate command.
 
+Registered captures that request GPU validation enable it in `dbg` and `opt`, and disable that request in `fin`.
+The `fin` loader rejects `--gpudbg` before graphics initialization. Shared capture wrappers default validation on for
+manual use; select `--no-gpu-validation` when using a `fin` executable. The generic `window_capture_smoke.py` defaults it
+off; request `--gpu-validation` with a `dbg` or `opt` executable when validation is required. Validation cannot be enabled
+by capturing an already-running `--window-handle`.
+
 Keep test sources focused on one domain within their suite. When a file grows to cover several domains, split its tests into named sources such as resource imports, command validation, presentation, or telemetry codecs, and register each source in the nearest `CMakeLists.txt`. Preserve the existing executable, suite, and case names so CTest commands and GoogleTest filters continue to work.
 
 Keep helpers beside the tests that use them. Share fixtures and declarations through small headers in a named test detail namespace; place substantial shared implementations in `.cpp` files. Keep domain-specific helpers with their tests, and avoid collecting test bodies in shared headers or numbered source fragments.

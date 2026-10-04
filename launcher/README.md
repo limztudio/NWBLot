@@ -66,6 +66,11 @@ Pass application arguments after `--` when running:
 python -m launcher testbed --config opt -- --gpudbg
 ```
 
+`--gpudbg` enables graphics validation in `dbg` and `opt` applications. `fin` applications omit this option and reject
+explicit requests during command-line parsing. Python capture harnesses also expose `--gpu-validation` / `--no-gpu-validation`;
+use `--no-gpu-validation` with a `fin` executable. The root smoke launcher can pass the native request after `--`, as shown
+above.
+
 Build-only commands reject application arguments and contradictory `--skip-build` requests before making changes.
 `--skip-build` remains available for launching existing binaries. Real launches require an executable artifact from the
 selected build and configuration's CMake File API reply, unless `--executable` supplies the path explicitly. Missing target

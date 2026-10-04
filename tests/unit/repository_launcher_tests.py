@@ -141,6 +141,16 @@ LIT_METADATA_LIBRARY = "STATIC_LIBRARY"
 LIT_ACTUAL_EXECUTABLE = "actual-target.exe"
 LIT_PREVIEW_EXECUTABLE = "preview-target"
 LIT_EXPLICIT_EXECUTABLE = "explicit-target.exe"
+LIT_STDOUT = "stdout"
+LIT_STDERR = "stderr"
+LIT_CHILD_STDOUT = "launcher child help"
+LIT_CHILD_STDERR = "launcher child error"
+LIT_PYTHON_COMMAND = "-c"
+LIT_READ_WRITE_TEXT = "w+"
+LIT_CHILD_STREAMS_PROGRAM = (
+    f"import sys; print({LIT_CHILD_STDOUT!r}, flush=True); "
+    f"print({LIT_CHILD_STDERR!r}, file=sys.stderr, flush=True); sys.exit(23)"
+)
 
 
 class FakeWindowsProcessApi:
@@ -528,6 +538,42 @@ class LauncherPlatformTests(unittest.TestCase):
             launcher.APPLICATION_FORCED_STOP_TIMEOUT_SECONDS,
         )
         generic_terminate.assert_not_called()
+
+    def test_owned_child_output_reaches_redirected_parent_streams(self):
+        args = argparse.Namespace(
+            kill_existing=False,
+            dry_run=False,
+            gpudbg=False,
+            detach=False,
+            run_seconds=None,
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stdout,
+            tempfile.TemporaryFile(mode=LIT_READ_WRITE_TEXT, encoding=LIT_UTF_8) as stderr,
+        ):
+            with (
+                mock.patch.object(sys, LIT_STDOUT, stdout),
+                mock.patch.object(sys, LIT_STDERR, stderr),
+            ):
+                exit_code = launcher.launch_process(
+                    args,
+                    Path(sys.executable),
+                    Path(temp_dir),
+                    os.environ.copy(),
+                    (LIT_PYTHON_COMMAND, LIT_CHILD_STREAMS_PROGRAM),
+                )
+
+            stdout.seek(0)
+            stderr.seek(0)
+            stdout_lines = stdout.read().splitlines()
+            stderr_lines = stderr.read().splitlines()
+
+        self.assertEqual(23, exit_code)
+        self.assertIn(LIT_CHILD_STDOUT, stdout_lines)
+        self.assertNotIn(LIT_CHILD_STDERR, stdout_lines)
+        self.assertEqual([LIT_CHILD_STDERR], stderr_lines)
 
     def test_discovers_leaf_launchers(self):
         with tempfile.TemporaryDirectory() as temp_dir:

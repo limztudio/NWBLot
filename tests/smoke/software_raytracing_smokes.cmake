@@ -8,7 +8,7 @@ function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTO
         "${RUNTIME_DIRECTORY}"
         "${WINDOW_TITLE}"
         "--application-arg=--disable-hardware-ray-tracing"
-        "--application-arg=--gpudbg"
+        "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
         "--timeout" "150"
         "--render-ready-timeout" "90"
         "--settle-seconds" "8"
@@ -82,6 +82,7 @@ if(TARGET nwb_caustic_sphere_smoke)
         NAME nwb_software_raytracing_optical_smoke
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py"
             --software-ray-tracing
+            "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
             --executable "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
             --working-directory "${_nwb_sw_smoke_runtime}"
             --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/software_optical"

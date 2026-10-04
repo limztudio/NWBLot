@@ -14,6 +14,7 @@ LIT_NWB_UNKNOWN_OPTION = "--nwb-unknown-option"
 LIT_OUTPUT_2 = "output"
 LIT_MAIN = "__main__"
 LIT_UTF_8 = "utf-8"
+LIT_STARTUP_MARKERS = ("Log server:", "Loader:", "GraphicsRuntime:", "Vulkan:")
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,13 +59,15 @@ def verify_utility(executable: pathlib.Path, root: pathlib.Path) -> None:
 
 
 def verify_application(executable: pathlib.Path, root: pathlib.Path) -> None:
-    for arguments in ([LIT_HELP], [LIT_NWB_UNKNOWN_OPTION]):
+    for arguments, expected_code in (([LIT_HELP], 0), ([LIT_NWB_UNKNOWN_OPTION], 109)):
         result = run(executable, arguments, root)
-        assert result.returncode in (-1, 255, 0xFFFFFFFF), (executable, arguments, result)
+        assert result.returncode == expected_code, (executable, arguments, result)
         if arguments == [LIT_HELP]:
-            assert LIT_HELP in result.stdout, result
+            assert LIT_HELP in result.stdout and not result.stderr, result
         else:
             assert LIT_NWB_UNKNOWN_OPTION in result.stderr, result
+        output = result.stdout + result.stderr
+        assert all(marker not in output for marker in LIT_STARTUP_MARKERS), (executable, arguments, result)
 
 
 def main() -> None:

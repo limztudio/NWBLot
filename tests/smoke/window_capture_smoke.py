@@ -2419,6 +2419,8 @@ def parse_args(argv):
     )
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Do not start a logserver; launch with standalone log output.")
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=False,
+        help="Request graphics validation from a launched dbg/opt application; fin applications reject the request.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
     parser.add_argument("--log-output", type=Path,
         help="For application capture, save the exact collected per-launch log text before validation.")
@@ -2484,6 +2486,8 @@ def parse_args(argv):
         parser.error("--expect-transparent-csg requires --transparent-csg-pose")
     if args.transparent_csg_pose is not None and not args.expect_transparent_csg:
         parser.error("--transparent-csg-pose requires --expect-transparent-csg")
+    if args.gpu_validation and args.window_handle is not None:
+        parser.error("--gpu-validation requires launching an executable, not --window-handle")
     if args.application_capture and args.window_handle is not None:
         parser.error("--application-capture cannot be combined with --window-handle")
     if args.log_output and not args.application_capture:
@@ -2517,6 +2521,8 @@ def parse_args(argv):
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()
+    if args.gpu_validation:
+        args.application_arg = ["--gpudbg", *args.application_arg]
     return args
 
 

@@ -67,7 +67,8 @@ def capture(args, variant):
         LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", "360",
         LIT_TIMEOUT, str(args.timeout), "--log-output", str(output.with_suffix(LIT_LOG)),
-        LIT_EXPECT_LOG_MESSAGE, "TransparentMultiSmokeProject: shutdown"]
+        LIT_EXPECT_LOG_MESSAGE, "TransparentMultiSmokeProject: shutdown",
+        "--gpu-validation" if args.gpu_validation else "--no-gpu-validation"]
     enabled = variant != LIT_REFLECTION_DISABLED
     command += [LIT_EXPECT_LOG_MESSAGE, "CausticSphereSmokeProject: reflection mode "
         + (("1" if args.software_ray_tracing else "2") if enabled else "0"),
@@ -85,7 +86,7 @@ def capture(args, variant):
         command += [LIT_EXPECT_LOG_MESSAGE, "AVBOIT refraction resolve:"]
     command += [LIT_EXPECT_LOG_MESSAGE if variant != LIT_CAUSTICS_DISABLED else LIT_REJECT_LOG_MESSAGE, "caustic producer ("]
     if args.software_ray_tracing:
-        command += ["--application-arg=--disable-hardware-ray-tracing", "--application-arg=--gpudbg"]
+        command += ["--application-arg=--disable-hardware-ray-tracing"]
         for message in (
             "Loader: hardware ray tracing disabled before device creation",
             "Vulkan: hardware ray tracing policy=disabled",
@@ -264,6 +265,8 @@ def parse_args(argv):
         help="Disable logical-device hardware ray tracing and validate software/screen-space optical contributions.")
     parser.add_argument("--application-arg", action=LIT_APPEND, default=[])
     caustic_quality_smoke.add_arguments(parser)
+    parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True,
+        help="Request graphics validation; use --no-gpu-validation for a fin application.")
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("timeout must be positive")

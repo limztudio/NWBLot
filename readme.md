@@ -18,7 +18,8 @@ Common tools:
 - CMake 3.25 or newer
 - Ninja
 - LLVM/Clang, including the LLVM linker and archive tools
-- Python 3 for the launcher and test-enabled builds
+- Python 3.8 or newer for the launcher and string-literal compiler pipeline
+- The compiler host's LLVM C API shared library matching the C and C++ Clang version exactly
 - `slangc` for the asset pipeline, which is enabled by default
 - A Vulkan loader and a compatible Vulkan driver for rendering
 
@@ -98,6 +99,10 @@ Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime a
 - Name-symbol: `__exec/<platform>/<arch>/namesym/<config>/`
 
 Building `testbed` also cooks its required assets into the matching runtime `res` directory.
+
+String pooling applies to C/C++ literals on every target through Clang's normal literal pooling; clang-cl also receives `/GF`. `NWB_OBFUSCATE_STRING_LITERALS=ON` is the default. The compiler pipeline pools and encodes eligible literals that survive optimization, then one decoder per executable or shared library restores their bytes before application static initialization. `constexpr StringView` declarations retain compile-time evaluation and direct pointer/length access, with no per-access decode checks or string allocations.
+
+Obfuscation requires a Ninja or Makefiles generator, Python 3.8 or newer, and a matching LLVM C API shared library that Python can load on the compiler host. Configuration discovers and validates the library, or accepts its path through `-D NWB_LLVM_C_LIBRARY=<path>`; missing tools, mismatched versions, and competing compiler/linker launchers fail configuration. Set `-D NWB_OBFUSCATE_STRING_LITERALS=OFF` to retain ordinary pooling without encoding. Encoded records add startup work, headers, alignment, and writable memory; pooling savings depend on the workload. Decoded text remains readable in memory, and named arrays, identity-sensitive objects, optimized immediates, debug data, and name-symbol data are outside the transformation's coverage. See [the launcher guide](launcher/README.md#string-literal-pooling-and-obfuscation) for configuration examples and limitations.
 
 ## Rendering portability
 

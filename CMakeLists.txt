@@ -81,6 +81,7 @@ endif()
 # On-demand "nwb_namesym" target: build-mode run -> .namesym sidecars bundled next to this configuration's logserver,
 # which loads them at startup to decode opt/fin client log hashes. No-op inside the build-mode variant itself.
 nwb_add_name_symbol_target()
+nwb_finalize_string_literals()
 
 message(STATUS "Configured NWBLot for ${CMAKE_SYSTEM_NAME} (${NWB_OUTPUT_ARCH}) with ${NWB_COMPILER_DESCRIPTION}")
 message(STATUS "Artifact output root: ${NWB_OUTPUT_ROOT}")

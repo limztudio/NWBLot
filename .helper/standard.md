@@ -350,6 +350,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - For compile-time string literals, use `constexpr StringView` rather than `constexpr const char*`:
   - Correct: `constexpr StringView str = "foobar";`
   - Wrong: `constexpr const char* str = "foobar";`
+- Keep C/C++ literal pooling and optional obfuscation at the compiler/linker boundary. Preserve frontend `constexpr` evaluation, borrowed view lifetimes, required object identity, and the selected machine-code optimization level. Decode eligible pooled records once per image before application static initialization; do not add per-access decode guards, temporary heap strings, or owning-string conversions to ordinary literal access.
+- Measure literal pooling savings separately from encoding costs: startup decoding, record headers/alignment, and writable private pages. Named arrays, address-significant or explicitly retained objects, optimized immediates, debug data, and name-symbol data are outside eligible literal-global coverage; decoded bytes remain readable in memory. Do not claim complete plaintext removal or zero startup/memory cost.
 - Reserve container capacity when expected counts are known.
 - Use the shared CPU task scheduler and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.

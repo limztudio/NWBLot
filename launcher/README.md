@@ -80,3 +80,38 @@ metadata or artifacts fail before launch. Dry runs can preview the repository na
 Specialized workflows such as `pipeline`, `smoke`, and the A/B runners have their own options; use their `--help` output.
 To build their CMake targets without running the workflow, use the generic `build` command. The Python `ui-skin` generator
 also owns a `launch.py` entry point and is available as `python -m launcher ui-skin`; see [its guide](../utilities/ui_skin/README.md).
+
+## String-literal pooling and obfuscation
+
+Clang's ordinary C/C++ literal pooling applies on every target; clang-cl also receives `/GF`. The default
+`NWB_OBFUSCATE_STRING_LITERALS=ON` build adds an optimized-bitcode transformation and one decoder per executable or shared
+library. Eligible narrow, UTF-16, and UTF-32 literals share encoded records when their bytes, character width, and alignment
+match. The decoder restores those records before application static initialization; their storage then lasts for the image's
+lifetime. Source `constexpr StringView` evaluation, borrowed view lifetime, and direct pointer/length access remain intact.
+
+The pipeline requires Python 3.8 or newer, a Ninja or Makefiles generator, and the compiler host's LLVM C API shared library.
+Its major, minor, and patch version must match both C and C++ Clang exactly, and Python must be able to load its host
+architecture. Configuration discovers candidate libraries beside the compiler and in toolchain library directories, validates
+the required API exports, and fails if no matching library is available. Supply an explicit library when needed:
+
+```powershell
+python -m launcher build all --config opt -D "NWB_LLVM_C_LIBRARY=C:/Program Files/LLVM/bin/LLVM-C.dll"
+```
+
+To keep ordinary pooling and disable encoding:
+
+```powershell
+python -m launcher build all --config opt -D NWB_OBFUSCATE_STRING_LITERALS=OFF
+```
+
+These are CMake cache settings, so a later build keeps the chosen value; pass `-D NWB_OBFUSCATE_STRING_LITERALS=ON` to
+reenable encoding. Enabled builds own the compiler and linker launchers and reject competing launchers. They preserve the
+selected `-O0`/`-O2`/`-O3` code-generation level and run LLVM optimization before encoding, without a second LLVM
+optimization pipeline afterward. Unsupported transformed object modes, including LTO and multi-source object commands,
+fail explicitly. Failed compilation preserves an existing successful object.
+
+Pooling can reduce duplicated literal storage, while encoding adds record headers, alignment, writable pages, and one
+startup pass over the records. There is no per-access decode branch or heap string allocation. Obfuscation encodes eligible
+compiler literal globals; named arrays, address-significant objects, explicitly retained globals, optimized immediates, debug
+data, and name-symbol data remain outside its coverage. Decoded text is readable in process memory. The object pipeline
+handles COFF, ELF, and Mach-O formats, which does not expand the repository's supported application platforms.

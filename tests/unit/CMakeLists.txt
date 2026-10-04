@@ -16,6 +16,26 @@ add_subdirectory(task)
 add_subdirectory(telemetry)
 add_subdirectory(ui)
 
+if(NWB_OBFUSCATE_STRING_LITERALS)
+    set(_nwb_literal_test_target_arguments)
+    if(CMAKE_CXX_COMPILER_TARGET)
+        list(APPEND _nwb_literal_test_target_arguments --target "${CMAKE_CXX_COMPILER_TARGET}")
+    endif()
+    add_test(
+        NAME nwb_string_literal_compiler_tests
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/string_literal_compiler_tests.py"
+            --compiler "${CMAKE_CXX_COMPILER}"
+            --c-compiler "${CMAKE_C_COMPILER}"
+            --runtime-object $<TARGET_OBJECTS:nwb_string_literal_runtime>
+            --llvm-library "${NWB_LLVM_C_LIBRARY}"
+            --llvm-version "${NWB_STRING_LITERAL_LLVM_VERSION}"
+            --configuration "$<CONFIG>"
+            --source-dir "${PROJECT_SOURCE_DIR}"
+            ${_nwb_literal_test_target_arguments}
+    )
+    set_tests_properties(nwb_string_literal_compiler_tests PROPERTIES TIMEOUT 120)
+endif()
+
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     add_test(
         NAME nwb_launcher_unit

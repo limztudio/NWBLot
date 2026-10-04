@@ -170,22 +170,22 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsWireFieldOrderIsStable){
 
     const auto readU16 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
         u16 value = 0u;
-        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readU32 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
         u32 value = 0u;
-        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readU64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
         u64 value = 0u;
-        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
     const auto readF64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
         f64 value = 0.0;
-        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        GLOBAL_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
         return value;
     };
 
@@ -268,13 +268,13 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     const auto loadRuntimeStatistics = [&]()->bool{
         if(!Telemetry::BuildFrameGraphPayload(testArena.arena, 911u, nodes, edges, payload))
             return false;
-        NWB_MEMCPY(
+        GLOBAL_MEMCPY(
             &first,
             sizeof(first),
             payload.data() + runtimeStatisticsOffset,
             sizeof(first)
         );
-        NWB_MEMCPY(
+        GLOBAL_MEMCPY(
             &second,
             sizeof(second),
             payload.data() + runtimeStatisticsOffset + sizeof(first),
@@ -286,7 +286,7 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
 
     ASSERT_TRUE(loadRuntimeStatistics());
     second.nodeIndex = first.nodeIndex;
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(
         payload.data() + runtimeStatisticsOffset + sizeof(first),
         payload.size() - runtimeStatisticsOffset - sizeof(first),
         &second,
@@ -297,8 +297,8 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
     ASSERT_TRUE(loadRuntimeStatistics());
     first.nodeIndex = s_ExpectedDualCount;
     second.nodeIndex = 0u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(
         payload.data() + runtimeStatisticsOffset + sizeof(first),
         payload.size() - runtimeStatisticsOffset - sizeof(first),
         &second,
@@ -308,52 +308,52 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.nodeIndex = 1u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.nodeIndex = 3u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.reserved = 1u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.graphGeneration = 0u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.planGeneration = 0u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.recordingAttemptGeneration = 0u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.deviceGeneration = 0u;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.compile.declarationSeconds = -1.0;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.recording.recordingSeconds = Limit<f64>::s_Infinity;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());
     first.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
-    NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+    GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     for(usize mutationIndex = 0u; mutationIndex < LengthOf(s_FrameGraphRuntimeStatisticsCountMutations); ++mutationIndex){
@@ -362,15 +362,15 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
         Telemetry::FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
         s_FrameGraphRuntimeStatisticsCountMutations[mutationIndex](malformed);
         first = EncodeTestFrameGraphRuntimeStatistics(malformed, first.nodeIndex, first.reserved);
-        NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
+        GLOBAL_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
         EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
     }
 
     ASSERT_TRUE(loadRuntimeStatistics());
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    GLOBAL_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     header.runtimeStatisticsCount = 4u;
-    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    GLOBAL_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(loadRuntimeStatistics());

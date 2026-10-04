@@ -95,7 +95,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
 
     const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
-    NWB_ASSERT(
+    GLOBAL_ASSERT(
         !hasCsgIntervalReads
         || (
             accumulationPayload.accumulationPhasePrepared
@@ -140,7 +140,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         accumulationComputeEmulationPlanCaptured
         && !accumulationComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT(
+        NWB_LOGGER_WARNING(GLOBAL_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Accumulation compute-emulation output states"
         ));
     }
@@ -173,7 +173,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         inputs.sharedComputeEmulationPlanCaptured
         && !accumulationSharedComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT(
+        NWB_LOGGER_WARNING(GLOBAL_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Accumulation shared compute-emulation output state"
         ));
     }
@@ -409,7 +409,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             Move(computeEmulationPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT(
+            NWB_LOGGER_WARNING(GLOBAL_TEXT(
                 "RendererSystem: could not declare AVBOIT Accumulation compute-emulation producer"
             ));
             return false;
@@ -531,10 +531,10 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
                 inputs.sharedComputeEmulationPlan.drawCount
             )
         ;
-        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+        GLOBAL_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
             inputs.sharedComputeEmulationPlan.drawCount
         ));
-        NWB_ASSERT(
+        GLOBAL_ASSERT(
             accumulationSharedComputeEmulationPhaseCount
             <= LengthOf(accumulationSharedComputeEmulationPhaseIdentities)
         );
@@ -562,7 +562,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
                 )
             ;
             if(!m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex].valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT(
+                NWB_LOGGER_WARNING(GLOBAL_TEXT(
                     "RendererSystem: could not declare AVBOIT Accumulation shared compute-emulation phase"
                 ));
                 return false;
@@ -595,7 +595,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             Move(accumulationPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_accumulationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
             return false;
         }
     }
@@ -626,7 +626,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         AvboitAccumulationFinalizeGraphTask::Payload{}
     );
     if(!m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
         return false;
     }
 

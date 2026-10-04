@@ -32,162 +32,162 @@
 #endif
 
 #if defined(__clang__)
-#define NWB_COMPILER_CLANG 1
+#define GLOBAL_COMPILER_CLANG 1
 #else
-#define NWB_COMPILER_CLANG 0
+#define GLOBAL_COMPILER_CLANG 0
 #endif
 
 #if defined(_MSC_VER) && !defined(__clang__)
-#define NWB_COMPILER_MSVC 1
+#define GLOBAL_COMPILER_MSVC 1
 #else
-#define NWB_COMPILER_MSVC 0
+#define GLOBAL_COMPILER_MSVC 0
 #endif
 
 #if defined(__clang_cl__) || (defined(_MSC_VER) && !defined(__clang__))
-#define NWB_COMPILER_FRONTEND_MSVC 1
+#define GLOBAL_COMPILER_FRONTEND_MSVC 1
 #else
-#define NWB_COMPILER_FRONTEND_MSVC 0
+#define GLOBAL_COMPILER_FRONTEND_MSVC 0
 #endif
 
-#if !NWB_COMPILER_FRONTEND_MSVC
-#define NWB_COMPILER_FRONTEND_GNU 1
+#if !GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_COMPILER_FRONTEND_GNU 1
 #else
-#define NWB_COMPILER_FRONTEND_GNU 0
+#define GLOBAL_COMPILER_FRONTEND_GNU 0
 #endif
 
 #if defined(PROP_DBG)
-#define NWB_DEBUG
+#define GLOBAL_DEBUG
 #elif defined(PROP_OPT)
-#define NWB_OPTIMIZE
+#define GLOBAL_OPTIMIZE
 #elif defined(PROP_FIN)
-#define NWB_FINAL
+#define GLOBAL_FINAL
 #endif
 
-#if !defined(NWB_DEBUG) && (defined(DEBUG) || defined(_DEBUG))
-#define NWB_DEBUG
+#if !defined(GLOBAL_DEBUG) && (defined(DEBUG) || defined(_DEBUG))
+#define GLOBAL_DEBUG
 #endif
 
-#if !defined(NWB_OPTIMIZE) && !defined(NWB_FINAL) && (defined(NDEBUG) || defined(_NDEBUG))
-#define NWB_OPTIMIZE
+#if !defined(GLOBAL_OPTIMIZE) && !defined(GLOBAL_FINAL) && (defined(NDEBUG) || defined(_NDEBUG))
+#define GLOBAL_OPTIMIZE
 #endif
 
-#if defined(NWB_DEBUG)
-#define NWB_INLINE inline
-#elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_INLINE __forceinline
+#if defined(GLOBAL_DEBUG)
+#define GLOBAL_INLINE inline
+#elif defined(GLOBAL_OPTIMIZE) || defined(GLOBAL_FINAL)
+#if GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_INLINE __forceinline
 #elif __has_attribute(always_inline) || defined(__GNUC__)
-#define NWB_INLINE inline __attribute__((always_inline))
+#define GLOBAL_INLINE inline __attribute__((always_inline))
 #else
-#define NWB_INLINE inline
+#define GLOBAL_INLINE inline
 #endif
 #endif
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_NOINLINE __declspec(noinline)
+#if GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_NOINLINE __declspec(noinline)
 #elif __has_attribute(noinline) || defined(__GNUC__)
-#define NWB_NOINLINE __attribute__((noinline))
+#define GLOBAL_NOINLINE __attribute__((noinline))
 #else
-#define NWB_NOINLINE
+#define GLOBAL_NOINLINE
 #endif
 
 #if __has_attribute(vectorcall)
-#define NWB_VECTORCALL __attribute__((vectorcall))
-#elif NWB_COMPILER_FRONTEND_MSVC
-#define NWB_VECTORCALL __vectorcall
+#define GLOBAL_VECTORCALL __attribute__((vectorcall))
+#elif GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_VECTORCALL __vectorcall
 #else
-#define NWB_VECTORCALL
+#define GLOBAL_VECTORCALL
 #endif
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_ALLOCATOR_PREFIX __declspec(allocator)
-#define NWB_ALLOCATOR_SUFFIX
+#if GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_ALLOCATOR_PREFIX __declspec(allocator)
+#define GLOBAL_ALLOCATOR_SUFFIX
 #elif __has_attribute(malloc) || defined(__GNUC__)
-#define NWB_ALLOCATOR_PREFIX
-#define NWB_ALLOCATOR_SUFFIX __attribute__((malloc))
+#define GLOBAL_ALLOCATOR_PREFIX
+#define GLOBAL_ALLOCATOR_SUFFIX __attribute__((malloc))
 #else
-#define NWB_ALLOCATOR_PREFIX
-#define NWB_ALLOCATOR_SUFFIX
+#define GLOBAL_ALLOCATOR_PREFIX
+#define GLOBAL_ALLOCATOR_SUFFIX
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_DEBUGTRAP __debugbreak()
+#if GLOBAL_COMPILER_FRONTEND_MSVC
+#define GLOBAL_DEBUGTRAP __debugbreak()
 #elif __has_builtin(__builtin_debugtrap)
-#define NWB_DEBUGTRAP __builtin_debugtrap()
+#define GLOBAL_DEBUGTRAP __builtin_debugtrap()
 #elif __has_builtin(__builtin_trap)
-#define NWB_DEBUGTRAP __builtin_trap()
+#define GLOBAL_DEBUGTRAP __builtin_trap()
 #else
-#define NWB_DEBUGTRAP
+#define GLOBAL_DEBUGTRAP
 #endif
 
-#if defined(NWB_DEBUG)
-#define NWB_OCCUR_INFO true
-#define NWB_OCCUR_ESSENTIAL_INFO true
-#define NWB_OCCUR_ASSERT true
-#define NWB_OCCUR_FATAL_ASSERT true
-#define NWB_OCCUR_WARNING true
-#define NWB_OCCUR_CRITICAL_WARNING true
-#define NWB_OCCUR_ERROR true
-#define NWB_HARDBREAK NWB_DEBUGTRAP
-#define NWB_SOFTBREAK NWB_DEBUGTRAP
-#elif defined(NWB_OPTIMIZE)
-#define NWB_OCCUR_INFO true
-#define NWB_OCCUR_ESSENTIAL_INFO true
-#define NWB_OCCUR_ASSERT false
-#define NWB_OCCUR_FATAL_ASSERT true
-#define NWB_OCCUR_WARNING true
-#define NWB_OCCUR_CRITICAL_WARNING true
-#define NWB_OCCUR_ERROR true
-#define NWB_HARDBREAK
-#define NWB_SOFTBREAK NWB_DEBUGTRAP
+#if defined(GLOBAL_DEBUG)
+#define GLOBAL_OCCUR_INFO true
+#define GLOBAL_OCCUR_ESSENTIAL_INFO true
+#define GLOBAL_OCCUR_ASSERT true
+#define GLOBAL_OCCUR_FATAL_ASSERT true
+#define GLOBAL_OCCUR_WARNING true
+#define GLOBAL_OCCUR_CRITICAL_WARNING true
+#define GLOBAL_OCCUR_ERROR true
+#define GLOBAL_HARDBREAK GLOBAL_DEBUGTRAP
+#define GLOBAL_SOFTBREAK GLOBAL_DEBUGTRAP
+#elif defined(GLOBAL_OPTIMIZE)
+#define GLOBAL_OCCUR_INFO true
+#define GLOBAL_OCCUR_ESSENTIAL_INFO true
+#define GLOBAL_OCCUR_ASSERT false
+#define GLOBAL_OCCUR_FATAL_ASSERT true
+#define GLOBAL_OCCUR_WARNING true
+#define GLOBAL_OCCUR_CRITICAL_WARNING true
+#define GLOBAL_OCCUR_ERROR true
+#define GLOBAL_HARDBREAK
+#define GLOBAL_SOFTBREAK GLOBAL_DEBUGTRAP
 #else
-#define NWB_OCCUR_INFO false
-#define NWB_OCCUR_ESSENTIAL_INFO true
-#define NWB_OCCUR_ASSERT false
-#define NWB_OCCUR_FATAL_ASSERT true
-#define NWB_OCCUR_WARNING false
-#define NWB_OCCUR_CRITICAL_WARNING true
-#define NWB_OCCUR_ERROR true
-#define NWB_HARDBREAK
-#define NWB_SOFTBREAK
+#define GLOBAL_OCCUR_INFO false
+#define GLOBAL_OCCUR_ESSENTIAL_INFO true
+#define GLOBAL_OCCUR_ASSERT false
+#define GLOBAL_OCCUR_FATAL_ASSERT true
+#define GLOBAL_OCCUR_WARNING false
+#define GLOBAL_OCCUR_CRITICAL_WARNING true
+#define GLOBAL_OCCUR_ERROR true
+#define GLOBAL_HARDBREAK
+#define GLOBAL_SOFTBREAK
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_COUT ::std::cout
-#define NWB_CIN ::std::cin
-#define NWB_WCOUT ::std::wcout
-#define NWB_WCIN ::std::wcin
-#define NWB_CERR ::std::cerr
-#define NWB_WCERR ::std::wcerr
-#define NWB_STRLEN(src) strlen(src)
-#define NWB_WSTRLEN(src) wcslen(src)
-#define NWB_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
-#define NWB_STRCMP(lhs, rhs) strcmp(lhs, rhs)
-#define NWB_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
-#define NWB_MEMSET(dest, value, size) memset(dest, value, size)
+#define GLOBAL_COUT ::std::cout
+#define GLOBAL_CIN ::std::cin
+#define GLOBAL_WCOUT ::std::wcout
+#define GLOBAL_WCIN ::std::wcin
+#define GLOBAL_CERR ::std::cerr
+#define GLOBAL_WCERR ::std::wcerr
+#define GLOBAL_STRLEN(src) strlen(src)
+#define GLOBAL_WSTRLEN(src) wcslen(src)
+#define GLOBAL_MEMCMP(lhs, rhs, size) memcmp(lhs, rhs, size)
+#define GLOBAL_STRCMP(lhs, rhs) strcmp(lhs, rhs)
+#define GLOBAL_WSTRCMP(lhs, rhs) wcscmp(lhs, rhs)
+#define GLOBAL_MEMSET(dest, value, size) memset(dest, value, size)
 #if defined(_MSC_VER)
-#define NWB_STRNLEN(src, count) strnlen_s(src, count)
-#define NWB_WSTRNLEN(src, count) wcsnlen_s(src, count)
-#define NWB_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
-#define NWB_WMEMCPY(dest, destSize, src, srcSize) wmemcpy_s(dest, destSize, src, srcSize)
-#define NWB_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
-#define NWB_WSTRCPY(dest, destSize, src) wcscpy_s(dest, destSize, src)
-#define NWB_STRNCPY(dest, destSize, src, count) strncpy_s(dest, destSize, src, count)
-#define NWB_WSTRNCPY(dest, destSize, src, count) wcsncpy_s(dest, destSize, src, count)
-#define NWB_STRCAT(dest, destSize, src) strcat_s(dest, destSize, src)
-#define NWB_WSTRCAT(dest, destSize, src) wcscat_s(dest, destSize, src)
-#define NWB_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
-#define NWB_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
-#define NWB_VSNPRINTF(dest, destSize, format, args) vsnprintf_s(dest, destSize, _TRUNCATE, format, args)
-#define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf_s(dest, destSize, format, args)
-#define NWB_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
+#define GLOBAL_STRNLEN(src, count) strnlen_s(src, count)
+#define GLOBAL_WSTRNLEN(src, count) wcsnlen_s(src, count)
+#define GLOBAL_MEMCPY(dest, destSize, src, srcSize) memcpy_s(dest, destSize, src, srcSize)
+#define GLOBAL_WMEMCPY(dest, destSize, src, srcSize) wmemcpy_s(dest, destSize, src, srcSize)
+#define GLOBAL_STRCPY(dest, destSize, src) strcpy_s(dest, destSize, src)
+#define GLOBAL_WSTRCPY(dest, destSize, src) wcscpy_s(dest, destSize, src)
+#define GLOBAL_STRNCPY(dest, destSize, src, count) strncpy_s(dest, destSize, src, count)
+#define GLOBAL_WSTRNCPY(dest, destSize, src, count) wcsncpy_s(dest, destSize, src, count)
+#define GLOBAL_STRCAT(dest, destSize, src) strcat_s(dest, destSize, src)
+#define GLOBAL_WSTRCAT(dest, destSize, src) wcscat_s(dest, destSize, src)
+#define GLOBAL_SPRINTF(format, formatSize, ...) sprintf_s(format, formatSize, __VA_ARGS__)
+#define GLOBAL_WSPRINTF(format, formatSize, ...) swprintf_s(format, formatSize, __VA_ARGS__)
+#define GLOBAL_VSNPRINTF(dest, destSize, format, args) vsnprintf_s(dest, destSize, _TRUNCATE, format, args)
+#define GLOBAL_VWSNPRINTF(dest, destSize, format, args) vswprintf_s(dest, destSize, format, args)
+#define GLOBAL_STRERROR(dest, destSize, errorNum) strerror_s(dest, destSize, errorNum)
 #else
 namespace CompileDetail{
 template<typename DestT, typename SrcT>
@@ -284,49 +284,49 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 }
 };
 
-#define NWB_STRNLEN(src, count) strnlen(src, count)
-#define NWB_WSTRNLEN(src, count) wcsnlen(src, count)
-#define NWB_MEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedMemcpy(dest, destSize, src, srcSize)
-#define NWB_WMEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedWmemcpy(dest, destSize, src, srcSize)
-#define NWB_STRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
-#define NWB_WSTRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
-#define NWB_STRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
-#define NWB_WSTRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
-#define NWB_STRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
-#define NWB_WSTRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
-#define NWB_SPRINTF(format, formatSize, ...) snprintf(format, formatSize, __VA_ARGS__)
-#define NWB_WSPRINTF(format, formatSize, ...) swprintf(format, formatSize, __VA_ARGS__)
-#define NWB_VSNPRINTF(dest, destSize, format, args) vsnprintf(dest, destSize, format, args)
-#define NWB_VWSNPRINTF(dest, destSize, format, args) vswprintf(dest, destSize, format, args)
-#define NWB_STRERROR(dest, destSize, errorNum) ::CompileDetail::BoundedStrError(dest, destSize, errorNum)
+#define GLOBAL_STRNLEN(src, count) strnlen(src, count)
+#define GLOBAL_WSTRNLEN(src, count) wcsnlen(src, count)
+#define GLOBAL_MEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedMemcpy(dest, destSize, src, srcSize)
+#define GLOBAL_WMEMCPY(dest, destSize, src, srcSize) ::CompileDetail::CheckedWmemcpy(dest, destSize, src, srcSize)
+#define GLOBAL_STRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
+#define GLOBAL_WSTRCPY(dest, destSize, src) ::CompileDetail::BoundedCopy(dest, destSize, src)
+#define GLOBAL_STRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
+#define GLOBAL_WSTRNCPY(dest, destSize, src, count) ::CompileDetail::BoundedNCopy(dest, destSize, src, count)
+#define GLOBAL_STRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
+#define GLOBAL_WSTRCAT(dest, destSize, src) ::CompileDetail::BoundedCat(dest, destSize, src)
+#define GLOBAL_SPRINTF(format, formatSize, ...) snprintf(format, formatSize, __VA_ARGS__)
+#define GLOBAL_WSPRINTF(format, formatSize, ...) swprintf(format, formatSize, __VA_ARGS__)
+#define GLOBAL_VSNPRINTF(dest, destSize, format, args) vsnprintf(dest, destSize, format, args)
+#define GLOBAL_VWSNPRINTF(dest, destSize, format, args) vswprintf(dest, destSize, format, args)
+#define GLOBAL_STRERROR(dest, destSize, errorNum) ::CompileDetail::BoundedStrError(dest, destSize, errorNum)
 #endif
 
 #if defined(UNICODE) || defined(_UNICODE)
-#define NWB_TCOUT NWB_WCOUT
-#define NWB_TCIN NWB_WCIN
-#define NWB_TCERR NWB_WCERR
-#define NWB_TSTRLEN(src) NWB_WSTRLEN(src)
-#define NWB_TSTRNLEN(src, count) NWB_WSTRNLEN(src, count)
-#define NWB_TSTRCMP(lhs, rhs) NWB_WSTRCMP(lhs, rhs)
-#define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_WMEMCPY(dest, destSize, src, srcSize)
-#define NWB_TSTRCPY(dest, destSize, src) NWB_WSTRCPY(dest, destSize, src)
-#define NWB_TSTRNCPY(dest, destSize, src, count) NWB_WSTRNCPY(dest, destSize, src, count)
-#define NWB_TSTRCAT(dest, destSize, src) NWB_WSTRCAT(dest, destSize, src)
-#define NWB_TSPRINTF(format, formatSize, ...) NWB_WSPRINTF(format, formatSize, __VA_ARGS__)
-#define NWB_TVSNPRINTF(dest, destSize, format, args) NWB_VWSNPRINTF(dest, destSize, format, args)
+#define GLOBAL_TCOUT GLOBAL_WCOUT
+#define GLOBAL_TCIN GLOBAL_WCIN
+#define GLOBAL_TCERR GLOBAL_WCERR
+#define GLOBAL_TSTRLEN(src) GLOBAL_WSTRLEN(src)
+#define GLOBAL_TSTRNLEN(src, count) GLOBAL_WSTRNLEN(src, count)
+#define GLOBAL_TSTRCMP(lhs, rhs) GLOBAL_WSTRCMP(lhs, rhs)
+#define GLOBAL_TMEMCPY(dest, destSize, src, srcSize) GLOBAL_WMEMCPY(dest, destSize, src, srcSize)
+#define GLOBAL_TSTRCPY(dest, destSize, src) GLOBAL_WSTRCPY(dest, destSize, src)
+#define GLOBAL_TSTRNCPY(dest, destSize, src, count) GLOBAL_WSTRNCPY(dest, destSize, src, count)
+#define GLOBAL_TSTRCAT(dest, destSize, src) GLOBAL_WSTRCAT(dest, destSize, src)
+#define GLOBAL_TSPRINTF(format, formatSize, ...) GLOBAL_WSPRINTF(format, formatSize, __VA_ARGS__)
+#define GLOBAL_TVSNPRINTF(dest, destSize, format, args) GLOBAL_VWSNPRINTF(dest, destSize, format, args)
 #else
-#define NWB_TCOUT NWB_COUT
-#define NWB_TCIN NWB_CIN
-#define NWB_TCERR NWB_CERR
-#define NWB_TSTRLEN(src) NWB_STRLEN(src)
-#define NWB_TSTRNLEN(src, count) NWB_STRNLEN(src, count)
-#define NWB_TSTRCMP(lhs, rhs) NWB_STRCMP(lhs, rhs)
-#define NWB_TMEMCPY(dest, destSize, src, srcSize) NWB_MEMCPY(dest, destSize, src, srcSize)
-#define NWB_TSTRCPY(dest, destSize, src) NWB_STRCPY(dest, destSize, src)
-#define NWB_TSTRNCPY(dest, destSize, src, count) NWB_STRNCPY(dest, destSize, src, count)
-#define NWB_TSTRCAT(dest, destSize, src) NWB_STRCAT(dest, destSize, src)
-#define NWB_TSPRINTF(format, formatSize, ...) NWB_SPRINTF(format, formatSize, __VA_ARGS__)
-#define NWB_TVSNPRINTF(dest, destSize, format, args) NWB_VSNPRINTF(dest, destSize, format, args)
+#define GLOBAL_TCOUT GLOBAL_COUT
+#define GLOBAL_TCIN GLOBAL_CIN
+#define GLOBAL_TCERR GLOBAL_CERR
+#define GLOBAL_TSTRLEN(src) GLOBAL_STRLEN(src)
+#define GLOBAL_TSTRNLEN(src, count) GLOBAL_STRNLEN(src, count)
+#define GLOBAL_TSTRCMP(lhs, rhs) GLOBAL_STRCMP(lhs, rhs)
+#define GLOBAL_TMEMCPY(dest, destSize, src, srcSize) GLOBAL_MEMCPY(dest, destSize, src, srcSize)
+#define GLOBAL_TSTRCPY(dest, destSize, src) GLOBAL_STRCPY(dest, destSize, src)
+#define GLOBAL_TSTRNCPY(dest, destSize, src, count) GLOBAL_STRNCPY(dest, destSize, src, count)
+#define GLOBAL_TSTRCAT(dest, destSize, src) GLOBAL_STRCAT(dest, destSize, src)
+#define GLOBAL_TSPRINTF(format, formatSize, ...) GLOBAL_SPRINTF(format, formatSize, __VA_ARGS__)
+#define GLOBAL_TVSNPRINTF(dest, destSize, format, args) GLOBAL_VSNPRINTF(dest, destSize, format, args)
 #endif
 
 
@@ -334,7 +334,7 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 
 
 [[nodiscard]] constexpr bool CanEnableDebugRuntime(){
-#if !defined(NWB_FINAL)
+#if !defined(GLOBAL_FINAL)
     return true;
 #else
     return false;

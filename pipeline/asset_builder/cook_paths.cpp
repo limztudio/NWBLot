@@ -40,25 +40,25 @@ bool ResolveCookPaths(
     outPaths.cacheDirectory.clear();
 
     if(options.assetRoots.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: no asset roots specified"));
         return false;
     }
     if(options.outputDirectory.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: output directory is empty"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: output directory is empty"));
         return false;
     }
 
     outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), AStringView(options.repoRoot));
     outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
         return false;
     }
 
     outPaths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'")
                 , StringConvert(assetRoot.path)
                 , StringConvert(assetRoot.virtualRoot.view())
             );
@@ -70,13 +70,13 @@ bool ResolveCookPaths(
         errorCode.clear();
         if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(assetRoot.path), resolvedAssetRoot, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
                     , StringConvert(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root is empty or invalid: '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: asset root is empty or invalid: '{}'")
                     , StringConvert(assetRoot.path)
                 );
             }
@@ -91,13 +91,13 @@ bool ResolveCookPaths(
     {
         if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(options.outputDirectory), outPaths.outputDirectory, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
                     , StringConvert(options.outputDirectory)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: output directory is empty or invalid: '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: output directory is empty or invalid: '{}'")
                     , StringConvert(options.outputDirectory)
                 );
             }
@@ -118,13 +118,13 @@ bool ResolveCookPaths(
         ;
         if(!ResolveAbsolutePath(outPaths.repoRoot, requestedCacheDirectoryText, outPaths.cacheDirectory, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}")
                     , StringConvert(requestedCacheDirectoryText)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: cache directory is empty or invalid: '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: cache directory is empty or invalid: '{}'")
                     , StringConvert(requestedCacheDirectoryText)
                 );
             }
@@ -133,7 +133,7 @@ bool ResolveCookPaths(
     }
 
     if(!EnsureDirectories(outPaths.cacheDirectory, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
             , PathToString<tchar>(outPaths.cacheDirectory)
             , StringConvert(errorCode.message())
         );

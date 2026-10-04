@@ -36,7 +36,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const bool replaceTransparent = composeCsg
         && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
     if(lightSpace && lightSpace->ready && (!composeCsg || replaceTransparent)){
-        NWB_ASSERT(graphOwnsOpaqueToTransparentBoundary);
+        GLOBAL_ASSERT(graphOwnsOpaqueToTransparentBoundary);
         Core::GpuTimingMeasure timing(
             m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
         );
@@ -92,7 +92,7 @@ void RendererRayTracingSystem::reportSoftwareShadowTraversal(const DeferredFrame
         return;
 
     m_rayTracingState.m_swShadowDispatchLogged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
         , static_cast<u64>(targets.width)
         , static_cast<u64>(targets.height)
         , static_cast<u64>(m_rayTracingState.m_sceneBvhInstanceCount)

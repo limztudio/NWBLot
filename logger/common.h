@@ -39,23 +39,23 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
+inline constexpr TStringView s_UnknownLogLevelName = GLOBAL_TEXT("UNKNOWN");
 [[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type){
     switch(type){
     case Type::Info:
-        return NWB_TEXT("INFO");
+        return GLOBAL_TEXT("INFO");
     case Type::EssentialInfo:
-        return NWB_TEXT("ESSENTIAL INFO");
+        return GLOBAL_TEXT("ESSENTIAL INFO");
     case Type::Warning:
-        return NWB_TEXT("WARNING");
+        return GLOBAL_TEXT("WARNING");
     case Type::CriticalWarning:
-        return NWB_TEXT("CRITICAL WARNING");
+        return GLOBAL_TEXT("CRITICAL WARNING");
     case Type::Assert:
-        return NWB_TEXT("ASSERT");
+        return GLOBAL_TEXT("ASSERT");
     case Type::Error:
-        return NWB_TEXT("ERROR");
+        return GLOBAL_TEXT("ERROR");
     case Type::Fatal:
-        return NWB_TEXT("FATAL");
+        return GLOBAL_TEXT("FATAL");
     }
     return s_UnknownLogLevelName;
 }
@@ -88,7 +88,7 @@ inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
 
 [[nodiscard]] inline LogString FormatMessageForProcessing(LogArena& arena, const MessageType& msg){
     const auto& [time, type, str] = msg;
-    return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+    return StringFormat(arena, GLOBAL_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
 template<typename PayloadContainer>
@@ -118,7 +118,7 @@ template<typename PayloadContainer>
     constexpr tchar s_NullTerminator = 0;
     AppendPOD(outPayload, s_NullTerminator);
 
-    NWB_ASSERT(outPayload.size() == payloadBytes);
+    GLOBAL_ASSERT(outPayload.size() == payloadBytes);
     return outPayload.size() == payloadBytes;
 }
 
@@ -133,11 +133,11 @@ template<typename PayloadContainer>
     outError = {};
 
     if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
-        outError = NWB_TEXT("Received a truncated message");
+        outError = GLOBAL_TEXT("Received a truncated message");
         return false;
     }
     if(!contents){
-        outError = NWB_TEXT("Received a malformed message payload");
+        outError = GLOBAL_TEXT("Received a malformed message payload");
         return false;
     }
 
@@ -147,25 +147,25 @@ template<typename PayloadContainer>
     Timer time{};
     Type::Enum type{};
     if(!ReadPOD(payload, cursor, time) || !ReadPOD(payload, cursor, type)){
-        outError = NWB_TEXT("Received a truncated message");
+        outError = GLOBAL_TEXT("Received a truncated message");
         return false;
     }
 
     if(!IsValidMessageType(type)){
-        outError = NWB_TEXT("Received a message with an invalid type");
+        outError = GLOBAL_TEXT("Received a message with an invalid type");
         return false;
     }
 
     const usize textBytes = totalSize - cursor;
     if(textBytes < sizeof(tchar) || (textBytes % sizeof(tchar)) != 0u){
-        outError = NWB_TEXT("Received a malformed message payload");
+        outError = GLOBAL_TEXT("Received a malformed message payload");
         return false;
     }
 
     tchar terminator = 0;
     usize terminatorCursor = totalSize - sizeof(tchar);
     if(!ReadPOD(payload, terminatorCursor, terminator) || terminator != 0){
-        outError = NWB_TEXT("Received a non-null-terminated message");
+        outError = GLOBAL_TEXT("Received a non-null-terminated message");
         return false;
     }
 
@@ -174,7 +174,7 @@ template<typename PayloadContainer>
     const usize messageBytes = textBytes - sizeof(tchar);
     message.resize(messageBytes / sizeof(tchar));
     if(messageBytes != 0u)
-        NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
+        GLOBAL_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
     outMessage = MakeTuple(Move(time), type, Move(message));
     return true;
 }
@@ -209,7 +209,7 @@ public:
 
         const LogString fileName = StringFormat(
             m_arena,
-            NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
+            GLOBAL_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
             fileNameBase,
             localTime.tm_year + s_LocalTimeYearBase,
             localTime.tm_mon + s_LocalTimeMonthBase,
@@ -303,7 +303,7 @@ public:
     inline bool init(Args&&... args){
         if(!static_cast<T*>(this)->s_GlobalInit){
             if(!static_cast<T*>(this)->globalInit()){
-                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to global initialization on {}"), loggerName), Type::Fatal);
+                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, GLOBAL_TEXT("Failed to global initialization on {}"), loggerName), Type::Fatal);
                 return false;
             }
             static_cast<T*>(this)->s_GlobalInit = true;

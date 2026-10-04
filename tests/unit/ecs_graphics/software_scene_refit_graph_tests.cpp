@@ -200,7 +200,7 @@ TEST(SoftwareSceneRefitGraph, RetainedInputUploadCompilesAndOwnsTheSrvTransition
             const void* const bytes = view.uploadBlobData({ .generation = view.generation(), .index = 0u }, byteSize);
             ASSERT_NE(bytes, nullptr);
             ASSERT_EQ(byteSize, context.snapshot->inputs.size() * sizeof(SoftwareSceneRefitInstanceGpu));
-            EXPECT_EQ(NWB_MEMCMP(bytes, context.snapshot->inputs.data(), byteSize), 0);
+            EXPECT_EQ(GLOBAL_MEMCMP(bytes, context.snapshot->inputs.data(), byteSize), 0);
         }
         ASSERT_NO_FATAL_FAILURE(ExpectCompiledHandoff(context, tasks));
     }

@@ -34,7 +34,7 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
     CsgFrameGpuData& csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
     MaterialTypedByteDataVector& materialTypedBytes,
@@ -57,7 +57,7 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
         drawItems,
         instanceData,
         csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         materialTypedRanges,
 #endif
         materialTypedBytes,

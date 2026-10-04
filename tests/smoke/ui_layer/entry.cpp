@@ -17,7 +17,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return NWB_TEXT("NWB UI Layer Smoke");
+    return GLOBAL_TEXT("NWB UI Layer Smoke");
 }
 
 bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){

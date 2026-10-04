@@ -42,7 +42,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     }
 
     if(!prepareGpuTimingScopes())
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
     bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height
@@ -268,7 +268,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
 
     for(const ScopeReservation& reservation : scopeReservations){
         if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope->identity, device, reservation.queryCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), StringConvert(reservation.scope->identity.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), StringConvert(reservation.scope->identity.resolvedText()));
             return false;
         }
     }
@@ -279,7 +279,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
 void RendererFramePipeline::commitFrameTargets(DeferredFrameTargets&& targets){
     m_frameTargets = Move(targets);
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
         , m_frameTargets.width
         , m_frameTargets.height
         , StringConvert(Core::GetFormatInfo(m_frameTargets.albedoFormat).getName())
@@ -329,7 +329,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
                     recordingAttemptGeneration
                 )
             ){
-                NWB_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
+                GLOBAL_FATAL_ASSERT_MSG(false, "renderer task-graph reset must resolve every unaccepted packet");
                 TerminateInvariant();
             }
             m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
@@ -459,7 +459,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         || presentationFramebufferDesc.colorAttachments.size() != 1u
         || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
     ){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
     }
@@ -574,22 +574,22 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
             m_preparedTaskGraphOutputLayerContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("RendererSystem: output layer requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
     }
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))
             m_preparedTaskGraphPresentationContributor = contributor;
         else if(m_graphics.isDeviceRecreationRequested()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
             return false;
         }
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
     }
 
     return true;

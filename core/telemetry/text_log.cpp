@@ -96,7 +96,7 @@ bool BuildTextLogPayload(
     __hidden_telemetry_text_log::AppendUtf8Text(outPayload, message);
 
     header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
-    NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
+    GLOBAL_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
     return true;
 }
 

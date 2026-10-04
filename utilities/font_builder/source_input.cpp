@@ -22,7 +22,7 @@ bool ReadFontSourceInput(const Path& path, Core::Assets::AssetBytes& outSfnt){
     if(LowerPathExtension<AString>(path) == ".font"){
         Impl::PreparedFontSource prepared(outSfnt.get_allocator().arena());
         if(!Impl::ReadPreparedFontSource(path, prepared, false) || prepared.faceIndex != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: malformed prepared .font input"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: malformed prepared .font input"));
             return false;
         }
         outSfnt = Move(prepared.fontBytes);
@@ -31,7 +31,7 @@ bool ReadFontSourceInput(const Path& path, Core::Assets::AssetBytes& outSfnt){
     ErrorCode error;
     const u64 sourceSize = FileSize(path, error);
     if(error || sourceSize == 0u || sourceSize > Impl::s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source size is invalid or unreadable"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: source size is invalid or unreadable"));
         return false;
     }
     InputFileStream stream(path, InputFileStream::binary);

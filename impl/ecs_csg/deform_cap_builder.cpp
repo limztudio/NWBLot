@@ -176,7 +176,7 @@ bool CsgDeformCapBuilder::FillCapLoop(
     SIMDVector centerUvVec = VectorZero();
     SIMDVector centerColorVec = VectorZero();
     for(const u32 vertexIndex : loop){
-        NWB_ASSERT(vertexIndex < inOutVertices.size());
+        GLOBAL_ASSERT(vertexIndex < inOutVertices.size());
         const CsgDeformVertex& vertex = inOutVertices[vertexIndex];
         centerPositionVec = VectorAdd(centerPositionVec, LoadFloat(vertex.position));
         centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));

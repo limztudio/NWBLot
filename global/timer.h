@@ -158,7 +158,7 @@ inline Timer s_VeryBegining = TimerNow();
     if(now == static_cast<std::time_t>(-1))
         return false;
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     return localtime_s(&outTime, &now) == 0;
 #else
     return localtime_r(&now, &outTime) != nullptr;

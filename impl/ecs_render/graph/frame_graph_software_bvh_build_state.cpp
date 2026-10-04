@@ -75,7 +75,7 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
         };
         for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : meshSoftwareBvhParentBuildStates){
             if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import software BVH parent build state"));
                 return false;
             }
         }
@@ -99,7 +99,7 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
                 "Software BVH Visit Counter"
             )
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import shared software BVH build state"));
             return false;
         }
     }

@@ -95,7 +95,7 @@ private:
     }
 
     void promoteIndex(){
-        NWB_ASSERT(!m_index && m_inlineCount == s_InlineTextureCount);
+        GLOBAL_ASSERT(!m_index && m_inlineCount == s_InlineTextureCount);
         TextureIndex index(s_InlineTextureCount * 4u, m_scratchArena);
         for(Core::Texture* const identity : m_inlineTextures)
             index.insert(identity);

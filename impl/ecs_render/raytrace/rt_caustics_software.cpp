@@ -23,10 +23,10 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const u32 passIndex){
-    NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
-    NWB_ASSERT(targets.bindless.valid());
+    GLOBAL_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
+    GLOBAL_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    GLOBAL_ASSERT(heap.isInitialized());
 
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
@@ -58,7 +58,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
             ? resolve.m_waveletStepTwo
             : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet
     ;
-    NWB_ASSERT(wavelet.m_pipeline);
+    GLOBAL_ASSERT(wavelet.m_pipeline);
     __hidden_caustics::DispatchCausticResolvePass(
         commandList,
         heap,
@@ -79,9 +79,9 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
 void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.bindless.valid());
+    GLOBAL_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    GLOBAL_ASSERT(heap.isInitialized());
 
     // The graph-owned five wavelet passes have completed. Only the fixed half-B upsample remains in this callback.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
@@ -148,7 +148,7 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     decayState.setPipeline(m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setComputeState(decayState);
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    NWB_ASSERT(heap.isInitialized());
+    GLOBAL_ASSERT(heap.isInitialized());
     heap.bindCompute(commandList, *m_rayTracingState.m_causticAccumulatorDecayPipeline.get());
     commandList.setPushConstants(&decayPush, sizeof(decayPush));
     commandList.dispatch(
@@ -205,11 +205,11 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
         || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
         return false;
     }
     if(!targets.bindless.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software caustics require complete deferred bindless frame resources"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: software caustics require complete deferred bindless frame resources"));
         return false;
     }
 

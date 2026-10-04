@@ -99,7 +99,7 @@ bool UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
             m_enabled = !m_enabled;
         else if(key == Core::Key::F7){
             const bool assigned = m_integer.setValue(9007199254740995ll) && m_float.setValue(2.5);
-            NWB_FATAL_ASSERT(assigned);
+            GLOBAL_FATAL_ASSERT(assigned);
         }
         else if(key == Core::Key::F8)
             m_clamp = !m_clamp;
@@ -111,7 +111,7 @@ bool UiNumericEditSmokeScene::keyboardUpdate(const i32 key, const i32 scancode, 
 
 void UiNumericEditSmokeScene::resetModels(){
     const bool reset = m_integer.setValue(7ll) && m_float.setValue(1.25) && m_clipboard.setText("");
-    NWB_FATAL_ASSERT(reset);
+    GLOBAL_FATAL_ASSERT(reset);
     m_enabled = true;
     m_readOnly = false;
     m_clamp = true;

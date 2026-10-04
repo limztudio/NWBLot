@@ -26,7 +26,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelSpawnPipelineFailed = true;
         return false;
     }
@@ -37,7 +37,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelSpawnBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
             m_rayTracingState.m_surfelSpawnPipelineFailed = true;
             return false;
         }
@@ -63,11 +63,11 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     ;
     m_rayTracingState.m_surfelSpawnPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelSpawnPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
         m_rayTracingState.m_surfelSpawnPipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel spawn compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel spawn compute pipeline"));
     return true;
 }
 
@@ -80,7 +80,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
         return false;
     }
@@ -91,7 +91,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
             m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
             return false;
         }
@@ -117,11 +117,11 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     ;
     m_rayTracingState.m_surfelAgeFreePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelAgeFreePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
         m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel age-free compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel age-free compute pipeline"));
     return true;
 }
 
@@ -134,7 +134,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
         return false;
     }
@@ -145,7 +145,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
             m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
             return false;
         }
@@ -171,11 +171,11 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     ;
     m_rayTracingState.m_surfelHashBuildPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelHashBuildPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
         m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel hash-build compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel hash-build compute pipeline"));
     return true;
 }
 
@@ -188,7 +188,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelTracePipelineFailed = true;
         return false;
     }
@@ -199,7 +199,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel trace binding layout"));
             m_rayTracingState.m_surfelTracePipelineFailed = true;
             return false;
         }
@@ -225,11 +225,11 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     ;
     m_rayTracingState.m_surfelTracePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelTracePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
         m_rayTracingState.m_surfelTracePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: created surfel trace compute pipeline"));
     return true;
 }
 
@@ -246,7 +246,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
         return false;
     }
 
@@ -263,7 +263,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelPoolBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelPoolBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel pool buffer"));
             return false;
         }
         m_rayTracingState.m_surfelSeeded = false;
@@ -283,7 +283,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelGuidePoolBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelGuidePoolBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel guide pool buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel guide pool buffer"));
             return false;
         }
         m_rayTracingState.m_surfelResourcesNeedClear = true;
@@ -302,7 +302,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelCellHeadBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelCellHeadBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel cell-head buffer"));
             return false;
         }
         m_rayTracingState.m_surfelResourcesNeedClear = true;
@@ -321,7 +321,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelCounterBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelCounterBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel counter buffer"));
             return false;
         }
         m_rayTracingState.m_surfelResourcesNeedClear = true;
@@ -341,7 +341,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelTraceIndirectArgsBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelTraceIndirectArgsBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel trace indirect-args buffer"));
             return false;
         }
     }
@@ -359,7 +359,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelFreeListBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelFreeListBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel free-list buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel free-list buffer"));
             return false;
         }
         m_rayTracingState.m_surfelResourcesNeedClear = true;
@@ -378,7 +378,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelPoolSnapshotBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelPoolSnapshotBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel pool snapshot buffer"));
             return false;
         }
     }
@@ -396,7 +396,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelCellHeadSnapshotBuffer = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelCellHeadSnapshotBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel cell-head snapshot buffer"));
             return false;
         }
     }
@@ -412,7 +412,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelCounterReadback = m_graphics.createBuffer(desc);
         if(!m_rayTracingState.m_surfelCounterReadback){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel counter readback buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel counter readback buffer"));
             return false;
         }
     }
@@ -430,7 +430,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         ;
         m_rayTracingState.m_surfelConstants = m_graphics.createBuffer(cbDesc);
         if(!m_rayTracingState.m_surfelConstants){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel constant buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel constant buffer"));
             return false;
         }
     }
@@ -447,7 +447,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, m_rayTracingState.m_surfelPoolSnapshotHeapHandle)
         || !RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
         return false;
     }
 
@@ -473,7 +473,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel HW trace requires the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel HW trace requires the descriptor-buffer TLAS heap layout"));
         m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
         return false;
     }
@@ -484,7 +484,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceHwBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceHwBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
             m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
             return false;
         }
@@ -514,11 +514,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     ;
     m_rayTracingState.m_surfelTraceHwPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelTraceHwPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));
         m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel HW trace compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel HW trace compute pipeline"));
     return true;
 }
 
@@ -531,7 +531,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel resolve requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel resolve requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelResolvePipelineFailed = true;
         return false;
     }
@@ -542,7 +542,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelResolveBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelResolveBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
             m_rayTracingState.m_surfelResolvePipelineFailed = true;
             return false;
         }
@@ -568,11 +568,11 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     ;
     m_rayTracingState.m_surfelResolvePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelResolvePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel resolve compute pipeline"));
         m_rayTracingState.m_surfelResolvePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel resolve compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel resolve compute pipeline"));
     return true;
 }
 
@@ -585,7 +585,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel upsample requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel upsample requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelUpsamplePipelineFailed = true;
         return false;
     }
@@ -596,7 +596,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelUpsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelUpsampleBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel upsample binding layout"));
             m_rayTracingState.m_surfelUpsamplePipelineFailed = true;
             return false;
         }
@@ -622,11 +622,11 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     ;
     m_rayTracingState.m_surfelUpsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelUpsamplePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel upsample compute pipeline"));
         m_rayTracingState.m_surfelUpsamplePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel upsample compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel upsample compute pipeline"));
     return true;
 }
 
@@ -639,7 +639,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace build-args requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: surfel trace build-args requires the initialized global descriptor heap"));
         m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed = true;
         return false;
     }
@@ -650,7 +650,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceBuildArgsBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceBuildArgsBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel trace build-args binding layout"));
             m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed = true;
             return false;
         }
@@ -676,11 +676,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     ;
     m_rayTracingState.m_surfelTraceBuildArgsPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_surfelTraceBuildArgsPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create surfel trace build-args compute pipeline"));
         m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel trace build-args compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created surfel trace build-args compute pipeline"));
     return true;
 }
 

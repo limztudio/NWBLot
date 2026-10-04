@@ -78,8 +78,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool splitTransparentResolve,
     const bool dispatchTransparentTemporalMerge,
     const SoftShadowOpaqueResolvePhase::Enum opaquePhase){
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredLightingResources.valid());
+    GLOBAL_ASSERT(targets.bindless.valid());
+    GLOBAL_ASSERT(deferredLightingResources.valid());
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
@@ -159,7 +159,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 historyValid = temporalHistoryReadable ? 1u : 0u;
 
     const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeCurrentGeometryEntryState, const bool graphOwnsMergeStaticReadEntryStates, const bool graphOwnsMergeTemporalEntryStates){
-        NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
+        GLOBAL_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
         if(!graphOwnsSoftTraceInputState)
             commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         if(!graphOwnsMergeTemporalEntryStates){

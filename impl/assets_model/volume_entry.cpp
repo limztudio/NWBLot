@@ -71,7 +71,7 @@ static bool BuildModelCookedAsset(ModelCookEntry& entry, Model& outAsset){
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
         registry,
-        NWB_TEXT("model"),
+        GLOBAL_TEXT("model"),
         &ParseModelDocument,
         &ParseModelValue,
         &BuildModelCookedAsset

@@ -85,7 +85,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
 struct MaterialTypedInstanceRangeVector;
 #endif
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived cross-queue frontier.

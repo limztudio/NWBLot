@@ -12,19 +12,19 @@
 
 
 #if defined(WIN32) || defined(_WIN32)
-#define NWB_PLATFORM_WINDOWS
+#define GLOBAL_PLATFORM_WINDOWS
 #endif
 #if defined(__linux__)
-#define NWB_PLATFORM_LINUX
+#define GLOBAL_PLATFORM_LINUX
 #endif
 #if defined(__unix__)
-#define NWB_PLATFORM_UNIX
+#define GLOBAL_PLATFORM_UNIX
 #endif
 #if defined(__ANDROID__)
-#define NWB_PLATFORM_ANDROID
+#define GLOBAL_PLATFORM_ANDROID
 #endif
 #if defined(__APPLE__)
-#define NWB_PLATFORM_APPLE
+#define GLOBAL_PLATFORM_APPLE
 #endif
 
 

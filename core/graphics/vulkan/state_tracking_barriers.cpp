@@ -431,7 +431,7 @@ void AppendTextureStateBarriersBefore(
 
 
 void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
-    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
+    if(!validateCommandRecordingScope(GLOBAL_TEXT("pipeline barrier")))
         return;
 
     Framebuffer* resumeFramebuffer = nullptr;
@@ -527,14 +527,14 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         }
         else
             rejectCommandRecording(
-                NWB_TEXT("pipeline barrier"),
-                NWB_TEXT("dynamic rendering could not resume after the barrier")
+                GLOBAL_TEXT("pipeline barrier"),
+                GLOBAL_TEXT("dynamic rendering could not resume after the barrier")
             );
     }
 }
 
 void CommandList::commitBarriers(){
-    if(!validateCommandRecordingScope(NWB_TEXT("commit barriers")))
+    if(!validateCommandRecordingScope(GLOBAL_TEXT("commit barriers")))
         return;
 
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
@@ -560,7 +560,7 @@ void CommandList::setTextureState(
 ){
     if(!textureResource)
         return;
-    constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
+    constexpr TStringView s_OperationName = GLOBAL_TEXT("set texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!validateTextureForGpuState(textureResource, stateBits, s_OperationName))
@@ -572,7 +572,7 @@ void CommandList::setTextureState(
         TextureSubresourceMipResolve::Range
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or outside the texture"));
         return;
     }
 
@@ -596,8 +596,8 @@ void CommandList::setTextureState(
                 && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
             ){
                 rejectCommandRecording(
-                    NWB_TEXT("set texture state"),
-                    NWB_TEXT("tracked texture subresource state could not be resolved")
+                    GLOBAL_TEXT("set texture state"),
+                    GLOBAL_TEXT("tracked texture subresource state could not be resolved")
                 );
                 return;
             }

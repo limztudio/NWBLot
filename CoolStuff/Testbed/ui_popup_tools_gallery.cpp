@@ -29,7 +29,7 @@ void TestbedUiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const
     const ContextMenuResult result = ui.contextMenu("commands", "anchor", m_source, m_menu, options);
     if(result.activated){
         m_command = result.key;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom context command key={}"), m_command);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom context command key={}"), m_command);
     }
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/popup_tools_caption"));
     const auto text = StringFormat(scratchArena, "Command: {} / Clicks: {}", m_command, m_anchorClicks);
@@ -37,7 +37,7 @@ void TestbedUiPopupToolsGallery::paint(NWB::Impl::UiPaintContext& context, const
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom popup tools declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom popup tools declaration failed"));
 }
 
 

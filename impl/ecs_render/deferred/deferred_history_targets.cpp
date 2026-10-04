@@ -42,17 +42,17 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     if(history.valid())
         return true;
 
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.causticIrradiance);
-    NWB_ASSERT(targets.surfelIrradiance);
+    GLOBAL_ASSERT(targets.bindless.valid());
+    GLOBAL_ASSERT(targets.shadowVisibility);
+    GLOBAL_ASSERT(targets.causticIrradiance);
+    GLOBAL_ASSERT(targets.surfelIrradiance);
 
     resetLaggedLightingHistoryResources(targets);
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged lighting history requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: lagged lighting history requires the global descriptor heap"));
         return false;
     }
 
@@ -70,7 +70,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     ;
     history.shadowVisibility = m_graphics.createTexture(shadowHistoryDesc);
     if(!history.shadowVisibility){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create lagged shadow-visibility history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -87,7 +87,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     ;
     history.causticIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
     if(!history.causticIrradiance){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create lagged caustic-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -98,7 +98,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     ;
     history.surfelIrradiance = m_graphics.createTexture(irradianceHistoryDesc);
     if(!history.surfelIrradiance){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create lagged surfel-irradiance history"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -141,7 +141,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         )
     ;
     if(!descriptorsRegistered){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -161,7 +161,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     ;
     history.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!history.slotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create lagged lighting-history slot buffer"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }
@@ -174,7 +174,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
             Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get())
         )
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;
     }

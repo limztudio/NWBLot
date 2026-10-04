@@ -235,7 +235,7 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
     EXPECT_EQ(runtimeZebraId, cookedZebraId);
 }
 
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
 TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -271,7 +271,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
         includeRoot,
         scratchArena
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("generated include")));
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));

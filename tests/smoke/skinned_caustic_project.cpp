@@ -117,7 +117,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("SkinnedCausticSmokeProject"));
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, GLOBAL_TEXT("SkinnedCausticSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -130,33 +130,33 @@ private:
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
             return false;
         }
-        NWB_ASSERT(modelAsset);
+        GLOBAL_ASSERT(modelAsset);
         const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
         if(!model){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded model has unexpected type"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: loaded model has unexpected type"));
             return false;
         }
         if(model->skeletonObjects().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: model has no skeleton object"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: model has no skeleton object"));
             return false;
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
             return false;
         }
-        NWB_ASSERT(skeletonAsset);
+        GLOBAL_ASSERT(skeletonAsset);
         const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
         if(!skeleton){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded skeleton has unexpected type"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: loaded skeleton has unexpected type"));
             return false;
         }
         if(skeleton->joints().empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: skeleton has no joints"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: skeleton has no joints"));
             return false;
         }
 
@@ -181,7 +181,7 @@ private:
             tintApplied
         );
         if(!tintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));
 
         return entity;
     }
@@ -258,21 +258,21 @@ public:
             NWB::Impl::ModelObjectKind::Skeleton
         );
 
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             activeCamera.camera.valid()
                 && m_groundEntity.valid()
                 && m_character.valid()
                 && m_skeletonEntity.valid(),
-            NWB_TEXT("SkinnedCausticSmokeProject failed to create all scene entities")
+            GLOBAL_TEXT("SkinnedCausticSmokeProject failed to create all scene entities")
         );
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)"), static_cast<u32>(m_bindJoints.size()));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinnedCausticSmokeProject: skinned glass refractor over ground created ({} joints)"), static_cast<u32>(m_bindJoints.size()));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinnedCausticSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("SkinnedCausticSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -293,8 +293,8 @@ private:
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_character = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_skeletonEntity = NWB::Core::ECS::s_InvalidEntityId;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinnedCausticSmokeProject") };
+    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ GLOBAL_TEXT("SkinnedCausticSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ GLOBAL_TEXT("SkinnedCausticSmokeProject") };
     f64 m_animationTime = 0.0;
 };
 
@@ -314,7 +314,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return NWB_TEXT("NWB Skinned Caustic Smoke");
+    return GLOBAL_TEXT("NWB Skinned Caustic Smoke");
 }
 
 

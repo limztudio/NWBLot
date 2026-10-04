@@ -78,7 +78,7 @@ public:
     inline explicit operator bool()const{ return m_invoke != nullptr; }
 
     inline void operator()(){
-        NWB_ASSERT_MSG(m_invoke != nullptr, NWB_TEXT("InplaceFunction invoked without target"));
+        GLOBAL_ASSERT_MSG(m_invoke != nullptr, GLOBAL_TEXT("InplaceFunction invoked without target"));
         m_invoke(storagePtr());
     }
 

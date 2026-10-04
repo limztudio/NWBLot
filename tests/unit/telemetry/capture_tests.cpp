@@ -42,7 +42,7 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
         {
             Telemetry::CaptureSessionCaptureScope captureScope(session);
 
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("scope text"));
             CaptureDiagnosticEvent(DiagnosticEventRecord{
                 .event = DiagnosticEventName::s_Error.data(),
                 .category = "scope_diagnostic",
@@ -52,7 +52,7 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
             });
         }
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("after scope"));
     }
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -62,8 +62,8 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
     });
 
     EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
-    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
-    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(GLOBAL_TEXT("scope text")));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(GLOBAL_TEXT("after scope")));
     EXPECT_EQ(session.eventCount(), s_ExpectedDualCount);
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
@@ -96,7 +96,7 @@ TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena,
         NWB::Core::Common::LogType::Warning,
-        NWB_TEXT("telemetry text log"),
+        GLOBAL_TEXT("telemetry text log"),
         payload
     ));
 

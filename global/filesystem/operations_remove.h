@@ -19,7 +19,7 @@ namespace GlobalFilesystemDetail{
 
 template<typename ArenaT>
 [[nodiscard]] inline u64 RemoveAllImpl(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     const DWORD attributes = FileAttributes(path, outError);
     if(outError)
         return 0u;
@@ -31,13 +31,13 @@ template<typename ArenaT>
     }
 
     u64 removedCount = 0u;
-    Path<ArenaT> pattern = path / NWB_TEXT("*");
+    Path<ArenaT> pattern = path / GLOBAL_TEXT("*");
     WIN32_FIND_DATA data = {};
     HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
     if(findHandle != INVALID_HANDLE_VALUE){
         for(;;){
             const TStringView fileName(data.cFileName);
-            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT("..")){
+            if(fileName != GLOBAL_TEXT(".") && fileName != GLOBAL_TEXT("..")){
                 const Path<ArenaT> child = path / fileName;
                 removedCount += RemoveAllImpl(child, outError);
                 if(outError){
@@ -140,7 +140,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to, ErrorCode& outError)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING)){
 #else
     if(std::rename(from.c_str(), to.c_str()) == 0){

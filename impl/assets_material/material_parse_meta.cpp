@@ -50,7 +50,7 @@ static bool ParseVariantField(
 
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' is required")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' is required")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -64,7 +64,7 @@ static bool ParseVariantField(
         usize rawVariantSize = list.empty() ? 0u : list.size() - 1u;
         for(usize i = 0u; i < list.size(); ++i){
             if(!list[i].isString()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' list elements must be strings")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' list elements must be strings")
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(fieldName)
                 );
@@ -87,7 +87,7 @@ static bool ParseVariantField(
         rawVariantView = variantText;
     }
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string or list of strings")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must be a string or list of strings")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -96,7 +96,7 @@ static bool ParseVariantField(
 
     rawVariantView = TrimView(rawVariantView);
     if(rawVariantView.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -122,7 +122,7 @@ static bool ParseVariantField(
     assignments.reserve(assignmentReserve);
 
     auto failInvalidVariant = [&](){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' has invalid variant signature '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
             , StringConvert(rawVariantView)
@@ -213,7 +213,7 @@ static bool ParseMaterialStageShaders(
         return true;  // optional: when omitted, the cross-asset phase generates the pixel shader from `surface`
                       // and assigns the shared engine mesh shader.
     if(!shadersValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     outStageShaders.reserve(shadersValue->asMap().size());
@@ -221,7 +221,7 @@ static bool ParseMaterialStageShaders(
     for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
         const AStringView stageKeyText(stageKey.data(), stageKey.size());
         if(!shaderValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader '{}' must be a string")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shader '{}' must be a string")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
@@ -231,7 +231,7 @@ static bool ParseMaterialStageShaders(
         const Core::Metascript::MStringView shaderText = shaderValue.asString();
         const AStringView shaderPath = TrimView(AStringView(shaderText.data(), shaderText.size()));
         if(!HasProjectAssetVirtualRoot(shaderPath, scratchArena)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' must use the project/ virtual root")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shader stage '{}' must use the project/ virtual root")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
@@ -244,11 +244,11 @@ static bool ParseMaterialStageShaders(
         Core::Assets::AssetRef<Shader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
         if(shaderType != Core::ShaderType::PixelStage && shaderType != Core::ShaderType::MeshStage){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
@@ -256,7 +256,7 @@ static bool ParseMaterialStageShaders(
         }
 
         if(!outStageShaders.emplace(shaderType, shaderAsset).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate shader stage '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': duplicate shader stage '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
@@ -265,7 +265,7 @@ static bool ParseMaterialStageShaders(
     }
 
     if(outStageShaders.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must not be empty"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': shaders must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -283,7 +283,7 @@ static bool ValidateMaterialOpticalStageContract(
     if(entry.stageShaders.empty() || !entry.surfaceSource.empty() || (!entry.transparent && !entry.refractive))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': explicit 'shaders' cannot be used with transparent/refractive materials; author a project 'surface' hook so AVBOIT and shadow optical passes use the material contract")
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': explicit 'shaders' cannot be used with transparent/refractive materials; author a project 'surface' hook so AVBOIT and shadow optical passes use the material contract")
         , PathToString<tchar>(nwbFilePath)
     );
     return false;
@@ -304,7 +304,7 @@ static bool ParseMaterialParameters(
     if(!parametersValue)
         return true;
     if(!parametersValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     outParameters.reserve(parametersValue->asMap().size());
@@ -314,7 +314,7 @@ static bool ParseMaterialParameters(
         const Core::Metascript::Value& paramValue
     ) -> bool{
         if(!paramValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a string")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter '{}' must be a string")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
@@ -325,19 +325,19 @@ static bool ParseMaterialParameters(
         ACompactString value;
         const AStringView paramValueText(paramValue.asString().data(), paramValue.asString().size());
         if(!key.assign(paramKeyText) || !value.assign(paramValueText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' exceeds ACompactString capacity")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter '{}' exceeds ACompactString capacity")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
             return false;
         }
         if(!key){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter names must not be empty"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter names must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
         if(!outParameters.emplace(key, value).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': duplicate parameter '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(key.view())
             );
@@ -350,7 +350,7 @@ static bool ParseMaterialParameters(
     for(const auto& [paramKey, paramValue] : parametersValue->asMap()){
         const AStringView paramKeyText(paramKey.data(), paramKey.size());
         if(paramValue.isString()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface parameter '{}' must be declared inside a block map")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface parameter '{}' must be declared inside a block map")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
@@ -358,21 +358,21 @@ static bool ParseMaterialParameters(
         }
 
         if(!paramValue.isMap()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}' must be a block map")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter '{}' must be a block map")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
             return false;
         }
         if(paramKeyText.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter block names must not be empty"), PathToString<tchar>(nwbFilePath));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter block names must not be empty"), PathToString<tchar>(nwbFilePath));
             return false;
         }
 
         for(const auto& [blockParamKey, blockParamValue] : paramValue.asMap()){
             const AStringView blockParamKeyText(blockParamKey.data(), blockParamKey.size());
             if(blockParamKeyText.empty()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter names in block '{}' must not be empty")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter names in block '{}' must not be empty")
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(paramKeyText)
                 );
@@ -381,7 +381,7 @@ static bool ParseMaterialParameters(
 
             ACompactString flattenedKey;
             if(!flattenedKey.assign(paramKeyText) || !flattenedKey.pushBack('.') || !flattenedKey.append(blockParamKeyText)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': parameter '{}.{}' exceeds ACompactString capacity")
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(paramKeyText)
                     , StringConvert(blockParamKeyText)
@@ -411,23 +411,23 @@ static bool ParseMaterialInterface(
 
     const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
     if(!interfaceValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     if(!interfaceValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must be a string"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface must be a string"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
     const Core::Metascript::MStringView interfaceText = interfaceValue->asString();
     const AStringView interfacePath = TrimView(AStringView(interfaceText.data(), interfaceText.size()));
     if(interfacePath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
     if(!HasProjectAssetVirtualRoot(interfacePath, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must use the project/ virtual root "
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface must use the project/ virtual root "
             "(e.g. 'project/shaders/surface.bind')")
             , PathToString<tchar>(nwbFilePath)
         );
@@ -439,7 +439,7 @@ static bool ParseMaterialInterface(
     ScratchString extension = PathToString(scratchArena, interfacePathPath.extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) != AStringView(".bind")){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -452,7 +452,7 @@ static bool ParseMaterialInterface(
 
     // Store path text; the Name hash is produced on demand.
     if(!Name(AStringView(strippedInterface))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': interface '{}' is invalid")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(interfacePath)
         );
@@ -482,7 +482,7 @@ static bool ParseMaterialVirtualAssetField(
     if(!fieldValue)
         return true;
     if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must be a string")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -492,7 +492,7 @@ static bool ParseMaterialVirtualAssetField(
     const Core::Metascript::MStringView fieldText = fieldValue->asString();
     const AStringView virtualPath = TrimView(AStringView(fieldText.data(), fieldText.size()));
     if(virtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -500,7 +500,7 @@ static bool ParseMaterialVirtualAssetField(
     }
 
     if(!HasProjectAssetVirtualRoot(virtualPath, scratchArena)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must use the project/ virtual root "
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must use the project/ virtual root "
             "(e.g. 'project/shaders/name{}')")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -513,7 +513,7 @@ static bool ParseMaterialVirtualAssetField(
     ScratchString extension = PathToString(scratchArena, virtualPathPath.extension());
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) != requiredExtension){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must reference a {} file")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': field '{}' must reference a {} file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
             , StringConvert(requiredExtension)
@@ -576,14 +576,14 @@ static bool ParseMaterialBoolProperty(
 
     const auto* propertyValue = asset.findField(fieldName);
     if(!propertyValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' is required and must be 0 or 1")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': '{}' is required and must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
         return false;
     }
     if(!propertyValue->isInteger()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -592,7 +592,7 @@ static bool ParseMaterialBoolProperty(
 
     const i64 propertyInt = propertyValue->asInteger();
     if(propertyInt != 0 && propertyInt != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -647,7 +647,7 @@ bool ParseMaterialMeta(
     if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, derivedVirtualPath))
         return false;
     if(!Name(AStringView(derivedVirtualPath))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     outEntry.virtualPath.assign(AStringView(derivedVirtualPath));

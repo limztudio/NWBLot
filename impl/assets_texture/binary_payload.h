@@ -25,9 +25,9 @@ namespace TextureBinaryPayload{
 
 inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
 inline constexpr u32 s_TextureVersion = 3u;
-inline constexpr TStringView s_TextureLoadBinaryContext = NWB_TEXT("Texture::loadBinary");
-inline constexpr TStringView s_TextureValidatePayloadContext = NWB_TEXT("Texture::validatePayload");
-inline constexpr TStringView s_TextureAssetKindLabel = NWB_TEXT("texture");
+inline constexpr TStringView s_TextureLoadBinaryContext = GLOBAL_TEXT("Texture::loadBinary");
+inline constexpr TStringView s_TextureValidatePayloadContext = GLOBAL_TEXT("Texture::validatePayload");
+inline constexpr TStringView s_TextureAssetKindLabel = GLOBAL_TEXT("texture");
 
 static constexpr usize s_PackedAlignBytes = 1u;
 

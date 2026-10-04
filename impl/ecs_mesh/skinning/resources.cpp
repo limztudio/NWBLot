@@ -39,7 +39,7 @@ static Core::BufferHandle SetupStructuredBuffer(
     const TStringView label
 ){
     if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return {};
     }
 
@@ -133,12 +133,12 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);
         return false;
     }
     const auto fail = [&](){
         releaseRuntimeResourceBindlessHeapHandles(resources);
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
     const auto registerBuffer = [&](Core::GpuDescriptorHandle& outHandle, const Core::DescriptorWriteItem& item){
@@ -156,7 +156,7 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         || !instance.meshletBoundsBuffer
         || !instance.meshletLocalBoundsBuffer || !instance.localBoundsBuffer
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
         return false;
     }
 
@@ -181,7 +181,7 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
 
     if(resources.skinCount != 0u){
         if(!resources.skinBuffer || !resources.jointPaletteBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers"), instance.handle.value);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent skinning payload buffers"), instance.handle.value);
             return fail();
         }
         if(
@@ -235,12 +235,12 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     bool& outResourcesRebuilt){
     outResources = nullptr;
     outResourcesRebuilt = false;
-    NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
+    GLOBAL_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
 
     const bool hasActiveSkin = payload.hasActiveSkin();
-    NWB_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
-    NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(!hasActiveSkin || payload.skinInfluenceCount == instance.skin.size());
+    GLOBAL_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
@@ -291,7 +291,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
         const Name jointPaletteBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_joints");
         if(!skinBufferName || !jointPaletteBufferName){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to derive skinning buffer names for runtime mesh '{}'"), instance.handle.value);
             return failRebuild();
         }
 
@@ -300,10 +300,10 @@ bool MeshSkinningSystem::ensureRuntimeResources(
             skinBufferName,
             skinInfluences.data(),
             skinInfluences.size(),
-            NWB_TEXT("skin influence")
+            GLOBAL_TEXT("skin influence")
         );
         if(!rebuilt.skinBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
             return failRebuild();
         }
 
@@ -312,10 +312,10 @@ bool MeshSkinningSystem::ensureRuntimeResources(
             jointPaletteBufferName,
             payload.jointMatrices.data(),
             payload.jointMatrices.size(),
-            NWB_TEXT("joint palette")
+            GLOBAL_TEXT("joint palette")
         );
         if(!rebuilt.jointPaletteBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);
             return failRebuild();
         }
     }
@@ -327,7 +327,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         "mesh_skinning_bindless_slots"
     );
     if(!bindlessSlotsBufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to derive bindless slot buffer name for runtime mesh '{}'"), instance.handle.value);
         return failRebuild();
     }
     Core::BufferDesc bindlessSlotsBufferDesc;
@@ -340,7 +340,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     ;
     rebuilt.bindlessResourceSlotsBuffer = m_graphics.createBuffer(bindlessSlotsBufferDesc);
     if(!rebuilt.bindlessResourceSlotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create bindless slot buffer for runtime mesh '{}'"), instance.handle.value);
         return failRebuild();
     }
 

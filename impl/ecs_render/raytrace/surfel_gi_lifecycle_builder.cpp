@@ -54,7 +54,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
         || !inputs.surfelPoolSnapshot.valid()
         || !inputs.surfelCellHeadSnapshot.valid()
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI snapshot resources were unavailable during graph declaration"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: surfel-GI snapshot resources were unavailable during graph declaration"));
         return false;
     }
 
@@ -83,7 +83,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
             }
         );
         if(!outResult.preparationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
             return false;
         }
 
@@ -146,7 +146,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
                 inputs.computeStateSource.states ? 1u : 0u
             ).valid()
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization clears"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI initialization clears"));
             return false;
         }
 
@@ -163,7 +163,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
                 initializationLifecycleDesc
             );
         if(!outResult.initializationLifecycleTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
             return false;
         }
         dependency = outResult.initializationLifecycleTask;
@@ -200,7 +200,7 @@ SurfelGiLifecycleBuilder::SurfelGiLifecycleBuilder(
         }
     );
     if(!outResult.snapshotCopyTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
         return false;
     }
     if(!outResult.preparationTask.valid())

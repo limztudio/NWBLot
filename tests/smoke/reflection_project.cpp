@@ -57,7 +57,7 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
         AddSmokeSkinnedRenderSystems(world, context);
         auto* rendererPtr = world.getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(rendererPtr);
+        GLOBAL_FATAL_ASSERT(rendererPtr);
         NWB::Impl::RendererSystem& renderer = *rendererPtr;
         return renderer;
     }
@@ -83,7 +83,7 @@ public:
         for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
             ++mipCount;
         if(width == 0u || height == 0u || mipCount > NWB_REFLECTION_MAX_DEPTH_MIPS){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: invalid extent for depth timing capacity"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: invalid extent for depth timing capacity"));
             return false;
         }
         const Name singleRangeScopes[] = {
@@ -106,7 +106,7 @@ public:
         // every native depth mip, to cover expected completion latency. The benchmark still checks sample coverage.
         for(const Name& scope : singleRangeScopes){
             if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.resolvedText()));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.resolvedText()));
                 return false;
             }
         }
@@ -115,11 +115,11 @@ public:
             device,
             s_InFlightRanges * mipCount
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare depth timing capacity"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: failed to prepare depth timing capacity"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing in-flight ranges {}"), s_InFlightRanges);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing depth mip count {}"), mipCount);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: timing in-flight ranges {}"), s_InFlightRanges);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: timing depth mip count {}"), mipCount);
         return true;
     }
 
@@ -134,7 +134,7 @@ class ReflectionSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
     explicit ReflectionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("ReflectionSmokeProject")))
+        , m_world(CreateSmokeWorldOrDie(context, GLOBAL_TEXT("ReflectionSmokeProject")))
         , m_renderer(CreateReflectionRenderer(*m_world, context)){}
     virtual ~ReflectionSmokeProject()override{ destroyWorld(); }
 
@@ -153,7 +153,7 @@ public:
         SmokeEnvironmentString spatialOwnerSelection(m_context.objectArena);
         if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_SPATIAL_OWNER", spatialOwnerSelection)){
             if(caseName != "rough" || m_authoredRoughness != 0.4f){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
                 return false;
             }
             m_spatialOwnerProbe = MakeUnique<ReflectionSpatialOwnerProbe>(m_context, m_renderer);
@@ -168,7 +168,7 @@ public:
         }
         const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
         if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase && !m_extendedCase){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
             return false;
         }
         const auto cameraId = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
@@ -179,7 +179,7 @@ public:
         const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
         );
-        NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), GLOBAL_TEXT("ReflectionSmokeProject: camera/light creation failed"));
 
         if(m_feedbackCase){
             m_feedbackScene = MakeUnique<ReflectionFeedbackScene>(m_context, *m_world);
@@ -200,7 +200,7 @@ public:
                 && m_reflectionSettings.temporalEnabled
                 && (m_targetSamples < 32u || m_postResetSamples > m_targetSamples)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
                 return false;
             }
         }
@@ -215,7 +215,7 @@ public:
         if(!configureFramebufferCapture())
             return false;
         if(m_spatialOwnerProbe && !m_framebufferCapture){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
             return false;
         }
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe){
@@ -224,15 +224,15 @@ public:
                 return false;
             m_context.graphics.addRenderPassToBack(m_timingRenderPass);
             m_timingRenderPassRegistered = true;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), StringConvert(caseName));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: case {} created"), StringConvert(caseName));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -264,7 +264,7 @@ private:
         else if(text == "1")
             value = true;
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), StringConvert(name));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), StringConvert(name));
             return false;
         }
         return true;
@@ -276,7 +276,7 @@ private:
             return true;
         u64 parsed = 0u;
         if(!ParseU64(AStringView(text.data(), text.size()), parsed) || parsed < minimum || parsed > maximum){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), StringConvert(name), minimum, maximum);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), StringConvert(name), minimum, maximum);
             return false;
         }
         value = static_cast<u32>(parsed);
@@ -293,12 +293,12 @@ private:
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
         if(m_freshFinalState){
             m_reflectionSettings.samplingSeed = m_requestedSeed;
-            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_reflectionSettings), NWB_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
+            GLOBAL_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_reflectionSettings), GLOBAL_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
         }
         else
-            NWB_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: scene mutation failed"));
+            GLOBAL_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), GLOBAL_TEXT("ReflectionSmokeProject: scene mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}")
             , m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u, m_requestedSeed
         );
     }
@@ -311,12 +311,12 @@ private:
         m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
         if(m_freshFinalState){
             m_reflectionSettings.samplingSeed = m_requestedSeed;
-            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_reflectionSettings), NWB_TEXT("ReflectionSmokeProject: fresh feedback reset failed"));
+            GLOBAL_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_reflectionSettings), GLOBAL_TEXT("ReflectionSmokeProject: fresh feedback reset failed"));
         }
         else
-            NWB_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: feedback mutation failed"));
+            GLOBAL_FATAL_ASSERT_MSG(m_feedbackScene->applyMutation(), GLOBAL_TEXT("ReflectionSmokeProject: feedback mutation failed"));
         m_mutationApplied = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeFeedbackMutation: graphics_frame={} fresh_final={}")
             , m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u
         );
     }
@@ -393,7 +393,7 @@ private:
         if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_RAY_BUDGET", budgetText)){
             u64 parsed = 0u;
             if(!ParseU64(AStringView(budgetText.data(), budgetText.size()), parsed) || parsed > Limit<u32>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: ray budget must be a nonnegative u32"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: ray budget must be a nonnegative u32"));
                 return false;
             }
             settings.maxHardwareRaysPerFrame = static_cast<u32>(parsed);
@@ -408,7 +408,7 @@ private:
         else if(route == "hybrid")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Hybrid;
         else if(route != "hardware"){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
             return false;
         }
         SmokeEnvironmentString debugText(m_context.objectArena);
@@ -419,25 +419,25 @@ private:
             else if(debugView == "confidence")
                 settings.debugView = NWB::Impl::ReflectionDebugView::Confidence;
             else if(debugView != "none"){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown debug view '{}'"), StringConvert(debugView));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: unknown debug view '{}'"), StringConvert(debugView));
                 return false;
             }
         }
         if(!m_renderer.setReflectionSettings(settings))
             return false;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: screen feedback {}"), settings.screenFeedbackEnabled ? 1u : 0u);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: screen steps {}"), settings.screenMaxSteps);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: screen feedback {}"), settings.screenFeedbackEnabled ? 1u : 0u);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: screen steps {}"), settings.screenMaxSteps);
         m_renderer.setRefractionEnabled(true);
         m_renderer.setRefractionHardwareTracingEnabled(true);
         const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
             && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware {}")
-            , hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: hardware {}")
+            , hardwareAvailable ? GLOBAL_TEXT("available") : GLOBAL_TEXT("unavailable")
         );
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
         if(m_opticalCase)
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: optical query limit {}"), settings.maxOpticalQueries);
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeProject: optical query limit {}"), settings.maxOpticalQueries);
         return true;
     }
 
@@ -451,11 +451,11 @@ private:
         m_statisticsGeneration = statistics.generation;
         m_latestStatistics = statistics;
         m_feedbackObservedBypass = m_feedbackObservedBypass || statistics.feedbackBypassedPixels > 0u;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
-            NWB_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
-            NWB_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
-            NWB_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
-            NWB_TEXT(" screen_attempts={} screen_hits={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
+            GLOBAL_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
+            GLOBAL_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
+            GLOBAL_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
+            GLOBAL_TEXT(" screen_attempts={} screen_hits={}")
             , statistics.sequence, statistics.generation, statistics.frameIndex, static_cast<u32>(statistics.traceMode)
             , statistics.width, statistics.height, statistics.requestedHardwareBudget, statistics.effectiveHardwareBudget
             , statistics.queueCapacity, statistics.hardwareRequested ? 1u : 0u, statistics.hardwareAvailable ? 1u : 0u
@@ -464,28 +464,28 @@ private:
             , statistics.candidates, statistics.hardwareRays, statistics.hardwareHits, statistics.opaquePixels, statistics.glassPixels
             , statistics.fallbackPixels, statistics.screenAttempts, statistics.screenHits
         );
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}")
-            NWB_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}")
+            GLOBAL_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
             , statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
             , statistics.historyStartGraphicsFrame, statistics.historySampleCount, statistics.sampleIndex, statistics.samplingSeed
             , statistics.historyEligible ? 1u : 0u, statistics.historyReused ? 1u : 0u, statistics.historyReset ? 1u : 0u
             , static_cast<u32>(statistics.historyResetReason)
         );
         {
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} hardware_queries={}")
-                NWB_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
-                NWB_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} hardware_queries={}")
+                GLOBAL_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
+                GLOBAL_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
                 , statistics.sequence, statistics.generation, statistics.maxOpticalQueries, statistics.hardwareQueries
                 , statistics.bootstrapEvents, statistics.transparentPaths, statistics.unsupportedPaths, statistics.limitedPaths
                 , statistics.ambiguousPaths, statistics.tirEvents, statistics.mediumOverflowPaths
                 , statistics.opticalTransportEnabled ? 1u : 0u
             );
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeFeedback: sequence={} generation={} graphics_frame={}")
-            NWB_TEXT(" feedback_sequence={} epoch={} start_graphics_frame={} probe_index={}")
-            NWB_TEXT(" requested={} enabled={} reused={} reset={} reason={} scheduling_valid={}")
-            NWB_TEXT(" potential_receivers={} screen_returns={} bypassed_pixels={} probe_tiles={}")
-            NWB_TEXT(" screen_iterations={} screen_limit_misses={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("ReflectionSmokeFeedback: sequence={} generation={} graphics_frame={}")
+            GLOBAL_TEXT(" feedback_sequence={} epoch={} start_graphics_frame={} probe_index={}")
+            GLOBAL_TEXT(" requested={} enabled={} reused={} reset={} reason={} scheduling_valid={}")
+            GLOBAL_TEXT(" potential_receivers={} screen_returns={} bypassed_pixels={} probe_tiles={}")
+            GLOBAL_TEXT(" screen_iterations={} screen_limit_misses={}")
             , statistics.sequence, statistics.generation, statistics.graphicsFrameIndex
             , statistics.feedbackSequence, statistics.feedbackEpoch, statistics.feedbackStartGraphicsFrame, statistics.feedbackProbeIndex
             , statistics.feedbackRequested ? 1u : 0u, statistics.feedbackEnabled ? 1u : 0u, statistics.feedbackReused ? 1u : 0u
@@ -508,7 +508,7 @@ private:
                 // Timing-only extended scenes do not request completed-state capture.
                 SmokeEnvironmentString capturePath(m_context.objectArena);
                 if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", capturePath)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
                     return false;
                 }
             }
@@ -518,7 +518,7 @@ private:
                 return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
             };
         }
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("ReflectionSmokeProject"), 16u, m_framebufferCapture, options);
+        return ConfigureSmokeFramebufferCapture(m_context, GLOBAL_TEXT("ReflectionSmokeProject"), 16u, m_framebufferCapture, options);
     }
 
     void destroyWorld(){
@@ -542,18 +542,18 @@ private:
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, mesh, material, s_MaterialInterface, color, position, scale
         );
-        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProject: mesh creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(entity.valid(), GLOBAL_TEXT("ReflectionSmokeProject: mesh creation failed"));
         const Name materialInterface(s_MaterialInterface);
         const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
         const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        GLOBAL_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             *m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3,
             NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)
-        ), NWB_TEXT("ReflectionSmokeProject: F0 override failed"));
-        NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
+        ), GLOBAL_TEXT("ReflectionSmokeProject: F0 override failed"));
+        GLOBAL_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             *m_world, entity, materialInterface, "runtime.perceptual_roughness", NWB::Impl::MaterialLayoutFieldType::Half,
             NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))
-        ), NWB_TEXT("ReflectionSmokeProject: roughness override failed"));
+        ), GLOBAL_TEXT("ReflectionSmokeProject: roughness override failed"));
         return entity;
     }
 
@@ -579,7 +579,7 @@ private:
             Float4(-1.6f + shift, 1.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
         const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
             Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
-        NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProject: offscreen markers failed"));
+        GLOBAL_FATAL_ASSERT_MSG(red.valid() && green.valid(), GLOBAL_TEXT("ReflectionSmokeProject: offscreen markers failed"));
     }
 
     void createOnscreenMirrorScene(const bool moved, const bool boundary){
@@ -599,7 +599,7 @@ private:
             Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
         const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
-        NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProject: floor mirror creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(floor.valid(), GLOBAL_TEXT("ReflectionSmokeProject: floor mirror creation failed"));
         // Camera and reflected rays both approach the marker fronts. Reflection through y=0 moves their virtual centers to y=-2.
         createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
             Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
@@ -618,7 +618,7 @@ private:
             Float4(-1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), 0.95f);
         const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f),
             Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
-        NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProject: opaque/glass spheres failed"));
+        GLOBAL_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), GLOBAL_TEXT("ReflectionSmokeProject: opaque/glass spheres failed"));
         m_world->entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
         createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
             Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
@@ -635,8 +635,8 @@ private:
     NWB::Impl::RendererSystem& m_renderer;
     ReflectionTimingRenderPass m_timingRenderPass{ m_context.graphics };
     UniquePtr<FramebufferCapture> m_framebufferCapture;
-    FpsProbe m_fpsProbe{ NWB_TEXT("ReflectionSmokeProject") };
-    GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
+    FpsProbe m_fpsProbe{ GLOBAL_TEXT("ReflectionSmokeProject") };
+    GpuPassTimingProbe m_gpuPassTimingProbe{ GLOBAL_TEXT("ReflectionSmokeProject") };
     u64 m_statisticsSequence = 0u;
     u64 m_statisticsGeneration = 0u;
     NWB::Impl::ReflectionSettings m_reflectionSettings;
@@ -677,10 +677,10 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     Tests::Smoke::SmokeEnvironmentString extent(arena);
     if(!Tests::Smoke::ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_EXTENT", extent) || extent == "native")
         return { 960, 720 };
-    NWB_FATAL_ASSERT_MSG(extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
+    GLOBAL_FATAL_ASSERT_MSG(extent == "npot", GLOBAL_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Reflection Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return GLOBAL_TEXT("NWB Reflection Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_reflection_smoke::ReflectionSmokeProject>(context);
 }

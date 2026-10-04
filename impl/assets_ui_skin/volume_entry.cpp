@@ -41,7 +41,7 @@ static bool ParseUiSkinDocument(
 static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterSingleDocumentCookEntry<UiSkinCookEntry, UiSkin, UiSkinAssetCodec>(
         registry,
-        NWB_TEXT("UI skin"),
+        GLOBAL_TEXT("UI skin"),
         &ParseUiSkinDocument,
         [](UiSkinCookEntry& entry, UiSkin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildUiSkinAsset); },
         false

@@ -166,8 +166,8 @@ void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(
     const MaterialPassDrawItemVector& drawItems){
     if(drawItems.empty())
         return;
-    NWB_ASSERT(context.materialGeometryStatesGraphOwned);
-    NWB_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
+    GLOBAL_ASSERT(context.materialGeometryStatesGraphOwned);
+    GLOBAL_ASSERT(indexedMaterialPassDrawResourcesReady(drawItems, context.frameBindings));
     for(const MaterialPassDrawItem& drawItem : drawItems){
         const auto& mesh = drawItem.meshResources;
         const auto& cache = mesh.objectGeometryCache;

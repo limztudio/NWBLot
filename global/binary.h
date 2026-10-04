@@ -41,7 +41,7 @@ inline void AppendBytesNoReserveUnchecked(Container& outBinary, const void* byte
     if(byteCount == 0u)
         return;
 
-    NWB_ASSERT(bytes);
+    GLOBAL_ASSERT(bytes);
 
     using ByteType = typename Container::value_type;
     const ByteType* typedBytes = static_cast<const ByteType*>(bytes);
@@ -87,7 +87,7 @@ template<typename Container>
         return false;
 
     if(byteCount > 0u)
-        NWB_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
+        GLOBAL_MEMCPY(outBytes, byteCount, binary.data() + inOutOffset, byteCount);
     inOutOffset += byteCount;
     return true;
 }
@@ -321,13 +321,13 @@ template<typename Container, typename ValueContainer>
     if constexpr(IsDefaultConstructible_V<ValueType> && requires(ValueContainer& c, usize n){ c.resize(n); c.data(); }){
         outValues.resize(valueCount);
         if(byteCount > 0u)
-            NWB_MEMCPY(outValues.data(), byteCount, binary.data() + cursor, byteCount);
+            GLOBAL_MEMCPY(outValues.data(), byteCount, binary.data() + cursor, byteCount);
         cursor += byteCount;
     }
     else{
         for(usize i = 0u; i < valueCount; ++i){
             ValueType value = {};
-            NWB_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
+            GLOBAL_MEMCPY(&value, sizeof(ValueType), binary.data() + cursor, sizeof(ValueType));
             cursor += sizeof(ValueType);
             outValues.push_back(value);
         }

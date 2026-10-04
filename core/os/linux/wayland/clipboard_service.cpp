@@ -104,13 +104,13 @@ void WaylandClipboardService::releaseDevices(){
 }
 
 void WaylandClipboardService::observeSerial(const u32 serial){
-    NWB_ASSERT(isOwnerThread());
+    GLOBAL_ASSERT(isOwnerThread());
     if(m_seat && serial)
         m_serial = serial;
 }
 
 void WaylandClipboardService::setKeyboardFocus(const bool focused){
-    NWB_ASSERT(isOwnerThread());
+    GLOBAL_ASSERT(isOwnerThread());
     m_focused = focused && m_seat;
     if(!m_focused){
         m_serial = 0u;
@@ -138,19 +138,19 @@ void WaylandClipboardService::startNativeRequest(
     if(operation == ClipboardOperation::WriteText){
         const ClipboardStatus::Enum status = writeSelection(channel, text);
         if(!completeNativeRequest(token, status))
-            NWB_FATAL_ASSERT(false);
+            GLOBAL_FATAL_ASSERT(false);
         return;
     }
     Offer* const offer = m_selected[channel == ClipboardChannel::Clipboard ? 0u : 1u];
     if(!m_focused || !offer || offer->rank == 0u){
         if(!completeNativeRequest(token, ClipboardStatus::Unavailable))
-            NWB_FATAL_ASSERT(false);
+            GLOBAL_FATAL_ASSERT(false);
         return;
     }
     int writeFd = -1;
     if(!OpenClipboardPipe(m_readFd, writeFd)){
         if(!completeNativeRequest(token, ClipboardStatus::NativeFailure))
-            NWB_FATAL_ASSERT(false);
+            GLOBAL_FATAL_ASSERT(false);
         return;
     }
     m_readToken = token;
@@ -181,7 +181,7 @@ void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
     m_readToken = {};
     CloseClipboardPipe(m_readFd);
     if(token.valid() && !completeNativeRequest(token, status, m_received.text()))
-        NWB_FATAL_ASSERT(false);
+        GLOBAL_FATAL_ASSERT(false);
     m_received.clear();
 }
 
@@ -253,7 +253,7 @@ GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(
     wl_display& display){
     auto service = MakeGlobalUnique<WaylandClipboardService>(arena, arena, display);
     if(!service->initialize()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Wayland clipboard initialization failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Wayland clipboard initialization failed"));
         return {};
     }
     return service;

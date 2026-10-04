@@ -35,7 +35,7 @@ namespace Smoke{
 template<typename ParameterT>
 inline void AssignCsgCutterParameters(Impl::CsgCutterComponent& cutter, const ParameterT& parameters){
     cutter.parameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
+    GLOBAL_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
 inline void AssignCsgCutterTransform( // beginner: Runs pure-SIMD affine/inverse core, Stores cutter matrices once.

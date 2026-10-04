@@ -267,16 +267,16 @@ inline bool DebugValidateBufferRange(
     TStringView operationName,
     TStringView rangeName
 ){
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     if(!IsBufferRangeInBounds(desc, offsetBytes, sizeBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} offset {} size {} is outside buffer size {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: {} offset {} size {} is outside buffer size {}")
             , operationName
             , rangeName
             , offsetBytes
             , sizeBytes
             , desc.byteSize
         );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {} range is outside the buffer"), operationName, rangeName);
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to {}: {} range is outside the buffer"), operationName, rangeName);
         return false;
     }
 #else
@@ -298,10 +298,10 @@ inline bool DebugResolveTextureSlice(
     TStringView message,
     TextureSlice& outResolved
 ){
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     if(!IsTextureSliceInBounds(desc, slice, formatLayout, &outResolved)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         return false;
     }
 #else
@@ -320,10 +320,10 @@ inline bool DebugValidateTextureSliceExtentsMatch(
     TStringView operationName,
     TStringView message
 ){
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     if(first.width != second.width || first.height != second.height || first.depth != second.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         return false;
     }
 #else
@@ -550,12 +550,12 @@ inline void CopyHostMemory(
         cpuScheduler.parallelFor(static_cast<usize>(0), chunkCount, [&](usize chunkIndex){
             const usize chunkOffset = chunkIndex * effectiveChunkSize;
             const usize chunkBytes = Min(effectiveChunkSize, size - chunkOffset);
-            NWB_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
+            GLOBAL_MEMCPY(dstBytes + chunkOffset, chunkBytes, srcBytes + chunkOffset, chunkBytes);
         });
         return;
     }
 
-    NWB_MEMCPY(dst, size, src, size);
+    GLOBAL_MEMCPY(dst, size, src, size);
 }
 
 

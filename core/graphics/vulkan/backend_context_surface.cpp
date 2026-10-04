@@ -18,7 +18,7 @@ NWB_VULKAN_BEGIN
 bool BackendContext::createWindowSurface(){
     VkResult res = VK_SUCCESS;
 
-#ifdef NWB_PLATFORM_WINDOWS
+#ifdef GLOBAL_PLATFORM_WINDOWS
     Common::WinFrame frame;
     frame.frameParam() = m_platformFrameParam;
 
@@ -29,11 +29,11 @@ bool BackendContext::createWindowSurface(){
 
     res = m_instanceDispatch.vkCreateWin32SurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Win32 surface. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create Win32 surface. {}"), ResultToString(res));
         return false;
     }
     return true;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     Common::LinuxFrame frame;
     frame.frameParam() = m_platformFrameParam;
 
@@ -47,7 +47,7 @@ bool BackendContext::createWindowSurface(){
 
         res = m_instanceDispatch.vkCreateXlibSurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Xlib surface. {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create Xlib surface. {}"), ResultToString(res));
             return false;
         }
         return true;
@@ -62,7 +62,7 @@ bool BackendContext::createWindowSurface(){
 
         res = m_instanceDispatch.vkCreateWaylandSurfaceKHR(m_vulkanInstance, &createInfo, nullptr, &m_windowSurface);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create Wayland surface. {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create Wayland surface. {}"), ResultToString(res));
             return false;
         }
         return true;
@@ -70,11 +70,11 @@ bool BackendContext::createWindowSurface(){
 #endif
     case Common::LinuxFrameBackend::Enum::None:
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Unsupported Linux window backend for surface creation."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Unsupported Linux window backend for surface creation."));
         return false;
     }
 #else
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface creation not supported on this platform."));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Surface creation not supported on this platform."));
     return false;
 #endif
 }
@@ -92,7 +92,7 @@ bool BackendContext::prepareSwapChainImageRevocation(){
             swapChainImage.rhiHandle
             && !swapChainImage.rhiHandle->canRevokeUnmanagedNativeImage(swapChainImage.image)
         ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Swapchain Texture wrapper identity is not revocable."));
             return false;
         }
     }
@@ -102,7 +102,7 @@ bool BackendContext::prepareSwapChainImageRevocation(){
             swapChainImage.rhiHandle
             && !swapChainImage.rhiHandle->prepareRevokeUnmanagedNativeImage(swapChainImage.image)
         ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Swapchain Texture wrapper identity could not be prepared for revocation."));
             return false;
         }
     }
@@ -152,13 +152,13 @@ bool BackendContext::createVulkanSwapChain(){
     VkResult res = VK_SUCCESS;
 
     if(m_swapChain || !m_swapChainImages.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing to create a swapchain while the previous one is still live."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Refusing to create a swapchain while the previous one is still live."));
         return false;
     }
 
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: requested SDR back buffer format is unsupported"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create swapchain: requested SDR back buffer format is unsupported"));
         return false;
     }
 
@@ -170,14 +170,14 @@ bool BackendContext::createVulkanSwapChain(){
     uint32_t surfaceFormatCount = 0u;
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, nullptr);
     if(res != VK_SUCCESS || surfaceFormatCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate surface formats for swapchain creation. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate surface formats for swapchain creation. {}"), ResultToString(res));
         return false;
     }
 
     Vector<VkSurfaceFormatKHR, Alloc::ScratchArena> surfaceFormats(surfaceFormatCount, scratchArena);
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, surfaceFormats.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve surface formats for swapchain creation. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to retrieve surface formats for swapchain creation. {}"), ResultToString(res));
         return false;
     }
 
@@ -189,7 +189,7 @@ bool BackendContext::createVulkanSwapChain(){
         hdr10Allowed,
         surfaceFormatSelection
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
         return false;
     }
 
@@ -198,22 +198,22 @@ bool BackendContext::createVulkanSwapChain(){
     m_swapChainState.outputMode = surfaceFormatSelection.outputMode;
     if(m_deviceParams.enableHDR10Output && m_swapChainState.outputMode != SwapChainOutputMode::HDR10){
         const TStringView reason = hdr10ExtensionEnabled
-            ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format")
-            : NWB_TEXT("VK_EXT_swapchain_colorspace is unavailable")
+            ? GLOBAL_TEXT("the active surface does not advertise a HDR10/PQ format")
+            : GLOBAL_TEXT("VK_EXT_swapchain_colorspace is unavailable")
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: HDR10 presentation unavailable; using SDR because {}."), reason);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Vulkan: HDR10 presentation unavailable; using SDR because {}."), reason);
     }
 
     VkSurfaceCapabilitiesKHR surfaceCaps = {};
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query surface capabilities. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to query surface capabilities. {}"), ResultToString(res));
         return false;
     }
 
     constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     if((surfaceCaps.supportedUsageFlags & s_RequiredSwapChainImageUsage) != s_RequiredSwapChainImageUsage){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: surface lacks required color-attachment image usage"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create swapchain: surface lacks required color-attachment image usage"));
         return false;
     }
     const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback
@@ -221,10 +221,10 @@ bool BackendContext::createVulkanSwapChain(){
     ;
     if(m_deviceParams.enableSwapChainReadback){
         const TStringView status = swapChainReadbackAvailable
-            ? NWB_TEXT("enabled")
-            : NWB_TEXT("unavailable because the surface lacks transfer-source image usage")
+            ? GLOBAL_TEXT("enabled")
+            : GLOBAL_TEXT("unavailable because the surface lacks transfer-source image usage")
         ;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: Swapchain readback {}."), status);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Vulkan: Swapchain readback {}."), status);
     }
 
     VkExtent2D extent = {};
@@ -240,7 +240,7 @@ bool BackendContext::createVulkanSwapChain(){
         extent.height = static_cast<u32>(VectorGetY(clampedExtent));
     }
     if(extent.width == 0 || extent.height == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Surface extent is invalid ({}x{})."), extent.width, extent.height);
         return false;
     }
 
@@ -250,14 +250,14 @@ bool BackendContext::createVulkanSwapChain(){
     uint32_t presentModeCount = 0;
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present mode count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate present mode count. {}"), ResultToString(res));
         return false;
     }
 
     Vector<VkPresentModeKHR, Alloc::ScratchArena> presentModes(presentModeCount, scratchArena);
     res = m_instanceDispatch.vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present modes. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate present modes. {}"), ResultToString(res));
         return false;
     }
 
@@ -276,7 +276,7 @@ bool BackendContext::createVulkanSwapChain(){
     }
     if(!requestedPresentModeFound && !fifoPresentModeFound){
         if(presentModes.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes no present modes."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Surface exposes no present modes."));
             return false;
         }
         selectedPresentMode = presentModes[0];
@@ -309,7 +309,7 @@ bool BackendContext::createVulkanSwapChain(){
         }
     }
     if(!compositeAlphaFound){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface supports no compatible composite alpha mode."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Surface supports no compatible composite alpha mode."));
         return false;
     }
 
@@ -344,7 +344,7 @@ bool BackendContext::createVulkanSwapChain(){
     if(swapChainReadbackAvailable)
         desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     desc.imageSharingMode = enableSwapChainSharing ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
-    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    GLOBAL_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     desc.queueFamilyIndexCount = enableSwapChainSharing ? static_cast<u32>(queueFamilyIndices.size()) : 0u;
     desc.pQueueFamilyIndices = enableSwapChainSharing ? queueFamilyIndices.data() : nullptr;
     desc.preTransform = selectedPreTransform;
@@ -376,7 +376,7 @@ bool BackendContext::createVulkanSwapChain(){
 
     res = m_deviceDispatch.vkCreateSwapchainKHR(m_vulkanDevice, &desc, nullptr, &m_swapChain);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swap chain. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create swap chain. {}"), ResultToString(res));
         return false;
     }
 
@@ -389,25 +389,25 @@ bool BackendContext::createVulkanSwapChain(){
     uint32_t imageCount = 0;
     res = m_deviceDispatch.vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query swap chain image count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to query swap chain image count. {}"), ResultToString(res));
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image-count query failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy incomplete swapchain after image-count query failure."));
         return false;
     }
 
     if(imageCount == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swap chain reported zero images."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Swap chain reported zero images."));
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete zero-image swapchain."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy incomplete zero-image swapchain."));
         return false;
     }
 
     Vector<VkImage, Alloc::ScratchArena> images(imageCount, scratchArena);
     res = m_deviceDispatch.vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image retrieval failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy incomplete swapchain after image retrieval failure."));
         return false;
     }
 
@@ -446,9 +446,9 @@ bool BackendContext::createVulkanSwapChain(){
             nativeProvenance
         );
         if(!sci.rhiHandle){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
             if(!destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy incomplete swapchain after image import failure."));
+                NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy incomplete swapchain after image import failure."));
             return false;
         }
         m_swapChainImages.push_back(Move(sci));

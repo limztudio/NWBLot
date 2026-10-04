@@ -30,7 +30,7 @@ namespace __hidden_shape_registry{
     if(!desc.shaderModule)
         return true;
     if(desc.shaderModuleInclude.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with empty shader module include"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with empty shader module include"), StringConvert(desc.name.resolvedText()));
         return false;
     }
 
@@ -39,7 +39,7 @@ namespace __hidden_shape_registry{
         if(ch != '"' && ch != ';' && ch != '=')
             continue;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid shader module include '{}'")
             , StringConvert(desc.name.resolvedText())
             , StringConvert(include)
         );
@@ -50,19 +50,19 @@ namespace __hidden_shape_registry{
 
 [[nodiscard]] bool ValidShapeTypeDesc(const CsgShapeTypeDesc& desc){
     if(!desc.name){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type with empty name"));
         return false;
     }
     if(!desc.boundsCallback){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with null bounds callback"), StringConvert(desc.name.resolvedText()));
         return false;
     }
     if(static_cast<usize>(desc.parameterByteSize) > s_CsgShapeInlineParameterMaxBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with parameter size larger than the inline shader ABI"), StringConvert(desc.name.resolvedText()));
         return false;
     }
     if(!desc.defaultParameterBytes.empty() && desc.defaultParameterBytes.size() != static_cast<usize>(desc.parameterByteSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with default parameter size mismatch"), StringConvert(desc.name.resolvedText()));
         return false;
     }
     return ValidShaderModuleInclude(desc);
@@ -75,7 +75,7 @@ template<typename ParameterT>
     if(!parameterBytes)
         return false;
 
-    NWB_MEMCPY(&outParameters, sizeof(ParameterT), parameterBytes, sizeof(ParameterT));
+    GLOBAL_MEMCPY(&outParameters, sizeof(ParameterT), parameterBytes, sizeof(ParameterT));
     return true;
 }
 
@@ -312,7 +312,7 @@ template<typename ParameterT>
     desc.name = name;
     desc.parameterByteSize = sizeof(ParameterT);
     desc.defaultParameterBytes.resize(sizeof(ParameterT));
-    NWB_MEMCPY(desc.defaultParameterBytes.data(), desc.defaultParameterBytes.size(), &defaultParameters, sizeof(ParameterT));
+    GLOBAL_MEMCPY(desc.defaultParameterBytes.data(), desc.defaultParameterBytes.size(), &defaultParameters, sizeof(ParameterT));
     desc.boundsCallback = boundsCallback;
     return desc;
 }
@@ -341,7 +341,7 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
 
     const CsgShapeTypeId canonicalId = CsgShapeTypeIdFromName(desc.name);
     if(!__hidden_shape_registry::ValidShapeTypeId(canonicalId)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), StringConvert(desc.name.resolvedText()));
         return false;
     }
 
@@ -350,18 +350,18 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
     const auto found = m_shapeTypeIds.find(desc.name);
     if(found != m_shapeTypeIds.end()){
         if(!replaceExisting){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), StringConvert(desc.name.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: shape type '{}' is already registered"), StringConvert(desc.name.resolvedText()));
             return false;
         }
 
-        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()) && found.value() == canonicalId && m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
+        GLOBAL_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()) && found.value() == canonicalId && m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
     }
 
     if(found != m_shapeTypeIds.end()){
         const CsgShapeTypeId existingId = found.value();
         const auto foundIndex = m_shapeTypeIndices.find(existingId);
         if(foundIndex == m_shapeTypeIndices.end()){
-            NWB_ASSERT(false);
+            GLOBAL_ASSERT(false);
             return false;
         }
 
@@ -373,14 +373,14 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
     }
 
     if(m_shapeTypes.size() >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' because the registry is full"), StringConvert(desc.name.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: rejected shape type '{}' because the registry is full"), StringConvert(desc.name.resolvedText()));
         return false;
     }
 
     const auto foundCanonicalId = m_shapeTypeIndices.find(canonicalId);
     if(foundCanonicalId != m_shapeTypeIndices.end()){
         const CsgShapeTypeInfo& conflictingShapeType = m_shapeTypes[foundCanonicalId.value()];
-        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape types '{}' and '{}' collide on canonical GPU id {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgShapeRegistry: shape types '{}' and '{}' collide on canonical GPU id {}")
             , StringConvert(conflictingShapeType.desc.name.resolvedText())
             , StringConvert(desc.name.resolvedText())
             , canonicalId

@@ -26,12 +26,12 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         RasterGlyph glyph(outGlyphs.get_allocator().arena());
         glyph.record.glyphId = glyphId;
         if(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}"), glyphId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: design metrics failed for glyph {}"), glyphId);
             return false;
         }
         glyph.record.advanceUnits = static_cast<f32>(face->glyph->advance.x);
         if(face->glyph->format != FT_GLYPH_FORMAT_OUTLINE){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
             return false;
         }
         if(face->glyph->outline.n_points == 0){
@@ -44,8 +44,8 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         if(result == 0)
             result = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
         if(result != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: {} SDF failed for glyph {} (FreeType error {}); choose bitmap mode for intersecting outlines")
-                , options.outline ? NWB_TEXT("outline") : NWB_TEXT("bitmap")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: {} SDF failed for glyph {} (FreeType error {}); choose bitmap mode for intersecting outlines")
+                , options.outline ? GLOBAL_TEXT("outline") : GLOBAL_TEXT("bitmap")
                 , glyphId
                 , result
             );
@@ -57,7 +57,7 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
             continue;
         }
         if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + 2u > options.extent || bitmap.rows + 2u > options.extent){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: glyph {} footprint {}x{} exceeds page {} including guards")
                 , glyphId
                 , bitmap.width + 2u
                 , bitmap.rows + 2u
@@ -67,7 +67,7 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         }
         const u64 byteCount = static_cast<u64>(bitmap.width) * bitmap.rows;
         if(byteCount > capacity - rasterBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: raster bytes exceed {} group capacity at glyph {}; increase extent or lower ppem"), options.maxGroups, glyphId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: raster bytes exceed {} group capacity at glyph {}; increase extent or lower ppem"), options.maxGroups, glyphId);
             return false;
         }
         rasterBytes += byteCount;
@@ -75,12 +75,12 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         const i32 pitch = bitmap.pitch;
         const usize absolutePitch = static_cast<usize>(pitch < 0 ? -pitch : pitch);
         if(!bitmap.buffer || absolutePitch < bitmap.width){
-            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
             return false;
         }
         for(u32 y = 0u; y < bitmap.rows; ++y){
             const u32 sourceY = pitch < 0 ? bitmap.rows - 1u - y : y;
-            NWB_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
+            GLOBAL_MEMCPY(glyph.pixels.data() + static_cast<usize>(y) * bitmap.width, bitmap.width, bitmap.buffer + static_cast<usize>(sourceY) * absolutePitch, bitmap.width);
         }
         glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;

@@ -128,7 +128,7 @@ struct UploadIdentities{
         || csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
         || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
         return false;
     }
 
@@ -144,7 +144,7 @@ struct UploadIdentities{
         alignof(u32)
     );
     if(!instanceBlob.valid() || !materialTypedBlob.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
         return false;
     }
 
@@ -170,7 +170,7 @@ struct UploadIdentities{
         }
     );
     if(!inOutUploadTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
         return false;
     }
 
@@ -190,7 +190,7 @@ struct UploadIdentities{
         }
     );
     if(!inOutUploadTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
         return false;
     }
 
@@ -205,7 +205,7 @@ struct UploadIdentities{
         *inputs.frameBindings,
         clipContextSlotData
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
         return false;
     }
     const Core::GpuUploadBlobId receiverRangesBlob = m_graph.copyUploadData(
@@ -228,7 +228,7 @@ struct UploadIdentities{
         || !cuttersBlob.valid()
         || !clipContextSlotsBlob.valid()
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
         return false;
     }
 
@@ -248,7 +248,7 @@ struct UploadIdentities{
         }
     );
     if(!inOutUploadTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
         return false;
     }
 
@@ -268,7 +268,7 @@ struct UploadIdentities{
         }
     );
     if(!inOutUploadTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
         return false;
     }
 
@@ -288,7 +288,7 @@ struct UploadIdentities{
         }
     );
     if(!inOutUploadTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
         return false;
     }
     outCsgStreamsUploaded = true;

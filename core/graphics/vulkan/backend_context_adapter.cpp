@@ -123,7 +123,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 bool BackendContext::pickPhysicalDevice(){
     const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
     if(!m_deviceParams.headlessDevice && VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
         return false;
     }
     const bool hdr10Allowed =
@@ -137,7 +137,7 @@ bool BackendContext::pickPhysicalDevice(){
     uint32_t deviceCount = 0;
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate physical device count. {}"), ResultToString(res));
         return false;
     }
 
@@ -146,7 +146,7 @@ bool BackendContext::pickPhysicalDevice(){
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate physical devices. {}"), ResultToString(res));
         return false;
     }
 
@@ -155,7 +155,7 @@ bool BackendContext::pickPhysicalDevice(){
     i32 lastDevice = static_cast<i32>(devices.size()) - 1;
     if(adapterIndex >= 0){
         if(adapterIndex > lastDevice){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: The specified physical device {} does not exist."), adapterIndex);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: The specified physical device {} does not exist."), adapterIndex);
             return false;
         }
         firstDevice = adapterIndex;
@@ -363,11 +363,11 @@ bool BackendContext::pickPhysicalDevice(){
     }
 
     if(skippedWindowedCpuDevice && !sawWindowedGpuCandidate){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
+        NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
         return false;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: {}"), StringConvert(errorStream.str()));
     return false;
 }
 
@@ -382,14 +382,14 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
         return false;
     }
 
     uint32_t deviceCount = 0;
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
         return false;
     }
 
@@ -403,7 +403,7 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     Vector<VkPhysicalDevice, Alloc::ScratchArena> devices(deviceCount, scratchArena);
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
         return false;
     }
 

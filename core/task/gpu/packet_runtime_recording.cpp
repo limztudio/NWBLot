@@ -105,7 +105,7 @@ public:
                     m_recordingLease,
                     *m_deferredAbort
                 );
-                NWB_FATAL_ASSERT_MSG(abortDeferred, "throwing packet recorder must transfer its exact recording claim");
+                GLOBAL_FATAL_ASSERT_MSG(abortDeferred, "throwing packet recorder must transfer its exact recording claim");
                 if(!abortDeferred)
                     TerminateInvariant();
             }
@@ -117,7 +117,7 @@ public:
                     m_packet,
                     m_recordingLease
                 );
-                NWB_FATAL_ASSERT_MSG(recordingAbandoned, "throwing packet recorder must abandon its exact recording claim");
+                GLOBAL_FATAL_ASSERT_MSG(recordingAbandoned, "throwing packet recorder must abandon its exact recording claim");
                 if(!recordingAbandoned)
                     TerminateInvariant();
             }
@@ -129,7 +129,7 @@ public:
             m_compiledGraph,
             m_recordingAttemptGeneration
         );
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             recordingAttemptResolved,
             "throwing packet recorder must resolve a terminal recording-plan lease"
         );
@@ -173,7 +173,7 @@ bool GpuNativePacketRecorder::recordPacket(
     GpuTaskGraph::PacketRecordingAbort* const deferredAbort
 )const{
     if(deferredAbort && deferredAbort->valid()){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Packet recording abort output must be fresh"));
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Packet recording abort output must be fresh"));
         return false;
     }
     if(!planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph))
@@ -256,7 +256,7 @@ bool GpuNativePacketRecorder::recordPacket(
                 recordingLease,
                 *deferredAbort
             );
-            NWB_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
+            GLOBAL_FATAL_ASSERT_MSG(abortDeferred, "failed to transfer an active packet recording abort");
             if(!abortDeferred)
                 TerminateInvariant();
             return;
@@ -417,7 +417,7 @@ bool GpuNativePacketRecorder::recordPacket(
                 if(!GpuPacketRecordingDetail::HasExplicitKnownInitialState(declarationAccess, barrier, *commandList)){
                     const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
                     NWB_LOGGER_ERROR(
-                        NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source")
+                        GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source")
                         , StringConvert(taskView.markerLabel)
                         , StringConvert(resource.markerLabel)
                     );
@@ -463,7 +463,7 @@ bool GpuNativePacketRecorder::recordPacket(
         bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"),
+                GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"),
                 StringConvert(taskView.markerLabel)
             );
             recorded = false;
@@ -490,13 +490,13 @@ bool GpuNativePacketRecorder::recordPacket(
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact || commandList->commandRecordingFailed()){
                 NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"),
+                    GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"),
                     StringConvert(taskView.markerLabel)
                 );
                 recorded = false;
             }
         }
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         bool taskCapabilityTrackingStarted = false;
         if(recorded){
             commandList->beginTaskCapabilityTracking(taskView.commands.allowedCapabilities());
@@ -511,14 +511,14 @@ bool GpuNativePacketRecorder::recordPacket(
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
                 NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"),
+                    GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"),
                     StringConvert(taskView.markerLabel)
                 );
                 recorded = false;
             }
             else if(commandList->commandRecordingFailed()){
                 NWB_LOGGER_CRITICAL_WARNING(
-                    NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"),
+                    GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"),
                     StringConvert(taskView.markerLabel),
                     packet.queue.index,
                     packet.queue.deviceGeneration
@@ -526,7 +526,7 @@ bool GpuNativePacketRecorder::recordPacket(
                 recorded = false;
             }
             else if(!recorded && recordThunkInvoked){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
+                NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
                     , StringConvert(taskView.identity.resolvedText())
                     , StringConvert(taskView.markerLabel)
                     , packetID.index
@@ -542,7 +542,7 @@ bool GpuNativePacketRecorder::recordPacket(
         taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
         if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed()))
             recorded = false;
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         GpuQueueCapability::Mask usedCapabilities = GpuQueueCapability::None;
         if(taskCapabilityTrackingStarted){
             if(taskRecordingLeaseIntact)
@@ -561,7 +561,7 @@ bool GpuNativePacketRecorder::recordPacket(
             )
         ){
             NWB_LOGGER_CRITICAL_WARNING(
-                NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
+                GLOBAL_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
                 StringConvert(taskView.markerLabel),
                 static_cast<u32>(usedCapabilities),
                 static_cast<u32>(taskView.commands.allowedCapabilities()),
@@ -652,7 +652,7 @@ bool GpuNativePacketRecorder::recordPacket(
     }
     const Timer recordingEnd = TimerNow();
     GpuRecordedPacket* const recordedPacketStorage = outRecordedGraph.packetStorage(packetID, artifactAccess);
-    NWB_FATAL_ASSERT_MSG(recordedPacketStorage, "recorded packet publication requires exact artifact storage");
+    GLOBAL_FATAL_ASSERT_MSG(recordedPacketStorage, "recorded packet publication requires exact artifact storage");
     if(!recordedPacketStorage)
         TerminateInvariant();
     GpuRecordedPacket& recordedPacket = *recordedPacketStorage;
@@ -675,7 +675,7 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.commandListCount = 1u;
     PacketArtifactPublicationScope artifactPublication(outRecordedGraph, packetID, artifactAccess);
     if(!graph.completePacketRecording(compiledGraph, planAccess, packetID, recordingLease)){
-        NWB_FATAL_ASSERT_MSG(false, "recorded artifact publication must retain its exact graph packet claim");
+        GLOBAL_FATAL_ASSERT_MSG(false, "recorded artifact publication must retain its exact graph packet claim");
         TerminateInvariant();
     }
     artifactPublication.complete();

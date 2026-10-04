@@ -28,7 +28,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software caustics require the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: software caustics require the initialized global descriptor heap"));
         m_rayTracingState.m_swCausticPipelineFailed = true;
         return false;
     }
@@ -41,7 +41,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
 
         m_rayTracingState.m_swCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_swCausticBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create software caustic binding layout"));
             m_rayTracingState.m_swCausticPipelineFailed = true;
             return false;
         }
@@ -70,7 +70,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     ;
     m_rayTracingState.m_swCausticPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_swCausticPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create software caustic compute pipeline"));
         m_rayTracingState.m_swCausticPipelineFailed = true;
         return false;
     }
@@ -91,7 +91,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic resolve requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic resolve requires the initialized global descriptor heap"));
         resolve.m_failed = true;
         return false;
     }
@@ -104,7 +104,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
 
         resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
         if(!resolve.m_bindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
             resolve.m_failed = true;
             return false;
         }
@@ -150,7 +150,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
         ;
         stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
         if(!stage.m_state.m_pipeline){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
             resolve.m_failed = true;
             return false;
         }
@@ -167,7 +167,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic geometry downsample requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic geometry downsample requires the initialized global descriptor heap"));
         m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
         return false;
     }
@@ -179,7 +179,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
 
         m_rayTracingState.m_causticGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_causticGeometryDownsampleBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic geometry downsample binding layout"));
             m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
             return false;
         }
@@ -207,7 +207,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     ;
     m_rayTracingState.m_causticGeometryDownsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_causticGeometryDownsamplePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
         m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
         return false;
     }
@@ -246,7 +246,7 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic accumulator decay requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic accumulator decay requires the initialized global descriptor heap"));
         m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
         return false;
     }
@@ -259,7 +259,7 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
 
         m_rayTracingState.m_causticAccumulatorDecayBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_causticAccumulatorDecayBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic accumulator decay binding layout"));
             m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
             return false;
         }
@@ -287,7 +287,7 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     ;
     m_rayTracingState.m_causticAccumulatorDecayPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_causticAccumulatorDecayPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator decay compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic accumulator decay compute pipeline"));
         m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
         return false;
     }
@@ -298,7 +298,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     if(m_rayTracingState.m_hwCausticPipeline && m_rayTracingState.m_hwCausticShaderTable)
         return true;
     if(m_rayTracingState.m_hwCausticPipeline || m_rayTracingState.m_hwCausticShaderTable){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RT caustic pipeline and shader table cache is inconsistent"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: RT caustic pipeline and shader table cache is inconsistent"));
         m_rayTracingState.m_hwCausticPipeline.reset();
         m_rayTracingState.m_hwCausticShaderTable.reset();
         m_rayTracingState.m_hwCausticPipelineFailed = true;
@@ -314,7 +314,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware caustics require the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: hardware caustics require the descriptor-buffer TLAS heap layout"));
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;
     }
@@ -326,7 +326,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 
         m_rayTracingState.m_hwCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_hwCausticBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create hardware caustic binding layout"));
             m_rayTracingState.m_hwCausticPipelineFailed = true;
             return false;
         }
@@ -369,14 +369,14 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 
     Core::RayTracingPipelineHandle pipeline = device.createRayTracingPipeline(pipelineDesc);
     if(!pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create RT caustic pipeline"));
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;
     }
 
     Core::RayTracingShaderTableHandle shaderTable = pipeline->createShaderTable();
     if(!shaderTable){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic shader table"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create RT caustic shader table"));
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;
     }
@@ -385,7 +385,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         || shaderTable->addMissShader(__hidden_caustics::s_HwMissExportName) != 0u
         || shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName) != 0u
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to populate RT caustic shader table"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to populate RT caustic shader table"));
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;
     }
@@ -393,7 +393,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     m_rayTracingState.m_hwCausticPipeline = Move(pipeline);
     m_rayTracingState.m_hwCausticShaderTable = Move(shaderTable);
 
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT caustic pipeline + shader table"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created RT caustic pipeline + shader table"));
     return true;
 }
 
@@ -443,11 +443,11 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
         || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
         return false;
     }
     if(!targets.bindless.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware caustics require complete deferred bindless frame resources"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: hardware caustics require complete deferred bindless frame resources"));
         return false;
     }
 
@@ -471,12 +471,12 @@ bool RendererRayTracingSystem::renderHwCaustics(
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;
-    NWB_ASSERT(meshView.bindingValid());
-    NWB_ASSERT(targets.bindless.valid());
+    GLOBAL_ASSERT(meshView.bindingValid());
+    GLOBAL_ASSERT(targets.bindless.valid());
     {
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         if(!heap.isInitialized() || !m_rayTracingState.m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cannot dispatch caustics without the descriptor-buffer TLAS heap handle"));
             return false;
         }
     }
@@ -545,7 +545,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
 
     if(!m_rayTracingState.m_hwCausticDispatchLogged){
         m_rayTracingState.m_hwCausticDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
             , static_cast<u64>(photonCount)
             , static_cast<u64>(temporalPhaseCount)
             , static_cast<u64>(photonBudget.fullGridCount)
@@ -561,7 +561,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic emission targets require the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: caustic emission targets require the initialized global descriptor heap"));
         return false;
     }
 
@@ -573,7 +573,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
             false,
             outHandle
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register caustic emission targets in the descriptor heap"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register caustic emission targets in the descriptor heap"));
             return false;
         }
         return true;
@@ -581,7 +581,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
 
     if(m_rayTracingState.m_causticEmissionTargetBuffer && m_rayTracingState.m_causticEmissionTargetCapacity >= targetCount){
         if(m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()){
-            NWB_ASSERT(m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
+            GLOBAL_ASSERT(m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
             return true;
         }
         return acquireHeapHandle(
@@ -607,7 +607,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     ;
     Core::BufferHandle targetBuffer = m_graphics.createBuffer(targetBufferDesc);
     if(!targetBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic emission-target buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic emission-target buffer"));
         return false;
     }
 
@@ -620,7 +620,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     m_rayTracingState.m_causticEmissionTargetBuffer = Move(targetBuffer);
     m_rayTracingState.m_causticEmissionTargetHeapHandle = targetHeapHandle;
     m_rayTracingState.m_causticEmissionTargetCapacity = capacity;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
         , static_cast<u64>(capacity)
     );
     return true;

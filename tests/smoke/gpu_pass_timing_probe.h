@@ -130,7 +130,7 @@ private:
 
     void report(const Core::Perf::TimingView& gpuTiming){
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("{}: gpu per-pass timing over {} frames / {}s")
+            GLOBAL_TEXT("{}: gpu per-pass timing over {} frames / {}s")
             , m_label
             , m_intervalFrames
             , m_intervalSeconds
@@ -156,7 +156,7 @@ private:
             const Name scopeName = gpuTiming.scopeNameAt(i);
             const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * s_MillisecondsPerSecond;
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
+                GLOBAL_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
                 , StringConvert(scopeName.resolvedText())
                 , averageMs
                 , accum.minSeconds * s_MillisecondsPerSecond
@@ -190,7 +190,7 @@ private:
 private:
     Core::Alloc::GlobalArena m_arena;
     Vector<ScopeState, Core::Alloc::GlobalArena> m_scopes;
-    TStringView m_label = NWB_TEXT("Smoke");
+    TStringView m_label = GLOBAL_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
     u32 m_intervalFrames = 0u;

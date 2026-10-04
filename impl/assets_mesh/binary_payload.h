@@ -24,8 +24,8 @@ namespace MeshBinaryPayload{
 
 
 inline constexpr u32 s_MeshMagic = 0x4D534835u; // MSH5
-inline constexpr TStringView s_MeshLoadBinaryContext = NWB_TEXT("Mesh::loadBinary");
-inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
+inline constexpr TStringView s_MeshLoadBinaryContext = GLOBAL_TEXT("Mesh::loadBinary");
+inline constexpr TStringView s_MeshAssetKindLabel = GLOBAL_TEXT("mesh");
 
 #pragma pack(push, 1)
 struct MeshHeaderBinary{

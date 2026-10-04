@@ -89,7 +89,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
         }
     );
     if(!clearTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
         return false;
     }
     outResult.clearFirstTask = clearTask;
@@ -115,7 +115,7 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
         }
     );
     if(!clearTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
         return false;
     }
     outResult.clearTask = clearTask;

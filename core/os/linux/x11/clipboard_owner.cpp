@@ -35,7 +35,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
             ){
                 Array<Atom, 256u> pairs{};
                 if(property.count)
-                    NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property.bytes, property.count * sizeof(Atom));
+                    GLOBAL_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property.bytes, property.count * sizeof(Atom));
                 for(usize index = 0u; index < property.count; index += 2u){
                     bool usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
                     for(usize previous = 0u; previous < index; previous += 2u){

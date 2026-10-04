@@ -161,8 +161,8 @@ TEST(OpticalRuntimeBounds, CpuUploadNeverPublishesUnvalidatedRuntimeBounds){
     RayTracingOpticalSceneUpload upload(context.testArena.arena, context.gather);
     u32 headerFlags = Limit<u32>::s_Max;
     u32 instanceFlags = Limit<u32>::s_Max;
-    NWB_MEMCPY(&headerFlags, sizeof(headerFlags), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET, sizeof(u32));
-    NWB_MEMCPY(&instanceFlags, sizeof(instanceFlags), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET, sizeof(u32));
+    GLOBAL_MEMCPY(&headerFlags, sizeof(headerFlags), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET, sizeof(u32));
+    GLOBAL_MEMCPY(&instanceFlags, sizeof(instanceFlags), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET, sizeof(u32));
     EXPECT_EQ(headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID, 0u);
     EXPECT_EQ(instanceFlags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
     const auto before = context.gather.contentHash();

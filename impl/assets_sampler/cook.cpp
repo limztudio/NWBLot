@@ -128,7 +128,7 @@ static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s
 
 
 bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("SamplerAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("SamplerAssetCodec::serialize")))
         return false;
 
     const Sampler& sampler = static_cast<const Sampler&>(asset);
@@ -207,7 +207,7 @@ bool ParseSamplerCookMetadata(
     )
         return false;
     if(!IsValidSamplerDescription(description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': sampler description is invalid")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': sampler description is invalid")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -220,7 +220,7 @@ bool ParseSamplerCookMetadata(
 
 bool BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Sampler& outSampler){
     if(!samplerEntry.arena || !samplerEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler cook: sampler entry is invalid"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Sampler cook: sampler entry is invalid"));
         return false;
     }
 

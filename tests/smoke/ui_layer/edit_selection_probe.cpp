@@ -26,18 +26,18 @@ Impl::Ui::Rect CaptureEditSelection(
     Core::Alloc::GlobalArena& arena, Impl::Ui::TextService& text, const Impl::Ui::EditModel& model,
     const Impl::Ui::EditBoxPlacement& placement, const f32 fontSize){
     using namespace Impl::Ui;
-    NWB_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
+    GLOBAL_FATAL_ASSERT(model.textMode() == EditTextMode::SingleLine);
     EditBoxView view(arena);
     const bool captured = view.snapshot(model);
-    NWB_FATAL_ASSERT(captured);
+    GLOBAL_FATAL_ASSERT(captured);
     const EditBoxRange range = view.selectionRange();
     if(range.begin == range.end || placement.content.width <= 0.0f || placement.content.height <= 0.0f)
         return {};
     const bool shaped = view.shape(text, { {}, fontSize }) == TextLayoutStatus::Success;
-    NWB_FATAL_ASSERT(shaped);
+    GLOBAL_FATAL_ASSERT(shaped);
     Rect selection;
     const bool resolved = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width, selection);
-    NWB_FATAL_ASSERT(resolved);
+    GLOBAL_FATAL_ASSERT(resolved);
     if(selection.width > 0.0f){
         selection.x += placement.textOrigin.x;
         selection.y += placement.textOrigin.y;

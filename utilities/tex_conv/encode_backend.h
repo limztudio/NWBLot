@@ -69,18 +69,18 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 // Shared plane-loader policies: LDR decodes 8-bit images, HDR decodes float images.
 struct LdrPlaneLoader{
     using Plane = basisu::image;
-    static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode input image '{}'.");
-    static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: input image '{}' has an invalid resolution.");
-    static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
+    static constexpr TStringView s_DecodeFailureLabel = GLOBAL_TEXT("tex_conv: failed to decode input image '{}'.");
+    static constexpr TStringView s_ResolutionFailureLabel = GLOBAL_TEXT("tex_conv: input image '{}' has an invalid resolution.");
+    static constexpr TStringView s_MismatchFailureLabel = GLOBAL_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
     [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image(inputPathText.c_str(), outPlane);
     }
 };
 struct HdrPlaneLoader{
     using Plane = basisu::imagef;
-    static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode HDR image '{}'.");
-    static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
-    static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");
+    static constexpr TStringView s_DecodeFailureLabel = GLOBAL_TEXT("tex_conv: failed to decode HDR image '{}'.");
+    static constexpr TStringView s_ResolutionFailureLabel = GLOBAL_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
+    static constexpr TStringView s_MismatchFailureLabel = GLOBAL_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");
     [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image_hdr(inputPathText.c_str(), outPlane, false);
     }

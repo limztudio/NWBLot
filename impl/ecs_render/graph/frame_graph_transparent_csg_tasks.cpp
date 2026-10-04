@@ -308,7 +308,7 @@ bool FrameGraphTransparentCsgTasks::declare(
         Move(avboitPrePayload)
     );
     if(!m_avboitSystem.taskGraphStage().m_preTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
         return false;
     }
 
@@ -338,7 +338,7 @@ bool FrameGraphTransparentCsgTasks::declare(
             Move(avboitCsgReceiverSpanPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
             return false;
         }
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
@@ -367,7 +367,7 @@ bool FrameGraphTransparentCsgTasks::declare(
             Move(avboitCsgIntervalCombinePayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
             return false;
         }
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;

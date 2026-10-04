@@ -32,10 +32,10 @@ namespace __hidden_ui_image_snapshot{
 
 
 static constexpr Array<TStringView, 16u> s_RectNames{
-    NWB_TEXT("before"), NWB_TEXT("after"), NWB_TEXT("natural_sprite"), NWB_TEXT("natural_slice"),
-    NWB_TEXT("fixed_sprite"), NWB_TEXT("fixed_slice"), NWB_TEXT("stretch"), NWB_TEXT("tinted"), NWB_TEXT("transparent"),
-    NWB_TEXT("frozen"), NWB_TEXT("external"), NWB_TEXT("external_clip"), NWB_TEXT("parent_image"), NWB_TEXT("child_image"),
-    NWB_TEXT("parent"), NWB_TEXT("child")
+    GLOBAL_TEXT("before"), GLOBAL_TEXT("after"), GLOBAL_TEXT("natural_sprite"), GLOBAL_TEXT("natural_slice"),
+    GLOBAL_TEXT("fixed_sprite"), GLOBAL_TEXT("fixed_slice"), GLOBAL_TEXT("stretch"), GLOBAL_TEXT("tinted"), GLOBAL_TEXT("transparent"),
+    GLOBAL_TEXT("frozen"), GLOBAL_TEXT("external"), GLOBAL_TEXT("external_clip"), GLOBAL_TEXT("parent_image"), GLOBAL_TEXT("child_image"),
+    GLOBAL_TEXT("parent"), GLOBAL_TEXT("child")
 };
 
 
@@ -97,17 +97,17 @@ void UiImageSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiImageSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight
             , current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiImageSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(NWB_TEXT("UiImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(GLOBAL_TEXT("UiImageSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiImageSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

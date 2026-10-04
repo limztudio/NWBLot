@@ -49,14 +49,14 @@ struct AutoMetadataParser{
 [[nodiscard]] static bool ParseMetascriptDocument(CookArena& cookArena, const Path& nwbFilePath, Core::Metascript::Document& outDoc){
     CookString metaText{cookArena};
     if(!ReadTextFile(nwbFilePath, metaText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: failed to read meta '{}'"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     StripUtf8Bom(metaText);
 
     if(!outDoc.parse(AStringView(metaText))){
         for(const Core::Metascript::ParseError& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: meta '{}' parse error at {}:{}: {}")
                 , PathToString<tchar>(nwbFilePath)
                 , err.line
                 , err.column
@@ -151,7 +151,7 @@ struct AutoMetadataParser{
         );
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
         , StringConvert(rawAssetTypeText)
         , PathToString<tchar>(discoveredNwbFile.filePath)
     );
@@ -212,14 +212,14 @@ bool DiscoverFilesWithExtension(
         errorCode.clear();
         if(!IsDirectory(assetRoot.path, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to query asset root '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: failed to query asset root '{}': {}")
                     , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
                 return false;
             }
 
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset root is not a directory: '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: asset root is not a directory: '{}'")
                 , PathToString<tchar>(assetRoot.path)
             );
             return false;
@@ -227,7 +227,7 @@ bool DiscoverFilesWithExtension(
 
         for(const auto& dirEntry : RecursiveDirectoryIterator(assetRoot.path, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: error scanning asset root '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: error scanning asset root '{}': {}")
                     , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
                 );
@@ -237,7 +237,7 @@ bool DiscoverFilesWithExtension(
             errorCode.clear();
             const bool isRegularFile = dirEntry.is_regular_file(errorCode);
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}")
                     , PathToString<tchar>(dirEntry.path())
                     , PathToString<tchar>(assetRoot.path)
                     , StringConvert(errorCode.message())
@@ -261,7 +261,7 @@ bool DiscoverFilesWithExtension(
             outFiles.emplace_back(cookArena, assetRoot.path, filePath, normalizedPath, assetRoot.virtualRoot);
         }
         if(errorCode){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to finish scanning asset root '{}': {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetBuilder: failed to finish scanning asset root '{}': {}")
                 , PathToString<tchar>(assetRoot.path)
                 , StringConvert(errorCode.message())
             );
@@ -282,7 +282,7 @@ bool DiscoverFilesWithExtension(
 
 bool AddPlannedFileCount(const u64 additionalFileCount, u64& inOutPlannedFileCount){
     if(inOutPlannedFileCount > Limit<u64>::s_Max - additionalFileCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: planned file count overflow"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: planned file count overflow"));
         return false;
     }
 
@@ -398,7 +398,7 @@ bool ParseAssetMetadata(
         }
 
         if(doc.declarations().size() > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: meta '{}' declares multiple asset objects without an asset_bunch object")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: meta '{}' declares multiple asset objects without an asset_bunch object")
                 , PathToString<tchar>(discoveredNwbFile.filePath)
             );
             return false;
@@ -418,7 +418,7 @@ bool ParseAssetMetadata(
     }
 
     if(!parsedAnyMetadata){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: no asset metadata found in asset roots"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: no asset metadata found in asset roots"));
         return false;
     }
 

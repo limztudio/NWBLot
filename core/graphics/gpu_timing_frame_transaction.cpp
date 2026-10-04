@@ -133,7 +133,7 @@ bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToke
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
 
-    NWB_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
+    GLOBAL_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
     if(
         (m_state != State::BeginRecorded && m_state != State::EndRecorded)
         || !m_recorder.validateScopeSubmission(m_scope, token)
@@ -266,7 +266,7 @@ GpuTimingMeasure::GpuTimingMeasure(
     // identity is retained separately for timing aggregation; the marker keeps the authored text so release
     // diagnostics never receive a Name hash in place of the original label.
     if(!scopeDefinition.valid()){
-        NWB_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
+        GLOBAL_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
     }
 

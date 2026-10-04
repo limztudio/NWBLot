@@ -9,10 +9,10 @@
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(GLOBAL_PLATFORM_LINUX)
 #include <sched.h>
 #endif
 
@@ -73,12 +73,12 @@ TEST(CpuTopologyTests, EveryEnumeratedPlacementCanPinAnIndependentWorker){
             applied = SetCurrentThreadCpuPlacement(placement);
             if(!applied)
                 return;
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
             GROUP_AFFINITY actual{};
             if(!GetThreadGroupAffinity(GetCurrentThread(), &actual))
                 return;
             verified = actual.Group == placement.processorGroup && actual.Mask == (static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
             const int processor = ::sched_getcpu();
             verified = processor >= 0 && static_cast<u32>(processor) == placement.logicalProcessorIndex;
 #endif
@@ -90,7 +90,7 @@ TEST(CpuTopologyTests, EveryEnumeratedPlacementCanPinAnIndependentWorker){
 }
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     ASSERT_EXIT({
         InteropVector<CpuWorkerPlacement> placements;
@@ -160,7 +160,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
 #endif
 
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(GLOBAL_PLATFORM_LINUX)
 TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
     InteropVector<CpuWorkerPlacement> placements;
     ASSERT_TRUE(QueryCpuWorkerPlacements(placements));

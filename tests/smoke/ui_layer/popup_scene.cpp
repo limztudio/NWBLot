@@ -53,7 +53,7 @@ UiPopupSmokeScene::UiPopupSmokeScene(Core::Alloc::GlobalArena& arena, Core::Inpu
     , m_outsideText(arena)
 {
     const bool initialized = m_popupText.setText("Popup") && m_outsideText.setText("Outside focus sentinel");
-    NWB_FATAL_ASSERT_MSG(initialized, NWB_TEXT("Popup smoke text models must contain valid UTF8"));
+    GLOBAL_FATAL_ASSERT_MSG(initialized, GLOBAL_TEXT("Popup smoke text models must contain valid UTF8"));
     m_input.addHandlerToBack(*this);
 }
 
@@ -122,7 +122,7 @@ bool UiPopupSmokeScene::paint(Impl::UiPaintContext& context){
             m_popup.close();
         }
         if(ui.checkbox("checked", "Popup checkbox", m_checked, choice))
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: checked={}"), static_cast<u32>(m_checked));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupSmoke: checked={}"), static_cast<u32>(m_checked));
         edit.width = {};
         const EditBoxResult popupEdit = ui.editBox("text", m_popupText, m_popupEdit, edit);
         m_popupFocused = popupEdit.focused;
@@ -175,7 +175,7 @@ void UiPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -200,22 +200,22 @@ void UiPopupSmokeScene::observeState(){
     m_lastValues = current;
     m_lastPlacement = placement;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
         , current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("popup"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("trigger"), __hidden_ui_popup_smoke::s_Trigger);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("modal"), __hidden_ui_popup_smoke::s_ModalTrigger);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("outside"), m_outsideEdit.placement.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("popup"), placement.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("trigger"), __hidden_ui_popup_smoke::s_Trigger);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("modal"), __hidden_ui_popup_smoke::s_ModalTrigger);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("counter"), __hidden_ui_popup_smoke::s_Counter);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("outside"), m_outsideEdit.placement.bounds);
     const Impl::Ui::Rect first{ placement.bounds.x + 8.0f, placement.bounds.y + 36.0f,
         placement.bounds.width - 16.0f, 32.0f };
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("first"), first);
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("second"), { first.x, first.y + 40.0f, first.width, first.height });
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
-    LogSmokeRect(NWB_TEXT("UiPopupSmoke"), m_sequence, NWB_TEXT("edit"), m_popupEdit.placement.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("first"), first);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("second"), { first.x, first.y + 40.0f, first.width, first.height });
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("check"), { first.x, first.y + 80.0f, first.width, first.height });
+    LogSmokeRect(GLOBAL_TEXT("UiPopupSmoke"), m_sequence, GLOBAL_TEXT("edit"), m_popupEdit.placement.bounds);
 }
 
 void UiPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

@@ -35,7 +35,7 @@ bool RendererMeshSystem::createMeshViewBuffer(){
     ;
     Core::BufferHandle meshViewBuffer = m_graphics.createBuffer(meshViewBufferDesc);
     if(!meshViewBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh view buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create mesh view buffer"));
         return false;
     }
 
@@ -57,7 +57,7 @@ bool RendererMeshSystem::snapshotAcceptedMeshViewWorldToClip(Float44& outWorldTo
         return false;
 
     ECSRenderDetail::MeshViewGpuData acceptedView;
-    NWB_MEMCPY(&acceptedView, sizeof(acceptedView), m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData));
+    GLOBAL_MEMCPY(&acceptedView, sizeof(acceptedView), m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData));
     outWorldToClip = acceptedView.worldToClip;
     return true;
 }
@@ -67,18 +67,18 @@ bool RendererMeshSystem::prepareMeshViewBufferUpload(
     ECSRenderDetail::MeshViewGpuData& outViewState,
     bool& outUploadRequired
 )const{
-    NWB_ASSERT(m_meshState.m_meshViewBuffer);
+    GLOBAL_ASSERT(m_meshState.m_meshViewBuffer);
 
     outViewState = ECSRenderDetail::ResolveMeshViewState(m_world, fallbackAspectRatio);
     outUploadRequired = !(
         m_meshState.m_meshViewGpuDataValid
-        && NWB_MEMCMP(m_meshState.m_meshViewGpuData, &outViewState, sizeof(outViewState)) == 0
+        && GLOBAL_MEMCMP(m_meshState.m_meshViewGpuData, &outViewState, sizeof(outViewState)) == 0
     );
     return true;
 }
 
 void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState){
-    NWB_MEMCPY(m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData), &viewState, sizeof(viewState));
+    GLOBAL_MEMCPY(m_meshState.m_meshViewGpuData, sizeof(m_meshState.m_meshViewGpuData), &viewState, sizeof(viewState));
     m_meshState.m_meshViewGpuDataValid = true;
 }
 

@@ -68,13 +68,13 @@ inline constexpr u32 s_CliOptionPresentCount = 0u;
 
 bool PromptString(const AStringView label, const AStringView defaultValue, AString& outValue, bool& prompted){
     prompted = true;
-    NWB_COUT << label;
+    GLOBAL_COUT << label;
     if(!defaultValue.empty())
-        NWB_COUT << " [" << defaultValue << "]";
-    NWB_COUT << ": ";
+        GLOBAL_COUT << " [" << defaultValue << "]";
+    GLOBAL_COUT << ": ";
 
     AString line;
-    if(!ReadTextLine(NWB_CIN, line)){
+    if(!ReadTextLine(GLOBAL_CIN, line)){
         outValue = defaultValue;
         return !outValue.empty();
     }
@@ -90,10 +90,10 @@ bool PromptString(const AStringView label, const AStringView defaultValue, AStri
 bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue, bool& prompted){
     prompted = true;
     for(;;){
-        NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
+        GLOBAL_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
-        if(!ReadTextLine(NWB_CIN, line)){
+        if(!ReadTextLine(GLOBAL_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -106,17 +106,17 @@ bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue
         if(ParseConfirmText(AStringView(line.data(), line.size()), outValue))
             return true;
 
-        NWB_COUT << "Please answer y or n.\n";
+        GLOBAL_COUT << "Please answer y or n.\n";
     }
 }
 
 bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue, bool& prompted){
     prompted = true;
     for(;;){
-        NWB_COUT << label << " [" << defaultValue << "]: ";
+        GLOBAL_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
-        if(!ReadTextLine(NWB_CIN, line)){
+        if(!ReadTextLine(GLOBAL_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -133,7 +133,7 @@ bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue
             return true;
         }
 
-        NWB_COUT << "Please enter a positive finite number.\n";
+        GLOBAL_COUT << "Please enter a positive finite number.\n";
     }
 }
 
@@ -141,7 +141,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     ErrorCode errorCode;
     const bool exists = FileExists(outputPath, errorCode);
     if(errorCode){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
         return false;
     }
     if(!exists)
@@ -149,7 +149,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     if(options.forceOverwrite)
         return true;
     if(options.acceptDefaults){
-        NWB_LOGGER_WARNING(NWB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
         return false;
     }
 
@@ -162,13 +162,13 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
 bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Input FBX or NWB path is required."));
             return false;
         }
 
         AString input;
         if(!PromptString("Input FBX or NWB path", {}, input, prompted)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Input FBX or NWB path is required."));
             return false;
         }
         options.inputPath = input;
@@ -256,7 +256,7 @@ bool SelectedMeshesUseSkinning(
     bool sawSkinned = false;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Selected mesh index is out of range"));
             return false;
         }
 
@@ -267,7 +267,7 @@ bool SelectedMeshesUseSkinning(
     }
 
     if(sawStatic && sawSkinned){
-        NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Model export does not support mixed static and skinned source meshes yet"));
         return false;
     }
 
@@ -307,7 +307,7 @@ void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalize
 
 int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
     if(options.listMeshes){
-        NWB_LOGGER_WARNING(NWB_TEXT("--list-meshes is only valid for FBX input."));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("--list-meshes is only valid for FBX input."));
         return s_FbxToNwbExitFailure;
     }
 
@@ -322,7 +322,7 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
 
     const Path outputPath(UtilityDetail::Arena(), options.outputPath);
     if(outputPath.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Output path is empty."));
         return s_FbxToNwbExitFailure;
     }
     if(!ValidateOutputOverwrite(outputPath, options, prompted))
@@ -434,22 +434,22 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!IsFinite(options.scale) || options.scale <= 0.0){
-            NWB_LOGGER_WARNING(NWB_TEXT("--scale must be a positive finite number."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("--scale must be a positive finite number."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
-            NWB_LOGGER_WARNING(NWB_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         ErrorCode errorCode;
         const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile){
-            NWB_LOGGER_WARNING(NWB_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
@@ -470,9 +470,9 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         }
         if(instances.empty()){
             if(options.includeHidden)
-                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("No mesh instances found in FBX."));
             else
-                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
@@ -486,7 +486,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
 
         Vec4 defaultColor;
         if(!ParseColorText(options.defaultColorText, defaultColor)){
-            NWB_LOGGER_WARNING(NWB_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
@@ -507,13 +507,13 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             usesSkinning = wantsSkinning;
         }
         if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning){
-            NWB_LOGGER_WARNING(NWB_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         const Path outputPath(UtilityDetail::Arena(), options.outputPath);
         if(outputPath.empty()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Output path is empty."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
@@ -579,7 +579,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
         return __hidden_command_line::s_FbxToNwbExitSuccess;
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, GLOBAL_COUT, GLOBAL_CERR); }, [](){ return -1; });
 }
 
 

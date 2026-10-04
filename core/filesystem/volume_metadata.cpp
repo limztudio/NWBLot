@@ -68,12 +68,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    if(NWB_MEMCMP(header.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic)) != 0){
+    if(GLOBAL_MEMCMP(header.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic)) != 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "magic mismatch");
         return false;
     }
     if(header.segmentSize != m_segmentSize){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}")
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Filesystem('{}'): loadMetadata failed: segment size {} does not match mounted size {}")
             , StringConvert(m_volumeName)
             , header.segmentSize
             , m_segmentSize
@@ -127,7 +127,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     if(header.indexBytes != expectedIndexBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
             , StringConvert(m_volumeName)
             , header.indexBytes
             , expectedIndexBytes
@@ -156,7 +156,7 @@ bool VolumeFileSystem::loadMetadataLocked(){
         }
 
         FilesystemVolumeDetail::VolumeIndexEntryDisk entry{};
-        NWB_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
+        GLOBAL_MEMCPY(&entry, sizeof(entry), indexData.data() + static_cast<usize>(cursor), sizeof(entry));
         cursor += sizeof(entry);
 
         u64 endOffset = 0;
@@ -212,7 +212,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     }
 
     FilesystemVolumeDetail::VolumeHeaderDisk header{};
-    NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(FilesystemVolumeDetail::s_VolumeMagic));
+    GLOBAL_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(FilesystemVolumeDetail::s_VolumeMagic));
     header.segmentSize = m_segmentSize;
     header.metadataBytes = m_metadataBytes;
     header.fileCount = static_cast<u64>(m_files.size());
@@ -235,7 +235,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
     if(totalMetaBytes > m_metadataBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes")
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes")
             , StringConvert(m_volumeName)
             , totalMetaBytes
             , m_metadataBytes

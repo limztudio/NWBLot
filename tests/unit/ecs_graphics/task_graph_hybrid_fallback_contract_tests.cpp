@@ -226,7 +226,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
     EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "if(hardwareShadowOpaqueBaseline())"));
     EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "enabled natural opaque hardware-shadow baseline"));
     EXPECT_TRUE(ContainsText(hybridBenchmarkStartup, "enabled healthy hardware transparent-shadow benchmark"));
-    EXPECT_FALSE(ContainsText(hybridBenchmarkStartup, "NWB_FATAL_ASSERT_MSG("));
+    EXPECT_FALSE(ContainsText(hybridBenchmarkStartup, "GLOBAL_FATAL_ASSERT_MSG("));
 }
 
 

@@ -63,7 +63,7 @@ template<typename IntegerT>
 
     const Value* const field = FindField(asset, fieldName);
     if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' is required")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -71,7 +71,7 @@ template<typename IntegerT>
         return false;
     }
     if(!field->isInteger() || field->asInteger() < 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-negative integer")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' must be a non-negative integer")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -81,7 +81,7 @@ template<typename IntegerT>
 
     const u64 value = static_cast<u64>(field->asInteger());
     if(value < static_cast<u64>(minimum) || value > static_cast<u64>(maximum)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported range")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': field '{}' is outside the supported range")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)

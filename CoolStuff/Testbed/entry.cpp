@@ -21,10 +21,10 @@
 
 
 namespace __hidden_testbed_entry{
-static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
-static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
-static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
-static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+static constexpr TStringView s_WindowTitle = GLOBAL_TEXT("NWB Testbed");
+static constexpr TStringView s_WorldAllocFailed = GLOBAL_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+static constexpr TStringView s_ResolverNull = GLOBAL_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+static constexpr TStringView s_DestroyRequiresIdleOrLoss = GLOBAL_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin/face"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean/face"};
@@ -123,18 +123,18 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
 
 
 void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
-    NWB_ASSERT(world);
+    GLOBAL_ASSERT(world);
 
     auto* meshSkinningSystemPtr = world->getSystem<NWB::Impl::MeshSkinningSystem>();
-    NWB_ASSERT(meshSkinningSystemPtr);
+    GLOBAL_ASSERT(meshSkinningSystemPtr);
     NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
 
     auto* rendererSystemPtr = world->getSystem<NWB::Impl::RendererSystem>();
-    NWB_ASSERT(rendererSystemPtr);
+    GLOBAL_ASSERT(rendererSystemPtr);
     NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
 
     auto* uiLayerSystemPtr = world->getSystem<NWB::Impl::UiLayerSystem>();
-    NWB_ASSERT(uiLayerSystemPtr);
+    GLOBAL_ASSERT(uiLayerSystemPtr);
     NWB::Impl::UiLayerSystem& uiLayerSystem = *uiLayerSystemPtr;
 
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
@@ -143,7 +143,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(uiLayerSystem);
 
     const bool deviceIdle = context.graphics.waitForIdle();
-    NWB_FATAL_ASSERT_MSG(
+    GLOBAL_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),
         __hidden_testbed_entry::s_DestroyRequiresIdleOrLoss
     );

@@ -296,7 +296,7 @@ namespace GpuTaskGraphCompilerDetail{
             combined.diagnosticOverrideQueue = {};
             const GpuPhysicalQueueInfo* combinedWitness = nullptr;
             if(AccumulateExactQueueConstraint(singleton.initialOwnershipQueue, combined.initialOwnershipQueue)){
-                NWB_ASSERT(legalityWitness);
+                GLOBAL_ASSERT(legalityWitness);
                 // The witness already admits preceding members; only the appended task can invalidate it.
                 if(
                     (!combined.initialOwnershipQueue.valid() || combined.initialOwnershipQueue == legalityWitness->id)
@@ -379,7 +379,7 @@ namespace GpuTaskGraphCompilerDetail{
     u64 overlap = 0u;
     if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
         const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
-        NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
+        GLOBAL_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
         overlap = scoringData.m_totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
     else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){

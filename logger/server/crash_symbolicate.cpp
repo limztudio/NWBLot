@@ -279,9 +279,9 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     Symbolicate::AppendEventSummary(arena, summary, detailReport);
 
     if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
         if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport))
-            NWB_LOGGER_WARNING(NWB_TEXT("Windows minidump stack could not be fully decoded"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Windows minidump stack could not be fully decoded"));
 #else
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif

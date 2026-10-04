@@ -53,9 +53,9 @@ void TestbedUiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const
     valid = ui.label("hint", "Arrows select; Enter / Space sets") && result.valid && valid;
     valid = ui.endPanel() && valid;
     if(result.activated)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom radio choice key={}"), m_state.selectedKey());
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom radio choice key={}"), m_state.selectedKey());
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom radio group declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom radio group declaration failed"));
 }
 
 

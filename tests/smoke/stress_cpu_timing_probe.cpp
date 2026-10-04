@@ -31,7 +31,7 @@ StressCpuTimingProbe::StressCpuTimingProbe(Core::Alloc::GlobalArena& arena)
 bool StressCpuTimingProbe::initialize(const bool requested, const bool presentationTimingEnabled){
     const bool hasOutput = ReadSmokeEnvironmentText("NWB_STRESS_CPU_TIMING_FILE", m_outputPath);
     if(hasOutput != requested || (requested && !presentationTimingEnabled)){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: diagnostics require presentation timing and an explicit output path"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: diagnostics require presentation timing and an explicit output path"));
         return false;
     }
     m_enabled = requested;
@@ -39,7 +39,7 @@ bool StressCpuTimingProbe::initialize(const bool requested, const bool presentat
         return true;
     // Reserve before warmup: no publication rows allocate or write files inside the measured window.
     m_records.reserve(s_MaxRecords);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressCpuTimingProbe: enabled cpu=1 gpu=1 memory=0 diagnostic_only=1"));
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("StressCpuTimingProbe: enabled cpu=1 gpu=1 memory=0 diagnostic_only=1"));
     return true;
 }
 
@@ -52,7 +52,7 @@ bool StressCpuTimingProbe::observe(
         return true;
     const Core::Perf::CaptureOptions options = session.captureOptions();
     if(!options.cpuTimingActive() || !options.gpuTimingActive() || options.memoryActive()){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: active capture options disagree with requested diagnostics"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: active capture options disagree with requested diagnostics"));
         return false;
     }
     if(!m_started){
@@ -70,7 +70,7 @@ bool StressCpuTimingProbe::observe(
     if(!write(presentation.total(), session.frameIndex()))
         return false;
     m_complete = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressCpuTimingProbe: complete records={} first={} last={} first_source={} end_source={}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("StressCpuTimingProbe: complete records={} first={} last={} first_source={} end_source={}")
         , static_cast<u64>(m_records.size())
         , m_firstPresentation
         , successfulPresentations
@@ -86,7 +86,7 @@ bool StressCpuTimingProbe::capture(
     const u64 frame,
     const u64 presentations){
     if(!timing.valid() || timing.scopeCount() > s_MaxScopesPerDomain){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: timing view invalid or scope capacity exceeded"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: timing view invalid or scope capacity exceeded"));
         return false;
     }
     for(usize index = 0u; index < timing.scopeCount(); ++index){
@@ -97,13 +97,13 @@ bool StressCpuTimingProbe::capture(
         const Core::Perf::TimingScopeId id = timing.scopeAt(index);
         const Name name = timing.scopeNameAt(index);
         if(scope.recorded && (scope.generation != id.generation || scope.name != name)){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: scope identity changed inside measurement"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: scope identity changed inside measurement"));
             return false;
         }
         if(scope.recorded && scope.lastPublication == stats.publishFrameIndex)
             continue;
         if((scope.recorded && stats.publishFrameIndex < scope.lastPublication) || m_records.size() >= s_MaxRecords){
-            NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: publication regressed or record capacity exceeded"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: publication regressed or record capacity exceeded"));
             return false;
         }
         scope.name = name;
@@ -117,12 +117,12 @@ bool StressCpuTimingProbe::capture(
 
 bool StressCpuTimingProbe::write(const PresentationFpsSample& presentation, const u64 endFrame){
     if(presentation.firstPresentationCount != m_firstPresentation || endFrame <= m_firstSourceFrame){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: presentation and source-frame boundaries disagree"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: presentation and source-frame boundaries disagree"));
         return false;
     }
     OutputFileStream output(m_outputPath.c_str(), s_FileOpenTruncate);
     if(!output.is_open()){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: failed to open diagnostic output"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: failed to open diagnostic output"));
         return false;
     }
     output.precision(17);
@@ -152,7 +152,7 @@ bool StressCpuTimingProbe::write(const PresentationFpsSample& presentation, cons
     output << "complete " << m_records.size() << ' ' << scopeCount << '\n';
     output.flush();
     if(!output.good()){
-        NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: diagnostic output write failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("StressCpuTimingProbe: diagnostic output write failed"));
         return false;
     }
     return true;

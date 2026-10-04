@@ -10,10 +10,10 @@
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(GLOBAL_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -49,9 +49,9 @@ public:
                 if(DurationInMS<u64>(TimerNow(), begin) >= s_TestTimeoutMS){
                     // A timeout must fail a death test instead of being mistaken for the expected invariant rejection.
                     if(deathTest){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
                         ExitProcess(0u);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
                         ::_exit(0);
 #endif
                     }
@@ -70,9 +70,9 @@ private:
 
 
 [[noreturn]] void ExitTestProcess(u32 code)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     ExitProcess(code);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     ::_exit(static_cast<int>(code));
 #else
     static_cast<void>(code);

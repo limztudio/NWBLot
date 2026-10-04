@@ -31,7 +31,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
@@ -43,7 +43,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
 
         m_rayTracingState.m_shadowBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_shadowBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create shadow binding layout"));
             m_rayTracingState.m_shadowPipelineFailed = true;
             return false;
         }
@@ -72,12 +72,12 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     ;
     m_rayTracingState.m_shadowPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
         m_rayTracingState.m_shadowPipelineFailed = true;
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
     return true;
 }
 
@@ -94,14 +94,14 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
     // Soft and hard traces share their push-only layout.
     if(!m_rayTracingState.m_shadowBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
@@ -129,12 +129,12 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     ;
     m_rayTracingState.m_shadowSoftPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_shadowSoftPipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
         return false;
     }
 
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
     return true;
 }
 
@@ -145,7 +145,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
         m_rayTracingState.m_swShadowPipelineFailed = true;
         return false;
     }
@@ -158,7 +158,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
 
         m_rayTracingState.m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_swShadowBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create software shadow binding layout"));
             m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -176,7 +176,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         ;
         m_rayTracingState.m_swShadowEdgeCounterBuffer = m_graphics.createBuffer(edgeCounterDesc);
         if(!m_rayTracingState.m_swShadowEdgeCounterBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create SW shadow edge-counter buffer"));
             m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -193,7 +193,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         ;
         m_rayTracingState.m_swShadowIndirectArgsBuffer = m_graphics.createBuffer(indirectArgsDesc);
         if(!m_rayTracingState.m_swShadowIndirectArgsBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create SW shadow indirect-args buffer"));
             m_rayTracingState.m_swShadowPipelineFailed = true;
             return false;
         }
@@ -204,7 +204,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
         m_rayTracingState.m_swShadowPipelineFailed = true;
         return false;
     }
@@ -253,7 +253,7 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     ;
     pipeline = m_graphics.getDevice().createComputePipeline(pipelineDesc);
     if(!pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
     }
     return true;
@@ -283,7 +283,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     ;
     Core::BufferHandle materialBuffer = m_graphics.createBuffer(materialBufferDesc);
     if(!materialBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance material buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create shadow instance material buffer"));
         return false;
     }
     if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle))
@@ -317,7 +317,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     ;
     Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
     if(!instanceBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create shadow instance context buffer"));
         return false;
     }
     if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle))
@@ -348,7 +348,7 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     ;
     Core::BufferHandle materialTypedBuffer = m_graphics.createBuffer(materialTypedBufferDesc);
     if(!materialTypedBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create shadow material typed buffer"));
         return false;
     }
     if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle))

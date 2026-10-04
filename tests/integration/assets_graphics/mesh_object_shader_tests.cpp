@@ -173,7 +173,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_TRUE(rejectedPlan.preparedEntries.empty());
         EXPECT_EQ(rejectedPlan.plannedFileCount, 7u);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("require the fixed engine shared mesh program")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("require the fixed engine shared mesh program")));
     Plan::PreparedShaderEntry standalone(testArena.arena);
     standalone.entry.name = "project/custom_mesh";
     standalone.sourcePath = root / "project" / "shared_ms.slang";

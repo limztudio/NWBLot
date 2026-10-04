@@ -150,7 +150,7 @@ TEST(GpuCommandIrRasterCapture, RollbackRestoresOwnedBlobAndOwnerPrefix){
     EXPECT_EQ(capture.recordCount(), 2u);
     ASSERT_TRUE(capture.exportOwned(rolledBack));
     ASSERT_EQ(rolledBack.bytes().size(), prefix.bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(rolledBack.bytes().data(), prefix.bytes().data(), prefix.bytes().size()), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(rolledBack.bytes().data(), prefix.bytes().data(), prefix.bytes().size()), 0);
     EXPECT_EQ(rolledBack.rasterStateOwner(1u), nullptr);
     EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(rolledBack.bytes()).valid());
 
@@ -181,7 +181,7 @@ TEST(GpuCommandIrRasterCapture, NativeBufferAddressesStayOutOfWireBytes){
     const BinaryByteView firstBytes = firstCapture.commandBytes();
     const BinaryByteView secondBytes = secondCapture.commandBytes();
     ASSERT_EQ(firstBytes.size(), secondBytes.size());
-    EXPECT_EQ(NWB_MEMCMP(firstBytes.data(), secondBytes.data(), firstBytes.size()), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(firstBytes.data(), secondBytes.data(), firstBytes.size()), 0);
 }
 
 TEST(GpuCommandIrRasterCapture, RetainedOwnerAnchorOutlivesIndependentCaptureArena){

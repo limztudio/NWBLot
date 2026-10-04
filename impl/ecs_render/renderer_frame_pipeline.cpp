@@ -126,7 +126,7 @@ RendererFramePipeline::RendererFramePipeline(
     , m_deferredLightingSubmissionTransaction(arena)
 {
     if(!RegisterBuiltInCsgShapeTypes(m_csgShapeRegistry))
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in CSG shape types"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register built-in CSG shape types"));
 
     m_deferredTaskTimingFeedback.activate();
 }
@@ -183,25 +183,25 @@ void RendererFramePipeline::reportLaggedLightingTransition(const LaggedLightingR
         break;
     case LaggedLightingReport::NoDedicatedAsyncCompute:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})"),
+            GLOBAL_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation {})"),
             targetGeneration
         );
         break;
     case LaggedLightingReport::BootstrapAccepted:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})"),
+            GLOBAL_TEXT("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})"),
             targetGeneration
         );
         break;
     case LaggedLightingReport::ActiveHistoryAccepted:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting active history accepted (target generation {})"),
+            GLOBAL_TEXT("RendererSystem: frame-lagged async lighting active history accepted (target generation {})"),
             targetGeneration
         );
         break;
     case LaggedLightingReport::CurrentFrameAccepted:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"),
+            GLOBAL_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"),
             targetGeneration
         );
         break;

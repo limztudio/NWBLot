@@ -124,7 +124,7 @@ inline void SIMDCALL BoundingFrustum::cornersValue(SIMDVector frustumOrigin, SIM
 
 
 inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // beginner: Loads frustum once, Streams corners out.
-    NWB_ASSERT(corners != nullptr);
+    GLOBAL_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
     cornersValue(
         LoadFloat(origin),

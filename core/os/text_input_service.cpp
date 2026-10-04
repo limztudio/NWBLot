@@ -63,7 +63,7 @@ QueuedTextInputService::QueuedTextInputService(Alloc::GlobalArena& arena)
 }
 
 QueuedTextInputService::~QueuedTextInputService(){
-    NWB_ASSERT(isOwnerThread());
+    GLOBAL_ASSERT(isOwnerThread());
 }
 
 TextInputSessionToken QueuedTextInputService::activeSession()const noexcept{

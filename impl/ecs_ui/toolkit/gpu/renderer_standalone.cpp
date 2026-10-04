@@ -151,7 +151,7 @@ bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame)
         else if(m_state->m_graphics.isDeviceRecreationRequested())
             return false;
         else
-            NWB_LOGGER_WARNING(NWB_TEXT("GpuRenderer: presentation contributor preparation failed; presenting UI output without its contribution"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("GpuRenderer: presentation contributor preparation failed; presenting UI output without its contribution"));
     }
     const Core::GpuPhysicalQueueId queue = m_state->m_graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(!queue.valid())

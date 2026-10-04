@@ -284,17 +284,17 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     const usize skinnedOffset = staticOffset + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary);
     Core::Assets::AssetBytes malformed(binary);
     ModelBinaryPayload::ModelSkinnedMeshObjectBinary skinnedObject;
-    NWB_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
+    GLOBAL_MEMCPY(&skinnedObject, sizeof(skinnedObject), malformed.data() + skinnedOffset, sizeof(skinnedObject));
     skinnedObject.nameHash = Name(s_PROP).hash();
-    NWB_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
+    GLOBAL_MEMCPY(malformed.data() + skinnedOffset, malformed.size() - skinnedOffset, &skinnedObject, sizeof(skinnedObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
     malformed = binary;
     ModelBinaryPayload::ModelStaticMeshObjectBinary staticObject;
-    NWB_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
+    GLOBAL_MEMCPY(&staticObject, sizeof(staticObject), malformed.data() + staticOffset, sizeof(staticObject));
     staticObject.parentObjectNameHash = Name(s_BODY).hash();
-    NWB_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
+    GLOBAL_MEMCPY(malformed.data() + staticOffset, malformed.size() - staticOffset, &staticObject, sizeof(staticObject));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.loadBinary(binary));
 
@@ -322,7 +322,7 @@ TEST(ModelPayload, CodecRejectsPreviousSchemaAndTruncatedSkinnedRecordAndReloads
 
     Core::Assets::AssetBytes malformed(binary);
     constexpr u32 s_PreviousModelMagic = 0x4D444C31u;
-    NWB_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
+    GLOBAL_MEMCPY(malformed.data(), malformed.size(), &s_PreviousModelMagic, sizeof(s_PreviousModelMagic));
     EXPECT_FALSE(loaded.loadBinary(malformed));
     EXPECT_TRUE(loaded.skeletonObjects().empty());
     EXPECT_TRUE(loaded.staticMeshObjects().empty());

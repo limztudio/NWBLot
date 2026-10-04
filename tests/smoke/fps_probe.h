@@ -55,7 +55,7 @@ public:
         const f64 averageFrameSeconds = m_intervalSeconds / static_cast<f64>(m_intervalFrames);
         const f64 averageFps = 1.0 / averageFrameSeconds;
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}")
+            GLOBAL_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}")
             , m_label
             , averageFps
             , averageFrameSeconds * s_MillisecondsPerSecond
@@ -79,7 +79,7 @@ private:
     static constexpr f64 s_LargeFrameSeconds = 3600.0;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 
-    TStringView m_label = NWB_TEXT("Smoke");
+    TStringView m_label = GLOBAL_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
     f64 m_minFrameSeconds = s_LargeFrameSeconds;

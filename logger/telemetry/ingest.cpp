@@ -37,12 +37,12 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
     LocalTime localTime = {};
     if(!GetLocalTime(localTime))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for telemetry upload name"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to read local time for telemetry upload name"));
 
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
         arena,
-        NWB_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}"),
+        GLOBAL_TEXT("telemetry_{:04}{:02}{:02}_{:02}{:02}{:02}_{}"),
         localTime.tm_year + s_LocalTimeYearBase,
         localTime.tm_mon + s_LocalTimeMonthBase,
         localTime.tm_mday,
@@ -143,7 +143,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
     if(!result.decode.ok()){
         result.message = StringFormat(
             arena,
-            NWB_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"),
+            GLOBAL_TEXT("Telemetry upload stored but decode failed: raw='{}' bytes_read={} status={}"),
             PathToString<tchar>(result.rawPath),
             result.decode.bytesRead,
             static_cast<u32>(result.decode.status)
@@ -154,7 +154,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     TelemetryReport report(arena);
     if(!BuildTelemetryReport(arena, recorder.view(), report)){
-        result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
+        result.message = StringFormat(arena, GLOBAL_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Type::Error;
         return result;
     }
@@ -167,7 +167,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
     if(!result.wroteJson || !result.wrotePerfCsv){
         result.message = StringFormat(
             arena,
-            NWB_TEXT("Telemetry upload decoded but report write failed: raw='{}' json='{}' csv='{}'"),
+            GLOBAL_TEXT("Telemetry upload decoded but report write failed: raw='{}' json='{}' csv='{}'"),
             PathToString<tchar>(result.rawPath),
             PathToString<tchar>(result.jsonPath),
             PathToString<tchar>(result.perfCsvPath)
@@ -178,7 +178,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     result.message = StringFormat(
         arena,
-        NWB_TEXT("Telemetry upload processed: events={} parse_failures={} raw='{}' json='{}' csv='{}'"),
+        GLOBAL_TEXT("Telemetry upload processed: events={} parse_failures={} raw='{}' json='{}' csv='{}'"),
         result.summary.eventCount,
         result.summary.parseFailureCount,
         PathToString<tchar>(result.rawPath),

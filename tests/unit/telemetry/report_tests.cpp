@@ -578,11 +578,11 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
         Limit<u16>::s_Max,
     };
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    GLOBAL_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
         header.version = version;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        GLOBAL_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         ASSERT_TRUE(recorder.recordBinary(
             Telemetry::EventKind::FrameGraphFrame,
             55u,

@@ -16,7 +16,7 @@ TestbedUiEditGallery::TestbedUiEditGallery(NWB::Core::Alloc::GlobalArena& arena)
 {
     const bool configured = m_text.setText("Edit me: \xED\x95\x9C\xEA\xB8\x80")
         && m_readOnly.setText("Read-only: copy this text");
-    NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed edit gallery must have valid initial text"));
+    GLOBAL_FATAL_ASSERT_MSG(configured, GLOBAL_TEXT("Testbed edit gallery must have valid initial text"));
 }
 
 void TestbedUiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
@@ -32,7 +32,7 @@ void TestbedUiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     options.height = { LayoutSizePolicy::Fixed, 36.0f };
     const EditBoxResult text = ui.editBox("editable", m_text, m_textState, options);
     if(text.textChanged)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom edit text bytes={}"), m_text.text().size());
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom edit text bytes={}"), m_text.text().size());
     options.readOnly = true;
     const EditBoxResult readOnly = ui.editBox("read_only", m_readOnly, m_readOnlyState, options);
     valid = text.valid && readOnly.valid && valid;
@@ -40,7 +40,7 @@ void TestbedUiEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom edit widget declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom edit widget declaration failed"));
 }
 
 

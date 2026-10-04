@@ -33,7 +33,7 @@ void RemoveTemporaryFile(const Path& path){
     ErrorCode errorCode;
     if(!RemoveFile(path, errorCode)){
         if(errorCode){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove temporary output '{}': {}")
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("tex_conv: failed to remove temporary output '{}': {}")
                 , PathToString<tchar>(path)
                 , StringConvert(errorCode.message())
             );
@@ -45,7 +45,7 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
     ErrorCode errorCode;
     const bool exists = FileExists(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to query output path '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
@@ -56,22 +56,22 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
 
     const bool directory = IsDirectory(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to inspect output path '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(directory){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: output path is a directory: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: output path is a directory: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(temporary){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: temporary output already exists: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: temporary output already exists: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(!force){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.")
             , PathToString<tchar>(path)
         );
         return false;
@@ -84,7 +84,7 @@ bool RemoveOutputPath(const Path& path){
     ErrorCode errorCode;
     const bool removed = RemoveFile(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to replace output '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to replace output '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
@@ -95,7 +95,7 @@ bool RemoveOutputPath(const Path& path){
 
     const bool exists = FileExists(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to query output '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
@@ -104,7 +104,7 @@ bool RemoveOutputPath(const Path& path){
     if(!exists)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove existing output '{}'."), PathToString<tchar>(path));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to remove existing output '{}'."), PathToString<tchar>(path));
     return false;
 }
 
@@ -217,7 +217,7 @@ bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument,
         else if(extension == __hidden_output::s_NwbOutputExtension)
             outOutputPaths.metadata = outputBase;
         else{
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return false;
         }
         outOutputPaths.metadata.replace_extension(__hidden_output::s_NwbOutputExtension);
@@ -243,22 +243,22 @@ bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force){
 bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload, const bool force){
     const AString metadata = __hidden_output::BuildMetadata(payload, outputPaths.data);
     if(metadata.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an unsupported texture payload format."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: cannot write an unsupported texture payload format."));
         return false;
     }
     if(payload.alphaBytes.size() > Limit<usize>::s_Max - payload.bytes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture payload is too large to write."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: texture payload is too large to write."));
         return false;
     }
     if(!__hidden_output::WriteTexturePayload(outputPaths.dataTemporary, payload)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to write output data file '{}'.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to write output data file '{}'.")
             , PathToString<tchar>(outputPaths.dataTemporary)
         );
         __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
         return false;
     }
     if(!WriteTextFile(outputPaths.metadataTemporary, metadata)){
-        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to write output metadata file '{}'.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to write output metadata file '{}'.")
             , PathToString<tchar>(outputPaths.metadataTemporary)
         );
         __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
@@ -277,7 +277,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
     ErrorCode errorCode;
     if(!RenamePath(outputPaths.dataTemporary, outputPaths.data, errorCode)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("tex_conv: failed to finalize output data file '{}': {}")
+            GLOBAL_TEXT("tex_conv: failed to finalize output data file '{}': {}")
             , PathToString<tchar>(outputPaths.data)
             , StringConvert(errorCode.message())
         );
@@ -287,7 +287,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
     }
     if(!RenamePath(outputPaths.metadataTemporary, outputPaths.metadata, errorCode)){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("tex_conv: failed to finalize output metadata file '{}': {}")
+            GLOBAL_TEXT("tex_conv: failed to finalize output metadata file '{}': {}")
             , PathToString<tchar>(outputPaths.metadata)
             , StringConvert(errorCode.message())
         );

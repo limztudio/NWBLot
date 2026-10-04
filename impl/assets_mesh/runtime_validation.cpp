@@ -98,7 +98,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("exceeds u32 stream count limits")
+            GLOBAL_TEXT("exceeds u32 stream count limits")
         );
     }
 
@@ -111,7 +111,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             meshPathText,
             MeshAssetBinaryPayload::s_PositionsStreamLabel,
             i,
-            NWB_TEXT("contains non-finite data")
+            GLOBAL_TEXT("contains non-finite data")
         );
     }
     for(usize i = 0u; i < normals.size(); ++i){
@@ -123,7 +123,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             meshPathText,
             MeshAssetBinaryPayload::s_NormalsStreamLabel,
             i,
-            NWB_TEXT("is invalid")
+            GLOBAL_TEXT("is invalid")
         );
     }
     for(usize i = 0u; i < tangents.size(); ++i){
@@ -135,7 +135,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             meshPathText,
             MeshAssetBinaryPayload::s_TangentsStreamLabel,
             i,
-            NWB_TEXT("is invalid")
+            GLOBAL_TEXT("is invalid")
         );
     }
     for(usize i = 0u; i < uv0.size(); ++i){
@@ -147,7 +147,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             meshPathText,
             MeshAssetBinaryPayload::s_Uv0StreamLabel,
             i,
-            NWB_TEXT("contains non-finite data")
+            GLOBAL_TEXT("contains non-finite data")
         );
     }
     for(usize i = 0u; i < colors.size(); ++i){
@@ -159,7 +159,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             meshPathText,
             MeshAssetBinaryPayload::s_ColorsStreamLabel,
             i,
-            NWB_TEXT("contains non-finite data")
+            GLOBAL_TEXT("contains non-finite data")
         );
     }
 
@@ -199,7 +199,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                     contextText,
                     meshPathText,
                     meshletIndex,
-                    NWB_TEXT("has invalid encoded position ref")
+                    GLOBAL_TEXT("has invalid encoded position ref")
                 );
             }
 
@@ -214,16 +214,16 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 meshPathText,
                 meshletIndex,
                 attributeIndex,
-                NWB_TEXT("shared across skin identities")
+                GLOBAL_TEXT("shared across skin identities")
             );
         },
         [&](const usize attributeIndex){
             return MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
                 contextText,
                 meshPathText,
-                NWB_TEXT("meshlet attribute ref"),
+                GLOBAL_TEXT("meshlet attribute ref"),
                 attributeIndex,
-                NWB_TEXT("is unreferenced")
+                GLOBAL_TEXT("is unreferenced")
             );
         }
     );
@@ -251,7 +251,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("has incomplete meshlet payload")
+            GLOBAL_TEXT("has incomplete meshlet payload")
         );
     }
     if(
@@ -262,7 +262,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("exceeds u32 stream count limits")
+            GLOBAL_TEXT("exceeds u32 stream count limits")
         );
     }
 
@@ -281,7 +281,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid vertex count")
+                GLOBAL_TEXT("has invalid vertex count")
             );
         }
         if(primitiveCount == 0u || primitiveCount > s_MeshMaxMeshletTriangles){
@@ -289,7 +289,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid primitive count")
+                GLOBAL_TEXT("has invalid primitive count")
             );
         }
         if(encodedPositionCount == 0u || encodedPositionCount > s_MeshMaxMeshletVertices){
@@ -297,7 +297,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid deformed position count")
+                GLOBAL_TEXT("has invalid deformed position count")
             );
         }
         if(attributeCount == 0u || attributeCount > s_MeshMaxMeshletVertices){
@@ -305,7 +305,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid attribute count")
+                GLOBAL_TEXT("has invalid attribute count")
             );
         }
         if(
@@ -318,7 +318,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has non-contiguous offsets")
+                GLOBAL_TEXT("has non-contiguous offsets")
             );
         }
 
@@ -332,7 +332,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid ref encoding width")
+                GLOBAL_TEXT("has invalid ref encoding width")
             );
         }
         if(
@@ -343,7 +343,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("encoded ref byte counts overflow")
+                GLOBAL_TEXT("encoded ref byte counts overflow")
             );
         }
 
@@ -361,7 +361,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("exceeds meshlet stream bounds")
+                GLOBAL_TEXT("exceeds meshlet stream bounds")
             );
         }
 
@@ -372,7 +372,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid bounds")
+                GLOBAL_TEXT("has invalid bounds")
             );
         }
         if(MeshletConeFlags(bounds) & ~s_MeshletConeFlagEnabled){
@@ -380,7 +380,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid cone flags")
+                GLOBAL_TEXT("has invalid cone flags")
             );
         }
         if(MeshletConeEnabled(bounds) && MeshletConePackedCutoff(bounds) == 0u){
@@ -388,7 +388,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid cone cutoff")
+                GLOBAL_TEXT("has invalid cone cutoff")
             );
         }
 
@@ -411,7 +411,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid encoded position ref")
+                GLOBAL_TEXT("has invalid encoded position ref")
             );
         }
 
@@ -433,7 +433,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("has invalid encoded attribute ref")
+                GLOBAL_TEXT("has invalid encoded attribute ref")
             );
         }
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
@@ -445,7 +445,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                 contextText,
                 meshPathText,
                 meshletIndex,
-                NWB_TEXT("local vertex ref is out of range")
+                GLOBAL_TEXT("local vertex ref is out of range")
             );
         }
         for(u32 primitiveIndex = 0u; primitiveIndex < primitiveCount; ++primitiveIndex){
@@ -460,7 +460,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
                     meshPathText,
                     meshletIndex,
                     primitiveIndex,
-                    NWB_TEXT("has an out-of-range local vertex")
+                    GLOBAL_TEXT("has an out-of-range local vertex")
                 );
             }
         }
@@ -475,7 +475,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         return MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
             contextText,
             meshPathText,
-            NWB_TEXT("meshlet streams contain trailing data")
+            GLOBAL_TEXT("meshlet streams contain trailing data")
         );
     }
 

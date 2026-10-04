@@ -432,16 +432,16 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     for(const u32 version : { 0u, 1u, 2u, NWB::Impl::TextureBinaryPayload::s_TextureVersion + 1u }){
-        NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
+        GLOBAL_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset)) << version;
         EXPECT_EQ(loadedAsset.get(), nullptr);
     }
     EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("unsupported texture payload version")));
 
     const u32 currentVersion = NWB::Impl::TextureBinaryPayload::s_TextureVersion;
-    NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
+    GLOBAL_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     EXPECT_TRUE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset));
 }
@@ -468,7 +468,7 @@ TEST(AssetsGraphics, TexturePayloadRejectsMismatchedExplicitAlphaMode){
         TextureFormat::s_OpaqueAlphaUnorm8
     );
     EXPECT_FALSE(texture.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("inconsistent alpha metadata")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("inconsistent alpha metadata")));
 }
 
 TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
@@ -633,24 +633,24 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         TStringView diagnostic;
     };
     constexpr Array<ObsoleteField, 15u> obsoleteFields = {{
-        { "asset.version = 1;\n", NWB_TEXT("unsupported asset field 'version'") },
+        { "asset.version = 1;\n", GLOBAL_TEXT("unsupported asset field 'version'") },
         { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'uastc_spec_revision'") },
+            GLOBAL_TEXT("unsupported asset field 'uastc_spec_revision'") },
         { "asset.uastc_hdr_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
+            GLOBAL_TEXT("unsupported asset field 'uastc_hdr_spec_revision'") },
         { "asset.alpha_uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
-            NWB_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
-        { "asset.schema_version = 1;\n", NWB_TEXT("unsupported asset field 'schema_version'") },
-        { "asset.revision = 1;\n", NWB_TEXT("unsupported asset field 'revision'") },
-        { "asset.block_width = 4;\n", NWB_TEXT("unsupported asset field 'block_width'") },
-        { "asset.block_height = 4;\n", NWB_TEXT("unsupported asset field 'block_height'") },
-        { "asset.bytes_per_block = 16;\n", NWB_TEXT("unsupported asset field 'bytes_per_block'") },
-        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", NWB_TEXT("unsupported asset field 'payload_layout'") },
-        { "asset.mip_address_mode = \"clamp\";\n", NWB_TEXT("unsupported asset field 'mip_address_mode'") },
-        { "asset.mip_count = 3;\n", NWB_TEXT("unsupported asset field 'mip_count'") },
-        { "asset.mips = [];\n", NWB_TEXT("unsupported asset field 'mips'") },
-        { "asset.alpha_payload_offset_bytes = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
-        { "asset.alpha_payload_byte_count = 48;\n", NWB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
+            GLOBAL_TEXT("unsupported asset field 'alpha_uastc_spec_revision'") },
+        { "asset.schema_version = 1;\n", GLOBAL_TEXT("unsupported asset field 'schema_version'") },
+        { "asset.revision = 1;\n", GLOBAL_TEXT("unsupported asset field 'revision'") },
+        { "asset.block_width = 4;\n", GLOBAL_TEXT("unsupported asset field 'block_width'") },
+        { "asset.block_height = 4;\n", GLOBAL_TEXT("unsupported asset field 'block_height'") },
+        { "asset.bytes_per_block = 16;\n", GLOBAL_TEXT("unsupported asset field 'bytes_per_block'") },
+        { "asset.payload_layout = \"mip_major_slice_major_blocks\";\n", GLOBAL_TEXT("unsupported asset field 'payload_layout'") },
+        { "asset.mip_address_mode = \"clamp\";\n", GLOBAL_TEXT("unsupported asset field 'mip_address_mode'") },
+        { "asset.mip_count = 3;\n", GLOBAL_TEXT("unsupported asset field 'mip_count'") },
+        { "asset.mips = [];\n", GLOBAL_TEXT("unsupported asset field 'mips'") },
+        { "asset.alpha_payload_offset_bytes = 48;\n", GLOBAL_TEXT("unsupported asset field 'alpha_payload_offset_bytes'") },
+        { "asset.alpha_payload_byte_count = 48;\n", GLOBAL_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
     }};
     for(const AStringView source : { s_TextureTestMetadata, s_TextureHdrTestMetadata }){
         for(const ObsoleteField& field : obsoleteFields){
@@ -690,10 +690,10 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
         TStringView diagnostic;
     };
     constexpr Array<InvalidFormat, 4u> invalidFormats = {{
-        { "", NWB_TEXT("field 'format' is required") },
-        { "asset.format = 17;", NWB_TEXT("field 'format' must be a string") },
-        { "asset.format = \"\";", NWB_TEXT("field 'format' must not be empty") },
-        { "asset.format = \"uastc_hdr_6x6\";", NWB_TEXT("field 'format' must be 'uastc_ldr_4x4' or 'uastc_hdr_4x4'") },
+        { "", GLOBAL_TEXT("field 'format' is required") },
+        { "asset.format = 17;", GLOBAL_TEXT("field 'format' must be a string") },
+        { "asset.format = \"\";", GLOBAL_TEXT("field 'format' must not be empty") },
+        { "asset.format = \"uastc_hdr_6x6\";", GLOBAL_TEXT("field 'format' must be 'uastc_ldr_4x4' or 'uastc_hdr_4x4'") },
     }};
     constexpr AStringView formatAssignment = "asset.format = \"uastc_ldr_4x4\";";
     for(const InvalidFormat& invalidFormat : invalidFormats){
@@ -733,13 +733,13 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
         TStringView diagnostic;
     };
     constexpr Array<DerivedField, 7u> derivedFields = {{
-        { s_TextureTestMetadata, "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
-        { s_TextureCubeTestMetadata, "asset.depth = 1;\n", NWB_TEXT("unsupported asset field 'depth'") },
-        { s_TextureHdrTestMetadata, "asset.color_space = \"linear\";\n", NWB_TEXT("unsupported asset field 'color_space'") },
-        { s_TextureHdrTestMetadata, "asset.has_alpha = 1;\n", NWB_TEXT("unsupported asset field 'has_alpha'") },
-        { s_TextureHdrTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
-        { s_TextureTestMetadata, "asset.alpha_mode = \"opaque\";\n", NWB_TEXT("unsupported asset field 'alpha_mode'") },
-        { s_TextureTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", NWB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+        { s_TextureTestMetadata, "asset.depth = 1;\n", GLOBAL_TEXT("unsupported asset field 'depth'") },
+        { s_TextureCubeTestMetadata, "asset.depth = 1;\n", GLOBAL_TEXT("unsupported asset field 'depth'") },
+        { s_TextureHdrTestMetadata, "asset.color_space = \"linear\";\n", GLOBAL_TEXT("unsupported asset field 'color_space'") },
+        { s_TextureHdrTestMetadata, "asset.has_alpha = 1;\n", GLOBAL_TEXT("unsupported asset field 'has_alpha'") },
+        { s_TextureHdrTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", GLOBAL_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
+        { s_TextureTestMetadata, "asset.alpha_mode = \"opaque\";\n", GLOBAL_TEXT("unsupported asset field 'alpha_mode'") },
+        { s_TextureTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", GLOBAL_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
     }};
     for(const DerivedField& field : derivedFields){
         CapturingLogger logger;
@@ -803,7 +803,7 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
                 EXPECT_EQ(logger.errorCount(), 0u);
             }
             else
-                EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sidecar size does not match the derived mip and alpha layout")));
+                EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("sidecar size does not match the derived mip and alpha layout")));
         }
         ErrorCode errorCode;
         EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
@@ -857,7 +857,7 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
             EXPECT_EQ(logger.errorCount(), 0u);
         }
         else
-            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'alpha_constant_unorm8' is outside the supported range")));
+            EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("field 'alpha_constant_unorm8' is outside the supported range")));
     }
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
@@ -872,22 +872,22 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
         {
             "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
             "asset.dimension = \"2d\"; asset.width = 4294967295; asset.height = 4294967295;\n",
-            NWB_TEXT("block grid exceeds runtime limits")
+            GLOBAL_TEXT("block grid exceeds runtime limits")
         },
         {
             "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
             "asset.dimension = \"volume\"; asset.width = 2147483648; asset.height = 2147483648; asset.depth = 4;\n",
-            NWB_TEXT("byte size overflows")
+            GLOBAL_TEXT("byte size overflows")
         },
         {
             "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
             "asset.dimension = \"volume\"; asset.width = 1073741824; asset.height = 1073741824; asset.depth = 15;\n",
-            NWB_TEXT("mip payload offsets overflow")
+            GLOBAL_TEXT("mip payload offsets overflow")
         },
         {
             "asset.format = \"uastc_hdr_4x4\"; asset.alpha_mode = \"uastc_ldr_4x4\";\n"
             "asset.dimension = \"cube\"; asset.width = 1073741824; asset.height = 1073741824;\n",
-            NWB_TEXT("separate HDR alpha payload size overflows")
+            GLOBAL_TEXT("separate HDR alpha payload size overflows")
         },
     }};
     for(const OverflowCase& overflowCase : overflowCases){
@@ -912,7 +912,7 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
 }
 
 TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -937,7 +937,7 @@ TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
         entry,
         scratchArena
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sidecar filename without path components")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("sidecar filename without path components")));
 #else
 #endif
 }

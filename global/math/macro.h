@@ -9,47 +9,47 @@
 
 
 #if defined(__SSE4_1__) || defined(__SSE4_2__) || defined(_M_AVX) || defined(_M_AVX2) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_X64) || defined(_M_AMD64) || (defined(_M_IX86_FP) && (_M_IX86_FP >= 2))))
-#define NWB_HAS_SSE4 1
+#define GLOBAL_HAS_SSE4 1
 #endif
 
 #if defined(__FMA__) || defined(_M_FMA)
-#define NWB_HAS_FMA3 1
+#define GLOBAL_HAS_FMA3 1
 #endif
 
 #if defined(__F16C__) || defined(_M_F16C)
-#define NWB_HAS_F16C 1
+#define GLOBAL_HAS_F16C 1
 #endif
 
 #if defined(__AVX__) || defined(__AVX2__) || defined(_M_AVX) || defined(_M_AVX2)
-#define NWB_HAS_AVX2 1
+#define GLOBAL_HAS_AVX2 1
 #endif
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__) || defined(_M_ARM64) || defined(_M_ARM64EC)
-#define NWB_HAS_NEON 1
+#define GLOBAL_HAS_NEON 1
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_AVX2) && !defined(NWB_HAS_SSE4)
-#define NWB_HAS_SSE4 1
+#if defined(GLOBAL_HAS_AVX2) && !defined(GLOBAL_HAS_SSE4)
+#define GLOBAL_HAS_SSE4 1
 #endif
 
-#if defined(NWB_HAS_FMA3) && !defined(NWB_HAS_SSE4)
-#define NWB_HAS_SSE4 1
+#if defined(GLOBAL_HAS_FMA3) && !defined(GLOBAL_HAS_SSE4)
+#define GLOBAL_HAS_SSE4 1
 #endif
 
-#if defined(NWB_HAS_F16C) && !defined(NWB_HAS_SSE4)
-#define NWB_HAS_SSE4 1
+#if defined(GLOBAL_HAS_F16C) && !defined(GLOBAL_HAS_SSE4)
+#define GLOBAL_HAS_SSE4 1
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_HAS_SSE4) && !defined(NWB_HAS_FMA3) && !defined(NWB_HAS_F16C) && !defined(NWB_HAS_AVX2) && !defined(NWB_HAS_NEON)
-#define NWB_HAS_SCALAR 1
+#if !defined(GLOBAL_HAS_SSE4) && !defined(GLOBAL_HAS_FMA3) && !defined(GLOBAL_HAS_F16C) && !defined(GLOBAL_HAS_AVX2) && !defined(GLOBAL_HAS_NEON)
+#define GLOBAL_HAS_SCALAR 1
 #endif
 
 
@@ -68,17 +68,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_HAS_SSE4)
+#if defined(GLOBAL_HAS_SSE4)
 #include <xmmintrin.h>
 #include <emmintrin.h>
 #include <smmintrin.h>
 #endif
 
-#if defined(NWB_HAS_FMA3) || defined(NWB_HAS_F16C) || defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_FMA3) || defined(GLOBAL_HAS_F16C) || defined(GLOBAL_HAS_AVX2)
 #include <immintrin.h>
 #endif
 
-#if defined(NWB_HAS_NEON)
+#if defined(GLOBAL_HAS_NEON)
 #include <arm_neon.h>
 #endif
 

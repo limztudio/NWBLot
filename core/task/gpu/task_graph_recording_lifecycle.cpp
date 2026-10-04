@@ -63,8 +63,8 @@ void GpuTaskGraph::RecordingAttemptScope::activateWithinLock(
     const u64 preparationSerial,
     const bool previousPlanWasActive
 )noexcept{
-    NWB_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
-    NWB_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
+    GLOBAL_FATAL_ASSERT_MSG(!m_graph, "GPU task graph recording attempt scope must be fresh");
+    GLOBAL_FATAL_ASSERT_MSG(preparationSerial != 0u, "GPU task graph recording preparation requires a nonzero serial");
     if(m_graph || preparationSerial == 0u)
         TerminateInvariant();
     m_graph = &graph;
@@ -220,7 +220,7 @@ bool GpuTaskGraph::beginRecordingAttempt(
                 requestedPlanGeneration,
                 nextRecordingAttemptGeneration
             );
-            NWB_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
+            GLOBAL_FATAL_ASSERT_MSG(candidateResolved, "Failed plan switch must release its candidate exact-plan lease");
             if(!candidateResolved)
                 TerminateInvariant();
             return false;
@@ -275,7 +275,7 @@ void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const n
             && !task.recordThunkCompleted
         ;
     }
-    NWB_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
+    GLOBAL_FATAL_ASSERT_MSG(tasksUnclaimed, "provisional recording attempt cancellation requires unclaimed graph tasks");
     if(!tasksUnclaimed)
         TerminateInvariant();
 
@@ -284,7 +284,7 @@ void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const n
         m_activeRecordingPlanGeneration,
         attempt.m_recordingAttemptGeneration
     );
-    NWB_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
+    GLOBAL_FATAL_ASSERT_MSG(candidateResolved, "provisional recording attempt cancellation must release its exact plan lease");
     if(!candidateResolved)
         TerminateInvariant();
 
@@ -318,7 +318,7 @@ void GpuTaskGraph::completeRecordingPreparation(RecordingAttemptScope& attempt)c
             m_activeRecordingPreparationSerial
         )
     ;
-    NWB_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
+    GLOBAL_FATAL_ASSERT_MSG(preparationValid, "Recording preparation completion requires its exact active capability");
     if(!preparationValid)
         TerminateInvariant();
 

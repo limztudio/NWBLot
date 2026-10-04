@@ -31,14 +31,14 @@ void TestbedUiSearchComboGallery::paint(NWB::Impl::UiPaintContext& context, cons
     options.combo.popupHeight = 240.0f;
     const SearchComboResult result = ui.searchComboBox("choice", m_source, m_state, options);
     if(result.combo.committed)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom searchable combo selected key={}"), m_state.combo().selectedKey());
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: custom searchable combo selected key={}"), m_state.combo().selectedKey());
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/search_combo_caption"));
     const auto text = StringFormat(scratchArena, "Selected: {}", m_state.combo().selectedKey());
     valid = ui.label("selected", { text.data(), text.size() }, caption) && result.combo.valid && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom searchable combo declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom searchable combo declaration failed"));
 }
 
 

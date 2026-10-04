@@ -48,7 +48,7 @@ bool AssignMaterialShadingModelIdsImpl(
 ){
     for(const MaterialCookEntry& entry : materialEntries){
         if(entry.bxdfSource.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material cook: material '{}' is missing a deferred bxdf"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
     }
@@ -61,7 +61,7 @@ bool AssignMaterialShadingModelIdsImpl(
 
     uniqueSources.erase(Unique(uniqueSources.begin(), uniqueSources.end()), uniqueSources.end());
     if(uniqueSources.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique deferred bxdfs"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material cook: too many unique deferred bxdfs"));
         return false;
     }
 
@@ -69,7 +69,7 @@ bool AssignMaterialShadingModelIdsImpl(
         const AStringView source(entry.bxdfSource);
         const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
         if(sourceIt == uniqueSources.end() || *sourceIt != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
@@ -87,7 +87,7 @@ bool AssignMaterialShadingModelIdsImpl(
 
     uniqueSurfaces.erase(Unique(uniqueSurfaces.begin(), uniqueSurfaces.end()), uniqueSurfaces.end());
     if(uniqueSurfaces.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: too many unique material surfaces"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material cook: too many unique material surfaces"));
         return false;
     }
 
@@ -100,7 +100,7 @@ bool AssignMaterialShadingModelIdsImpl(
         const AStringView surface(entry.surfaceSource);
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
         if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material cook: failed to assign surface dispatch id for '{}'"), StringConvert(AStringView(entry.virtualPath)));
             return false;
         }
         entry.surfaceDispatchId = static_cast<u32>(static_cast<usize>(surfaceIt - uniqueSurfaces.begin()));
@@ -156,7 +156,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
         const AStringView source(entry.bxdfSource);
         AStringView& slot = sourceById[entry.shadingModelId];
         if(!slot.empty() && slot != source){
-            NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources"), entry.shadingModelId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources"), entry.shadingModelId);
             return false;
         }
         slot = source;
@@ -208,14 +208,14 @@ bool EmitDeferredBxdfDispatchModuleImpl(
     const Path outputPath = outIncludeRoot / s_DeferredBxdfModuleSubPath.data();
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parent_path())
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;
@@ -363,7 +363,7 @@ static bool AppendShadowSurfaceBindAliases(
     for(const MaterialBindInstance& instance : bindEntry.instances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
         if(!bindStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: interface '{}' instance '{}' has unknown type '{}'")
                 , StringConvert(bindEntry.virtualPath)
                 , StringConvert(instance.name)
                 , StringConvert(instance.type)
@@ -458,13 +458,13 @@ static bool BuildShadowSurfaceBindEntryLookup(
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
         const Name interfaceName(AStringView(bindEntry.virtualPath));
         if(!interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid")
                 , StringConvert(bindEntry.virtualPath)
             );
             return false;
         }
         if(!outLookup.emplace(interfaceName, &bindEntry).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
             return false;
         }
     }
@@ -516,7 +516,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
         const AStringView surface(entry.surfaceSource);
         AStringView& surfaceSlot = surfaceById[entry.surfaceDispatchId];
         if(!surfaceSlot.empty() && surfaceSlot != surface){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple surface sources"), entry.surfaceDispatchId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: model id {} maps to multiple surface sources"), entry.surfaceDispatchId);
             return false;
         }
         surfaceSlot = surface;
@@ -524,7 +524,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
         const AStringView interfaceName(entry.materialInterface);
         AStringView& interfaceSlot = interfaceById[entry.surfaceDispatchId];
         if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple material interfaces"), entry.surfaceDispatchId);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: model id {} maps to multiple material interfaces"), entry.surfaceDispatchId);
             return false;
         }
         interfaceSlot = interfaceName;
@@ -560,7 +560,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
         const Name interfaceName(interfaceById[id]);
         const auto bindEntryIt = bindEntryLookup.find(interfaceName);
         if(bindEntryIt == bindEntryLookup.end()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'")
                 , id
                 , StringConvert(interfaceById[id])
             );
@@ -674,14 +674,14 @@ bool EmitShadowSurfaceDispatchModuleImpl(
     const Path outputPath = outIncludeRoot / s_ShadowSurfaceModuleSubPath.data();
     ErrorCode errorCode;
     if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parent_path())
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Shadow surface dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
         return false;

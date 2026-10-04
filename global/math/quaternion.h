@@ -43,27 +43,27 @@ inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE bool SIMDCALL QuaternionEqual(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Equal(q0, q1); }
-NWB_INLINE bool SIMDCALL QuaternionNotEqual(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4NotEqual(q0, q1); }
-NWB_INLINE bool SIMDCALL QuaternionIsNaN(SIMDVector q)noexcept{ return Vector4IsNaN(q); }
-NWB_INLINE bool SIMDCALL QuaternionIsInfinite(SIMDVector q)noexcept{ return Vector4IsInfinite(q); }
-NWB_INLINE bool SIMDCALL QuaternionIsIdentity(SIMDVector q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
+GLOBAL_INLINE bool SIMDCALL QuaternionEqual(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Equal(q0, q1); }
+GLOBAL_INLINE bool SIMDCALL QuaternionNotEqual(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4NotEqual(q0, q1); }
+GLOBAL_INLINE bool SIMDCALL QuaternionIsNaN(SIMDVector q)noexcept{ return Vector4IsNaN(q); }
+GLOBAL_INLINE bool SIMDCALL QuaternionIsInfinite(SIMDVector q)noexcept{ return Vector4IsInfinite(q); }
+GLOBAL_INLINE bool SIMDCALL QuaternionIsIdentity(SIMDVector q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionDot(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Dot(q0, q1); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionDot(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Dot(q0, q1); }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs)noexcept{
-#if defined(NWB_HAS_SCALAR)
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs)noexcept{
+#if defined(GLOBAL_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(
         (lhs.f[3] * rhs.f[0]) + (lhs.f[0] * rhs.f[3]) + (lhs.f[1] * rhs.f[2]) - (lhs.f[2] * rhs.f[1]),
         (lhs.f[3] * rhs.f[1]) - (lhs.f[0] * rhs.f[2]) + (lhs.f[1] * rhs.f[3]) + (lhs.f[2] * rhs.f[0]),
         (lhs.f[3] * rhs.f[2]) + (lhs.f[0] * rhs.f[1]) - (lhs.f[1] * rhs.f[0]) + (lhs.f[2] * rhs.f[3]),
         (lhs.f[3] * rhs.f[3]) - (lhs.f[0] * rhs.f[0]) - (lhs.f[1] * rhs.f[1]) - (lhs.f[2] * rhs.f[2])
     );
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     const float32x2_t lhsL = vget_low_f32(lhs);
     const float32x2_t lhsH = vget_high_f32(lhs);
 
@@ -90,7 +90,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs
     SIMDVector lhsY = lhs;
     SIMDVector lhsZ = lhs;
     SIMDVector result = lhs;
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     result = _mm_permute_ps(result, _MM_SHUFFLE(3, 3, 3, 3));
 #if defined(__AVX2__) || defined(_M_AVX2)
     lhsX = _mm_broadcastss_ps(lhsX);
@@ -108,7 +108,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs
 
     result = _mm_mul_ps(result, rhs);
     SIMDVector rhsShuffle = rhs;
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
@@ -117,7 +117,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs
     lhsX = _mm_mul_ps(lhsX, rhsShuffle);
     result = VectorMultiplyAdd(lhsX, SIMDQuaternionDetail::s_SIMDQuaternionControlWZYX, result);
 
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(2, 3, 0, 1));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(2, 3, 0, 1));
@@ -125,7 +125,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs
     lhsY = _mm_mul_ps(lhsY, rhsShuffle);
     lhsY = _mm_mul_ps(lhsY, SIMDQuaternionDetail::s_SIMDQuaternionControlZWXY);
 
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     rhsShuffle = _mm_permute_ps(rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
 #else
     rhsShuffle = _mm_shuffle_ps(rhsShuffle, rhsShuffle, _MM_SHUFFLE(0, 1, 2, 3));
@@ -136,14 +136,14 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionMultiply(SIMDVector lhs, SIMDVector rhs
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionLengthSq(SIMDVector q)noexcept{ return Vector4LengthSq(q); }
-NWB_INLINE SIMDVector SIMDCALL QuaternionReciprocalLength(SIMDVector q)noexcept{ return Vector4ReciprocalLength(q); }
-NWB_INLINE SIMDVector SIMDCALL QuaternionLength(SIMDVector q)noexcept{ return Vector4Length(q); }
-NWB_INLINE SIMDVector SIMDCALL QuaternionNormalizeEst(SIMDVector q)noexcept{ return Vector4NormalizeEst(q); }
-NWB_INLINE SIMDVector SIMDCALL QuaternionNormalize(SIMDVector q)noexcept{ return Vector4Normalize(q); }
-NWB_INLINE SIMDVector SIMDCALL QuaternionConjugate(SIMDVector q)noexcept{ return VectorXorInt(q, s_SIMDNegate3); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionLengthSq(SIMDVector q)noexcept{ return Vector4LengthSq(q); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionReciprocalLength(SIMDVector q)noexcept{ return Vector4ReciprocalLength(q); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionLength(SIMDVector q)noexcept{ return Vector4Length(q); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionNormalizeEst(SIMDVector q)noexcept{ return Vector4NormalizeEst(q); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionNormalize(SIMDVector q)noexcept{ return Vector4Normalize(q); }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionConjugate(SIMDVector q)noexcept{ return VectorXorInt(q, s_SIMDNegate3); }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionInverse(SIMDVector q)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionInverse(SIMDVector q)noexcept{
     const SIMDVector lengthSq = QuaternionLengthSq(q);
     const SIMDVector conjugate = QuaternionConjugate(q);
     const SIMDVector control = VectorLessOrEqual(lengthSq, s_SIMDEpsilon);
@@ -151,7 +151,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionInverse(SIMDVector q)noexcept{
     return VectorSelect(result, VectorZero(), control);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionLn(SIMDVector q)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionLn(SIMDVector q)noexcept{
     const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
     const SIMDVector qw = VectorSplatW(q);
     const SIMDVector q0 = VectorAndInt(q, s_SIMDMask3);
@@ -163,7 +163,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionLn(SIMDVector q)noexcept{
     return VectorSelect(q0, result, controlW);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionExp(SIMDVector q)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionExp(SIMDVector q)noexcept{
     const SIMDVector theta = Vector3Length(q);
     SIMDVector sinTheta{};
     SIMDVector cosTheta{};
@@ -175,10 +175,10 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionExp(SIMDVector q)noexcept{
     return VectorSelect(cosTheta, result, s_SIMDSelect1110);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SIMDVector t)noexcept{
-    NWB_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SIMDVector t)noexcept{
+    GLOBAL_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
 
-#if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
+#if defined(GLOBAL_HAS_SCALAR) || defined(GLOBAL_HAS_NEON)
     const SIMDVector oneMinusEpsilon = VectorReplicate(1.0f - SIMDQuaternionDetail::s_QuaternionInterpolationEpsilon);
     SIMDVector cosOmega = QuaternionDot(q0, q1);
     SIMDVector control = VectorLess(cosOmega, VectorZero());
@@ -223,7 +223,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SI
 
     const SIMDVector omega = VectorATan2(sinOmega, cosOmega);
     SIMDVector v01{};
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     v01 = _mm_permute_ps(t, _MM_SHUFFLE(2, 3, 0, 1));
 #else
     v01 = _mm_shuffle_ps(t, t, _MM_SHUFFLE(2, 3, 0, 1));
@@ -238,7 +238,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SI
     s0 = VectorSelect(v01, s0, control);
 
     SIMDVector s1{};
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     s1 = _mm_permute_ps(s0, _MM_SHUFFLE(1, 1, 1, 1));
 #if defined(__AVX2__) || defined(_M_AVX2)
     s0 = _mm_broadcastss_ps(s0);
@@ -256,12 +256,12 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSlerpV(SIMDVector q0, SIMDVector q1, SI
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionSlerp(SIMDVector q0, SIMDVector q1, f32 t)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionSlerp(SIMDVector q0, SIMDVector q1, f32 t)noexcept{
     return QuaternionSlerpV(q0, q1, VectorReplicate(t));
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionSquadV(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3, SIMDVector t)noexcept{
-    NWB_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionSquadV(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3, SIMDVector t)noexcept{
+    GLOBAL_ASSERT((VectorGetY(t) == VectorGetX(t)) && (VectorGetZ(t) == VectorGetX(t)) && (VectorGetW(t) == VectorGetX(t)));
 
     const SIMDVector q03 = QuaternionSlerpV(q0, q3, t);
     const SIMDVector q12 = QuaternionSlerpV(q1, q2, t);
@@ -270,11 +270,11 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionSquadV(SIMDVector q0, SIMDVector q1, SI
     return QuaternionSlerpV(q03, q12, tp);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionSquad(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3, f32 t)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionSquad(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3, f32 t)noexcept{
     return QuaternionSquadV(q0, q1, q2, q3, VectorReplicate(t));
 }
 
-NWB_INLINE void SIMDCALL QuaternionSquadSetup(SIMDVector& outA, SIMDVector& outB, SIMDVector& outC, SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3)noexcept{
+GLOBAL_INLINE void SIMDCALL QuaternionSquadSetup(SIMDVector& outA, SIMDVector& outB, SIMDVector& outC, SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector q3)noexcept{
 
     const SIMDVector lengthSq12 = QuaternionLengthSq(VectorAdd(q1, q2));
     const SIMDVector lengthDelta12 = QuaternionLengthSq(VectorSubtract(q1, q2));
@@ -309,7 +309,7 @@ NWB_INLINE void SIMDCALL QuaternionSquadSetup(SIMDVector& outA, SIMDVector& outB
     outC = sq2;
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentric(SIMDVector q0, SIMDVector q1, SIMDVector q2, f32 f, f32 g)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionBaryCentric(SIMDVector q0, SIMDVector q1, SIMDVector q2, f32 f, f32 g)noexcept{
     const SIMDVector fVector = VectorReplicate(f);
     const SIMDVector gVector = VectorReplicate(g);
     const SIMDVector s = VectorAdd(fVector, gVector);
@@ -321,9 +321,9 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentric(SIMDVector q0, SIMDVector q
     return QuaternionSlerpV(q01, q02, VectorDivide(gVector, s));
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentricV(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector f, SIMDVector g)noexcept{
-    NWB_ASSERT((VectorGetY(f) == VectorGetX(f)) && (VectorGetZ(f) == VectorGetX(f)) && (VectorGetW(f) == VectorGetX(f)));
-    NWB_ASSERT((VectorGetY(g) == VectorGetX(g)) && (VectorGetZ(g) == VectorGetX(g)) && (VectorGetW(g) == VectorGetX(g)));
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionBaryCentricV(SIMDVector q0, SIMDVector q1, SIMDVector q2, SIMDVector f, SIMDVector g)noexcept{
+    GLOBAL_ASSERT((VectorGetY(f) == VectorGetX(f)) && (VectorGetZ(f) == VectorGetX(f)) && (VectorGetW(f) == VectorGetX(f)));
+    GLOBAL_ASSERT((VectorGetY(g) == VectorGetX(g)) && (VectorGetZ(g) == VectorGetX(g)) && (VectorGetW(g) == VectorGetX(g)));
 
     const SIMDVector s = VectorAdd(f, g);
     if(Vector4InBounds(s, VectorReplicate(SIMDQuaternionDetail::s_QuaternionBarycentricVectorEpsilon)))
@@ -339,10 +339,10 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentricV(SIMDVector q0, SIMDVector 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionIdentity()noexcept{ return s_SIMDIdentityR3; }
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionIdentity()noexcept{ return s_SIMDIdentityR3; }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
-#if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
+#if defined(GLOBAL_HAS_SCALAR) || defined(GLOBAL_HAS_NEON)
     const SIMDVector n = VectorSelect(s_SIMDIdentityR3, normalAxis, s_SIMDSelect1110);
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
@@ -364,14 +364,14 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionRotationAxis(SIMDVector axis, f32 angle)noexcept{
-    NWB_ASSERT(!Vector3Equal(axis, VectorZero()));
-    NWB_ASSERT(!Vector3IsInfinite(axis));
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionRotationAxis(SIMDVector axis, f32 angle)noexcept{
+    GLOBAL_ASSERT(!Vector3Equal(axis, VectorZero()));
+    GLOBAL_ASSERT(!Vector3IsInfinite(axis));
 
     return QuaternionRotationNormal(Vector3Normalize(axis), angle);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
     const SIMDVector halfAngles = VectorMultiply(angles, s_SIMDOneHalf);
     SIMDVector sinAngles{};
     SIMDVector cosAngles{};
@@ -391,12 +391,12 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVect
     return VectorMultiplyAdd(q1, r1, q0);
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
     return QuaternionRotationRollPitchYawFromVector(VectorSet(pitch, yaw, roll, 0.0f));
 }
 
-NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix)noexcept{
-#if defined(NWB_HAS_SCALAR)
+GLOBAL_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix)noexcept{
+#if defined(GLOBAL_HAS_SCALAR)
     const f32 r22 = matrix.m[2][2];
     f32 x{};
     f32 y{};
@@ -445,7 +445,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
     }
 
     return SIMDConvertDetail::MakeF32(x, y, z, w);
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     const SIMDVector r0 = matrix.v[0];
     const SIMDVector r1 = matrix.v[1];
     const SIMDVector r2 = matrix.v[2];
@@ -506,7 +506,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
     SIMDVector r00{};
     SIMDVector r11{};
     SIMDVector r22{};
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
 #if defined(__AVX2__) || defined(_M_AVX2)
     r00 = _mm_broadcastss_ps(r0);
 #else
@@ -531,7 +531,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
 
     t0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 2, 2, 1));
     t1 = _mm_shuffle_ps(r1, r2, _MM_SHUFFLE(1, 0, 0, 0));
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     t1 = _mm_permute_ps(t1, _MM_SHUFFLE(1, 3, 2, 0));
 #else
     t1 = _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(1, 3, 2, 0));
@@ -540,7 +540,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
 
     t0 = _mm_shuffle_ps(r2, r1, _MM_SHUFFLE(0, 0, 0, 1));
     t1 = _mm_shuffle_ps(r1, r0, _MM_SHUFFLE(1, 2, 2, 2));
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
     t1 = _mm_permute_ps(t1, _MM_SHUFFLE(1, 3, 2, 0));
 #else
     t1 = _mm_shuffle_ps(t1, t1, _MM_SHUFFLE(1, 3, 2, 0));
@@ -565,7 +565,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
 #endif
 }
 
-NWB_INLINE void SIMDCALL QuaternionToAxisAngle(SIMDVector& outAxis, f32& outAngle, SIMDVector q)noexcept{
+GLOBAL_INLINE void SIMDCALL QuaternionToAxisAngle(SIMDVector& outAxis, f32& outAngle, SIMDVector q)noexcept{
     outAxis = q;
     const SIMDVector angle = VectorScale(VectorACos(VectorSplatW(q)), 2.0f);
     outAngle = VectorGetX(angle);

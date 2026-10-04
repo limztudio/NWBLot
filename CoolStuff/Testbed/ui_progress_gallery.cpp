@@ -23,7 +23,7 @@ void TestbedUiProgressGallery::paint(NWB::Impl::UiPaintContext& context, const f
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom progress declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom progress declaration failed"));
 }
 
 

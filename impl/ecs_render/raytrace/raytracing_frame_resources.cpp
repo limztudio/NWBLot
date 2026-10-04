@@ -72,7 +72,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
 
     const Float4& boundsMin = m_rayTracingState.m_causticTargetBoundsMin;
     const Float4& boundsMax = m_rayTracingState.m_causticTargetBoundsMax;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: caustic P1 -- {} caustic light(s); {} refractive emission target(s), combined extent min ({}, {}, {}) max ({}, {}, {})")
         , classification.causticLightCount
         , m_rayTracingState.m_causticRefractiveInstanceCount
         , boundsMin.x
@@ -89,10 +89,10 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
         // params.y carries the light type (Directional=0, Point=1, Spot=2); point lights are excluded so only
         // directional/spot reach here.
         const bool directional = lights[i].params.y < ECSRenderDetail::s_LightTypeDirectionalMax;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("RendererSystem: caustic P1 -- caustic slot {} -> light index {} ({})")
             , static_cast<u32>(lights[i].params.w)
             , i
-            , directional ? NWB_TEXT("directional") : NWB_TEXT("spot")
+            , directional ? GLOBAL_TEXT("directional") : GLOBAL_TEXT("spot")
         );
     }
 }
@@ -222,7 +222,7 @@ bool RendererRayTracingSystem::surfelCountReadbackSubmissionMatches(
 void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(
     const Core::QueueSubmissionToken& submissionToken
 )noexcept{
-    NWB_ASSERT(submissionToken.valid());
+    GLOBAL_ASSERT(submissionToken.valid());
     m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
 }
 
@@ -235,7 +235,7 @@ void RendererRayTracingSystem::logCapabilityOnce(){
         return;
 
     m_rayTracingState.m_capabilityLogged = true;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: ray tracing capability - accel struct {}, pipeline {}, ray query {}")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: ray tracing capability - accel struct {}, pipeline {}, ray query {}")
         , m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         , m_graphics.queryFeatureSupport(Core::Feature::RayTracingPipeline)
         , m_graphics.queryFeatureSupport(Core::Feature::RayQuery)

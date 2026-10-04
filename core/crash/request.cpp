@@ -28,11 +28,11 @@ inline constexpr StringView s_UnknownReasonLabel = "unknown";
 
 
 static PlatformKind::Enum CurrentPlatformKind()noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     return PlatformKind::Windows;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_ANDROID)
     return PlatformKind::Android;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     return PlatformKind::Linux;
 #else
     return PlatformKind::Unknown;

@@ -196,7 +196,7 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     ASSERT_NE(sentinel, nullptr);
     sentinel[0u] = 71u;
     const ArenaMemoryStats before = arena.memoryStats();
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     EXPECT_DEATH_IF_SUPPORTED({ EXPECT_EQ(arena.allocate(3u, 32u), nullptr); }, "");
     EXPECT_DEATH_IF_SUPPORTED({ EXPECT_EQ(arena.reallocate(sentinel, 3u, 64u), nullptr); }, "");
     EXPECT_DEATH_IF_SUPPORTED({ arena.deallocate(sentinel, 3u, 32u); }, "");

@@ -231,20 +231,20 @@ bool TextureAssetLoader::Create(
     const TStringView ownerName
 ){
     const TStringView owner = ownerName;
-    NWB_ASSERT(!outResource.valid());
+    GLOBAL_ASSERT(!outResource.valid());
     if(outResource.valid())
         return true;
     if(outResource.texture || outResource.sampledImageHeapHandle.valid() || outResource.format != Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: texture resource is partially initialized; release it before recreating"), owner);
         return false;
     }
     // Texture::loadBinary already validated the cooked payload; keep a debug-only invariant here.
-    NWB_ASSERT(textureAsset.validatePayload());
+    GLOBAL_ASSERT(textureAsset.validatePayload());
 
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: cannot load texture '{}' without an initialized descriptor heap")
             , owner
             , StringConvert(textureAsset.virtualPath().resolvedText())
         );
@@ -253,7 +253,7 @@ bool TextureAssetLoader::Create(
 
     Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset);
     if(format == Core::Format::UNKNOWN){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot sample the required texture format for '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: device cannot sample the required texture format for '{}'")
             , owner
             , StringConvert(textureAsset.virtualPath().resolvedText())
         );
@@ -264,7 +264,7 @@ bool TextureAssetLoader::Create(
     const Core::TextureDimension::Enum textureDimension = __hidden_texture_loader::ToCoreTextureDimension(textureAsset.dimension());
     const Core::GpuDescriptorClass::Enum descriptorClass = __hidden_texture_loader::ToSampledImageDescriptorClass(textureAsset.dimension());
     // Texture::loadBinary already validated the cooked dimension; keep a debug-only invariant here.
-    NWB_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::kCount);
+    GLOBAL_ASSERT(textureDimension != Core::TextureDimension::Unknown && descriptorClass != Core::GpuDescriptorClass::kCount);
 
     Core::TextureDesc textureDesc;
     textureDesc
@@ -315,7 +315,7 @@ bool TextureAssetLoader::Create(
         );
     }
     if(!texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
 
@@ -353,7 +353,7 @@ bool TextureAssetLoader::Create(
             || decoded.sliceByteCount == 0u
             || mip.sliceCount == 0u
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: decoded texture '{}' mip {} has an empty upload region")
                 , owner
                 , StringConvert(imageName.resolvedText())
                 , static_cast<u32>(mipIndex)
@@ -388,7 +388,7 @@ bool TextureAssetLoader::Create(
     // Resolve descriptor failures before accepting the upload; publish the whole resource before releasing this lease.
     const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
     if(!sampledImageHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
     ScopeExit releaseDescriptor([&heap, sampledImageHandle]()noexcept{ heap.free(sampledImageHandle); });
@@ -400,7 +400,7 @@ bool TextureAssetLoader::Create(
         Core::s_AllSubresources,
         textureDimension
     ))){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
 
@@ -415,7 +415,7 @@ bool TextureAssetLoader::Create(
         .physicalInitialState = Core::ResourceStates::Unknown,
         .hasPhysicalInitialState = true,
     })){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, StringConvert(imageName.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, StringConvert(imageName.resolvedText()));
         return false;
     }
 

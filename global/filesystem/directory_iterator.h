@@ -76,8 +76,8 @@ public:
 
 private:
     void collect(const Path<ArenaT>& path, ErrorCode& outError){
-#if defined(NWB_PLATFORM_WINDOWS)
-        Path<ArenaT> pattern = path / NWB_TEXT("*");
+#if defined(GLOBAL_PLATFORM_WINDOWS)
+        Path<ArenaT> pattern = path / GLOBAL_TEXT("*");
         WIN32_FIND_DATA data = {};
         HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
         if(findHandle == INVALID_HANDLE_VALUE){
@@ -87,7 +87,7 @@ private:
 
         for(;;){
             const TStringView fileName(data.cFileName);
-            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT(".."))
+            if(fileName != GLOBAL_TEXT(".") && fileName != GLOBAL_TEXT(".."))
                 this->m_entries.emplace_back(path / fileName);
 
             if(FindNextFile(findHandle, &data))

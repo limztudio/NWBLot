@@ -11,8 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SSE4)
+GLOBAL_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
+#if defined(GLOBAL_HAS_SSE4)
     __m128i iTrunc = _mm_cvttps_epi32(value);
     SIMDVector fTrunc = _mm_cvtepi32_ps(iTrunc);
     SIMDVector y = VectorSubtract(value, fTrunc);
@@ -64,7 +64,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
     select0 = _mm_and_si128(isNaN, s_SIMDQNaN);
     select1 = _mm_andnot_si128(isNaN, result5);
     return _mm_castsi128_ps(_mm_or_si128(select0, select1));
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     int32x4_t iTrunc = vcvtq_s32_f32(value);
     const float32x4_t fTrunc = vcvtq_f32_s32(iTrunc);
     const float32x4_t y = vsubq_f32(value, fTrunc);
@@ -111,18 +111,18 @@ NWB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorExp10(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorExp10(SIMDVector value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLg10, value));
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorExpE(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorExpE(SIMDVector value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
+GLOBAL_INLINE SIMDVector SIMDCALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
 
-NWB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SSE4)
+GLOBAL_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
+#if defined(GLOBAL_HAS_SSE4)
     __m128i rawBiased = _mm_and_si128(_mm_castps_si128(value), s_SIMDInfinity);
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
     const __m128i isExponentZero = _mm_cmpeq_epi32(s_SIMDZero, rawBiased);
@@ -188,7 +188,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
     select0 = _mm_and_si128(isNaN, s_SIMDQNaN);
     select1 = _mm_andnot_si128(isNaN, result);
     return _mm_castsi128_ps(_mm_or_si128(select0, select1));
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     const int32x4_t rawBiased = vandq_s32(vreinterpretq_s32_f32(value), s_SIMDInfinity);
     const int32x4_t trailing = vandq_s32(vreinterpretq_s32_f32(value), s_SIMDQNaNTest);
     const uint32x4_t isExponentZero = vceqq_s32(vreinterpretq_s32_f32(s_SIMDZero), rawBiased);
@@ -243,28 +243,28 @@ NWB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorLog10(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
+GLOBAL_INLINE SIMDVector SIMDCALL VectorLog10(SIMDVector value)noexcept{
+#if defined(GLOBAL_HAS_SSE4) || defined(GLOBAL_HAS_NEON)
     return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
 #else
     return VectorSet(Log10(VectorGetX(value)), Log10(VectorGetY(value)), Log10(VectorGetZ(value)), Log10(VectorGetW(value)));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
-#if defined(NWB_HAS_SSE4) || defined(NWB_HAS_NEON)
+GLOBAL_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
+#if defined(GLOBAL_HAS_SSE4) || defined(GLOBAL_HAS_NEON)
     return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
 #else
     return VectorSet(Log(VectorGetX(value)), Log(VectorGetY(value)), Log(VectorGetZ(value)), Log(VectorGetW(value)));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
+GLOBAL_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
 
-NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(NWB_HAS_SCALAR)
+GLOBAL_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(GLOBAL_HAS_SCALAR)
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     return SIMDConvertDetail::MakeF32(
         Pow(vgetq_lane_f32(v0, 0), vgetq_lane_f32(v1, 0)),
         Pow(vgetq_lane_f32(v0, 1), vgetq_lane_f32(v1, 1)),

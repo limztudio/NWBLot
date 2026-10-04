@@ -81,7 +81,7 @@ namespace __hidden_csg_resources{
     if(!heap.isInitialized())
         return false;
 
-    NWB_ASSERT(
+    GLOBAL_ASSERT(
         descriptorClass == Core::GpuDescriptorClass::StorageBuffer
         || descriptorClass == Core::GpuDescriptorClass::UniformBuffer
     );
@@ -158,7 +158,7 @@ bool RendererCsgSystem::createCsgClipResources(){
 
         m_csgState.m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_csgState.m_clipBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG clip binding layout"));
             return false;
         }
     }
@@ -176,7 +176,7 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
         sizeof(CsgReceiverRangeGpuData),
         ECSRenderDetail::s_CsgReceiverRangeBufferName
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG receiver range buffer"));
         return false;
     }
 
@@ -185,7 +185,7 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
         *m_csgState.m_receiverRangeBuffer.get(),
         m_csgState.m_receiverRangeBufferHeapHandle
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
         return false;
     }
     return true;
@@ -201,7 +201,7 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
         sizeof(CsgCutterGpuData),
         ECSRenderDetail::s_CsgCutterBufferName
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG cutter buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG cutter buffer"));
         return false;
     }
 
@@ -210,7 +210,7 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
         *m_csgState.m_cutterBuffer.get(),
         m_csgState.m_cutterBufferHeapHandle
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
         return false;
     }
     return true;
@@ -219,8 +219,8 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
 bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, const usize cutterCount){
     if(receiverRangeCount == 0u || cutterCount == 0u)
         return true;
-    NWB_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(
         !reserveCsgReceiverRangeBufferCapacity(receiverRangeCount)
         || !reserveCsgCutterBufferCapacity(cutterCount)
@@ -239,7 +239,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         ;
         m_csgState.m_clipContextSlotsBuffer = m_graphics.createBuffer(bufferDesc);
         if(!m_csgState.m_clipContextSlotsBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
             return false;
         }
     }
@@ -269,19 +269,19 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
             m_csgState.m_intervalSampleStateHeapHandle
         )
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
         return false;
     }
     if(!createCsgClipResources())
         return false;
 
     // Draw paths consume these handles only via a graph snapshot.
-    NWB_ASSERT(m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
-    NWB_ASSERT(m_csgState.m_cutterBufferCapacity >= cutterCount);
-    NWB_ASSERT(m_csgState.m_receiverRangeBufferHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_cutterBufferHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(m_csgState.m_intervalSampleStateHeapHandle.valid());
+    GLOBAL_ASSERT(m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
+    GLOBAL_ASSERT(m_csgState.m_cutterBufferCapacity >= cutterCount);
+    GLOBAL_ASSERT(m_csgState.m_receiverRangeBufferHeapHandle.valid());
+    GLOBAL_ASSERT(m_csgState.m_cutterBufferHeapHandle.valid());
+    GLOBAL_ASSERT(m_csgState.m_clipContextSlotsHeapHandle.valid());
+    GLOBAL_ASSERT(m_csgState.m_intervalSampleStateHeapHandle.valid());
     return true;
 }
 

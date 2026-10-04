@@ -75,7 +75,7 @@ usize WidgetStateStore::findIndex(const WidgetId id)const{
     if(found == m_index.end())
         return m_entries.size();
     const usize index = found.value();
-    NWB_ASSERT(index < m_entries.size() && m_entries[index].id == id);
+    GLOBAL_ASSERT(index < m_entries.size() && m_entries[index].id == id);
     return index;
 }
 

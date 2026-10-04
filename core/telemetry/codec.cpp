@@ -168,7 +168,7 @@ DecodeResult DecodeEvent(TelemetryArena& arena, const void* const bytes, const u
 
     if(payloadBytes != 0u){
         outEvent.payload.resize(payloadBytes);
-        NWB_MEMCPY(outEvent.payload.data(), outEvent.payload.size(), encoded.data() + result.bytesRead, payloadBytes);
+        GLOBAL_MEMCPY(outEvent.payload.data(), outEvent.payload.size(), encoded.data() + result.bytesRead, payloadBytes);
     }
     result.bytesRead += payloadBytes;
     return result;

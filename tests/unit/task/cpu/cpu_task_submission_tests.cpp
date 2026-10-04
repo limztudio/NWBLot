@@ -10,9 +10,9 @@
 
 #include <gtest/gtest.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -90,9 +90,9 @@ static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
 
 
 [[noreturn]] void ExitTestProcess(u32 code)noexcept{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     ExitProcess(code);
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     ::_exit(static_cast<int>(code));
 #else
     static_cast<void>(code);

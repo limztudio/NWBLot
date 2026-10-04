@@ -26,7 +26,7 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
         return false;
     if(message == WM_SETFOCUS || message == WM_KILLFOCUS){
         if(!resetFallbackCharInput() || !setFocused(message == WM_SETFOCUS))
-            NWB_LOGGER_WARNING(NWB_TEXT("Text input: native keyboard-focus update failed"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Text input: native keyboard-focus update failed"));
         return true;
     }
     const TextInputSessionToken token = activeSession();
@@ -142,10 +142,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(
 
 
 void Win32TextInputService::rejectNativeInput(const TextInputSessionToken token, const TextInputAdmission::Enum admission){
-    NWB_LOGGER_WARNING(NWB_TEXT("Text input: native delivery rejected ({})"), static_cast<u32>(admission));
+    NWB_LOGGER_WARNING(GLOBAL_TEXT("Text input: native delivery rejected ({})"), static_cast<u32>(admission));
     if(admission != TextInputAdmission::QueueFull && token == activeSession()){
         if(!cancelSession(token, TextInputCancelReason::NativeFailure))
-            NWB_FATAL_ASSERT(false);
+            GLOBAL_FATAL_ASSERT(false);
     }
 }
 

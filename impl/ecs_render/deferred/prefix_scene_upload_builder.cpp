@@ -244,7 +244,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     sceneShadingSetupPayload.deferredSystem = &m_deferredSystem;
     sceneShadingSetupPayload.timingTicket = inputs.sceneShadingSetupTimingTicket;
     sceneShadingSetupPayload.ready = inputs.sceneShadingSetupReady;
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(
         sceneShadingSetupPayload.lightData,
         sizeof(sceneShadingSetupPayload.lightData),
         sceneLightData,
@@ -262,7 +262,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         return false;
     outResult.tailTask = outResult.sceneShadingSetupTask;
     outResult.lightingClassification = rayTracingLightingClassification;
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(
         outResult.lightData,
         sizeof(outResult.lightData),
         sceneLightData,

@@ -135,7 +135,7 @@ static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAss
 static bool RegisterProjectProbeCookEntry(NWB::Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ProjectProbeCookEntry, ProjectProbeAsset, ProjectProbeAssetCodec>(
         ProjectProbeAsset::AssetTypeName(),
-        NWB_TEXT("project probe asset"),
+        GLOBAL_TEXT("project probe asset"),
         &ParseProjectProbeDocument,
         &ParseProjectProbeValue,
         &BuildProjectProbeAsset
@@ -162,7 +162,7 @@ static bool LoadProjectProbeAsset(
     ))
         return false;
 
-    NWB_ASSERT(loadedAsset);
+    GLOBAL_ASSERT(loadedAsset);
     const ProjectProbeAsset* probe = NWB::Core::Assets::CastAsset<ProjectProbeAsset>(loadedAsset.get());
     if(!probe)
         return false;

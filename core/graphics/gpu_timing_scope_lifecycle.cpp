@@ -142,7 +142,7 @@ bool GpuTimingRecorder::beginScope(
         }
 
         ticket = activeSubmissionTicket();
-        NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
+        GLOBAL_ASSERT_MSG(ticket, GLOBAL_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
         if(!ticket){
             ++m_statistics.beginFailureCount;
             return false;

@@ -57,7 +57,7 @@ namespace MaterialPipelineCsgMode{
     };
 };
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLOBAL_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
@@ -69,7 +69,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLOBAL_INLINE bool MaterialPipelinePassUsesRendererCsgShaderVariant(const MaterialPipelinePass::Enum pass){
     switch(pass){
     case MaterialPipelinePass::Opaque:
     case MaterialPipelinePass::CsgReceiverSurface:
@@ -79,7 +79,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
+[[nodiscard]] GLOBAL_INLINE bool MaterialPipelinePassUsesRendererCsgClip(const MaterialPipelinePass::Enum pass, const bool transparent){
     switch(pass){
     case MaterialPipelinePass::Opaque:
         return !transparent;
@@ -90,11 +90,11 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLOBAL_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLOBAL_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
 
@@ -128,7 +128,7 @@ struct MaterialPipelineCsgBindingUse{
     bool intervalSample = false;
 };
 
-[[nodiscard]] NWB_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
+[[nodiscard]] GLOBAL_INLINE MaterialPipelineCsgBindingUse MaterialPipelineResolveCsgBindingUse(
     const MaterialPipelineKey& pipelineKey,
     const MaterialPipelinePass::Enum pass
 ){

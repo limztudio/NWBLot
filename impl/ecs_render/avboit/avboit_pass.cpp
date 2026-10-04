@@ -45,7 +45,7 @@ static void DispatchAvboitCompute(
     const u32 groupCountX,
     const bool hdr10OutputActive
 ){
-    NWB_ASSERT(heap.isInitialized());
+    GLOBAL_ASSERT(heap.isInitialized());
 
     Core::ComputeState computeState;
     computeState.setPipeline(&pipeline);
@@ -152,8 +152,8 @@ Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
 }
 
 RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const bool hdr10OutputActive){
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
-    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    GLOBAL_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
+    GLOBAL_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 
     RendererAvboitPushConstants pushConstants;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH] = targets.fullWidth;
@@ -335,9 +335,9 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const bool occupancyCsgComputeEmulationOutputStatesGraphOwned,
     const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
-    NWB_ASSERT(m_avboitState.m_depthWarpPipeline);
-    NWB_ASSERT(m_avboitState.m_integratePipeline);
+    GLOBAL_ASSERT(avboitTargets.valid());
+    GLOBAL_ASSERT(m_avboitState.m_depthWarpPipeline);
+    GLOBAL_ASSERT(m_avboitState.m_integratePipeline);
 
     m_materialSystem.renderPreparedMaterialPass(
         commandList,
@@ -376,7 +376,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const bool extinctionCsgComputeEmulationOutputStatesGraphOwned,
     const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
+    GLOBAL_ASSERT(avboitTargets.valid());
 
     m_materialSystem.renderPreparedMaterialPass(
         commandList,
@@ -415,7 +415,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const bool accumulationCsgComputeEmulationOutputStatesGraphOwned,
     const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
+    GLOBAL_ASSERT(avboitTargets.valid());
 
     m_materialSystem.renderPreparedMaterialPass(
         commandList,

@@ -67,7 +67,7 @@ public:
         {
             NothrowScopedLock listenerLock(m_recorder.m_sampleListenerMutex);
             const bool callbackClaimValid = m_record && m_record->activeCallbackCount != 0u;
-            NWB_FATAL_ASSERT_MSG(callbackClaimValid, "GPU timing listener callback claim underflow");
+            GLOBAL_FATAL_ASSERT_MSG(callbackClaimValid, "GPU timing listener callback claim underflow");
             if(!callbackClaimValid)
                 TerminateInvariant();
             --m_record->activeCallbackCount;
@@ -269,12 +269,12 @@ void GpuTimingRecorder::removeFeedbackScopeDemandsLocked(
 )noexcept{
     for(const Name& scopeName : scopeNames){
         const usize demandIndex = findFeedbackScopeDemandLocked(scopeName);
-        NWB_ASSERT(demandIndex != m_feedbackScopeDemands.size());
+        GLOBAL_ASSERT(demandIndex != m_feedbackScopeDemands.size());
         if(demandIndex == m_feedbackScopeDemands.size())
             continue;
 
         FeedbackScopeDemand& demand = m_feedbackScopeDemands[demandIndex];
-        NWB_ASSERT(demand.ownerCount > 0u);
+        GLOBAL_ASSERT(demand.ownerCount > 0u);
         if(demand.ownerCount > 1u){
             --demand.ownerCount;
             continue;

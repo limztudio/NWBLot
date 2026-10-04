@@ -152,7 +152,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
     MaterialPassDrawItemPartitions drawItems{scratchArena};
     InstanceGpuDataVector instanceData{scratchArena};
     CsgFrameGpuData csgFrameData{scratchArena};
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
 #endif
     MaterialTypedByteDataVector materialTypedBytes{scratchArena};
@@ -165,7 +165,7 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
         drawItems,
         instanceData,
         csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         materialTypedRanges,
 #endif
         materialTypedBytes,
@@ -313,7 +313,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
     CsgFrameGpuData& csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
     MaterialTypedByteDataVector& materialTypedBytes,
@@ -326,14 +326,14 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     auto rendererView = m_world.view<RendererComponent>();
     auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!ecsMeshSystemPtr){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes"));
         return;
     }
     NWB::Impl::MeshSystem& ecsMeshSystem = *ecsMeshSystemPtr;
     const usize rendererCapacity = rendererView.candidateCount();
     drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     materialTypedRanges.reserve(rendererCapacity);
 #endif
     const usize materialTypedByteReserve = rendererCapacity <= Limit<usize>::s_Max / sizeof(u32)
@@ -464,7 +464,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         MeshResources& mesh,
         const CsgReceiverDrawState& csgReceiverState
     ) -> bool{
-        NWB_ASSERT(mesh.valid());
+        GLOBAL_ASSERT(mesh.valid());
 
         // Mesh creation establishes source-stream descriptors; preparation only validates them.
         if(!m_meshSystem.meshGeometryHeapHandlesReady(mesh))
@@ -494,7 +494,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(csgClipRequested && !materialInfo->csgCapSurfaceDispatchAvailable){
             if(!materialInfo->csgCapSurfaceDispatchUnavailableLogged){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract"), StringConvert(materialInfo->materialName.resolvedText()));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: CSG receiver material '{}' has no cook-generated surface hook; clipping is disabled because cap fill requires the declared typed surface contract"), StringConvert(materialInfo->materialName.resolvedText()));
                 materialInfo->csgCapSurfaceDispatchUnavailableLogged = true;
             }
         }
@@ -518,7 +518,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         }
 
         auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
-            NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
+            GLOBAL_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
 
             if(!appendConstantMaterialTypedBytes(*materialInfo, typedRanges.constantRange))
                 return Limit<u32>::s_Max;
@@ -531,7 +531,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             instanceData.push_back(Move(instance));
             if(csgReceiverLookupPtr)
                 csgFrameData.receiverRanges.push_back(CsgReceiverRangeGpuData{});
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
             materialTypedRanges.push_back(typedRanges);
 #endif
             return instanceIndex;
@@ -634,7 +634,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 break;
             }
             default:
-                NWB_ASSERT(false);
+                GLOBAL_ASSERT(false);
                 break;
             }
         };
@@ -663,7 +663,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             csgRange.surfaceDispatchId = materialInfo->surfaceDispatchId;
             csgRange.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
             csgRange.meshInstanceIndex = instanceIndex;
-            NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
+            GLOBAL_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
             csgFrameData.receiverRanges[instanceIndex] = csgRange;
         }
 

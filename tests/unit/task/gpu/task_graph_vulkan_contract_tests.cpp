@@ -605,16 +605,16 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     VkPipelineRenderingCreateInfo renderingInfo{};
     EXPECT_TRUE(BuildPipelineRenderingInfo(
         Graphics::FramebufferInfo().addColorFormat(Graphics::Format::RGBA8_UNORM),
-        NWB_TEXT("unit graphics pipeline"),
+        GLOBAL_TEXT("unit graphics pipeline"),
         renderingInfo,
         colorFormats
     ));
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
     CapturingLogger logger;
     Graphics::Common::LoggerRegistrationGuard loggerGuard(logger);
     EXPECT_FALSE(BuildPipelineRenderingInfo(
         Graphics::FramebufferInfo().addColorFormat(Graphics::Format::D24S8),
-        NWB_TEXT("unit graphics pipeline"),
+        GLOBAL_TEXT("unit graphics pipeline"),
         renderingInfo,
         colorFormats
     ));

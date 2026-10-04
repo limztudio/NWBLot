@@ -41,7 +41,7 @@ Win32TextInputService::Win32TextInputService(Alloc::GlobalArena& arena, const No
 Win32TextInputService::~Win32TextInputService(){
     const TextInputSessionToken token = activeSession();
     if(token.valid() && !end(token))
-        NWB_FATAL_ASSERT(false);
+        GLOBAL_FATAL_ASSERT(false);
 }
 
 TextInputCapabilities Win32TextInputService::capabilities()const noexcept{
@@ -84,7 +84,7 @@ void Win32TextInputService::endNativeSession(const TextInputSessionToken token){
             if(context){
                 Win32TextInputContextGuard release(window, context);
                 if(!ImmNotifyIME(context, NI_COMPOSITIONSTR, CPS_CANCEL, 0u))
-                    NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 composition cancellation unavailable"));
+                    NWB_LOGGER_WARNING(GLOBAL_TEXT("Text input: IMM32 composition cancellation unavailable"));
             }
         }
     }
@@ -111,7 +111,7 @@ TextInputAdmission::Enum Win32TextInputService::updateNativeCaret(const TextInpu
     const bool compositionSet = ImmSetCompositionWindow(context, &composition) != FALSE;
     const bool candidateSet = ImmSetCandidateWindow(context, &candidate) != FALSE;
     if(!compositionSet || !candidateSet){
-        NWB_LOGGER_WARNING(NWB_TEXT("Text input: IMM32 caret placement failed"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Text input: IMM32 caret placement failed"));
         return TextInputAdmission::NativeFailure;
     }
     return TextInputAdmission::Accepted;

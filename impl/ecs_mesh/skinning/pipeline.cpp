@@ -46,7 +46,7 @@ static bool LoadComputeShader(
         graphics,
         assetManager,
         shaderPathResolver,
-        NWB_TEXT("MeshSkinningSystem")
+        GLOBAL_TEXT("MeshSkinningSystem")
     );
 }
 
@@ -64,7 +64,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: skinning compute requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: skinning compute requires the initialized global descriptor heap"));
         return false;
     }
 
@@ -78,7 +78,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
 
         m_skinningBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_skinningBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create skinning binding layout"));
             return false;
         }
     }
@@ -107,7 +107,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
     if(m_skinningComputePipeline)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning compute pipeline"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create skinning compute pipeline"));
     return false;
 }
 
@@ -115,7 +115,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: meshlet-bounds compute requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: meshlet-bounds compute requires the initialized global descriptor heap"));
         return false;
     }
 
@@ -129,7 +129,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
 
         m_boundsBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_boundsBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create bounds binding layout"));
             return false;
         }
     }
@@ -158,7 +158,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     if(m_boundsComputePipeline)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds compute pipeline"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create bounds compute pipeline"));
     return false;
 }
 
@@ -188,7 +188,7 @@ bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
     m_localBoundsComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_localBoundsComputePipeline)
         return true;
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create local bounds compute pipeline"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create local bounds compute pipeline"));
     return false;
 }
 
@@ -196,7 +196,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: normal-repack compute requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: normal-repack compute requires the initialized global descriptor heap"));
         return false;
     }
 
@@ -210,7 +210,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
 
         m_repackBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_repackBindingLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding layout"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create repack binding layout"));
             return false;
         }
     }
@@ -239,7 +239,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
     if(m_repackComputePipeline)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack compute pipeline"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningSystem: failed to create repack compute pipeline"));
     return false;
 }
 

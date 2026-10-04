@@ -39,7 +39,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
 static void ExpectCookFailure(
     TestArena& testArena,
     const CookSingleMetaFn cookSingleMeta,
@@ -102,7 +102,7 @@ TEST(AssetsGraphics, MeshCookerDefaultColors){
 
 
 TEST(AssetsGraphics, MeshCookerValidationFailures){
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -166,14 +166,14 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
         "empty_map_mesh_tangent"
     );
     EXPECT_GE(logger.errorCount(), 10u);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'uv0' must be a list")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'normals' must be a list")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("vertex_ref normal index is out of range")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'normals' must not be empty")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must be a list")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("vertex_ref tangent index is out of range")));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'tangents' must not be empty")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("unsupported asset field")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'uv0' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'normals' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("vertex_ref normal index is out of range")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'normals' must not be empty")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'tangents' must be a list")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("vertex_ref tangent index is out of range")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("'tangents' must not be empty")));
 #else
 #endif
 }

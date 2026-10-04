@@ -101,7 +101,7 @@ UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& are
     , m_view(*this)
 {
     const bool initialized = filter({});
-    NWB_FATAL_ASSERT(initialized);
+    GLOBAL_FATAL_ASSERT(initialized);
 }
 
 bool UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse, u64& index)const{

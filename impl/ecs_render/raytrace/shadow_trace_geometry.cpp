@@ -162,7 +162,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         if(!buffer)
             return false;
         BufferRecord* const record = bufferIndex.find(buffer.get());
-        NWB_ASSERT(record);
+        GLOBAL_ASSERT(record);
         if(record->preparedIndex != s_MissingIndex){
             outPrepared[record->preparedIndex].roles |= role;
             return true;

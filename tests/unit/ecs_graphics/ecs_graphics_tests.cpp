@@ -660,7 +660,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     instanceRange.mutableRange = secondRange;
     const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
     EXPECT_EQ(gpuData.translation.w, secondRange.byteOffset);
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
     instanceRanges.push_back(instanceRange);
     NWB::Impl::ECSRenderDetail::AssertMaterialTypedUploadRanges(
@@ -801,7 +801,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
         true,
         [](const usize, const TStringView){ return false; }
     );
-    NWB_FATAL_ASSERT(meshletRefsEncoded);
+    GLOBAL_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 
@@ -933,7 +933,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     joints.skinningMode = NWB::Impl::SkeletonSkinningMode::LinearBlend;
     joints.joints[0u] = MakeIdentityJointMatrix();
 
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
     CapturingLogger runtimeValidationLogger;
     NWB::Core::Common::LoggerRegistrationGuard runtimeValidationLoggerRegistrationGuard(runtimeValidationLogger);
 
@@ -961,9 +961,9 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     ));
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("failed dual-quaternion payload build")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLOBAL_TEXT("joint palette count")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLOBAL_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLOBAL_TEXT("failed dual-quaternion payload build")));
 #endif
 }
 

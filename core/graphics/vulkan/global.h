@@ -8,11 +8,11 @@
 #include <core/global.h>
 #include <core/alloc/module.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #ifndef VK_USE_PLATFORM_WIN32_KHR
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
 #ifndef VK_USE_PLATFORM_XLIB_KHR
 #define VK_USE_PLATFORM_XLIB_KHR
 #endif
@@ -21,9 +21,9 @@
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #endif
 #endif
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_ANDROID)
 #define VK_USE_PLATFORM_ANDROID_KHR
-#elif defined(NWB_PLATFORM_APPLE)
+#elif defined(GLOBAL_PLATFORM_APPLE)
 #define VK_USE_PLATFORM_METAL_EXT
 #endif
 

@@ -19,7 +19,7 @@ TestbedUiNestedPopupGallery::TestbedUiNestedPopupGallery(NWB::Core::Alloc::Globa
 {
     const bool initialized = m_beforeText.setText("Before child") && m_afterText.setText("After child")
         && m_childText.setText("Inside child");
-    NWB_FATAL_ASSERT(initialized);
+    GLOBAL_FATAL_ASSERT(initialized);
     m_combo.select(1u);
     m_search.combo().select(1u);
 }
@@ -51,7 +51,7 @@ void TestbedUiNestedPopupGallery::paint(NWB::Impl::UiPaintContext& context, cons
     ui.style().fontSize = previousFontSize;
     ui.style().gap = previousGap;
     if(!valid || ui.failed())
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom nested popup declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom nested popup declaration failed"));
 }
 
 bool TestbedUiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
@@ -101,7 +101,7 @@ bool TestbedUiNestedPopupGallery::paintParent(NWB::Impl::Ui::Builder& ui){
     const ContextMenuResult result = ui.contextMenu("commands", "menu_anchor", m_source, m_menu, menu);
     if(result.activated){
         m_command = result.key;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: nested context command={}"), m_command);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Testbed: nested context command={}"), m_command);
     }
     return result.valid;
 }

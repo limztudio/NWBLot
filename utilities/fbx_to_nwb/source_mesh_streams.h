@@ -197,7 +197,7 @@ template<typename Value, typename Lookup>
     }
 
     if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), StringConvert(streamName));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to build mesh: {} stream has too many unique values"), StringConvert(streamName));
         return false;
     }
 

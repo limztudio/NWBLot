@@ -53,7 +53,7 @@ namespace __hidden_softshadow_pipelines{
         ;
         stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
         if(!stage.m_state.m_pipeline){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
             channel.m_failed = true;
             return false;
         }
@@ -178,8 +178,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     const bool dispatchFirstWavelet,
     const bool dispatchTail
 ){
-    NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
-    NWB_ASSERT(dispatch.visibilityTexture);
+    GLOBAL_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
+    GLOBAL_ASSERT(dispatch.visibilityTexture);
     const u32 halfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 halfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
@@ -190,7 +190,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false, const bool graphOwnsOutputState = false){
-        NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
+        GLOBAL_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
             case ShadowResolveStage::Wavelet:
                 if(!dispatch.graphOwnsWaveletGeometryEntryState)
@@ -256,8 +256,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
 
     static_assert((NWB_SHADOW_RESOLVE_PASS_COUNT % 2) == 1, "opaque resolve pass count must be odd");
     static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be odd");
-    NWB_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
-    NWB_ASSERT(dispatchFirstWavelet || dispatchTail);
+    GLOBAL_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
+    GLOBAL_ASSERT(dispatchFirstWavelet || dispatchTail);
 
     if(dispatchFirstWavelet){
         runPass(
@@ -290,7 +290,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         lastWaveletResources = &nextWaveletResources;
         sourceIsHalfA = !sourceIsHalfA;
     }
-    NWB_ASSERT(dispatch.upsampleResources.inputColorTexture == lastWaveletResources->outputTexture);
+    GLOBAL_ASSERT(dispatch.upsampleResources.inputColorTexture == lastWaveletResources->outputTexture);
     runPass(
         dispatch.upsampleResources,
         1u,
@@ -353,7 +353,7 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
 
     Float44 acceptedWorldToClip = {};
     if(m_meshSystem.snapshotAcceptedMeshViewWorldToClip(acceptedWorldToClip)){
-        NWB_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &acceptedWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
+        GLOBAL_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &acceptedWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
         m_rayTracingState.m_prevWorldToClipValid = true;
     }
     if(m_rayTracingState.m_softTransparentTemporalReady && !hardwareTransparentShadowReady())

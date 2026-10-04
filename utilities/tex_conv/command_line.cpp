@@ -82,7 +82,7 @@ int Run(const int argc, char** argv){
                 + static_cast<u32>(!volumeArguments.empty())
             ;
             if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
                 return TexConvCliDetail::s_TexConvExitFailure;
             }
 
@@ -119,7 +119,7 @@ int Run(const int argc, char** argv){
                     alphaSource.constant = s_AlphaBlackConstant;
                 }
                 else if(alphaText.empty()){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: --alpha expects an image path, white, or black."));
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 else{
@@ -132,20 +132,20 @@ int Run(const int argc, char** argv){
                 ErrorCode errorCode;
                 const bool inputIsRegularFile = IsRegularFile(inputPath, errorCode);
                 if(errorCode && !IsMissingPathError(errorCode)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}")
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to inspect input '{}': {}")
                         , PathToString<tchar>(inputPath)
                         , StringConvert(errorCode.message())
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!inputIsRegularFile){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'")
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: input image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(inputPath)
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(inputPath)){
-                    NWB_LOGGER_ERROR(NWB_TEXT(
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT(
                         "tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
@@ -157,20 +157,20 @@ int Run(const int argc, char** argv){
                 ErrorCode errorCode;
                 const bool alphaIsRegularFile = IsRegularFile(alphaSource.path, errorCode);
                 if(errorCode && !IsMissingPathError(errorCode)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}")
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: failed to inspect alpha image '{}': {}")
                         , PathToString<tchar>(alphaSource.path)
                         , StringConvert(errorCode.message())
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!alphaIsRegularFile){
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(alphaSource.path)
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(alphaSource.path)){
-                    NWB_LOGGER_ERROR(NWB_TEXT(
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT(
                         "tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
@@ -205,7 +205,7 @@ int Run(const int argc, char** argv){
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
             return TexConvCliDetail::s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return TexConvCliDetail::s_TexConvExitFatal; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, GLOBAL_COUT, GLOBAL_CERR); }, [](){ return TexConvCliDetail::s_TexConvExitFatal; });
 }
 
 

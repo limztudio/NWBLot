@@ -73,15 +73,15 @@ struct Box{
 class CsgShadowSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorld(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("CsgShadowSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, GLOBAL_TEXT("CsgShadowSmokeProject"));
         auto& renderer = AddSmokeRenderSystems(*world, context);
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("Invalid CSG shadow reflection settings"));
+        GLOBAL_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), GLOBAL_TEXT("Invalid CSG shadow reflection settings"));
         renderer.setRefractionEnabled(false);
         NWB::Impl::PresentationSettings presentation;
         presentation.toneMap = NWB::Impl::PresentationToneMap::LinearClamp;
-        NWB_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), NWB_TEXT("Invalid CSG shadow presentation settings"));
+        GLOBAL_FATAL_ASSERT_MSG(renderer.setPresentationSettings(presentation), GLOBAL_TEXT("Invalid CSG shadow presentation settings"));
         return world;
     }
 
@@ -131,7 +131,7 @@ private:
                 (box.minimum.z + box.maximum.z) * 0.5f, 0.0f),
             Float4(box.maximum.x - box.minimum.x, box.maximum.y - box.minimum.y, box.maximum.z - box.minimum.z, 0.0f)
         );
-        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProject: box creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(entity.valid(), GLOBAL_TEXT("CsgShadowSmokeProject: box creation failed"));
         return entity;
     }
 
@@ -182,7 +182,7 @@ private:
             initialCenter.x -= 0.6f * (m_pointLight ? 0.5f : 1.0f);
         AssignCsgCutterTransform(cutter, LoadFloat(initialCenter), QuaternionIdentity());
         if(moving){
-            NWB_ASSERT(m_movingCount < LengthOf(m_movingCutters));
+            GLOBAL_ASSERT(m_movingCount < LengthOf(m_movingCutters));
             m_movingCutters[m_movingCount] = cutterEntity.id();
             m_finalCutterCenters[m_movingCount] = finalCenter;
             ++m_movingCount;
@@ -275,7 +275,7 @@ private:
         // The infinite plane keeps the control in the CSG route while removing only z <= -8, outside its box.
         plane.normalDistance = Float4(0.0f, 0.0f, 1.0f, 8.0f);
         addAnalyticCutter(5u, Name("engine/csg/plane"), plane, MatrixIdentity());
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"));
     }
 
     void destroyWorld(){
@@ -299,7 +299,7 @@ public:
             return false;
         const auto camera = CreateSmokeCamera(*m_world, 0.0f, -s_CameraDepth, 0.0f);
         auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(camera);
-        NWB_FATAL_ASSERT_MSG(cameraTransform, NWB_TEXT("CsgShadowSmokeProject: camera creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(cameraTransform, GLOBAL_TEXT("CsgShadowSmokeProject: camera creation failed"));
         const f32 cameraX = m_arm == Arm::CameraShift ? 0.3f : 0.0f;
         cameraTransform->position.x = cameraX;
         const auto receiver = CreateTintedStaticMeshEntity(
@@ -307,17 +307,17 @@ public:
             Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 3.0f, 0.0f)
         );
         auto* receiverTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiver);
-        NWB_FATAL_ASSERT_MSG(camera.valid() && receiverTransform, NWB_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(camera.valid() && receiverTransform, GLOBAL_TEXT("CsgShadowSmokeProject: camera/receiver creation failed"));
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), receiverTransform->rotation);
         const auto light = m_pointLight
             ? NWB::Impl::Scene::CreatePointLightEntity(*m_world, Float4(0.0f, 0.0f, -12.0f, 0.0f), Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f, 30.0f)
             : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         auto* lightComponent = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light);
-        NWB_FATAL_ASSERT_MSG(lightComponent, NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
+        GLOBAL_FATAL_ASSERT_MSG(lightComponent, GLOBAL_TEXT("CsgShadowSmokeProject: light creation failed"));
         lightComponent->angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
         lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
         lightComponent->enableCaustics = false;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
             , StringConvert(m_finiteLightSource ? s_FINITE : s_HARD)
             , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
         );
@@ -327,16 +327,16 @@ public:
             createAtlas();
         const bool hardware = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
             && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgShadowSmokeProject: atlas arm={} light={} hardware={} camera_x={} caster_z_max=-5 receiver_z=0")
             , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u, m_capture);
+        return ConfigureSmokeFramebufferCapture(m_context, GLOBAL_TEXT("CsgShadowSmokeProject"), 120u, m_capture);
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgShadowSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -346,10 +346,10 @@ public:
         if(m_arm == Arm::Moved && m_update == s_MoveUpdate){
             for(u32 index = 0u; index < m_movingCount; ++index){
                 auto* cutter = m_world->tryGetComponent<NWB::Impl::CsgCutterComponent>(m_movingCutters[index]);
-                NWB_ASSERT(cutter);
+                GLOBAL_ASSERT(cutter);
                 AssignCsgCutterTransform(*cutter, LoadFloat(m_finalCutterCenters[index]), QuaternionIdentity());
             }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgShadowSmokeProject: cutters moved at update40"));
         }
         const f32 fixedDelta = RendererBaselineFixedDelta();
         m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
@@ -381,7 +381,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB CSG Shadow Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return GLOBAL_TEXT("NWB CSG Shadow Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_csg_shadow_smoke::CsgShadowSmokeProject>(context);
 }

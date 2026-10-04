@@ -81,14 +81,14 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
     EXPECT_EQ(record.blobSizeBytes, byteCount);
     const BinaryByteView blobBytes = reader.blobBytes();
     ASSERT_EQ(blobBytes.size(), byteCount);
-    EXPECT_EQ(NWB_MEMCMP(blobBytes.data(), expected.data(), byteCount), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(blobBytes.data(), expected.data(), byteCount), 0);
     EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
 
     capture.reset();
     ASSERT_TRUE(Graphics::ValidateGpuCommandIrStream(owned.bytes()).valid());
     Graphics::GpuCommandIrStreamReader retainedReader(owned.bytes());
     ASSERT_EQ(retainedReader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(NWB_MEMCMP(retainedReader.blobBytes().data(), expected.data(), byteCount), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(retainedReader.blobBytes().data(), expected.data(), byteCount), 0);
 }
 
 TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefixThenRefills){
@@ -119,7 +119,7 @@ TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefix
     ASSERT_EQ(capture.recordCount(), 1u);
     ASSERT_TRUE(capture.exportOwned(rolledBack));
     ASSERT_EQ(rolledBack.bytes().size(), prefix.bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(rolledBack.bytes().data(), prefix.bytes().data(), prefix.bytes().size()), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(rolledBack.bytes().data(), prefix.bytes().data(), prefix.bytes().size()), 0);
     ASSERT_TRUE(Graphics::ValidateGpuCommandIrStream(rolledBack.bytes()).valid());
 
     ASSERT_TRUE(capture.captureUploadBuffer(
@@ -128,7 +128,7 @@ TEST(GpuCommandIrUploadCapture, CheckpointRollbackKeepsExactCommandAndBlobPrefix
     ));
     ASSERT_TRUE(capture.exportOwned(refilled));
     ASSERT_EQ(refilled.bytes().size(), full.bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(refilled.bytes().data(), full.bytes().data(), full.bytes().size()), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(refilled.bytes().data(), full.bytes().data(), full.bytes().size()), 0);
     EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(refilled.bytes()).valid());
 }
 
@@ -160,7 +160,7 @@ TEST(GpuCommandIrUploadCapture, RejectedInputsAndForeignOrStaleCheckpointsPreser
     EXPECT_FALSE(foreign.rollback(checkpoint));
     ASSERT_TRUE(capture.exportOwned(after));
     ASSERT_EQ(after.bytes().size(), before.bytes().size());
-    EXPECT_EQ(NWB_MEMCMP(after.bytes().data(), before.bytes().data(), before.bytes().size()), 0);
+    EXPECT_EQ(GLOBAL_MEMCMP(after.bytes().data(), before.bytes().data(), before.bytes().size()), 0);
     EXPECT_EQ(capture.recordCount(), 1u);
     EXPECT_EQ(capture.recordingAttemptGeneration(), 31u);
 

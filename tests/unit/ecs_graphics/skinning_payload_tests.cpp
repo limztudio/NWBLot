@@ -268,7 +268,7 @@ TEST(SkinningPayload, RuntimeScratchStorageIsReusedAcrossMeshes){
     EXPECT_EQ(finalMemory.reservedBytes, initialMemory.reservedBytes);
 }
 
-#if defined(NWB_FINAL)
+#if defined(GLOBAL_FINAL)
 void ExpectEmptyRuntimePayload(const NWB::Impl::RuntimeSkinPayloadScratch& payload){
     EXPECT_FALSE(payload.hasActiveSkin());
     EXPECT_EQ(payload.skinInfluenceCount, 0u);

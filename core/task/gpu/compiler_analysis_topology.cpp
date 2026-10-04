@@ -52,7 +52,7 @@ struct TopologicalReadyIndex final : NoCopy{
         usize levelWords = (m_taskCount - 1u) / s_BitsPerWord + 1u;
         usize wordCount = 0u;
         for(;;){
-            NWB_ASSERT(m_levelCount < m_levelOffsets.size());
+            GLOBAL_ASSERT(m_levelCount < m_levelOffsets.size());
             m_levelOffsets[m_levelCount++] = wordCount;
             wordCount += levelWords;
             if(levelWords == 1u)
@@ -91,7 +91,7 @@ struct TopologicalReadyIndex final : NoCopy{
         usize taskIndex = 0u;
         for(usize level = m_levelCount; level > 0u; --level){
             const u64 word = m_words[m_levelOffsets[level - 1u] + taskIndex];
-            NWB_ASSERT(word != 0u);
+            GLOBAL_ASSERT(word != 0u);
             taskIndex = taskIndex * s_BitsPerWord + static_cast<usize>(CountTrailingZeros(word));
         }
         usize index = taskIndex;
@@ -200,7 +200,7 @@ bool BuildTopologicalOrder(
             ++adjacencyIndex
         ){
             const GpuTaskDependencyEdge& edge = edges[adjacency.edgeIndices[adjacencyIndex]];
-            NWB_ASSERT(indegrees[edge.consumer.index] > 0u);
+            GLOBAL_ASSERT(indegrees[edge.consumer.index] > 0u);
             if(--indegrees[edge.consumer.index] == 0u){
                 if(readyIndex.m_levelCount != 0u)
                     readyIndex.add(edge.consumer.index);
@@ -230,7 +230,7 @@ bool BuildTopologicalOrder(
                 return;
             }
         }
-        NWB_ASSERT(false);
+        GLOBAL_ASSERT(false);
     };
     bool foundCycle = false;
     for(u32 taskIndex = 0u; taskIndex < taskCount; ++taskIndex){

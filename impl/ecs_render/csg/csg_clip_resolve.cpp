@@ -94,14 +94,14 @@ static void CopyCsgCutterInlineParameters(
 
     const usize parameter0Bytes = Min(parameterByteSize, sizeof(Float4));
     if(parameter0Bytes > 0u)
-        NWB_MEMCPY(&inOutCutter.parameter0, sizeof(Float4), parameterBytes, parameter0Bytes);
+        GLOBAL_MEMCPY(&inOutCutter.parameter0, sizeof(Float4), parameterBytes, parameter0Bytes);
 
     if(parameterByteSize <= sizeof(Float4))
         return;
 
     const usize parameter1Bytes = Min(parameterByteSize - sizeof(Float4), sizeof(Float4));
     if(parameter1Bytes > 0u)
-        NWB_MEMCPY(&inOutCutter.parameter1, sizeof(Float4), parameterBytes + sizeof(Float4), parameter1Bytes);
+        GLOBAL_MEMCPY(&inOutCutter.parameter1, sizeof(Float4), parameterBytes + sizeof(Float4), parameter1Bytes);
 }
 
 [[nodiscard]] static bool BuildCsgReceiverWorldToLocal(
@@ -195,9 +195,9 @@ static void BuildResolvedClipCutterGpuData(
     const f32 worldToShapeScaleBound,
     CsgCutterGpuData& outCutter
 ){
-    NWB_ASSERT(resolvedCutter.cutter);
-    NWB_ASSERT(resolvedCutter.parameterByteSize == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
-    NWB_ASSERT(resolvedCutter.parameterByteSize == 0u || resolvedCutter.parameterBytes);
+    GLOBAL_ASSERT(resolvedCutter.cutter);
+    GLOBAL_ASSERT(resolvedCutter.parameterByteSize == static_cast<usize>(resolvedCutter.shapeType.desc.parameterByteSize));
+    GLOBAL_ASSERT(resolvedCutter.parameterByteSize == 0u || resolvedCutter.parameterBytes);
 
     if(IsFinite(worldToShapeScaleBound) && worldToShapeScaleBound > 0.0f)
         outCutter.worldToShapeScaleBound = worldToShapeScaleBound;
@@ -284,7 +284,7 @@ template<typename CutterTransformLoader, typename CutterHandler>
             );
             if(resolveResult == CsgClipCutterResolveResult::Skipped)
                 return;
-            NWB_ASSERT(resolveResult == CsgClipCutterResolveResult::Ready);
+            GLOBAL_ASSERT(resolveResult == CsgClipCutterResolveResult::Ready);
 
             if(!handler(resolvedCutter))
                 resolved = false;

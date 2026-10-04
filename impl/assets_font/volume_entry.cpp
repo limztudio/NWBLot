@@ -30,7 +30,7 @@ namespace __hidden_font_volume_entry{
 
 static bool RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontCookEntry, Font, FontAssetCodec>(
-        registry, NWB_TEXT("font"),
+        registry, GLOBAL_TEXT("font"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc,
             FontCookEntry& entry, Core::Assets::CookEntryParseContext& context){
             return ParseFontCookMetadata(root, virtualRoot, path, doc, entry, context.scratchArena);

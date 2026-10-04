@@ -155,13 +155,13 @@ public:
             Float4(0.1f, 1.f, 1.3f, 0.f)
         );
         if(!entity.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
             return false;
         }
         auto& transform = world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     }
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
     return true;
 }
 #endif
@@ -169,13 +169,13 @@ public:
 
 [[nodiscard]] static TStringView TransparentMultiFpsLabel(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
+    return GLOBAL_TEXT("FrameLaggedAsyncLightingSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("TransparentCsgSmokeProject");
+    return GLOBAL_TEXT("TransparentCsgSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return NWB_TEXT("CausticSphereSmokeProject");
+    return GLOBAL_TEXT("CausticSphereSmokeProject");
 #else
-    return NWB_TEXT("TransparentMultiSmokeProject");
+    return GLOBAL_TEXT("TransparentMultiSmokeProject");
 #endif
 }
 
@@ -269,7 +269,7 @@ static void ApplyTransparentCsgSceneTransform( // beginner: Runs pure-SIMD scene
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
     cutter.shapeType = Name("engine/csg/plane");
     cutter.active = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
 
     NWB::Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = Float4(0.0f, -1.0f, 0.0f, 0.0f);
@@ -326,7 +326,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, GLOBAL_TEXT("TransparentMultiSmokeProject"));
 
         const bool rayQueryHardwareAvailable =
             context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
@@ -334,11 +334,11 @@ private:
         ;
         if(rayQueryHardwareAvailable){
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware")
+                GLOBAL_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware")
             );
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable")
+                GLOBAL_TEXT("TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable")
             );
         }
 
@@ -346,7 +346,7 @@ private:
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
         rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
+            GLOBAL_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
         );
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
@@ -369,7 +369,7 @@ private:
             else if(mode == "screen")
                 reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::ScreenSpace;
             else
-                NWB_FATAL_ASSERT_MSG(mode == "hybrid", NWB_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
+                GLOBAL_FATAL_ASSERT_MSG(mode == "hybrid", GLOBAL_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
         }
         if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON")){
             reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.f);
@@ -383,17 +383,17 @@ private:
             reflectionSettings.temporalEnabled = false;
             reflectionSettings.spatialFilterEnabled = false;
             reflectionSettings.screenFeedbackEnabled = false;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}")
                 , reflectionSettings.diagnosticsEnabled
                 , reflectionSettings.temporalEnabled
                 , reflectionSettings.spatialFilterEnabled
                 , reflectionSettings.screenFeedbackEnabled
             );
         }
-        NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
-            , refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        GLOBAL_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), GLOBAL_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticSphereSmokeProject: camera refraction {}")
+            , refractionEnabled ? GLOBAL_TEXT("enabled") : GLOBAL_TEXT("disabled")
         );
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         // This clipping/coverage oracle measures the authored AVBOIT surface appearance.
@@ -401,9 +401,9 @@ private:
         rendererSystem.setRefractionEnabled(false);
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             rendererSystem.setReflectionSettings(reflectionSettings),
-            NWB_TEXT("TransparentCsgSmokeProject: invalid reflection settings")
+            GLOBAL_TEXT("TransparentCsgSmokeProject: invalid reflection settings")
         );
 #else
         AddSmokeRenderSystems(*world, context);
@@ -424,7 +424,7 @@ private:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     [[nodiscard]] bool configureFramebufferCapture(){
-        return NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CausticSphereSmokeProject"), 360u, m_framebufferCapture);
+        return NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, GLOBAL_TEXT("CausticSphereSmokeProject"), 360u, m_framebufferCapture);
     }
 #endif
 
@@ -494,31 +494,31 @@ public:
             // Camera distance varies visible footprint while the optical geometry, light and photon quality stay fixed.
             NWB::Tests::Smoke::SmokeEnvironmentString presetText(m_context.objectArena);
             if(!NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_CAUSTIC_SMOKE_CAMERA_PRESET", presetText)){
-                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset is required"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("CausticTimingProbe: camera preset is required"));
                 return false;
             }
             const AStringView preset(presetText.data(), presetText.size());
             if(preset != "populated" && preset != "sparse"){
-                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
             }
             cameraDistance *= preset == "sparse" ? 2.0f : 1.0f;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}")
-                , preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: camera {} distance {} height {}")
+                , preset == "sparse" ? GLOBAL_TEXT("sparse") : GLOBAL_TEXT("populated")
                 , cameraDistance
                 , s_CameraTargetY
             );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}")
                 , rendererBaselineFixedDelta()
                 , effectiveFrozenAngle()
                 , s_CausticSphereScale
             );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}")
                 , NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
                 , NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
                 , NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT
             );
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}")
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}")
                 , s_DefaultDirectionalLightPitch
                 , s_DefaultDirectionalLightYaw
                 , s_DefaultDirectionalLightIntensity
@@ -538,8 +538,8 @@ public:
         f32 causticSetting = 1.f;
         const bool causticsEnabled = !ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED", causticSetting) || causticSetting != 0.f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}")
-            , causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticSphereSmokeProject: caustics {}")
+            , causticsEnabled ? GLOBAL_TEXT("enabled") : GLOBAL_TEXT("disabled")
         );
 #endif
 
@@ -662,19 +662,19 @@ public:
         const bool csgEntitiesValid = true;
 #endif
         updateTransparentSceneTransforms();
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
-            NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
+            GLOBAL_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(causticTiming){
             const auto& camera = m_world->entity(activeCamera).getComponent<NWB::Impl::Scene::CameraComponent>();
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: vertical FOV radians {}"), camera.verticalFovRadians());
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: vertical FOV radians {}"), camera.verticalFovRadians());
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
         }
 #endif
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
         return true;
     }
 
@@ -687,7 +687,7 @@ public:
         removeFrameLaggedAsyncLightingUnfocusedPass();
 #endif
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("TransparentMultiSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -707,7 +707,7 @@ public:
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    GLOBAL_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
                     m_rendererBaselineRenderedFrameCount
                 );
             }
@@ -721,14 +721,14 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         if(m_frameLaggedAsyncLightingToggleInput.consumeToggleRequest()){
             auto* const rendererSystemPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
-            NWB_FATAL_ASSERT_MSG(rendererSystemPtr, NWB_TEXT("FrameLaggedAsyncLightingSmokeProject renderer system disappeared"));
+            GLOBAL_FATAL_ASSERT_MSG(rendererSystemPtr, GLOBAL_TEXT("FrameLaggedAsyncLightingSmokeProject renderer system disappeared"));
             NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
             m_frameLaggedAsyncLightingEnabled = !m_frameLaggedAsyncLightingEnabled;
             rendererSystem.setFrameLaggedAsyncLightingEnabled(m_frameLaggedAsyncLightingEnabled);
             if(m_frameLaggedAsyncLightingEnabled)
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
+                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
             else
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
+                NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
         }
 #endif
         // Yaw: env freeze > arrow-scrub (latches off auto-spin) > auto-spin default.
@@ -838,13 +838,13 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-    return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
+    return GLOBAL_TEXT("NWB Frame Lagged Async Lighting Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-    return NWB_TEXT("NWB Transparent CSG Smoke");
+    return GLOBAL_TEXT("NWB Transparent CSG Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-    return NWB_TEXT("NWB Caustic Sphere Smoke");
+    return GLOBAL_TEXT("NWB Caustic Sphere Smoke");
 #else
-    return NWB_TEXT("NWB Transparent Multi Smoke");
+    return GLOBAL_TEXT("NWB Transparent Multi Smoke");
 #endif
 }
 

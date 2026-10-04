@@ -31,7 +31,7 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
     return CollisionDetail::PlaneDistance(plane, point);
 }
 
@@ -39,7 +39,7 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL PlaneTests::FromPointNormal(
+[[nodiscard]] GLOBAL_INLINE SIMDVector SIMDCALL PlaneTests::FromPointNormal(
     const SIMDVector normal,
     const SIMDVector point,
     const SIMDVector fallbackNormal

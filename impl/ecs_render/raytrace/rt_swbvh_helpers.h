@@ -68,7 +68,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     const Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena>& instances,
     const Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena>& primitives
 ){
-    NWB_ASSERT(instances.size() == primitives.size());
+    GLOBAL_ASSERT(instances.size() == primitives.size());
 
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
@@ -94,7 +94,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     const InstanceGpuDataVector& instanceData,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
-    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
+    GLOBAL_ASSERT(instanceMaterials.size() == instanceData.size());
 
     u64 hash = s_Fnv64OffsetBasis;
     Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
@@ -128,7 +128,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     const Core::Buffer* const bufferKey = &buffer;
     auto found = cache.find(bufferKey);
     if(found != cache.end()){
-        NWB_ASSERT(found.value().handle.valid());
+        GLOBAL_ASSERT(found.value().handle.valid());
         found.value().seenThisFrame = true;
         outHandle = found.value().handle;
         return true;
@@ -214,7 +214,7 @@ template<typename RayTracingState>
     const RayTracingState& state,
     const u32 instanceCount
 ){
-    NWB_ASSERT(instanceCount > 0u);
+    GLOBAL_ASSERT(instanceCount > 0u);
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
     return
         state.m_sceneBvhNodeBuffer

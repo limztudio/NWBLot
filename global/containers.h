@@ -367,7 +367,7 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
     }
     usize sourceOffset = 0u;
     if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
-        NWB_ASSERT(sourceSize <= destination.size() - sourceOffset);
+        GLOBAL_ASSERT(sourceSize <= destination.size() - sourceOffset);
         if(sourceSize > destination.size() - sourceOffset)
             return;
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
@@ -387,7 +387,7 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
 
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(sourceSize);
-        NWB_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
+        GLOBAL_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else{
         ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
@@ -407,17 +407,17 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
 
     const usize destinationSize = destination.size();
     const usize sourceSize = source.size();
-    NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
+    GLOBAL_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
     usize sourceOffset = 0u;
     if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
-        NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
+        GLOBAL_ASSERT(sourceSize <= destinationSize - sourceOffset);
         if(sourceSize > destinationSize - sourceOffset)
             return;
         const usize requiredSize = destinationSize + sourceSize;
         ContainerDetail::ReserveGrowingCapacity(destination, requiredSize);
         if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); }){
             destination.resize(requiredSize);
-            NWB_MEMCPY(
+            GLOBAL_MEMCPY(
                 destination.data() + destinationSize,
                 sourceSize * sizeof(DestinationValue),
                 destination.data() + sourceOffset,
@@ -434,7 +434,7 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     ContainerDetail::ReserveGrowingCapacity(destination, destinationSize + sourceSize);
     if constexpr(requires(DestinationVector& d, usize n){ d.data(); d.resize(n); } && requires(const SourceVector& s){ s.data(); }){
         destination.resize(destinationSize + sourceSize);
-        NWB_MEMCPY(
+        GLOBAL_MEMCPY(
             destination.data() + destinationSize,
             sourceSize * sizeof(DestinationValue),
             source.data(),

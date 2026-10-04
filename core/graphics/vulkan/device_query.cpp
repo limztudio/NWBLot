@@ -168,7 +168,7 @@ bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
 
     if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
         NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"),
+            GLOBAL_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"),
             StringConvert(GetFormatInfo(format).getName()),
             ResultToString(res)
         );
@@ -252,7 +252,7 @@ void Device::probeCompressedTextureFormats(){
             }
         }
         else{
-            NWB_ASSERT(Format::IsBCCompressedFormat(format));
+            GLOBAL_ASSERT(Format::IsBCCompressedFormat(format));
             ++bcFormatCount;
             if(readable)
                 ++readableBcFormatCount;
@@ -260,7 +260,7 @@ void Device::probeCompressedTextureFormats(){
     }
 
     NWB_LOGGER_INFO(
-        NWB_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats."),
+        GLOBAL_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats."),
         readableAstcLdrFormatCount,
         astcLdrFormatCount,
         readableAstcHdrFormatCount,
@@ -303,8 +303,8 @@ Heap::~Heap(){
     {
         ScopedLock lock(m_bindingMutex);
         if(!m_bindingReservations.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing to free a heap with live placed-resource bindings"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Refusing to free a heap with live placed-resource bindings"));
+            GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
             return;
         }
     }
@@ -326,8 +326,8 @@ void Heap::eraseBindingReservationLocked(const void* owner){
         return;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unregister a placed-resource heap binding"));
-    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Missing placed-resource heap binding"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to unregister a placed-resource heap binding"));
+    GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Missing placed-resource heap binding"));
 }
 
 
@@ -338,8 +338,8 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     VkResult res = VK_SUCCESS;
 
     if(d.capacity == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create heap: capacity is zero"));
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create heap: capacity is zero"));
         return nullptr;
     }
 
@@ -349,8 +349,8 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     case HeapType::Readback:
         break;
     default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create heap: invalid heap type"));
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to create heap: invalid heap type"));
         return nullptr;
     }
 
@@ -359,7 +359,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
 
     res = m_allocator.allocateHeap(*heap);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
         DestroyArenaObject(m_context.objectArena, heap);
         return nullptr;
     }

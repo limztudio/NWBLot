@@ -69,13 +69,13 @@ static constexpr u32 s_FramebufferCaptureDefaultFrameCount = 360u;
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TextureSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, GLOBAL_TEXT("TextureSmokeProject"));
         AddSmokeRenderSystems(*world, context);
         return world;
     }
 
     bool configureFramebufferCapture(){
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount, m_framebufferCapture);
+        return ConfigureSmokeFramebufferCapture(m_context, GLOBAL_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount, m_framebufferCapture);
     }
 
     void destroyWorld(){
@@ -145,18 +145,18 @@ public:
             Float4(1.1f, 1.1f, 1.1f, 0.0f),
             s_TextureRuntimeTintParameter
         );
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             activeCamera.valid() && directionalLight.valid() && m_whiteGround.valid() && m_texturedSphere.valid(),
-            NWB_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere")
+            GLOBAL_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere")
         );
 
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created"));
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("TextureSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -191,7 +191,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 }
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return NWB_TEXT("NWB Texture Smoke");
+    return GLOBAL_TEXT("NWB Texture Smoke");
 }
 
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){

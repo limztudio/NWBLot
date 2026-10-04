@@ -63,7 +63,7 @@ bool RendererAvboitSystem::createAvboitResources(){
     auto& device = m_graphics.getDevice();
 
     if(!ECSRenderDetail::CreateClampSampler(device, m_avboitState.m_linearSampler, true)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create linear sampler for AVBOIT"));
         return false;
     }
 
@@ -98,7 +98,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
     auto& device = m_graphics.getDevice();
     Core::BindingLayoutHandle materialPassBindingLayout;
     if(!m_materialSystem.prepareMaterialPassBindingLayout(materialPassBindingLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT requires the shared material-pass push-constant layout"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: AVBOIT requires the shared material-pass push-constant layout"));
         return false;
     }
 
@@ -108,7 +108,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         m_avboitState.m_depthWarpComputeShader,
         materialPassBindingLayout
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
@@ -118,7 +118,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         m_avboitState.m_integrateComputeShader,
         materialPassBindingLayout
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;
     }
 

@@ -134,16 +134,16 @@ GpuVersion<GpuTextureImageVersion> GpuRendererState::prepareTextureImage(const S
         return reused;
     }
     // The source factory owns structural payload validation; immutable cache insertion keeps a debug-only invariant.
-    NWB_ASSERT(source->texture().validatePayload());
+    GLOBAL_ASSERT(source->texture().validatePayload());
     auto version = MakeGpuVersion<GpuTextureImageVersion>(m_arena, m_graphics, source);
     if(!version)
         return {};
     if(!TextureAssetLoader::Create(
-        version->m_texture, source->texture(), source->identity().name(), m_graphics, NWB_TEXT("UI Texture Image")
+        version->m_texture, source->texture(), source->identity().name(), m_graphics, GLOBAL_TEXT("UI Texture Image")
     ))
         return {};
     if(!__hidden_ui_gpu_texture_images::ValidVersion(*version)){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: texture image {} has invalid GPU format, geometry, or readiness")
             , source->generation()
         );
         return {};
@@ -173,7 +173,7 @@ bool GpuRendererState::declareTextureImages(
     GpuTextureGraphResources& resources,
     GpuRasterResourceUses& uses){
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
         return false;
     }
     for(usize index = 0u; index < frame->m_textureImages.size(); ++index){
@@ -194,7 +194,7 @@ bool GpuRendererState::declareTextureImages(
                 .setToken(readiness)
         );
         if(!ready.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})")
                 , index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value
             );
             return false;
@@ -206,7 +206,7 @@ bool GpuRendererState::declareTextureImages(
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
         if(!texture.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: texture image {} import failed (source generation={})")
                 , index, source->generation()
             );
             return false;

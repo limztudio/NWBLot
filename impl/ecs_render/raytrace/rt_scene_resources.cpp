@@ -32,7 +32,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
             m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle
         )
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
         return false;
     }
     return true;

@@ -47,7 +47,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
     for(;;){
         if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
-            NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
+            GLOBAL_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
             TerminateInvariant();
         }
         if(s_NextCompiledPlanGeneration.compare_exchange_weak(

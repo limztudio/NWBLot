@@ -176,7 +176,7 @@ TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGeneric
     ASSERT_TRUE(completeDocument.parse(completeMetadata));
     UiSkinCookEntry completeEntry(testArena.arena);
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, completeEntry, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("missing required region 'window.normal'")));
 }
 
 

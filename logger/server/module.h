@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_ServerName = NWB_TEXT("Server");
+inline constexpr TStringView s_ServerName = GLOBAL_TEXT("Server");
 inline constexpr usize s_MaxPendingCrashUploadPathText = 1024u;
 inline constexpr f32 s_ServerUpdateIntervalSeconds = 0.1f;
 

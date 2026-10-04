@@ -45,7 +45,7 @@ void FrameRecoveryGraphTask::accepted(Payload& payload, const Core::QueueSubmiss
         && payload.frameTimingTransaction
         && !payload.frameTimingTransaction->confirmEndSubmission(token, false)
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: failed to retire frame recovery timing query"));
         payload.frameTimingTransaction->discard();
     }
     if(payload.armed)

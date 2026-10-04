@@ -31,7 +31,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructTransition;
     default:
-        NWB_ASSERT(false);
+        GLOBAL_ASSERT(false);
         return GpuCompiledBarrierType::TextureTransition;
     }
 }
@@ -47,7 +47,7 @@ namespace GpuTaskGraphCompilerDetail{
     case GpuGraphResourceType::AccelStruct:
         return GpuCompiledBarrierType::AccelStructUav;
     default:
-        NWB_ASSERT(false);
+        GLOBAL_ASSERT(false);
         return GpuCompiledBarrierType::TextureUav;
     }
 }
@@ -460,7 +460,7 @@ namespace GpuTaskGraphCompilerDetail{
                 continue;
             }
 
-            NWB_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
+            GLOBAL_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
             const usize previousStateIndex = resourceHistory.last(use.resource);
             const TrackedCompiledResourceState* previousState = previousStateIndex != Limit<usize>::s_Max
                 ? &trackedResourceStates[previousStateIndex] : nullptr;

@@ -103,7 +103,7 @@ inline void HashCombine(usize& seed, const T& value){
         value = 0.0f;
 
     u32 bits = 0u;
-    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    GLOBAL_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
     return bits;
 }
 

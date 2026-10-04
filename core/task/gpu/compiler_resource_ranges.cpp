@@ -352,8 +352,8 @@ static void AppendResourceStateFragmentsInStateOrder(
         while(runBegin > 0u && discovered[runBegin - 1u].stateIndex == stateIndex)
             --runBegin;
 
-        NWB_ASSERT(discovered[runBegin].state);
-        NWB_ASSERT(runBegin == 0u || discovered[runBegin - 1u].stateIndex > stateIndex);
+        GLOBAL_ASSERT(discovered[runBegin].state);
+        GLOBAL_ASSERT(runBegin == 0u || discovered[runBegin - 1u].stateIndex > stateIndex);
         for(usize fragmentIndex = runBegin; fragmentIndex < runEnd; ++fragmentIndex)
             outFragments.push_back(discovered[fragmentIndex]);
         runEnd = runBegin;

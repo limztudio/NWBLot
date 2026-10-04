@@ -104,7 +104,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             || !causticResolveGeometry.valid()
             || !sceneGeometryDomain.valid()
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware-caustics graph resources"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import hardware-caustics graph resources"));
             return false;
         }
 
@@ -429,7 +429,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         for(usize resourceIndex = 0u; resourceIndex < inputs.hardwareTraceAttributeResourceCount; ++resourceIndex){
             const Core::GpuGraphResourceId resource = inputs.hardwareTraceAttributeResources[resourceIndex];
             if(!resource.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
                 return false;
             }
             if(!hardwareTraceAttributeStatesGraphOwned)
@@ -447,7 +447,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             }
         }
         if(!optionalResourcesImported){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));
             return false;
         }
 
@@ -500,7 +500,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             irradianceClear
         );
         if(!irradianceClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear"));
             return false;
         }
         outResult.causticIrradianceClearTask = irradianceClearTask;
@@ -531,7 +531,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 accumulatorNonTemporalClear
             );
             if(!accumulatorNonTemporalClearTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
                 return false;
             }
             outResult.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
@@ -568,7 +568,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 accumulatorBootstrapClear
             );
             if(!accumulatorBootstrapClearTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear"));
                 return false;
             }
             outResult.causticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
@@ -616,7 +616,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 inputs.photonTiming
             );
             if(!accumulatorDecayTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay"));
                 return false;
             }
             outResult.causticAccumulatorDecayTask = accumulatorDecayTask;
@@ -655,7 +655,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             inputs.producerDispatched
         );
         if(!outResult.causticPhotonTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
             return false;
         }
 
@@ -678,7 +678,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             inputs.resolveTiming
         );
         if(!outResult.causticGeometryTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
             return false;
         }
 
@@ -699,7 +699,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         resolveChainInputs.resolveTiming = inputs.resolveTiming;
         HardwareCausticsResolveChainResult resolveChainResult;
         if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, hardwareCausticsScratchArena)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));
             return false;
         }
         outResult.causticResolvePrepareTask = resolveChainResult.causticResolvePrepareTask;

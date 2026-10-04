@@ -391,7 +391,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
             if(scope.physicalQueue == range.physicalQueue){
                 scope.range = range;
                 if(!scope.received){
-                    NWB_ASSERT(it->remainingScopeCount > 0u);
+                    GLOBAL_ASSERT(it->remainingScopeCount > 0u);
                     scope.received = true;
                     --it->remainingScopeCount;
                 }
@@ -488,8 +488,8 @@ void GpuTimingMetricCorrelator::rememberMetricOutput(
     for(const PacketEnvelopeMetricOutputRoleRecord& outputRole : m_packetEnvelopeMetricOutputRoles){
         if(outputRole.scopeName != name)
             continue;
-        NWB_ASSERT(outputRole.physicalQueue == queue);
-        NWB_ASSERT(outputRole.queueInternalIdle == internalIdle);
+        GLOBAL_ASSERT(outputRole.physicalQueue == queue);
+        GLOBAL_ASSERT(outputRole.queueInternalIdle == internalIdle);
         return;
     }
     m_packetEnvelopeMetricOutputRoles.push_back(PacketEnvelopeMetricOutputRoleRecord{

@@ -91,7 +91,7 @@ inline void SIMDCALL BoundingBox::cornersValue(SIMDVector boxCenter, SIMDVector 
 
 
 inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner: Loads box once, Streams corners out.
-    NWB_ASSERT(corners != nullptr);
+    GLOBAL_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
     cornersValue(LoadFloat(center), LoadFloat(extents), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
@@ -468,8 +468,8 @@ inline void BoundingBox::createFromPoints( // beginner: streams point storage, S
     const Float3U* points,
     const usize stride
 )noexcept{
-    NWB_ASSERT(points != nullptr);
-    NWB_ASSERT(count > 0u);
+    GLOBAL_ASSERT(points != nullptr);
+    GLOBAL_ASSERT(count > 0u);
     SIMDVector minBounds = LoadFloat(*CollisionDetail::StrideFloat3Pointer(points, stride, 0u));
     SIMDVector maxBounds = minBounds;
     for(usize i = 1u; i < count; ++i)

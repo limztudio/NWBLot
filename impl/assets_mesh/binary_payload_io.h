@@ -24,16 +24,16 @@ namespace MeshAssetBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_PositionStreamNameView = NWB_TEXT("position");
-inline constexpr TStringView s_NormalStreamNameView = NWB_TEXT("normal");
-inline constexpr TStringView s_TangentStreamNameView = NWB_TEXT("tangent");
-inline constexpr TStringView s_Uv0StreamNameView = NWB_TEXT("uv0");
-inline constexpr TStringView s_ColorStreamNameView = NWB_TEXT("color");
-inline constexpr TStringView s_PositionsStreamLabel = NWB_TEXT("positions");
-inline constexpr TStringView s_NormalsStreamLabel = NWB_TEXT("normals");
-inline constexpr TStringView s_TangentsStreamLabel = NWB_TEXT("tangents");
-inline constexpr TStringView s_Uv0StreamLabel = NWB_TEXT("uv0");
-inline constexpr TStringView s_ColorsStreamLabel = NWB_TEXT("colors");
+inline constexpr TStringView s_PositionStreamNameView = GLOBAL_TEXT("position");
+inline constexpr TStringView s_NormalStreamNameView = GLOBAL_TEXT("normal");
+inline constexpr TStringView s_TangentStreamNameView = GLOBAL_TEXT("tangent");
+inline constexpr TStringView s_Uv0StreamNameView = GLOBAL_TEXT("uv0");
+inline constexpr TStringView s_ColorStreamNameView = GLOBAL_TEXT("color");
+inline constexpr TStringView s_PositionsStreamLabel = GLOBAL_TEXT("positions");
+inline constexpr TStringView s_NormalsStreamLabel = GLOBAL_TEXT("normals");
+inline constexpr TStringView s_TangentsStreamLabel = GLOBAL_TEXT("tangents");
+inline constexpr TStringView s_Uv0StreamLabel = GLOBAL_TEXT("uv0");
+inline constexpr TStringView s_ColorsStreamLabel = GLOBAL_TEXT("colors");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ template<
     MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
     const TStringView failureContext
 ){
-    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
+    if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, GLOBAL_TEXT("meshlets")))
         return false;
     if(!Core::Assets::ReadVectorPayload(
         binary,
@@ -112,7 +112,7 @@ template<
         header.meshletBoundCount,
         outMeshletBounds,
         failureContext,
-        NWB_TEXT("meshlet bounds")
+        GLOBAL_TEXT("meshlet bounds")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -121,7 +121,7 @@ template<
         header.meshletPositionRefDeltaByteCount,
         outMeshletPositionRefDeltas,
         failureContext,
-        NWB_TEXT("meshlet position ref deltas")
+        GLOBAL_TEXT("meshlet position ref deltas")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -130,7 +130,7 @@ template<
         header.meshletAttributeRefDeltaByteCount,
         outMeshletAttributeRefDeltas,
         failureContext,
-        NWB_TEXT("meshlet attribute ref deltas")
+        GLOBAL_TEXT("meshlet attribute ref deltas")
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -139,7 +139,7 @@ template<
         header.meshletLocalVertexRefCount,
         outMeshletLocalVertexRefs,
         failureContext,
-        NWB_TEXT("meshlet local vertex refs")
+        GLOBAL_TEXT("meshlet local vertex refs")
     ))
         return false;
     return Core::Assets::ReadVectorPayload(
@@ -148,7 +148,7 @@ template<
         header.meshletPrimitiveIndexCount,
         outMeshletPrimitiveIndices,
         failureContext,
-        NWB_TEXT("meshlet primitive indices")
+        GLOBAL_TEXT("meshlet primitive indices")
     );
 }
 
@@ -214,12 +214,12 @@ template<typename MeshT>
     const MeshT& mesh,
     const TStringView failureContext
 ){
-    return Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, NWB_TEXT("meshlets"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, NWB_TEXT("meshlet bounds"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, NWB_TEXT("meshlet position ref deltas"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
-        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
+    return Core::Assets::AppendVectorPayload(outBinary, mesh.meshlets(), failureContext, GLOBAL_TEXT("meshlets"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletBounds(), failureContext, GLOBAL_TEXT("meshlet bounds"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPositionRefDeltas(), failureContext, GLOBAL_TEXT("meshlet position ref deltas"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, GLOBAL_TEXT("meshlet attribute ref deltas"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, GLOBAL_TEXT("meshlet local vertex refs"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, GLOBAL_TEXT("meshlet primitive indices"))
     ;
 }
 

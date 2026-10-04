@@ -180,16 +180,16 @@ private:
 
 bool ValidateFontSource(const Core::Assets::AssetBytes& bytes, const u32 faceIndex){
     if(faceIndex != 0u || bytes.empty() || bytes.size() > s_FontMaxSourceBytes){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes"), s_FontMaxSourceBytes);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ValidateFontSource failed: face index must be zero and source size must be 1..{} bytes"), s_FontMaxSourceBytes);
         return false;
     }
     if(!__hidden_font_validation::ValidateSfntDirectory(bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: unsupported or malformed static TrueType/CFF SFNT directory"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ValidateFontSource failed: unsupported or malformed static TrueType/CFF SFNT directory"));
         return false;
     }
     __hidden_font_validation::NativeFontValidator validator(bytes.get_allocator().arena());
     if(!validator.validate(bytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ValidateFontSource failed: FreeType rejected the scalable Unicode face"));
         return false;
     }
     return true;

@@ -22,7 +22,7 @@ protected:
         const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
         : m_memoryStats(allocationLog, reservation)
     {
-        NWB_ASSERT_MSG(static_cast<bool>(allocationLog), NWB_TEXT("ArenaBase allocationLog must be a valid name"));
+        GLOBAL_ASSERT_MSG(static_cast<bool>(allocationLog), GLOBAL_TEXT("ArenaBase allocationLog must be a valid name"));
     }
     ~ArenaBase() = default;
 

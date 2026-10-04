@@ -55,7 +55,7 @@ struct TextureCreateMetadata{
 [[nodiscard]] inline bool TextureDescriptionsEqual(const TextureDesc& lhs, const TextureDesc& rhs)noexcept{
     return
         lhs.name == rhs.name
-        && NWB_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
+        && GLOBAL_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
         && lhs.width == rhs.width
         && lhs.height == rhs.height
         && lhs.depth == rhs.depth
@@ -323,11 +323,11 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
 
 inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
     if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != s_TextureCubeLayerCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
         return false;
     }
     if(dimension == TextureDimension::TextureCubeArray && (subresources.numArraySlices < s_TextureCubeLayerCount || (subresources.numArraySlices % s_TextureCubeLayerCount) != 0)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube array views must include a positive multiple of 6 array layers"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create image view: cube array views must include a positive multiple of 6 array layers"));
         return false;
     }
 
@@ -335,9 +335,9 @@ inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, con
 }
 
 inline bool ReportTextureCreateDescError(TStringView operationName, TStringView message, const bool assertFailure){
-    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     if(assertFailure)
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     return false;
 }
 
@@ -349,30 +349,30 @@ inline bool ValidateTextureCreateDesc(
 ){
     outMetadata = {};
     if(!ResourceQueueSharing::IsValid(desc.queueSharing))
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("queue sharing contains unknown bits"), assertFailure);
     if(!IsTextureCreationStateMaskValid(desc.initialState))
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("initial state is invalid for a texture"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("initial state is invalid for a texture"), assertFailure);
     if(!VulkanDetail::ValidateTextureShape(desc, operationName)){
         if(assertFailure)
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid texture shape"), operationName);
+            GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to {}: invalid texture shape"), operationName);
         return false;
     }
 
     outMetadata.format = VulkanDetail::ConvertFormat(desc.format);
     if(outMetadata.format == VK_FORMAT_UNDEFINED)
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("format is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("format is unsupported"), assertFailure);
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
     if(!VulkanDetail::GetTextureFormatBlockLayout(formatInfo, outMetadata.formatLayout))
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("invalid texture format"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("invalid texture format"), assertFailure);
 
     outMetadata.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(!VulkanDetail::IsSupportedSampleCount(desc.sampleCount))
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("sample count is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("sample count is unsupported"), assertFailure);
     if(desc.sampleQuality != 0u)
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("sample quality must be zero"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("sample quality must be zero"), assertFailure);
     if(!TryTextureDimensionToImageType(desc.dimension, outMetadata.imageType))
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("texture dimension is unsupported"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("texture dimension is unsupported"), assertFailure);
     if(
         desc.sampleCount != 1u
         && (
@@ -382,18 +382,18 @@ inline bool ValidateTextureCreateDesc(
     )
         return ReportTextureCreateDescError(
             operationName,
-            NWB_TEXT("multisampled textures must be 2D and not cube-compatible"),
+            GLOBAL_TEXT("multisampled textures must be 2D and not cube-compatible"),
             assertFailure
         );
     if(desc.sampleCount != 1 && desc.mipLevels != 1)
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
+        return ReportTextureCreateDescError(operationName, GLOBAL_TEXT("multisampled texture mip levels must be 1"), assertFailure);
 
     outMetadata.usage = PickImageUsage(desc, outMetadata.aspectMask);
     const VkImageUsageFlags requiredInitialUsage = RequiredImageUsageForResourceStates(desc.initialState);
     if((outMetadata.usage & requiredInitialUsage) != requiredInitialUsage){
         return ReportTextureCreateDescError(
             operationName,
-            NWB_TEXT("initial state requires an undeclared image usage"),
+            GLOBAL_TEXT("initial state requires an undeclared image usage"),
             assertFailure
         );
     }

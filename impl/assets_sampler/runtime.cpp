@@ -38,10 +38,10 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetC
 
 
 bool Sampler::validatePayload()const{
-    if(!checkVirtualPath(NWB_TEXT("Sampler::validatePayload")))
+    if(!checkVirtualPath(GLOBAL_TEXT("Sampler::validatePayload")))
         return false;
     if(!IsValidSamplerDescription(m_description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description")
             , StringConvert(virtualPath().resolvedText())
         );
         return false;
@@ -59,12 +59,12 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SamplerBinaryPayload::s_SamplerMagic,
-        NWB_TEXT("Sampler::loadBinary"),
-        NWB_TEXT("sampler")
+        GLOBAL_TEXT("Sampler::loadBinary"),
+        GLOBAL_TEXT("sampler")
     ))
         return false;
     if(header.version != SamplerBinaryPayload::s_SamplerVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
         return false;
     }
     if(
@@ -73,7 +73,7 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         || header.magFilter > 1u
         || header.mipFilter > 1u
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler header contains invalid flags"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Sampler::loadBinary failed: sampler header contains invalid flags"));
         return false;
     }
 
@@ -94,10 +94,10 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     description.addressW = static_cast<Core::SamplerAddressMode::Enum>(header.addressW);
     description.reductionType = static_cast<Core::SamplerReductionType::Enum>(header.reductionType);
     if(!IsValidSamplerDescription(description)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler description is invalid"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Sampler::loadBinary failed: sampler description is invalid"));
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Sampler::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, GLOBAL_TEXT("Sampler::loadBinary")))
         return false;
 
     m_description = description;

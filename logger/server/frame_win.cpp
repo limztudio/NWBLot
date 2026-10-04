@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -204,12 +204,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY,
                 DEFAULT_PITCH | FF_SWISS,
-                NWB_TEXT("Terminal")
+                GLOBAL_TEXT("Terminal")
             );
 
             s_ListHwnd = CreateWindowEx(
                 0,
-                NWB_TEXT("LISTBOX"),
+                GLOBAL_TEXT("LISTBOX"),
                 nullptr,
                 WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY,
                 0,
@@ -306,7 +306,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     combined.reserve(combinedSize);
                     for(const auto& msg : s_Store->messages){
                         combined += msg.first();
-                        combined += NWB_TEXT("\r\n");
+                        combined += GLOBAL_TEXT("\r\n");
                     }
                     if(combined.size() > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
                         return 0;
@@ -318,7 +318,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         if(hMem){
                             void* lockedMemory = GlobalLock(hMem);
                             if(lockedMemory){
-                                NWB_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
+                                GLOBAL_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
                                 GlobalUnlock(hMem);
 #if defined(UNICODE) || defined(_UNICODE)
                                 if(!SetClipboardData(CF_UNICODETEXT, hMem))
@@ -395,8 +395,8 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
-    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
+    static constexpr TStringView s_WindowClassName = GLOBAL_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = GLOBAL_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 
@@ -488,7 +488,7 @@ NWB_LOG_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif //NWB_PLATFORM_WINDOWS
+#endif //GLOBAL_PLATFORM_WINDOWS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

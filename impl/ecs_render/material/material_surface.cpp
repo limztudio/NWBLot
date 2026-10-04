@@ -63,7 +63,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     ReleaseFn&& releaseResource
 ){
     if(!assetRef.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText));
         return nullptr;
     }
 
@@ -80,7 +80,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
             releaseResource(*resource);
     }
 
-    NWB_ASSERT(assetIt.value());
+    GLOBAL_ASSERT(assetIt.value());
     return assetIt.value().get();
 }
 
@@ -103,11 +103,11 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                NWB_TEXT("RendererSystem")
+                GLOBAL_TEXT("RendererSystem")
             ))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
                     , StringConvert(assetPath.resolvedText())
                 );
                 TextureAssetLoader::Release(outResource, graphics);
@@ -122,7 +122,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 
     const Name& texturePath = textureAsset.name();
     if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid")
             , StringConvert(texturePath.resolvedText())
         );
         return false;
@@ -151,7 +151,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                NWB_TEXT("RendererSystem")
+                GLOBAL_TEXT("RendererSystem")
             );
         },
         [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
@@ -164,7 +164,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
         !samplerResource->valid()
         || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cached sampler asset '{}' is invalid"), StringConvert(samplerPath.resolvedText()));
         return false;
     }
 
@@ -220,7 +220,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
     Core::GraphicsRuntime& graphicsModule = m_graphics;
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cannot resolve material resources without an initialized descriptor heap"));
         return false;
     }
 
@@ -231,7 +231,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 
         u32 heapSlot = 0u;
         if(resourceReference.resourceSource != MaterialResourceSource::Asset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid asset resource source"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' has an invalid asset resource source"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -244,7 +244,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 m_assetManager,
                 heapSlot
             )){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
                     , StringConvert(materialInfo.materialName.resolvedText())
                     , StringConvert(resourceReference.textureAsset.name().resolvedText())
                 );
@@ -259,7 +259,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
                 m_assetManager,
                 heapSlot
             )){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
                     , StringConvert(materialInfo.materialName.resolvedText())
                     , StringConvert(resourceReference.samplerAsset.name().resolvedText())
                 );
@@ -267,7 +267,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
             }
             break;
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -275,10 +275,10 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
             resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
             || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
-        NWB_MEMCPY(
+        GLOBAL_MEMCPY(
             materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset,
             materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset,
             &heapSlot,
@@ -299,7 +299,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     Core::GraphicsRuntime& graphicsModule = m_graphics;
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resource fixtures without an initialized descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: cannot resolve material resource fixtures without an initialized descriptor heap"));
         return false;
     }
     const bool fixtureCacheReady =
@@ -333,7 +333,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     textureSetup.queue = Core::CommandQueue::Graphics;
     fixtures.checkerRgba8Texture = graphicsModule.setupTexture(textureSetup);
     if(!fixtures.checkerRgba8Texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material checker texture fixture"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create material checker texture fixture"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
         return false;
     }
@@ -341,7 +341,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     samplerDesc.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
     fixtures.linearClampSampler = graphicsModule.getDevice().createSampler(samplerDesc);
     if(!fixtures.linearClampSampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material clamp sampler fixture"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create material clamp sampler fixture"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
         return false;
     }
@@ -356,7 +356,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
             Core::TextureDimension::Texture2D
         ))
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material checker texture fixture in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register material checker texture fixture in the descriptor heap"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
         return false;
     }
@@ -365,7 +365,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
         !fixtures.linearClampHeapHandle.valid()
         || !heap.write(fixtures.linearClampHeapHandle, Core::DescriptorWriteItem::Sampler(0u, fixtures.linearClampSampler.get()))
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
         return false;
     }
@@ -396,20 +396,20 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_CheckerRgba8)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampled-image fixture"), StringConvert(materialInfo.materialName.resolvedText()));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' requests unsupported sampled-image fixture"), StringConvert(materialInfo.materialName.resolvedText()));
                 return false;
             }
             heapSlot = fixtures.checkerRgba8HeapHandle.slot();
             break;
         case MaterialResourceKind::Sampler:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_LinearClamp)){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampler fixture"), StringConvert(materialInfo.materialName.resolvedText()));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' requests unsupported sampler fixture"), StringConvert(materialInfo.materialName.resolvedText()));
                 return false;
             }
             heapSlot = fixtures.linearClampHeapHandle.slot();
             break;
         default:
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
 
@@ -417,10 +417,10 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
             resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
             || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource fixture slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' resource fixture slot exceeds constant typed bytes"), StringConvert(materialInfo.materialName.resolvedText()));
             return false;
         }
-        NWB_MEMCPY(
+        GLOBAL_MEMCPY(
             materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset,
             materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset,
             &heapSlot,
@@ -452,7 +452,7 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     MaterialTypedByteVector& outMutableDefaultTypedBytes
 ){
     static_cast<void>(materialPath);
-    NWB_ASSERT(material.typedLayoutHash() != 0u);
+    GLOBAL_ASSERT(material.typedLayoutHash() != 0u);
     outConstantTypedBytes.clear();
     outMutableDefaultTypedBytes.clear();
 
@@ -460,9 +460,9 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     usize sourceByteOffset = 0u;
     for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
         // Material::loadBinary already ran ValidateMaterialTypedLayout; keep a debug-only invariant here.
-        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
-        NWB_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
-        NWB_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
+        GLOBAL_ASSERT(IsValidMaterialBlockClass(block.blockClass));
+        GLOBAL_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
+        GLOBAL_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
 
         MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant
             ? outConstantTypedBytes
@@ -476,7 +476,7 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
         sourceByteOffset += block.byteSize;
     }
     // Material::loadBinary already validated the packed byte count against the cooked layout.
-    NWB_ASSERT(sourceByteOffset == packedTypedBytes.size());
+    GLOBAL_ASSERT(sourceByteOffset == packedTypedBytes.size());
 
     return true;
 }
@@ -486,7 +486,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
 
     const Name materialPath = materialAsset.name();
     if(!materialPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: renderer material is empty"));
         return false;
     }
 
@@ -502,7 +502,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const Material* loadedMaterial = m_assetManager.loadTypedSync<Material>(
         materialPath,
         loadedAsset,
-        NWB_TEXT("RendererSystem"),
+        GLOBAL_TEXT("RendererSystem"),
         "material"
     );
     if(!loadedMaterial)
@@ -513,8 +513,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
     // Material::loadBinary already rejected empty shader variants and missing material interfaces.
-    NWB_ASSERT(!material.shaderVariant().empty());
-    NWB_ASSERT(material.materialInterface());
+    GLOBAL_ASSERT(!material.shaderVariant().empty());
+    GLOBAL_ASSERT(material.materialInterface());
     createdInfo.shaderVariant.reserve(material.shaderVariant().size());
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
@@ -524,19 +524,19 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();
     if(!hasMeshShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required mesh shader"), StringConvert(materialPath.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: material '{}' is missing required mesh shader"), StringConvert(materialPath.resolvedText()));
         return false;
     }
     if(!hasPixelShader && !material.transparent()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), StringConvert(materialPath.resolvedText()));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: opaque material '{}' is missing required pixel shader"), StringConvert(materialPath.resolvedText()));
         return false;
     }
 
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
-    NWB_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
-    NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
+    GLOBAL_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
     createdInfo.materialInterface = material.materialInterface();
 
     createdInfo.typedLayoutHash = material.typedLayoutHash();
@@ -552,7 +552,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         createdInfo.constantTypedBytes,
         createdInfo.mutableDefaultTypedBytes
     )){
-        NWB_ASSERT(false);
+        GLOBAL_ASSERT(false);
         return false;
     }
     createdInfo.unpatchedConstantTypedBytes = createdInfo.constantTypedBytes;
@@ -571,7 +571,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     auto result = m_materialState.m_surfaceInfos.try_emplace(materialPath, Move(createdInfo));
     auto it = result.first;
     outInfo = &it.value();
-    NWB_ASSERT(outInfo);
+    GLOBAL_ASSERT(outInfo);
     return true;
 }
 

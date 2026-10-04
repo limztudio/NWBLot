@@ -32,10 +32,10 @@ void ProjectTestbed::drawUiControls(NWB::Impl::UiPaintContext& context){
         const bool declared = context.ui.label("renderer", __hidden_ui_controls::s_RendererLine)
             && context.ui.separator("separator", separator)
             && context.ui.label("character", __hidden_ui_controls::s_CharacterLine);
-        NWB_FATAL_ASSERT(declared);
+        GLOBAL_FATAL_ASSERT(declared);
     }
     const bool ended = context.ui.endWindow();
-    NWB_FATAL_ASSERT(ended);
+    GLOBAL_FATAL_ASSERT(ended);
 }
 
 

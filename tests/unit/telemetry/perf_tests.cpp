@@ -60,7 +60,7 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
         usize cursor = 0u;
         ASSERT_TRUE(ReadPOD(current, cursor, header));
         header.version = version;
-        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        GLOBAL_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
         EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
         EXPECT_TRUE(parsed.scopeText.empty());
         ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size(), parsed));

@@ -31,7 +31,7 @@ static constexpr AStringView s_PROJECT_FIXTURES_BUNDLE_FIRST = "project/fixtures
 static constexpr AStringView s_LOCAL = "local";
 static constexpr AStringView s_LABEL = "label";
 static constexpr AStringView s_A_SEPARATELY_OWNED_METADATA_STRING = "a separately owned metadata string";
-static constexpr TStringView s_DOES_NOT_TARGET_A_DECLARED_ASSET = NWB_TEXT("does not target a declared asset");
+static constexpr TStringView s_DOES_NOT_TARGET_A_DECLARED_ASSET = GLOBAL_TEXT("does not target a declared asset");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -380,7 +380,7 @@ asset_bunch bunch = [first, second];
         ));
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("cyclic local metadata reference")));
 }
 
 TEST(AssetBunchOwnership, MissingLaterReferenceReleasesPartialNestedCollections){
@@ -454,7 +454,7 @@ TEST(AssetBunchOwnership, NullValueReachesTheTypeParserAndKeepsItsRejectionContr
         ));
     }
     EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
-    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
+    EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("asset is not a map")));
 }
 
 TEST(AssetBunchLookup, ExactCaseReferencesPreserveExportAndRepeatedLocalValueOrder){
@@ -514,7 +514,7 @@ asset_bunch bunch = [Asset, asset];
         ));
         EXPECT_TRUE(output.empty());
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("variable 'asset' is listed more than once")));
+        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("variable 'asset' is listed more than once")));
         EXPECT_FALSE(logger.sawErrorContaining(s_DOES_NOT_TARGET_A_DECLARED_ASSET));
     }
 }
@@ -539,7 +539,7 @@ asset_bunch bunch = [asset];
         EXPECT_TRUE(output.empty());
         EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
         EXPECT_EQ(logger.errorCount(), 1u);
-        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference 'local'")));
+        EXPECT_TRUE(logger.sawErrorContaining(GLOBAL_TEXT("cyclic local metadata reference 'local'")));
     }
 }
 
@@ -563,8 +563,8 @@ TEST(AssetBunchLookup, BunchDeclarationsAreExcludedFromExportAndNestedReferenceL
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
-                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'bunch'"))
-                : TStringView(NWB_TEXT("reference 'bunch' does not target a declared asset"))
+                ? TStringView(GLOBAL_TEXT("item 0 references undeclared asset variable 'bunch'"))
+                : TStringView(GLOBAL_TEXT("reference 'bunch' does not target a declared asset"))
             ));
         }
     }
@@ -588,8 +588,8 @@ TEST(AssetBunchLookup, ExportLookupKeepsFullReferenceTextAndRejectsLiteralItems)
             EXPECT_TRUE(output.empty());
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_TRUE(logger.sawErrorContaining(caseIndex == 0u
-                ? TStringView(NWB_TEXT("item 0 references undeclared asset variable 'known.missing'"))
-                : TStringView(NWB_TEXT("item 0 must be a declared asset reference"))
+                ? TStringView(GLOBAL_TEXT("item 0 references undeclared asset variable 'known.missing'"))
+                : TStringView(GLOBAL_TEXT("item 0 must be a declared asset reference"))
             ));
         }
     }
@@ -617,7 +617,7 @@ TEST(AssetBunchLookup, NestedListFailureFollowsSourceTraversalOrder){
             EXPECT_EQ(fixture.metadataArena.memoryStats().usedBytes, baselineMetadata.usedBytes);
             EXPECT_EQ(logger.errorCount(), 1u);
             EXPECT_EQ(logger.sawErrorContaining(s_DOES_NOT_TARGET_A_DECLARED_ASSET), caseIndex == 0u);
-            EXPECT_EQ(logger.sawErrorContaining(NWB_TEXT("cyclic local metadata reference")), caseIndex == 1u);
+            EXPECT_EQ(logger.sawErrorContaining(GLOBAL_TEXT("cyclic local metadata reference")), caseIndex == 1u);
         }
     }
 }

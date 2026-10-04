@@ -58,7 +58,7 @@ bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPaylo
             if(length == 0u)
                 break;
             if(totalBytes + length > s_FontAtlasMaxPositioningBytes){
-                NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas positioning export failed: source table byte budget exceeded"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("FontAtlas positioning export failed: source table byte budget exceeded"));
                 return false;
             }
             FontAtlasPositioningTable table(arena);

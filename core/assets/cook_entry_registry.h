@@ -161,7 +161,7 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(pathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: duplicate property asset virtual path '{}' for {}")
         , StringConvert(virtualPath.resolvedText())
         , assetKind
     );
@@ -174,7 +174,7 @@ template<typename StringT>
     CookEntryPathHashSet& inOutSeenVirtualPathHashes
 ){
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid {} virtual path"), assetKind);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: invalid {} virtual path"), assetKind);
         return false;
     }
 
@@ -182,7 +182,7 @@ template<typename StringT>
     if(inOutSeenVirtualPathHashes.insert(virtualPathHash).second)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate {} virtual path '{}'")
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: duplicate {} virtual path '{}'")
         , assetKind
         , StringConvert(virtualPath.resolvedText())
     );
@@ -252,7 +252,7 @@ public:
         CookEntryParseContext& context
     )override{
         if(!m_parseDocument){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: asset type '{}' cannot be parsed from document '{}'")
                 , StringConvert(m_assetType.resolvedText())
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -273,7 +273,7 @@ public:
         CookEntryParseContext& context
     )override{
         if(!m_parseValue){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: asset type '{}' cannot be parsed from asset_bunch item in '{}'")
                 , StringConvert(m_assetType.resolvedText())
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -302,7 +302,7 @@ public:
             AssetT asset(assetArena);
             if(!m_buildAsset(entry, asset)){
                 if(m_logBuildFailure){
-                    NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
+                    NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: failed to build {} '{}'")
                         , m_assetKindText
                         , StringConvert(CookEntryRegistryDetail::ToCookEntryText(entry.virtualPath))
                     );
@@ -366,14 +366,14 @@ public:
     template<typename BucketT>
     bool registerCustomType(const Name& assetType){
         if(!assetType){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed custom cook entry type"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: tried to register an unnamed custom cook entry type"));
             return false;
         }
 
         auto bucket = MakeUnique<BucketT>(m_arena);
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: duplicate cook entry type registration '{}'")
                 , StringConvert(assetType.resolvedText())
             );
             return false;
@@ -395,11 +395,11 @@ public:
         const bool logBuildFailure = true
     ){
         if(!assetType){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: tried to register an unnamed cook entry type"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: tried to register an unnamed cook entry type"));
             return false;
         }
         if(!buildAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: cook entry type '{}' has no build function")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: cook entry type '{}' has no build function")
                 , StringConvert(assetType.resolvedText())
             );
             return false;
@@ -416,7 +416,7 @@ public:
         );
         ICookEntryBucket* bucketPtr = bucket.get();
         if(!m_lookup.emplace(assetType, bucketPtr).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: duplicate cook entry type registration '{}'")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: duplicate cook entry type registration '{}'")
                 , StringConvert(assetType.resolvedText())
             );
             return false;
@@ -453,7 +453,7 @@ public:
         if(bucket)
             return bucket->parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: unsupported asset type '{}' in meta '{}'")
             , StringConvert(assetType.resolvedText())
             , PathToString<tchar>(nwbFilePath)
         );
@@ -471,7 +471,7 @@ public:
         if(bucket)
             return bucket->parseValue(virtualPath, nwbFilePath, asset, context);
 
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: unsupported asset type '{}' in asset_bunch from meta '{}'")
             , StringConvert(assetType.resolvedText())
             , PathToString<tchar>(nwbFilePath)
         );
@@ -484,7 +484,7 @@ public:
 
     [[nodiscard]] bool writeBucket(const usize bucketIndex, CookEntryWriteContext& context){
         if(bucketIndex >= m_buckets.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetCook: invalid cook entry bucket index {}"), bucketIndex);
             return false;
         }
 

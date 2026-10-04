@@ -111,26 +111,26 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     ScopedLock lock(m_mutex);
 
     if(!m_initialized){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write called before initialize."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write called before initialize."));
         return false;
     }
     if(!handle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write called with an invalid handle."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write called with an invalid handle."));
         return false;
     }
 
     const GpuDescriptorClass::Enum descriptorClass = handle.descriptorClass();
     if(descriptorClass >= GpuDescriptorClass::kCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: handle has invalid class {}."), static_cast<u32>(descriptorClass));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: handle has invalid class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
     if(descriptorClass == GpuDescriptorClass::AccelStruct && !m_accelStructLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct requires the descriptor-buffer TLAS layout."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct requires the descriptor-buffer TLAS layout."));
         return false;
     }
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     if(!manager || manager != &m_device.m_descriptorBufferManager){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an unavailable manager."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an unavailable manager."));
         return false;
     }
     {
@@ -141,7 +141,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             || m_descriptorBufferGeneration == 0u
             || manager->m_bindingGeneration != m_descriptorBufferGeneration
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a stale descriptor generation."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a stale descriptor generation."));
             return false;
         }
     }
@@ -153,13 +153,13 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         || allocator.slotStates[handle.slot()] != SlotState::Live
         || allocator.allocatedClasses[handle.slot()] != static_cast<u8>(descriptorClass)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected stale, retagged, or retired handle {}.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected stale, retagged, or retired handle {}.")
             , handle.value
         );
         return false;
     }
     if(!IsResourceTypeCompatible(descriptorClass, item.type)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected resource type {} for descriptor class {}.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected resource type {} for descriptor class {}.")
             , static_cast<u32>(item.type)
             , static_cast<u32>(descriptorClass)
         );
@@ -174,28 +174,28 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
         // TLAS handles retain backing AS until deferred free; generations need fresh handles.
         if(handle.slot() >= m_accelStructBufferBlocks.size() || handle.slot() >= m_accelStructResources.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct handle slot {} is out of range."), handle.slot());
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct handle slot {} is out of range."), handle.slot());
             return false;
         }
         auto* const accelStruct = static_cast<AccelStruct*>(writeItem.resourceHandle);
         if(!m_device.isAccelStructReadyForGpuUse(accelStruct)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready AccelStruct."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready AccelStruct."));
             return false;
         }
         Buffer* const backingBuffer = accelStruct->getBackingBuffer();
         if(!backingBuffer || !isResourceAdmittedToActiveUsesLocked(backingBuffer->getQueueAdmissionSnapshot())){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an AccelStruct unavailable to an active exact queue.")
+                GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an AccelStruct unavailable to an active exact queue.")
             );
             return false;
         }
         if(!accelStruct->m_isTopLevelAtCreation){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a bottom-level AccelStruct."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a bottom-level AccelStruct."));
             return false;
         }
         RayTracingAccelStructHandle& retained = m_accelStructResources[handle.slot()];
         if(retained && retained.get() != accelStruct){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: cannot replace a live AccelStruct descriptor slot; allocate a fresh handle."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: cannot replace a live AccelStruct descriptor slot; allocate a fresh handle."));
             return false;
         }
         RayTracingAccelStructHandle candidate(
@@ -217,19 +217,19 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
 
     if(descriptorClass == GpuDescriptorClass::Sampler){
         if(handle.slot() >= m_samplerDescriptorResources.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: sampler slot {} is outside the retained table.")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: sampler slot {} is outside the retained table.")
                 , handle.slot()
             );
             return false;
         }
         auto* const sampler = static_cast<Sampler*>(writeItem.resourceHandle);
         if(!sampler || &sampler->m_context != &m_context || sampler->m_sampler == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Sampler."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Sampler."));
             return false;
         }
         SamplerHandle& retained = m_samplerDescriptorResources[handle.slot()];
         if(retained && retained.get() != sampler){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: live Sampler replacement requires a fresh handle."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: live Sampler replacement requires a fresh handle."));
             return false;
         }
         SamplerHandle candidate(nullptr, SamplerHandle::deleter_type(&m_context.objectArena));
@@ -246,7 +246,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         handle.slot() >= m_resourceDescriptorBuffers.size()
         || handle.slot() >= m_resourceDescriptorTextures.size()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: resource slot {} is outside the retained tables.")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: resource slot {} is outside the retained tables.")
             , handle.slot()
         );
         return false;
@@ -255,19 +255,19 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     if(item.type == ResourceType::Texture_SRV || item.type == ResourceType::Texture_UAV){
         auto* const texture = static_cast<Texture*>(writeItem.resourceHandle);
         if(!m_device.isTextureReadyForGpuUse(texture)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Texture."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Texture."));
             return false;
         }
         if(!isResourceAdmittedToActiveUsesLocked(texture->getQueueAdmissionSnapshot())){
             NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Texture unavailable to an active exact queue.")
+                GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Texture unavailable to an active exact queue.")
             );
             return false;
         }
 
         const TextureDesc& textureDesc = texture->getCreationDescription();
         if(textureDesc.sampleCount != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a multisampled bindless image."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a multisampled bindless image."));
             return false;
         }
 
@@ -277,7 +277,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 : textureDesc.dimension
             ;
             if(dimension != GetSampledImageDimension(descriptorClass)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected sampled-image dimension {} for class {}.")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected sampled-image dimension {} for class {}.")
                     , static_cast<u32>(dimension)
                     , static_cast<u32>(descriptorClass)
                 );
@@ -286,7 +286,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
 
             const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
             if(format == Format::UNKNOWN || format >= Format::kCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-image format."));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-image format."));
                 return false;
             }
             const FormatInfo& formatInfo = GetFormatInfo(format);
@@ -295,7 +295,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 (uintClass && (formatInfo.kind != FormatKind::Integer || formatInfo.isSigned))
                 || (!uintClass && formatInfo.kind == FormatKind::Integer)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for sampled-image class {}.")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for sampled-image class {}.")
                     , static_cast<u32>(format)
                     , static_cast<u32>(descriptorClass)
                 );
@@ -312,7 +312,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 && dimension != TextureDimension::Texture2DArray
                 && dimension != TextureDimension::Texture3D
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected texture dimension {} for StorageImage.")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected texture dimension {} for StorageImage.")
                     , static_cast<u32>(dimension)
                 );
                 return false;
@@ -320,7 +320,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
 
             const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : textureDesc.format;
             if(format == Format::UNKNOWN || format >= Format::kCount){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid StorageImage format."));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid StorageImage format."));
                 return false;
             }
             const FormatInfo& formatInfo = GetFormatInfo(format);
@@ -335,7 +335,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
                 || (!unsignedInteger && !floatOrNormalized)
                 || (dimension == TextureDimension::Texture3D && !floatOrNormalized)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for StorageImage dimension {}.")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected format {} for StorageImage dimension {}.")
                     , static_cast<u32>(format)
                     , static_cast<u32>(dimension)
                 );
@@ -345,7 +345,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
 
         TextureHandle& retained = m_resourceDescriptorTextures[handle.slot()];
         if(m_resourceDescriptorBuffers[handle.slot()] || (retained && retained.get() != texture)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: live Texture replacement requires a fresh handle."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: live Texture replacement requires a fresh handle."));
             return false;
         }
         TextureHandle candidate(nullptr, TextureHandle::deleter_type(&m_context.objectArena));
@@ -367,16 +367,16 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     else if(descriptorClass == GpuDescriptorClass::UniformBuffer)
         requiredUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
     else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid Buffer descriptor class."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid Buffer descriptor class."));
         return false;
     }
     if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Buffer."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Buffer."));
         return false;
     }
     if(!isResourceAdmittedToActiveUsesLocked(buffer->getQueueAdmissionSnapshot())){
         NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Buffer unavailable to an active exact queue.")
+            GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected a Buffer unavailable to an active exact queue.")
         );
         return false;
     }
@@ -384,19 +384,19 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         const BufferDesc& bufferDesc = buffer->getCreationDescription();
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : bufferDesc.format;
         if(format == Format::UNKNOWN || format >= Format::kCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-buffer format."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-buffer format."));
             return false;
         }
         const FormatInfo& formatInfo = GetFormatInfo(format);
         if(formatInfo.kind != FormatKind::Integer || formatInfo.isSigned){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write requires an unsigned-integer sampled-buffer format."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write requires an unsigned-integer sampled-buffer format."));
             return false;
         }
     }
 
     BufferHandle& retained = m_resourceDescriptorBuffers[handle.slot()];
     if(m_resourceDescriptorTextures[handle.slot()] || (retained && retained.get() != buffer)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: live Buffer replacement requires a fresh handle."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::write: live Buffer replacement requires a fresh handle."));
         return false;
     }
     BufferHandle candidate(nullptr, BufferHandle::deleter_type(&m_context.objectArena));
@@ -450,18 +450,18 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     auto carve = [&](const BindingLayoutHandle& layout, DescriptorBufferSegment& outBlock, const GpuDescriptorClass::Enum* classes, const u32 classCount) -> bool{
         const auto* bindingLayout = layout.get();
         if(!bindingLayout || !bindingLayout->isDescriptorBufferCompatible()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
             return false;
         }
         const u32 setSizeBytes = bindingLayout->getDescriptorBufferSetSizeBytes();
         if(setSizeBytes == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout reports a zero set size."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout reports a zero set size."));
             return false;
         }
         const BindlessLayoutDesc* bindlessDesc = bindingLayout->getBindlessDesc();
         const u32 descriptorCount = bindlessDesc ? bindlessDesc->maxCapacity : 0u;
         if(descriptorCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout has no descriptor capacity."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: bindless layout has no descriptor capacity."));
             return false;
         }
         const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(
@@ -471,7 +471,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             m_descriptorBufferGeneration
         );
         if(!block.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
             return false;
         }
         outBlock = block;
@@ -480,7 +480,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             const GpuDescriptorClass::Enum cls = classes[c];
             const auto it = bindingOffsets.find(getRegisterSlot(cls));
             if(it == bindingOffsets.end()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
                 return false;
             }
             const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(__hidden_vulkan_descriptor_heap::ClassToResourceType(cls));
@@ -491,7 +491,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
                 || it->second > setSizeBytes
                 || requiredBytes > static_cast<u64>(setSizeBytes - it->second)
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer binding range is invalid for class {}."), static_cast<u32>(cls));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer binding range is invalid for class {}."), static_cast<u32>(cls));
                 return false;
             }
             m_classBufferOffset[static_cast<u32>(cls)] = it->second;
@@ -527,7 +527,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
 
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
         if(!m_accelStructLayout || writeItem.arrayElement >= m_accelStructBufferBlocks.size()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: invalid TLAS descriptor slot {}."), writeItem.arrayElement);
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: invalid TLAS descriptor slot {}."), writeItem.arrayElement);
             return false;
         }
 
@@ -540,7 +540,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
             || m_accelStructBufferBindingOffset > setSizeBytes
             || descriptorSize > setSizeBytes - m_accelStructBufferBindingOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: TLAS layout footprint is invalid."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: TLAS layout footprint is invalid."));
             return false;
         }
 
@@ -556,7 +556,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
                 m_descriptorBufferGeneration
             );
             if(!candidateBlock.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: failed to carve {}-byte TLAS block."), setSizeBytes);
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: failed to carve {}-byte TLAS block."), setSizeBytes);
                 return false;
             }
             block = &candidateBlock;
@@ -568,7 +568,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
             || descriptorSize > block->sizeBytes - m_accelStructBufferBindingOffset
             || static_cast<u64>(block->offsetBytes) + m_accelStructBufferBindingOffset > UINT32_MAX
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: TLAS descriptor block is invalid."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: TLAS descriptor block is invalid."));
             if(allocateBlock)
                 m_context.descriptorBufferManager->freeForBindingGeneration(
                     candidateBlock,
@@ -602,14 +602,14 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         : DescriptorBufferSegmentKind::Resource
     ;
     if(!block.valid() || block.kind != expectedSegmentKind){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: heap block not carved for class {}."), static_cast<u32>(descriptorClass));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: heap block not carved for class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
 
     const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(writeItem.type);
     const u32 descriptorSize = m_context.descriptorBufferManager->getDescriptorSize(descriptorType);
     if(descriptorSize == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: zero descriptor size for class {}."), static_cast<u32>(descriptorClass));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: zero descriptor size for class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
 
@@ -621,7 +621,7 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         || descriptorSize > block.sizeBytes - relativeOffsetBytes
         || static_cast<u64>(block.offsetBytes) + relativeOffsetBytes > UINT32_MAX
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: descriptor range exceeds the carved block for class {}."), static_cast<u32>(descriptorClass));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: descriptor range exceeds the carved block for class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
 

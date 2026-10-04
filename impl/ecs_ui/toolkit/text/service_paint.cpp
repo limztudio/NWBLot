@@ -109,7 +109,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         else{
             const AtlasGlyph* record = m_atlas->find(glyph.face, glyph.glyphId, pixelSize);
             if(!record){
-                NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must be present"));
+                GLOBAL_FATAL_ASSERT_MSG(false, GLOBAL_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
             if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, item.rectangle, deviceScale))
@@ -158,7 +158,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             : paint.drawGlyph(m_pages[glyph.pageIndex], glyph.rectangle, glyph.uv, color)
         ;
         if(!drawn){
-            NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Admitted UI glyph draw must succeed"));
+            GLOBAL_FATAL_ASSERT_MSG(false, GLOBAL_TEXT("Admitted UI glyph draw must succeed"));
             return false;
         }
     }

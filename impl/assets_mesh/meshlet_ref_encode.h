@@ -62,12 +62,12 @@ struct MeshletRefEncodeChannel{
 using MeshletPositionRefEncodeChannel = MeshletRefEncodeChannel<MeshletPositionStreamRef>;
 using MeshletAttributeRefEncodeChannel = MeshletRefEncodeChannel<MeshletAttributeStreamRef>;
 
-NWB_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index){
+GLOBAL_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index){
     range.minimum = Min(range.minimum, index);
     range.maximum = Max(range.maximum, index);
 }
 
-NWB_INLINE void AddMeshletAttributeRefEncodeRanges(
+GLOBAL_INLINE void AddMeshletAttributeRefEncodeRanges(
     MeshletAttributeRefEncodeRanges& ranges,
     const MeshletAttributeStreamRef& ref
 ){
@@ -77,7 +77,7 @@ NWB_INLINE void AddMeshletAttributeRefEncodeRanges(
     AddMeshletRefEncodeIndex(ranges.color, ref.color);
 }
 
-NWB_INLINE void StoreMeshletAttributeRefEncodeBases(
+GLOBAL_INLINE void StoreMeshletAttributeRefEncodeBases(
     MeshletDesc& meshlet,
     const MeshletAttributeRefEncodeRanges& ranges
 ){
@@ -87,7 +87,7 @@ NWB_INLINE void StoreMeshletAttributeRefEncodeBases(
     meshlet.colorBase = ranges.color.minimum;
 }
 
-[[nodiscard]] NWB_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range){
+[[nodiscard]] GLOBAL_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range){
     return MeshletRefDeltaWidthForMaxDelta(range.maximum - range.minimum);
 }
 
@@ -123,7 +123,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
     return true;
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletDecodedPositionRefMatches(
+[[nodiscard]] GLOBAL_INLINE bool MeshletDecodedPositionRefMatches(
     const MeshletPositionStreamRef& decoded,
     const MeshletPositionStreamRef& source,
     const bool skinRequired
@@ -133,7 +133,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletDecodedAttributeRefMatches(
+[[nodiscard]] GLOBAL_INLINE bool MeshletDecodedAttributeRefMatches(
     const MeshletAttributeStreamRef& decoded,
     const MeshletAttributeStreamRef& source
 ){
@@ -169,14 +169,14 @@ template<
         !MeshletEncodedPositionRefByteCount(meshlet, skinRequired, encodedPositionBytes)
         || !MeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)
     )
-        return onFailure(meshletIndex, NWB_TEXT("encoded ref width is invalid"));
+        return onFailure(meshletIndex, GLOBAL_TEXT("encoded ref width is invalid"));
     if(
         meshlet.positionRefOffset > positionDeltas.size()
         || encodedPositionBytes != positionDeltas.size() - meshlet.positionRefOffset
         || meshlet.attributeRefOffset > attributeDeltas.size()
         || encodedAttributeBytes != attributeDeltas.size() - meshlet.attributeRefOffset
     )
-        return onFailure(meshletIndex, NWB_TEXT("encoded ref byte count mismatch"));
+        return onFailure(meshletIndex, GLOBAL_TEXT("encoded ref byte count mismatch"));
 
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& sourceRef = positionRefs[sourcePositionRefOffset + localPositionIndex];
@@ -192,7 +192,7 @@ template<
             )
             || !MeshletDecodedPositionRefMatches(decodedRef, sourceRef, skinRequired)
         )
-            return onFailure(meshletIndex, NWB_TEXT("encoded position ref decode mismatch"));
+            return onFailure(meshletIndex, GLOBAL_TEXT("encoded position ref decode mismatch"));
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
@@ -208,7 +208,7 @@ template<
             )
             || !MeshletDecodedAttributeRefMatches(decodedRef, sourceRef)
         )
-            return onFailure(meshletIndex, NWB_TEXT("encoded attribute ref decode mismatch"));
+            return onFailure(meshletIndex, GLOBAL_TEXT("encoded attribute ref decode mismatch"));
     }
 
     return true;
@@ -239,7 +239,7 @@ template<
     for(usize meshletIndex = 0u; meshletIndex < meshlets.size(); ++meshletIndex){
         MeshletDesc& meshlet = meshlets[meshletIndex];
         if(MeshletPositionCount(meshlet) == 0u || MeshletAttributeCount(meshlet) == 0u)
-            return onFailure(meshletIndex, NWB_TEXT("meshlet cannot encode empty ref ranges"));
+            return onFailure(meshletIndex, GLOBAL_TEXT("meshlet cannot encode empty ref ranges"));
 
         const u32 sourcePositionRefOffset = meshlet.positionRefOffset;
         const u32 sourceAttributeRefOffset = meshlet.attributeRefOffset;
@@ -254,7 +254,7 @@ template<
                 AddMeshletRefEncodeIndex(skinRange, ref.skin);
             }
             else if(ref.skin != s_MeshMissingStreamIndex){
-                return onFailure(meshletIndex, NWB_TEXT("static meshlet cannot encode skin references"));
+                return onFailure(meshletIndex, GLOBAL_TEXT("static meshlet cannot encode skin references"));
             }
         }
 
@@ -284,14 +284,14 @@ template<
             outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)
             || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)
         )
-            return onFailure(meshletIndex, NWB_TEXT("encoded ref byte offset exceeds u32 limits"));
+            return onFailure(meshletIndex, GLOBAL_TEXT("encoded ref byte offset exceeds u32 limits"));
 
         meshlet.positionRefOffset = static_cast<u32>(outPositionDeltas.size());
         meshlet.attributeRefOffset = static_cast<u32>(outAttributeDeltas.size());
 
         const MeshletPositionRefEncodeChannel positionChannels[] = {
-            { &MeshletPositionStreamRef::position, &MeshletDesc::positionBase, positionWidth, NWB_TEXT("position ref delta cannot be encoded") },
-            { &MeshletPositionStreamRef::skin, &MeshletDesc::skinBase, skinWidth, NWB_TEXT("skin ref delta cannot be encoded") },
+            { &MeshletPositionStreamRef::position, &MeshletDesc::positionBase, positionWidth, GLOBAL_TEXT("position ref delta cannot be encoded") },
+            { &MeshletPositionStreamRef::skin, &MeshletDesc::skinBase, skinWidth, GLOBAL_TEXT("skin ref delta cannot be encoded") },
         };
         const usize positionChannelCount = skinRequired ? 2u : 1u;
         for(usize channelIndex = 0u; channelIndex < positionChannelCount; ++channelIndex){
@@ -309,10 +309,10 @@ template<
         }
 
         const MeshletAttributeRefEncodeChannel attributeChannels[] = {
-            { &MeshletAttributeStreamRef::normal, &MeshletDesc::normalBase, normalWidth, NWB_TEXT("normal ref delta cannot be encoded") },
-            { &MeshletAttributeStreamRef::tangent, &MeshletDesc::tangentBase, tangentWidth, NWB_TEXT("tangent ref delta cannot be encoded") },
-            { &MeshletAttributeStreamRef::uv0, &MeshletDesc::uv0Base, uv0Width, NWB_TEXT("uv0 ref delta cannot be encoded") },
-            { &MeshletAttributeStreamRef::color, &MeshletDesc::colorBase, colorWidth, NWB_TEXT("color ref delta cannot be encoded") },
+            { &MeshletAttributeStreamRef::normal, &MeshletDesc::normalBase, normalWidth, GLOBAL_TEXT("normal ref delta cannot be encoded") },
+            { &MeshletAttributeStreamRef::tangent, &MeshletDesc::tangentBase, tangentWidth, GLOBAL_TEXT("tangent ref delta cannot be encoded") },
+            { &MeshletAttributeStreamRef::uv0, &MeshletDesc::uv0Base, uv0Width, GLOBAL_TEXT("uv0 ref delta cannot be encoded") },
+            { &MeshletAttributeStreamRef::color, &MeshletDesc::colorBase, colorWidth, GLOBAL_TEXT("color ref delta cannot be encoded") },
         };
         for(const MeshletAttributeRefEncodeChannel& channel : attributeChannels){
             if(!AppendMeshletRefChannelDeltas(
@@ -347,7 +347,7 @@ template<
         outPositionDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)
         || outAttributeDeltas.size() > static_cast<usize>(Limit<u32>::s_Max)
     )
-        return onFailure(meshlets.size(), NWB_TEXT("encoded ref byte count exceeds u32 limits"));
+        return onFailure(meshlets.size(), GLOBAL_TEXT("encoded ref byte count exceeds u32 limits"));
 
     return true;
 }

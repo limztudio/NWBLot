@@ -17,7 +17,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector SIMDCALL VectorArcCoefficientApproximation(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorArcCoefficientApproximation(SIMDVector value)noexcept{
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
 
@@ -31,7 +31,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorArcCoefficientApproximation(SIMDVector valu
     return VectorMultiply(result, root);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorATan2SelectResult(SIMDVector y, SIMDVector x, SIMDVector atanResult, SIMDVector constants)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorATan2SelectResult(SIMDVector y, SIMDVector x, SIMDVector atanResult, SIMDVector constants)noexcept{
     const SIMDVector zero = VectorZero();
     SIMDVector atanResultValid = VectorTrueInt();
 
@@ -75,7 +75,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorATan2SelectResult(SIMDVector y, SIMDVector 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
     const SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     SIMDVector t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
@@ -83,14 +83,14 @@ NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorACos(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorACos(SIMDVector value)noexcept{
     const SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     const SIMDVector t0 = SIMDVectorDetail::VectorArcCoefficientApproximation(value);
     SIMDVector t1 = VectorSubtract(s_SIMDPi, t0);
     return VectorSelect(t1, t0, nonnegative);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorATan(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorATan(SIMDVector value)noexcept{
     SIMDVector absV = VectorAbs(value);
     SIMDVector invV = VectorReciprocal(value);
     SIMDVector comp = VectorGreater(value, s_SIMDOne);
@@ -115,13 +115,13 @@ NWB_INLINE SIMDVector SIMDCALL VectorATan(SIMDVector value)noexcept{
     return VectorSelect(result1, result, comp);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorATan2(SIMDVector y, SIMDVector x)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorATan2(SIMDVector y, SIMDVector x)noexcept{
     const SIMDVector constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, s_PI * 0.75f);
     SIMDVector v = VectorDivide(y, x);
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATan(v), constants);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
@@ -129,7 +129,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorSinEst(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorSinEstPolynomial(x2), x);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -138,7 +138,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
-NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
+GLOBAL_INLINE void SIMDCALL VectorSinCosEst(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -149,7 +149,7 @@ NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector& outSin, SIMDVector& outCos,
     outCos = VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorTanEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorTanEst(SIMDVector value)noexcept{
     SIMDVector v1 = VectorMultiply(value, VectorSplatW(s_SIMDTanEstCoefficients));
     v1 = VectorRound(v1);
     v1 = VectorNegativeMultiplySubtract(s_SIMDPi, v1, value);
@@ -168,7 +168,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorTanEst(SIMDVector value)noexcept{
     return VectorMultiply(n, d);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorASinEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorASinEst(SIMDVector value)noexcept{
     SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
@@ -179,7 +179,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorASinEst(SIMDVector value)noexcept{
     return VectorSubtract(s_SIMDHalfPi, t0);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorACosEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorACosEst(SIMDVector value)noexcept{
     SIMDVector nonnegative = VectorGreaterOrEqual(value, s_SIMDZero);
     SIMDVector x = VectorAbs(value);
     SIMDVector root = VectorSqrt(VectorMax(s_SIMDZero, VectorSubtract(s_SIMDOne, x)));
@@ -189,7 +189,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorACosEst(SIMDVector value)noexcept{
     return VectorSelect(t1, t0, nonnegative);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorATanEst(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorATanEst(SIMDVector value)noexcept{
     SIMDVector absV = VectorAbs(value);
     SIMDVector invV = VectorReciprocalEst(value);
     SIMDVector comp = VectorGreater(value, s_SIMDOne);
@@ -210,7 +210,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorATanEst(SIMDVector value)noexcept{
     return VectorSelect(result1, result, comp);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorATan2Est(SIMDVector y, SIMDVector x)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL VectorATan2Est(SIMDVector y, SIMDVector x)noexcept{
     const SIMDVector constants = VectorSet(s_PI, s_PIDIV2, s_PIDIV4, 2.3561944905f);
     SIMDVector v = VectorMultiply(y, VectorReciprocalEst(x));
     return SIMDVectorDetail::VectorATan2SelectResult(y, x, VectorATanEst(v), constants);

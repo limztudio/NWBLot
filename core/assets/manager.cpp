@@ -36,17 +36,17 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
     outAsset.reset();
 
     if(!assetType){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: asset type is empty"));
         return false;
     }
     if(!virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: virtual path is empty"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: virtual path is empty"));
         return false;
     }
 
     AssetBytes binary{m_arena};
     if(!m_binarySource.readAssetBinary(virtualPath, binary)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: failed to read binary for asset '{}' of type '{}'")
             , StringConvert(virtualPath.resolvedText())
             , StringConvert(assetType.resolvedText())
         );
@@ -54,7 +54,7 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
     }
 
     if(!m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
             , StringConvert(virtualPath.resolvedText())
             , StringConvert(assetType.resolvedText())
         );
@@ -67,13 +67,13 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
 
 u64 AssetManager::enqueueLoad(const Name& assetType, const Name& virtualPath){
     if(!assetType || !virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: rejected async load request with empty asset type or virtual path"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: rejected async load request with empty asset type or virtual path"));
         return 0;
     }
 
     const u64 requestId = allocateRequestId();
     if(requestId == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: async load request ids are exhausted"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("AssetManager: async load request ids are exhausted"));
         return 0;
     }
 

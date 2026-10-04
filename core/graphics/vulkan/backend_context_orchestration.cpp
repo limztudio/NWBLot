@@ -41,7 +41,7 @@ bool BackendContext::createInstance(){
 
 bool BackendContext::createDevice(){
     if(!IsValidHardwareRayTracingPolicy(m_deviceParams.hardwareRayTracingPolicy)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
         return false;
     }
 
@@ -50,7 +50,7 @@ bool BackendContext::createDevice(){
 
     m_maxFramesInFlight = m_deviceParams.maxFramesInFlight;
     if(m_maxFramesInFlight == 0){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
+        NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: maxFramesInFlight was 0; clamping to 1."));
         m_maxFramesInFlight = 1;
     }
 
@@ -77,7 +77,7 @@ bool BackendContext::createDevice(){
 
     for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions){
         if(ResolveDeviceExtensionRequest(m_deviceParams.hardwareRayTracingPolicy, name, true) == DeviceExtensionRequestAction::Reject){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), StringConvert(name));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), StringConvert(name));
             return false;
         }
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
@@ -171,14 +171,14 @@ bool BackendContext::createDevice(){
         (static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities))
         != static_cast<u8>(requiredGraphicsQueueCapabilities)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: selected required Graphics queue family does not support Graphics and Transfer."));
         return false;
     }
     if(
         (static_cast<u8>(requiredComputeQueueCapabilities) & static_cast<u8>(requiredComputeQueueCapabilitiesMask))
         != static_cast<u8>(requiredComputeQueueCapabilitiesMask)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: selected required Compute queue family does not support Compute and Transfer."));
         return false;
     }
     const u32 graphicsNativeQueueIndex = findNativeQueueIndex(
@@ -198,7 +198,7 @@ bool BackendContext::createDevice(){
         || (m_computeQueueEnabled && computeNativeQueueIndex == Limit<u32>::s_Max)
         || (m_transferQueueEnabled && transferNativeQueueIndex == Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Scheduler queue projection references a missing native queue."));
         return false;
     }
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
@@ -281,11 +281,11 @@ bool BackendContext::createDevice(){
 
     m_rhiDevice = CreateDevice(deviceDesc);
     if(!m_rhiDevice){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create RHI device wrapper."));
         return false;
     }
     if(!m_rhiDevice->getDescriptorHeap().isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
         m_rhiDevice = nullptr;
         return false;
     }
@@ -297,11 +297,11 @@ bool BackendContext::createDevice(){
         const GpuDescriptorHeapLifecycleStatistics heap = m_rhiDevice->getDescriptorHeap().lifecycleStatistics();
         const bool accelerationStructureLayout = m_rhiDevice->getDescriptorHeap().hasAccelStructLayout();
         if(rayQuery || rayTracingPipeline || accelerationStructure || heap.accelStructCapacity != 0u || accelerationStructureLayout){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
             m_rhiDevice = nullptr;
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: hardware ray tracing policy=disabled; RayQuery={} RayTracingPipeline={} RayTracingAccelStruct={} AccelStructDescriptors={} AccelStructLayout={}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Vulkan: hardware ray tracing policy=disabled; RayQuery={} RayTracingPipeline={} RayTracingAccelStruct={} AccelStructDescriptors={} AccelStructLayout={}")
             , static_cast<u32>(rayQuery)
             , static_cast<u32>(rayTracingPipeline)
             , static_cast<u32>(accelerationStructure)
@@ -320,7 +320,7 @@ bool BackendContext::createSwapChainResources(){
     usize const numPresentSemaphores = m_swapChainImages.size();
     if(!recreateSemaphores(m_presentSemaphores, numPresentSemaphores, "create present semaphores")){
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy swapchain after present-semaphore creation failure."));
         return false;
     }
 
@@ -328,7 +328,7 @@ bool BackendContext::createSwapChainResources(){
     if(!recreateAcquireSyncSlots(numAcquireSyncSlots)){
         clearSemaphores(m_presentSemaphores);
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy swapchain after acquire-slot creation failure."));
         return false;
     }
 
@@ -336,7 +336,7 @@ bool BackendContext::createSwapChainResources(){
         clearSemaphores(m_presentSemaphores);
         clearAcquireSyncSlots();
         if(!destroySwapChainAfterCreateFailure())
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy swapchain after frame-query creation failure."));
         return false;
     }
 
@@ -349,8 +349,8 @@ bool BackendContext::createSwapChainResources(){
             clearAcquireSyncSlots();
             resetDirectPresentCommandList();
             if(!destroySwapChainAfterCreateFailure())
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the direct presentation command list."));
+                NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to destroy swapchain after direct-list creation failure."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create the direct presentation command list."));
             return false;
         }
     }
@@ -376,7 +376,7 @@ bool BackendContext::createSwapChain(){
         || m_swapChain
         || !m_swapChainImages.empty()
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Swapchain creation requires an empty ready lifecycle."));
         return false;
     }
 
@@ -386,7 +386,7 @@ bool BackendContext::createSwapChain(){
     if(m_rhiDevice && !m_lifecycleDrainActive){
         m_lifecycleDrainActive = m_rhiDevice->beginLifecycleDrain();
         if(!m_lifecycleDrainActive)
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close submissions after swapchain creation failure."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to close submissions after swapchain creation failure."));
     }
     {
         ScopedLock presentationLock(m_framePresentationMutex);
@@ -453,7 +453,7 @@ bool BackendContext::prepareSwapChainTransition(
         }
         if(m_rhiDevice && !m_rhiDevice->sealLifecycleDrainForDestruction()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
             return false;
         }
 
@@ -475,12 +475,12 @@ bool BackendContext::prepareSwapChainTransition(
 
     if(m_rhiDevice && !m_lifecycleDrainActive){
         if(m_rhiDevice->submissionOperationActiveOnCurrentThread()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
             return false;
         }
         if(!m_rhiDevice->beginLifecycleDrain()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
             return false;
         }
         m_lifecycleDrainActive = true;
@@ -499,7 +499,7 @@ bool BackendContext::prepareSwapChainTransition(
     const bool acquireProofsComplete = waitAcquireSyncSlotsForLifecycle();
     if(!acquireProofsComplete && (!m_rhiDevice || !m_rhiDevice->isDeviceLost())){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
+        NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
         return false;
     }
     if(!acquireProofsComplete && m_rhiDevice && m_rhiDevice->isDeviceLost()){
@@ -521,7 +521,7 @@ bool BackendContext::prepareSwapChainTransition(
         }
         if(idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove device idle."));
+            NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Swapchain transition could not prove device idle."));
             return false;
         }
         if(kind == SwapChainTransitionKind::Resize && m_rhiDevice->requiresRecreation()){
@@ -535,7 +535,7 @@ bool BackendContext::prepareSwapChainTransition(
             lifecycleLock.lock();
             if(!m_rhiDevice->sealLifecycleDrainForDestruction()){
                 m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
+                NWB_LOGGER_CRITICAL_WARNING(GLOBAL_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
                 return false;
             }
         }
@@ -571,7 +571,7 @@ bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
         return false;
     }
 
-    NWB_ASSERT(m_rhiDevice && m_lifecycleDrainActive);
+    GLOBAL_ASSERT(m_rhiDevice && m_lifecycleDrainActive);
     m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
     {
         ScopedLock presentationLock(m_framePresentationMutex);

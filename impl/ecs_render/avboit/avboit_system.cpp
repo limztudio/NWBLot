@@ -60,7 +60,7 @@ void RendererAvboitSystem::resetTaskGraphStage()noexcept{
 
 
 Core::Sampler& RendererAvboitSystem::linearSampler()const noexcept{
-    NWB_ASSERT(m_avboitState.m_linearSampler);
+    GLOBAL_ASSERT(m_avboitState.m_linearSampler);
     return *m_avboitState.m_linearSampler;
 }
 

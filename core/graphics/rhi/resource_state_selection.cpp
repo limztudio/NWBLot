@@ -33,7 +33,7 @@ void CommandListResourceSelection::insertIndex(void* const storage, const usize 
         }
         bucket = (bucket + 1u) & mask;
     }
-    NWB_ASSERT_MSG(false, NWB_TEXT("Resource selection index exceeded its reserved load bound"));
+    GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Resource selection index exceeded its reserved load bound"));
 }
 
 
@@ -122,7 +122,7 @@ bool CommandListResourceSelection::grow(){
             ? static_cast<const void*>(static_cast<const u8*>(storage) + index * sizeof(Entry))
             : &m_inlineEntries[index]
         ;
-        NWB_MEMCPY(&entry, sizeof(entry), source, sizeof(entry));
+        GLOBAL_MEMCPY(&entry, sizeof(entry), source, sizeof(entry));
         new(static_cast<Entry*>(storage) + index) Entry(entry);
     }
     usize* const buckets = reinterpret_cast<usize*>(static_cast<u8*>(storage) + capacity * sizeof(Entry));

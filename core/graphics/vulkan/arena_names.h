@@ -24,16 +24,16 @@ namespace VulkanArenaScope{
 
 
 inline constexpr Name s_InstanceCreateArena("core/graphics/backend_instance_create");
-inline constexpr TStringView s_TaskStageLabel = NWB_TEXT("task");
-inline constexpr TStringView s_MeshStageLabel = NWB_TEXT("mesh");
-inline constexpr TStringView s_FragmentStageLabel = NWB_TEXT("fragment");
-inline constexpr TStringView s_BufferResourceLabel = NWB_TEXT("buffer");
-inline constexpr TStringView s_TextureResourceLabel = NWB_TEXT("texture");
-inline constexpr TStringView s_WriteBufferCommandLabel = NWB_TEXT("write buffer");
-inline constexpr TStringView s_SetComputeStateCommandLabel = NWB_TEXT("set compute state");
-inline constexpr TStringView s_SetPermanentTextureStateCommandLabel = NWB_TEXT("set permanent texture state");
-inline constexpr TStringView s_DispatchMeshCommandLabel = NWB_TEXT("dispatch mesh");
-inline constexpr TStringView s_DispatchIndirectCommandLabel = NWB_TEXT("dispatch indirect");
+inline constexpr TStringView s_TaskStageLabel = GLOBAL_TEXT("task");
+inline constexpr TStringView s_MeshStageLabel = GLOBAL_TEXT("mesh");
+inline constexpr TStringView s_FragmentStageLabel = GLOBAL_TEXT("fragment");
+inline constexpr TStringView s_BufferResourceLabel = GLOBAL_TEXT("buffer");
+inline constexpr TStringView s_TextureResourceLabel = GLOBAL_TEXT("texture");
+inline constexpr TStringView s_WriteBufferCommandLabel = GLOBAL_TEXT("write buffer");
+inline constexpr TStringView s_SetComputeStateCommandLabel = GLOBAL_TEXT("set compute state");
+inline constexpr TStringView s_SetPermanentTextureStateCommandLabel = GLOBAL_TEXT("set permanent texture state");
+inline constexpr TStringView s_DispatchMeshCommandLabel = GLOBAL_TEXT("dispatch mesh");
+inline constexpr TStringView s_DispatchIndirectCommandLabel = GLOBAL_TEXT("dispatch indirect");
 inline constexpr AStringView s_PresentationSignalCancellationContext = "presentation signal cancellation";
 inline constexpr AStringView s_AcquireSlotReuseContext = "acquire slot reuse";
 inline constexpr AStringView s_AcquireNextImageContext = "acquire next image";

@@ -150,7 +150,7 @@ bool AvboitGeneratedGeometryReuse::capture(
         m_instances.push_back(instances[draw.instanceIndex]);
     m_frameBindings = frameBindings;
     static_assert(sizeof(m_viewBytes) == sizeof(view));
-    NWB_MEMCPY(m_viewBytes, sizeof(m_viewBytes), &view, sizeof(view));
+    GLOBAL_MEMCPY(m_viewBytes, sizeof(m_viewBytes), &view, sizeof(view));
     m_captured = true;
     return true;
 }
@@ -166,7 +166,7 @@ bool AvboitGeneratedGeometryReuse::matches(
         || !__hidden_generated_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena)
         || m_draws.size() != draws.regular.computeDrawItems.size()
         || !__hidden_generated_geometry_reuse::FrameBindingsMatch(m_frameBindings, frameBindings)
-        || NWB_MEMCMP(m_viewBytes, &view, sizeof(view)) != 0
+        || GLOBAL_MEMCMP(m_viewBytes, &view, sizeof(view)) != 0
     ){
         reset();
         return false;
@@ -175,7 +175,7 @@ bool AvboitGeneratedGeometryReuse::matches(
         const MaterialPassDrawItem& current = draws.regular.computeDrawItems[index];
         if(
             !__hidden_generated_geometry_reuse::DrawInputsMatch(m_draws[index], current)
-            || NWB_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0
+            || GLOBAL_MEMCMP(&m_instances[index], &instances[current.instanceIndex], sizeof(InstanceGpuData)) != 0
         ){
             reset();
             return false;

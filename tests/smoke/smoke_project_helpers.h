@@ -38,11 +38,11 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
 ){
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: ECS world allocation failed"), projectName);
+        NWB_LOGGER_FATAL(GLOBAL_TEXT("{} initialization failed: ECS world allocation failed"), projectName);
         throw RuntimeException("Smoke project initialization failed");
     }
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(NWB_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
+        NWB_LOGGER_FATAL(GLOBAL_TEXT("{} initialization failed: shader path resolver callback is null"), projectName);
         throw RuntimeException("Smoke project initialization failed");
     }
 
@@ -62,7 +62,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
         Float4(0.0f, cameraHeight, -cameraDistance, 0.0f)
     );
     auto* cameraTransform = world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera);
-    NWB_ASSERT(cameraTransform);
+    GLOBAL_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform->rotation);
 
     return activeCamera.camera;
@@ -170,15 +170,15 @@ inline void SetSmokeYawWindowTitle(
 
     static constexpr usize s_TitleCapacity = 192u;
     tchar title[s_TitleCapacity];
-    NWB_TSPRINTF(
+    GLOBAL_TSPRINTF(
         title,
         s_TitleCapacity,
-        NWB_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
+        GLOBAL_TEXT("%.*s  |  yaw %.4f rad (%.2f deg)%s"),
         static_cast<i32>(QueryProjectWindowTitle().size()),
         QueryProjectWindowTitle().data(),
         display.wrappedRadians,
         display.degrees,
-        manualControl ? NWB_TEXT("  [manual: <- ->]") : NWB_TEXT("")
+        manualControl ? GLOBAL_TEXT("  [manual: <- ->]") : GLOBAL_TEXT("")
     );
     context.graphics.setWindowTitle(TStringView(title));
 }

@@ -32,7 +32,7 @@ NWB_IMPL_BEGIN
 
 
 bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("ModelAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("ModelAssetCodec::serialize")))
         return false;
 
     const Model& model = static_cast<const Model&>(asset);
@@ -96,20 +96,20 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skeletonObjectBinaries,
-        NWB_TEXT("ModelAssetCodec::serialize"),
-        NWB_TEXT("skeleton objects")
+        GLOBAL_TEXT("ModelAssetCodec::serialize"),
+        GLOBAL_TEXT("skeleton objects")
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             staticMeshObjectBinaries,
-            NWB_TEXT("ModelAssetCodec::serialize"),
-            NWB_TEXT("static mesh objects")
+            GLOBAL_TEXT("ModelAssetCodec::serialize"),
+            GLOBAL_TEXT("static mesh objects")
         )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skinnedMeshObjectBinaries,
-            NWB_TEXT("ModelAssetCodec::serialize"),
-            NWB_TEXT("skinned mesh objects")
+            GLOBAL_TEXT("ModelAssetCodec::serialize"),
+            GLOBAL_TEXT("skinned mesh objects")
         )
     ;
 }
@@ -195,7 +195,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     if(!fieldValue)
         return true;
     if(!fieldValue->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': field '{}' must be a map")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Model meta '{}': field '{}' must be a map")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -208,7 +208,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
         typename ObjectVectorT::value_type object{};
         object.name = Name(AStringView(objectName.data(), objectName.size()));
         if(!object.name){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': object name must not be empty")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': object name must not be empty")
                 , StringConvert(objectKind)
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -225,7 +225,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 [[nodiscard]] bool ParseSkeletonObject(const Path& nwbFilePath, const Value& objectValue, ModelSkeletonObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model skeleton object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': value must be a map")
             , StringConvert(s_ObjectKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -242,7 +242,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 [[nodiscard]] bool ParseStaticMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelStaticMeshObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model static mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': value must be a map")
             , StringConvert(s_ObjectKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -267,7 +267,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
 [[nodiscard]] bool ParseSkinnedMeshObject(const Path& nwbFilePath, const Value& objectValue, ModelSkinnedMeshObject& outObject){
     static constexpr AStringView s_ObjectKind = "Model skinned mesh object";
     if(!objectValue.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': value must be a map")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} '{}': value must be a map")
             , StringConvert(s_ObjectKind)
             , PathToString<tchar>(nwbFilePath)
         );

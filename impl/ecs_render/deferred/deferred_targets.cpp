@@ -31,13 +31,13 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
         return false;
     }
-    NWB_ASSERT(m_deferredState.m_sampler);
-    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    NWB_ASSERT(m_deferredState.m_lightBuffer);
-    NWB_ASSERT(targets.csgIntervalTargetsValid());
+    GLOBAL_ASSERT(m_deferredState.m_sampler);
+    GLOBAL_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    GLOBAL_ASSERT(m_deferredState.m_lightBuffer);
+    GLOBAL_ASSERT(targets.csgIntervalTargetsValid());
 
     auto registerTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
@@ -161,7 +161,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.transparentMomentsBStorage, targets.transparentMomentsB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
     ;
     if(!registered){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
         resetDeferredBindlessFrameResources(targets);
         return false;
     }
@@ -215,7 +215,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
     ;
     bindless.slotsBuffer = m_graphics.createBuffer(slotsBufferDesc);
     if(!bindless.slotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
         resetDeferredBindlessFrameResources(targets);
         return false;
     }
@@ -231,7 +231,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get())
         )
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));
         resetDeferredBindlessFrameResources(targets);
         return false;
     }
@@ -397,7 +397,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
         || csgRemovedIntervalDataFormat == Core::Format::UNKNOWN
         || csgRemovedIntervalCountFormat == Core::Format::UNKNOWN
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to find supported deferred framebuffer formats"));
         return false;
     }
     if(!createDeferredLightingResources())
@@ -449,7 +449,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.albedo = m_graphics.createTexture(albedoDesc);
     if(!createdTargets.albedo){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred albedo target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred albedo target"));
         return false;
     }
 
@@ -465,7 +465,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.normal = m_graphics.createTexture(normalDesc);
     if(!createdTargets.normal){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred normal target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred normal target"));
         return false;
     }
 
@@ -481,7 +481,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.worldPosition = m_graphics.createTexture(worldPositionDesc);
     if(!createdTargets.worldPosition){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred world-position target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred world-position target"));
         return false;
     }
 
@@ -497,7 +497,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.specularRoughness = m_graphics.createTexture(specularRoughnessDesc);
     if(!createdTargets.specularRoughness){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
         return false;
     }
 
@@ -515,7 +515,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.opaqueColor = m_graphics.createTexture(opaqueColorDesc);
     if(!createdTargets.opaqueColor){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred opaque color target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred opaque color target"));
         return false;
     }
 
@@ -533,7 +533,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.compositeColor = m_graphics.createTexture(compositeColorDesc);
     if(!createdTargets.compositeColor){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite color target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred composite color target"));
         return false;
     }
 
@@ -548,7 +548,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     createdTargets.depth = m_graphics.createTexture(depthDesc);
     if(!createdTargets.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred depth target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred depth target"));
         return false;
     }
 
@@ -575,7 +575,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     framebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
     createdTargets.framebuffer = device.createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create deferred framebuffer"));
         return false;
     }
 

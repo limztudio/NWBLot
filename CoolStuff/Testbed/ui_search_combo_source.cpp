@@ -99,7 +99,7 @@ TestbedUiSearchComboSource::TestbedUiSearchComboSource(NWB::Core::Alloc::GlobalA
     , m_view(*this)
 {
     const bool initialized = filter({});
-    NWB_FATAL_ASSERT(initialized);
+    GLOBAL_FATAL_ASSERT(initialized);
 }
 
 bool TestbedUiSearchComboSource::indexOf(const u64 keyValue, u64& index)const{

@@ -76,7 +76,7 @@ private:
             }
 
             T& value(){
-                NWB_ASSERT(m_value.has_value());
+                GLOBAL_ASSERT(m_value.has_value());
                 return *m_value;
             }
 

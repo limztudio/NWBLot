@@ -115,11 +115,11 @@ public:
 
 public:
     constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+        GLOBAL_ASSERT_MSG((buffer != nullptr || count == 0), GLOBAL_TEXT("null pointer cannot point to a block of non-zero size"));
         if(buffer == nullptr)
             return;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot deallocate without an arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaAllocator cannot deallocate without an arena"));
         if(m_arena == nullptr)
             return;
 
@@ -132,7 +132,7 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator cannot allocate without an arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
             throw std::bad_alloc{};
 
@@ -147,7 +147,7 @@ public:
 #endif
 
     [[nodiscard]] ArenaT& arena()const noexcept{
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaAllocator has no arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaAllocator has no arena"));
         return *m_arena;
     }
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }
@@ -271,11 +271,11 @@ public:
     }
 
     constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
-        NWB_ASSERT_MSG((buffer != nullptr || count == 0), NWB_TEXT("null pointer cannot point to a block of non-zero size"));
+        GLOBAL_ASSERT_MSG((buffer != nullptr || count == 0), GLOBAL_TEXT("null pointer cannot point to a block of non-zero size"));
         if(buffer == nullptr)
             return;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaCacheAlignedAllocator cannot deallocate without an arena"));
         if(m_arena == nullptr)
             return;
 
@@ -288,7 +288,7 @@ public:
         if(bytes == 0u)
             return nullptr;
 
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaCacheAlignedAllocator cannot allocate without an arena"));
         if(m_arena == nullptr)
             throw std::bad_alloc{};
 
@@ -303,7 +303,7 @@ public:
 #endif
 
     [[nodiscard]] ArenaT& arena()const noexcept{
-        NWB_ASSERT_MSG(m_arena != nullptr, NWB_TEXT("ArenaCacheAlignedAllocator has no arena"));
+        GLOBAL_ASSERT_MSG(m_arena != nullptr, GLOBAL_TEXT("ArenaCacheAlignedAllocator has no arena"));
         return *m_arena;
     }
     [[nodiscard]] ArenaT* arenaPtr()const noexcept{ return m_arena; }

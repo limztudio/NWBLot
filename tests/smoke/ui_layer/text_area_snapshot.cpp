@@ -33,10 +33,10 @@ namespace __hidden_ui_text_area_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr TStringView s_RectNames[]{ NWB_TEXT("bounds"), NWB_TEXT("content"), NWB_TEXT("clip"), NWB_TEXT("caret"),
-    NWB_TEXT("reset"), NWB_TEXT("long"), NWB_TEXT("readonly"), NWB_TEXT("enabled"), NWB_TEXT("viewport"),
-    NWB_TEXT("clipboard"), NWB_TEXT("outside"), NWB_TEXT("x_track"), NWB_TEXT("x_thumb"), NWB_TEXT("y_track"),
-    NWB_TEXT("y_thumb"), NWB_TEXT("corner") };
+static constexpr TStringView s_RectNames[]{ GLOBAL_TEXT("bounds"), GLOBAL_TEXT("content"), GLOBAL_TEXT("clip"), GLOBAL_TEXT("caret"),
+    GLOBAL_TEXT("reset"), GLOBAL_TEXT("long"), GLOBAL_TEXT("readonly"), GLOBAL_TEXT("enabled"), GLOBAL_TEXT("viewport"),
+    GLOBAL_TEXT("clipboard"), GLOBAL_TEXT("outside"), GLOBAL_TEXT("x_track"), GLOBAL_TEXT("x_thumb"), GLOBAL_TEXT("y_track"),
+    GLOBAL_TEXT("y_thumb"), GLOBAL_TEXT("corner") };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -125,25 +125,25 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextAreaSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight, current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextAreaSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7], value[8], value[9]
         , value[10], value[11], value[12], value[13], value[14], value[15], value[16], value[17], value[18], value[19]
         , value[20], value[21], value[22], value[23], value[24]
     );
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextAreaSmoke: metrics sequence={} scroll={},{} measure={},{} line_height={} selections={} maximum={},{}")
         , current.sequence, current.scroll.x, current.scroll.y, current.measure.x, current.measure.y
         , current.lineHeight, current.selectionCount, current.maximum.x, current.maximum.y
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(NWB_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(GLOBAL_TEXT("UiTextAreaSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
     for(u32 index = 0u; index < current.selectionCount; ++index){
         const Rect& rectangle = current.selections[index];
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}")
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiTextAreaSmoke: geometry sequence={} selection_{}={},{},{},{}")
             , current.sequence, index, rectangle.x, rectangle.y, rectangle.width, rectangle.height
         );
     }

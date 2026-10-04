@@ -10,9 +10,9 @@
 
 #include <global/sync.h>
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_LINUX) || defined(GLOBAL_PLATFORM_ANDROID)
 #include <signal.h>
 #include <sys/types.h>
 #endif
@@ -53,15 +53,15 @@ inline constexpr usize s_HandlerArgumentTextCapacity = 32u;
 #define NWB_CRASH_HANDLER_EXECUTABLE_NAME "crash_handler"
 #endif
 
-#if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) NWB_TEXT(".exe");
+#if defined(GLOBAL_PLATFORM_WINDOWS)
+inline constexpr TStringView s_HandlerExecutableFileName = GLOBAL_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME) GLOBAL_TEXT(".exe");
 #else
-inline constexpr TStringView s_HandlerExecutableFileName = NWB_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
+inline constexpr TStringView s_HandlerExecutableFileName = GLOBAL_TEXT(NWB_CRASH_HANDLER_EXECUTABLE_NAME);
 #endif
 
-inline constexpr TStringView s_RequestHandleArgument = NWB_TEXT("--request-handle");
-inline constexpr TStringView s_AckHandleArgument = NWB_TEXT("--ack-handle");
-inline constexpr TStringView s_AckEventArgument = NWB_TEXT("--ack-event");
+inline constexpr TStringView s_RequestHandleArgument = GLOBAL_TEXT("--request-handle");
+inline constexpr TStringView s_AckHandleArgument = GLOBAL_TEXT("--ack-handle");
+inline constexpr TStringView s_AckEventArgument = GLOBAL_TEXT("--ack-event");
 inline constexpr StringView s_RequestFdArgument = "--request-fd";
 inline constexpr StringView s_AckFdArgument = "--ack-fd";
 inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
@@ -200,7 +200,7 @@ struct CrashDumpRequestOptions{
 };
 
 struct ManualDumpContextStorage{
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     CONTEXT context = {};
     EXCEPTION_RECORD exceptionRecord = {};
     EXCEPTION_POINTERS exceptionPointers = {};
@@ -215,15 +215,15 @@ struct CrashState{
     Atomic<u64> breadcrumbOrder{ 1u };
     Atomic<u64> crashSequence{ 1u };
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     HANDLE requestWriteHandle = INVALID_HANDLE_VALUE;
     HANDLE ackReadHandle = INVALID_HANDLE_VALUE;
     HANDLE crashHandledEvent = nullptr;
     PROCESS_INFORMATION handlerProcessInfo = {};
     LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
-#elif defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_ANDROID)
     stack_t previousSignalStack = {};
 #endif
 
@@ -236,11 +236,11 @@ struct CrashState{
     // path may already hold when a hard fault occurs), and an atomic (not a Futex) so it is signal/SEH-safe.
     Atomic<u32> transportInFlight{ 0u };
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
     int requestWriteFd = -1;
     int ackReadFd = -1;
     pid_t handlerPid = -1;
-#elif defined(NWB_PLATFORM_ANDROID)
+#elif defined(GLOBAL_PLATFORM_ANDROID)
     int emergencyWriteFd = -1;
 #endif
 

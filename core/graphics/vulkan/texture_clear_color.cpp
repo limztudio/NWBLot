@@ -17,7 +17,7 @@ NWB_VULKAN_BEGIN
 
 void CommandList::clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTexture(texture, subresources, GLOBAL_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureRectFloat(
@@ -31,7 +31,7 @@ void CommandList::clearTextureRectFloat(
         texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
-        NWB_TEXT("color value"),
+        GLOBAL_TEXT("color value"),
         clearValue,
         false,
         false
@@ -45,7 +45,7 @@ void CommandList::clearTextureBoxFloat(
     const Color& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTextureBox(texture, subresources, box, GLOBAL_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor){
@@ -54,7 +54,7 @@ void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subre
 
 void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTexture(texture, subresources, GLOBAL_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureRectUInt(
@@ -77,7 +77,7 @@ void CommandList::clearTextureRectUInt(
         texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
-        NWB_TEXT("unsigned integer value"),
+        GLOBAL_TEXT("unsigned integer value"),
         clearValue,
         true,
         false
@@ -100,7 +100,7 @@ void CommandList::clearTextureBoxUInt(
     const UIntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTextureBox(texture, subresources, box, GLOBAL_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor){
@@ -109,7 +109,7 @@ void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subres
 
 void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, const IntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(texture, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTexture(texture, subresources, GLOBAL_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::clearTextureRectInt(
@@ -132,7 +132,7 @@ void CommandList::clearTextureRectInt(
         texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
-        NWB_TEXT("signed integer value"),
+        GLOBAL_TEXT("signed integer value"),
         clearValue,
         true,
         true
@@ -155,7 +155,7 @@ void CommandList::clearTextureBoxInt(
     const IntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(texture, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTextureBox(texture, subresources, box, GLOBAL_TEXT("signed integer value"), clearValue, true, true);
 }
 
 
@@ -176,9 +176,9 @@ void CommandList::clearColorTexture(
     if(!publicCommandStateAccessible())
         return;
     static_cast<void>(valueName);
-    constexpr TStringView s_OperationName = NWB_TEXT("clear texture");
+    constexpr TStringView s_OperationName = GLOBAL_TEXT("clear texture");
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture must be a live resource owned by this device"));
         return;
     }
     const VkImageUsageFlags requiredUsage = m_renderPassActive
@@ -186,18 +186,18 @@ void CommandList::clearColorTexture(
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or invalid"));
         return;
     }
     if(!VulkanTextureDetail::TextureColorClearAspectIsValid(texture.m_aspectMask)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture format does not have a color aspect"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture format does not have a color aspect"));
         return;
     }
     if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(
@@ -205,7 +205,7 @@ void CommandList::clearColorTexture(
         integerValue,
         signedIntegerValue
     )){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear value type does not match the texture format"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("clear value type does not match the texture format"));
         return;
     }
 
@@ -213,14 +213,14 @@ void CommandList::clearColorTexture(
     if(blockCompressed && desc.sampleCount != 1u){
         rejectCommandRecording(
             s_OperationName,
-            NWB_TEXT("block-compressed texture clears require a single-sampled texture")
+            GLOBAL_TEXT("block-compressed texture clears require a single-sampled texture")
         );
         return;
     }
     if(blockCompressed && m_renderPassActive){
         rejectCommandRecording(
             s_OperationName,
-            NWB_TEXT("block-compressed texture clears cannot execute during active rendering")
+            GLOBAL_TEXT("block-compressed texture clears cannot execute during active rendering")
         );
         return;
     }
@@ -300,18 +300,18 @@ void CommandList::clearColorTextureBox(
     static_cast<void>(valueName);
     constexpr TStringView s_OperationName = s_ClearTextureBoxOperation;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture must be a live resource owned by this device"));
         return;
     }
     const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("subresource range is empty or invalid"));
         return;
     }
     if(!VulkanTextureDetail::TextureColorClearAspectIsValid(texture.m_aspectMask)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture format does not have a color aspect"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture format does not have a color aspect"));
         return;
     }
     if(!VulkanTextureDetail::TextureColorClearValueTypeMatchesFormat(
@@ -319,7 +319,7 @@ void CommandList::clearColorTextureBox(
         integerValue,
         signedIntegerValue
     )){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("clear value type does not match the texture format"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("clear value type does not match the texture format"));
         return;
     }
 
@@ -344,33 +344,33 @@ void CommandList::clearColorTextureBox(
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
     if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
     if(blockCompressed && desc.sampleCount != 1u){
         rejectCommandRecording(
             s_OperationName,
-            NWB_TEXT("block-compressed texture clears require a single-sampled texture")
+            GLOBAL_TEXT("block-compressed texture clears require a single-sampled texture")
         );
         return;
     }
     if(blockCompressed && m_renderPassActive){
         rejectCommandRecording(
             s_OperationName,
-            NWB_TEXT("block-compressed texture clears cannot execute during active rendering")
+            GLOBAL_TEXT("block-compressed texture clears cannot execute during active rendering")
         );
         return;
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
         if(!m_renderPassActive){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("bounded multisampled clears require active rendering"));
+            rejectCommandRecording(s_OperationName, GLOBAL_TEXT("bounded multisampled clears require active rendering"));
             return;
         }
 
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
         if(baseResolvedBox.minZ != 0 || baseResolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("attachment bounded clears require full attachment depth"));
+            rejectCommandRecording(s_OperationName, GLOBAL_TEXT("attachment bounded clears require full attachment depth"));
             return;
         }
 
@@ -398,7 +398,7 @@ void CommandList::clearColorTextureBox(
     if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
         rejectCommandRecording(
             s_ClearTextureBoxOperation,
-            NWB_TEXT("bounded texture box clears do not support the texture format")
+            GLOBAL_TEXT("bounded texture box clears do not support the texture format")
         );
         return;
     }
@@ -431,7 +431,7 @@ void CommandList::clearColorTextureBox(
         )){
             rejectCommandRecording(
                 s_ClearTextureBoxOperation,
-                NWB_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges")
+                GLOBAL_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges")
             );
             return;
         }
@@ -442,12 +442,12 @@ void CommandList::clearColorTextureBox(
         const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
         const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
         if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, GLOBAL_TEXT("clear byte size overflows"));
             return;
         }
         const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
         if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, GLOBAL_TEXT("clear byte size overflows"));
             return;
         }
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
@@ -459,7 +459,7 @@ void CommandList::clearColorTextureBox(
         )){
             rejectCommandRecording(
                 s_ClearTextureBoxOperation,
-                NWB_TEXT("clear upload layout is not addressable")
+                GLOBAL_TEXT("clear upload layout is not addressable")
             );
             return;
         }
@@ -473,7 +473,7 @@ void CommandList::clearColorTextureBox(
     if(queueRequirement == VulkanTextureDetail::TextureClearQueueRequirement::Transfer){
         if(!recordAndValidateCommandCapability(
             GpuQueueCapability::Transfer,
-            NWB_TEXT("clear color texture box through staging")
+            GLOBAL_TEXT("clear color texture box through staging")
         ))
             return;
     }
@@ -483,7 +483,7 @@ void CommandList::clearColorTextureBox(
         );
         if(!recordAndValidateAnyCommandCapability(
             s_PartialClearCapabilities,
-            NWB_TEXT("clear partial color texture box through staging")
+            GLOBAL_TEXT("clear partial color texture box through staging")
         ))
             return;
     }
@@ -507,13 +507,13 @@ void CommandList::clearColorTextureBox(
         void* stagingBytes = nullptr;
         if(!prepareUploadStaging(
             mipPlan.uploadLayout.clearByteCount,
-            NWB_TEXT("clearTextureBox"),
+            GLOBAL_TEXT("clearTextureBox"),
             stagingBuffer,
             stagingOffset,
             stagingBytes,
             mipPlan.uploadLayout.stagingAlignment
         )){
-            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("staging allocation failed"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, GLOBAL_TEXT("staging allocation failed"));
             return;
         }
         if(
@@ -527,7 +527,7 @@ void CommandList::clearColorTextureBox(
         ){
             rejectCommandRecording(
                 s_ClearTextureBoxOperation,
-                NWB_TEXT("staging allocation returned an invalid range")
+                GLOBAL_TEXT("staging allocation returned an invalid range")
             );
             return;
         }

@@ -99,13 +99,13 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 [[nodiscard]] static TStringView CsgSkinnedVisibleFpsLabel(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
+    return GLOBAL_TEXT("CsgSkinnedTransparentSphereVisibleSmokeProject");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return NWB_TEXT("CsgSkinnedTransparentVisibleSmokeProject");
+    return GLOBAL_TEXT("CsgSkinnedTransparentVisibleSmokeProject");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("CsgSkinnedSphereVisibleSmokeProject");
+    return GLOBAL_TEXT("CsgSkinnedSphereVisibleSmokeProject");
 #else
-    return NWB_TEXT("CsgSkinnedVisibleSmokeProject");
+    return GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject");
 #endif
 }
 
@@ -157,7 +157,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("CsgSkinnedVisibleSmokeProject"));
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return world;
@@ -187,7 +187,7 @@ private:
             tintApplied
         );
         if(!tintApplied)
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
 
         return entity;
     }
@@ -200,7 +200,7 @@ private:
             NWB::Impl::ModelObjectKind::SkinnedMesh
         );
         if(!m_receiverObject.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: failed to find spawned receiver model object"));
             return false;
         }
 
@@ -230,10 +230,10 @@ private:
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
             return fallback;
         }
-        NWB_ASSERT(modelAsset);
+        GLOBAL_ASSERT(modelAsset);
         const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
         if(!model)
             return fallback;
@@ -242,10 +242,10 @@ private:
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
         if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
             return fallback;
         }
-        NWB_ASSERT(skeletonAsset);
+        GLOBAL_ASSERT(skeletonAsset);
         const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
         if(!skeleton)
             return fallback;
@@ -253,7 +253,7 @@ private:
         const u32 jointCount = skeleton->jointCount();
         const u32 anchorIndex = skeleton->findJointIndex(s_CutterAnchorBoneName);
         if(anchorIndex == NWB::Impl::s_SkeletonInvalidJointIndex || anchorIndex >= jointCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), StringConvert(s_CutterAnchorBoneName.resolvedText()));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: skeleton has no '{}' bone for cutter anchor"), StringConvert(s_CutterAnchorBoneName.resolvedText()));
             return fallback;
         }
 
@@ -363,24 +363,24 @@ public:
         const SIMDVector cutterLocalCenter = resolveCutterAnchorLocalCenter();
         StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
-        NWB_FATAL_ASSERT_MSG(
+        GLOBAL_FATAL_ASSERT_MSG(
             activeCamera.camera.valid() && directionalLight.valid()
                 && m_plainReceiver.valid()
                 && m_receiver.valid()
                 && m_receiverObject.valid()
                 && m_cutter.valid(),
-            NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
+            GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject failed to create all scene entities")
         );
-        NWB_FATAL_ASSERT_MSG(receiverReady, NWB_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
+        GLOBAL_FATAL_ASSERT_MSG(receiverReady, GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject failed to bind CSG receiver to spawned model object"));
 
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with sphere cutter and non-CSG control created"));
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: transparent skinned CSG receiver scene with non-CSG control created"));
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with sphere cutter and non-CSG control created"));
 #else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: skinned CSG receiver scene with non-CSG control created"));
 #endif
         return true;
     }
@@ -388,7 +388,7 @@ public:
     virtual void onShutdown()override{
         m_context.graphics.setFrameSubmissionSuspended(false);
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -400,7 +400,7 @@ public:
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    GLOBAL_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
                     m_rendererBaselineRenderedFrameCount
                 );
             }
@@ -455,13 +455,13 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 TStringView NWB::QueryProjectWindowTitle(){
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER) && defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
+    return GLOBAL_TEXT("NWB Transparent Skinned Sphere CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-    return NWB_TEXT("NWB Transparent Skinned CSG Smoke");
+    return GLOBAL_TEXT("NWB Transparent Skinned CSG Smoke");
 #elif defined(NWB_CSG_SKINNED_VISIBLE_SPHERE_CUTTER)
-    return NWB_TEXT("NWB Skinned Sphere CSG Smoke");
+    return GLOBAL_TEXT("NWB Skinned Sphere CSG Smoke");
 #else
-    return NWB_TEXT("NWB Skinned CSG Smoke");
+    return GLOBAL_TEXT("NWB Skinned CSG Smoke");
 #endif
 }
 

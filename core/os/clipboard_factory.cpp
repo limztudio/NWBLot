@@ -5,7 +5,7 @@
 #include "clipboard.h"
 #include "clipboard_service.h"
 
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include "win32/clipboard_service.h"
 #endif
 
@@ -38,7 +38,7 @@ protected:
     virtual void startNativeRequest(
         const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView)override{
         if(!completeNativeRequest(token, ClipboardStatus::Unsupported))
-            NWB_FATAL_ASSERT(false);
+            GLOBAL_FATAL_ASSERT(false);
     }
 };
 
@@ -53,7 +53,7 @@ protected:
 
 
 GlobalUniquePtr<IClipboardService> CreateClipboardService(Alloc::GlobalArena& arena, void* const nativeWindowHandle){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     if(nativeWindowHandle)
         return MakeGlobalUnique<Win32ClipboardService>(arena, arena, MakeNotNull(nativeWindowHandle));
 #else

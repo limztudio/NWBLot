@@ -17,7 +17,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
 #include <execinfo.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -100,7 +100,7 @@ static void __hidden_capture_frame_pointer_callstack(
     }
 }
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
 // backtrace() unwinds via .eh_frame without frame pointers; warmed up at install so the crash-time call stays allocation-free.
 // Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
@@ -147,7 +147,7 @@ static void __hidden_capture_current_callstack(
     outOptions.stackPointer = static_cast<u64>(reinterpret_cast<usize>(stackPointer));
     outOptions.framePointer = static_cast<u64>(reinterpret_cast<usize>(framePointer));
     outOptions.instructionPointer = static_cast<u64>(reinterpret_cast<usize>(instructionPointer));
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
     const u64 alignmentInstructionPointer = outOptions.triggerInstructionPointer != 0u
         ? outOptions.triggerInstructionPointer
         : outOptions.instructionPointer
@@ -184,7 +184,7 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
     options.framePointer = static_cast<u64>(context->uc_mcontext.regs[s_AArch64FramePointerRegisterIndex]);
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
     // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction
     // pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
     if(__hidden_capture_eh_frame_callstack(options, options.instructionPointer))
@@ -209,7 +209,7 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
 
 [[noreturn]] static void __hidden_terminate_handler(){
     Detail::CrashDumpRequestOptions options;
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the
     // follow-up SIGABRT to carry it.
     if(!__hidden_capture_eh_frame_callstack(options, 0u))
@@ -245,7 +245,7 @@ static void __hidden_install_signal_handlers(){
 #endif
 }
 
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_ANDROID)
 static void __hidden_open_android_emergency_file(){
     if(Detail::g_State.spoolDirectoryText[0] == 0)
         return;
@@ -258,7 +258,7 @@ static void __hidden_open_android_emergency_file(){
 }
 #endif
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_LINUX) && !defined(GLOBAL_PLATFORM_ANDROID)
 [[nodiscard]] static bool __hidden_move_fd_above_stdio(int& inOutFd)noexcept{
     if(inOutFd > STDERR_FILENO)
         return true;
@@ -453,13 +453,13 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
     }
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0)
         status = WriteAllFileDescriptor(g_State.emergencyWriteFd, &request, sizeof(request))
             ? CrashDumpTransportStatus::Sent
             : CrashDumpTransportStatus::Failed
         ;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0){
         __hidden_crash_posix::__hidden_drain_pending_acks(g_State.ackReadFd);
         if(!__hidden_crash_posix::__hidden_send_all_socket_no_sigpipe(g_State.requestWriteFd, &request, sizeof(request)))
@@ -476,10 +476,10 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
 template<typename ArenaT>
 bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_ANDROID)
     static_cast<void>(handlerExecutablePath);
     return true;
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     if(g_State.handlerStarted)
         return true;
     if(handlerExecutablePath.empty())
@@ -548,9 +548,9 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
 
 void InstallPlatformHandlers(){
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_ANDROID)
     __hidden_crash_posix::__hidden_open_android_emergency_file();
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     // Force libgcc_s to load now so the crash-time backtrace() is allocation-free and async-signal-safe.
     __hidden_crash_posix::__hidden_warm_up_unwinder();
 #endif
@@ -560,12 +560,12 @@ void InstallPlatformHandlers(){
 }
 
 void UninstallPlatformResources(){
-#if defined(NWB_PLATFORM_ANDROID)
+#if defined(GLOBAL_PLATFORM_ANDROID)
     if(g_State.emergencyWriteFd >= 0){
         close(g_State.emergencyWriteFd);
         g_State.emergencyWriteFd = -1;
     }
-#elif defined(NWB_PLATFORM_LINUX)
+#elif defined(GLOBAL_PLATFORM_LINUX)
     const pid_t handlerPid = g_State.handlerPid;
     if(g_State.requestWriteFd >= 0){
         close(g_State.requestWriteFd);

@@ -108,7 +108,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
 
     const usize targetByteCount = targets.size() * sizeof(NwbCausticEmissionTargetGpu);
     m_preparedCausticEmissionTargetBytes.resize(targetByteCount);
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(
         m_preparedCausticEmissionTargetBytes.data(),
         m_preparedCausticEmissionTargetBytes.size(),
         targets.data(),
@@ -139,7 +139,7 @@ bool RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(
         || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
         || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: frozen caustic emission-target payload no longer matches preflight storage"));
         return false;
     }
 
@@ -187,7 +187,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     ;
     targets.causticIrradiance = m_graphics.createTexture(irradianceDesc);
     if(!targets.causticIrradiance){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic irradiance target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic irradiance target"));
         return false;
     }
 
@@ -204,7 +204,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     ;
     targets.causticAccumulator = m_graphics.createTexture(accumulatorDesc);
     if(!targets.causticAccumulator){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic accumulator target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic accumulator target"));
         return false;
     }
 
@@ -219,7 +219,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     ;
     targets.causticHistory = m_graphics.createTexture(historyDesc);
     if(!targets.causticHistory){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic a-trous half-A target"));
         return false;
     }
 
@@ -234,7 +234,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     ;
     targets.causticResolveHalf = m_graphics.createTexture(halfBDesc);
     if(!targets.causticResolveHalf){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic a-trous half-B target"));
         return false;
     }
 
@@ -250,11 +250,11 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     ;
     targets.causticResolveGeometry = m_graphics.createTexture(geometryDesc);
     if(!targets.causticResolveGeometry){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
         return false;
     }
     if(!prepareCausticResolveActivity(halfWidth, halfHeight))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
     return true;
 }
 

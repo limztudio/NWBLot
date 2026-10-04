@@ -385,7 +385,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
     *writeCursor = CharT{};
 }
 
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
 template<typename CharT>
 inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
     if(dstSize == 0)
@@ -464,7 +464,7 @@ class Name{
 public:
     constexpr Name()
         : m_hash{}
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
@@ -473,7 +473,7 @@ public:
     {}
     constexpr Name(std::nullptr_t)
         : m_hash{}
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
@@ -482,53 +482,53 @@ public:
     {}
     constexpr Name(const char* str)
         : m_hash(ComputeNameHash(str))
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     constexpr Name(const wchar* str)
         : m_hash(ComputeNameHash(str))
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     explicit Name(const NameHash& hash)
         : m_hash(hash)
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
     }
     explicit constexpr Name(const AStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
         , m_hasSymbolText(true)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         if(!IsConstantEvaluated())
@@ -536,14 +536,14 @@ public:
     }
     explicit constexpr Name(const WStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)
         , m_hasSymbolText(true)
 #endif
     {
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         if(!IsConstantEvaluated())
@@ -570,7 +570,7 @@ public:
 #if defined(GLOBAL_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         const AStringView text(m_debugName, sizeof(m_debugName));
         return text.substr(0u, text.find('\0'));
 #else
@@ -590,7 +590,7 @@ public:
 #if defined(GLOBAL_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         return m_debugName;
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
@@ -606,7 +606,7 @@ public:
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const{
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
         return AStringView(m_debugName);
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
@@ -627,7 +627,7 @@ private:
 
 private:
     NameHash m_hash;
-#if defined(NWB_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
+#if defined(GLOBAL_DEBUG) || defined(GLOBAL_BUILD_SYMBOLS)
     char m_debugName[NameDetail::s_DebugNameCapacity];
 #endif
 #if defined(GLOBAL_BUILD_SYMBOLS)

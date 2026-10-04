@@ -74,7 +74,7 @@ void MeshSkinningDeformationState::refreshCurrent(
         || (jointCount != 0u && !joints)
     )
         return;
-    m_current = jointCount == 0u || NWB_MEMCMP(joints, m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
+    m_current = jointCount == 0u || GLOBAL_MEMCMP(joints, m_acceptedJoints.data(), jointCount * sizeof(SkeletonJointMatrix)) == 0;
 }
 
 u64 MeshSkinningDeformationState::stage(
@@ -90,7 +90,7 @@ u64 MeshSkinningDeformationState::stage(
         || m_candidateSerial == Limit<u64>::s_Max
         || m_acceptedRevision == Limit<u64>::s_Max
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningDeformationState: invalid or exhausted deformation candidate"));
         return 0u;
     }
     if(jointCount == 0u)

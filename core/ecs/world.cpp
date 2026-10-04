@@ -159,7 +159,7 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& po
         return nodeIndex;
     }
 
-    NWB_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
+    GLOBAL_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
     const u32 nodeIndex = static_cast<u32>(m_entityComponentNodes.size());
     m_entityComponentNodes.push_back(EntityComponentNode{ typeId, MakeNotNull(&pool), nextNode });
     return nodeIndex;
@@ -167,7 +167,7 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& po
 
 
 void World::releaseEntityComponentNode(u32 nodeIndex){
-    NWB_ASSERT(nodeIndex < m_entityComponentNodes.size());
+    GLOBAL_ASSERT(nodeIndex < m_entityComponentNodes.size());
     m_entityComponentNodes[nodeIndex].next = m_freeEntityComponentNode;
     m_freeEntityComponentNode = nodeIndex;
 }

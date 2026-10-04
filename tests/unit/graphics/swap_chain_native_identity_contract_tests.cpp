@@ -1327,7 +1327,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     const usize unwindDetachOffset = fullGraphicsSource.find("detachDevice();", activeUnwindOffset);
     const usize activeUnwindReturnOffset = fullGraphicsSource.find("return;", unwindDetachOffset);
     const usize destructorFailureGuardOffset = fullGraphicsSource.find("ScopeExit detachOnFailure(detachDevice);", activeUnwindReturnOffset);
-    const usize destructorAssertionOffset = fullGraphicsSource.find("NWB_FATAL_ASSERT_MSG(", graphicsDestructorOffset);
+    const usize destructorAssertionOffset = fullGraphicsSource.find("GLOBAL_FATAL_ASSERT_MSG(", graphicsDestructorOffset);
     const usize destructorDestroyOffset = fullGraphicsSource.find("destroy(),", destructorAssertionOffset);
     const usize destructorGuardReleaseOffset = fullGraphicsSource.find("detachOnFailure.release();", destructorDestroyOffset);
     ASSERT_NE(graphicsDestructorOffset, AStringView::npos);

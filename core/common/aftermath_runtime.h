@@ -18,10 +18,10 @@ NWB_COMMON_BEGIN
 
 
 // Vendored Aftermath runtime name; single source shared by capture and decode.
-#if defined(NWB_PLATFORM_WINDOWS)
-inline constexpr TStringView s_AftermathRuntimeName = NWB_TEXT("GFSDK_Aftermath_Lib.x64.dll");
+#if defined(GLOBAL_PLATFORM_WINDOWS)
+inline constexpr TStringView s_AftermathRuntimeName = GLOBAL_TEXT("GFSDK_Aftermath_Lib.x64.dll");
 #else
-inline constexpr TStringView s_AftermathRuntimeName = NWB_TEXT("libGFSDK_Aftermath_Lib.x64.so");
+inline constexpr TStringView s_AftermathRuntimeName = GLOBAL_TEXT("libGFSDK_Aftermath_Lib.x64.so");
 #endif
 
 

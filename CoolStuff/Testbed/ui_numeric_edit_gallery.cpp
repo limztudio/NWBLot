@@ -16,7 +16,7 @@ TestbedUiNumericEditGallery::TestbedUiNumericEditGallery(NWB::Core::Alloc::Globa
     , m_float(arena)
 {
     const bool initialized = m_integer.setValue(9007199254740993ll) && m_float.setValue(1.25);
-    NWB_FATAL_ASSERT(initialized);
+    GLOBAL_FATAL_ASSERT(initialized);
 }
 
 void TestbedUiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
@@ -42,7 +42,7 @@ void TestbedUiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, cons
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom numeric editor declaration failed"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Testbed: custom numeric editor declaration failed"));
 }
 
 

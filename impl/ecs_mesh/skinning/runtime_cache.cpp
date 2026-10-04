@@ -98,7 +98,7 @@ RuntimeMeshHandle MeshSkinningRuntimeCache::allocateHandle(){
             return handle;
     }
 
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh handle space exhausted"));
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("MeshSkinningRuntimeCache: runtime mesh handle space exhausted"));
     return RuntimeMeshHandle{};
 }
 

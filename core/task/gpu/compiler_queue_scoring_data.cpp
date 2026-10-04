@@ -178,7 +178,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(
     if(m_assignedCostWords.empty()){
         for(GpuTaskQueueLoad& load : m_assignedQueueLoads){
             if(load.queue == previousQueue){
-                NWB_ASSERT(load.estimatedCost >= cost);
+                GLOBAL_ASSERT(load.estimatedCost >= cost);
                 load.estimatedCost -= cost;
             }
             if(load.queue == selectedQueue)
@@ -193,7 +193,7 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(
         GpuTaskQueueLoad& load = m_assignedQueueLoads[queueIndex];
         u64& word = m_assignedCostWords[(queueIndex + 1u) * wordsPerQueue + wordIndex];
         if(load.queue == previousQueue){
-            NWB_ASSERT(load.estimatedCost >= cost);
+            GLOBAL_ASSERT(load.estimatedCost >= cost);
             load.estimatedCost -= cost;
             word &= ~mask;
         }
@@ -220,10 +220,10 @@ u64 GpuTaskQueueScoringData::independentQueueCost(
     const usize memberCount)const noexcept{
     if(!reachability.m_valid || reachability.m_totalOrder || memberCount == 0u)
         return 0u;
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){
         const GpuTaskId task = members.get()[memberIndex].task;
-        NWB_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
+        GLOBAL_ASSERT(task.valid() && task.generation == reachability.m_graphGeneration && task.index < reachability.m_taskCount);
     }
 #endif
     usize queueIndex = 0u;
@@ -242,7 +242,7 @@ u64 GpuTaskQueueScoringData::independentQueueCost(
         }
         return independentCost;
     }
-    NWB_ASSERT(m_costWordsPerGroup == reachability.m_wordsPerRow);
+    GLOBAL_ASSERT(m_costWordsPerGroup == reachability.m_wordsPerRow);
     usize firstWord = m_costWordsPerGroup;
     usize lastWord = 0u;
     for(usize memberIndex = 0u; memberIndex < memberCount; ++memberIndex){

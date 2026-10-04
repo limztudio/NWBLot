@@ -16,16 +16,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_AssertColon = NWB_TEXT(":");
-inline constexpr TStringView s_AssertNewline = NWB_TEXT("\n");
-inline constexpr TStringView s_AssertLabel = NWB_TEXT("ASSERT ");
-inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
+inline constexpr TStringView s_AssertColon = GLOBAL_TEXT(":");
+inline constexpr TStringView s_AssertNewline = GLOBAL_TEXT("\n");
+inline constexpr TStringView s_AssertLabel = GLOBAL_TEXT("ASSERT ");
+inline constexpr TStringView s_FatalAssertLabel = GLOBAL_TEXT("FATAL ASSERT ");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
+#define GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
         .event = ::DiagnosticEventName::s_Assert,                                        \
         .category = categoryValue,                                                       \
@@ -36,24 +36,24 @@ inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
         .terminatesProcess = true,                                                       \
     })
 
-#define NWB_DETAIL_ASSERT_ABORT(label)                                                   \
-    NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
+#define GLOBAL_DETAIL_ASSERT_ABORT(label)                                                   \
+    GLOBAL_TCERR << label << GLOBAL_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
     ::std::abort()
 
-#define NWB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
+#define GLOBAL_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
 {                                                                                        \
     if(!(condition)){                                                                    \
-        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
-        NWB_DETAIL_ASSERT_ABORT(label);                                                  \
+        GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
+        GLOBAL_DETAIL_ASSERT_ABORT(label);                                                  \
     }                                                                                    \
 }
 
-#define NWB_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
+#define GLOBAL_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
 {                                                                                        \
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
-        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
-        NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
+        GLOBAL_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
+        GLOBAL_TCERR << label << GLOBAL_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \
 }
@@ -62,24 +62,24 @@ inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_OCCUR_ASSERT
-#define NWB_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
-#define NWB_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
+#if GLOBAL_OCCUR_ASSERT
+#define GLOBAL_ASSERT(condition) GLOBAL_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
+#define GLOBAL_ASSERT_MSG(condition, ...) GLOBAL_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
 #else
-#define NWB_ASSERT(condition)
-#define NWB_ASSERT_MSG(condition, ...)
+#define GLOBAL_ASSERT(condition)
+#define GLOBAL_ASSERT_MSG(condition, ...)
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_OCCUR_FATAL_ASSERT
-#define NWB_FATAL_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
-#define NWB_FATAL_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
+#if GLOBAL_OCCUR_FATAL_ASSERT
+#define GLOBAL_FATAL_ASSERT(condition) GLOBAL_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
+#define GLOBAL_FATAL_ASSERT_MSG(condition, ...) GLOBAL_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
 #else
-#define NWB_FATAL_ASSERT(condition)
-#define NWB_FATAL_ASSERT_MSG(condition, ...)
+#define GLOBAL_FATAL_ASSERT(condition)
+#define GLOBAL_FATAL_ASSERT_MSG(condition, ...)
 #endif
 
 

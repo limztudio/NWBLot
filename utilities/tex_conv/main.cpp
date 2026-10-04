@@ -18,15 +18,15 @@ namespace __hidden_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_LoggerAppName = NWB_TEXT("tex_conv");
-inline constexpr TStringView s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logger.init() failed");
+inline constexpr TStringView s_LoggerAppName = GLOBAL_TEXT("tex_conv");
+inline constexpr TStringView s_LoggerInitFailureText = GLOBAL_TEXT("[tex_conv] logger.init() failed");
 inline constexpr int s_TexConvEntryFailure = -1;
 
 
 int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
-        NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
+        GLOBAL_TCERR << s_LoggerInitFailureText << GLOBAL_TEXT("\n");
         return s_TexConvEntryFailure;
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
@@ -38,7 +38,7 @@ int EntryPoint(const isize argc, char** argv, void*){
     return Run(static_cast<int>(argc), argv);
 }
 
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
+#if defined(GLOBAL_PLATFORM_WINDOWS) && defined(GLOBAL_UNICODE)
 int EntryPoint(const isize argc, wchar** argv, void*){
     return NWB::Core::Common::ApplicationEntryDetail::InvokeWithUtf8Args(argc, argv, Run);
 }

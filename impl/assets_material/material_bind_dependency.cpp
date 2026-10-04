@@ -39,7 +39,7 @@ static bool TryResolveMaterialBindDependencyInterface(
     ErrorCode errorCode;
     Path normalizedDependency = AbsolutePath(dependency, errorCode).lexically_normal();
     if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}")
             , PathToString<tchar>(dependency)
             , StringConvert(errorCode.message())
         );
@@ -57,7 +57,7 @@ static bool TryResolveMaterialBindDependencyInterface(
     Path relativePath = normalizedDependency.lexically_relative(normalizedMaterialBindIncludeRoot);
     relativePath.replace_extension();
     if(!Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText(relativePath, outInterfacePath)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to derive interface from generated include '{}'")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind dependency: failed to derive interface from generated include '{}'")
             , PathToString<tchar>(normalizedDependency)
         );
         return false;
@@ -88,7 +88,7 @@ bool ResolveMaterialBindDependencyInterface(
         ErrorCode errorCode;
         normalizedMaterialBindIncludeRoot = AbsolutePath(materialBindIncludeRoot, errorCode).lexically_normal();
         if(errorCode){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}")
                 , PathToString<tchar>(materialBindIncludeRoot)
                 , StringConvert(errorCode.message())
             );
@@ -112,7 +112,7 @@ bool ResolveMaterialBindDependencyInterface(
 
         const Name dependencyInterfaceName{ AStringView(dependencyInterfacePath) };
         if(!dependencyInterfaceName){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: shader '{}' includes invalid generated "
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Material bind dependency: shader '{}' includes invalid generated "
                 "material bind interface '{}'")
                 , StringConvert(shaderName)
                 , StringConvert(dependencyInterfacePath)

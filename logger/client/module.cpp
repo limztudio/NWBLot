@@ -78,7 +78,7 @@ bool Client::internalInit(const AStringView url){
 
     m_curl = curl_easy_init();
     if(!m_curl){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to initialize CURL on {}"), s_ClientName), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), GLOBAL_TEXT("Failed to initialize CURL on {}"), s_ClientName), Type::Fatal);
         return false;
     }
 
@@ -87,25 +87,25 @@ bool Client::internalInit(const AStringView url){
 
     curlResult = curl_easy_setopt(curlHandle, CURLOPT_POST, 1);
     if(curlResult != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set post on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), GLOBAL_TEXT("Failed to set post on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
     curlResult = curl_easy_setopt(curlHandle, CURLOPT_NOSIGNAL, 1L);
     if(curlResult != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set no-signal mode on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), GLOBAL_TEXT("Failed to set no-signal mode on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
     curlResult = curl_easy_setopt(curlHandle, CURLOPT_CONNECTTIMEOUT_MS, __hidden_log_client::s_ConnectTimeoutMs);
     if(curlResult != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set connect timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), GLOBAL_TEXT("Failed to set connect timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
     curlResult = curl_easy_setopt(curlHandle, CURLOPT_TIMEOUT_MS, __hidden_log_client::s_RequestTimeoutMs);
     if(curlResult != CURLE_OK){
-        enqueue(StringFormat(BaseType::arena(), NWB_TEXT("Failed to set request timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
+        enqueue(StringFormat(BaseType::arena(), GLOBAL_TEXT("Failed to set request timeout on {}: {}"), s_ClientName, StringConvert(BaseType::arena(), curl_easy_strerror(curlResult))), Type::Fatal);
         return false;
     }
 
@@ -117,7 +117,7 @@ bool Client::enqueueTelemetry(const void* const bytes, const usize byteCount){
 
     LogBytes upload(BaseType::arena());
     upload.resize(byteCount);
-    NWB_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
+    GLOBAL_MEMCPY(upload.data(), upload.size(), bytes, byteCount);
     m_telemetryQueue.emplace(Move(upload));
     m_telemetryCount.fetch_add(1u, MemoryOrder::relaxed);
     this->m_semaphore.release();
@@ -147,7 +147,7 @@ bool Client::internalUpdate(){
                 const MessageType fallbackMsg = MakeTuple(
                     Timer{},
                     Type::Error,
-                    LogString(NWB_TEXT("Logger client dropped an oversized message"), BaseType::arena())
+                    LogString(GLOBAL_TEXT("Logger client dropped an oversized message"), BaseType::arena())
                 );
                 if(!BuildMessagePayload(fallbackMsg, m_pendingPayload))
                     return true;
@@ -235,7 +235,7 @@ bool ClientStandalone::internalUpdate(){
     while(tryDequeue(msg)){
         const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
 
-        NWB_TCOUT << formattedMessage << static_cast<tchar>('\n');
+        GLOBAL_TCOUT << formattedMessage << static_cast<tchar>('\n');
         m_processedMessageFile.writeLine(formattedMessage);
     }
 

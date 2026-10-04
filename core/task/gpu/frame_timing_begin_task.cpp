@@ -32,7 +32,7 @@ void FrameTimingBeginGraphTask::accepted(Payload& payload, const QueueSubmission
     if(!payload.frameTimingTransaction)
         return;
     if(!payload.frameTimingTransaction->confirmBeginSubmission(token)){
-        NWB_LOGGER_WARNING(NWB_TEXT("GPU task graph: failed to confirm accepted frame timing begin; discarding timing reservation"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("GPU task graph: failed to confirm accepted frame timing begin; discarding timing reservation"));
         payload.frameTimingTransaction->discard();
     }
 }

@@ -514,7 +514,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
     const usize sourceBytes = EstimateMeshletSourceBytes(indices, entry);
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , metrics.meshletCount
@@ -554,7 +554,7 @@ bool MeshCookMeshlets::PrecomputeMeshletTriangleData(
 
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
     if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
@@ -669,7 +669,7 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(
 template<typename CookEntryT>
 MeshletBounds MeshCookMeshlets::BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
     const u32 positionCount = MeshletPositionCount(meshlet);
-    NWB_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
+    GLOBAL_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
     SIMDVector positions[s_MeshMaxMeshletVertices];
     for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
@@ -1113,7 +1113,7 @@ bool MeshCookMeshlets::AddMeshletTriangleToBuilder(
         const bool found = FindMeshletLocalVertex(localSourceVertexRefs, vertexRefIndex, localVertex);
         if(!found){
             if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': triangle cannot fit within one meshlet")
                     , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
@@ -1235,7 +1235,7 @@ template<
         u16 localPosition = 0u;
         if(!FindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits")
                     , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
@@ -1248,7 +1248,7 @@ template<
         u16 localAttribute = 0u;
         if(!FindMeshletAttributeRef(outAttributeRefs, outAttributeSkins, attributeRef, source.skin, localAttribute)){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
-                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': meshlet attributes exceed local index limits")
                     , metaKind
                     , PathToString<tchar>(nwbFilePath)
                 );
@@ -1416,7 +1416,7 @@ bool MeshCookMeshlets::BuildMeshlets(
     }
 
     if(entry.meshlets.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("{} meta '{}': meshlet build produced no meshlets")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
         );

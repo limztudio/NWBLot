@@ -34,11 +34,11 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             allResourcesReady = false;
         }
     }
@@ -67,7 +67,7 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
 
         PreparedMeshBlasBuild build;
         if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
             return false;
         }
@@ -90,7 +90,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
             || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
@@ -100,7 +100,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             build,
             meshBlasGeometryBuildInputStatesGraphOwned
         )){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
@@ -143,7 +143,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         }
         if(build.firstBuild){
             ++m_blasLedgerFirstBuilds;
-            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
+            NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
                 , StringConvert(build.meshName.resolvedText())
                 , build.runtimeMesh
                 , static_cast<u64>(build.vertexCount)
@@ -159,7 +159,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
     // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
     if(!allPlansCurrent)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}")
         , m_blasLedgerStaticSkipped
         , m_blasLedgerFirstBuilds
         , m_blasLedgerRefits

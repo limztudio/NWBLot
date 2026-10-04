@@ -210,7 +210,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         },
         prefixSceneUploadResult
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
         return false;
     }
     m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult.meshViewSetupTask;
@@ -219,7 +219,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         prefixSceneUploadResult.lightingClassification
     ;
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
-    NWB_MEMCPY(
+    GLOBAL_MEMCPY(
         sceneLightData,
         sizeof(sceneLightData),
         prefixSceneUploadResult.lightData,
@@ -265,7 +265,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueColorClearDesc
     );
     if(!m_graphicsPrefixDeferredClearTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred-clear task"));
         return false;
     }
 
@@ -275,7 +275,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     MaterialPassDrawItemPartitions opaqueDrawItems{ materialUploadScratch };
     InstanceGpuDataVector instanceData{ materialUploadScratch };
     CsgFrameGpuData csgFrameData{ materialUploadScratch };
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ materialUploadScratch };
 #endif
     MaterialTypedByteDataVector materialTypedBytes{ materialUploadScratch };
@@ -287,7 +287,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueDrawItems,
         instanceData,
         csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
         materialTypedRanges,
 #endif
         materialTypedBytes,
@@ -324,7 +324,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .drawItems = &opaqueDrawItems,
             .instanceData = &instanceData,
             .csgFrameData = &csgFrameData,
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
             .materialTypedRanges = &materialTypedRanges,
 #endif
             .materialTypedBytes = &materialTypedBytes,
@@ -338,7 +338,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         },
         opaqueUploadChainResult
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque upload chain"));
         return false;
     }
     const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult.csgUploadTask;
@@ -445,7 +445,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalClearTimingState,
         opaqueCsgIntervalClearResult
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
         return false;
     }
     m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult.clearFirstTask;
@@ -500,7 +500,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         )
     ;
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
         // Frozen heap slots require a complete graph declaration before this material callback can record.
         return false;
     }
@@ -517,7 +517,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         )
     ;
     if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
         return false;
     }
 
@@ -543,7 +543,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         )
     ;
     if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT(
+        NWB_LOGGER_WARNING(GLOBAL_TEXT(
             "RendererSystem: could not declare graph-owned opaque compute-emulation output states"
         ));
     }
@@ -577,7 +577,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueSharedComputeEmulationPlanCaptured
         && !opaqueSharedComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT(
+        NWB_LOGGER_WARNING(GLOBAL_TEXT(
             "RendererSystem: could not declare graph-owned shared opaque compute-emulation output state"
         ));
     }
@@ -620,7 +620,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueCsgReceiverComputeEmulationPlanCaptured
         && !opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT(
+        NWB_LOGGER_WARNING(GLOBAL_TEXT(
             "RendererSystem: could not declare graph-owned opaque CSG receiver compute-emulation output states"
         ));
     }
@@ -876,7 +876,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             Move(opaqueComputeEmulationPayload)
         );
         if(!m_graphicsPrefixOpaqueComputeEmulationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
             return false;
         }
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
@@ -970,7 +970,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             Move(opaqueCsgReceiverComputeEmulationPayload)
         );
         if(!m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
             return false;
         }
         gbufferDependency = m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
@@ -1011,7 +1011,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         Move(gbufferPayload)
     );
     if(!m_graphicsPrefixGbufferTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque G-buffer task"));
         return false;
     }
 
@@ -1165,7 +1165,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         const usize opaqueSharedComputeEmulationPhaseCount =
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(opaqueSharedComputeEmulationPlan.drawCount);
         if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(opaqueSharedComputeEmulationPhaseCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
             return false;
         }
         Core::GpuTaskId opaqueSharedComputeEmulationDependency = m_graphicsPrefixGbufferTask;
@@ -1191,7 +1191,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 )
             ;
             if(!m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
                 return false;
             }
             opaqueSharedComputeEmulationDependency = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
@@ -1220,7 +1220,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             Move(csgReceiverSpanPayload)
         );
         if(!m_graphicsPrefixCsgReceiverSpanTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
             return false;
         }
 
@@ -1244,7 +1244,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             Move(csgIntervalCombinePayload)
         );
         if(!m_graphicsPrefixCsgIntervalCombineTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-combine task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque CSG interval-combine task"));
             return false;
         }
 
@@ -1270,7 +1270,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             )
         ;
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
             return false;
         }
         const bool csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleUsesMaterialGeometry
@@ -1286,7 +1286,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             )
         ;
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
             return false;
         }
 
@@ -1318,7 +1318,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             opaqueCsgIntervalSampleComputeEmulationPlanCaptured
             && !opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT(
+            NWB_LOGGER_WARNING(GLOBAL_TEXT(
                 "RendererSystem: could not declare graph-owned opaque CSG interval-sample compute-emulation outputs"
             ));
         }
@@ -1537,7 +1537,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 )
             ;
             if(!m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT(
+                NWB_LOGGER_WARNING(GLOBAL_TEXT(
                     "RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"
                 ));
                 return false;
@@ -1573,7 +1573,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             Move(csgIntervalSamplePayload)
         );
         if(!m_graphicsPrefixCsgIntervalSampleTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-sample task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare opaque CSG interval-sample task"));
             return false;
         }
         gbufferCompletionTask = m_graphicsPrefixCsgIntervalSampleTask;
@@ -1634,7 +1634,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         }
     );
     if(!m_graphicsPrefixTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return false;
     }
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes

@@ -106,7 +106,7 @@ struct CausticAccumulatorDecayGraphTask{
         );
         if(!dispatched){
             DiscardGpuTimingMeasure(payload.causticPhotonTiming);
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
         }
         return true;
     }
@@ -159,7 +159,7 @@ struct SoftwareCausticsGraphTask{
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork(payload.meshView))
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: software caustic render pass failed"));
         }
         return true;
     }
@@ -218,7 +218,7 @@ struct HardwareCausticsGraphTask{
             if(payload.causticProducerDispatched)
                 *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork(payload.meshView))
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
         return true;
     }
@@ -554,9 +554,9 @@ inline void DispatchCausticResolvePass(
     const u32 groupsY,
     const CausticResolveActivitySnapshot& activity = {}
 ){
-    NWB_ASSERT(input.texture);
-    NWB_ASSERT(output.texture);
-    NWB_ASSERT(input.texture != output.texture);
+    GLOBAL_ASSERT(input.texture);
+    GLOBAL_ASSERT(output.texture);
+    GLOBAL_ASSERT(input.texture != output.texture);
     // Sequence indices match the graph: prepare, five wavelets, then upsample.
     const u32 activityPassIndex = stage == CausticResolveStage::Wavelet
         ? static_cast<u32>(CountTrailingZeros(stepWidth)) + 1u

@@ -119,7 +119,7 @@ void UiListSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiListSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -158,16 +158,16 @@ void UiListSmokeScene::observeState(){
     m_lastValues = current;
     m_lastPlacement = placement;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiListSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiListSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5]
         , current[6], current[7], current[8], current[9], current[10], current[11]
     );
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("selected_row"), selectedRow());
-    LogSmokeRect(NWB_TEXT("UiListSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("list"), placement.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("track"), placement.track);
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("selected_row"), selectedRow());
+    LogSmokeRect(GLOBAL_TEXT("UiListSmoke"), m_sequence, GLOBAL_TEXT("counter"), __hidden_ui_list_smoke::s_Counter);
 }
 
 void UiListSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

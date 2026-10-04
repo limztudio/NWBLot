@@ -444,7 +444,7 @@ static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, 
 
 // Base grids retain full quality; the explicit quality divisor scales both dimensions before temporal phase selection.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
-#if defined(NWB_FINAL) || defined(NWB_OPTIMIZE)
+#if defined(GLOBAL_FINAL) || defined(GLOBAL_OPTIMIZE)
 inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 #else
 inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
@@ -465,7 +465,7 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
 // Resolve exposure on SIMD lanes; photon-count changes preserve brightness. Decay path is
 // VectorNegativeMultiplySubtract(decay, intensity, intensity) = intensity * (1 - decay); the temporal gate is a
 // lane select, so both candidates stay on lanes and no scalar branch computes the surviving candidate.
-[[nodiscard]] NWB_INLINE f32 EffectiveCausticIntensity(const f32 temporalDecay)noexcept{
+[[nodiscard]] GLOBAL_INLINE f32 EffectiveCausticIntensity(const f32 temporalDecay)noexcept{
     const SIMDVector decayLanes = VectorReplicate(temporalDecay);
     const SIMDVector intensityLanes = VectorReplicate(s_CausticIntensity);
     const SIMDVector decayedLanes = VectorNegativeMultiplySubtract(decayLanes, intensityLanes, intensityLanes);

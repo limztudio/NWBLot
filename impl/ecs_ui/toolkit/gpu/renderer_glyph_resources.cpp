@@ -41,7 +41,7 @@ namespace __hidden_ui_gpu_glyphs{
     // Equal identities may be reconstructed, but cannot silently alias different immutable coverage bytes.
     return
         first.pixels().size() == second.pixels().size()
-        && NWB_MEMCMP(first.pixels().data(), second.pixels().data(), first.pixels().size()) == 0
+        && GLOBAL_MEMCMP(first.pixels().data(), second.pixels().data(), first.pixels().size()) == 0
     ;
 }
 
@@ -217,7 +217,7 @@ bool GpuRendererState::declareGlyphPages(
     GpuGlyphGraphResources& resources,
     GpuRasterResourceUses& uses){
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
         return false;
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
@@ -232,7 +232,7 @@ bool GpuRendererState::declareGlyphPages(
                 .setToken(page->m_readinessToken)
         );
         if(!ready.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} upload completion import failed (queue={}, generation={}, value={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: glyph page {} upload completion import failed (queue={}, generation={}, value={})")
                 , index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value
             );
             return false;
@@ -244,7 +244,7 @@ bool GpuRendererState::declareGlyphPages(
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
         if(!texture.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})")
                 , index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation
             );
             return false;

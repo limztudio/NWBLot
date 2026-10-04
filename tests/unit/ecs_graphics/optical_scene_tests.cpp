@@ -192,8 +192,8 @@ TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){
     EXPECT_EQ(upload.instanceCount, 1u);
     u32 storedCount = 0u;
     u32 storedEntity = 0u;
-    NWB_MEMCPY(&storedCount, sizeof(storedCount), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET, sizeof(u32));
-    NWB_MEMCPY(&storedEntity, sizeof(storedEntity), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES, sizeof(u32));
+    GLOBAL_MEMCPY(&storedCount, sizeof(storedCount), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET, sizeof(u32));
+    GLOBAL_MEMCPY(&storedEntity, sizeof(storedEntity), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES, sizeof(u32));
     EXPECT_EQ(storedCount, 1u);
     EXPECT_EQ(storedEntity, Core::ECS::EntityID(7u, s_ExpectedDualCount).id);
 }

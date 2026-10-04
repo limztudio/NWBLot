@@ -114,7 +114,7 @@ void GpuTaskGraph::prepareExternalCompletionIndex(){
     ImportIdentityIndex identities(AddSize(identityCount, identityCount), m_arena);
     for(usize index = 0u; index < m_externalCompletions.size(); ++index){
         if(!identities.emplace(m_externalCompletions[index].identity.identityHash(), static_cast<u32>(index)).second){
-            NWB_FATAL_ASSERT_MSG(false, "Completion import index requires unique retained identities");
+            GLOBAL_FATAL_ASSERT_MSG(false, "Completion import index requires unique retained identities");
             TerminateInvariant();
         }
     }

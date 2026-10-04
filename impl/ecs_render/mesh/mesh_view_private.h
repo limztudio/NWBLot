@@ -87,11 +87,11 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     return MatrixMultiply(viewToClip, worldToView);
 }
 
-NWB_INLINE SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
+GLOBAL_INLINE SIMDVector BuildViewFrustumPlaneVector(const SIMDVector normal, const SIMDVector point){
     return PlaneTests::FromPointNormal(normal, point, VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
 }
 
-NWB_INLINE SIMDVector BuildViewFrustumSidePlaneVector(
+GLOBAL_INLINE SIMDVector BuildViewFrustumSidePlaneVector(
     const SIMDVector forward,
     const SIMDVector side,
     const SIMDVector tanHalfAngle,
@@ -167,7 +167,7 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
 
     SIMDVector determinant;
     const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
-    NWB_ASSERT(VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorZero()));
+    GLOBAL_ASSERT(VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorZero()));
     StoreFloat(clipToWorld, state.clipToWorld);
 
     SIMDVector cameraPosition;

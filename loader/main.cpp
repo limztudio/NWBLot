@@ -135,7 +135,7 @@ struct LoaderOptions{
 };
 
 bool ProjectTickCallback(void* userData, f32 delta){
-    NWB_FATAL_ASSERT_MSG(userData, NWB_TEXT("ProjectTickCallback received null user data"));
+    GLOBAL_FATAL_ASSERT_MSG(userData, GLOBAL_TEXT("ProjectTickCallback received null user data"));
     auto* updateContext = static_cast<UpdateCallbackContext*>(userData);
     return updateContext->callbacks.onUpdate(delta);
 }
@@ -198,7 +198,7 @@ bool LoadShaderArchiveRecords(
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
 }
 
-#if !defined(NWB_FINAL)
+#if !defined(GLOBAL_FINAL)
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer (dbg/opt builds only)");
 }
@@ -207,26 +207,26 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
     if(options.disableHardwareRayTracing){
         if(!graphics.setHardwareRayTracingPolicy(NWB::Core::HardwareRayTracingPolicy::Disabled)){
-            NWB_LOGGER_FATAL(NWB_TEXT("Loader: hardware ray tracing policy must be selected before graphics initialization"));
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Loader: hardware ray tracing policy must be selected before graphics initialization"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: hardware ray tracing disabled before device creation"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: hardware ray tracing disabled before device creation"));
     }
 
     if(options.forceSdrOutput){
         if(!graphics.setHDR10OutputEnabled(false)){
-            NWB_LOGGER_FATAL(NWB_TEXT("Loader: SDR output must be selected before graphics initialization"));
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Loader: SDR output must be selected before graphics initialization"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: forcing SDR presentation"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: forcing SDR presentation"));
     }
 
     if(options.enableGpuDebug){
         if(!graphics.setDebugRuntimeEnabled(true)){
-            NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
             return false;
         }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: GPU debug validation enabled"));
     }
 
     return true;
@@ -274,7 +274,7 @@ bool InstallCrashCapture(CrashArena& crashArena){
             || dumpResult.status == NWB::Core::Crash::CrashDumpStatus::PackageWriteFailed
         ){
             NWB_LOGGER_WARNING(
-                NWB_TEXT("Loader: GPU crash dump capture failed (status {})")
+                GLOBAL_TEXT("Loader: GPU crash dump capture failed (status {})")
                 , static_cast<u32>(dumpResult.status)
             );
         }
@@ -288,11 +288,11 @@ void ConfigureCrashReporting(const LoaderOptions& options){
         : AStringView(options.logAddress.data(), options.logAddress.size())
     ;
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Loader: failed to set crash upload destination"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Loader: failed to set 'runtime' crash metadata"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, options.enableGpuDebug ? s_EnabledText : s_DisabledText))
-        NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 
 bool UploadTelemetry(void* userData, const void* bytes, const usize byteCount){
@@ -321,13 +321,13 @@ static int RunProjectRuntime(
 
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == __hidden_loader::s_EmptyFrameClientExtent || frameClientSize.height == __hidden_loader::s_EmptyFrameClientExtent){
-            NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
             return __hidden_loader::s_LoaderExitFailure;
         }
 
         const TStringView projectWindowTitle = NWB::QueryProjectWindowTitle();
         if(projectWindowTitle.empty()){
-            NWB_LOGGER_FATAL(NWB_TEXT("Invalid project window title"));
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Invalid project window title"));
             return __hidden_loader::s_LoaderExitFailure;
         }
 
@@ -339,7 +339,7 @@ static int RunProjectRuntime(
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
         if(!NWB::ConfigureProjectRuntime(startupContext)){
-            NWB_LOGGER_FATAL(NWB_TEXT("Loader: project runtime configuration failed before device initialization"));
+            NWB_LOGGER_FATAL(GLOBAL_TEXT("Loader: project runtime configuration failed before device initialization"));
             return __hidden_loader::s_LoaderExitFailure;
         }
         if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
@@ -352,7 +352,7 @@ static int RunProjectRuntime(
         i32 initializedFrameWidth = __hidden_loader::s_UninitializedFrameExtent;
         i32 initializedFrameHeight = __hidden_loader::s_UninitializedFrameExtent;
         frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
         NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
         if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
@@ -363,7 +363,7 @@ static int RunProjectRuntime(
         );
         if(!graphicsFilesystem)
             return __hidden_loader::s_LoaderExitFailure;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 
         {
             __hidden_loader::FilesystemAssetBinarySource assetBinarySource(*graphicsFilesystem);
@@ -375,7 +375,7 @@ static int RunProjectRuntime(
 
             NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
             if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
-                NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
+                NWB_LOGGER_FATAL(GLOBAL_TEXT("Failed to load shader archive index '{}'")
                     , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
                 );
                 return __hidden_loader::s_LoaderExitFailure;
@@ -428,7 +428,7 @@ static int RunProjectRuntime(
 
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);
             if(!callbacks){
-                NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
+                NWB_LOGGER_FATAL(GLOBAL_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
             __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
@@ -439,24 +439,24 @@ static int RunProjectRuntime(
 
             callbackShutdownGuard.activate();
             if(!callbacks->onStartup()){
-                NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
+                NWB_LOGGER_FATAL(GLOBAL_TEXT("Project startup callback returned false"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
+            NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: project startup complete"));
             frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
 
             if(!frame.showFrame()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Loader: frame show failed"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
 
             if(!frame.mainLoop()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Loader: frame main loop failed"));
                 return __hidden_loader::s_LoaderExitFailure;
             }
         }
         if(!graphicsFilesystem->unmount()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to unmount project filesystem"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Loader: failed to unmount project filesystem"));
             return __hidden_loader::s_LoaderExitFailure;
         }
     }
@@ -470,11 +470,11 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         if(!logger.init())
             return __hidden_loader::s_LoaderExitFailure;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
+        NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: using standalone log output"));
         if(crashReportingInstalled)
             __hidden_loader::ConfigureCrashReporting(options);
         else
-            NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
         return RunProjectRuntime(arena, options, inst, nullptr);
     }
@@ -483,11 +483,11 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     if(!logger.init(AStringView(options.logAddress.data(), options.logAddress.size())))
         return __hidden_loader::s_LoaderExitFailure;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress));
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress));
     if(crashReportingInstalled)
         __hidden_loader::ConfigureCrashReporting(options);
     else
-        NWB_LOGGER_ERROR(NWB_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Loader: crash reporting unavailable - ERROR/FATAL/crash dumps will NOT be captured this run"));
 
     return RunProjectRuntime(arena, options, inst, &logger);
 }
@@ -521,7 +521,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
     app.add_flag(__hidden_loader::s_ForceSdrOutputFlag.data(), options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
     app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
-#if !defined(NWB_FINAL)
+#if !defined(GLOBAL_FINAL)
     __hidden_loader::AddDebugCommandLineOptions(app, options);
 #endif
 
@@ -533,7 +533,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, GLOBAL_COUT, GLOBAL_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; });
 }
 
 

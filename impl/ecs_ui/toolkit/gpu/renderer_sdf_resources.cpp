@@ -158,7 +158,7 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
         const usize texels = static_cast<usize>(binding.width) * binding.height;
         expanded.resize(texels * uploadChannels, 0u);
         for(usize texel = 0u; texel < texels; ++texel)
-            NWB_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData + texel * binding.channelCount, binding.channelCount);
+            GLOBAL_MEMCPY(expanded.data() + texel * uploadChannels, uploadChannels, uploadData + texel * binding.channelCount, binding.channelCount);
         uploadData = expanded.data();
         uploadBytes = expanded.size();
     }
@@ -209,7 +209,7 @@ bool GpuRendererState::declareSdfPages(
     GpuSdfGraphResources& resources,
     GpuRasterResourceUses& uses){
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
         return false;
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
@@ -223,7 +223,7 @@ bool GpuRendererState::declareSdfPages(
                 .setToken(page->m_readinessToken)
         );
         if(!ready.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} upload completion import failed (queue={}, generation={}, value={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: SDF page {} upload completion import failed (queue={}, generation={}, value={})")
                 , index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value
             );
             return false;
@@ -235,7 +235,7 @@ bool GpuRendererState::declareSdfPages(
                 .setExternalFinalState(Core::ResourceStates::ShaderResource)
         );
         if(!texture.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})")
                 , index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation
             );
             return false;

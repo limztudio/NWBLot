@@ -111,8 +111,8 @@ void CommandList::setViewportState(const ViewportState& viewportState){
 
 bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
     if(framebuffer.m_framebufferInfo.width == 0 || framebuffer.m_framebufferInfo.height == 0 || framebuffer.m_framebufferInfo.arraySize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
+        GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
         return false;
     }
 
@@ -122,11 +122,11 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
     constexpr u32 s_MaxColorAttachments = s_MaxRenderTargets;
     VkRenderingAttachmentInfo colorAttachments[s_MaxColorAttachments] = {};
     const u32 numColorAttachments = static_cast<u32>(fbDesc.colorAttachments.size());
-    NWB_ASSERT(numColorAttachments <= s_MaxColorAttachments);
+    GLOBAL_ASSERT(numColorAttachments <= s_MaxColorAttachments);
 
     for(u32 i = 0u; i < numColorAttachments; ++i){
         auto* const tex = fbDesc.colorAttachments[i].texture;
-        NWB_ASSERT(tex);
+        GLOBAL_ASSERT(tex);
 
         const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(
             tex->m_creationDesc,
@@ -142,8 +142,8 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
             fbDesc.colorAttachments[i].format
         );
         if(view == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
+            GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
             return false;
         }
 
@@ -182,8 +182,8 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
             fbDesc.depthAttachment.format
         );
         if(depthView == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
+            GLOBAL_ASSERT_MSG(false, GLOBAL_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             return false;
         }
 
@@ -236,7 +236,7 @@ void CommandList::endDynamicRendering(){
 }
 
 void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
-    constexpr TStringView s_OperationName = NWB_TEXT("begin render pass");
+    constexpr TStringView s_OperationName = GLOBAL_TEXT("begin render pass");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
@@ -254,7 +254,7 @@ void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassPara
             return;
     }
     if(!beginDynamicRendering(framebuffer, params)){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("dynamic rendering could not begin"));
+        rejectCommandRecording(s_OperationName, GLOBAL_TEXT("dynamic rendering could not begin"));
         return;
     }
 
@@ -272,7 +272,7 @@ void CommandList::endRenderPass(){
         return;
     if(!m_renderPassActive)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("end render pass")))
         return;
     endActiveRenderPass();
 }
@@ -295,7 +295,7 @@ bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
 
     RenderPassParameters params = {};
     if(!beginDynamicRendering(*framebuffer, params)){
-        rejectCommandRecording(NWB_TEXT("begin graphics render pass"), NWB_TEXT("dynamic rendering could not begin"));
+        rejectCommandRecording(GLOBAL_TEXT("begin graphics render pass"), GLOBAL_TEXT("dynamic rendering could not begin"));
         return false;
     }
     retainResource(framebuffer);
@@ -314,11 +314,11 @@ void CommandList::endActiveRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set graphics state")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("set graphics state")))
         return;
     if(!validateGraphicsState(state))
         return;
-    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set graphics state")))
+    if(!prepareFramebufferForRendering(state.framebuffer, GLOBAL_TEXT("set graphics state")))
         return;
 
     setResourceStatesForGraphicsBuffers(state);
@@ -365,9 +365,9 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 void CommandList::draw(const DrawArguments& args){
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("draw")))
         return;
-    if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
+    if(!validateGraphicsDrawArguments(args, false, GLOBAL_TEXT("draw")))
         return;
 
     m_context.deviceDispatch.vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
@@ -376,9 +376,9 @@ void CommandList::draw(const DrawArguments& args){
 void CommandList::drawIndexed(const DrawArguments& args){
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("draw indexed")))
         return;
-    if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
+    if(!validateGraphicsDrawArguments(args, true, GLOBAL_TEXT("draw indexed")))
         return;
 
     m_context.deviceDispatch.vkCmdDrawIndexed(
@@ -394,15 +394,15 @@ void CommandList::drawIndexed(const DrawArguments& args){
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
     if(drawCount == 0u)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("draw indirect")))
         return;
     Buffer* indirectBuffer = nullptr;
     if(!prepareDrawIndirect(
         offsetBytes,
         drawCount,
         sizeof(DrawIndirectArguments),
-        NWB_TEXT("draw indirect"),
-        NWB_TEXT("drawIndirect"),
+        GLOBAL_TEXT("draw indirect"),
+        GLOBAL_TEXT("drawIndirect"),
         VulkanDetail::IndirectDrawIndexMode::NonIndexed,
         indirectBuffer
     ))
@@ -415,15 +415,15 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
     if(drawCount == 0u)
         return;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, GLOBAL_TEXT("draw indexed indirect")))
         return;
     Buffer* indirectBuffer = nullptr;
     if(!prepareDrawIndirect(
         offsetBytes,
         drawCount,
         sizeof(DrawIndexedIndirectArguments),
-        NWB_TEXT("draw indexed indirect"),
-        NWB_TEXT("drawIndexedIndirect"),
+        GLOBAL_TEXT("draw indexed indirect"),
+        GLOBAL_TEXT("drawIndexedIndirect"),
         VulkanDetail::IndirectDrawIndexMode::Indexed,
         indirectBuffer
     ))

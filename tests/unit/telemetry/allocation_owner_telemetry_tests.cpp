@@ -177,7 +177,7 @@ TEST(AllocationOwnerTelemetry, VersionOneRoundTripsAllSourcesBinaryIdentityAndDe
             ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, s_DisplayName, snapshot, delta, bytes));
             ASSERT_EQ(bytes.size(), sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + s_DisplayName.size());
             Telemetry::EncodedPerfMemoryPayloadHeader header;
-            NWB_MEMCPY(&header, sizeof(header), bytes.data(), sizeof(header));
+            GLOBAL_MEMCPY(&header, sizeof(header), bytes.data(), sizeof(header));
             EXPECT_EQ(header.version, 1u);
             EXPECT_EQ(header.source, static_cast<u32>(source));
             EXPECT_EQ(header.scopeHash, binaryHash);
@@ -199,7 +199,7 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     Telemetry::TelemetryBytes bytes(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
-    NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
+    GLOBAL_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
     EXPECT_EQ(parsed.scopeName, owner);
@@ -208,7 +208,7 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     ExpectDelta(parsed.delta, delta);
 
     for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
-        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        GLOBAL_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
         switch(invalidCase){
@@ -222,12 +222,12 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
         case 7u: malformed.scopeHash = {}; break;
         case 8u: ++malformed.scopeNameBytes; break;
         }
-        NWB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
+        GLOBAL_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         ExpectEmptyPayload(parsed);
     }
     for(const usize truncatedSize : { sizeof(validHeader) - 1u, bytes.size() - 1u }){
-        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        GLOBAL_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), truncatedSize, parsed));
         ExpectEmptyPayload(parsed);

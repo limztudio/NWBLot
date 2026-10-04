@@ -107,7 +107,7 @@ void BackendContext::logVulkanDeviceConfiguration(
                 ? "no alternate Graphics family or additional Graphics queues"
                 : "Graphics family exposes no additional queues"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} crossFamilyRequested={} effective={} count={} graphicsFamily={} auxiliaryGraphicsFamily={} ({})")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: same-class graphics queue requested={} crossFamilyRequested={} effective={} count={} graphicsFamily={} auxiliaryGraphicsFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
         , StringConvert(VulkanDetail::BoolToString(m_sameClassGraphicsQueueEnabled))
@@ -135,7 +135,7 @@ void BackendContext::logVulkanDeviceConfiguration(
             ? "dedicated compute family selected"
             : "no dedicated compute-only family"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane))
         , StringConvert(VulkanDetail::BoolToString(asyncComputeLaneEffective))
         , m_graphicsQueueFamily
@@ -155,7 +155,7 @@ void BackendContext::logVulkanDeviceConfiguration(
                     ? "no alternate dedicated Compute family or additional Compute queues"
                     : "Compute family exposes no additional queues"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class compute queue requested={} crossFamilyRequested={} effective={} count={} computeFamily={} auxiliaryComputeFamily={} ({})")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: same-class compute queue requested={} crossFamilyRequested={} effective={} count={} computeFamily={} auxiliaryComputeFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
         , StringConvert(VulkanDetail::BoolToString(m_sameClassComputeQueueEnabled))
@@ -179,7 +179,7 @@ void BackendContext::logVulkanDeviceConfiguration(
             ? "dedicated transfer-only family selected"
             : "no dedicated transfer-only family"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableTransferQueue))
         , StringConvert(VulkanDetail::BoolToString(transferQueueEffective))
         , m_graphicsQueueFamily
@@ -200,7 +200,7 @@ void BackendContext::logVulkanDeviceConfiguration(
                     ? "no alternate dedicated Transfer family or additional Transfer queues"
                     : "Transfer family exposes no additional queues"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class transfer queue requested={} crossFamilyRequested={} effective={} count={} transferFamily={} auxiliaryTransferFamily={} ({})")
+    NWB_LOGGER_INFO(GLOBAL_TEXT("Vulkan: same-class transfer queue requested={} crossFamilyRequested={} effective={} count={} transferFamily={} auxiliaryTransferFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
         , StringConvert(VulkanDetail::BoolToString(m_sameClassTransferQueueEnabled))
@@ -210,7 +210,7 @@ void BackendContext::logVulkanDeviceConfiguration(
         , StringConvert(sameClassTransferQueueReason)
     );
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("Vulkan: created device '{}'"), m_rendererString);
 }
 
 

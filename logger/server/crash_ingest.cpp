@@ -40,19 +40,19 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         CrashExtractedDirectory(arena, config.storageDirectory),
         config.retention.maxExtractedPackages
     ))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to extracted crash packages"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to apply retention to extracted crash packages"));
     if(!ApplyDirectoryRetention(
         arena,
         CrashRawDirectory(arena, config.storageDirectory),
         config.retention.maxRawArchives
     ))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to raw crash archives"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to apply retention to raw crash archives"));
     if(!ApplyDirectoryRetention(
         arena,
         CrashInvalidDirectory(arena, config.storageDirectory),
         config.retention.maxInvalidArchives
     ))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to apply retention to invalid crash archives"));
 }
 
 [[nodiscard]] static Type::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
@@ -375,18 +375,18 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
 ){
     ErrorCode removeError;
     if(!RemoveAllIfExists(packageDirectory, removeError))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove rejected crash package directory"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to remove rejected crash package directory"));
 
     Path invalidPath(arena);
     if(!::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory), invalidPath))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to move rejected crash archive to invalid directory"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to move rejected crash archive to invalid directory"));
     ApplyRetention(arena, config);
 
     CrashIngestResult result(arena);
     result.type = Type::Error;
     result.message = StringFormat(
         arena,
-        NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
+        GLOBAL_TEXT("Crash upload rejected: {}; raw='{}'"),
         StringConvert(reason),
         PathToString<tchar>(invalidPath.empty() ? archivePath : invalidPath)
     );
@@ -423,14 +423,14 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     // Failing to persist the report on disk is an infrastructure error, not a malformed crash: keep the valid,
     // already-decoded package instead of quarantining it as invalid, and still return the in-memory report.
     if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
 
     Path rawPath(arena);
     const bool rawArchived = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory), rawPath);
     if(!rawArchived){
         ErrorCode removeError;
         if(!RemoveFile(archivePath, removeError))
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove crash archive that could not be retained"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to remove crash archive that could not be retained"));
     }
     Ingest::ApplyRetention(arena, config);
 

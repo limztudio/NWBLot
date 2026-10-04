@@ -51,7 +51,7 @@ UiPopupToolsSmokeScene::UiPopupToolsSmokeScene(Core::Alloc::GlobalArena& arena, 
     , m_sentinel(arena)
 {
     const bool initialized = m_sentinel.setText("Sentinel");
-    NWB_FATAL_ASSERT(initialized);
+    GLOBAL_FATAL_ASSERT(initialized);
     m_input.addHandlerToBack(*this);
 }
 
@@ -135,7 +135,7 @@ void UiPopupToolsSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& disp
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupToolsSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -177,23 +177,23 @@ void UiPopupToolsSmokeScene::observeState(){
     m_lastTooltip = tooltip;
     m_lastSentinel = sentinel;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiPopupToolsSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(GLOBAL_TEXT("UiPopupToolsSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14]
     );
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("menu"), menu.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("tooltip"), tooltip.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("anchor"), __hidden_ui_popup_tools_smoke::s_Anchor);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("menu"), menu.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("tooltip"), tooltip.bounds);
     const auto& list = m_menu.listState().placement();
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("list"), list.bounds);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("viewport"), list.viewport);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("first"), rowBounds(1u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("second"), rowBounds(2u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("disabled"), rowBounds(3u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("last"), rowBounds(5u));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("sentinel"), sentinel);
-    LogSmokeRect(NWB_TEXT("UiPopupToolsSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("list"), list.bounds);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("viewport"), list.viewport);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("first"), rowBounds(1u));
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("second"), rowBounds(2u));
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("disabled"), rowBounds(3u));
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("last"), rowBounds(5u));
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("cursor_row"), rowBounds(m_menu.cursorKey()));
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("sentinel"), sentinel);
+    LogSmokeRect(GLOBAL_TEXT("UiPopupToolsSmoke"), m_sequence, GLOBAL_TEXT("counter"), __hidden_ui_popup_tools_smoke::s_Counter);
 }
 
 void UiPopupToolsSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

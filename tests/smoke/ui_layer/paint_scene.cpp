@@ -36,7 +36,7 @@ void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
     paint.fillRect(rectangle(0.34f, 0.08f, 0.16f, 0.20f), { 1.0f, 0.0f, 0.0f, 0.5f });
     paint.fillRect(rectangle(0.54f, 0.08f, 0.18f, 0.20f), { 0.25f, 0.25f, 0.25f, 1.0f });
     if(!paint.drawRegion(Name("white"), rectangle(0.76f, 0.08f, 0.20f, 0.20f), { 0.1f, 0.8f, 0.2f, 0.5f })){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: white sprite is absent from the default atlas"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: white sprite is absent from the default atlas"));
         return;
     }
 
@@ -46,7 +46,7 @@ void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
     paint.pushClip(rectangle(0.14f, 0.42f, 0.16f, 0.16f));
     paint.fillRect(rectangle(0.04f, 0.38f, 0.28f, 0.26f), { 1.0f, 0.0f, 0.0f, 1.0f });
     if(!paint.popClip() || !paint.popClip()){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: nested clip stack became unbalanced"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: nested clip stack became unbalanced"));
         return;
     }
 
@@ -55,13 +55,13 @@ void PaintUiLayerSmokeScene(Impl::UiPaintContext& context){
         || !paint.drawRegion(Name("button.normal"), rectangle(0.66f, 0.40f, 0.13f, 0.14f))
         || !paint.drawRegion(Name("button.hover"), rectangle(0.82f, 0.40f, 0.14f, 0.14f))
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: named nine-slice regions are absent from the default atlas"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: named nine-slice regions are absent from the default atlas"));
         return;
     }
 
     paint.fillRect(rectangle(0.64f, 0.64f, 0.16f, 0.16f), { 0.0f, 0.1f, 0.2f, 1.0f });
     if(!paint.drawRegion(Name("combo.arrow"), rectangle(0.68f, 0.68f, 0.08f, 0.08f)))
-        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: combo arrow sprite is absent from the default atlas"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiLayerSmokeProject: combo arrow sprite is absent from the default atlas"));
 }
 
 

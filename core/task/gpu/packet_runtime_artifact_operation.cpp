@@ -88,7 +88,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
                 (operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask)
                 == GpuRecordedGraph::s_ArtifactOperationReaderMask
             ){
-                NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact reader ownership overflowed");
+                GLOBAL_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact reader ownership overflowed");
                 TerminateInvariant();
             }
 
@@ -112,7 +112,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
         return;
 
     if(s_activeOperation != this){
-        NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact operations must unwind in lexical order");
+        GLOBAL_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact operations must unwind in lexical order");
         TerminateInvariant();
     }
     s_activeOperation = m_previousOperation;
@@ -121,7 +121,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
 
     if(m_exclusive){
         if(m_recordedGraph->m_operationState.load(MemoryOrder::relaxed) != GpuRecordedGraph::s_ArtifactOperationWriterBit){
-            NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph exclusive artifact operation must retain its writer claim");
+            GLOBAL_FATAL_ASSERT_MSG(false, "GpuRecordedGraph exclusive artifact operation must retain its writer claim");
             TerminateInvariant();
         }
         m_recordedGraph->m_operationState.store(0u, MemoryOrder::release);
@@ -131,7 +131,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
         u32 operationState = m_recordedGraph->m_operationState.load(MemoryOrder::acquire);
         for(;;){
             if((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) == 0u){
-                NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph shared artifact operation must retain its reader claim");
+                GLOBAL_FATAL_ASSERT_MSG(false, "GpuRecordedGraph shared artifact operation must retain its reader claim");
                 TerminateInvariant();
             }
             if(m_recordedGraph->m_operationState.compare_exchange_weak(

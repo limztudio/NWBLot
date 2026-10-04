@@ -67,7 +67,7 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     CommandList& commandList
 );
 
-#if defined(NWB_DEBUG)
+#if defined(GLOBAL_DEBUG)
 [[nodiscard]] inline bool HasQueueCapabilities(
     const GpuQueueCapability::Mask available,
     const GpuQueueCapability::Mask required

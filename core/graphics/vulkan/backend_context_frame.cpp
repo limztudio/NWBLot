@@ -210,7 +210,7 @@ bool BackendContext::replaceFramePresentationSemaphoreAfterIdle(){
     if(result != VK_SUCCESS){
         if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)
             m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
         return false;
     }
 
@@ -388,7 +388,7 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
         VkSemaphore sem = VK_NULL_HANDLE;
         res = m_deviceDispatch.vkCreateSemaphore(m_vulkanDevice, &semInfo, nullptr, &sem);
         if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}. {}"), StringConvert(operationName), ResultToString(res));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to {}. {}"), StringConvert(operationName), ResultToString(res));
             clearSemaphores(semaphores);
             return false;
         }
@@ -411,7 +411,7 @@ bool BackendContext::createFrameSyncQueries(){
     for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
         EventQueryHandle query = m_rhiDevice->createEventQuery();
         if(!query){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create frame synchronization query {} of {}")
                 , index + 1u
                 , m_maxFramesInFlight
             );
@@ -453,7 +453,7 @@ bool BackendContext::recreateAcquireSyncSlots(const usize count){
         if(result == VK_SUCCESS)
             result = m_deviceDispatch.vkCreateFence(m_vulkanDevice, &fenceInfo, nullptr, &slot.fence);
         if(result != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Vulkan: Failed to create acquire synchronization slot {}. {}")
                 , index
                 , ResultToString(result)
             );
@@ -492,7 +492,7 @@ bool BackendContext::prepareAcquireSyncSlot(AcquireSyncSlot& slot){
     if(result != VK_SUCCESS){
         if(result == VK_ERROR_DEVICE_LOST)
             m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to prepare an acquire synchronization slot for reuse. {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to prepare an acquire synchronization slot for reuse. {}"), ResultToString(result));
         return false;
     }
 
@@ -519,7 +519,7 @@ bool BackendContext::waitAcquireSyncSlotsForLifecycle(){
             continue;
         if(result == VK_ERROR_DEVICE_LOST && m_rhiDevice)
             m_rhiDevice->markDeviceLost();
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to join a WSI acquire fence during lifecycle transition. {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Vulkan: Failed to join a WSI acquire fence during lifecycle transition. {}"), ResultToString(result));
         return false;
     }
     return true;

@@ -41,7 +41,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
         outValue = static_cast<u32>(value->asInteger());
         return true;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}")
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas glyph meta '{}': field '{}' must be an integer in 0..{}")
         , PathToString<tchar>(path)
         , StringConvert(field)
         , maximum
@@ -81,7 +81,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas glyph meta";
     )
         return false;
     if(glyph.width == 0u || glyph.height == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas glyph meta '{}': bitmap dimensions must be positive; empty glyphs declare only advance_units"), PathToString<tchar>(path));
         return false;
     }
     glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width) * unitsPerPixel;
@@ -109,7 +109,7 @@ bool ParseFontAtlasGlyphMetadata(const Path& nwbFilePath, const Core::Metascript
         outPayload.sourceGlyphCount == 0u || outPayload.sourceGlyphCount > s_FontAtlasMaxGlyphCount
         || glyphs->asList().size() != outPayload.sourceGlyphCount
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Font atlas glyph meta '{}': exactly one record per source glyph is required"), PathToString<tchar>(nwbFilePath));
         return false;
     }
     Core::Assets::AssetVector<FontAtlasGlyph> candidate(outPayload.glyphs.get_allocator().arena());

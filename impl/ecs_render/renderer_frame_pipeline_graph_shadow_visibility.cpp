@@ -182,7 +182,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry")
     );
     if(!sceneGeometryDomain.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
         return false;
     }
 
@@ -426,7 +426,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             resourceUses.push_back(use);
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
         return false;
     }
     Core::GpuGraphResourceId adaptiveEdgeCounter;
@@ -437,7 +437,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             "Shadow Edge Counter"
         );
         if(!adaptiveEdgeCounter.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import graph-owned adaptive shadow counter resource"));
             return false;
         }
     }
@@ -584,7 +584,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             || !shadowTypedMaterials.valid()
             || !shadowInstances.valid()
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
             return false;
         }
 
@@ -838,7 +838,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             if(!resource.valid())
                 resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
             if(!resource.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
                 return false;
             }
             if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing){ return existing == resource; }) != csgBoundsResources.end())
@@ -863,7 +863,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .stateSourceCount = shadowVisibilityStateSourceCount,
         });
         if(!maps.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare light-space shadow maps"));
             return false;
         }
         const Core::GpuGraphResourceId mapBuffers[] = { maps.counts, maps.events, maps.views };
@@ -924,7 +924,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &rayTracingPlan.lightSpace
         );
         if(!m_deferredShadowVisibilityOpaqueTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
             return false;
         }
 
@@ -964,7 +964,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 combinedSoftWavelet
             );
             if(!m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
                 return false;
             }
         }
@@ -993,7 +993,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 hardwareShadowSupported
             );
             if(!m_deferredShadowVisibilityOpaqueResolveTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
                 return false;
             }
         }
@@ -1028,7 +1028,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &rayTracingPlan.lightSpace
         );
         if(!m_deferredShadowVisibilityTransparentTraceTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));
             return false;
         }
 
@@ -1067,7 +1067,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 )
             ;
             if(!m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
                 return false;
             }
             transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTemporalMergeTask;
@@ -1098,7 +1098,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             combinedSoftWavelet
         );
         if(!m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
             return false;
         }
 
@@ -1129,7 +1129,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             combinedSoftUpsample
         );
         if(!m_deferredShadowVisibilityTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
             return false;
         }
         return true;
@@ -1166,7 +1166,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
                 }
             );
             if(!m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned adaptive shadow counter clear"));
                 return false;
             }
             shadowVisibilityDependency = m_deferredShadowVisibilityAdaptiveCounterClearTask;
@@ -1212,7 +1212,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
     );
     if(!m_deferredShadowVisibilityAllLitClearTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
         return false;
     }
     shadowVisibilityDependency = m_deferredShadowVisibilityAllLitClearTask;
@@ -1248,7 +1248,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         graphOwnedAdaptivePlan
     );
     if(!m_deferredShadowVisibilityTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
         return false;
     }
     return true;

@@ -44,7 +44,7 @@ template<typename ArenaT>
     if(::_dupenv_s(&value, &valueSize, nativeName.c_str()) != 0 || !value)
         return false;
 
-    const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(NWB_STRLEN(value));
+    const usize valueLength = valueSize > 0u ? static_cast<usize>(valueSize - 1u) : static_cast<usize>(GLOBAL_STRLEN(value));
     outValue.assign(value, valueLength);
     ::free(value);
     return true;

@@ -50,7 +50,7 @@ bool GpuTaskGraph::validExternalCompletion(const GpuExternalCompletionId& id)con
 }
 
 GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
-    NWB_ASSERT(index < m_tasks.size());
+    GLOBAL_ASSERT(index < m_tasks.size());
     const GpuTaskNode& task = m_tasks[index];
     return GpuTaskGraphTaskView{
         .id = GpuTaskId{ .generation = m_generation, .index = static_cast<u32>(index) },
@@ -86,7 +86,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
 }
 
 GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
-    NWB_ASSERT(index < m_resources.size());
+    GLOBAL_ASSERT(index < m_resources.size());
     const GpuGraphResourceNode& resource = m_resources[index];
     return GpuTaskGraphResourceView{
         .id = GpuGraphResourceId{ .generation = m_generation, .index = static_cast<u32>(index) },
@@ -118,7 +118,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
 }
 
 GpuTaskGraphResourceVersionView GpuTaskGraph::resourceVersionAt(const usize index)const{
-    NWB_ASSERT(index < m_resourceVersions.size());
+    GLOBAL_ASSERT(index < m_resourceVersions.size());
     const GpuGraphResourceVersionNode& version = m_resourceVersions[index];
     return GpuTaskGraphResourceVersionView{
         .id = GpuGraphResourceVersionId{ .generation = m_generation, .index = static_cast<u32>(index) },
@@ -129,7 +129,7 @@ GpuTaskGraphResourceVersionView GpuTaskGraph::resourceVersionAt(const usize inde
 }
 
 GpuTaskGraphResourceSetView GpuTaskGraph::resourceSetAt(const usize index)const{
-    NWB_ASSERT(index < m_resourceSets.size());
+    GLOBAL_ASSERT(index < m_resourceSets.size());
     const GpuGraphResourceSetNode& resourceSet = m_resourceSets[index];
     return GpuTaskGraphResourceSetView{
         .id = GpuGraphResourceSetId{ .generation = m_generation, .index = static_cast<u32>(index) },
@@ -141,7 +141,7 @@ GpuTaskGraphResourceSetView GpuTaskGraph::resourceSetAt(const usize index)const{
 }
 
 GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const{
-    NWB_ASSERT(index < m_pipelines.size());
+    GLOBAL_ASSERT(index < m_pipelines.size());
     const GpuGraphPipelineNode& pipeline = m_pipelines[index];
     return GpuTaskGraphPipelineView{
         .id = GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(index) },
@@ -156,7 +156,7 @@ GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const{
 }
 
 GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usize index)const{
-    NWB_ASSERT(index < m_externalCompletions.size());
+    GLOBAL_ASSERT(index < m_externalCompletions.size());
     const GpuExternalCompletionNode& completion = m_externalCompletions[index];
     return GpuTaskGraphExternalCompletionView{
         .id = GpuExternalCompletionId{ .generation = m_generation, .index = static_cast<u32>(index) },

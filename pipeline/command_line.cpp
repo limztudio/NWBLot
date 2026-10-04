@@ -21,7 +21,7 @@ namespace __hidden_command_line{
 static bool AssignText(const AInteropString& value, NWB::Core::Assets::AssetString& output){
     const AStringView text(value.data(), value.size());
     if(!text.empty() && !IsSingleLinePathText(text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: paths must not contain nulls or newlines"));
         return false;
     }
     output.assign(text);
@@ -34,7 +34,7 @@ static bool AssignInputs(const InteropVector<AInteropString>& values, NWB::Core:
     for(const AInteropString& value : values){
         NWB::Core::Assets::AssetString text(arena);
         if(value.empty() || !AssignText(value, text)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: input path must not be empty"));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: input path must not be empty"));
             return false;
         }
         outputs.push_back(Move(text));
@@ -78,7 +78,7 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
     CommandLineParseApp(m_app, argc, argv);
 
     if(m_inputs.empty() && m_inputList.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: provide --input or --input-list"));
         return false;
     }
     if(!__hidden_command_line::AssignInputs(m_inputs, options.inputs)
@@ -88,12 +88,12 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
         || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory))
         return false;
     if(options.outputPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: output path must not be empty"));
         return false;
     }
     if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size()))
         || !options.assetType.assign(AStringView(m_assetType.data(), m_assetType.size()))){
-        NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
         return false;
     }
     if(!m_inputList.empty()){
@@ -108,11 +108,11 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
 
 int PipelineCommandLine::exit(const CLI::ParseError& error)const{
     if(AStringView(error.get_name()) == s_PipelineCliHelpRequestName){
-        NWB_COUT << m_app.help();
+        GLOBAL_COUT << m_app.help();
         return s_PipelineExitSuccess;
     }
-    NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to parse command line: {}"), StringConvert(error.what()));
-    NWB_CERR << m_app.help();
+    NWB_LOGGER_ERROR(GLOBAL_TEXT("Pipeline: failed to parse command line: {}"), StringConvert(error.what()));
+    GLOBAL_CERR << m_app.help();
     return s_PipelineExitFailure;
 }
 

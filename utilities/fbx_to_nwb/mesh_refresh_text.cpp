@@ -223,7 +223,7 @@ template<typename Value, typename WriteValue>
 ){
     TextReplacement replacement;
     if(!FindListAssignmentRange(source, variableName, fieldName, replacement)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment")
             , StringConvert(variableName)
             , StringConvert(fieldName)
         );
@@ -320,7 +320,7 @@ template<typename Value, typename WriteValue>
             continue;
 
         if(result){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), StringConvert(meshVariableName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), StringConvert(meshVariableName));
             return nullptr;
         }
 

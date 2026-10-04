@@ -14,7 +14,7 @@
 
 #include <global/algorithm.h>
 
-#if defined(NWB_PLATFORM_LINUX)
+#if defined(GLOBAL_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
@@ -65,7 +65,7 @@ struct ConnectionInfo{
     ConnectionInfo& operator=(const ConnectionInfo&) = delete;
     ~ConnectionInfo(){
         if(!closeCrashUploadStream())
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to close crash upload stream"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to close crash upload stream"));
         Core::Alloc::CoreFree(buffer);
     }
 
@@ -84,7 +84,7 @@ struct ConnectionInfo{
         if(!reserve(requiredSize))
             return false;
 
-        NWB_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
+        GLOBAL_MEMCPY(buffer + size, appendSize, uploadData.data(), appendSize);
         size = requiredSize;
         return true;
     }
@@ -157,7 +157,7 @@ inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibyt
 }
 
 static void EnqueueServerMessage(Server& server, const TStringView message, const Type::Enum type){
-    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, s_ServerName), type);
+    server.enqueue(StringFormat(server.arena(), GLOBAL_TEXT("{} on {}"), message, s_ServerName), type);
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
@@ -165,7 +165,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
     if(!response){
-        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Type::Fatal);
+        EnqueueServerMessage(server, GLOBAL_TEXT("Failed to create a response"), Type::Fatal);
         return MHD_NO;
     }
 
@@ -194,7 +194,7 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 
     LocalTime localTime = {};
     if(!GetLocalTime(localTime))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to read local time for crash package name"));
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
@@ -242,11 +242,11 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
         return;
 
     if(!info.closeCrashUploadStream())
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to close discarded crash upload stream"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to close discarded crash upload stream"));
 
     ErrorCode error;
     if(!RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath)), error))
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove discarded crash upload file"));
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to remove discarded crash upload file"));
 }
 
 
@@ -364,13 +364,13 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
 
     if(!connectionContext){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Type::Warning);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Rejected unauthorized crash upload"), Type::Warning);
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
         auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to initialize connection upload state"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Failed to initialize connection upload state"), Type::Fatal);
             return MHD_NO;
         }
 
@@ -382,7 +382,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
 
     if(uploadDataSize){
         if(!uploadData){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Received a malformed upload chunk"), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
@@ -393,7 +393,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
             uploadDataSize > static_cast<size_t>(uploadSizeLimit)
             || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
         ){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Received an oversized message"), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
@@ -401,7 +401,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(BinaryByteView(reinterpret_cast<const u8*>(uploadData), appendSize))){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Failed to store upload chunk"), Type::Fatal);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, connectionContext);
             return MHD_NO;
@@ -418,7 +418,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
                 thisPtr->enqueue(
                     StringFormat(
                         thisPtr->arena(),
-                        NWB_TEXT("Crash upload queued for ingest at '{}'"),
+                        GLOBAL_TEXT("Crash upload queued for ingest at '{}'"),
                         PathToString<tchar>(storedPath)
                     ),
                     Type::EssentialInfo
@@ -427,13 +427,13 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
             else{
                 ErrorCode error;
                 if(!RemoveFile(storedPath, error))
-                    NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove unqueued crash upload file"));
-                __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Type::Error);
+                    NWB_LOGGER_WARNING(GLOBAL_TEXT("Failed to remove unqueued crash upload file"));
+                __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Discarded crash upload that could not be queued"), Type::Error);
             }
         }
         else{
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Failed to store crash upload"), Type::Error);
         }
     }
     else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Telemetry){
@@ -450,7 +450,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
         // that client's debug-hash tokens back to readable names. Silent: symbol pushes are routine, not log-worthy.
         const AStringView nameSymbolBody(reinterpret_cast<const char*>(info->buffer), info->size);
         if(!Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an empty or malformed name-symbol upload"), Type::Warning);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLOBAL_TEXT("Received an empty or malformed name-symbol upload"), Type::Warning);
         }
     }
     else{
@@ -461,7 +461,7 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
         else{
             __hidden_logger_server::EnqueueServerMessage(
                 *thisPtr,
-                error.empty() ? TStringView(NWB_TEXT("Received a malformed message")) : error,
+                error.empty() ? TStringView(GLOBAL_TEXT("Received a malformed message")) : error,
                 Type::Error
             );
         }
@@ -507,7 +507,7 @@ bool Server::internalInit(
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
     const bool loadedNameSymbols = Core::Common::NameSymbols::LoadDefaultFile(BaseType::arena());
     if(loadedNameSymbols)
-        enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Type::Info);
+        enqueue(BasicStringView<tchar>(GLOBAL_TEXT("Log server: loaded startup name-symbol mappings")), Type::Info);
 
     if(logFileNameBase.empty()){
         if(!m_processedMessageFile.openByExecutableName())
@@ -551,7 +551,7 @@ bool Server::enqueueCrashUpload(const Path& path){
     PendingCrashUpload upload;
     const AString<LogArena> pathText = PathToString<char>(BaseType::arena(), path);
     if(pathText.size() >= sizeof(upload.path)){
-        enqueue(BasicStringView<tchar>(NWB_TEXT("Crash upload path exceeds queue capacity")), Type::Error);
+        enqueue(BasicStringView<tchar>(GLOBAL_TEXT("Crash upload path exceeds queue capacity")), Type::Error);
         return false;
     }
 

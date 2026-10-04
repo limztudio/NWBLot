@@ -50,16 +50,16 @@ namespace SIMDVectorDetail{
 
 
 template<typename T>
-NWB_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
+GLOBAL_INLINE T* StridePointer(T* pointer, usize stride, usize index)noexcept{
     return reinterpret_cast<T*>(reinterpret_cast<u8*>(pointer) + stride * index);
 }
 
 template<typename T>
-NWB_INLINE const T* StridePointer(const T* pointer, usize stride, usize index)noexcept{
+GLOBAL_INLINE const T* StridePointer(const T* pointer, usize stride, usize index)noexcept{
     return reinterpret_cast<const T*>(reinterpret_cast<const u8*>(pointer) + stride * index);
 }
 
-NWB_INLINE u32 ComparisonMaskR(u32 mask, u32 activeMask)noexcept{
+GLOBAL_INLINE u32 ComparisonMaskR(u32 mask, u32 activeMask)noexcept{
     mask &= activeMask;
     if(mask == activeMask)
         return s_CRMASK_CR6TRUE;
@@ -68,11 +68,11 @@ NWB_INLINE u32 ComparisonMaskR(u32 mask, u32 activeMask)noexcept{
     return 0;
 }
 
-NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
+GLOBAL_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
     return (mask & activeMask) == activeMask ? s_CRMASK_CR6BOUNDS : 0;
 }
 
-NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
+GLOBAL_INLINE f32 RoundToNearest(f32 value)noexcept{
     f32 integer = Floor(value);
     value -= integer;
     if(value < s_RoundHalfBias)
@@ -87,7 +87,7 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
     return integer + 1.0f;
 }
 
-NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
+GLOBAL_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
         quotient = static_cast<f32>(static_cast<i32>(quotient + s_RoundHalfBias));
@@ -113,7 +113,7 @@ NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - s_CosQuarticCoeff) * y2 + 1.0f);
 }
 
-NWB_INLINE u32 TruncateBits(f32 value)noexcept{
+GLOBAL_INLINE u32 TruncateBits(f32 value)noexcept{
     union{
         f32 f;
         u32 u;
@@ -132,17 +132,17 @@ NWB_INLINE u32 TruncateBits(f32 value)noexcept{
     return result.u;
 }
 
-#if defined(NWB_HAS_SSE4)
+#if defined(GLOBAL_HAS_SSE4)
 struct SllEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
+    static GLOBAL_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
 };
 
 struct SrlEpi32 final{
-    static NWB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
+    static GLOBAL_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
 };
 
 template<typename ShiftOp>
-NWB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
+GLOBAL_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
     __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
     __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
     const __m128i r0 = ShiftOp::Apply(v, c);
@@ -164,15 +164,15 @@ NWB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
     return _mm_castps_si128(_mm_shuffle_ps(r01, r23, _MM_SHUFFLE(2, 0, 2, 0)));
 }
 
-NWB_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
+GLOBAL_INLINE __m128i MultiSllEpi32(__m128i value, __m128i count)noexcept{
     return MultiShiftEpi32<SllEpi32>(value, count);
 }
 
-NWB_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
+GLOBAL_INLINE __m128i MultiSrlEpi32(__m128i value, __m128i count)noexcept{
     return MultiShiftEpi32<SrlEpi32>(value, count);
 }
 
-NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
+GLOBAL_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
     const __m128i mask0000FFFF = _mm_set1_epi32(0x0000FFFF);
     const __m128i mask000000FF = _mm_set1_epi32(0x000000FF);
     const __m128i mask0000000F = _mm_set1_epi32(0x0000000F);
@@ -206,8 +206,8 @@ NWB_INLINE __m128i GetLeadingBit(__m128i value)noexcept{
 }
 #endif
 
-#if defined(NWB_HAS_NEON)
-NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
+#if defined(GLOBAL_HAS_NEON)
+GLOBAL_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
     const uint32x4_t raw = vreinterpretq_u32_s32(value);
     const uint32x4_t isZero = vceqq_u32(raw, vdupq_n_u32(0));
     uint32x4_t leading = vsubq_u32(vdupq_n_u32(31), vclzq_u32(raw));
@@ -217,17 +217,17 @@ NWB_INLINE int32x4_t GetLeadingBit(int32x4_t value)noexcept{
 #endif
 
 template<u32 Lane>
-NWB_INLINE f32 SIMDCALL GetLane(SIMDVector value)noexcept{
+GLOBAL_INLINE f32 SIMDCALL GetLane(SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-#if defined(NWB_HAS_SCALAR)
+#if defined(GLOBAL_HAS_SCALAR)
     return value.f[Lane];
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     return vgetq_lane_f32(value, Lane);
 #else
     if constexpr(Lane == 0u)
         return _mm_cvtss_f32(value);
     else{
-#if defined(NWB_HAS_AVX2)
+#if defined(GLOBAL_HAS_AVX2)
         return _mm_cvtss_f32(_mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
 #else
         return _mm_cvtss_f32(_mm_shuffle_ps(value, value, _MM_SHUFFLE(Lane, Lane, Lane, Lane)));
@@ -237,11 +237,11 @@ NWB_INLINE f32 SIMDCALL GetLane(SIMDVector value)noexcept{
 }
 
 template<u32 Lane>
-NWB_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
+GLOBAL_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-#if defined(NWB_HAS_SCALAR)
+#if defined(GLOBAL_HAS_SCALAR)
     return value.u[Lane];
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     return vgetq_lane_u32(vreinterpretq_u32_f32(value), Lane);
 #else
     if constexpr(Lane == 0u)
@@ -252,24 +252,24 @@ NWB_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
 }
 
 template<u32 Lane>
-NWB_INLINE void SIMDCALL StoreLane(f32& out, SIMDVector value)noexcept{
+GLOBAL_INLINE void SIMDCALL StoreLane(f32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
     out = GetLane<Lane>(value);
 }
 
 template<u32 Lane>
-NWB_INLINE void SIMDCALL StoreIntLane(u32& out, SIMDVector value)noexcept{
+GLOBAL_INLINE void SIMDCALL StoreIntLane(u32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
     out = GetIntLane<Lane>(value);
 }
 
 template<u32 Lane>
-NWB_INLINE SIMDVector SIMDCALL SplatLane(SIMDVector value)noexcept{
+GLOBAL_INLINE SIMDVector SIMDCALL SplatLane(SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-#if defined(NWB_HAS_SCALAR)
+#if defined(GLOBAL_HAS_SCALAR)
     const f32 laneValue = value.f[Lane];
     return SIMDConvertDetail::MakeF32(laneValue, laneValue, laneValue, laneValue);
-#elif defined(NWB_HAS_NEON)
+#elif defined(GLOBAL_HAS_NEON)
     if constexpr(Lane < 2u)
         return vdupq_lane_f32(vget_low_f32(value), Lane);
     else
@@ -279,7 +279,7 @@ NWB_INLINE SIMDVector SIMDCALL SplatLane(SIMDVector value)noexcept{
         return _mm_broadcastss_ps(value);
     else
         return _mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
-#elif defined(NWB_HAS_AVX2)
+#elif defined(GLOBAL_HAS_AVX2)
     return _mm_permute_ps(value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));
 #else
     return _mm_shuffle_ps(value, value, _MM_SHUFFLE(Lane, Lane, Lane, Lane));

@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("UiSkinAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, GLOBAL_TEXT("UiSkinAssetCodec::serialize")))
         return false;
     const UiSkin& skin = *checked_cast<const UiSkin*>(&asset);
     if(!skin.validatePayload())
@@ -35,19 +35,19 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
 
     usize reserveBytes = sizeof(UiSkinBinaryPayload::HeaderBinary);
     if(!AddBinaryRepeatedReserveBytes(reserveBytes, skin.regions().size(), sizeof(UiSkinBinaryPayload::RegionBinary))){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkinAssetCodec::serialize failed: payload size overflows"));
         return false;
     }
     if(!AddBinaryRepeatedReserveBytes(
         reserveBytes, UiSkinColorRole::Count, sizeof(UiSkinBinaryPayload::ColorBinary)
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkinAssetCodec::serialize failed: palette payload size overflows"));
         return false;
     }
     if(!AddBinaryRepeatedReserveBytes(
         reserveBytes, 1u, sizeof(UiSkinBinaryPayload::TypographyBinary)
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("UiSkinAssetCodec::serialize failed: typography payload size overflows"));
         return false;
     }
 
@@ -101,7 +101,7 @@ bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
 
 bool BuildUiSkinAsset(const UiSkinCookEntry& entry, UiSkin& outSkin){
     if(entry.regions.size() > s_UiSkinMaxRegionCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("BuildUiSkinAsset failed: region count {} exceeds schema limit {}"), entry.regions.size(), s_UiSkinMaxRegionCount);
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("BuildUiSkinAsset failed: region count {} exceeds schema limit {}"), entry.regions.size(), s_UiSkinMaxRegionCount);
         return false;
     }
     UiSkin candidate(entry.arena, entry.virtualPath);

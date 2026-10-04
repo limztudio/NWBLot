@@ -120,7 +120,7 @@ static void RemoveFileBestEffort(const Path& path){
     const bool exists = FileExists(path, errorCode);
     if(errorCode){
         if(!IsMissingPathError(errorCode)){
-            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query stale compiler output '{}' before cleanup: {}")
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to query stale compiler output '{}' before cleanup: {}")
                 , PathToString<tchar>(path)
                 , StringConvert(errorCode.message())
             );
@@ -132,13 +132,13 @@ static void RemoveFileBestEffort(const Path& path){
         errorCode.clear();
         if(!RemoveFile(path, errorCode)){
             if(errorCode){
-                NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove stale compiler output '{}': {}")
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to remove stale compiler output '{}': {}")
                     , PathToString<tchar>(path)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove stale compiler output '{}'")
+                NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to remove stale compiler output '{}'")
                     , PathToString<tchar>(path)
                 );
             }
@@ -183,13 +183,13 @@ public:
             return;
 
         if(errorCode){
-            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}' : {}")
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}' : {}")
                 , PathToString<tchar>(m_path)
                 , StringConvert(errorCode.message())
             );
         }
         else{
-            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}'"), PathToString<tchar>(m_path));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}'"), PathToString<tchar>(m_path));
         }
     }
 
@@ -315,7 +315,7 @@ static bool PrepareBomStrippedCompilerInputs(
     outIncludeDirectories.clear();
 
     if(request.dependencies.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), StringConvert(request.shaderName));
         return false;
     }
 
@@ -324,7 +324,7 @@ static bool PrepareBomStrippedCompilerInputs(
     for(const Path& dependency : request.dependencies){
         sourceText.clear();
         if(!ReadTextFile(dependency, sourceText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while normalizing UTF-8 BOM")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to read compiler input '{}' while normalizing UTF-8 BOM")
                 , PathToString<tchar>(dependency)
             );
             return false;
@@ -344,7 +344,7 @@ static bool PrepareBomStrippedCompilerInputs(
 
     ErrorCode errorCode;
     if(!EnsureEmptyDirectory(overlayRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source directory '{}' : {}")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to create temporary compiler source directory '{}' : {}")
             , PathToString<tchar>(overlayRoot)
             , StringConvert(errorCode.message())
         );
@@ -355,7 +355,7 @@ static bool PrepareBomStrippedCompilerInputs(
     for(const Path& dependency : request.dependencies){
         Path overlayDependencyPath(dependency.arena());
         if(!BuildCompilerOverlayPath(overlayRoot, dependency, overlayDependencyPath)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map compiler input '{}' into the temporary source directory")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to map compiler input '{}' into the temporary source directory")
                 , PathToString<tchar>(dependency)
             );
             return false;
@@ -363,7 +363,7 @@ static bool PrepareBomStrippedCompilerInputs(
 
         errorCode.clear();
         if(!EnsureDirectories(overlayDependencyPath.parent_path(), errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}")
                 , PathToString<tchar>(overlayDependencyPath.parent_path())
                 , StringConvert(errorCode.message())
             );
@@ -372,7 +372,7 @@ static bool PrepareBomStrippedCompilerInputs(
 
         sourceText.clear();
         if(!ReadTextFile(dependency, sourceText)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source")
                 , PathToString<tchar>(dependency)
             );
             return false;
@@ -380,7 +380,7 @@ static bool PrepareBomStrippedCompilerInputs(
         StripUtf8Bom(sourceText);
         RewriteAbsoluteCompilerIncludes(sourceText, dependency, request, overlayRoot, scratchArena);
         if(!WriteTextFile(overlayDependencyPath, AStringView(sourceText.data(), sourceText.size()))){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to write BOM-stripped compiler input '{}'"), PathToString<tchar>(overlayDependencyPath));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to write BOM-stripped compiler input '{}'"), PathToString<tchar>(overlayDependencyPath));
             return false;
         }
     }
@@ -388,14 +388,14 @@ static bool PrepareBomStrippedCompilerInputs(
     ErrorCode sourcePathError;
     const Path absoluteSourcePath = AbsolutePath(request.sourcePath, sourcePathError).lexically_normal();
     if(sourcePathError || !IsCompilerDependency(request.dependencies, absoluteSourcePath) || !BuildCompilerOverlayPath(overlayRoot, absoluteSourcePath, outSourcePath)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map source '{}' into the temporary compiler source directory")
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to map source '{}' into the temporary compiler source directory")
             , PathToString<tchar>(request.sourcePath)
         );
         return false;
     }
 
     if(request.includeDirectories.size() > Limit<usize>::s_Max / 2u){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), StringConvert(request.shaderName));
+        NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), StringConvert(request.shaderName));
         return false;
     }
 
@@ -405,7 +405,7 @@ static bool PrepareBomStrippedCompilerInputs(
         const Path absoluteIncludeDirectory = AbsolutePath(includeDirectory, errorCode).lexically_normal();
         Path overlayIncludeDirectory(includeDirectory.arena());
         if(errorCode || !BuildCompilerOverlayPath(overlayRoot, absoluteIncludeDirectory, overlayIncludeDirectory)){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory")
                 , PathToString<tchar>(includeDirectory)
             );
             return false;
@@ -492,7 +492,7 @@ bool SlangShaderCompiler::resolveIncludeFile(const AStringView includeName, cons
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to query include candidate '{}': {}")
                 , PathToString<tchar>(localCandidate)
                 , StringConvert(errorCode.message())
             );
@@ -508,7 +508,7 @@ bool SlangShaderCompiler::resolveIncludeFile(const AStringView includeName, cons
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to query include candidate '{}': {}")
                 , PathToString<tchar>(includeCandidate)
                 , StringConvert(errorCode.message())
             );
@@ -527,29 +527,29 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         outBytecode.clear();
 
         if(request.sourcePath.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : source path is empty"), StringConvert(request.shaderName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to compile shader '{}' : source path is empty"), StringConvert(request.shaderName));
             return false;
         }
 
         if(request.outputPath.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : output path is empty"), StringConvert(request.shaderName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to compile shader '{}' : output path is empty"), StringConvert(request.shaderName));
             return false;
         }
 
         if(request.entryPoint.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to compile shader '{}' : entry point is empty"), StringConvert(request.shaderName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Failed to compile shader '{}' : entry point is empty"), StringConvert(request.shaderName));
             return false;
         }
 
         AStringView slangStage;
         if(!tryMapStageToSlangStage(request.stage, slangStage)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
             return false;
         }
 
         const AStringView optimizationArgument = slangOptimizationArgument(request.optimizationLevel);
         if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader '{}' uses an invalid optimization level {}")
                 , StringConvert(request.shaderName)
                 , static_cast<u32>(request.optimizationLevel)
             );
@@ -588,7 +588,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
             AddOverflows<usize>(maxFixedArgumentCount, defineCount)
             || includeDirectoryCount > (Limit<usize>::s_Max - maxFixedArgumentCount - defineCount) / 2u
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), StringConvert(request.shaderName));
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("ShaderCook: compiler request for '{}' has too many arguments"), StringConvert(request.shaderName));
             return false;
         }
 
@@ -657,18 +657,18 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
             &exitCodeQueryFailed
         );
         if(exitCodeQueryFailed)
-            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query compiler process exit code"));
+            NWB_LOGGER_WARNING(GLOBAL_TEXT("ShaderCook: failed to query compiler process exit code"));
         if(exitCode != 0){
             __hidden_slang_compiler::ScratchString diagnostics{argumentArena};
             if(__hidden_slang_compiler::ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') :\n{}")
                     , StringConvert(request.shaderName)
                     , StringConvert(request.variantName)
                     , StringConvert(diagnostics)
                 );
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') with exit code {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') with exit code {}")
                     , StringConvert(request.shaderName)
                     , StringConvert(request.variantName)
                     , exitCode
@@ -679,7 +679,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
 
         __hidden_slang_compiler::ScratchString diagnostics{argumentArena};
         if(__hidden_slang_compiler::ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}")
                 , StringConvert(request.shaderName)
                 , StringConvert(request.variantName)
                 , StringConvert(diagnostics)
@@ -690,7 +690,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         ErrorCode errorCode;
         if(!ReadBinaryFile(request.outputPath, outBytecode, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}' : {}")
                     , StringConvert(request.shaderName)
                     , StringConvert(request.variantName)
                     , PathToString<tchar>(request.outputPath)
@@ -698,7 +698,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
                 );
             }
             else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'")
+                NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') : failed to read output '{}'")
                     , StringConvert(request.shaderName)
                     , StringConvert(request.variantName)
                     , PathToString<tchar>(request.outputPath)
@@ -711,7 +711,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         case ShaderBinaryPayload::BytecodeValidationFailure::None:
             break;
         case ShaderBinaryPayload::BytecodeValidationFailure::InvalidSize:
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid size {}")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid size {}")
                 , StringConvert(request.shaderName)
                 , StringConvert(request.variantName)
                 , outBytecode.size()
@@ -719,7 +719,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
             outBytecode.clear();
             return false;
         case ShaderBinaryPayload::BytecodeValidationFailure::InvalidMagic:
-            NWB_LOGGER_ERROR(NWB_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid SPIR-V magic")
+            NWB_LOGGER_ERROR(GLOBAL_TEXT("Shader compile failed for '{}' (variant '{}') : compiled bytecode has invalid SPIR-V magic")
                 , StringConvert(request.shaderName)
                 , StringConvert(request.variantName)
             );

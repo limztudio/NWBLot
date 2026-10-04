@@ -12,7 +12,7 @@
 #include <global/simplemath.h>
 
 #include <cerrno>
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
 #include <windows.h>
 #else
 #include <unistd.h>
@@ -29,7 +29,7 @@ NWB_FILESYSTEM_BEGIN
 
 
 static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outError){
-#if defined(NWB_PLATFORM_WINDOWS)
+#if defined(GLOBAL_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max)){
         GlobalFilesystemDetail::SetValueTooLargeError(outError);
         return false;
@@ -95,7 +95,7 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
     if(sourceEndOffset > capacityBytes){
-        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
+        NWB_LOGGER_WARNING(GLOBAL_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
             , StringConvert(m_volumeName)
             , sourceOffset
             , sourceEndOffset

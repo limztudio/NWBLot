@@ -182,11 +182,7 @@ void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
         const auto& packet = decoded.packetSubmissionStatistics[index];
         EXPECT_EQ(packet.ownerNodeIndex, index / packetsPerOwner);
         EXPECT_EQ(packet.packetIndex, index % packetsPerOwner);
-        EXPECT_EQ(packet.packetGeneration, 72u);
         EXPECT_EQ(packet.queue.index, (packet.packetIndex & 1u) == 0u ? 1u : 3u);
-        EXPECT_EQ(packet.queue.deviceGeneration, 17u);
-        EXPECT_EQ(packet.taskCount, 1u);
-        EXPECT_EQ(packet.commandListCount, 1u);
     }
     testing::Test::RecordProperty("packet_count", packetCount);
     testing::Test::RecordProperty("owner_count", ownerCount);

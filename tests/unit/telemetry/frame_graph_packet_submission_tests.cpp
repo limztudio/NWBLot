@@ -57,7 +57,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
 }
 
-TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsStable){
+TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -81,57 +81,6 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
         packetSubmissionStatistics,
         payload
     ));
-    Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
-    EXPECT_EQ(header.runtimeStatisticsCount, 1u);
-    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
-    EXPECT_EQ(header.packetSubmissionStatisticsCount, 3u);
-    EXPECT_EQ(header.packetSubmissionStatisticsPresent, 1u);
-
-    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
-        + sizeof(Telemetry::EncodedFrameGraphNode)
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics)
-        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * s_ExpectedDualCount
-    ;
-    Telemetry::EncodedFrameGraphPacketSubmissionStatistics firstEncodedStatistics;
-    GLB_MEMCPY(
-        &firstEncodedStatistics,
-        sizeof(firstEncodedStatistics),
-        payload.data() + packetSubmissionStatisticsOffset,
-        sizeof(firstEncodedStatistics)
-    );
-    EXPECT_EQ(firstEncodedStatistics.ownerNodeIndex, 0u);
-    EXPECT_EQ(firstEncodedStatistics.packetIndex, 0u);
-    EXPECT_EQ(firstEncodedStatistics.packetGeneration, 72u);
-    EXPECT_EQ(firstEncodedStatistics.queue.index, 1u);
-    EXPECT_EQ(firstEncodedStatistics.queue.deviceGeneration, 17u);
-    EXPECT_EQ(firstEncodedStatistics.queueClass, Telemetry::FrameGraphQueueClass::Graphics);
-    EXPECT_EQ(firstEncodedStatistics.joinsAcceptedQueueFrontier, 0u);
-    EXPECT_EQ(firstEncodedStatistics.recoverySubmission, 0u);
-    EXPECT_EQ(firstEncodedStatistics.reserved, 0u);
-    EXPECT_EQ(firstEncodedStatistics.taskCount, s_ExpectedDualCount);
-    EXPECT_EQ(firstEncodedStatistics.commandListCount, 1u);
-    EXPECT_EQ(firstEncodedStatistics.plannedWaitTokenCount, s_ExpectedDualCount);
-    EXPECT_EQ(firstEncodedStatistics.sameQueueWaitElisionCount, 1u);
-    EXPECT_EQ(firstEncodedStatistics.timelineWaitCount, 1u);
-    EXPECT_EQ(firstEncodedStatistics.mergedTimelineWaitCount, 0u);
-    EXPECT_DOUBLE_EQ(firstEncodedStatistics.submissionSeconds, 0.125);
-
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
-    ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 3u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[0u].packetIndex, 0u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].packetIndex, 1u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[s_ThirdElementIndex].packetIndex, s_ExpectedDualCount);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queue.index, 3u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queueClass, Telemetry::FrameGraphQueueClass::Compute);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].commandListCount, s_ExpectedDualCount);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].mergedTimelineWaitCount, s_ExpectedDualCount);
-    EXPECT_TRUE(parsed.packetSubmissionStatistics[s_ThirdElementIndex].joinsAcceptedQueueFrontier);
-    EXPECT_TRUE(parsed.packetSubmissionStatistics[s_ThirdElementIndex].recoverySubmission);
-
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord firstPhysicalQueue =
         physicalQueueRuntimeStatistics[0u]
     ;

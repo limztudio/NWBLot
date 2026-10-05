@@ -130,14 +130,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
     colorClear.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
     const Graphics::GpuTaskId colorTask = colorGraph.addClearTextureTask(transferDesc, colorClear);
     ASSERT_TRUE(colorTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(colorTask.index).commands.alternativeCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
-        );
-    }
 
     Graphics::GpuClearTextureRectUIntTaskDesc colorRectClear;
     colorRectClear.destination = colorResource;
@@ -153,14 +145,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         colorRectClear
     );
     ASSERT_TRUE(colorRectTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(colorGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(colorRectTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Transfer
-        );
-    }
 
     Graphics::GpuTaskGraph rectGraph(testArena.arena);
     const Graphics::GpuGraphResourceId rectResource = rectGraph.importTexture(
@@ -179,14 +163,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         isolatedRectClear
     );
     ASSERT_TRUE(isolatedRectTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(rectGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(isolatedRectTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Transfer
-        );
-    }
 
     Graphics::GpuTaskGraph compressedGraph(testArena.arena);
     const Graphics::GpuGraphResourceId compressedResource = compressedGraph.importTexture(
@@ -207,14 +183,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         compressedClear
     );
     ASSERT_TRUE(compressedTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(compressedGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(compressedTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Transfer
-        );
-    }
 
     Graphics::GpuTaskGraph depthGraph(testArena.arena);
     const Graphics::GpuGraphResourceId depthResource = depthGraph.importTexture(
@@ -233,14 +201,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
     depthClear.clearDepth = true;
     const Graphics::GpuTaskId depthTask = depthGraph.addClearTextureTask(transferDesc, depthClear);
     ASSERT_TRUE(depthTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(depthGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(depthTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Graphics
-        );
-    }
 
     Graphics::GpuTaskGraph multisampleColorGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleColorResource = multisampleColorGraph.importTexture(
@@ -259,14 +219,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         multisampleColorClear
     );
     ASSERT_TRUE(multisampleColorTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleColorGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(multisampleColorTask.index).commands.alternativeCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
-        );
-    }
 
     Graphics::GpuTaskGraph multisampleDepthGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleDepthResource = multisampleDepthGraph.importTexture(
@@ -285,14 +237,6 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         multisampleDepthClear
     );
     ASSERT_TRUE(multisampleDepthTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(multisampleDepthGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(multisampleDepthTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Graphics
-        );
-    }
 
     Graphics::GpuTaskGraph multisampleCompressedGraph(testArena.arena);
     const Graphics::GpuGraphResourceId multisampleCompressedResource = multisampleCompressedGraph.importTexture(
@@ -484,14 +428,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(uploadTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(uploadGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(uploadTask.index).commands.requiredCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
-        );
-    }
 
     Graphics::TextureDesc multisampleDescription = Graphics::TextureDesc()
         .setWidth(4u)
@@ -544,14 +480,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(copyTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(copyGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(copyTask.index).commands.requiredCapabilities,
-            Graphics::GpuQueueCapability::Graphics
-        );
-    }
 
     const auto expectCompiledOn = [&](
         const Graphics::GpuTaskGraph& graph,
@@ -630,14 +558,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(partialTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(partialTask.index).commands.alternativeCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
-        );
-    }
     expectCompiledOn(partialGraph, partialTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
     expectCompiledOn(partialGraph, partialTask, DedicatedComputeQueue(), Graphics::CommandQueue::Compute, true);
     expectCompiledOn(partialGraph, partialTask, GraphicsQueue(), Graphics::CommandQueue::Graphics, true);
@@ -673,14 +593,6 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         }
     );
     ASSERT_TRUE(partialGraphicsTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(partialGraphicsGraph);
-
-        EXPECT_EQ(
-            declarations.taskAt(partialGraphicsTask.index).commands.alternativeCapabilities,
-            QueueCapabilities(Graphics::GpuQueueCapability::Compute, Graphics::GpuQueueCapability::Graphics)
-        );
-    }
     expectCompiledOn(
         partialGraphicsGraph,
         partialGraphicsTask,

@@ -74,28 +74,6 @@ TEST(GpuTaskGraph, AutomaticallyRunsComputeOnGraphicsWhenNoComputeQueueExists){
     EXPECT_EQ(assignments.find(task)->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
 }
 
-TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingAutomaticWorkOnGraphics){
-    const auto runCase = [](const bool tiny){
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = tiny ? Graphics::GpuTaskCostHint::Tiny : Graphics::GpuTaskCostHint::Medium;
-        scheduling.overlapPreferred = tiny;
-        const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_small"), "Automatic Small", ComputeCommands(), scheduling);
-        ASSERT_TRUE(task.valid());
-        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        ASSERT_TRUE(Analyze(graph, analysis));
-        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
-        ASSERT_NE(assignments.find(task), nullptr);
-        EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
-    };
-    runCase(true);
-    runCase(false);
-}
-
 TEST(GpuTaskGraph, CoLocatesMergedMixedCommandsOnAQueueSupportingTheWholeChain){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

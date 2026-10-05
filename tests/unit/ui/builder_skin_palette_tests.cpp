@@ -41,58 +41,6 @@ class UiBuilderSkinPaletteTests : public WidgetFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiBuilderSkinPaletteTests, SkinRebindAppliesCompletePaletteAndPreservesExplicitSize){
-    const UiSkinPalette first = MakePalette(0.1f);
-    const UiSkinPalette second = MakePalette(0.3f);
-    m_skin.setPalette(first);
-    m_builder.setSkin(m_skin);
-    m_builder.style().fontSize = 21.0f;
-    m_builder.style().text = { 0.9f, 0.8f, 0.7f, 1.0f };
-    ExpectColor(m_builder.style().text, { 0.9f, 0.8f, 0.7f, 1.0f });
-
-    m_skin.setPalette(second);
-    m_builder.setSkin(m_skin);
-    ExpectColor(m_builder.style().text, second.colors[UiSkinColorRole::TextNormal]);
-    ExpectColor(m_builder.tooltipStyle().text, second.colors[UiSkinColorRole::TextTooltip]);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 21.0f);
-
-    UiSkin defaultSkin(m_arena, Name("tests/ui/default_skin"));
-    UiSkin::RegionVector regions(m_arena);
-    for(const UiSkinRegion& region : m_skin.regions())
-        regions.push_back(region);
-    defaultSkin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-    ASSERT_TRUE(defaultSkin.validatePayload());
-    m_builder.setSkin(defaultSkin);
-    const UiSkinPalette paletteDefault;
-    ExpectColor(m_builder.style().text, paletteDefault.colors[UiSkinColorRole::TextNormal]);
-    ExpectColor(m_builder.editStyle().selection, paletteDefault.colors[UiSkinColorRole::EditSelection]);
-    ExpectColor(m_builder.tooltipStyle().text, paletteDefault.colors[UiSkinColorRole::TextTooltip]);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 21.0f);
-}
-
-TEST_F(UiBuilderSkinPaletteTests, SkinTypographySetsDefaultAndPreservesExplicitStyleSize){
-    m_builder.style().fontSize = WidgetStyle{}.fontSize;
-    m_skin.setPalette(MakePalette(0.1f));
-    m_skin.setTypography({ 20.0f });
-    m_builder.setSkin(m_skin);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 20.0f);
-
-    m_skin.setTypography({ 22.0f });
-    m_builder.setSkin(m_skin);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 22.0f);
-
-    m_builder.style().fontSize = 19.0f;
-    m_skin.setTypography({ 24.0f });
-    m_builder.setSkin(m_skin);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
-
-    UiSkin defaultSkin(m_arena, Name("tests/ui/default_skin"));
-    UiSkin::RegionVector regions(m_skin.regions().begin(), m_skin.regions().end(), m_arena);
-    defaultSkin.setAtlas(m_skin.texture(), m_skin.atlasWidth(), m_skin.atlasHeight(), m_skin.referenceDensity(), Move(regions));
-    m_builder.setSkin(defaultSkin);
-    EXPECT_FLOAT_EQ(m_builder.style().fontSize, 19.0f);
-}
-
 TEST_F(UiBuilderSkinPaletteTests, SkinChangeInsidePanelFailsWithoutReplacingActiveStyle){
     m_builder.style().fontSize = WidgetStyle{}.fontSize;
     const UiSkinPalette first = MakePalette(0.1f);

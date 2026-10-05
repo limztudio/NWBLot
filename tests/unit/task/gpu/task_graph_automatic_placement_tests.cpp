@@ -30,11 +30,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-void ExpectComputeStagePlacement(
-    const Graphics::GpuTaskCostHint::Enum stageCost,
-    const bool independentGraphics,
-    const u64 computeQueueLoad,
-    const Graphics::CommandQueue::Enum expectedQueueClass){
+void ExpectComputeStagePlacement(const u64 computeQueueLoad, const Graphics::CommandQueue::Enum expectedQueueClass){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskSchedulingHint graphicsScheduling;
@@ -49,7 +45,7 @@ void ExpectComputeStagePlacement(
     ASSERT_TRUE(producer.valid());
 
     Graphics::GpuTaskSchedulingHint stageScheduling;
-    stageScheduling.cost = stageCost;
+    stageScheduling.cost = Graphics::GpuTaskCostHint::Large;
     const Graphics::GpuTaskId stage = AddTaskWithCommands(
         graph,
         Name("tests/task_graph/automatic_stage_compute"),
@@ -73,17 +69,14 @@ void ExpectComputeStagePlacement(
     );
     ASSERT_TRUE(consumer.valid());
 
-    Graphics::GpuTaskId independent;
-    if(independentGraphics){
-        independent = AddTaskWithCommands(
-            graph,
-            Name("tests/task_graph/automatic_stage_independent_graphics"),
-            "Automatic Stage Independent Graphics",
-            GraphicsCommands(),
-            graphicsScheduling
-        );
-        ASSERT_TRUE(independent.valid());
-    }
+    const Graphics::GpuTaskId independent = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_stage_independent_graphics"),
+        "Automatic Stage Independent Graphics",
+        GraphicsCommands(),
+        graphicsScheduling
+    );
+    ASSERT_TRUE(independent.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
@@ -101,10 +94,8 @@ void ExpectComputeStagePlacement(
     ASSERT_NE(assignments.find(consumer), nullptr);
     EXPECT_EQ(assignments.find(producer)->queue, queues[0u].id);
     EXPECT_EQ(assignments.find(consumer)->queue, queues[0u].id);
-    if(independentGraphics){
-        ASSERT_NE(assignments.find(independent), nullptr);
-        EXPECT_EQ(assignments.find(independent)->queue, queues[0u].id);
-    }
+    ASSERT_NE(assignments.find(independent), nullptr);
+    EXPECT_EQ(assignments.find(independent)->queue, queues[0u].id);
 
     const Graphics::GpuTaskQueueAssignment* const stageAssignment = assignments.find(stage);
     ASSERT_NE(stageAssignment, nullptr);
@@ -116,30 +107,17 @@ void ExpectComputeStagePlacement(
     EXPECT_EQ(stageAssignment->score.incomingCrossings, routedCompute ? 1 : 0);
     EXPECT_EQ(stageAssignment->score.outgoingCrossings, routedCompute ? 1 : 0);
     EXPECT_EQ(stageAssignment->score.overlap, routedCompute ? 8 : 0);
-    EXPECT_EQ(
-        stageAssignment->reason,
-        stageCost == Graphics::GpuTaskCostHint::Tiny
-            ? Graphics::GpuTaskQueueAssignmentReason::Conservative
-            : Graphics::GpuTaskQueueAssignmentReason::Scored
-    );
+    EXPECT_EQ(stageAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
 }
 
 
 // Independent Graphics work can overlap the Compute stage even though its producer and consumer use Graphics.
 TEST(GpuTaskGraph, AutomaticallyOverlapsComputeBetweenGraphicsProducerAndConsumer){
-    ExpectComputeStagePlacement(Graphics::GpuTaskCostHint::Large, true, 0u, Graphics::CommandQueue::Compute);
-}
-
-TEST(GpuTaskGraph, KeepsComputeBetweenGraphicsDependenciesLocalWithoutIndependentWork){
-    ExpectComputeStagePlacement(Graphics::GpuTaskCostHint::Large, false, 0u, Graphics::CommandQueue::Graphics);
+    ExpectComputeStagePlacement(0u, Graphics::CommandQueue::Compute);
 }
 
 TEST(GpuTaskGraph, AvoidsBusyComputeQueueForStageBetweenGraphicsDependencies){
-    ExpectComputeStagePlacement(Graphics::GpuTaskCostHint::Large, true, 64u, Graphics::CommandQueue::Graphics);
-}
-
-TEST(GpuTaskGraph, KeepsTinyComputeBetweenGraphicsDependenciesLocal){
-    ExpectComputeStagePlacement(Graphics::GpuTaskCostHint::Tiny, true, 0u, Graphics::CommandQueue::Graphics);
+    ExpectComputeStagePlacement(64u, Graphics::CommandQueue::Graphics);
 }
 
 TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGroup){

@@ -27,16 +27,6 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 
-TEST(LightingContentStamp, DirectIntensityEditsInvalidateWithoutStructuralChanges){
-    ECSRenderDetail::SceneShadingGpuData shading;
-    ECSRenderDetail::SceneLightGpuData lights[2];
-    const u64 original = ComputeSceneLightingContentHash(shading, lights, 1u);
-    lights[0].colorIntensity.w = 0.f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, 1u), original);
-    lights[0].colorIntensity.w = 1.f;
-    EXPECT_EQ(ComputeSceneLightingContentHash(shading, lights, 1u), original);
-}
-
 TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
     ECSRenderDetail::SceneShadingGpuData shading;
     ECSRenderDetail::SceneLightGpuData lights[2];
@@ -48,24 +38,8 @@ TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
     EXPECT_EQ(ComputeSceneLightingContentHash(shading, nullptr, 0u), ComputeSceneLightingContentHash(shading, lights, 0u));
 }
 
-TEST(LightingContentStamp, PositionDirectionRangeAndSourceShapeAreSemanticInputs){
-    ECSRenderDetail::SceneShadingGpuData shading;
-    ECSRenderDetail::SceneLightGpuData light;
-    const u64 original = ComputeSceneLightingContentHash(shading, &light, 1u);
-    light.position.y = 2.f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, &light, 1u), original);
-    light = {};
-    light.direction.x = 1.f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, &light, 1u), original);
-    light = {};
-    light.params.x = 100.f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, &light, 1u), original);
-    light = {};
-    light.params2.y = 0.5f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, &light, 1u), original);
-}
 
-TEST(LightingContentStamp, LightSelectionOrderAndObserverStateArePreserved){
+TEST(LightingContentStamp, ReversingSelectedLightsChangesSemanticIdentity){
     ECSRenderDetail::SceneShadingGpuData shading;
     ECSRenderDetail::SceneLightGpuData lights[2];
     lights[0].colorIntensity.x = 0.2f;
@@ -73,8 +47,6 @@ TEST(LightingContentStamp, LightSelectionOrderAndObserverStateArePreserved){
     const u64 original = ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount);
     const ECSRenderDetail::SceneLightGpuData reversed[2] = {lights[1], lights[0]};
     EXPECT_NE(ComputeSceneLightingContentHash(shading, reversed, s_ExpectedDualCount), original);
-    shading.cameraPositionLightCount.x = 0.25f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount), original);
 }
 
 

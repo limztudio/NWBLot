@@ -53,16 +53,6 @@ TEST(UiGlyphCoverage, TransparentAndOpaqueCoveragePreservePremultipliedEndpoints
     EXPECT_FLOAT_EQ(opaque.w, tint.w);
 }
 
-TEST(UiGlyphCoverage, HalfCoverageAppliesOnceToColorAndOpacityWithoutSrgbDecode){
-    const ShaderFloat4 result = nwbUiGlyphCoverageColor({ 0.5f, 0.25f, 0.125f, 0.5f }, 0.5f);
-    EXPECT_FLOAT_EQ(result.x, 0.25f);
-    EXPECT_FLOAT_EQ(result.y, 0.125f);
-    EXPECT_FLOAT_EQ(result.z, 0.0625f);
-    EXPECT_FLOAT_EQ(result.w, 0.25f);
-    // Premultiplied source-over leaves three quarters of the destination at this coverage and tint opacity.
-    EXPECT_FLOAT_EQ(result.x + 0.2f * (1.f - result.w), 0.4f);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

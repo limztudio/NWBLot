@@ -3,7 +3,7 @@
 
 
 #include "popup_tools_fixture.h"
-#include "search_combo_fixture.h"
+#include "combo_fixture.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,20 +18,18 @@ namespace __hidden_ui_nested_popup_trigger_tests{
 using namespace NWB;
 using namespace NWB::Impl::Ui;
 using namespace NWB::UiPopupToolsTests;
-using namespace NWB::UiSearchComboTests;
+using namespace NWB::UiComboTests;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiNestedPopupTriggerTests : public SearchFixture{
+class UiNestedPopupTriggerTests : public ComboFixture{
 protected:
     virtual void SetUp()override{
-        SearchFixture::SetUp();
+        ComboFixture::SetUp();
         m_source.count = 5u;
         m_source.disabled = 3u;
-        m_searchSource.full.count = 5u;
-        m_searchSource.full.disabled = 3u;
         m_parent.open();
         m_child.open();
     }
@@ -61,7 +59,6 @@ protected:
     [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
     [[nodiscard]] WidgetId fieldId()const{ return MakeWidgetId(childId(), "combo"); }
     [[nodiscard]] WidgetId rowsId()const{ return MakeWidgetId(fieldId(), "rows"); }
-    [[nodiscard]] WidgetId queryId()const{ return MakeWidgetId(fieldId(), "query"); }
     [[nodiscard]] WidgetId anchorId()const{ return MakeWidgetId(childId(), "anchor"); }
     [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(childId(), "menu"), "rows"); }
 
@@ -90,13 +87,6 @@ protected:
             return false;
         m_result = m_builder.comboBox("combo", m_source, m_state, Options());
         return m_result.valid && finishChild(generation);
-    }
-
-    [[nodiscard]] bool acceptChildSearch(const u64 generation){
-        if(!beginChild(generation))
-            return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, options());
-        return m_searchResult.combo.valid && finishChild(generation);
     }
 
     [[nodiscard]] bool acceptChildMenu(const u64 generation){
@@ -167,54 +157,6 @@ TEST_F(UiNestedPopupTriggerTests, AcceptedChildFieldPointerOpensComboAndOnlyAnEn
     EXPECT_FALSE(m_state.isOpen());
     EXPECT_EQ(target(rowsId()), nullptr);
     EXPECT_EQ(target(fieldId())->popup, child);
-    EXPECT_EQ(m_context.input().focus(), fieldId());
-    expectUserParentsOpen();
-}
-
-TEST_F(UiNestedPopupTriggerTests, AcceptedChildSearchPointerOpensExplicitQueryScopeAndTypedResultsCommit){
-    ASSERT_TRUE(acceptChildSearch(1u));
-    ASSERT_NE(target(fieldId()), nullptr);
-    const PopupToken child = target(fieldId())->popup;
-    EXPECT_EQ(m_host.loans, 0u);
-    click(Center(target(fieldId())->rectangle));
-    ASSERT_TRUE(acceptChildSearch(2u));
-    EXPECT_TRUE(m_searchResult.combo.opened);
-    EXPECT_TRUE(m_search.combo().isOpen());
-    ASSERT_NE(target(queryId()), nullptr);
-    ASSERT_NE(target(rowsId()), nullptr);
-    EXPECT_EQ(target(queryId())->layer, 3u);
-    EXPECT_EQ(target(queryId())->popup, target(rowsId())->popup);
-    EXPECT_EQ(target(queryId())->popup.widget, MakeWidgetId(fieldId(), "popup"));
-    EXPECT_EQ(m_host.loanContextPopup, child);
-    EXPECT_EQ(m_host.lastPopup, target(queryId())->popup);
-    EXPECT_EQ(m_host.publishContextPopup, target(queryId())->popup);
-    EXPECT_EQ(target(queryId())->keyboardOwner, rowsId());
-    EXPECT_EQ(m_context.input().focus(), queryId());
-
-    m_host.text("Second");
-    ASSERT_TRUE(acceptChildSearch(3u));
-    EXPECT_TRUE(m_searchResult.queryChanged);
-    EXPECT_EQ(m_search.query().text(), "Second");
-    EXPECT_TRUE(m_search.editorState().focused);
-    EXPECT_EQ(m_context.input().focus(), queryId());
-    EXPECT_EQ(target(rowsId())->control.contentGeneration, m_searchSource.view.generation);
-    EXPECT_EQ(target(comboRow(1u)), nullptr);
-    ASSERT_NE(target(comboRow(2u)), nullptr);
-    press(Core::Key::Down);
-    ASSERT_TRUE(acceptChildSearch(4u));
-    EXPECT_EQ(m_search.combo().listState().cursorKey(), 2u);
-    EXPECT_EQ(m_search.combo().selectedKey(), 0u);
-    EXPECT_EQ(m_context.input().focus(), queryId());
-    m_host.submitted = true;
-    press(Core::Key::Enter);
-    ASSERT_TRUE(acceptChildSearch(5u));
-    EXPECT_TRUE(m_searchResult.combo.committed);
-    EXPECT_TRUE(m_searchResult.combo.closed);
-    EXPECT_EQ(m_search.combo().selectedKey(), 2u);
-    EXPECT_FALSE(m_search.combo().isOpen());
-    EXPECT_EQ(target(queryId()), nullptr);
-    EXPECT_EQ(target(rowsId()), nullptr);
-    EXPECT_EQ(m_host.contextScopedLoans, 0u);
     EXPECT_EQ(m_context.input().focus(), fieldId());
     expectUserParentsOpen();
 }

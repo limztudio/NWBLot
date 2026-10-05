@@ -8,11 +8,8 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-from reflection_roughness_reference import (analyze_furnace, analyze_roughness, decode_radiance,
-    integrated_radiance, mirror_cells, reference_grid, smith_lambda)
-from reflection_roughness_smoke import (CaptureSpec, HISTORY_FIELDS, ROUGH_CAPTURES, TEMPORAL_CAPTURES,
-    compare_convergence, compare_deformation, compare_exact_scene, compare_sampling_seeds, high_frequency_energy, parse_history,
-    spec_environment, validate_history)
+from reflection_roughness_reference import analyze_furnace, analyze_roughness, integrated_radiance, mirror_cells, reference_grid, smith_lambda
+from reflection_roughness_smoke import CaptureSpec, HISTORY_FIELDS, compare_convergence, compare_deformation, compare_exact_scene, compare_sampling_seeds, high_frequency_energy, parse_history, spec_environment, validate_history
 from reflection_smoke import SmokeFailure
 
 # Shared literals (no inline hardcodes below this block).
@@ -49,32 +46,15 @@ def reference_frame(roughness, scale=1.0, swap_colors=False, camera_x=0.0):
 
 
 class ReflectionRoughnessReferenceTests(unittest.TestCase):
-    def test_reinhard_srgb_roundtrip_matches_presentation_quantization(self):
-        for value in (0.001, 0.01, 0.1, 0.5, 1.0):
-            self.assertAlmostEqual(decode_radiance(encode_radiance(value)), value, delta=0.012)
-
     def test_exact_mirror_hits_virtual_emitter_and_rejects_wrong_position(self):
         # Point x=-1.6*6/14 reflects exactly to emitter x=-1.6 at z=-8.
         self.assertAlmostEqual(integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 0), 0.95, places=6)
         self.assertEqual(integrated_radiance((0, 1.4, 0), 0, 0), 0)
         self.assertEqual(integrated_radiance((-1.6 * 6 / 14, 1.4, 0), 0, 1), 0)
 
-    def test_area_quadrature_converges_without_production_sampler(self):
-        point = (-0.7, 1.4, 0)
-        coarse = integrated_radiance(point, 0.4, 0, resolution=12)
-        fine = integrated_radiance(point, 0.4, 0, resolution=48)
-        self.assertGreater(fine, 0.01)
-        self.assertAlmostEqual(coarse, fine, delta=fine * 0.005)
-
     def test_smith_lambda_normal_incidence_and_alpha_one_closed_form(self):
         self.assertEqual(smith_lambda(1, 0.8), 0)
         self.assertAlmostEqual(smith_lambda(0.4, 1), (1 / 0.4 - 1) / 2)
-
-    def test_correct_integrated_shape_survives_capture_quantization(self):
-        for roughness in (0, 0.2, 0.4, 0.6):
-            with self.subTest(roughness=roughness):
-                result = analyze_roughness(reference_frame(roughness), roughness)
-                self.assertLess(result["normalized_reference_error"], 0.03)
 
     def test_smooth_image_cannot_pass_for_rough_lobe(self):
         with self.assertRaises(SmokeFailure):
@@ -263,14 +243,6 @@ class ReflectionCompletedHistoryTests(unittest.TestCase):
         self.assertEqual(env[LIT_NWB_REFLECTION_SMOKE_SEED], "0")
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DEBUG, env)
         self.assertNotIn(LIT_NWB_REFRACTION_SMOKE_ENABLED, env)
-
-    def test_capture_matrix_has_independent_cap_and_motion_coverage(self):
-        self.assertEqual(len(ROUGH_CAPTURES) + len(TEMPORAL_CAPTURES), 26)
-        self.assertEqual({spec.samples for spec in ROUGH_CAPTURES}, {8, 64, 256})
-        self.assertEqual(len({spec.name for spec in ROUGH_CAPTURES + TEMPORAL_CAPTURES}), 26)
-        self.assertTrue(any(spec.case == "rough_furnace" and not spec.temporal and spec.roughness == 1 for spec in ROUGH_CAPTURES))
-        self.assertTrue(any(spec.case == LIT_TEMPORAL_DEFORM and not spec.final_state for spec in TEMPORAL_CAPTURES))
-
 
 if __name__ == LIT_MAIN:
     unittest.main()

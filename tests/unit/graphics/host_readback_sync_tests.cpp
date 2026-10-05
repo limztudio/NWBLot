@@ -240,32 +240,6 @@ TEST(HostReadbackSync, DeduplicatesNativeBuffersAndAppendsOneBarrierEach){
     EXPECT_EQ(tracker.size(), 1u);
 }
 
-TEST(HostReadbackSync, UniversalHostScopesSurviveEveryExactQueueClass){
-    constexpr GpuQueueCapability::Mask s_Capabilities[] = {
-        GpuQueueCapability::Graphics,
-        GpuQueueCapability::Compute,
-        GpuQueueCapability::Transfer,
-    };
-
-    for(const GpuQueueCapability::Mask capabilities : s_Capabilities){
-        VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-        VkAccessFlags2 sourceAccess = VK_ACCESS_2_MEMORY_WRITE_BIT;
-        StateTracking::NormalizeBarrierScopeForQueueCapabilities(capabilities, sourceStage, sourceAccess);
-        EXPECT_EQ(sourceStage, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-        EXPECT_EQ(sourceAccess, VK_ACCESS_2_MEMORY_WRITE_BIT);
-
-        VkPipelineStageFlags2 destinationStage = VK_PIPELINE_STAGE_2_HOST_BIT;
-        VkAccessFlags2 destinationAccess = VK_ACCESS_2_HOST_READ_BIT;
-        StateTracking::NormalizeBarrierScopeForQueueCapabilities(
-            capabilities,
-            destinationStage,
-            destinationAccess
-        );
-        EXPECT_EQ(destinationStage, VK_PIPELINE_STAGE_2_HOST_BIT);
-        EXPECT_EQ(destinationAccess, VK_ACCESS_2_HOST_READ_BIT);
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

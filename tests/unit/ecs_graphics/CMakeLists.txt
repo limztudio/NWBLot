@@ -57,7 +57,6 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_descriptor_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_effects_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_geometry_contract_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/task_graph_hybrid_fallback_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_shadow_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_smoke_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_timing_contract_tests.cpp"

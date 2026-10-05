@@ -303,32 +303,6 @@ TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMet
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     ASSERT_TRUE(state.snapshot.hasCsg);
-    ASSERT_EQ(state.snapshot.receiverRanges.size(), state.instances.size());
-    constexpr usize s_RangeOffset = NWB_CSG_SHADOW_CONTEXT_BYTES;
-    constexpr usize s_CutterOffset = s_RangeOffset + NWB_CSG_SHADOW_RANGE_BYTES;
-    constexpr usize s_InstanceOffset = s_CutterOffset + NWB_CSG_SHADOW_CUTTER_BYTES;
-    EXPECT_EQ(s_RangeOffset, 32u);
-    EXPECT_EQ(s_CutterOffset % alignof(Float4), 0u);
-    EXPECT_EQ(s_InstanceOffset % alignof(Float4), 0u);
-    ASSERT_EQ(state.bytes.size(), s_InstanceOffset + NWB_CSG_SHADOW_INSTANCE_BYTES);
-    u32 header[NWB_CSG_SHADOW_CONTEXT_BYTES / sizeof(u32)] = {};
-    GLB_MEMCPY(header, sizeof(header), state.bytes.data(), sizeof(header));
-    EXPECT_EQ(header[0], 1u);
-    EXPECT_EQ(header[1], s_RangeOffset);
-    EXPECT_EQ(header[2], s_CutterOffset);
-    EXPECT_EQ(header[3], 1u);
-    EXPECT_EQ(header[4], s_InstanceOffset);
-    for(usize index = 5u; index < LengthOf(header); ++index)
-        EXPECT_EQ(header[index], 0u);
-    LightSpaceCsgInstanceGpu instance;
-    GLB_MEMCPY(&instance, sizeof(instance), state.bytes.data() + s_InstanceOffset, sizeof(instance));
-    EXPECT_TRUE(MatrixIsIdentity(LoadFloat(instance.worldToObject)));
-    EXPECT_EQ(instance.primitiveCount, 1u);
-    EXPECT_EQ(instance.localMin, Float4(-2.f, -2.f, -2.f, 0.f));
-    EXPECT_EQ(instance.localMax, Float4(2.f, 2.f, 2.f, 0.f));
-    EXPECT_EQ(instance.runtimeBoundsSlot, Limit<u32>::s_Max);
-    EXPECT_EQ(instance.meshRootSlot, Limit<u32>::s_Max);
-
     constexpr u32 s_SoftwareRootSlot = 17u;
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);

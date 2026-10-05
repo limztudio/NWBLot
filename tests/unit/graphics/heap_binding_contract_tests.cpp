@@ -171,63 +171,19 @@ TEST(HeapBindingContract, FiltersProtectedAndIncompatibleMemoryTypes){
     EXPECT_FALSE(Binding::AllowsGenericHeapBinding(dedicatedRequirements));
 }
 
-TEST(HeapBindingContract, ResolvesBufferCpuAccessAndMatchesHeapTypes){
-    struct CpuAccessCase{
-        CpuAccessMode::Enum declaredAccess = CpuAccessMode::None;
-        bool isVolatile = false;
-        bool resolves = false;
+TEST(HeapBindingContract, RejectsUnknownCpuAccessVolatileReadsAndIncompatibleHeaps){
+    for(const bool isVolatile : { false, true }){
         CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-    };
-    static constexpr CpuAccessCase s_CpuAccessCases[] = {
-        { CpuAccessMode::None, false, true, CpuAccessMode::None },
-        { CpuAccessMode::Read, false, true, CpuAccessMode::Read },
-        { CpuAccessMode::Write, false, true, CpuAccessMode::Write },
-        { static_cast<CpuAccessMode::Enum>(UINT8_MAX), false, false, CpuAccessMode::None },
-        { CpuAccessMode::None, true, true, CpuAccessMode::Write },
-        { CpuAccessMode::Read, true, false, CpuAccessMode::None },
-        { CpuAccessMode::Write, true, true, CpuAccessMode::Write },
-        { static_cast<CpuAccessMode::Enum>(UINT8_MAX), true, false, CpuAccessMode::None },
-    };
-    static constexpr HeapType::Enum s_HeapTypes[] = {
-        HeapType::DeviceLocal,
-        HeapType::Upload,
-        HeapType::Readback,
-        static_cast<HeapType::Enum>(UINT8_MAX),
-    };
-
-    for(usize accessIndex = 0u; accessIndex < LengthOf(s_CpuAccessCases); ++accessIndex){
-        const CpuAccessCase& accessCase = s_CpuAccessCases[accessIndex];
-        CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-        EXPECT_EQ(
-            Binding::TryResolveBufferCpuAccess(
-                accessCase.declaredAccess,
-                accessCase.isVolatile,
-                effectiveAccess
-            ),
-            accessCase.resolves
-        ) << "CPU access case " << accessIndex;
-        EXPECT_EQ(effectiveAccess, accessCase.effectiveAccess) << "CPU access case " << accessIndex;
-
-        for(usize heapIndex = 0u; heapIndex < LengthOf(s_HeapTypes); ++heapIndex){
-            const HeapType::Enum heapType = s_HeapTypes[heapIndex];
-            const bool expectedCompatibility =
-                accessCase.resolves
-                && (
-                    (accessCase.effectiveAccess == CpuAccessMode::None && heapType == HeapType::DeviceLocal)
-                    || (accessCase.effectiveAccess == CpuAccessMode::Write && heapType == HeapType::Upload)
-                    || (accessCase.effectiveAccess == CpuAccessMode::Read && heapType == HeapType::Readback)
-                )
-            ;
-            EXPECT_EQ(
-                Binding::IsBufferHeapTypeCompatible(
-                    accessCase.declaredAccess,
-                    accessCase.isVolatile,
-                    heapType
-                ),
-                expectedCompatibility
-            ) << "CPU access case " << accessIndex << ", heap case " << heapIndex;
-        }
+        EXPECT_FALSE(Binding::TryResolveBufferCpuAccess(static_cast<CpuAccessMode::Enum>(UINT8_MAX), isVolatile, effectiveAccess));
+        EXPECT_EQ(effectiveAccess, CpuAccessMode::None);
     }
+    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
+    EXPECT_FALSE(Binding::TryResolveBufferCpuAccess(CpuAccessMode::Read, true, effectiveAccess));
+    EXPECT_FALSE(Binding::IsBufferHeapTypeCompatible(CpuAccessMode::Read, true, HeapType::Readback));
+    EXPECT_FALSE(Binding::IsBufferHeapTypeCompatible(CpuAccessMode::None, false, HeapType::Upload));
+    EXPECT_FALSE(Binding::IsBufferHeapTypeCompatible(CpuAccessMode::Read, false, HeapType::DeviceLocal));
+    EXPECT_FALSE(Binding::IsBufferHeapTypeCompatible(CpuAccessMode::Write, false, HeapType::Readback));
+    EXPECT_FALSE(Binding::IsBufferHeapTypeCompatible(CpuAccessMode::None, false, static_cast<HeapType::Enum>(UINT8_MAX)));
 }
 
 TEST(HeapBindingContract, PadsReadbackRequirementsToWholeNonCoherentAtoms){

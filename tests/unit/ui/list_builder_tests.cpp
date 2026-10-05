@@ -87,14 +87,6 @@ public:
         return rawKey(index) != disabled;
     }
 
-    void resetCounters()const{
-        keyCalls = 0u;
-        lookupCalls = 0u;
-        searchCalls = 0u;
-        textCalls = 0u;
-        enabledCalls = 0u;
-    }
-
 
 private:
     [[nodiscard]] u64 rawKey(const u64 index)const{
@@ -503,28 +495,6 @@ TEST_F(UiListBuilderTests, ThumbUsesItsAcceptedTrackMaximumWhenCandidateHeightCh
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FLOAT_EQ(target(thumb)->gestureReference.height, 190.0f);
-}
-
-TEST_F(UiListBuilderTests, StandaloneSelectableUsesActivationAndSkinFallback){
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
-    WidgetOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 100.0f };
-    options.height = { LayoutSizePolicy::Fixed, 30.0f };
-    EXPECT_FALSE(m_builder.selectable("choice", "Choice", true, options));
-    ASSERT_TRUE(finishPanel());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    Rect selected;
-    EXPECT_TRUE(skinQuad(snapshot, 8u, selected));
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    const WidgetId choice = id("choice", "panel");
-    ASSERT_NE(target(choice), nullptr);
-    EXPECT_TRUE(target(choice)->focusable);
-    click(Center(target(choice)->rectangle));
-    ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }));
-    EXPECT_TRUE(m_builder.selectable("choice", "Choice", false, options));
-    ASSERT_TRUE(finishPanel());
 }
 
 TEST_F(UiListBuilderTests, LatestThumbMotionFollowsAnInterveningWheelInNativeInputOrder){

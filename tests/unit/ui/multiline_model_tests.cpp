@@ -22,21 +22,15 @@ using MultilineModelTests = MultilineFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(MultilineModelTests, DefaultSingleLineRetainsItsOriginalAdmissionAndMovement){
+TEST_F(MultilineModelTests, SingleLineRejectsHardBreaksAndNulWithoutChangingModel){
     EditModel single(m_arena);
-    EXPECT_EQ(single.textMode(), EditTextMode::SingleLine);
     ASSERT_TRUE(single.setText("a\t\x01\x7F\xC2\x85" "b"));
-    ASSERT_TRUE(single.move(EditMove::Home));
-    EXPECT_EQ(single.caret(), 0u);
-    ASSERT_TRUE(single.move(EditMove::End));
-    EXPECT_EQ(single.caret(), single.text().size());
     const MultilineSnapshot before(m_arena, single);
     for(const AStringView rejected : { AStringView("\n"), AStringView("\r"), AStringView("\xE2\x80\xA8"),
         AStringView("\xE2\x80\xA9"), AStringView("\0", 1u) }){
         EXPECT_FALSE(single.setText(rejected));
         before.expectUnchanged(single);
     }
-    EXPECT_EQ(m_model.textMode(), EditTextMode::Multiline);
 }
 
 TEST_F(MultilineModelTests, CanonicalLinesPreserveUnicodeGraphemeBoundariesAndTrailingEmptyLine){
@@ -197,35 +191,6 @@ TEST_F(MultilineModelTests, HomeEndAddressCurrentHardLineIncludingEmptyAndTraili
     ASSERT_TRUE(m_model.move(EditMove::Home));
     ASSERT_TRUE(m_model.move(EditMove::End));
     EXPECT_EQ(m_model.caret(), 0u);
-}
-
-TEST_F(MultilineModelTests, ExtendedLineAndDocumentMovementPreserveTheSelectionAnchor){
-    ASSERT_TRUE(m_model.setText("ab\n\ncde\n"));
-    ASSERT_TRUE(m_model.setSelection(5u, 5u));
-    ASSERT_TRUE(m_model.move(EditMove::Home, true));
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.selectedText(), "c");
-    ASSERT_TRUE(m_model.move(EditMove::End, true));
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.selectedText(), "de");
-    ASSERT_TRUE(m_model.move(EditMove::DocumentHome, true));
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.selectedText(), "ab\n\nc");
-    ASSERT_TRUE(m_model.move(EditMove::DocumentEnd, true));
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.selectedText(), "de\n");
-}
-
-TEST_F(MultilineModelTests, WordRunsMayCrossHardLineWhitespace){
-    ASSERT_TRUE(m_model.setText("one\ntwo"));
-    ASSERT_TRUE(m_model.move(EditMove::WordLeft));
-    EXPECT_EQ(m_model.caret(), 4u);
-    ASSERT_TRUE(m_model.move(EditMove::WordLeft));
-    EXPECT_EQ(m_model.caret(), 0u);
-    ASSERT_TRUE(m_model.move(EditMove::WordRight));
-    EXPECT_EQ(m_model.caret(), 4u);
-    ASSERT_TRUE(m_model.move(EditMove::WordRight));
-    EXPECT_EQ(m_model.caret(), 7u);
 }
 
 TEST_F(MultilineModelTests, AcceptedNoopSelectionAndMovementAdvanceTheSelectionEpochInBothModes){

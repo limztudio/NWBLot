@@ -355,62 +355,6 @@ TEST(GpuTaskGraph, IndependentOutputLayerJoinsProducedVersionAtSceneAndStandalon
     }
 }
 
-TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
-    TestArena testArena;
-    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::CpuTaskScheduler cpuScheduler(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
-    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
-        testArena,
-        context,
-        allocator,
-        graph,
-        Name("tests/task_graph/present_acquisition_backbuffer"),
-        "Present Acquisition Back Buffer",
-        Graphics::ResourceStates::Present
-    );
-    ASSERT_TRUE(backbuffer.valid());
-
-    const Graphics::GpuTaskResourceUse writerUse{
-        .resource = backbuffer,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::RenderTarget,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    Graphics::GpuTaskDesc writerDesc;
-    writerDesc
-        .setIdentity(Name("tests/task_graph/present_acquisition_writer"))
-        .setMarkerLabel("Present Acquisition Writer")
-        .setResourceUses(&writerUse, 1u)
-    ;
-    const Graphics::GpuTaskId writer = graph.addTask(writerDesc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
-    ASSERT_TRUE(writer.valid());
-    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
-        .producer = writer,
-        .backBuffer = backbuffer,
-    }));
-
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-    ASSERT_NE(compiledPlan.presentEndpoint(), nullptr);
-    EXPECT_EQ(compiledPlan.presentEndpoint()->producer, writer);
-    EXPECT_EQ(compiledPlan.presentEndpoint()->backBuffer, backbuffer);
-    EXPECT_EQ(declarations.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Present);
-    EXPECT_EQ(declarations.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
-}
-
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);

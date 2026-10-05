@@ -349,32 +349,6 @@ TEST(PreparedSoftwareBvhGraphResources, LargePermutedRequestsRetainOrderAndLateF
     EXPECT_EQ(missing->getReferenceCount(), s_ExpectedDualCount);
 }
 
-TEST(PreparedSoftwareBvhGraphResources, UniqueAndRepeatedRequestsDoNotAllocateBeyondReservedOutput){
-    struct Workload{
-        usize uniqueMeshes;
-        usize buildCount;
-    };
-    constexpr Workload s_Workloads[]{ { 1u, 1u }, { 1u, 128u }, { 7u, 7u }, { 40u, 40u }, { 40u, 128u } };
-    for(const Workload& workload : s_Workloads){
-        BuildContext context;
-        for(usize index = 0u; index < workload.uniqueMeshes * 4u + 3u; ++index)
-            context.addBuffer();
-        for(usize index = 0u; index < workload.buildCount; ++index)
-            context.addBuild(3u + (index % workload.uniqueMeshes) * 4u, 0u, index);
-        Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/small_storage"));
-        PreparedMeshSwBvhGraphResourceVector resources(scratch);
-        resources.reserve(workload.buildCount);
-        const ArenaMemoryStats before = scratch.memoryStats();
-        ASSERT_TRUE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
-        const ArenaMemoryStats after = scratch.memoryStats();
-        EXPECT_EQ(after.allocationCount, before.allocationCount);
-        EXPECT_EQ(after.usedBytes, before.usedBytes);
-        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-        ASSERT_NO_FATAL_FAILURE(ExpectRows(context, resources));
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -475,6 +449,32 @@ TEST(PreparedSoftwareBvhGraphResourcesBenchmark, DISABLED_Sparse1In4096){
 
 TEST(PreparedSoftwareBvhGraphResourcesBenchmark, DISABLED_LateMissing1024){
     BenchmarkGraphResources(1024u, 1024u, 1024u, 1u, true);
+}
+
+TEST(PreparedSoftwareBvhGraphResources, UniqueAndRepeatedRequestsDoNotAllocateBeyondReservedOutput){
+    struct Workload{
+        usize uniqueMeshes;
+        usize buildCount;
+    };
+    constexpr Workload s_Workloads[]{ { 1u, 1u }, { 1u, 128u }, { 7u, 7u }, { 40u, 40u }, { 40u, 128u } };
+    for(const Workload& workload : s_Workloads){
+        BuildContext context;
+        for(usize index = 0u; index < workload.uniqueMeshes * 4u + 3u; ++index)
+            context.addBuffer();
+        for(usize index = 0u; index < workload.buildCount; ++index)
+            context.addBuild(3u + (index % workload.uniqueMeshes) * 4u, 0u, index);
+        Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/small_storage"));
+        PreparedMeshSwBvhGraphResourceVector resources(scratch);
+        resources.reserve(workload.buildCount);
+        const ArenaMemoryStats before = scratch.memoryStats();
+        ASSERT_TRUE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
+        const ArenaMemoryStats after = scratch.memoryStats();
+        EXPECT_EQ(after.allocationCount, before.allocationCount);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+        ASSERT_NO_FATAL_FAILURE(ExpectRows(context, resources));
+    }
 }
 
 

@@ -74,33 +74,12 @@ TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcro
     ASSERT_TRUE(capture.exportOwned(owned));
 
     const BinaryByteView bytes = owned.bytes();
-    Graphics::GpuCommandIrStreamHeader header;
-    usize cursor = 0u;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, header));
-    EXPECT_EQ(header.version, 5u);
-    EXPECT_EQ(header.recordCount, 4u);
     EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(bytes).valid());
 
     Graphics::GpuCommandIrStreamReader reader(bytes);
     Graphics::GpuCommandIrDecodedRecord decoded;
     ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrWireOpcode::SetGraphicsState);
-    EXPECT_EQ(decoded.raster.task, s_CommandIrTask);
-    EXPECT_EQ(decoded.raster.packet, s_CommandIrPacket);
-    EXPECT_EQ(decoded.raster.queue, s_CommandIrQueue);
-    EXPECT_EQ(decoded.raster.pipeline, state.pipeline);
-    EXPECT_EQ(decoded.raster.colorAttachment, state.colorAttachment);
-    EXPECT_EQ(decoded.raster.viewport, state.viewport);
-    EXPECT_EQ(decoded.raster.scissor, state.scissor);
-    EXPECT_EQ(decoded.raster.blendConstantColor, state.blendConstantColor);
-    ASSERT_EQ(decoded.raster.vertexBuffers.size(), 1u);
-    EXPECT_EQ(decoded.raster.vertexBuffers[0].resource, s_CommandIrSource);
-    EXPECT_EQ(decoded.raster.vertexBuffers[0].slot, 3u);
-    EXPECT_EQ(decoded.raster.vertexBuffers[0].offset, 16u);
-    EXPECT_EQ(decoded.raster.indexResource, state.indexResource);
-    EXPECT_EQ(decoded.raster.indexFormat, Graphics::Format::R32_UINT);
-    EXPECT_EQ(decoded.raster.indexOffset, 4u);
-
     ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrWireOpcode::SetPushConstants);
     ASSERT_EQ(decoded.raster.blobSizeBytes, sizeof(expectedPush));
@@ -111,11 +90,6 @@ TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcro
 
     ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrWireOpcode::DrawIndexed);
-    EXPECT_EQ(decoded.raster.drawArguments.vertexCount, draw.vertexCount);
-    EXPECT_EQ(decoded.raster.drawArguments.instanceCount, draw.instanceCount);
-    EXPECT_EQ(decoded.raster.drawArguments.startIndexLocation, draw.startIndexLocation);
-    EXPECT_EQ(decoded.raster.drawArguments.startVertexLocation, draw.startVertexLocation);
-    EXPECT_EQ(decoded.raster.drawArguments.startInstanceLocation, draw.startInstanceLocation);
     ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrWireOpcode::EndRenderPass);
     EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);

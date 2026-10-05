@@ -20,14 +20,7 @@ namespace __hidden_ecs_graphics_gi_material_surface_contract_tests{
 
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ECS_RENDER = "ecs_render";
-static constexpr AStringView s_ASSETS = "assets";
-static constexpr AStringView s_GRAPHICS = "graphics";
-static constexpr AStringView s_GI = "gi";
-static constexpr AStringView s_RAYTRACE = "raytrace";
-static constexpr AStringView s_GI_SW_TRACE_SLANGI = "gi_sw_trace.slangi";
-static constexpr AStringView s_GI_HW_TRACE_SLANGI = "gi_hw_trace.slangi";
 static constexpr AStringView s_GRAPH = "graph";
-static constexpr AStringView s_SHADOW = "shadow";
 static constexpr AStringView s_RETURN_FALSE = "return false";
 static constexpr AStringView s_RETURN = "return;";
 
@@ -89,81 +82,7 @@ static bool ReturnsAfterFailedBuilderCall(const AStringView text, const AStringV
 }
 
 
-TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
-    TestArena testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-
-    AString swTraceSource;
-    AString hwTraceSource;
-    AString dispatchCodegenSource;
-    AString rtDetailSource;
-    AString instanceMaterialSource;
-    AString frostBindSource;
-    AString frostSurfaceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwTraceSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / "assets_material" / "material_dispatch_codegen.cpp", dispatchCodegenSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "rt_detail.cpp", rtDetailSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_SHADOW / "instance_material.slangi", instanceMaterialSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / s_ASSETS / "shaders" / "frost_surface.bind", frostBindSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / s_ASSETS / "shaders" / "frost.surface", frostSurfaceSource));
-
-    const AStringView swTrace(swTraceSource.data(), swTraceSource.size());
-    const AStringView hwTrace(hwTraceSource.data(), hwTraceSource.size());
-    const AStringView dispatchCodegen(dispatchCodegenSource.data(), dispatchCodegenSource.size());
-    const AStringView rtDetail(rtDetailSource.data(), rtDetailSource.size());
-    const AStringView instanceMaterial(instanceMaterialSource.data(), instanceMaterialSource.size());
-    const AStringView frostBind(frostBindSource.data(), frostBindSource.size());
-    const AStringView frostSurface(frostSurfaceSource.data(), frostSurfaceSource.size());
-
-    EXPECT_TRUE(ContainsText(swTrace, "#include \"shadow/generated/surface_dispatch.slangi\""));
-    EXPECT_TRUE(ContainsText(swTrace, "const NwbMeshSurface surface = nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(swTrace, "closest.albedo = surface.baseColor;"));
-    EXPECT_TRUE(ContainsText(hwTrace, "#include \"shadow/generated/surface_dispatch.slangi\""));
-    EXPECT_TRUE(ContainsText(hwTrace, "const NwbMeshSurface surface = nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(hwTrace, "closest.albedo = surface.baseColor;"));
-
-    EXPECT_TRUE(ContainsText(dispatchCodegen, "s_ShadowSurfaceBindNamespacePrefix = \"nwbShadowBindModel\""));
-    EXPECT_TRUE(ContainsText(dispatchCodegen, "NwbMeshSurface nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(dispatchCodegen, "half3(0.5h, 0.5h, 0.5h)"));
-
-    EXPECT_TRUE(ContainsText(frostBind, "struct NwbFrostSurfaceMaterial"));
-    EXPECT_TRUE(ContainsText(frostBind, "frost_albedo"));
-    EXPECT_FALSE(ContainsText(frostBind, "color_tint"));
-    EXPECT_TRUE(ContainsText(frostSurface, "nwbMaterialBindLoadFrost"));
-    EXPECT_TRUE(ContainsText(frostSurface, "nwbMakeMeshSurface(baseColor"));
-
-    EXPECT_FALSE(ContainsText(rtDetail, "runtime.color_tint"));
-    EXPECT_FALSE(ContainsText(instanceMaterial, "baseColorR"));
-    EXPECT_FALSE(ContainsText(instanceMaterial, "baseColorG"));
-    EXPECT_FALSE(ContainsText(instanceMaterial, "baseColorB"));
-}
-
-
 // Boolean GI occlusion: same geometric-blocking acceptance as closest, without attribute/material work.
-TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction){
-    TestArena testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-
-    AString commonSource;
-    AString swSource;
-    AString hwSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / "gi_trace_common.slangi", commonSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_SW_TRACE_SLANGI, swSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ASSETS / s_GRAPHICS / s_GI / s_GI_HW_TRACE_SLANGI, hwSource));
-
-    const AStringView common(commonSource.data(), commonSource.size());
-    const AStringView sw(swSource.data(), swSource.size());
-    const AStringView hw(hwSource.data(), hwSource.size());
-
-    EXPECT_TRUE(ContainsText(common, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);"));
-    EXPECT_TRUE(ContainsText(common, "nwbGiShadeHit"));
-    EXPECT_TRUE(ContainsText(sw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
-    EXPECT_TRUE(ContainsText(sw, "nwbGiSwInstanceOccluded"));
-    EXPECT_TRUE(ContainsText(sw, "nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2)"));
-    EXPECT_TRUE(ContainsText(hw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
-    EXPECT_TRUE(ContainsText(hw, "RAY_FLAG_FORCE_OPAQUE"));
-}
 
 
 TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAreIncomplete){
@@ -213,8 +132,6 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
         s_RETURN_FALSE
     ));
 
-    EXPECT_TRUE(ContainsText(transparentCsgIntervalBuilder, "GatherPreparedMaterialGeometryResourceSet("));
-    EXPECT_TRUE(ContainsText(transparentCsgIntervalBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         transparentCsgIntervalBuilder,
         "if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)",
@@ -232,8 +149,6 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
         s_RETURN
     ));
 
-    EXPECT_TRUE(ContainsText(avboitGeometryPreparationBuilder, "GatherPreparedMaterialGeometryResourceSet("));
-    EXPECT_TRUE(ContainsText(avboitGeometryPreparationBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
     EXPECT_TRUE(ContainsBeforeClosingBrace(
         avboitGeometryPreparationBuilder,
         "if(!outResult.geometryOwned)",

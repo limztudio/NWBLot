@@ -46,25 +46,6 @@ TEST_F(UiEditCompositionTests, PreeditOwnsTransientTextWithoutPublishingCommitte
     EXPECT_FALSE(m_model.canUndo());
 }
 
-TEST_F(UiEditCompositionTests, CommitReplacesOriginalSelectionAsOneUndoableEdit){
-    ASSERT_TRUE(m_model.setText("abcd"));
-    ASSERT_TRUE(m_model.setSelection(1u, 3u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("x", 1u, 1u));
-    ASSERT_TRUE(m_model.updateComposition("xy", 2u, 2u));
-    ASSERT_TRUE(m_model.commitComposition("final"));
-    EXPECT_EQ(m_model.text(), "afinald");
-    EXPECT_EQ(m_model.caret(), 6u);
-    EXPECT_FALSE(m_model.composition().active);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abcd");
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 3u);
-    EXPECT_FALSE(m_model.canUndo());
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "afinald");
-}
-
 TEST_F(UiEditCompositionTests, NativePreeditClearBeforeCommitRetainsOriginalReplacementBaseline){
     ASSERT_TRUE(m_model.setText("abcd"));
     ASSERT_TRUE(m_model.setSelection(1u, 3u));

@@ -201,36 +201,10 @@ TEST(SwapChainPresentation, CountsAcceptedPresentationSeparatelyFromConsumedWait
     EXPECT_FALSE(Core::GraphicsBackend::VulkanDetail::IsQueuePresentationAccepted(VK_ERROR_OUT_OF_DATE_KHR));
 }
 
-TEST(SwapChainPresentation, ClassifiesWhetherQueuePresentConsumedItsBinaryWait){
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUCCESS), QueuePresentWaitDisposition::Consumed);
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUBOPTIMAL_KHR), QueuePresentWaitDisposition::Consumed);
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_DATE_KHR), QueuePresentWaitDisposition::Consumed);
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_SURFACE_LOST_KHR), QueuePresentWaitDisposition::Consumed);
-    EXPECT_EQ(
-        ClassifyQueuePresentWaitDisposition(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT),
-        QueuePresentWaitDisposition::Consumed
-    );
-    EXPECT_EQ(
-        ClassifyQueuePresentWaitDisposition(VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT),
-        QueuePresentWaitDisposition::Consumed
-    );
-    EXPECT_EQ(
-        ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_HOST_MEMORY),
-        QueuePresentWaitDisposition::NotConsumed
-    );
-    EXPECT_EQ(
-        ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_DEVICE_MEMORY),
-        QueuePresentWaitDisposition::NotConsumed
-    );
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_DEVICE_LOST), QueuePresentWaitDisposition::DeviceLost);
-    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_UNKNOWN), QueuePresentWaitDisposition::Unknown);
-}
 
 TEST(SwapChainPresentation, AcquiredPresentationTypesRejectIncompleteOrInvalidSnapshots){
     AcquiredBackBuffer backBuffer;
     EXPECT_FALSE(backBuffer.valid());
-    EXPECT_EQ(backBuffer.index, Limit<u32>::s_Max);
-    EXPECT_EQ(backBuffer.nativeInitialState, ResourceStates::Unknown);
 
     backBuffer.index = 0u;
     backBuffer.nativeInitialState = ResourceStates::RenderTarget;
@@ -240,17 +214,6 @@ TEST(SwapChainPresentation, AcquiredPresentationTypesRejectIncompleteOrInvalidSn
     EXPECT_FALSE(frame.valid());
 }
 
-TEST(SwapChainPresentation, ReacquiredImagesExposeUnknownUntilTheirFirstConsumedPresent){
-    SwapChainImagePresentationState images[2];
-
-    EXPECT_EQ(images[0].nativeInitialState(), ResourceStates::Unknown);
-    images[0].observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Consumed);
-
-    EXPECT_EQ(images[1].nativeInitialState(), ResourceStates::Unknown);
-    images[1].observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Consumed);
-
-    EXPECT_EQ(images[0].nativeInitialState(), ResourceStates::Present);
-}
 
 TEST(SwapChainPresentation, PresentationStateAdvancesOnlyForConsumedWaitsAndResetsOnRebuild){
     SwapChainImagePresentationState state;

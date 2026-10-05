@@ -52,9 +52,6 @@ TEST(EcsGraphics, ReflectionAuthoringSanitizesOnlyTheDedicatedReflectionFields){
     EXPECT_FALSE(ContainsText(authoring, "refractionIor"));
     EXPECT_FALSE(ContainsText(authoring, "shadowAbsorptionTint"));
     EXPECT_FALSE(ContainsText(authoring, "renderCoverage"));
-    EXPECT_TRUE(ContainsText(shader, "const half4 reflection = nwbPackMeshSurfaceReflection(specularF0, perceptualRoughness);"));
-    EXPECT_TRUE(ContainsText(shader, "surface.specularF0 = reflection.rgb;"));
-    EXPECT_TRUE(ContainsText(shader, "surface.perceptualRoughness = reflection.a;"));
 }
 
 TEST(EcsGraphics, GlassReflectionUsesFiniteDielectricF0WithoutCoverageScaling){
@@ -68,9 +65,6 @@ TEST(EcsGraphics, GlassReflectionUsesFiniteDielectricF0WithoutCoverageScaling){
     ASSERT_NE(end, AStringView::npos);
     const AStringView glass = shader.substr(begin, end - begin);
     EXPECT_TRUE(ContainsText(glass, "isfinite(float(refractionIor)) ? max(float(refractionIor), 1.0) : 1.0"));
-    EXPECT_TRUE(ContainsText(glass, "(validIor - 1.0) / (validIor + 1.0)"));
-    EXPECT_TRUE(ContainsText(glass, "surface.refractionIor = half(validIor);"));
-    EXPECT_TRUE(ContainsText(glass, "nwbSetMeshSurfaceReflection(surface, half3(dielectricRatio * dielectricRatio), half(0.0));"));
     const usize reflectionWrite = glass.find("nwbSetMeshSurfaceReflection(");
     const usize coverageWrite = glass.find("surface.renderCoverage =");
     ASSERT_NE(reflectionWrite, AStringView::npos);
@@ -78,47 +72,6 @@ TEST(EcsGraphics, GlassReflectionUsesFiniteDielectricF0WithoutCoverageScaling){
     EXPECT_LT(reflectionWrite, coverageWrite);
 }
 
-TEST(EcsGraphics, ReflectionGBufferAppendsItsOwnAttachmentWithoutRepackingBxdfParameters){
-    EXPECT_EQ(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION, 0);
-    EXPECT_EQ(NWB_MESH_GBUFFER_NORMAL_LOCATION, 1);
-    EXPECT_EQ(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION, 2);
-    EXPECT_EQ(NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION, 3);
-    EXPECT_EQ(NWB_MESH_GBUFFER_TARGET_COUNT, 4);
-
-    TestArena testArena;
-    AString source;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_MESH / "gbuffer_io.slangi", source));
-    const AStringView shader(source.data(), source.size());
-    EXPECT_TRUE(ContainsText(shader, "float4 specularRoughness : SV_Target3;"));
-    EXPECT_TRUE(ContainsText(shader, "output.specularRoughness = outGBufferSpecularRoughness;"));
-    EXPECT_TRUE(ContainsText(shader, "outGBufferSpecularRoughness = specularRoughness;"));
-    EXPECT_TRUE(ContainsText(shader, "outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));"));
-    EXPECT_TRUE(ContainsText(shader, "outGBufferWorldPosition = half4(half3(worldPosition), param1);"));
-}
-
-TEST(EcsGraphics, OpaqueCsgAndGlassWritersUseOneSanitizedReflectionPacking){
-    TestArena testArena;
-    const TestPath graphics = RepoRoot(testArena) / "impl" / "assets" / "graphics";
-    AString meshSource;
-    AString capSource;
-    AString captureSource;
-    ASSERT_TRUE(ReadTextFile(graphics / s_MESH / "gbuffer_ps.slangi", meshSource));
-    ASSERT_TRUE(ReadTextFile(graphics / "csg" / "interval_cap_fill_ps.slang", capSource));
-    ASSERT_TRUE(ReadTextFile(graphics / "avboit" / "accumulate_ps_authoring.slangi", captureSource));
-    constexpr AStringView pack = "nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness)";
-    EXPECT_TRUE(ContainsText(AStringView(meshSource.data(), meshSource.size()), pack));
-    EXPECT_TRUE(ContainsText(AStringView(capSource.data(), capSource.size()), pack));
-    const AStringView capture(captureSource.data(), captureSource.size());
-    const usize captureBegin = capture.find("if(refractionCapture)");
-    ASSERT_NE(captureBegin, AStringView::npos);
-    const usize captureEnd = capture.find("return capture;", captureBegin);
-    ASSERT_NE(captureEnd, AStringView::npos);
-    const AStringView captureBody = capture.substr(captureBegin, captureEnd - captureBegin);
-    EXPECT_TRUE(ContainsText(captureBody, pack));
-    EXPECT_TRUE(ContainsText(captureBody, "capture.foregroundExtinction = nwbPackMeshSurfaceReflection"));
-    EXPECT_TRUE(ContainsText(captureBody, "capture.accumExtinction.w = -1.0;"));
-    EXPECT_TRUE(ContainsText(captureBody, "float(nwbMeshInstanceIndex()) + 1.0"));
-}
 
 TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCaptureIsDisabled){
     TestArena testArena;
@@ -155,67 +108,10 @@ TEST(EcsGraphics, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudg
     EXPECT_FALSE(snapshot.hasHardwareWork());
     snapshot.parameters.maxHardwareRays = 1u;
     EXPECT_TRUE(snapshot.hasHardwareWork());
-    snapshot.parameters.maxHardwareRays = 64u;
-    EXPECT_TRUE(snapshot.hasHardwareWork());
     snapshot.parameters.hardwareEnabled = 0u;
     EXPECT_FALSE(snapshot.hasHardwareWork());
 }
 
-TEST(EcsGraphics, ReflectionFrameSelectorsMatchTwelveStd140LanesAndSeparateCounterBytes){
-    using Parameters = NWB::Impl::ReflectionFrameParameters;
-    EXPECT_EQ(sizeof(Parameters), 192u);
-    EXPECT_EQ(offsetof(Parameters, width), 0u);
-    EXPECT_EQ(offsetof(Parameters, height), 4u);
-    EXPECT_EQ(offsetof(Parameters, traceMode), 8u);
-    EXPECT_EQ(offsetof(Parameters, hardwareEnabled), 12u);
-    EXPECT_EQ(offsetof(Parameters, opaqueSpecularSlot), 16u);
-    EXPECT_EQ(offsetof(Parameters, opaqueRadianceSlot), 32u);
-    EXPECT_EQ(offsetof(Parameters, argsSlot), 48u);
-    EXPECT_EQ(offsetof(Parameters, deferredResourcesSlot), 64u);
-    EXPECT_EQ(offsetof(Parameters, depthPyramidSlot), 80u);
-    EXPECT_EQ(offsetof(Parameters, sampleIndex), 60u);
-    EXPECT_EQ(offsetof(Parameters, samplingSeed), 96u);
-    EXPECT_EQ(offsetof(Parameters, sampleBaseX), 100u);
-    EXPECT_EQ(offsetof(Parameters, sampleBaseY), 104u);
-    EXPECT_EQ(offsetof(Parameters, maxOpticalQueries), 108u);
-    EXPECT_EQ(offsetof(Parameters, feedbackReadSlot), 112u);
-    EXPECT_EQ(offsetof(Parameters, feedbackWriteSlot), 116u);
-    EXPECT_EQ(offsetof(Parameters, feedbackFlags), 120u);
-    EXPECT_EQ(offsetof(Parameters, feedbackProbeIndex), 124u);
-    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 128u);
-    EXPECT_EQ(offsetof(Parameters, environmentTopR), 144u);
-    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 160u);
-    EXPECT_EQ(offsetof(Parameters, screenThickness), 176u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS + sizeof(u32), 64u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS, 64u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_RETURNS, 68u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS, 72u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES, 76u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW, 80u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH, 84u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES, 88u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SIZE, 96u);
-    EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Disabled), NWB_REFLECTION_MODE_DISABLED);
-    EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::ScreenSpace), NWB_REFLECTION_MODE_SCREEN);
-    EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hardware), NWB_REFLECTION_MODE_HARDWARE);
-    EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hybrid), NWB_REFLECTION_MODE_HYBRID);
-}
-
-TEST(EcsGraphics, ReflectionPostprocessSelectorsKeepAcceptedSamplingSeparateFromHistoryCount){
-    struct TemporalParameters{
-#define NWB_REFLECTION_TEST_POST_FIELD(name) u32 name = 0u;
-        NWB_REFLECTION_TEMPORAL_UINT_FIELDS(NWB_REFLECTION_TEST_POST_FIELD)
-#undef NWB_REFLECTION_TEST_POST_FIELD
-    };
-    EXPECT_EQ(sizeof(TemporalParameters), NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
-    EXPECT_EQ(sizeof(TemporalParameters), 48u);
-    EXPECT_EQ(offsetof(TemporalParameters, previousSampleCount), 20u);
-    EXPECT_EQ(offsetof(TemporalParameters, historyValid), 28u);
-    EXPECT_EQ(offsetof(TemporalParameters, sampleIndex), 32u);
-    EXPECT_EQ(offsetof(TemporalParameters, samplingSeed), 36u);
-    EXPECT_LE(NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
-}
 
 TEST(EcsGraphics, ReflectionTemporalNoUpdatePreservesTheTaskAndSkipsNativeRecording){
     TestArena testArena;

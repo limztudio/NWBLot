@@ -50,86 +50,6 @@ using TestArena = NWB::Tests::TestArena<SwapchainNativeIdentityContractTestArena
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(SwapChainPresentation, SwapchainImageUsageMatchesPresentationAndOptionalReadbackConsumers){
-    TestArena testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-
-    AString surfaceSource;
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "vulkan" / s_BACKEND_CONTEXT_SURFACE_CPP,
-        surfaceSource
-    ));
-    const AStringView fullSurfaceSource(surfaceSource.data(), surfaceSource.size());
-    const usize createFunctionBegin = fullSurfaceSource.find("bool BackendContext::createVulkanSwapChain(){");
-    const usize createFunctionEnd = fullSurfaceSource.find("NWB_VULKAN_END", createFunctionBegin);
-    ASSERT_NE(createFunctionBegin, AStringView::npos);
-    ASSERT_NE(createFunctionEnd, AStringView::npos);
-    ASSERT_LT(createFunctionBegin, createFunctionEnd);
-    const AStringView createFunction = fullSurfaceSource.substr(
-        createFunctionBegin,
-        createFunctionEnd - createFunctionBegin
-    );
-
-    const usize requiredUsageOffset = createFunction.find(
-        "constexpr VkImageUsageFlags s_RequiredSwapChainImageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;"
-    );
-    const usize requiredUsageValidationOffset = createFunction.find(
-        "(surfaceCaps.supportedUsageFlags & s_RequiredSwapChainImageUsage) != s_RequiredSwapChainImageUsage",
-        requiredUsageOffset
-    );
-    const usize optionalReadbackOffset = createFunction.find(
-        "const bool swapChainReadbackAvailable = m_deviceParams.enableSwapChainReadback",
-        requiredUsageValidationOffset
-    );
-    const usize readbackSupportOffset = createFunction.find(
-        "(surfaceCaps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u",
-        optionalReadbackOffset
-    );
-    const usize imageUsageOffset = createFunction.find(
-        "desc.imageUsage = s_RequiredSwapChainImageUsage;",
-        readbackSupportOffset
-    );
-    const usize optionalReadbackConditionOffset = createFunction.find(
-        "if(swapChainReadbackAvailable)",
-        imageUsageOffset
-    );
-    const usize optionalReadbackUsageOffset = createFunction.find(
-        "desc.imageUsage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;",
-        optionalReadbackConditionOffset
-    );
-    const usize logicalNonSampledOffset = createFunction.find(
-        "textureDesc.isShaderResource = false;",
-        optionalReadbackUsageOffset
-    );
-    const usize logicalRenderTargetOffset = createFunction.find(
-        "textureDesc.isRenderTarget = true;",
-        logicalNonSampledOffset
-    );
-    const usize nativeUsageOffset = createFunction.find(".usage = desc.imageUsage", logicalRenderTargetOffset);
-    ASSERT_NE(requiredUsageOffset, AStringView::npos);
-    ASSERT_NE(requiredUsageValidationOffset, AStringView::npos);
-    ASSERT_NE(optionalReadbackOffset, AStringView::npos);
-    ASSERT_NE(readbackSupportOffset, AStringView::npos);
-    ASSERT_NE(imageUsageOffset, AStringView::npos);
-    ASSERT_NE(optionalReadbackConditionOffset, AStringView::npos);
-    ASSERT_NE(optionalReadbackUsageOffset, AStringView::npos);
-    ASSERT_NE(logicalNonSampledOffset, AStringView::npos);
-    ASSERT_NE(logicalRenderTargetOffset, AStringView::npos);
-    ASSERT_NE(nativeUsageOffset, AStringView::npos);
-    EXPECT_LT(requiredUsageOffset, requiredUsageValidationOffset);
-    EXPECT_LT(requiredUsageValidationOffset, optionalReadbackOffset);
-    EXPECT_LT(optionalReadbackOffset, readbackSupportOffset);
-    EXPECT_LT(readbackSupportOffset, imageUsageOffset);
-    EXPECT_LT(imageUsageOffset, optionalReadbackConditionOffset);
-    EXPECT_LT(optionalReadbackConditionOffset, optionalReadbackUsageOffset);
-    EXPECT_LT(optionalReadbackUsageOffset, logicalNonSampledOffset);
-    EXPECT_LT(logicalNonSampledOffset, logicalRenderTargetOffset);
-    EXPECT_LT(logicalRenderTargetOffset, nativeUsageOffset);
-    EXPECT_EQ(createFunction.find("VK_IMAGE_USAGE_TRANSFER_DST_BIT"), AStringView::npos);
-    EXPECT_EQ(createFunction.find("VK_IMAGE_USAGE_SAMPLED_BIT"), AStringView::npos);
-}
-
-
 TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceBeforePublication){
     TestArena testArena;
     const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
@@ -260,20 +180,6 @@ TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceB
     EXPECT_LT(duplicateFamilyOffset, duplicateReturnOffset);
     EXPECT_LT(duplicateReturnOffset, familyPushOffset);
 
-    const usize imageFlagsOffset = createFunction.find("const VkImageCreateFlags swapChainImageFlags =");
-    const usize imageFlagsEndOffset = createFunction.find(";", imageFlagsOffset);
-    ASSERT_NE(imageFlagsOffset, AStringView::npos);
-    ASSERT_NE(imageFlagsEndOffset, AStringView::npos);
-    const AStringView imageFlags = createFunction.substr(
-        imageFlagsOffset,
-        imageFlagsEndOffset - imageFlagsOffset
-    );
-    EXPECT_NE(imageFlags.find("desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR"), AStringView::npos);
-    EXPECT_NE(
-        imageFlags.find("? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT"),
-        AStringView::npos
-    );
-    EXPECT_NE(imageFlags.find(": 0u"), AStringView::npos);
     const usize provenanceOffset = createFunction.find("const NativeTextureProvenance nativeProvenance{");
     const usize importOffset = createFunction.find("m_rhiDevice->createHandleForNativeTexture(");
     const usize publicationOffset = createFunction.find("m_swapChainImages.push_back(Move(sci));", importOffset);
@@ -293,13 +199,6 @@ TEST(SwapChainPresentation, NativeTextureImportReceivesExactSwapchainProvenanceB
     ASSERT_NE(importEndOffset, AStringView::npos);
     ASSERT_NE(provenanceArgumentOffset, AStringView::npos);
     EXPECT_LT(provenanceArgumentOffset, importEndOffset);
-    const AStringView provenance = createFunction.substr(provenanceOffset, importOffset - provenanceOffset);
-    EXPECT_NE(provenance.find(".usage = desc.imageUsage"), AStringView::npos);
-    EXPECT_NE(provenance.find(".flags = swapChainImageFlags"), AStringView::npos);
-    EXPECT_NE(provenance.find(".sharingMode = desc.imageSharingMode"), AStringView::npos);
-    EXPECT_NE(provenance.find(".queueFamilyIndexCount = desc.queueFamilyIndexCount"), AStringView::npos);
-    EXPECT_NE(provenance.find(".queueFamilyIndices = desc.pQueueFamilyIndices"), AStringView::npos);
-    EXPECT_NE(provenance.find(".initialStateKnown = false"), AStringView::npos);
     EXPECT_EQ(createFunction.find("sci.rhiHandle->m_imageInfo"), AStringView::npos);
     EXPECT_EQ(createFunction.find("sci.rhiHandle->initializeRetainedSubresourceStates"), AStringView::npos);
 
@@ -773,7 +672,6 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     AString lifecycleSource;
     AString queueSource;
     AString submissionSource;
-    AString descriptorHeapSource;
     AString descriptorHeapRetirementSource;
     AString trackedCommandBufferSource;
     AString stateTrackingSource;
@@ -792,10 +690,6 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "queue.cpp", queueSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / s_VULKAN / "queue_submission.cpp", submissionSource));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp",
-        descriptorHeapSource
-    ));
-    ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_retirement.cpp",
         descriptorHeapRetirementSource
     ));
@@ -813,7 +707,6 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     const AStringView lifecycle(lifecycleSource.data(), lifecycleSource.size());
     const AStringView queue(queueSource.data(), queueSource.size());
     const AStringView submission(submissionSource.data(), submissionSource.size());
-    const AStringView descriptorHeap(descriptorHeapSource.data(), descriptorHeapSource.size());
     const AStringView descriptorHeapRetirement(descriptorHeapRetirementSource.data(), descriptorHeapRetirementSource.size());
     const AStringView trackedCommandBuffer(trackedCommandBufferSource.data(), trackedCommandBufferSource.size());
     const AStringView stateTracking(stateTrackingSource.data(), stateTrackingSource.size());

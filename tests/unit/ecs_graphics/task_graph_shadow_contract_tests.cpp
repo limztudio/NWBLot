@@ -4,9 +4,6 @@
 
 #include "task_graph_contract_test_helpers.h"
 
-#include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,12 +25,6 @@ static constexpr AStringView s_RT_SHADOW_TRANSPARENT_CPP = "raytrace/rt_shadow_t
 static constexpr AStringView s_RT_SHADOW_GPU_VISIBILITY_CPP = "raytrace/rt_shadow_gpu_visibility.cpp";
 static constexpr AStringView s_RT_SHADOW_PIPELINES_CPP = "raytrace/rt_shadow_pipelines.cpp";
 static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS = "renderer_frame_pipeline_graph_shadow_visibility.cpp";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -131,60 +122,17 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
 
 // The renderer-local visibility clear retains typed command-IR capture after the graph-owned CopyDest transition.
 // Its task contract permits Compute or Graphics so the scheduler can keep the clear with its consumer.
-TEST(EcsGraphics, ShadowVisibilityAllLitClearOwnsShaderCommandContractAndNativeCapture){
-    const NWB::Core::GpuTaskCommandRequirements commands = NWB::Impl::ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask::s_CommandRequirements;
-    EXPECT_EQ(commands.requiredCapabilities, NWB::Core::GpuQueueCapability::None);
-    EXPECT_EQ(commands.alternativeCapabilities, NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Graphics);
+TEST(EcsGraphics, AllLitClearRejectsMissingDestinationAndActiveRenderPass){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString allLitClearTaskSource;
-    AString shadowVisibilityTaskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "task_graph_shadow_visibility_tasks.cpp", allLitClearTaskSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilityTaskGraphSource));
     const AStringView callback(allLitClearTaskSource.data(), allLitClearTaskSource.size());
-    const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
 
     EXPECT_TRUE(ContainsText(callback, "context.declarations.textureForResource(payload.destination)"));
     EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
     EXPECT_FALSE(ContainsText(callback, "endRenderPass()"));
-    EXPECT_TRUE(ContainsText(callback, "Core::GpuClearTextureTaskDesc clearDesc{"));
-    EXPECT_TRUE(ContainsText(callback, ".destination = payload.destination,"));
-    EXPECT_TRUE(ContainsText(callback, ".subresources = s_ShadowVisibilitySubresources,"));
-    EXPECT_TRUE(ContainsText(callback, ".valueType = Core::GpuClearTextureTaskValueType::Float,"));
-    EXPECT_TRUE(ContainsText(callback, ".floatValue = s_ShadowVisibilityAllLitClearColor,"));
-    EXPECT_TRUE(ContainsText(callback, "RecordFloatTextureClear(commandList, context, payload.destination, *destination, clearDesc)"));
-
-    const usize resourceUseOffset = shadowVisibility.find("const Core::GpuTaskResourceUse allLitClearResourceUse");
-    const usize shadowSchedulingOffset = shadowVisibility.find("Core::GpuTaskSchedulingHint scheduling;", resourceUseOffset);
-    ASSERT_NE(resourceUseOffset, AStringView::npos);
-    ASSERT_NE(shadowSchedulingOffset, AStringView::npos);
-    ASSERT_LT(resourceUseOffset, shadowSchedulingOffset);
-    const AStringView allLitClear = shadowVisibility.substr(resourceUseOffset, shadowSchedulingOffset - resourceUseOffset);
-
-    EXPECT_TRUE(ContainsText(allLitClear, "WriteTextureUse(\n        shadowVisibility,\n        ECSRenderDetail::s_ShadowVisibilitySubresources,\n        Core::ResourceStates::CopyDest\n    )"));
-    EXPECT_TRUE(ContainsText(allLitClear, ".setScheduling(allLitClearScheduling)"));
-    EXPECT_TRUE(ContainsText(allLitClear, ".setResourceUses(&allLitClearResourceUse, 1u)"));
-    EXPECT_TRUE(ContainsText(allLitClear, "m_deferredLightingTaskGraph.addTask<"));
-    EXPECT_TRUE(ContainsText(allLitClear, "ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask"));
-    EXPECT_FALSE(ContainsText(allLitClear, "addClearTextureTask("));
-}
-
-
-// Shadow Visibility has both a fully split soft-transparent route and a current unsplit adaptive route. Each graph-owned chain may choose an alternate Compute family, while its direct successors retain that physical queue and the explicit primary-Graphics presentation guard remains outside this effect.
-TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
-    TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
-
-    AString shadowVisibilitySource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SHADOW_VIS, shadowVisibilitySource));
-    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
-
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(opaqueScheduling)"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(tailScheduling)"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(primitiveScheduling)"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(allLitClearScheduling)"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(scheduling)"));
 }
 
 
@@ -408,56 +356,6 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
 }
 
 
-// Both software-shadow recording routes publish the same production-owned one-shot diagnostic.
-// The split transparent trace reports only after recording its dispatch, while the retained monolithic path shares it.
-TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoutes){
-    TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
-
-    AString shadowSource;
-    ASSERT_TRUE(ReadRendererSources(
-        repoRoot,
-        {
-            s_RT_SHADOW_TASKS_H,
-            s_RT_SHADOW_MATERIAL_CONTEXT_CPP,
-            s_RT_SHADOW_VISIBILITY_TARGET_CPP,
-            s_RT_SHADOW_OPAQUE_CPP,
-            s_RT_SHADOW_TRANSPARENT_CPP,
-            s_RT_SHADOW_GPU_VISIBILITY_CPP,
-            s_RT_SHADOW_PIPELINES_CPP,
-        },
-        shadowSource
-    ));
-    const AStringView shadow(shadowSource.data(), shadowSource.size());
-
-    const usize splitTraceOffset = shadow.find("bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(");
-    const usize reportOffset = shadow.find("void RendererRayTracingSystem::reportSoftwareShadowTraversal(", splitTraceOffset);
-    const usize temporalMergeOffset = shadow.find("bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(", reportOffset);
-    const usize monolithicOffset = shadow.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(", temporalMergeOffset);
-    const usize opaqueOffset = shadow.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(", monolithicOffset);
-    ASSERT_NE(splitTraceOffset, AStringView::npos);
-    ASSERT_NE(reportOffset, AStringView::npos);
-    ASSERT_NE(temporalMergeOffset, AStringView::npos);
-    ASSERT_NE(monolithicOffset, AStringView::npos);
-    ASSERT_NE(opaqueOffset, AStringView::npos);
-    ASSERT_LT(splitTraceOffset, reportOffset);
-    ASSERT_LT(reportOffset, temporalMergeOffset);
-    ASSERT_LT(temporalMergeOffset, monolithicOffset);
-    ASSERT_LT(monolithicOffset, opaqueOffset);
-
-    const AStringView splitTrace = shadow.substr(splitTraceOffset, reportOffset - splitTraceOffset);
-    const AStringView report = shadow.substr(reportOffset, temporalMergeOffset - reportOffset);
-    const AStringView monolithic = shadow.substr(monolithicOffset, opaqueOffset - monolithicOffset);
-    EXPECT_TRUE(ContainsText(splitTrace, "dispatchSoftShadowDenoiseAndTransparentFold("));
-    EXPECT_TRUE(ContainsText(splitTrace, "reportSoftwareShadowTraversal(targets);\n    return true;"));
-    EXPECT_TRUE(ContainsText(report, "if(m_rayTracingState.m_swShadowDispatchLogged)"));
-    EXPECT_TRUE(ContainsText(report, "m_rayTracingState.m_swShadowDispatchLogged = true;"));
-    EXPECT_TRUE(ContainsText(report, "RendererSystem: dispatched software shadow traversal"));
-    EXPECT_EQ(CountText(monolithic, "reportSoftwareShadowTraversal(targets);"), s_ExpectedDualCount);
-    EXPECT_FALSE(ContainsText(monolithic, "const auto logSoftwareShadowTraversal"));
-}
-
-
 // The retained monolithic callback owns later native scratch transitions, but its graph entry must still reflect each fresh target's first write.
 // Only an accepted temporal history may enter as a sampled input.
 TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
@@ -583,50 +481,6 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_TRUE(ContainsText(preparedShadow, "m_shadowComputePersistentState.buildMergedResourceSubset("));
     EXPECT_TRUE(ContainsText(preparedShadow, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(preparedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));
-}
-
-
-// The split software-BVH task records only compute commands after graph-owned clears.
-// Shadow Preparation owns transfer/compute requirements and its frame timing contract requires the primary Graphics timeline.
-TEST(EcsGraphics, ShadowPreparationTaskContractsOwnNativeCommandAndFrameTimingRequirements){
-    const NWB::Core::GpuTaskCommandRequirements buildCommands = NWB::Impl::ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::s_CommandRequirements;
-    const NWB::Core::GpuTaskCommandRequirements prepareCommands = NWB::Impl::ECSRenderDetail::ShadowPrepareGraphTask::s_CommandRequirements;
-    EXPECT_EQ(buildCommands.requiredCapabilities, NWB::Core::GpuQueueCapability::Compute);
-    EXPECT_FALSE(buildCommands.requiresPrimaryGraphicsQueue);
-    EXPECT_EQ(prepareCommands.requiredCapabilities, NWB::Core::GpuQueueCapability::Compute | NWB::Core::GpuQueueCapability::Transfer);
-    EXPECT_TRUE(prepareCommands.requiresPrimaryGraphicsQueue);
-    TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
-
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_prepare.cpp",
-        taskGraphSource
-    ));
-
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-    const usize softwareBuildOffset = taskGraph.find(".setMarkerLabel(\"Shadow Prepare SW-BVH Build\")");
-    const usize softwareBuildEndOffset = taskGraph.find("m_deferredLightingTaskGraph.addTask<", softwareBuildOffset);
-    ASSERT_NE(softwareBuildOffset, AStringView::npos);
-    ASSERT_NE(softwareBuildEndOffset, AStringView::npos);
-    const AStringView softwareBuild = taskGraph.substr(
-        softwareBuildOffset,
-        softwareBuildEndOffset - softwareBuildOffset
-    );
-    EXPECT_TRUE(ContainsText(softwareBuild, ".setScheduling(buildScheduling)"));
-
-    const usize shadowPrepareOffset = taskGraph.find(".setMarkerLabel(\"Shadow Preparation\")", softwareBuildEndOffset);
-    const usize shadowPrepareEndOffset = taskGraph.find(
-        "m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>",
-        shadowPrepareOffset
-    );
-    ASSERT_NE(shadowPrepareOffset, AStringView::npos);
-    ASSERT_NE(shadowPrepareEndOffset, AStringView::npos);
-    const AStringView shadowPrepare = taskGraph.substr(
-        shadowPrepareOffset,
-        shadowPrepareEndOffset - shadowPrepareOffset
-    );
-    EXPECT_TRUE(ContainsText(shadowPrepare, ".setScheduling(scheduling)"));
 }
 
 

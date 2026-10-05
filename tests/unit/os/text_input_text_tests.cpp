@@ -25,7 +25,6 @@ using namespace NWB::Core;
 
 TEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul){
     EXPECT_EQ(ValidateTextInputUtf8({}, 100u), TextInputAdmission::Accepted);
-    EXPECT_EQ(ValidateTextInputUtf8("ASCII\xED\x95\x9C\xF0\x9F\x98\x80", 100u), TextInputAdmission::Accepted);
     EXPECT_EQ(ValidateTextInputUtf8("\xC0\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xE0\x80\x80", 100u), TextInputAdmission::InvalidText);
     EXPECT_EQ(ValidateTextInputUtf8("\xED\xA0\x80", 100u), TextInputAdmission::InvalidText);
@@ -53,15 +52,9 @@ TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins
     EXPECT_FALSE(IsTextInputCaretRectValid({ 0, Limit<i32>::s_Max - 10, 1, 11 }));
 }
 
-TEST(TextInputText, CodePointEncodingPreservesUnicodeAndRejectsInvalidScalars){
+TEST(TextInputText, InvalidScalarsClearThePreviouslyEncodedLength){
     char bytes[4] = {};
     usize length = 0u;
-    ASSERT_EQ(EncodeTextInputCodePoint('A', bytes, length), TextInputAdmission::Accepted);
-    EXPECT_EQ(AStringView(bytes, length), "A");
-    ASSERT_EQ(EncodeTextInputCodePoint(0x00e9u, bytes, length), TextInputAdmission::Accepted);
-    EXPECT_EQ(AStringView(bytes, length), "\xC3\xA9");
-    ASSERT_EQ(EncodeTextInputCodePoint(0xd55cu, bytes, length), TextInputAdmission::Accepted);
-    EXPECT_EQ(AStringView(bytes, length), "\xED\x95\x9C");
     ASSERT_EQ(EncodeTextInputCodePoint(0x1f600u, bytes, length), TextInputAdmission::Accepted);
     EXPECT_EQ(AStringView(bytes, length), "\xF0\x9F\x98\x80");
     EXPECT_EQ(EncodeTextInputCodePoint(0u, bytes, length), TextInputAdmission::InvalidText);

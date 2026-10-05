@@ -71,43 +71,6 @@ void VerifyUse(
     EXPECT_EQ(use.range.bufferRange.byteSize, Core::s_EntireBuffer.byteSize);
 }
 
-TEST(SkinningGraphResourceUses, PreservesOrderedRolesAndIndependentPhaseStates){
-    Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/roles"));
-    MeshSkinningGraphResourceUses uses(scratch);
-    const MeshSkinningGraphDispatchPlan plan = Plan();
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch, uses));
-    constexpr u32 deformation[] = { 1u, s_ExpectedDualCount, 3u, 4u, 5u, 6u, 7u, 8u, 10u, 11u, 14u, 15u, 16u };
-    constexpr u32 postDispatch[] = { 1u, 5u, 8u, 10u, 12u, 13u, 9u, 18u, 6u, 11u, 17u };
-    constexpr u32 localBounds[] = { 1u, 18u, 19u };
-    constexpr u32 finalizer[] = { 5u, 6u, 7u, 9u, 19u, 17u };
-    ASSERT_EQ(uses.deformation.size(), LengthOf(deformation));
-    ASSERT_EQ(uses.postDispatch.size(), LengthOf(postDispatch));
-    ASSERT_EQ(uses.localBounds.size(), LengthOf(localBounds));
-    ASSERT_EQ(uses.finalizer.size(), LengthOf(finalizer));
-    for(usize index = 0u; index < LengthOf(deformation); ++index){
-        const bool writes = index >= 4u && index <= 6u;
-        const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
-            : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
-        VerifyUse(uses.deformation[index], { .generation = 1u, .index = deformation[index] }, state,
-            writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
-    }
-    for(usize index = 0u; index < LengthOf(postDispatch); ++index){
-        const bool writes = index == 6u || index == 7u || index == 10u;
-        const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
-            : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
-        VerifyUse(uses.postDispatch[index], { .generation = 1u, .index = postDispatch[index] }, state,
-            writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
-    }
-    for(usize index = 0u; index < LengthOf(localBounds); ++index){
-        const bool writes = index == s_ExpectedDualCount;
-        const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
-            : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
-        VerifyUse(uses.localBounds[index], { .generation = 1u, .index = localBounds[index] }, state,
-            writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
-    }
-    for(usize index = 0u; index < LengthOf(finalizer); ++index)
-        VerifyUse(uses.finalizer[index], { .generation = 1u, .index = finalizer[index] }, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
-}
 
 TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence){
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/repeated"));

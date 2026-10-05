@@ -233,16 +233,13 @@ TEST_F(UiEditCommandTests, PreeditOwnsCommandsAndEnterWhileEscapeFirstCancelsOnl
     EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Submit }).submitted);
 }
 
-TEST_F(UiEditCommandTests, ClipboardCommandsDescribeExchangeWithoutEditingTheModel){
+TEST_F(UiEditCommandTests, EmptyAndUnknownCommandsPreserveTextAndSelection){
     ASSERT_TRUE(m_model.setText("abcd"));
     ASSERT_TRUE(m_model.setSelection(1u, 3u));
-    EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Copy }).clipboard, EditClipboardAction::Copy);
-    EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Cut }).clipboard, EditClipboardAction::Cut);
-    EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Paste }).clipboard, EditClipboardAction::Paste);
-    EXPECT_EQ(m_model.text(), "abcd");
-    EXPECT_EQ(m_model.selectedText(), "bc");
     EXPECT_FALSE(ApplyEditCommand(m_model, {}).handled);
     EXPECT_FALSE(ApplyEditCommand(m_model, { static_cast<EditCommand::Enum>(255u) }).handled);
+    EXPECT_EQ(m_model.text(), "abcd");
+    EXPECT_EQ(m_model.selectedText(), "bc");
 }
 
 

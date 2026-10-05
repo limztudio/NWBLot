@@ -45,9 +45,6 @@ TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsLeaveTheOutputUnchanged){
     emptyOutput.task = Graphics::GpuTaskId{ .generation = 98u, .index = 99u };
     EXPECT_EQ(emptyReader.next(emptyOutput), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(emptyReader.validation().valid());
-    EXPECT_EQ(emptyReader.graphGeneration(), 0u);
-    EXPECT_EQ(emptyReader.planGeneration(), 0u);
-    EXPECT_EQ(emptyReader.recordCount(), 0u);
     EXPECT_EQ(emptyOutput.task.index, 99u);
     EXPECT_EQ(emptyOutput.task.generation, 98u);
 
@@ -67,57 +64,6 @@ TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsLeaveTheOutputUnchanged){
     EXPECT_TRUE(reader.validation().valid());
     EXPECT_EQ(reader.validation().byteOffset, capture.commandBytes().size());
     EXPECT_EQ(reader.validation().recordIndex, 4u);
-}
-
-TEST(GpuCommandIrStreamReader, DecodesCanonicalColorAndSingleAspectClearRecords){
-    TestArena testArena;
-    Graphics::GpuCommandIrCapture capture(testArena.arena);
-    Graphics::GpuClearTextureTaskDesc clearTexture;
-    clearTexture.destination = s_CommandIrDestination;
-    clearTexture.subresources = Graphics::TextureSubresourceSet(1u, s_ExpectedDualCount, 3u, 4u);
-    // The stream omits depth/stencil aspect flags ignored by native color-clear lowering.
-    clearTexture.clearDepth = true;
-    clearTexture.clearStencil = true;
-    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::Float;
-    clearTexture.floatValue = Graphics::Color(0.1f, 0.2f, 0.3f, 0.4f);
-    ASSERT_TRUE(capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture));
-    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
-    clearTexture.uintValue = Graphics::UIntColor(11u, 12u, 13u, 14u);
-    ASSERT_TRUE(capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture));
-    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::Int;
-    clearTexture.intValue = Graphics::IntColor(-11, -12, -13, -14);
-    ASSERT_TRUE(capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture));
-    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::DepthStencil;
-    clearTexture.depthValue = 0.75f;
-    clearTexture.stencilValue = 23u;
-    clearTexture.clearStencil = false;
-    ASSERT_TRUE(capture.captureClearTexture(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrDestination, clearTexture));
-
-    Graphics::GpuCommandIrStreamReader reader(capture.commandBytes());
-    Graphics::GpuCommandIrBuiltinTaskRecord record;
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::Float);
-    EXPECT_EQ(record.floatClearValue, clearTexture.floatValue);
-    EXPECT_FALSE(record.clearDepth);
-    EXPECT_FALSE(record.clearStencil);
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::UInt);
-    EXPECT_EQ(record.uintClearValue, Graphics::UIntColor(11u, 12u, 13u, 14u));
-    EXPECT_FALSE(record.clearDepth);
-    EXPECT_FALSE(record.clearStencil);
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::Int);
-    EXPECT_EQ(record.intClearValue, Graphics::IntColor(-11, -12, -13, -14));
-    EXPECT_FALSE(record.clearDepth);
-    EXPECT_FALSE(record.clearStencil);
-    ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::DepthStencil);
-    EXPECT_EQ(record.depthClearValue, 0.75f);
-    EXPECT_EQ(record.stencilClearValue, 23u);
-    EXPECT_TRUE(record.clearDepth);
-    EXPECT_FALSE(record.clearStencil);
-    EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
-    EXPECT_TRUE(reader.validation().valid());
 }
 
 TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){

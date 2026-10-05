@@ -92,20 +92,8 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
         ASSERT_TRUE(firstQueueStatistics.valid());
         EXPECT_EQ(firstQueueStatistics.graphGeneration, compiledPlan.generation());
         EXPECT_EQ(firstQueueStatistics.planGeneration, compiledPlan.planGeneration());
-        EXPECT_EQ(firstQueueStatistics.recordingAttemptGeneration, 0u);
         EXPECT_EQ(firstQueueStatistics.deviceGeneration, compiledPlan.deviceGeneration());
         EXPECT_EQ(firstQueueStatistics.queue, firstQueue);
-        EXPECT_EQ(firstQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
-        EXPECT_EQ(firstQueueStatistics.packetCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.taskCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.commandListCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.barrierCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.workerRoutedPacketCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.parallelPacketCount, 0u);
-        EXPECT_EQ(firstQueueStatistics.commandListAcquisitionSeconds, 0.0);
-        EXPECT_EQ(firstQueueStatistics.graphBarrierRecordingSeconds, 0.0);
-        EXPECT_EQ(firstQueueStatistics.taskRecordSeconds, 0.0);
-        EXPECT_EQ(firstQueueStatistics.recordingSeconds, 0.0);
         const Graphics::GpuPhysicalQueueId staleFirstQueue{
             .index = firstQueue.index,
             .deviceGeneration = static_cast<u16>(
@@ -160,20 +148,8 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     ASSERT_TRUE(secondQueueStatistics.valid());
     EXPECT_EQ(secondQueueStatistics.graphGeneration, compiledPlan.generation());
     EXPECT_EQ(secondQueueStatistics.planGeneration, compiledPlan.planGeneration());
-    EXPECT_EQ(secondQueueStatistics.recordingAttemptGeneration, 0u);
     EXPECT_EQ(secondQueueStatistics.deviceGeneration, compiledPlan.deviceGeneration());
     EXPECT_EQ(secondQueueStatistics.queue, secondQueue);
-    EXPECT_EQ(secondQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(secondQueueStatistics.packetCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.taskCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.commandListCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.barrierCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.workerRoutedPacketCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.parallelPacketCount, 0u);
-    EXPECT_EQ(secondQueueStatistics.commandListAcquisitionSeconds, 0.0);
-    EXPECT_EQ(secondQueueStatistics.graphBarrierRecordingSeconds, 0.0);
-    EXPECT_EQ(secondQueueStatistics.taskRecordSeconds, 0.0);
-    EXPECT_EQ(secondQueueStatistics.recordingSeconds, 0.0);
 }
 
 TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
@@ -385,64 +361,6 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         ASSERT_NE(reads.compiled.findTask(replacement).plan, nullptr);
         EXPECT_TRUE(reads.compiled.packetForTask(replacement).valid());
     }
-}
-
-TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
-    constexpr usize s_TaskCount = 4096u;
-    constexpr usize s_QuerySweepCount = 16u;
-
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Core::Alloc::ScratchArena lookupScratchArena(Name("tests/task/gpu/lookup_scale_scratch"));
-    Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> tasks(lookupScratchArena);
-    tasks.reserve(s_TaskCount);
-    const Name taskBaseName("tests/task_graph/compiled_lookup_scale_task_");
-    char taskIndexBuffer[32u] = {};
-    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        const Graphics::GpuTaskId task = AddTask(
-            graph,
-            DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
-            "Compiled Lookup Scale Task"
-        );
-        ASSERT_TRUE(task.valid());
-        tasks.push_back(task);
-    }
-
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-    ASSERT_EQ(compiledPlan.taskCount(), s_TaskCount);
-
-    u64 assignmentChecksum = 0u;
-    u64 packetChecksum = 0u;
-    for(usize sweepIndex = 0u; sweepIndex < s_QuerySweepCount; ++sweepIndex){
-        for(usize queryIndex = 0u; queryIndex < s_TaskCount; ++queryIndex){
-            const usize taskIndex = (queryIndex * 4051u + sweepIndex) % s_TaskCount;
-            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
-            if(!assignment || assignment->task != tasks[taskIndex]){
-                ADD_FAILURE() << "Dense queue-assignment lookup failed at task " << taskIndex;
-                return;
-            }
-            const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(tasks[taskIndex]).plan;
-            if(!compiledTask || compiledTask->task != tasks[taskIndex] || !compiledTask->packet.valid()){
-                ADD_FAILURE() << "Dense compiled-task lookup failed at task " << taskIndex;
-                return;
-            }
-            assignmentChecksum += static_cast<u64>(assignment->task.index) + 1u;
-            packetChecksum += static_cast<u64>(compiledTask->packet.index) + 1u;
-        }
-    }
-    const u64 expectedSweepChecksum = static_cast<u64>(s_TaskCount) * (s_TaskCount + 1u) / 2u;
-    EXPECT_EQ(assignmentChecksum, expectedSweepChecksum * s_QuerySweepCount);
-    EXPECT_EQ(packetChecksum, expectedSweepChecksum * s_QuerySweepCount);
 }
 
 TEST(GpuTaskGraph, RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole){

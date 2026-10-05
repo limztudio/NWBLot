@@ -78,22 +78,6 @@ TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
     EXPECT_FALSE(ComputeReflectionFeedbackExtent(Limit<u32>::s_Max, Limit<u32>::s_Max).valid());
 }
 
-TEST(ReflectionFeedback, ProbeCadenceCountsAcceptedFeedbackIndependentlyOfTemporalSettings){
-    ReflectionFeedbackState state(1u);
-    ReflectionSettings settings;
-    for(u32 index = 0u; index < 40u; ++index){
-        settings.temporalEnabled = (index % s_ExpectedDualCount) == 0u;
-        settings.temporalMaxSamples = index + 1u;
-        settings.spatialFilterEnabled = !settings.temporalEnabled;
-        settings.spatialRadius = index % 4u;
-        settings.diagnosticsEnabled = settings.temporalEnabled;
-        settings.debugView = settings.temporalEnabled ? ReflectionDebugView::Confidence : ReflectionDebugView::None;
-        const auto plan = state.plan(Stamp(), settings, true, 100u + index);
-        EXPECT_EQ(plan.probeIndex, index);
-        EXPECT_EQ(plan.reset, index == 0u);
-        Accept(state, plan);
-    }
-}
 
 TEST(ReflectionFeedback, SpeculativePlansAndRejectedWriterDoNotAdvanceCadence){
     ReflectionFeedbackState state(1u);

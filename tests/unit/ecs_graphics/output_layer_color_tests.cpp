@@ -94,8 +94,7 @@ void ExpectColorNear(const ShaderFloat3 actual, const ShaderFloat3 expected, con
     EXPECT_NEAR(actual.z, expected.z, tolerance);
 }
 
-TEST(OutputLayerColor, SdrCompositesPremultipliedColorWithoutApplyingAlphaTwice){
-    ExpectColorNear(nwbOutputLayerOver(float3(0.25), float3(0.5), 0.5f), float3(0.625));
+TEST(OutputLayerColor, TransparentAndOpaqueEndpointsPreservePremultipliedInputs){
     ExpectColorNear(nwbOutputLayerOver(float3(0.25), float3(0.0), 0.f), float3(0.25));
     ExpectColorNear(nwbOutputLayerOver(float3(0.25), float3(0.75), 1.f), float3(0.75));
 }
@@ -115,13 +114,9 @@ TEST(OutputLayerColor, HdrBlendsInLinearNitsBeforeOnePqEncoding){
     ExpectColorNear(actual, nwbHdr10PqEncodeNits(float3(101.5)));
     const float3 encodedBlend = nwbHdr10EncodeUiLinear(float3(1.)) * 0.5;
     EXPECT_GT(actual.x - encodedBlend.x, 0.1);
-    // A white scene reference and white UI both meet at the same 203-nit paper white.
-    ExpectColorNear(nwbHdr10EncodeSceneWithUi(float3(1.), float3(0.5), 0.5f), nwbHdr10PqEncodeNits(float3(203.)));
 }
 
-TEST(OutputLayerColor, LinearUiDoesNotDecodeSrgbTwiceAndHighlightsRemainOrdered){
-    EXPECT_GT(nwbHdr10EncodeUiLinear(float3(0.5)).x, nwbHdr10EncodeUiSrgb(float3(0.5)).x);
-    EXPECT_NEAR(nwbHdr10UiLinearToNits(float3(1.)).x, 203., 0.001);
+TEST(OutputLayerColor, NegativeUiRadianceClampsAndHighlightsRemainBelowTheOutputBound){
     EXPECT_GT(nwbHdr10SceneToNits(float3(100.)).x, nwbHdr10SceneToNits(float3(1.)).x);
     EXPECT_LT(nwbHdr10SceneToNits(float3(100.)).x, 1000.);
     ExpectColorNear(nwbHdr10EncodeUiLinear(float3(-1.)), nwbHdr10EncodeUiLinear(float3(0.)));

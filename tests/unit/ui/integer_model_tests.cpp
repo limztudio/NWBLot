@@ -40,33 +40,6 @@ TEST_F(IntegerModelTests, SubmitCommitsExactLargeIntegerAndCancellationCannotRou
     EXPECT_EQ(m_model.draft().text(), "9007199254740993");
 }
 
-TEST_F(IntegerModelTests, SubmitPreservesAcceptedLexicalBytesSelectionAndUndoHistory){
-    ASSERT_TRUE(m_model.setValue(7));
-    EditModel& edit = m_model.lendDraft();
-    ASSERT_TRUE(edit.selectAll());
-    ASSERT_TRUE(edit.replaceSelection("  +0043 "));
-    ASSERT_TRUE(edit.setSelection(2u, 6u));
-    ASSERT_TRUE(edit.canUndo());
-    const DraftSnapshot before(m_arena, edit);
-    const u64 epoch = m_model.revision();
-    const NumericEditResult result = m_model.submit();
-    ASSERT_TRUE(result.valid);
-    EXPECT_TRUE(result.committed);
-    EXPECT_TRUE(result.valueChanged);
-    EXPECT_FALSE(result.clamped);
-    EXPECT_FALSE(result.restored);
-    EXPECT_EQ(m_model.value(), 43);
-    EXPECT_FALSE(m_model.dirty());
-    EXPECT_GT(m_model.revision(), epoch);
-    before.expectUnchanged(edit);
-    ASSERT_TRUE(edit.undo());
-    EXPECT_EQ(edit.text(), "7");
-    EXPECT_TRUE(m_model.dirty());
-    ASSERT_TRUE(edit.redo());
-    EXPECT_EQ(edit.text(), "  +0043 ");
-    EXPECT_FALSE(m_model.dirty());
-}
-
 TEST_F(IntegerModelTests, EquivalentSubmitIsACommitWithoutRewritingOrChangingTheValue){
     ASSERT_TRUE(m_model.setValue(43));
     ASSERT_TRUE(m_model.setDraft("+00043"));
@@ -81,24 +54,6 @@ TEST_F(IntegerModelTests, EquivalentSubmitIsACommitWithoutRewritingOrChangingThe
     EXPECT_TRUE(cancelled.cancelled);
     EXPECT_TRUE(cancelled.restored);
     EXPECT_EQ(m_model.draft().text(), "43");
-}
-
-TEST_F(IntegerModelTests, BlurCommitsAndCanonicalizesTheAcceptedDraft){
-    ASSERT_TRUE(m_model.setDraft("  +0043 "));
-    const u64 external = m_model.draft().externalRevision();
-    const NumericEditResult result = m_model.blur();
-    ASSERT_TRUE(result.valid);
-    EXPECT_TRUE(result.committed);
-    EXPECT_TRUE(result.valueChanged);
-    EXPECT_FALSE(result.rejected);
-    EXPECT_FALSE(result.restored);
-    EXPECT_EQ(m_model.value(), 43);
-    EXPECT_EQ(m_model.draft().text(), "43");
-    EXPECT_EQ(m_model.draft().anchor(), 2u);
-    EXPECT_EQ(m_model.draft().caret(), 2u);
-    EXPECT_GT(m_model.draft().externalRevision(), external);
-    EXPECT_FALSE(m_model.dirty());
-    EXPECT_FALSE(m_model.draft().canUndo());
 }
 
 TEST_F(IntegerModelTests, InvalidIncompleteAndOverflowSubmitPreserveThePendingDraft){

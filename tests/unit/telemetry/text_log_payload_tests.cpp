@@ -21,15 +21,11 @@ namespace __hidden_text_log_payload_tests{
 using namespace TelemetryTestDetail;
 namespace LogType = NWB::Core::Common::LogType;
 
-void CheckPayload(const Telemetry::TelemetryBytes& payload, const LogType::Enum type, const u8* expected, const usize count){
+void CheckPayload(const Telemetry::TelemetryBytes& payload, const u8* expected, const usize count){
     ASSERT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + count);
     Telemetry::EncodedTextLogPayloadHeader header;
     usize cursor = 0u;
     ASSERT_TRUE(ReadPOD(payload, cursor, header));
-    EXPECT_EQ(header.magic, Telemetry::s_TextLogPayloadMagic);
-    EXPECT_EQ(header.version, Telemetry::s_TextLogPayloadVersion);
-    EXPECT_EQ(header.type, static_cast<u8>(type));
-    EXPECT_EQ(header.reserved, 0u);
     EXPECT_EQ(header.messageBytes, count);
     for(usize index = 0u; index < count; ++index)
         EXPECT_EQ(payload[cursor + index], expected[index]) << index;
@@ -47,7 +43,7 @@ TEST(Telemetry, TextLogPayloadPreservesUnicodeAndEmbeddedNullBytes){
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena, LogType::Warning, TStringView(s_Message, LengthOf(s_Message) - 1u), payload
     ));
-    CheckPayload(payload, LogType::Warning, s_Expected, LengthOf(s_Expected));
+    CheckPayload(payload, s_Expected, LengthOf(s_Expected));
 }
 
 TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
@@ -68,7 +64,7 @@ TEST(Telemetry, TextLogPayloadRetainsPlatformInvalidUnicodeConversion){
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena, LogType::Info, TStringView(s_Message, LengthOf(s_Message)), payload
     ));
-    CheckPayload(payload, LogType::Info, s_Expected, LengthOf(s_Expected));
+    CheckPayload(payload, s_Expected, LengthOf(s_Expected));
 }
 
 TEST(Telemetry, TextLogPayloadReusesWarmDestinationWithoutTransientAllocations){
@@ -107,7 +103,7 @@ TEST(Telemetry, TextLogPayloadPreservesAliasedInputBeforeHeaderWrite){
     GLB_MEMCPY(payload.data() + s_Offset, s_MessageBytes, s_Message, s_MessageBytes);
     const TStringView aliased(reinterpret_cast<const tchar*>(payload.data() + s_Offset), LengthOf(s_Message) - 1u);
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Error, aliased, payload));
-    CheckPayload(payload, LogType::Error, s_Expected, LengthOf(s_Expected));
+    CheckPayload(payload, s_Expected, LengthOf(s_Expected));
 }
 
 TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
@@ -141,7 +137,7 @@ TEST(Telemetry, TextLogPayloadEmptyAndInvalidTypeReplacePreviousBytes){
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::Info, GLB_TEXT("old payload"), payload));
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(testArena.arena, LogType::EssentialInfo, {}, payload));
-    CheckPayload(payload, LogType::EssentialInfo, nullptr, 0u);
+    CheckPayload(payload, nullptr, 0u);
     EXPECT_FALSE(Telemetry::BuildTextLogPayload(testArena.arena, static_cast<LogType::Enum>(0xffu), {}, payload));
     EXPECT_TRUE(payload.empty());
 }

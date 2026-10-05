@@ -217,29 +217,6 @@ TEST(CommandBufferResourceReferences, DestructionReleasesOwnedResourcesDuringUnw
         EXPECT_EQ(buffer->getReferenceCount(), 1u);
 }
 
-TEST(CommandBufferResourceReferences, SmallRepeatedAndRecycledRecordingsNeedNoAdditionalAllocations){
-    ReferencesContext context;
-    context.addBuffers(4u);
-    context.addTextures(1u);
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
-    context.recordResources();
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
-    const ArenaMemoryStats before = context.testArena.arena.memoryStats();
-    for(usize iteration = 0u; iteration < 32u; ++iteration){
-        context.recordResources();
-        context.references.discardBufferStateCommits();
-        context.recordResources();
-        context.references.clear();
-        context.recordResources();
-    }
-    const ArenaMemoryStats after = context.testArena.arena.memoryStats();
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
-    EXPECT_EQ(after.allocationCount, before.allocationCount);
-    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 5u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 4u);
-}
 
 TEST(CommandBufferResourceReferences, TexturePromotionPreservesEveryPreexistingMembershipAndJournal){
     ReferencesContext context;
@@ -308,30 +285,6 @@ TEST(CommandBufferResourceReferences, OwningPromotionKeepsUntypedOwnersAliveUnti
     EXPECT_LT(context.testArena.arena.memoryStats().usedBytes, usedBeforeClear);
 }
 
-TEST(CommandBufferResourceReferences, IndexedRepeatedAndRecycledRecordingsReuseCapacity){
-    ReferencesContext context;
-    context.addBuffers(128u);
-    context.addTextures(32u);
-    context.recordResources();
-    ASSERT_TRUE(Access::hasResourceReferenceIndex(context.references));
-    context.references.clear();
-    context.recordResources();
-    const ArenaMemoryStats before = context.testArena.arena.memoryStats();
-    for(usize iteration = 0u; iteration < 8u; ++iteration){
-        context.recordResources();
-        context.references.discardBufferStateCommits();
-        context.recordResources();
-        context.references.clear();
-        context.recordResources();
-    }
-    const ArenaMemoryStats after = context.testArena.arena.memoryStats();
-    EXPECT_EQ(after.allocationCount, before.allocationCount);
-    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-    EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 160u);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 160u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 128u);
-}
 
 static void BenchmarkReferences(const usize bufferCount, const usize textureCount, const usize repeatCount){
     ReferencesContext context;
@@ -378,6 +331,55 @@ TEST(CommandBufferResourceReferences, DISABLED_BenchmarkLargeRepeatedRecording){
 
 TEST(CommandBufferResourceReferences, DISABLED_BenchmarkSmallRepeatedRecording){
     BenchmarkReferences(4u, 1u, 256u);
+}
+
+TEST(CommandBufferResourceReferences, SmallRepeatedAndRecycledRecordingsNeedNoAdditionalAllocations){
+    ReferencesContext context;
+    context.addBuffers(4u);
+    context.addTextures(1u);
+    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    context.recordResources();
+    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    const ArenaMemoryStats before = context.testArena.arena.memoryStats();
+    for(usize iteration = 0u; iteration < 32u; ++iteration){
+        context.recordResources();
+        context.references.discardBufferStateCommits();
+        context.recordResources();
+        context.references.clear();
+        context.recordResources();
+    }
+    const ArenaMemoryStats after = context.testArena.arena.memoryStats();
+    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(Access::retainedResources(context.references).size(), 5u);
+    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 4u);
+}
+
+TEST(CommandBufferResourceReferences, IndexedRepeatedAndRecycledRecordingsReuseCapacity){
+    ReferencesContext context;
+    context.addBuffers(128u);
+    context.addTextures(32u);
+    context.recordResources();
+    ASSERT_TRUE(Access::hasResourceReferenceIndex(context.references));
+    context.references.clear();
+    context.recordResources();
+    const ArenaMemoryStats before = context.testArena.arena.memoryStats();
+    for(usize iteration = 0u; iteration < 8u; ++iteration){
+        context.recordResources();
+        context.references.discardBufferStateCommits();
+        context.recordResources();
+        context.references.clear();
+        context.recordResources();
+    }
+    const ArenaMemoryStats after = context.testArena.arena.memoryStats();
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 160u);
+    EXPECT_EQ(Access::retainedResources(context.references).size(), 160u);
+    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 128u);
 }
 
 

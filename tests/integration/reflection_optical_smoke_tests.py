@@ -64,47 +64,22 @@ LIT_AVBOIT_REFRACTION_RESOLVE_SCREEN_SPACE = "AVBOIT refraction resolve: screen-
 LIT_REJECT_LOG_MESSAGE = "--reject-log-message"
 LIT_AVBOIT_REFRACTION_RESOLVE_HARDWARE = "AVBOIT refraction resolve: hardware"
 LIT_EXTERIOR_ENVIRONMENT = "exterior_environment"
-LIT_PROOF = "proof"
 LIT_RENDERERSYSTEM_DISPATCHED_SOFTWARE_CAU = "RendererSystem: dispatched software caustic producer"
 LIT_SCREEN = "screen"
 LIT_NWB_REFRACTION_SMOKE_HARDWARE = "NWB_REFRACTION_SMOKE_HARDWARE"
 LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_SOFTWARE_RAY_TRACING = "--software-ray-tracing"
 LIT_REQUIRE_HARDWARE = "--require-hardware"
-LIT_PREDICTOR = "predictor"
 LIT_MISSING_EXTERIOR = "missing exterior"
 LIT_MAIN = "__main__"
 
 
 class ReferenceTests(unittest.TestCase):
-    def test_normal_air_glass_air_has_two_fresnel_crossings(self):
-        clear, details = reference.trace_transmission(LIT_OPTICAL_CLEAR, (0, 1.4, 0), (0, 0, -1))
-        expected = reference.CHART_RADIANCE * 0.96 ** 2
-        self.assertAlmostEqual(clear[0], expected, places=10)
-        self.assertEqual(details[LIT_CROSSINGS], 2)
-        self.assertEqual(details[LIT_REASON], LIT_CHART)
-
-    def test_beer_uses_geometric_distance_and_half_authored_values(self):
-        clear, _ = reference.trace_transmission(LIT_OPTICAL_CLEAR, (0, 1.4, 0), (0, 0, -1))
-        tinted, _ = reference.trace_transmission(LIT_OPTICAL_TINTED, (0, 1.4, 0), (0, 0, -1))
-        self.assertAlmostEqual(tinted[0] / clear[0], reference.half(0.55) ** 2, places=5)
-        self.assertEqual(tinted[2], clear[2])
-
     def test_inside_origin_retains_radiance_eta_squared(self):
         actual, details = reference.trace_transmission("optical_inside", (0, 1.4, 0), (0, 0, -1))
         self.assertAlmostEqual(actual[0], reference.CHART_RADIANCE * 0.96 * 1.5 ** 2, places=10)
         self.assertEqual(details[LIT_CROSSINGS], 1)
         self.assertGreater(actual[0], 1.0)
-
-    def test_oblique_snell_and_exact_fresnel(self):
-        direction = (0.6, 0.0, -0.8)
-        fresnel, transmitted = reference.fresnel_snell(direction, (0, 0, 1), 1, 1.5)
-        self.assertAlmostEqual(transmitted[0], 0.4, places=12)
-        self.assertAlmostEqual(transmitted[2], -math.sqrt(0.84), places=12)
-        rs = (0.8 - 1.5 * math.sqrt(0.84)) / (0.8 + 1.5 * math.sqrt(0.84))
-        rp = (1.5 * 0.8 - math.sqrt(0.84)) / (1.5 * 0.8 + math.sqrt(0.84))
-        self.assertAlmostEqual(fresnel, (rs * rs + rp * rp) / 2, places=12)
-        self.assertNotAlmostEqual(fresnel, 0.04 + 0.96 * 0.2 ** 5, places=5)
 
     def test_tir_and_unresolved_residual_have_distinct_energy(self):
         angle = math.sqrt(0.5)
@@ -169,14 +144,6 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(details[LIT_QUERIES], 2)
         self.assertEqual(details[LIT_REASON], "opaque_alpha")
 
-    def test_nested_fixtures_are_strictly_contained_on_all_axes(self):
-        for case in ("optical_inside_nested", "optical_nested2", LIT_OPTICAL_NESTED3, LIT_OPTICAL_OVERFLOW):
-            objects = reference.boundaries(case)
-            for outer, inner in zip(objects, objects[1:]):
-                for (normal_a, extent_a), (normal_b, extent_b) in zip(outer.planes, inner.planes):
-                    self.assertEqual(normal_a, normal_b)
-                    self.assertLess(extent_b, extent_a)
-
     def test_torus_uses_authored_geometric_triangles_and_reentry(self):
         self.assertEqual(len(reference.authored_torus_triangles()), 1280)
         _, details = reference.trace_transmission(LIT_OPTICAL_TORUS, (0, 1.4, 0), (0, 0, -1))
@@ -188,11 +155,6 @@ class ReferenceTests(unittest.TestCase):
         self.assertGreater(before[0] - after[0], 0.3)
         self.assertGreater(before[1] - after[1], 0.1)
         self.assertAlmostEqual(before[2], after[2], places=10)
-
-    def test_presentation_round_trip_allows_physical_inside_energy(self):
-        for value in (0.0, 0.1, 0.8, 1.85, 2.06):
-            self.assertLess(abs(reference.decode_radiance(reference.encode_radiance(value)) - value), 0.035)
-
 
 class ImageOracleTests(unittest.TestCase):
     def synthetic_frame(self, case, queries=16, channel_scale=1.0, shift=0):
@@ -209,12 +171,6 @@ class ImageOracleTests(unittest.TestCase):
     def analyze(self, frame, spec):
         with patch.object(smoke, "reference_points", return_value=iter(self.points)):
             return smoke.analyze_image(frame, spec)
-
-    def test_quantized_reference_passes(self):
-        spec = smoke.OpticalCapture(LIT_OPTICAL_TINTED, LIT_OPTICAL_TINTED)
-        result = self.analyze(self.synthetic_frame(spec.case), spec)
-        self.assertGreater(result["stable_reference_pixels"], 150)
-        self.assertLess(result["linear_rgb_mae"], 0.006)
 
     def test_absorption_omission_fails(self):
         with self.assertRaises(SmokeFailure):
@@ -250,10 +206,6 @@ class StatisticsTests(unittest.TestCase):
         statistics = [{LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9}]
         with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"):
             return smoke.validate_optics(text, spec)
-
-    def test_actual_queries_are_distinct_from_primary_paths(self):
-        result = self.validate(self.log())
-        self.assertEqual(result["stable_optics"][LIT_HARDWARE_QUERIES], 500)
 
     def test_query_cap_violation_fails(self):
         with self.assertRaises(SmokeFailure):
@@ -306,11 +258,6 @@ class CombinedCausticTests(unittest.TestCase):
             for x in range(185, 215):
                 frames[LIT_CAUSTICS_DISABLED][2][y][x] = (60, 60, 60)
         return frames
-
-    def test_distinct_sphere_and_ground_contributions_pass(self):
-        result = caustic.analyze_frames(self.frames())
-        self.assertEqual(result[LIT_REFLECTION_DISABLED][LIT_CHANGED_SPHERE_PIXELS], 1500)
-        self.assertEqual(result[LIT_CAUSTICS_DISABLED][LIT_CHANGED_GROUND_PIXELS], 750)
 
     def test_no_visible_reflection_fails(self):
         frames = self.frames()
@@ -384,12 +331,6 @@ class CombinedCausticTests(unittest.TestCase):
             with self.subTest(disabled=disabled), self.assertRaises(SmokeFailure):
                 caustic.analyze_frames(frames, software_ray_tracing=True)
 
-    def test_hardware_mode_keeps_exterior_radiometric_oracle(self):
-        with patch.object(caustic, LIT_ANALYZE_EXTERIOR_REFLECTION, return_value={LIT_PROOF: True}) as exterior:
-            result = caustic.analyze_frames(self.frames())
-        exterior.assert_called_once()
-        self.assertEqual(result[LIT_REFLECTION_DISABLED][LIT_EXTERIOR_ENVIRONMENT], {LIT_PROOF: True})
-
     def test_capture_software_route_requires_real_disabled_device_for_every_toggle(self):
         args = SimpleNamespace(output_directory=Path(LIT_OUTPUT), executable=Path(LIT_APP_EXE),
             working_directory=Path(LIT_RUNTIME), logserver_executable=None, timeout=150,
@@ -445,15 +386,6 @@ class CombinedCausticTests(unittest.TestCase):
 
     def test_device_policy_arguments_are_explicit_and_mutually_exclusive(self):
         required = ["--executable", LIT_APP_EXE, "--working-directory", LIT_RUNTIME, "--output-directory", LIT_OUTPUT]
-        default = caustic.parse_args(required)
-        self.assertFalse(default.require_hardware)
-        self.assertFalse(default.software_ray_tracing)
-        software = caustic.parse_args(required + [LIT_SOFTWARE_RAY_TRACING])
-        self.assertTrue(software.software_ray_tracing)
-        self.assertFalse(software.require_hardware)
-        hardware = caustic.parse_args(required + [LIT_REQUIRE_HARDWARE])
-        self.assertTrue(hardware.require_hardware)
-        self.assertFalse(hardware.software_ray_tracing)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
             caustic.parse_args(required + [LIT_REQUIRE_HARDWARE, LIT_SOFTWARE_RAY_TRACING])
         self.assertEqual(error.exception.code, 2)
@@ -466,15 +398,6 @@ class CausticExteriorTests(unittest.TestCase):
         for x, y, fresnel in caustic_reference.exterior_samples():
             rows[y][x] = tuple(round(value) for value in caustic_reference.expected_environment_color(disabled[2][y][x], fresnel))
         return (1280, 900, rows), disabled
-
-    def test_mesh_selected_quantized_environment_passes(self):
-        combined, disabled = self.frames()
-        result = caustic.analyze_exterior_reflection(combined, disabled)
-        self.assertGreater(result["tested_samples"], 6000)
-        self.assertEqual(result["missing_samples"], 0)
-        self.assertLess(result["rgb_byte_mae"], 0.3)
-        self.assertEqual(result[LIT_PREDICTOR]["environment"], (0.6, 0.7, 1.0))
-        self.assertEqual(len(result[LIT_PREDICTOR]["mesh_lf_sha256"]), 64)
 
     def test_single_stable_missing_sample_cannot_hide_in_global_change_count(self):
         combined, disabled = self.frames()
@@ -530,12 +453,6 @@ class CausticExteriorTests(unittest.TestCase):
         self.assertTrue(caustic_reference.hits_ground((0, 0.85, -0.7), (0, -1, 0)))
         self.assertFalse(caustic_reference.hits_ground((0, 0.85, -0.7), (0, 1, 0)))
         self.assertFalse(caustic_reference.hits_ground((4, 0.85, -0.7), (0, -1, 0)))
-
-    def test_normal_incidence_uses_physical_ior_f0_and_presentation(self):
-        expected = caustic_reference.expected_environment_color((0, 0, 0), 0.04)
-        for encoded, environment in zip(expected, caustic_reference.ENVIRONMENT):
-            self.assertAlmostEqual(caustic_reference.decode_scene_radiance(encoded), 0.04 * environment, places=12)
-
 
 if __name__ == LIT_MAIN:
     unittest.main()

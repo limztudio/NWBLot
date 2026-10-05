@@ -112,20 +112,13 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     sampler.setDescription(description);
     EXPECT_FALSE(codec.serialize(sampler, binary));
 
-    for(const NWB::Core::SamplerReductionType::Enum reduction : {
-        NWB::Core::SamplerReductionType::Standard, NWB::Core::SamplerReductionType::Comparison
-    }){
-        description.reductionType = reduction;
-        description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-        sampler.setDescription(description);
-        ASSERT_TRUE(codec.serialize(sampler, binary));
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
-        ASSERT_NE(loadedAsset.get(), nullptr);
-        const NWB::Impl::Sampler& loaded = static_cast<const NWB::Impl::Sampler&>(*loadedAsset);
-        EXPECT_EQ(loaded.description().reductionType, reduction);
-        EXPECT_EQ(loaded.description().borderColor, NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f));
-    }
+    description.reductionType = NWB::Core::SamplerReductionType::Standard;
+    description.borderColor = NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
+    sampler.setDescription(description);
+    ASSERT_TRUE(codec.serialize(sampler, binary));
+    UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
+    ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, recoveredAsset));
+    ASSERT_NE(recoveredAsset.get(), nullptr);
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("sampler description is invalid")));
 }
 

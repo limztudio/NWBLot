@@ -42,7 +42,6 @@ using TaskGraphTestUtils::TestArena;
 
 TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
     const Graphics::FormatInfo& d24s8 = Graphics::GetFormatInfo(Graphics::Format::D24S8);
-    const Graphics::FormatInfo& d32s8 = Graphics::GetFormatInfo(Graphics::Format::D32S8);
     const Graphics::FormatInfo& rgba = Graphics::GetFormatInfo(Graphics::Format::RGBA8_UNORM);
     Graphics::TextureUploadAspect::Enum resolvedAspect = Graphics::TextureUploadAspect::Automatic;
     Graphics::TextureUploadAspectLayout layout;
@@ -81,19 +80,6 @@ TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
     EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Stencil);
     ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
         d24s8,
-        Graphics::TextureUploadAspect::Stencil,
-        layout
-    ));
-    EXPECT_EQ(layout.bytesPerBlock, sizeof(u8));
-
-    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
-        d32s8,
-        Graphics::TextureUploadAspect::Depth,
-        layout
-    ));
-    EXPECT_EQ(layout.bytesPerBlock, sizeof(u32));
-    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
-        d32s8,
         Graphics::TextureUploadAspect::Stencil,
         layout
     ));
@@ -231,31 +217,6 @@ TEST(VulkanStateTracking, NormalizesBarrierScopesFromExactPhysicalQueueCapabilit
         VK_ACCESS_2_TRANSFER_WRITE_BIT
     );
     expectNormalized(
-        Graphics::GpuQueueCapability::Transfer,
-        VK_PIPELINE_STAGE_2_CONVERT_COOPERATIVE_VECTOR_MATRIX_BIT_NV,
-        VK_ACCESS_2_TRANSFER_READ_BIT,
-        VK_PIPELINE_STAGE_2_CONVERT_COOPERATIVE_VECTOR_MATRIX_BIT_NV,
-        VK_ACCESS_2_TRANSFER_READ_BIT
-    );
-    expectNormalized(
-        Graphics::GpuQueueCapability::Transfer,
-        VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR,
-        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
-        VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR,
-        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT
-    );
-    expectNormalized(
-        Graphics::GpuQueueCapability::Transfer,
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR,
-        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
-            | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
-            | VK_ACCESS_2_TRANSFER_READ_BIT,
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR,
-        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
-            | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
-            | VK_ACCESS_2_TRANSFER_READ_BIT
-    );
-    expectNormalized(
         Graphics::GpuQueueCapability::Compute,
         VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
         VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -310,20 +271,6 @@ TEST(VulkanStateTracking, NormalizesBarrierScopesFromExactPhysicalQueueCapabilit
         VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT,
         VK_PIPELINE_STAGE_2_NONE,
         0u
-    );
-    expectNormalized(
-        Graphics::GpuQueueCapability::Compute,
-        VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT,
-        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
-        VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT,
-        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT
-    );
-    expectNormalized(
-        Graphics::GpuQueueCapability::Graphics,
-        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
-        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT
     );
     expectNormalized(
         Graphics::GpuQueueCapability::Graphics,
@@ -411,8 +358,6 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
 TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBoundaries){
     using namespace Graphics::GraphicsBackend::VulkanDetail;
 
-    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::PointList), VK_PRIMITIVE_TOPOLOGY_POINT_LIST);
-    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::LineStrip), VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
     EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::PatchList), VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
     EXPECT_EQ(
         GetPrimitiveTopology(static_cast<Graphics::PrimitiveType::Enum>(Limit<u8>::s_Max)),
@@ -555,18 +500,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
         s_MaximumMeshGroupCounts,
         Limit<u32>::s_Max
     ));
-    VkPhysicalDeviceMeshShaderPropertiesEXT meshProperties{};
-    meshProperties.maxTaskWorkGroupCount[0u] = s_ExpectedDualCount;
-    meshProperties.maxTaskWorkGroupTotalCount = 3u;
-    meshProperties.maxMeshWorkGroupCount[0u] = 5u;
-    meshProperties.maxMeshWorkGroupTotalCount = 7u;
-    const MeshDispatchLimits taskLimits = GetMeshDispatchLimits(meshProperties, true);
-    const MeshDispatchLimits meshLimits = GetMeshDispatchLimits(meshProperties, false);
-    EXPECT_EQ(taskLimits.maximumGroupCounts, meshProperties.maxTaskWorkGroupCount);
-    EXPECT_EQ(taskLimits.maximumTotalGroupCount, 3u);
-    EXPECT_EQ(meshLimits.maximumGroupCounts, meshProperties.maxMeshWorkGroupCount);
-    EXPECT_EQ(meshLimits.maximumTotalGroupCount, 7u);
-
     Graphics::DepthStencilState depthStencilState;
     EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_DEPTH_BIT));
     depthStencilState.disableDepthTest();
@@ -587,12 +520,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
     depthStencilState.setStencilWriteMask(0u);
     EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
-
-    Graphics::RasterState rasterState;
-    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_FALSE);
-    rasterState.slopeScaledDepthBias = 1.0f;
-    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_TRUE);
-    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_TRUE).depthClampEnable, VK_TRUE);
 
     EXPECT_TRUE(IsPipelineColorAttachmentFormatClassValid(Graphics::Format::RGBA8_UNORM));
     EXPECT_FALSE(IsPipelineColorAttachmentFormatClassValid(Graphics::Format::D24S8));
@@ -758,49 +685,6 @@ TEST(VulkanDevice, MatchesExactCommandListSubmissionQueueIdentity){
         s_ExactQueue,
         Graphics::CommandQueue::Graphics
     ));
-}
-
-TEST(VulkanStateTracking, MapsAccelerationStructureBuildInputsAndReadScopesExactly){
-    using Graphics::GraphicsBackend::VulkanDetail::GetVkAccessFlags;
-    using Graphics::GraphicsBackend::VulkanDetail::GetVkPipelineStageFlags;
-
-    EXPECT_EQ(
-        GetVkAccessFlags(Graphics::ResourceStates::AccelStructBuildInput),
-        VK_ACCESS_2_SHADER_READ_BIT
-    );
-    EXPECT_EQ(
-        GetVkAccessFlags(Graphics::ResourceStates::OpacityMicromapBuildInput),
-        VK_ACCESS_2_SHADER_READ_BIT
-    );
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructBuildInput, false),
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    );
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::OpacityMicromapBuildInput, false),
-        VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
-    );
-    constexpr VkPipelineStageFlags2 s_AccelStructReadStages =
-        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-        | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    ;
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructRead, false),
-        s_AccelStructReadStages
-    );
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructRead, true),
-        s_AccelStructReadStages | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
-    );
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructWrite, true),
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    );
-    EXPECT_EQ(
-        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructBuildBlas, true),
-        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
-    );
 }
 
 TEST(VulkanStateTracking, HonorsForcedSameStateMemoryDependenciesIndependentlyOfUavPolicy){

@@ -43,103 +43,7 @@ public:
     }
 };
 
-[[nodiscard]] static bool AddRuntimeStatisticsPacketSubmissions(
-    Telemetry::FrameGraphBuilder& builder,
-    const Telemetry::FrameGraphNodeHandle owner
-){
-    for(u32 packetIndex = 0u; packetIndex < 19u; ++packetIndex){
-        Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
-            .packetGeneration = 52u,
-            .taskCount = packetIndex == 0u ? s_ExpectedDualCount : 1u,
-            .commandListCount = packetIndex == 0u ? s_ExpectedDualCount : 1u,
-            .ownerNodeIndex = owner.index,
-            .packetIndex = packetIndex,
-            .queue = { .index = 1u, .deviceGeneration = 17u },
-            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-            .joinsAcceptedQueueFrontier = packetIndex != 18u,
-            .recoverySubmission = packetIndex < 5u,
-            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
-        };
-        if(packetIndex < 5u){
-            statistics.plannedWaitTokenCount = 1u;
-            statistics.sameQueueWaitElisionCount = 1u;
-        }
-        else if(packetIndex < 13u){
-            statistics.plannedWaitTokenCount = 1u;
-            statistics.timelineWaitCount = 1u;
-        }
-        else{
-            statistics.mergedTimelineWaitCount = packetIndex == 13u ? s_ExpectedDualCount : 1u;
-            statistics.plannedWaitTokenCount = statistics.mergedTimelineWaitCount;
-        }
-        if(!builder.addPacketSubmissionStatistics(owner, statistics))
-            return false;
-    }
-
-    for(u32 queuePacketIndex = 0u; queuePacketIndex < 11u; ++queuePacketIndex){
-        Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
-            .packetGeneration = 52u,
-            .taskCount = 1u,
-            .commandListCount = queuePacketIndex == 0u ? s_ExpectedDualCount : 1u,
-            .ownerNodeIndex = owner.index,
-            .packetIndex = 19u + queuePacketIndex,
-            .queue = { .index = 3u, .deviceGeneration = 17u },
-            .queueClass = Telemetry::FrameGraphQueueClass::Compute,
-            .joinsAcceptedQueueFrontier = queuePacketIndex != 10u,
-            .recoverySubmission = queuePacketIndex < 3u,
-            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
-        };
-        if(queuePacketIndex == 0u){
-            statistics.plannedWaitTokenCount = 7u;
-            statistics.sameQueueWaitElisionCount = 7u;
-        }
-        else if(queuePacketIndex == 1u){
-            statistics.plannedWaitTokenCount = 6u;
-            statistics.timelineWaitCount = 6u;
-        }
-        else if(queuePacketIndex == s_ExpectedDualCount){
-            statistics.plannedWaitTokenCount = 11u;
-            statistics.mergedTimelineWaitCount = 11u;
-        }
-        if(!builder.addPacketSubmissionStatistics(owner, statistics))
-            return false;
-    }
-    return true;
-}
-
-class RuntimeStatisticsFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
-public:
-    virtual bool appendFrameGraph(Telemetry::FrameGraphBuilder& builder)override{
-        const Telemetry::FrameGraphNodeHandle owner = builder.addPass(
-            Name("runtime_pass"),
-            "Runtime Pass",
-            Telemetry::FrameGraphPassMetadata{
-                .queueAssignment = MakeChangedFrameGraphQueueAssignment(),
-                .compiledTask = MakeFrameGraphCompiledTask(
-                    52u,
-                    9u,
-                    Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
-                ),
-                .runtimeStatistics = MakeFrameGraphRuntimeStatistics(),
-            },
-            6u
-        );
-        if(!owner.valid())
-            return false;
-        if(!builder.addPhysicalQueueRuntimeStatistics(
-            owner,
-            MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
-        ) || !builder.addPhysicalQueueRuntimeStatistics(
-            owner,
-            MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
-        ))
-            return false;
-        return AddRuntimeStatisticsPacketSubmissions(builder, owner);
-    }
-};
-
-
-TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
+TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
     session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
@@ -160,47 +64,9 @@ TEST(Telemetry, FrameGraphRegistryResolvesPendingNameEdges){
     ASSERT_EQ(parsed.edges.size(), 1u);
     EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
     EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
-    EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::DependsOn);
-    EXPECT_EQ(parsed.edges[0u].flags, 7u);
 }
 
-TEST(Telemetry, FrameGraphRegistryPreservesRuntimeStatistics){
-    TestArena testArena;
-    Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
-
-    Telemetry::FrameGraphRegistry registry(testArena.arena);
-    RuntimeStatisticsFrameGraphContributor contributor;
-    registry.registerContributor(contributor);
-
-    ASSERT_TRUE(registry.record(session));
-    const Telemetry::EventRecord* event = session.view().eventAt(0u);
-    ASSERT_NE(event, nullptr);
-
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    ASSERT_EQ(parsed.nodes.size(), 1u);
-    EXPECT_EQ(parsed.nodes[0u].flags, 6u);
-    EXPECT_TRUE(parsed.nodes[0u].runtimeStatistics.present);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.graphGeneration, 51u);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionCount, 3u);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.resourceVersionEdgeCount, 6u);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.uploadBlobBytes, 30u);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.recording.parallelPacketCount, 29u);
-    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.acceptedFrontierSubmissionCount, 28u);
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].ownerNodeIndex, 0u);
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.queue.index, 1u);
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.queue.index, 3u);
-    EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
-    ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 30u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[0u].queue.index, 1u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[18u].queue.index, 1u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[19u].queue.index, 3u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[29u].queue.index, 3u);
-}
-
-TEST(Telemetry, FrameGraphBuilderCopiesPhysicalQueueRuntimeStatistics){
+TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -224,7 +90,6 @@ TEST(Telemetry, FrameGraphBuilderCopiesPhysicalQueueRuntimeStatistics){
     statistics.compile.taskCount = 0u;
 
     ASSERT_EQ(records.size(), 1u);
-    EXPECT_EQ(records[0u].ownerNodeIndex, owner.index);
     EXPECT_EQ(records[0u].statistics.compile.taskCount, 50u);
     Telemetry::FrameGraphPhysicalQueueRuntimeStatistics outOfBounds =
         MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)

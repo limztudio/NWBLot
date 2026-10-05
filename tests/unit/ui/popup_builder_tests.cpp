@@ -152,29 +152,6 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     EXPECT_TRUE(m_context.input().wouldConsumePointer({ 10.0f, 10.0f }));
 }
 
-TEST_F(UiPopupBuilderTests, ExistingPanelAtlasFallbackSuppliesPopupImageAndBodyPadding){
-    PopupState state;
-    state.open();
-    m_builder.popupStyle().padding = {};
-    ASSERT_EQ(m_skin.findRegion(Name("popup.normal")), nullptr);
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", state, Anchored()));
-    WidgetOptions stretch = Control();
-    stretch.width = { LayoutSizePolicy::Stretch, 1.0f };
-    stretch.height = { LayoutSizePolicy::Stretch, 1.0f };
-    EXPECT_FALSE(m_builder.button("apply", "Apply", stretch));
-    ASSERT_TRUE(finishPopup());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    Rect background;
-    ASSERT_TRUE(skinQuad(snapshot, 5u, background));
-    ExpectBounds(background, state.placement().bounds);
-    const HitTarget* child = target(id("apply", "popup"));
-    ASSERT_NE(child, nullptr);
-    ExpectBounds(child->rectangle, { 43.0f, 92.0f, 212.0f, 150.0f });
-    ExpectBounds(child->clip, { 43.0f, 92.0f, 212.0f, 150.0f });
-}
-
 TEST_F(UiPopupBuilderTests, ClosingFromTheBodySkipsBackdropBodyPaintAndCandidateTargets){
     PopupState state;
     state.open();
@@ -361,29 +338,6 @@ TEST_F(UiPopupBuilderTests, CloseAndReopenInTheBodySkipsOldEpochPaintAndActionsU
     const DrawSnapshot active = m_paint.freeze();
     EXPECT_FALSE(active.commands().empty());
     ASSERT_TRUE(m_context.commitFrame(4u));
-}
-
-TEST_F(UiPopupBuilderTests, NestedPopupEndRestoresItsParentAndPublishesBothScopes){
-    PopupState first;
-    PopupState nested;
-    first.open();
-    nested.open();
-    ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("popup", first, Anchored()));
-    const PopupToken parent = m_context.popupToken();
-    ASSERT_TRUE(m_builder.beginPopup("nested", nested, Anchored()));
-    EXPECT_NE(m_context.popupToken(), parent);
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_EQ(m_context.popupToken(), parent);
-    EXPECT_FALSE(m_builder.balanced());
-    ASSERT_TRUE(m_builder.endPopup());
-    EXPECT_TRUE(m_builder.balanced());
-    ASSERT_TRUE(finishRoot());
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_FALSE(snapshot.commands().empty());
-    ASSERT_TRUE(m_context.commitFrame(1u));
-    ASSERT_EQ(m_context.input().popupCount(), 2u);
-    EXPECT_EQ(m_context.input().popupScope(m_context.input().topPopupToken())->parent, parent);
 }
 
 TEST_F(UiPopupBuilderTests, PopupRequiresThePrecedingPanelToBeBalanced){

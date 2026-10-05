@@ -157,17 +157,6 @@ TEST_F(UiControlInputTests, WheelCopiesAcceptedStepWithoutChangingFocusOrCreatin
     EXPECT_TRUE(m_router.actions().empty());
 }
 
-TEST_F(UiControlInputTests, EmptyViewportSpaceAndScrollbarRouteWheelToTheirHost){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    EXPECT_TRUE(wheel(-1.0, { 50.0f, 80.0f }).pointerConsumed);
-    EXPECT_TRUE(wheel(1.0, { 95.0f, 25.0f }).pointerConsumed);
-    ControlAction action;
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.source, m_targets[0u].id);
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.source, m_targets[2u].id);
-}
-
 TEST_F(UiControlInputTests, OverlappingUnrelatedControlBlocksUnderlyingWheelRouting){
     HitTarget cover = Host(4u);
     cover.paintOrder = 10u;

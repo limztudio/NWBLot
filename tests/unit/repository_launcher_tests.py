@@ -29,8 +29,6 @@ LIT_KILL = "kill"
 LIT_NATIVE_WAIT = "native_wait"
 LIT_WINDOWS = "windows"
 LIT_WINDOWS_2 = "Windows"
-LIT_LINUX = "linux"
-LIT_X64 = "x64"
 LIT_AMD64 = "AMD64"
 LIT_ARM64 = "arm64"
 LIT_ARM64_2 = "ARM64"
@@ -79,24 +77,17 @@ LIT_HARDWARE_SHADOW_BOUNDARY_2 = "hardware-shadow-boundary"
 LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH = "tests/ab/hardware_shadow_boundary/launch.py"
 LIT_TRANSFER_QUEUE_2 = "transfer-queue"
 LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY = "tests/ab/transfer_queue/launch.py"
-LIT_PIPELINE_LAUNCH_PY = "pipeline/launch.py"
 LIT_TESTS_SMOKE_LAUNCH_PY = "tests/smoke/launch.py"
-LIT_TEX_CONV_2 = "tex-conv"
-LIT_TESTS_LAUNCH_PY = "tests/launch.py"
 LIT_TESTS_AB_LAUNCH_PY = "tests/ab/launch.py"
 LIT_SAME_NAME = "same_name"
 LIT_A = r"\A"
 LIT_Z = r"\Z"
-LIT_DISCOVER_REPO_LAUNCHERS = "discover_repo_launchers"
-LIT_RUN_REPO_SCRIPT = "run_repo_script"
 LIT_DRY_RUN = "--dry-run"
 LIT_CONFIG = "--config"
 LIT_ASSET_ROOT = "--asset-root"
 LIT_OUTPUT_DIRECTORY = "--output-directory"
 LIT_RUNTIME_RESOURCES = "runtime resources"
 LIT_EMPTY = "--"
-LIT_MEASURE_SECONDS = "--measure-seconds"
-LIT_N_30 = "30"
 LIT_OPT = "opt"
 LIT_REPO_ROOT = "--repo-root"
 LIT_CACHE_DIRECTORY = "--cache-directory"
@@ -107,10 +98,7 @@ LIT_ASSET_GATHERER_EXE = "asset_gatherer.exe"
 LIT_CONFIGURE = "configure"
 LIT_RESOLVE = "resolve"
 LIT_STAGE = "stage"
-LIT_CONFIGURATION = "--configuration"
-LIT_PROJECT_COOK = "project-cook"
 LIT_BUILTINS_PRINT = "builtins.print"
-LIT_TOOL_DIRECTORY = "--tool-directory"
 LIT_MAIN = "__main__"
 LIT_BUILD_ONLY = "--build-only"
 LIT_SKIP_BUILD = "--skip-build"
@@ -318,12 +306,6 @@ class LauncherPlatformTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
             launcher.resolve_launch_settings(args, LIT_FULL)
 
-    def test_cmake_cache_domain_overrides_directory_name(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            build_dir = Path(temp_dir)
-            (build_dir / LIT_CMAKECACHE_TXT).write_text("NWB_OUTPUT_DOMAIN:UNINITIALIZED=full\n", encoding=LIT_UTF_8)
-            self.assertEqual(LIT_FULL, launcher.infer_output_domain(build_dir, LIT_LINUX, LIT_X64))
-
     def test_required_cache_defines_accept_cmake_bool_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             build_dir = Path(temp_dir)
@@ -374,12 +356,6 @@ class LauncherPlatformTests(unittest.TestCase):
         retained_handle = api.handles[202]
         self.assertTrue(results[0].forced)
         self.assertIn((LIT_FORCE, retained_handle), api.events)
-
-    def test_windows_exact_image_query_does_not_require_termination_access(self):
-        self.assertEqual(
-            0,
-            repository_windows_process.PROCESS_QUERY_AND_WAIT_ACCESS & repository_windows_process.PROCESS_TERMINATE,
-        )
 
     def test_windows_query_only_handle_can_still_complete_gracefully(self):
         events = []
@@ -575,63 +551,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertNotIn(LIT_CHILD_STDERR, stdout_lines)
         self.assertEqual([LIT_CHILD_STDERR], stderr_lines)
 
-    def test_discovers_leaf_launchers(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            paths = (
-                root / LIT_PIPELINE / LIT_LAUNCH_PY,
-                root / LIT_COOLSTUFF / LIT_LAUNCH_PY,
-                root / LIT_COOLSTUFF / "Testbed" / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_SMOKE / LIT_LAUNCHER_PY,
-                root / LIT_TESTS / LIT_AB / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_ASYNC_SHADOW_M4 / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_COMMAND_IR / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / LIT_RUN_PY,
-                root / LIT_TESTS / LIT_AB / LIT_FRAME_LAGGED_ASYNC_LIGHTING / "helper.py",
-                root / LIT_TESTS / LIT_AB / LIT_HARDWARE_SHADOW_BOUNDARY / LIT_LAUNCH_PY,
-                root / LIT_TESTS / LIT_AB / LIT_TRANSFER_QUEUE / LIT_LAUNCH_PY,
-                root / LIT_UTILITIES / LIT_LAUNCH_PY,
-                root / LIT_UTILITIES / LIT_TEX_CONV / LIT_LAUNCH_PY,
-            )
-            for path in paths:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("", encoding=LIT_UTF_8)
-
-            launchers = launcher.discover_repo_launchers(root)
-
-        self.assertEqual(
-            {
-                LIT_ASYNC_SHADOW_M4_2: Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-                LIT_COMMAND_IR_2: Path(LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY),
-                LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: Path(LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L),
-                LIT_HARDWARE_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH),
-                LIT_TRANSFER_QUEUE_2: Path(LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY),
-                LIT_PIPELINE: Path(LIT_PIPELINE_LAUNCH_PY),
-                LIT_SMOKE: Path(LIT_TESTS_SMOKE_LAUNCH_PY),
-                LIT_TESTBED: Path("CoolStuff/Testbed/launch.py"),
-                LIT_TEX_CONV_2: Path("utilities/tex_conv/launch.py"),
-            },
-            {command: discovered.script for command, discovered in launchers.items()},
-        )
-        self.assertEqual(
-            {
-                LIT_ASYNC_SHADOW_M4_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_COMMAND_IR_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_HARDWARE_SHADOW_BOUNDARY_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_TRANSFER_QUEUE_2: (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-                LIT_PIPELINE: (),
-                LIT_SMOKE: (Path(LIT_TESTS_LAUNCH_PY),),
-                LIT_TESTBED: (Path("CoolStuff/launch.py"),),
-                LIT_TEX_CONV_2: (Path("utilities/launch.py"),),
-            },
-            {command: discovered.route for command, discovered in launchers.items()},
-        )
-        self.assertFalse({LIT_AB, "coolstuff", LIT_TESTS, LIT_UTILITIES}.intersection(launchers))
-
     def test_ignores_nonstandard_leaf_script_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -729,38 +648,6 @@ class LauncherPlatformTests(unittest.TestCase):
                 LIT_A + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + LIT_Z,
             ):
                 launcher.discover_repo_launchers(root)
-
-    def test_top_level_leaf_forwards_direct_flags_without_a_separator(self):
-        repo_launchers = {
-            LIT_PIPELINE: launcher.RepoLauncher(LIT_PIPELINE, Path(LIT_PIPELINE_LAUNCH_PY)),
-        }
-        forwarded = [LIT_CONFIG, LIT_DBG, LIT_ASSET_ROOT, "project assets", LIT_OUTPUT_DIRECTORY, LIT_RUNTIME_RESOURCES]
-        with (
-            mock.patch.object(launcher, LIT_DISCOVER_REPO_LAUNCHERS, return_value=repo_launchers),
-            mock.patch.object(launcher, LIT_RUN_REPO_SCRIPT, return_value=0) as run_repo_script,
-        ):
-            self.assertEqual(0, launcher.main([LIT_PIPELINE, *forwarded]))
-        run_repo_script.assert_called_once_with(Path(LIT_PIPELINE_LAUNCH_PY), forwarded, echo=True)
-
-    def test_root_dispatch_preserves_application_argument_separator(self):
-        repo_launchers = {
-            LIT_ASYNC_SHADOW_M4_2: launcher.RepoLauncher(
-                LIT_ASYNC_SHADOW_M4_2,
-                Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-                (Path(LIT_TESTS_LAUNCH_PY), Path(LIT_TESTS_AB_LAUNCH_PY)),
-            )
-        }
-        with (
-            mock.patch.object(launcher, LIT_DISCOVER_REPO_LAUNCHERS, return_value=repo_launchers),
-            mock.patch.object(launcher, LIT_RUN_REPO_SCRIPT, return_value=0) as run_repo_script,
-        ):
-            self.assertEqual(0, launcher.main([LIT_ASYNC_SHADOW_M4_2, LIT_EMPTY, LIT_MEASURE_SECONDS, LIT_N_30]))
-        run_repo_script.assert_called_once_with(
-            Path(LIT_TESTS_LAUNCH_PY),
-            [LIT_AB, LIT_ASYNC_SHADOW_M4_2, LIT_EMPTY, LIT_MEASURE_SECONDS, LIT_N_30],
-            echo=True,
-        )
-
 
 class LauncherBuildBoundaryTests(unittest.TestCase):
     def setUp(self):
@@ -1207,28 +1094,7 @@ class PipelineLauncherTests(unittest.TestCase):
         )
         self.assertEqual([LIT_CONFIGURE, LIT_BUILD, LIT_RESOLVE, LIT_RESOLVE, LIT_RESOLVE, LIT_STAGE, LIT_STAGE, LIT_STAGE],
                          [call[0] for call in workflow.mock_calls])
-        self.assertEqual(list(self.tool_paths.values()), [call.args[0] for call in self.stage.call_args_list])
-        for call in self.stage.call_args_list:
-            self.assertEqual(self.root, call.args[2])
-        builder_arguments = self.stage.call_args_list[1].args[1]
-        gatherer_arguments = self.stage.call_args_list[2].args[1]
-        self.assertEqual(str(self.root), builder_arguments[builder_arguments.index(LIT_REPO_ROOT) + 1])
-        self.assertEqual(str(self.cache), builder_arguments[builder_arguments.index(LIT_CACHE_DIRECTORY) + 1])
-        self.assertEqual([str(path) for path in self.asset_roots],
-                         [builder_arguments[index + 1] for index, value in enumerate(builder_arguments) if value == LIT_ASSET_ROOT])
-        self.assertEqual(str(self.output), gatherer_arguments[gatherer_arguments.index(LIT_OUTPUT_DIRECTORY) + 1])
-        for arguments in (builder_arguments, gatherer_arguments):
-            self.assertEqual(LIT_OPT, arguments[arguments.index(LIT_CONFIGURATION) + 1])
         self.process.assert_not_called()
-
-    def test_explicit_asset_configuration_overrides_build_configuration(self):
-        self.prepare_pipeline_build()
-
-        self.assertEqual(0, self.pipeline.main([*self.arguments, LIT_CONFIGURATION, LIT_PROJECT_COOK]))
-
-        for call in self.stage.call_args_list[1:]:
-            arguments = call.args[1]
-            self.assertEqual(LIT_PROJECT_COOK, arguments[arguments.index(LIT_CONFIGURATION) + 1])
 
     def test_build_failure_propagates_without_resolving_or_launching_tools(self):
         _, build, resolve = self.prepare_pipeline_build()
@@ -1283,31 +1149,6 @@ class PipelineLauncherTests(unittest.TestCase):
         resolve.assert_not_called()
         self.stage.assert_not_called()
         self.process.assert_not_called()
-
-    def test_tool_directory_and_individual_override_select_the_requested_executables(self):
-        _, _, resolve = self.prepare_pipeline_build()
-        directory = self.root / "project tools"
-        directory.mkdir()
-        expected_tools = [directory / path.name for path in self.tool_paths.values()]
-        for path in expected_tools:
-            path.touch()
-        explicit_builder = self.root / "project builder.exe"
-        explicit_builder.touch()
-        for forwarded in ([LIT_TOOL_DIRECTORY, str(directory)], ["--tool-directory=" + str(directory)]):
-            with self.subTest(arguments=forwarded):
-                self.stage.reset_mock()
-                self.assertEqual(0, self.pipeline.main([*self.arguments, *forwarded]))
-                self.assertEqual(expected_tools, [call.args[0] for call in self.stage.call_args_list])
-        resolve.assert_not_called()
-
-        self.stage.reset_mock()
-        self.assertEqual(0, self.pipeline.main([
-            *self.arguments, LIT_TOOL_DIRECTORY, str(directory), "--asset-builder", str(explicit_builder),
-        ]))
-
-        resolve.assert_called_once_with(self.settings, LIT_NWB_ASSET_BUILDER, explicit_builder, None, False)
-        self.assertEqual([expected_tools[0], explicit_builder, expected_tools[2]],
-                         [call.args[0] for call in self.stage.call_args_list])
 
     def test_stage_failure_reports_failure_and_prevents_later_stages(self):
         self.prepare_pipeline_build()

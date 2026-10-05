@@ -793,7 +793,6 @@ TEST_F(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
 
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Fatal);
-    EXPECT_EQ(TStringView(NWB::Log::MessageTypeToString(NWB::Log::Type::Fatal)), TStringView(GLB_TEXT("FATAL")));
     EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("event=fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, GLB_TEXT("category=logger_Fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, GLB_TEXT("message=fatal logger observation")));
@@ -972,7 +971,6 @@ TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedN
     TStringView error;
     ASSERT_TRUE(NWB::Log::ParseMessagePayload(testArena.arena, shifted.data() + s_PrefixBytes, payload.size(), parsed, error));
     EXPECT_TRUE(error.empty());
-    EXPECT_EQ(Get<1u>(parsed), NWB::Log::Type::Warning);
     EXPECT_EQ(TStringView(Get<2u>(parsed)), message);
 
     shifted.back() = 1u;

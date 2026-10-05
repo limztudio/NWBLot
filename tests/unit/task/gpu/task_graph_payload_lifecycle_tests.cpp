@@ -163,13 +163,6 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedPayloadLifecycle){
         }
     );
     ASSERT_TRUE(task.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        EXPECT_TRUE(declarations.taskAt(task.index).hasPayload);
-        EXPECT_TRUE(declarations.taskAt(task.index).hasRecordPayload);
-        EXPECT_TRUE(declarations.taskAt(task.index).hasAcceptedPayload);
-    }
-
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,

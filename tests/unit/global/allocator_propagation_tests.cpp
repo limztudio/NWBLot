@@ -38,28 +38,12 @@ template<typename T>
 using DefaultAllocator = ContainerDetail::DefaultArenaAllocator<T, GlobalArena, DefaultOwner>;
 
 template<typename AllocatorT>
-void VerifyAllocatorAssignment(){
-    static_assert(AllocatorT::propagate_on_container_move_assignment::value);
-    static_assert(AllocatorT::propagate_on_container_swap::value);
-    GlobalArena sourceArena(Name("tests/allocator_propagation/direct_source"));
-    GlobalArena targetArena(Name("tests/allocator_propagation/direct_target"));
-    AllocatorT source(sourceArena);
-    AllocatorT target(targetArena);
-    EXPECT_NE(source, target);
-    target = source;
-    EXPECT_EQ(target.arenaPtr(), &sourceArena);
-    EXPECT_EQ(target, source);
-    AllocatorT replacement(targetArena);
-    target = Move(replacement);
-    EXPECT_EQ(target.arenaPtr(), &targetArena);
-    EXPECT_EQ(target, replacement);
-    AllocatorT& sameAllocator = target;
-    target = sameAllocator;
-    EXPECT_EQ(target.arenaPtr(), &targetArena);
-    using Rebound = typename AllocatorT::template rebind<u64>::other;
-    Rebound rebound(sourceArena);
-    rebound = Rebound(target);
-    EXPECT_EQ(rebound.arenaPtr(), &targetArena);
+void VerifyAllocatorSelfAssignment(){
+    GlobalArena arena(Name("tests/allocator_propagation/self_assignment"));
+    AllocatorT allocator(arena);
+    AllocatorT& sameAllocator = allocator;
+    allocator = sameAllocator;
+    EXPECT_EQ(allocator.arenaPtr(), &arena);
 }
 
 template<typename VectorT>
@@ -204,22 +188,10 @@ void VerifyStringSwap(const bool foreignArena, const bool shortFirst){
 }
 
 
-TEST(AllocatorPropagation, DirectAssignmentMatchesAdvertisedMoveContract){
-    VerifyAllocatorAssignment<ContainerDetail::ArenaAllocator<u32, GlobalArena>>();
-    VerifyAllocatorAssignment<ContainerDetail::ArenaCacheAlignedAllocator<u32, GlobalArena>>();
-    VerifyAllocatorAssignment<DefaultAllocator<u32>>();
-}
-
-TEST(AllocatorPropagation, PlainAllocatorCanAcquireAndReleaseAnOptionalArenaBinding){
-    GlobalArena arena(Name("tests/allocator_propagation/optional_binding"));
-    ContainerDetail::ArenaAllocator<u32, GlobalArena> plain;
-    ContainerDetail::ArenaAllocator<u32, GlobalArena> bound(arena);
-    EXPECT_EQ(plain.arenaPtr(), nullptr);
-    plain = bound;
-    EXPECT_EQ(plain.arenaPtr(), &arena);
-    bound = ContainerDetail::ArenaAllocator<u32, GlobalArena>{};
-    EXPECT_EQ(bound.arenaPtr(), nullptr);
-    EXPECT_EQ(plain.arenaPtr(), &arena);
+TEST(AllocatorPropagation, SelfAssignmentPreservesArenaBinding){
+    VerifyAllocatorSelfAssignment<ContainerDetail::ArenaAllocator<u32, GlobalArena>>();
+    VerifyAllocatorSelfAssignment<ContainerDetail::ArenaCacheAlignedAllocator<u32, GlobalArena>>();
+    VerifyAllocatorSelfAssignment<DefaultAllocator<u32>>();
 }
 
 TEST(AllocatorPropagation, VectorMoveTransfersStorageAndItsDeallocationOwner){

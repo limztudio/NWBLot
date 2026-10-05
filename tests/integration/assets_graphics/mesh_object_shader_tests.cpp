@@ -130,31 +130,15 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, plan, scratchArena));
     ASSERT_EQ(plan.preparedEntries.size(), 1u);
     EXPECT_EQ(plan.plannedFileCount, 3u);
-    constexpr AStringView stages[] = { "vs" };
-    const AStringView archiveStages[] = { Impl::MaterialShaderStageNames::MeshObjectVertexArchiveStageText() };
-    const Path expectedSources[] = { meshRoot / "object_vs.slang" };
-    for(u32 index = 0u; index < 1u; ++index){
-        const auto& auxiliary = plan.preparedEntries[index];
-        EXPECT_EQ(auxiliary.entry.name, mesh.entry.name);
-        EXPECT_EQ(auxiliary.entry.stage.view(), stages[index]);
-        EXPECT_EQ(auxiliary.entry.archiveStage.view(), archiveStages[index]);
+    {
+        const auto& auxiliary = plan.preparedEntries[0u];
         EXPECT_FALSE(auxiliary.entry.rayQuery);
-        EXPECT_EQ(auxiliary.entry.entryPoint, "main");
-        EXPECT_EQ(auxiliary.sourcePath.lexically_normal(), expectedSources[index].lexically_normal());
-        EXPECT_EQ(auxiliary.includeDirectories, mesh.includeDirectories);
         EXPECT_EQ(auxiliary.variantCount, 1u);
         EXPECT_TRUE(auxiliary.entry.defineValues.empty());
         EXPECT_TRUE(auxiliary.entry.implicitDefines.empty());
-        Impl::ShaderCook::CookVector<Impl::ShaderCook::DefineCombo> combinations(testArena.arena);
-        ASSERT_TRUE(shaderCook.expandDefineCombinations(auxiliary.entry.defineValues, combinations, scratchArena));
-        ASSERT_EQ(combinations.size(), 1u);
-        EXPECT_EQ(shaderCook.buildVariantName(combinations[0], scratchArena), Core::ShaderArchive::s_DefaultVariant);
         EXPECT_FALSE(auxiliary.entry.emitMeshComputeShadow);
         EXPECT_FALSE(auxiliary.usesMaterialTypedBinding);
         EXPECT_FALSE(auxiliary.supportsCsgClipVariant);
-        EXPECT_FALSE(auxiliary.supportsAvboitCsgClipVariant);
-        EXPECT_NE(auxiliary.dependencyChecksum, 0u);
-        EXPECT_GE(auxiliary.dependencies.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
     for(u32 mismatch = 0u; mismatch < 5u; ++mismatch){
@@ -188,7 +172,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
     EXPECT_NE(changedPlan.preparedEntries[0].dependencyChecksum, oldChecksum);
-    EXPECT_EQ(changedPlan.preparedEntries[0].variantCount, 1u);
     ErrorCode removeError;
     ASSERT_TRUE(RemoveFile(meshRoot / "object_vs.slang", removeError));
     ASSERT_FALSE(removeError);

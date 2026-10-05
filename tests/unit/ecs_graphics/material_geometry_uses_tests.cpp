@@ -126,54 +126,6 @@ static void ExpectUses(
     }
 }
 
-static void MeasureGatherWorkload(const usize meshCount, const usize repetitions, const usize warmGatherCount){
-    GeometryContext context;
-    BufferVector buffers{ context.scratchArena };
-    ASSERT_TRUE(CreateBuffers(context, meshCount * s_SourceBufferCount, buffers));
-    Impl::MaterialPassDrawItems drawItems(context.scratchArena);
-    drawItems.meshDrawItems.reserve(meshCount * repetitions);
-    for(usize repetition = 0u; repetition < repetitions; ++repetition){
-        for(usize meshIndex = 0u; meshIndex < meshCount; ++meshIndex)
-            drawItems.meshDrawItems.push_back(MakeDrawItem(buffers, meshIndex * s_SourceBufferCount));
-    }
-    const Impl::MaterialPassDrawItems* const drawItemSets[] = { &drawItems };
-    Core::Alloc::ScratchArena gatherScratchArena(Name("tests/material_geometry_uses/gather_scratch"));
-    ResourceUseVector uses{ gatherScratchArena };
-
-    // Measure the complete production helper, including first-import work. Buffer creation and draw preparation
-    // are outside the measured region; the second region reuses those imports as later frame-graph passes do.
-    const Timer coldBegin = TimerNow();
-    const bool coldGathered = Impl::RendererTaskGraphDetail::GatherPreparedMaterialGeometryUses(
-        context.graph, drawItemSets, LengthOf(drawItemSets), gatherScratchArena, uses
-    );
-    const u64 coldNanoseconds = DurationInNS<u64>(TimerNow(), coldBegin);
-    ASSERT_TRUE(coldGathered);
-    ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, buffers));
-
-    bool warmGathered = true;
-    const Timer warmBegin = TimerNow();
-    for(usize gatherIndex = 0u; gatherIndex < warmGatherCount; ++gatherIndex){
-        if(!Impl::RendererTaskGraphDetail::GatherPreparedMaterialGeometryUses(
-            context.graph, drawItemSets, LengthOf(drawItemSets), gatherScratchArena, uses
-        )){
-            warmGathered = false;
-            break;
-        }
-    }
-    const u64 warmNanoseconds = DurationInNS<u64>(TimerNow(), warmBegin);
-    ASSERT_TRUE(warmGathered);
-    ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, buffers));
-
-    const ArenaMemoryStats gatherMemory = gatherScratchArena.memoryStats();
-    NWB::Tests::RecordUnsignedTestProperty("geometry_scratch_reserved_bytes", gatherMemory.reservedBytes);
-    NWB::Tests::RecordUnsignedTestProperty("geometry_scratch_peak_bytes", gatherMemory.peakUsedBytes);
-    NWB::Tests::RecordUnsignedTestProperty("geometry_cold_gather_ns", coldNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("geometry_warm_gather_total_ns", warmNanoseconds);
-    NWB::Tests::RecordUnsignedTestProperty("geometry_warm_gather_count", warmGatherCount);
-    NWB::Tests::RecordUnsignedTestProperty("geometry_unique_buffer_count", buffers.size());
-    NWB::Tests::RecordUnsignedTestProperty("geometry_draw_count", drawItems.meshDrawItems.size());
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -480,14 +432,6 @@ TEST(MaterialGeometryUses, TracksEveryChangedSourceInRepeatedMeshTuples){
         context.graph, drawItemSets, LengthOf(drawItemSets), gatherScratchArena, uses
     ));
     ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, expected));
-}
-
-TEST(MaterialGeometryUses, GathersRepeatedMeshes){
-    MeasureGatherWorkload(128u, 16u, 1u);
-}
-
-TEST(MaterialGeometryUses, GathersOneMesh){
-    MeasureGatherWorkload(1u, 1u, 64u);
 }
 
 

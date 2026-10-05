@@ -626,32 +626,6 @@ TEST(ComputeEmulationAliasPlan, SharedPlanRejectsChangedDrawMetadataAndOutput){
     EXPECT_FALSE(plan.matches(1u));
 }
 
-TEST(ComputeEmulationAliasPlan, SmallValidationUsesNoScratchAllocation){
-    for(const usize count : { 0u, 1u, 8u, 16u, 32u }){
-        AliasPlanContext context(count);
-        RegularPlan regular(context.m_planArena);
-        AvboitPlan avboit(context.m_planArena);
-        IntervalPlan interval(context.m_planArena);
-        ReceiverPlan receiver(context.m_planArena);
-        const ArenaMemoryStats before = context.m_operationArena.memoryStats();
-        EXPECT_EQ(CapturePlan(regular, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(CapturePlan(avboit, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(CapturePlan(interval, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(MatchesPlan(regular, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(MatchesPlan(avboit, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(MatchesPlan(interval, context, context.m_operationArena), count != 0u);
-        // Receiver capture seeds both streams into one membership set; keep its total unique inputs at most 32.
-        if(count == 32u)
-            context.m_regular.computeDrawItems.clear();
-        EXPECT_EQ(CapturePlan(receiver, context, context.m_operationArena), count != 0u);
-        EXPECT_EQ(MatchesPlan(receiver, context, context.m_operationArena), count != 0u);
-        const ArenaMemoryStats after = context.m_operationArena.memoryStats();
-        EXPECT_EQ(after.allocationCount, before.allocationCount);
-        EXPECT_EQ(after.usedBytes, before.usedBytes);
-        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-    }
-}
 
 struct MetricNames{
     AStringView capture;
@@ -808,6 +782,33 @@ TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_MutatedCsgIntersection1024){
     Tests::RecordUnsignedTestProperty("alias_receiver_scratch_peak_bytes", scratchPeak);
     Tests::RecordUnsignedTestProperty("alias_draw_count", 1024u);
     Tests::RecordUnsignedTestProperty("alias_iterations", s_Iterations);
+}
+
+TEST(ComputeEmulationAliasPlan, SmallValidationUsesNoScratchAllocation){
+    for(const usize count : { 0u, 1u, 8u, 16u, 32u }){
+        AliasPlanContext context(count);
+        RegularPlan regular(context.m_planArena);
+        AvboitPlan avboit(context.m_planArena);
+        IntervalPlan interval(context.m_planArena);
+        ReceiverPlan receiver(context.m_planArena);
+        const ArenaMemoryStats before = context.m_operationArena.memoryStats();
+        EXPECT_EQ(CapturePlan(regular, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(CapturePlan(avboit, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(CapturePlan(interval, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(MatchesPlan(regular, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(MatchesPlan(avboit, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(MatchesPlan(interval, context, context.m_operationArena), count != 0u);
+        // Receiver capture seeds both streams into one membership set; keep its total unique inputs at most 32.
+        if(count == 32u)
+            context.m_regular.computeDrawItems.clear();
+        EXPECT_EQ(CapturePlan(receiver, context, context.m_operationArena), count != 0u);
+        EXPECT_EQ(MatchesPlan(receiver, context, context.m_operationArena), count != 0u);
+        const ArenaMemoryStats after = context.m_operationArena.memoryStats();
+        EXPECT_EQ(after.allocationCount, before.allocationCount);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+    }
 }
 
 

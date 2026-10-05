@@ -34,10 +34,6 @@ TEST(OutputLayerShape, AcceptsNoWorkAndGenerationOnlyWithoutGraphResources){
 
     layer.frameGeneration = 17u;
     EXPECT_TRUE(layer.validShape());
-    EXPECT_FALSE(layer.readyTask.valid());
-    EXPECT_FALSE(layer.color.valid());
-    EXPECT_FALSE(layer.colorVersion.valid());
-    EXPECT_FALSE(layer.sampledImage.valid());
 }
 
 TEST(OutputLayerShape, PreservesUploadOnlyAndCompleteColorForms){

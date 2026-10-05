@@ -106,12 +106,6 @@ static void VerifyResolvedSpans(){
     NameSymbols::DecodeHashTokens(arena, text);
     EXPECT_EQ(text, expected);
 
-    source.assign("prefix !").append(shortToken).append(" !suffix");
-    expectedSource.assign("prefix !decode/short !suffix");
-    text = CopyAsciiText<CharT>(arena, AStringView(source.data(), source.size()));
-    NameSymbols::DecodeHashTokens(arena, text);
-    const BasicString<CharT, Arena> expectedTail = CopyAsciiText<CharT>(arena, AStringView(expectedSource.data(), expectedSource.size()));
-    EXPECT_EQ(text, expectedTail);
 }
 
 

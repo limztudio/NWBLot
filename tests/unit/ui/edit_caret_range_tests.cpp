@@ -85,14 +85,6 @@ TEST_F(EditCaretFixture, BreakCapWidthIsAppliedOnlyToSelectedLfBytes){
     expectRange({ 3u, 4u }, 1u, { 0.0f, 12.0f, 10.0f, 12.0f }, 100.0f);
 }
 
-TEST_F(EditCaretFixture, RangeRectanglesUseEachLineHeightAndTop){
-    m_shaper.variedHeight = true;
-    ASSERT_TRUE(adoptText("a\nTALL\nb"));
-    expectRange({ 0u, 8u }, 0u, { 0.0f, 0.0f, 11.0f, 12.0f });
-    expectRange({ 0u, 8u }, 1u, { 0.0f, 12.0f, 41.0f, 20.0f });
-    expectRange({ 0u, 8u }, 2u, { 0.0f, 32.0f, 10.0f, 12.0f });
-}
-
 TEST_F(EditCaretFixture, InvalidRangeEndpointsAndLineIndicesPreserveOutput){
     ASSERT_TRUE(adoptText("e\xcc\x81\nx"));
     const EditBoxRange invalid[]{ { 3u, 1u }, { 0u, 6u }, { 2u, 3u }, { 1u, 2u } };

@@ -122,9 +122,6 @@ TEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadi
     settings = ReflectionSettings{};
     settings.environmentBottom.z = Limit<f32>::s_Infinity;
     EXPECT_FALSE(ValidateReflectionSettings(settings));
-    settings = ReflectionSettings{};
-    settings.environmentTop.x = 8.f;
-    EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
 

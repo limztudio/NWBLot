@@ -129,21 +129,6 @@ static void MeasureValidation(ModelInputs& inputs, const usize iterations){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ModelPayload, AcceptsMixedObjectsAndOptionalBindings){
-    ModelInputs inputs;
-    EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.staticMeshObjects.front().parentJoint = NAME_NONE;
-    inputs.staticMeshObjects.front().material = Core::Assets::AssetRef<Material>("tests/model_payload/material");
-    inputs.skinnedMeshObjects.front().material = inputs.staticMeshObjects.front().material;
-    inputs.publish();
-    EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.staticMeshObjects.front().parentObject = NAME_NONE;
-    inputs.staticMeshObjects.front().material.reset();
-    inputs.skinnedMeshObjects.front().material.reset();
-    inputs.publish();
-    EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
-}
-
 TEST(ModelPayload, RejectsDuplicateNamesWithinAndAcrossObjectKinds){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

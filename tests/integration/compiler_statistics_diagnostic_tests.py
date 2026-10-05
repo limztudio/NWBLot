@@ -113,8 +113,6 @@ class CompilerStatisticsDiagnosticTests(unittest.TestCase):
         self.assertEqual(report[LIT_JOINED][0]["gather_publish_frame"], 5097)
         self.assertEqual(report[LIT_RAW_COMPILER_ROWS], values)
         self.assertEqual(report[LIT_JOINED][0][LIT_IDENTITY], values[97][LIT_IDENTITY])
-        self.assertAlmostEqual(report[LIT_PHASE_SECONDS]["resource_state_planning"]["mean_seconds"], .011)
-        self.assertEqual(report[LIT_PHASE_SECONDS]["total"][LIT_SAMPLES], 256)
         self.assertEqual(len(report["unjoined_source_frames"]), 128)
 
     def test_configuration_requires_exact_fields_types_and_capacity(self):

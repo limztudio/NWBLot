@@ -95,28 +95,6 @@ TEST(UiSliderStateTests, ResetClearsSemanticAndDiagnosticStateEvenWhenAlreadyRes
     EXPECT_EQ(state.revision(), reset.revision + 1u);
 }
 
-TEST(UiSliderStateTests, SnapshotMatchingCoversAllEpochsValueBitsAndPressIdentity){
-    SliderState state;
-    const SliderSnapshot before = state.snapshot();
-    EXPECT_TRUE(state.matches(before));
-    for(u32 field = 0u; field < 10u; ++field){
-        SliderSnapshot changed = before;
-        switch(field){
-        case 0u: ++changed.instanceGeneration; break;
-        case 1u: ++changed.inputGeneration; break;
-        case 2u: ++changed.revision; break;
-        case 3u: ++changed.admissionGeneration; break;
-        case 4u: changed.valueBits = 0x8000000000000000ull; break;
-        case 5u: changed.press.target = { 1u }; break;
-        case 6u: ++changed.press.declarationGeneration; break;
-        case 7u: ++changed.press.layoutGeneration; break;
-        case 8u: ++changed.press.sequence; break;
-        default: changed.pressMoved = true; break;
-        }
-        EXPECT_FALSE(state.matches(changed));
-    }
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

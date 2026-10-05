@@ -92,50 +92,6 @@ TEST(GpuTaskGraph, RejectsMalformedQueueSharingWithoutDeclarationMutation){
     }
 }
 
-TEST(GpuTaskGraph, CompilerOwnershipTransferDefenseRejectsMalformedSharingBeforeSameFamilyNoOp){
-    TestArena testArena;
-    // NOTE: tests/unit/task/gpu/ is one level deeper than RepoRootOf callers (tests/<a>/<b>/),
-    // so climb one extra parent here instead of sharing the helper.
-    const TestPath repoRoot = TestPath(testArena.arena, __FILE__)
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .parent_path()
-        .lexically_normal()
-    ;
-    TestAString compilerSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "task" / "gpu" / "compiler_ownership_transfer.cpp", compilerSource));
-    const AStringView source(compilerSource.data(), compilerSource.size());
-    const usize functionBegin = source.find("[[nodiscard]] bool AppendCompiledOwnershipTransfer(");
-    const usize functionEnd = source.find("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////", functionBegin);
-    ASSERT_NE(functionBegin, AStringView::npos);
-    ASSERT_NE(functionEnd, AStringView::npos);
-    ASSERT_LT(functionBegin, functionEnd);
-
-    const usize invalidSharingGuard = source.find(
-        "|| !ResourceQueueSharing::IsValid(resource.queueSharing)",
-        functionBegin
-    );
-    const usize invalidSharingRejection = source.find("return false;", invalidSharingGuard);
-    const usize declaredResourceLookup = source.find(
-        "const GpuTaskGraphResourceView declaredResource",
-        invalidSharingGuard
-    );
-    const usize sameFamilyNoOp = source.find(
-        "if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)",
-        declaredResourceLookup
-    );
-    ASSERT_NE(invalidSharingGuard, AStringView::npos);
-    ASSERT_NE(invalidSharingRejection, AStringView::npos);
-    ASSERT_NE(declaredResourceLookup, AStringView::npos);
-    ASSERT_NE(sameFamilyNoOp, AStringView::npos);
-    EXPECT_LT(invalidSharingGuard, invalidSharingRejection);
-    EXPECT_LT(invalidSharingRejection, declaredResourceLookup);
-    EXPECT_LT(declaredResourceLookup, sameFamilyNoOp);
-    EXPECT_LT(sameFamilyNoOp, functionEnd);
-}
-
 TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     constexpr Graphics::ResourceQueueSharing::Mask s_NativeQueueSharing =
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute;

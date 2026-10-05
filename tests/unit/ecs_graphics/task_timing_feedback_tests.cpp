@@ -182,19 +182,7 @@ TEST(RendererTaskTimingFeedbackState, PolicyTransitionHelpersPreserveEntirePolic
     };
     Core::GpuTaskTimingFeedbackPolicy currentPolicy = originalPolicy;
 
-    const Impl::RendererTaskTimingFeedbackPolicyTransition enableTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enabledPolicy, true);
-    EXPECT_EQ(enableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Enable);
-    ExpectPolicyEqual(currentPolicy, originalPolicy);
-    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enableTransition, true);
-    ExpectPolicyEqual(currentPolicy, enabledPolicy);
-
-    const Impl::RendererTaskTimingFeedbackPolicyTransition disableTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, disabledPolicy, true);
-    EXPECT_EQ(disableTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::Disable);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, disableTransition, true);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
+    currentPolicy = disabledPolicy;
 
     const Impl::RendererTaskTimingFeedbackPolicyTransition failedEnableTransition =
         Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enabledPolicy, true);

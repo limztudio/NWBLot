@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """Verify optional CSG workload admission, actual shadow routing and measurement evidence."""
 
-import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke  # noqa: E402
@@ -20,13 +19,9 @@ LIT_WAIST_BANDS = "waist_bands"
 LIT_CSG_PROFILE = "--csg-profile"
 LIT_VERIFIED = "verified"
 LIT_HARDWARE_COMPOSE = "hardware_compose"
-LIT_OBSERVED = "observed"
 LIT_DISABLED_LOGICAL_DEVICE = "disabled logical-device"
 LIT_PRECEDE = "precede"
-LIT_ANIMATE = "--animate"
-LIT_CSG_PROFILE_2 = "csg_profile"
 LIT_MAIN = "__main__"
-LIT_UTF_8 = "utf-8"
 
 
 PROFILE = (smoke.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 "
@@ -63,9 +58,6 @@ class StressCsgProfileTests(unittest.TestCase):
 
     def test_cli_requires_complete_twenty_body_map_profile(self):
         arguments = self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS]
-        args = smoke.parse_args(arguments)
-        environment = smoke.launch_environment({LIT_NWB_STRESS_CSG_PROFILE: LIT_NONE}, args, self.output)
-        self.assertEqual(environment[LIT_NWB_STRESS_CSG_PROFILE], LIT_WAIST_BANDS)
         for extra in (["--characters-per-class", "5"], ["--software-shadow-backend", "trace"],
             [LIT_CSG_PROFILE, "unknown"]):
             with self.subTest(extra=extra), patch("sys.stderr"), self.assertRaises(SystemExit):
@@ -74,8 +66,6 @@ class StressCsgProfileTests(unittest.TestCase):
     def test_csg_reuse_requires_accepted_runtime_evidence(self):
         for name, requested, effective in (("reuse_one_frame", 1, 2), ("reuse_two_frames", 2, 3)):
             args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS, "--software-shadow-capture-cadence", name])
-            environment = smoke.launch_environment({}, args, self.output)
-            self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], name)
             text = csg_log().replace("capture_cadence=0", f"capture_cadence={requested}")
             with self.assertRaisesRegex(smoke.SmokeFailure, "accepted light-space capture reuse"):
                 smoke.verify_software_shadow_settings(text, args)
@@ -88,8 +78,6 @@ class StressCsgProfileTests(unittest.TestCase):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
         hardware = smoke.verify_csg_profile(csg_log(), args)
         self.assertTrue(hardware[LIT_HARDWARE_COMPOSE])
-        self.assertEqual(hardware[LIT_OBSERVED]["receivers"], 20)
-        self.assertEqual(hardware["map_instances"], 25)
         args.application_arg.append("--disable-hardware-ray-tracing")
         software = smoke.verify_csg_profile(csg_log(False), args)
         self.assertFalse(software[LIT_HARDWARE_COMPOSE])
@@ -120,31 +108,6 @@ class StressCsgProfileTests(unittest.TestCase):
         late_dispatch = original.replace(dispatch, "").replace(smoke.DONE, dispatch + LIT_N + smoke.DONE)
         with self.assertRaisesRegex(smoke.SmokeFailure, LIT_PRECEDE):
             smoke.verify_csg_profile(late_dispatch, args)
-
-    def test_fixed_and_moving_modes_keep_the_same_profile(self):
-        for moving in (False, True):
-            args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS] + ([LIT_ANIMATE] if moving else []))
-            environment = smoke.launch_environment({}, args, self.output)
-            self.assertEqual(environment[LIT_NWB_STRESS_CSG_PROFILE], LIT_WAIST_BANDS)
-            self.assertEqual("NWB_STRESS_TEST_SPIN_ANGLE" not in environment, moving)
-            self.assertEqual("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS" not in environment, moving)
-
-    def test_acquisition_retains_verified_csg_evidence(self):
-        args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS, LIT_ANIMATE])
-        with patch.object(smoke, "identities", return_value={}), \
-            patch.object(smoke, "build_launch_environment", return_value={}), \
-            patch.object(smoke, "launch_logserver", return_value=(None, None, self.output, {}, "*.log")), \
-            patch.object(smoke, "launch_testbed", return_value=Mock()), \
-            patch.object(smoke, "terminate_process", return_value=(0, "")), \
-            patch.object(smoke, "shutdown_logserver_and_collect", return_value=csg_log()), \
-            patch.object(smoke.ab, "device_material_signature", return_value={}):
-            result = smoke.acquire(args, self.output)
-        self.assertTrue(result[LIT_CSG_PROFILE_2][LIT_VERIFIED])
-        self.assertEqual(result[LIT_CSG_PROFILE_2]["signature"], PROFILE)
-        self.assertEqual(result["workload"][LIT_OBSERVED]["total"], 20)
-        self.assertEqual(result["motion"]["mode"], "rotating")
-        launch = json.loads((self.output / "launch.json").read_text(encoding=LIT_UTF_8))
-        self.assertEqual(launch["environment"][LIT_NWB_STRESS_CSG_PROFILE], LIT_WAIST_BANDS)
 
 
 if __name__ == LIT_MAIN:

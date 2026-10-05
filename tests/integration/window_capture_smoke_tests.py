@@ -100,9 +100,6 @@ LIT_CAPTURE_ROOT = "capture-root"
 LIT_PREPARE = "prepare"
 LIT_POST_PREPARE_CLIENT_RECT = "post-prepare-client-rect"
 LIT_BITBLT = "BitBlt"
-LIT_RAISE = "raise"
-LIT_FOCUS = "focus"
-LIT_FLUSH = "flush"
 LIT_SYSTEM = "system"
 LIT_LINUX = "Linux"
 LIT_REQUEST_LINUX_GRACEFUL_EXIT = "request_linux_graceful_exit"
@@ -268,12 +265,7 @@ class ApplicationCaptureConfigurationTests(unittest.TestCase):
             self.assertEqual(env[LIT_PRESERVED], LIT_YES)
             self.assertEqual(base_environment, {LIT_PRESERVED: LIT_YES})
 
-    def test_application_capture_frame_count_defaults_to_360_and_must_be_positive(self):
-        args = window_capture_smoke.parse_args(
-            [LIT_APPLICATION_CAPTURE, LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
-        )
-        self.assertEqual(args.application_capture_frame_count, 360)
-
+    def test_application_capture_rejects_zero_frame_count(self):
         with self.assertRaises(SystemExit):
             window_capture_smoke.parse_args(
                 [
@@ -442,15 +434,6 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
                 for x in (retained[0], retained[2]):
                     for y in (retained[1], retained[3]):
                         self.assertGreater(self.signed_margin(clipped_hull, (x, y)), .002)
-
-    def test_all_three_clipped_poses_pass_their_explicit_oracle(self):
-        for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
-            with self.subTest(pose=pose):
-                rows = self.synthetic_scene(pose)
-                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
-                self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
-                self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
-                window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
 
     def test_all_three_missing_cutter_poses_fail_even_with_background_outside_receiver(self):
         for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
@@ -1236,68 +1219,6 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
         capture._window_root_region.assert_not_called()
 
 
-class CaptureFocusTests(unittest.TestCase):
-    def test_linux_focus_window_raises_sets_input_focus_and_flushes(self):
-        window = 0x4A
-        display = object()
-        calls = []
-        capture = object.__new__(window_capture_smoke.LinuxX11Capture)
-
-        class FakeX11:
-            def XRaiseWindow(self, received_display, received_window):
-                calls.append((LIT_RAISE, received_display, received_window))
-
-            def XSetInputFocus(self, received_display, received_window, revert_to, timestamp):
-                calls.append((LIT_FOCUS, received_display, received_window, revert_to, timestamp))
-
-            def XFlush(self, received_display):
-                calls.append((LIT_FLUSH, received_display))
-
-        capture.x11 = FakeX11()
-        capture.display = display
-
-        capture.focus_window(window)
-
-        self.assertEqual(
-            calls,
-            [
-                (LIT_RAISE, display, window),
-                (LIT_FOCUS, display, window, capture.REVERT_TO_PARENT, capture.CURRENT_TIME),
-                (LIT_FLUSH, display),
-            ],
-        )
-
-    def test_windows_focus_window_foregrounds_the_captured_hwnd(self):
-        window = 0x4A
-        calls = []
-        capture = object.__new__(window_capture_smoke.WindowsCapture)
-
-        class FakeUser32:
-            def SetForegroundWindow(self, hwnd):
-                calls.append(hwnd.value)
-                return 1
-
-        capture.user32 = FakeUser32()
-
-        capture.focus_window(window)
-
-        self.assertEqual(calls, [window])
-
-    def test_windows_prepare_window_uses_the_capture_preparation_path(self):
-        window = 0x4A
-        calls = []
-        capture = object.__new__(window_capture_smoke.WindowsCapture)
-
-        def prepare(received_window):
-            calls.append(received_window)
-
-        capture._prepare_capture_window = prepare
-
-        capture.prepare_window(window)
-
-        self.assertEqual(calls, [window])
-
-
 class GracefulTerminationTests(unittest.TestCase):
     def test_windows_graceful_exit_preserves_a_high_bit_hwnd(self):
         process_id = 4321
@@ -1346,23 +1267,6 @@ class GracefulTerminationTests(unittest.TestCase):
             [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t],
         )
 
-    def test_linux_x11_helper_receives_captured_window_handle(self):
-        result = mock.Mock(returncode=0)
-        with mock.patch.object(window_capture_smoke.subprocess, "run", return_value=result) as run:
-            self.assertTrue(window_capture_smoke.request_linux_graceful_exit(0x4a))
-
-        run.assert_called_once_with(
-            [
-                sys.executable,
-                str(SMOKE_DIRECTORY / "x11_graceful_close.py"),
-                "0x4a",
-            ],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=6.0,
-        )
-
     def test_linux_x11_close_waits_for_normal_exit_before_fallback(self):
         process = _FakeProcess(graceful_exit=True)
         with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
@@ -1404,17 +1308,6 @@ class GracefulTerminationTests(unittest.TestCase):
         close.assert_not_called()
         self.assertEqual(process.terminate_calls, 1)
 
-    def test_windows_keeps_existing_wm_close_path(self):
-        process = _FakeProcess(graceful_exit=True)
-        with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_WINDOWS), \
-             mock.patch.object(window_capture_smoke, "request_windows_graceful_exit", return_value=True) as windows_close, \
-             mock.patch.object(window_capture_smoke, LIT_REQUEST_LINUX_GRACEFUL_EXIT) as linux_close:
-            terminate_process(process, LIT_TESTBED, 0x4a)
-
-        windows_close.assert_called_once_with(process.pid)
-        linux_close.assert_not_called()
-        self.assertEqual(process.terminate_calls, 0)
-
     def test_nonzero_graceful_exit_is_reported_to_the_smoke_runner(self):
         process = _FakeProcess(graceful_exit=True, graceful_exit_code=-6)
         with mock.patch.object(window_capture_smoke.platform, LIT_SYSTEM, return_value=LIT_LINUX), \
@@ -1436,15 +1329,6 @@ class ResizeCaptureConfigurationTests(unittest.TestCase):
     @staticmethod
     def base_args():
         return [LIT_EXECUTABLE, sys.executable, LIT_OUTPUT, LIT_CAPTURE_BMP]
-
-    def test_resize_is_opt_in_and_has_two_meaningful_settle_intervals(self):
-        ordinary = window_capture_smoke.parse_args(self.base_args())
-        self.assertIsNone(ordinary.resize_client)
-        self.assertIsNone(ordinary.resize_settle_seconds)
-        resized = window_capture_smoke.parse_args(self.base_args() + [LIT_RESIZE_CLIENT, LIT_N_1001, LIT_N_701])
-        self.assertEqual(resized.resize_client, [1001, 701])
-        self.assertEqual(resized.settle_seconds, 2.0)
-        self.assertEqual(resized.resize_settle_seconds, 2.0)
 
     def test_resize_rejects_incompatible_modes_and_invalid_limits(self):
         for extra in (

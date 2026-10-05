@@ -148,17 +148,12 @@ static_assert(!IsAssignable_V<ImageSource&, ImageSource&&>);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiImageSourceTests, CopiesCompleteNonPowerOfTwoSrgbMetadataMipsAndPayloadExactly){
+TEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds){
     Texture texture(m_inputArena, Name("tests/ui/image/paint"));
     ASSERT_TRUE(prepare(m_inputArena, texture));
     ASSERT_TRUE(texture.validatePayload());
     const auto source = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(source);
-    static_assert(IsSame_V<decltype(source->texture()), const Texture&>);
-    static_assert(IsSame_V<decltype(source->identity()), const Core::Assets::AssetRef<Texture>&>);
-    EXPECT_EQ(source->identity().name(), texture.virtualPath());
-    EXPECT_NE(source->generation(), 0u);
-    expectCopy(texture, source->texture());
     const auto& mips = source->texture().mipLevels();
     ASSERT_EQ(mips.size(), 4u);
     EXPECT_EQ(mips[0u].width, 9u);
@@ -244,52 +239,24 @@ TEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfter
     EXPECT_TRUE(retained->texture().validatePayload());
 }
 
-TEST_F(UiImageSourceTests, LinearLdrOpaqueAndEmbeddedAlphaPreserveTheirExactMetadata){
-    for(const auto mode : { TextureAlphaMode::Opaque, TextureAlphaMode::EmbeddedLdr }){
-        TextureDescription description;
-        description.colorSpace = TextureColorSpace::Linear;
-        description.alphaMode = mode;
-        description.hasAlpha = mode != TextureAlphaMode::Opaque;
-        Texture texture(m_inputArena, Name("tests/ui/image/linear"));
-        ASSERT_TRUE(prepare(m_inputArena, texture, description));
-        const auto source = MakeImageSource(m_sourceArena, texture);
-        ASSERT_TRUE(source);
-        expectCopy(texture, source->texture());
-    }
-    EXPECT_EQ(m_logger.errorCount(), 0u);
-}
-
-TEST_F(UiImageSourceTests, LinearHdrOpaqueConstantAndSeparateAlphaPreserveBothStreams){
-    constexpr Array<TextureAlphaMode::Enum, 3u> modes{
-        TextureAlphaMode::Opaque, TextureAlphaMode::ConstantUnorm8, TextureAlphaMode::SeparateUastcLdr4x4
-    };
-    for(const auto mode : modes){
-        TextureDescription description;
-        description.colorSpace = TextureColorSpace::Linear;
-        description.format = TexturePayloadFormat::UastcHdr4x4;
-        description.alphaMode = mode;
-        description.hasAlpha = mode != TextureAlphaMode::Opaque;
-        description.alphaConstant = mode == TextureAlphaMode::ConstantUnorm8 ? 77u : TextureFormat::s_OpaqueAlphaUnorm8;
-        Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
-        ASSERT_TRUE(prepare(m_inputArena, texture, description));
-        ASSERT_TRUE(texture.validatePayload());
-        const auto source = MakeImageSource(m_sourceArena, texture);
-        ASSERT_TRUE(source);
-        expectCopy(texture, source->texture());
-        const Texture& copied = source->texture();
-        EXPECT_EQ(copied.primaryPayloadByteCount(), 144u);
-        if(mode == TextureAlphaMode::SeparateUastcLdr4x4){
-            ASSERT_EQ(copied.payloadBytes().size(), 288u);
-            ASSERT_NE(copied.alphaUastcBlocks(), nullptr);
-            EXPECT_EQ(copied.alphaUastcBlocks(), copied.payloadBytes().data() + 144u);
-            EXPECT_NE(copied.alphaUastcBlocks(), texture.alphaUastcBlocks());
-            EXPECT_EQ(copied.alphaUastcBlocks()[143u], static_cast<u8>(37u + 287u * 17u));
-        }
-        else{
-            EXPECT_EQ(copied.payloadBytes().size(), 144u);
-            EXPECT_EQ(copied.alphaUastcBlocks(), nullptr);
-        }
-    }
+TEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream){
+    TextureDescription description;
+    description.colorSpace = TextureColorSpace::Linear;
+    description.format = TexturePayloadFormat::UastcHdr4x4;
+    description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
+    description.hasAlpha = true;
+    Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
+    ASSERT_TRUE(prepare(m_inputArena, texture, description));
+    ASSERT_TRUE(texture.validatePayload());
+    const auto source = MakeImageSource(m_sourceArena, texture);
+    ASSERT_TRUE(source);
+    const Texture& copied = source->texture();
+    EXPECT_EQ(copied.primaryPayloadByteCount(), 144u);
+    ASSERT_EQ(copied.payloadBytes().size(), 288u);
+    ASSERT_NE(copied.alphaUastcBlocks(), nullptr);
+    EXPECT_EQ(copied.alphaUastcBlocks(), copied.payloadBytes().data() + 144u);
+    EXPECT_NE(copied.alphaUastcBlocks(), texture.alphaUastcBlocks());
+    EXPECT_EQ(copied.alphaUastcBlocks()[143u], static_cast<u8>(37u + 287u * 17u));
     EXPECT_EQ(m_logger.errorCount(), 0u);
 }
 

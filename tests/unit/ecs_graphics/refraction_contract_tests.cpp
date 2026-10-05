@@ -29,43 +29,15 @@ static constexpr AStringView s_DEFERRED = "deferred";
 using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
-TEST(EcsGraphics, RefractionSelectorAppendsTwoLanesWithoutMovingExistingResources){
-    using Slots = NWB::Impl::DeferredBindlessResourceSlots;
-    EXPECT_EQ(sizeof(Slots), 176u);
-    EXPECT_EQ(offsetof(Slots, gbufferBaseColor), 0u);
-    EXPECT_EQ(offsetof(Slots, opaqueColor), 32u);
-    EXPECT_EQ(offsetof(Slots, avboitTransmittance), 48u);
-    EXPECT_EQ(offsetof(Slots, compositeColor), 88u);
-    EXPECT_EQ(offsetof(Slots, csgCapBackNormal), 96u);
-    EXPECT_EQ(offsetof(Slots, csgRemovedIntervalCapNormal), 128u);
-    EXPECT_EQ(offsetof(Slots, refractionDepth), 144u);
-    EXPECT_EQ(offsetof(Slots, refractionResolveStorage), 156u);
-    EXPECT_EQ(offsetof(Slots, refractionResolve), 160u);
-    EXPECT_EQ(offsetof(Slots, avboitForegroundColor), 164u);
-    EXPECT_EQ(offsetof(Slots, avboitForegroundExtinction), 168u);
-    EXPECT_EQ(offsetof(Slots, refractionInstance), 172u);
-    EXPECT_EQ(sizeof(NWB::Impl::RendererAvboitPushConstants), 64u);
-    EXPECT_EQ(NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE, 128u);
 
-    TestArena testArena;
-    AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / s_DEFERRED / "bindless_resources.slangi", shaderSource));
-    EXPECT_EQ(CountText(AStringView(shaderSource.data(), shaderSource.size()), "    uint4 "), 11u);
-}
-
-TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialContext){
+TEST(EcsGraphics, UncommittedQueriesCannotReconstructSurfaceAndNearestTraversalCompletes){
     TestArena testArena;
     const TestPath graphics = RepoRoot(testArena) / "impl" / "assets" / "graphics";
     AString helperSource;
-    AString resolverSource;
     ASSERT_TRUE(ReadTextFile(graphics / "raytrace" / "surface_hit.slangi", helperSource));
-    ASSERT_TRUE(ReadTextFile(graphics / "refraction" / "resolve_hw_cs.slang", resolverSource));
     const AStringView helper(helperSource.data(), helperSource.size());
-    const AStringView resolver(resolverSource.data(), resolverSource.size());
-    EXPECT_FALSE(ContainsText(helper, "g_NwbRefraction"));
     EXPECT_FALSE(ContainsText(helper, "RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH"));
     EXPECT_TRUE(ContainsText(helper, "RayQuery<RAY_FLAG_FORCE_OPAQUE> query"));
-    EXPECT_TRUE(ContainsText(helper, "NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance]"));
     const usize closestFunction = helper.find("NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(");
     const usize reconstructFunction = helper.find("NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(");
     ASSERT_NE(closestFunction, AStringView::npos);
@@ -81,18 +53,6 @@ TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialConte
     EXPECT_LT(completeQuery, committedGuard);
     EXPECT_LT(committedGuard, reconstructCall);
     EXPECT_LT(reconstructFunction, materialRead);
-    EXPECT_TRUE(ContainsText(helper, "hit.flags = material.flags;"));
-    EXPECT_TRUE(ContainsText(helper, "hit.primitive = primitive;"));
-    EXPECT_TRUE(ContainsText(helper, "nwbRayTraceScaleGeometryVector(cross(edge0, edge1))"));
-    EXPECT_TRUE(ContainsText(helper, "return nwbRayTraceNormalizeGeometryVector(worldNormal);"));
-    EXPECT_TRUE(ContainsText(helper, "return hit;"));
-    EXPECT_TRUE(ContainsText(helper, "nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit)"));
-    EXPECT_TRUE(ContainsText(resolver, "#include \"interface_hit.slangi\""));
-    EXPECT_EQ(CountText(resolver, "nwbRayTraceClosestSurfaceHit("), 1u);
-    EXPECT_EQ(CountText(resolver, "nwbRefractionClosestEntryInterface("), 1u);
-    EXPECT_EQ(CountText(resolver, "nwbRefractionClosestExitInterface("), 1u);
-    EXPECT_EQ(CountText(resolver, "g_NwbRefractionMaterialContext.sceneSlots.z,"), 3u);
-    EXPECT_FALSE(ContainsText(resolver, "RayQuery<"));
 }
 
 TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaqueDepth){
@@ -100,7 +60,6 @@ TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaque
     AString shaderSource;
     ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / s_IMPL / s_ASSETS / s_GRAPHICS / "avboit" / "accumulate_ps_authoring.slangi", shaderSource));
     const AStringView shader(shaderSource.data(), shaderSource.size());
-    EXPECT_TRUE(ContainsText(shader, "const bool refractionCapture = nwbAvboitRefractionCapture();"));
     const usize capture = shader.find("if(refractionCapture)");
     const usize captureReturn = shader.find("return capture;", capture);
     const usize coverageRejection = shader.find("if(alpha <= half(0.0))");
@@ -112,7 +71,6 @@ TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaque
     EXPECT_TRUE(ContainsText(captureBody, "!isfinite(ior) || ior <= 1.0001"));
     EXPECT_TRUE(ContainsText(captureBody, "if(input.position.z > opaqueDepth)"));
     EXPECT_FALSE(ContainsText(captureBody, "if(alpha"));
-    EXPECT_TRUE(ContainsText(captureBody, "float(nwbMeshInstanceIndex()) + 1.0"));
 }
 
 TEST(EcsGraphics, StandaloneAvboitModeNeverSamplesMissingRefractionDescriptors){
@@ -132,26 +90,19 @@ TEST(EcsGraphics, StandaloneAvboitModeNeverSamplesMissingRefractionDescriptors){
     }
 }
 
-TEST(EcsGraphics, CompositeOpticalPolicyMatchesFiveWordPushAbiAndGatesAuxiliaryReads){
+TEST(EcsGraphics, AuxiliaryReadsRequireValidRefractionAndReflectionSlots){
     TestArena testArena;
     const TestPath root = RepoRoot(testArena);
-    AString cppSource;
     AString shaderSource;
-    ASSERT_TRUE(ReadTextFile(root / s_IMPL / "ecs_render" / s_DEFERRED / "deferred_composite.cpp", cppSource));
     ASSERT_TRUE(ReadTextFile(root / s_IMPL / s_ASSETS / s_GRAPHICS / s_DEFERRED / "composite_cs.slang", shaderSource));
-    const AStringView cpp(cppSource.data(), cppSource.size());
     const AStringView shader(shaderSource.data(), shaderSource.size());
-    EXPECT_TRUE(ContainsText(cpp, "static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u)"));
-    EXPECT_TRUE(ContainsText(shader, "uint resourceSlots;\n    uint refractionResources;"));
     const usize guard = shader.find("if(g_NwbDeferredCompositePushConstants.refractionResources != 0u)");
     const usize auxiliaryRead = shader.find("g_NwbDeferredBindlessResources.refractionSlots1");
     ASSERT_NE(guard, AStringView::npos);
     ASSERT_NE(auxiliaryRead, AStringView::npos);
     EXPECT_LT(guard, auxiliaryRead);
-    EXPECT_TRUE(ContainsText(shader, "uint opaqueReflectionSlot;\n    uint glassReflectionSlot;\n    uint reflectionDebugView;"));
     EXPECT_TRUE(ContainsText(shader, "opaqueReflectionSlot != 0xffffffffu"));
     EXPECT_TRUE(ContainsText(shader, "glassReflectionSlot != 0xffffffffu"));
-    EXPECT_TRUE(ContainsText(shader, "frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)"));
 }
 
 

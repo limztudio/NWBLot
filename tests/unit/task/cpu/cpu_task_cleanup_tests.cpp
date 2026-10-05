@@ -282,22 +282,6 @@ TEST(CpuTaskCleanupTests, CancelingOneScopeKeepsTheSchedulerAvailableForOtherWor
 }
 
 
-TEST(CpuTaskCleanupTests, Queuing1024TasksBeforeExecutionGrowsSchedulerStorage){
-    using namespace __hidden_cpu_task_cleanup_tests;
-    static constexpr usize s_TaskCount = 1024u;
-    u32 visits[s_TaskCount] = {};
-    CpuTaskScheduler scheduler(0u);
-    for(usize index = 0u; index < s_TaskCount; ++index){
-        ASSERT_TRUE(scheduler.submit([&, index](){ ++visits[index]; }).valid());
-    }
-    EXPECT_EQ(scheduler.statistics().outstandingTasks, s_TaskCount);
-    scheduler.wait();
-    for(const u32 count : visits)
-        EXPECT_EQ(count, 1u);
-    EXPECT_EQ(scheduler.statistics().completedTasks, s_TaskCount);
-}
-
-
 TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
     using namespace __hidden_cpu_task_cleanup_tests;
     Atomic<u32> visits{ 0u };

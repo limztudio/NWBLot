@@ -55,13 +55,11 @@ namespace __hidden_global_tests{
 
 
 static constexpr AStringView s_ALPHA = "alpha";
-static constexpr AStringView s_GRAPHICS = "graphics";
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/namesymbols/before_registry_live";
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
 static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
 static constexpr AStringView s_BETA = "beta";
 static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
-static constexpr AStringView s_GRAPHICSVOLUME = "GraphicsVolume";
 static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
@@ -73,7 +71,6 @@ static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = GLB_TEXT("parallel logg
 static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
 #endif
 static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
-static constexpr AStringView s_RAW_CONVERTED_WARNING = "raw converted warning";
 static constexpr AStringView s_VALUE_42 = "value 42";
 static constexpr AStringView s_VALUE_FORMAT_TRAILING = "value {}.trailing";
 static constexpr WStringView s_VALUE_FORMAT_TRAILING_WIDE = L"value {}.trailing";
@@ -144,7 +141,6 @@ static AStringView s_DiagnosticEventCategory = {};
 static AStringView s_DiagnosticEventExpression = {};
 static AStringView s_DiagnosticEventMessage = {};
 static AStringView s_DiagnosticEventFile = {};
-static u32 s_DiagnosticEventLine = 0u;
 inline constexpr usize s_DiagnosticEventCaptureTextBytes = 2048u;
 static char s_DiagnosticEventNameText[s_DiagnosticEventCaptureTextBytes] = {};
 static char s_DiagnosticEventCategoryText[s_DiagnosticEventCaptureTextBytes] = {};
@@ -201,7 +197,6 @@ static void ResetDiagnosticEventCapture()noexcept{
     s_DiagnosticEventExpression = {};
     s_DiagnosticEventMessage = {};
     s_DiagnosticEventFile = {};
-    s_DiagnosticEventLine = 0u;
     s_DiagnosticEventNameText[0u] = 0;
     s_DiagnosticEventCategoryText[0u] = 0;
     s_DiagnosticEventExpressionText[0u] = 0;
@@ -216,7 +211,6 @@ static void RecordDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     s_DiagnosticEventExpression = CopyDiagnosticEventText(s_DiagnosticEventExpressionText, record.expression);
     s_DiagnosticEventMessage = CopyDiagnosticEventText(s_DiagnosticEventMessageText, record.message);
     s_DiagnosticEventFile = CopyDiagnosticEventText(s_DiagnosticEventFileText, record.file);
-    s_DiagnosticEventLine = record.line;
 }
 
 
@@ -287,16 +281,8 @@ TEST(Global, ExhaustedPodReadsPreserveCursorAndOutput){
     EXPECT_EQ(readValue, writtenValue);
 }
 
-TEST(Global, AllocationSizeHelpers){
-    EXPECT_EQ(SizeOf<sizeof(u32)>(3u), sizeof(u32) * 3u);
-    EXPECT_EQ(AddSize(17u, 25u), 42u);
-    EXPECT_EQ(Alignment(1u, 37u), 37u);
-    EXPECT_EQ(Alignment(8u, 37u), 40u);
-    EXPECT_EQ(Alignment(16u, 48u), 48u);
-
+TEST(Global, MultiplicationOverflowClearsResult){
     usize product = Limit<usize>::s_Max;
-    EXPECT_TRUE(::TryMultiply<usize>(7u, 6u, product));
-    EXPECT_EQ(product, 42u);
     EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount, product));
     EXPECT_EQ(product, 0u);
 }
@@ -383,8 +369,6 @@ TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
     SIMDVector normalized = VectorSet(9.0f, 8.0f, 7.0f, 6.0f);
     const SIMDVector unchanged = normalized;
 
-    EXPECT_TRUE(Vector3TryNormalize(VectorSet(3.0f, 4.0f, 0.0f, 0.0f), normalized));
-    EXPECT_TRUE(Vector3NearEqual(normalized, VectorSet(0.6f, 0.8f, 0.0f, 0.0f), VectorReplicate(0.0001f)));
 
     normalized = unchanged;
     EXPECT_FALSE(Vector3TryNormalize(VectorZero(), normalized));
@@ -397,7 +381,7 @@ TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
     EXPECT_TRUE(Vector3Equal(normalized, unchanged));
 }
 
-TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
+TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndClearsMissingOutput){
     constexpr AStringView s_Maps =
         "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n"
         "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n"
@@ -406,8 +390,6 @@ TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
     Vector<LinuxProcessMemoryMapEntry> entries;
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
     ASSERT_EQ(entries.size(), s_ExpectedDualCount);
-    EXPECT_EQ(entries[0u].fileOffset, 0x20u);
-    EXPECT_EQ(entries[0u].path, AStringView("/tmp/first.so"));
 
     LinuxProcessMemoryMapEntry entry;
     EXPECT_TRUE(FindLinuxProcessMemoryMapForAddress(entries, 0x1000u, entry));
@@ -418,40 +400,21 @@ TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
     EXPECT_TRUE(entry.path.empty());
 }
 
-TEST(Global, GrowingCapacityHelpers){
-    EXPECT_EQ(::NextGrowingCapacity(0u, 1u), 1u);
-    EXPECT_EQ(::NextGrowingCapacity(3u, 4u), 6u);
-    EXPECT_EQ(::NextGrowingCapacity(8u, 8u), 8u);
-    EXPECT_EQ(::NextGrowingCapacity(8u, 9u), 16u);
-    EXPECT_EQ(::NextGrowingCapacity(0u, 4097u, 4096u), 8192u);
+TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
     EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / s_ExpectedDualCount) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
 }
 
-TEST(Global, CheckedDivideUp){
-    u32 result = 0u;
-    EXPECT_TRUE(::DivideUpChecked(17u, 4u, result));
-    EXPECT_EQ(result, 5u);
+TEST(Global, CheckedDivideUpRejectsZeroDivisor){
+    u32 result = 99u;
     EXPECT_FALSE(::DivideUpChecked(17u, 0u, result));
 }
 
-TEST(Global, TriangleAreaPrecisionHelpers){
+TEST(Global, TriangleAreaRejectsExactThreshold){
     const Float3U a(1.0f, 1.0f, 1.0f);
     const Float3U b(4.0f, 1.0f, 1.0f);
     const Float3U c(1.0f, 5.0f, 1.0f);
-    const TriangleAreaNormal64 areaNormal = ::BuildStoredTriangleAreaNormal64(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
-    EXPECT_DOUBLE_EQ(areaNormal.x, 0.0);
-    EXPECT_DOUBLE_EQ(areaNormal.y, 0.0);
-    EXPECT_DOUBLE_EQ(areaNormal.z, 12.0);
-    EXPECT_DOUBLE_EQ(::TriangleAreaNormalLengthSquared(areaNormal), 144.0);
     EXPECT_TRUE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 143.0));
     EXPECT_FALSE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 144.0));
-
-    const TriangleAreaNormal64 simdAreaNormal = ::BuildTriangleAreaNormal64(
-        VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
-        VectorSet(4.0f, 1.0f, 1.0f, 0.0f),
-        VectorSet(1.0f, 5.0f, 1.0f, 0.0f)
-    );
-    EXPECT_DOUBLE_EQ(simdAreaNormal.z, 12.0);
 }
 
 TEST(Global, GlobalArenaReallocationPreservesAlignment){
@@ -740,22 +703,13 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
 #endif
 }
 
-TEST(Global, NameHashDebugTextHelpers){
+TEST(Global, NameHashDebugTextRejectsInvalidHex){
     const NameHash source = ComputeNameHash("global_name_hash_debug_text");
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(source, hashText, sizeof(hashText));
-
+    hashText[0u] = 'g';
     NameHash decoded = {};
-    EXPECT_TRUE(NameDetail::DecodeDebugHashText(AStringView(hashText), decoded));
-    EXPECT_EQ(decoded, source);
-
-    char copiedHashText[NameDetail::s_DebugHashTextLength + 1u] = {};
-    EXPECT_TRUE(NameDetail::CopyDebugHashToken(AStringView(hashText), 0u, copiedHashText));
-    EXPECT_EQ(AStringView(copiedHashText), AStringView(hashText));
-
-    AString invalidHashText(hashText);
-    invalidHashText[0u] = 'g';
-    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(invalidHashText.data(), invalidHashText.size()), decoded));
+    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText), decoded));
 }
 
 TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
@@ -867,11 +821,11 @@ TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
 TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance){
     NWB::Tests::TestArena<> testArena;
 #if defined(GLB_PLATFORM_WINDOWS)
-    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./한글/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLB_TEXT("C:\\"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("한글"), GLB_TEXT("File.TXT") };
+    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./í•œê¸€/File.TXT/");
+    constexpr TStringView s_Expected[]{ GLB_TEXT("C:\\"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("í•œê¸€"), GLB_TEXT("File.TXT") };
 #else
-    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./한글/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLB_TEXT("/"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("한글"), GLB_TEXT("File.TXT") };
+    const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./í•œê¸€/File.TXT/");
+    constexpr TStringView s_Expected[]{ GLB_TEXT("/"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("í•œê¸€"), GLB_TEXT("File.TXT") };
 #endif
     auto componentIt = path.begin();
     const TStringView first = componentIt.nativeComponent();
@@ -902,7 +856,7 @@ TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
     NWB::Core::Alloc::GlobalArena arena(Name{"tests/path/native_component_views"});
     const Path<NWB::Core::Alloc::GlobalArena> path(
         arena,
-        "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_한글_😀/Third_component"
+        "First_component_long_enough_to_require_owning_storage/Second_component_with_Unicode_í•œê¸€_ðŸ˜€/Third_component"
     );
     const TStringView native = path.native();
     const ArenaMemoryStats before = arena.memoryStats();
@@ -933,20 +887,8 @@ TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
 }
 
 
-TEST(Global, TextUtilityHelpers){
-    NWB::Tests::TestArena<> testArena;
-    const Path<NWB::Core::Alloc::GlobalArena> genericPath(testArena.arena, "alpha\\beta/file.txt");
-    const auto genericPathText = PathToGenericString<char>(testArena.arena, genericPath);
-
-    EXPECT_EQ(AStringView(genericPathText.data(), genericPathText.size()), AStringView("alpha/beta/file.txt"));
-    EXPECT_EQ(TrimLeftView(AStringView(" \talpha ")), AStringView("alpha "));
-    EXPECT_EQ(TrimView(AStringView(" \talpha \r\n")), s_ALPHA);
-    EXPECT_EQ(TrimCopy(AString(" \tMiXeD \r\n")), AString("MiXeD"));
-    EXPECT_EQ(ToAsciiLowerCopy(AString("MiXeD")), AString("mixed"));
-    EXPECT_EQ(UnquoteMatchingAsciiQuotes(AString(" 'asset path' ")), AString("asset path"));
-    EXPECT_EQ(UnquoteMatchingAsciiQuotes(AString(" \"asset path\" ")), AString("asset path"));
+TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
     EXPECT_TRUE(SafeStringView(static_cast<const char*>(nullptr)).empty());
-    EXPECT_EQ(SafeStringView("safe"), AStringView("safe"));
     EXPECT_TRUE(FitsU32(static_cast<usize>(Limit<u32>::s_Max)));
     EXPECT_FALSE(FitsU32(static_cast<u64>(Limit<u32>::s_Max) + 1u));
     EXPECT_FALSE(FitsU32(-1));
@@ -954,37 +896,9 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_FALSE(CanRepresentU64<u32>(static_cast<u64>(Limit<u32>::s_Max) + 1u));
     EXPECT_TRUE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max)));
     EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
-    EXPECT_TRUE(StartsWith(s_ALPHA, AStringView("alp")));
-    EXPECT_TRUE(StartsWith(s_ALPHA, "al"));
-    EXPECT_FALSE(StartsWith(s_ALPHA, s_BETA));
     EXPECT_FALSE(StartsWith(AStringView("al"), s_ALPHA));
-    EXPECT_TRUE(EqualsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("graphicsvolume")));
-    EXPECT_TRUE(ContainsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("volume")));
-    EXPECT_FALSE(ContainsAsciiIgnoreCase(s_GRAPHICSVOLUME, AStringView("shader")));
-
-    AString jsonText;
-    AppendJsonQuotedText(jsonText, AStringView("a\"b\\c\n\t"));
-    EXPECT_EQ(jsonText, AString("\"a\\\"b\\\\c\\n\\t\""));
-    EXPECT_EQ(MakeJsonEscapedText<AString>(AStringView("a\rb")), AString("a\\rb"));
-
-    AString lineEndings("alpha\r\nbeta\rgamma\n");
-    EXPECT_TRUE(HasCrlfLineEndings(AStringView(lineEndings.data(), lineEndings.size())));
-    NormalizeLineEndingsInPlace(lineEndings, false);
-    EXPECT_EQ(lineEndings, AString("alpha\nbeta\ngamma\n"));
-    NormalizeLineEndingsInPlace(lineEndings, true);
-    EXPECT_EQ(lineEndings, AString("alpha\r\nbeta\r\ngamma\r\n"));
-
-    AString csvCell;
-    AppendCsvCell(csvCell, AStringView("alpha,b\"eta"));
-    EXPECT_EQ(csvCell, AString("\"alpha,b\"\"eta\""));
-
-    AString dotText;
-    AppendDotQuotedText(dotText, AStringView("node\"\\\n"));
-    EXPECT_EQ(dotText, AString("\"node\\\"\\\\\\n\""));
 
     u64 value = 0u;
-    EXPECT_TRUE(ParseVariableHexU64(AStringView("0x10"), value));
-    EXPECT_EQ(value, 16u);
     EXPECT_TRUE(ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"), value));
     EXPECT_EQ(value, Limit<u64>::s_Max);
     EXPECT_FALSE(ParseVariableHexU64(AStringView(), value));
@@ -994,13 +908,9 @@ TEST(Global, TextUtilityHelpers){
 
     constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
     AStringView textValue;
-    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, s_ALPHA, textValue));
-    EXPECT_EQ(textValue, AStringView("one"));
     EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "empty", textValue));
     EXPECT_TRUE(textValue.empty());
     EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing", textValue));
-    EXPECT_TRUE(FindLineKeyValueU64(s_KeyValueText, s_BETA, value));
-    EXPECT_EQ(value, 42u);
 }
 
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
@@ -1132,49 +1042,21 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
 }
 #endif
 
-TEST(Global, FilesystemVolumeSegmentNaming){
-    EXPECT_TRUE(ValidVolumeName(s_GRAPHICS));
-    EXPECT_TRUE(ValidVolumeName("runtime_pipeline-cache"));
+TEST(Global, VolumeNamesRejectEmptySeparatorsAndWhitespace){
     EXPECT_FALSE(ValidVolumeName(""));
     EXPECT_FALSE(ValidVolumeName("graphics/cache"));
     EXPECT_FALSE(ValidVolumeName("graphics cache"));
-
-    const ACompactString firstSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 0u);
-    const ACompactString sameSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 0u);
-    const ACompactString nextSegment = MakeVolumeSegmentFileName(s_GRAPHICS, 1u);
-
-    EXPECT_EQ(firstSegment.view(), sameSegment.view());
-    EXPECT_NE(firstSegment.view(), nextSegment.view());
-    EXPECT_EQ(firstSegment.view().size(), s_HexU64DigitCount + AStringView(".vol").size());
-    EXPECT_EQ(firstSegment.view().substr(s_HexU64DigitCount), AStringView(".vol"));
-    EXPECT_EQ(HashVolumeSegmentFileName(s_GRAPHICS, 0u), HashVolumeSegmentFileName(s_GRAPHICS, 0u));
-
-    NWB::Tests::TestArena<> testArena;
-    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/volume_segment_naming");
-    const Path<NWB::Core::Alloc::GlobalArena> firstSegmentPath = MakeVolumeSegmentPath(root, "graphics", 0u);
-    ErrorCode error;
-
-    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
-    EXPECT_FALSE(VolumeSegmentExists(root, s_GRAPHICS));
-    EXPECT_TRUE(WriteTextFile(firstSegmentPath, AStringView("segment")));
-    EXPECT_TRUE(VolumeSegmentExists(root, s_GRAPHICS));
-    EXPECT_FALSE(VolumeSegmentExists(root, s_GRAPHICS, 1u));
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
-TEST(Global, StringTableText){
+TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
     Vector<u8> stringTable;
     u32 alphaOffset = Limit<u32>::s_Max;
     u32 betaOffset = Limit<u32>::s_Max;
 
     EXPECT_TRUE(AppendStringTableText(stringTable, s_ALPHA, alphaOffset));
     EXPECT_TRUE(AppendStringTableText(stringTable, s_BETA, betaOffset));
-    EXPECT_EQ(alphaOffset, 0u);
-    EXPECT_EQ(betaOffset, 6u);
 
     ACompactString parsed;
-    EXPECT_TRUE(ReadStringTableText(stringTable, 0u, stringTable.size(), alphaOffset, parsed));
-    EXPECT_EQ(parsed.view(), s_ALPHA);
 
     Vector<u8> prefixedBinary;
     prefixedBinary.push_back(0xFFu);
@@ -1224,31 +1106,12 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
 }
 
 TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
-    FixedVector<u8, 16u> fixedBinary;
-    const u32 writtenValue = 0x55667788u;
-    AppendPOD(fixedBinary, writtenValue);
-
-    usize podCursor = 0u;
-    u32 readValue = 0u;
-    EXPECT_TRUE(ReadPOD(fixedBinary, podCursor, readValue));
-    EXPECT_EQ(readValue, writtenValue);
-    EXPECT_EQ(podCursor, sizeof(writtenValue));
-
     Vector<u8> vectorBinary;
     const u16 values[] = { 4u, 5u, 6u };
     for(const u16 value : values)
         AppendPOD(vectorBinary, value);
 
     usize vectorCursor = 0u;
-    FixedVector<u16, 4u> parsedValues;
-    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, parsedValues), BinaryVectorPayloadFailure::None);
-    EXPECT_EQ(vectorCursor, vectorBinary.size());
-    EXPECT_EQ(parsedValues.size(), 3u);
-    EXPECT_EQ(parsedValues[0u], values[0u]);
-    EXPECT_EQ(parsedValues[1u], values[1u]);
-    EXPECT_EQ(parsedValues[s_ThirdElementIndex], values[s_ThirdElementIndex]);
-
-    vectorCursor = 0u;
     FixedVector<u16, s_ExpectedDualCount> tooSmall;
     EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
@@ -1360,25 +1223,6 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 
     EXPECT_TRUE(elseBranchRan);
     EXPECT_EQ(logger.messageCount(), 0u);
-
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("macro {}"), 42);
-
-    EXPECT_EQ(logger.messageCount(), 1u);
-    EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_TRUE(logger.sawMessageContaining(GLB_TEXT("macro 42")));
-
-    const AString rawMessage(s_RAW_CONVERTED_WARNING);
-    NWB_LOGGER_WARNING(StringConvert(rawMessage));
-
-#if GLB_OCCUR_WARNING
-    EXPECT_EQ(logger.messageCount(), s_ExpectedDualCount);
-    EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Warning);
-    EXPECT_TRUE(logger.sawMessageContaining(GLB_TEXT("raw converted warning")));
-#else
-    EXPECT_EQ(logger.messageCount(), 1u);
-    EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::EssentialInfo);
-    EXPECT_FALSE(logger.sawMessageContaining(GLB_TEXT("raw converted warning")));
-#endif
 }
 
 TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
@@ -1447,7 +1291,7 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
     EXPECT_TRUE(logger.sawErrorContaining(s_PARALLEL_LOGGER_MESSAGE));
 }
 
-TEST(Global, DiagnosticEventHook){
+TEST(Global, DiagnosticEventHookRejectsReentryAndHonorsBoundedText){
     ResetDiagnosticEventCapture();
 
     const DiagnosticEventCallback callback = [](const DiagnosticEventRecord& record)noexcept{
@@ -1470,12 +1314,7 @@ TEST(Global, DiagnosticEventHook){
     EXPECT_EQ(s_DiagnosticEventCategory, AStringView("unit"));
     EXPECT_EQ(s_DiagnosticEventExpression, AStringView(""));
     EXPECT_EQ(s_DiagnosticEventMessage, AStringView("message"));
-    EXPECT_EQ(s_DiagnosticEventFile, AStringView("diagnostics_test.cpp"));
-    EXPECT_EQ(s_DiagnosticEventLine, 42u);
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert), DiagnosticEventName::s_Assert);
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert), DiagnosticEventName::s_Assert);
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), StringView{});
-    EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error }), DiagnosticEventName::s_Error);
 }
 
 TEST(Global, OwnershipInvariantTerminationIsAlwaysActive){

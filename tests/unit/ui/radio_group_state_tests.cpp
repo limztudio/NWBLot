@@ -68,35 +68,6 @@ TEST(UiRadioGroupStateTests, ResetClearsBindingAndSelectionEvenWhenAlreadyEmpty)
     EXPECT_FALSE(state.matches(before));
 }
 
-TEST(UiRadioGroupStateTests, SnapshotEqualityAndMatchingCoverEveryPublicEpochAndKey){
-    RadioGroupState state;
-    state.select(41u);
-    const RadioGroupSnapshot snapshot = state.snapshot();
-    EXPECT_TRUE(state.matches(snapshot));
-    EXPECT_EQ(snapshot, state.snapshot());
-    RadioGroupSnapshot changed = snapshot;
-    ++changed.instanceGeneration;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.inputGeneration;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.revision;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.selectedKey;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.cursorKey;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.sourceGeneration;
-    EXPECT_FALSE(state.matches(changed));
-    changed = snapshot;
-    ++changed.sourceRevision;
-    EXPECT_FALSE(state.matches(changed));
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

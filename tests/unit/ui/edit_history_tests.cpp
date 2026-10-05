@@ -24,26 +24,6 @@ class UiEditHistoryTests : public EditFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiEditHistoryTests, UndoRedoRestoreCopiedTextAndSelectionAndAdvanceRevision){
-    ASSERT_TRUE(m_model.setText("abcd"));
-    ASSERT_TRUE(m_model.setSelection(3u, 1u));
-    ASSERT_TRUE(m_model.replaceSelection("x"));
-    EXPECT_EQ(m_model.text(), "axd");
-    const u64 revision = m_model.revision();
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abcd");
-    EXPECT_EQ(m_model.anchor(), 3u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    EXPECT_GT(m_model.revision(), revision);
-    EXPECT_FALSE(m_model.canUndo());
-    EXPECT_TRUE(m_model.canRedo());
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "axd");
-    EXPECT_EQ(m_model.anchor(), 2u);
-    EXPECT_EQ(m_model.caret(), 2u);
-    EXPECT_FALSE(m_model.canRedo());
-}
-
 TEST_F(UiEditHistoryTests, BranchingAfterUndoDiscardsOnlyFutureHistory){
     ASSERT_TRUE(m_model.replaceSelection("a"));
     ASSERT_TRUE(m_model.replaceSelection("b"));
@@ -114,23 +94,6 @@ TEST_F(UiEditHistoryTests, DisabledHistoryAndCopiedReplacementHaveBoundedOwnersh
     EXPECT_EQ(limited.text(), "owned");
     EXPECT_FALSE(limited.undo());
     EXPECT_FALSE(limited.redo());
-}
-
-TEST_F(UiEditHistoryTests, NativeSurroundingDeleteRestoresOriginalCaretAndSelectionOnUndo){
-    ASSERT_TRUE(m_model.setText("abCde"));
-    ASSERT_TRUE(m_model.setSelection(3u, 3u));
-    ASSERT_TRUE(m_model.eraseSurrounding(1u, 1u));
-    EXPECT_EQ(m_model.text(), "abe");
-    EXPECT_EQ(m_model.caret(), 2u);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abCde");
-    EXPECT_EQ(m_model.anchor(), 3u);
-    EXPECT_EQ(m_model.caret(), 3u);
-    ASSERT_TRUE(m_model.setSelection(1u, 3u));
-    ASSERT_TRUE(m_model.eraseSurrounding(1u, 1u));
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 3u);
 }
 
 

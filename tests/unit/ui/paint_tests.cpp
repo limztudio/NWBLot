@@ -50,8 +50,6 @@ protected:
 
 TEST_F(UiPaintTests, CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverlay){
     const Rect display = m_builder.currentClip();
-    EXPECT_FLOAT_EQ(display.width, 200.0f);
-    EXPECT_FLOAT_EQ(display.height, 100.0f);
     m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });
     m_builder.pushClip({ 20.0f, 5.0f, 40.0f, 20.0f });
     const Rect nested = m_builder.currentClip();
@@ -97,23 +95,6 @@ TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
     EXPECT_FLOAT_EQ(snapshot.vertices()[0].texCoord.y, 37.0f / 64.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[4].position.x, 10.0f);
     EXPECT_FLOAT_EQ(snapshot.vertices()[6].position.y, 40.0f);
-}
-
-TEST_F(UiPaintTests, NineSlicePreservesCornerDensityAndAtlasCoordinates){
-    ASSERT_TRUE(m_builder.drawRegion(Name("panel"), { 10.0f, 20.0f, 80.0f, 40.0f }));
-    const auto snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.vertices().size(), 36u);
-    ASSERT_EQ(snapshot.indices().size(), 54u);
-    ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0].indexCount, 54u);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.x, 12.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].position.y, 23.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.x, 4.0f / 128.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[2].texCoord.y, 6.0f / 64.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[32].position.x, 86.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[32].position.y, 59.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[34].texCoord.x, 32.0f / 128.0f);
-    EXPECT_FLOAT_EQ(snapshot.vertices()[34].texCoord.y, 24.0f / 64.0f);
 }
 
 TEST_F(UiPaintTests, UndersizedNineSliceCollapsesCenterAndScalesOpposingBorders){

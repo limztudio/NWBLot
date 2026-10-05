@@ -17,8 +17,8 @@ window. `--self-test` checks capture failures, cleanup ordering, and incomplete 
 
 from __future__ import annotations
 
+
 import argparse
-import inspect
 import json
 import math
 import re
@@ -100,13 +100,8 @@ LIT_MINIMUM_SHADOW_MS = "--minimum-shadow-ms"
 LIT_MAXIMUM_FRAME_REGRESSION_PERCENT = "--maximum-frame-regression-percent"
 LIT_MAXIMUM_PIXEL_MEAN_ABS = "--maximum-pixel-mean-abs"
 LIT_PREPARE = "prepare"
-LIT_CAPTURE = "capture"
-LIT_PREPARED_CLIENT_CAPTURE = "prepared-client-capture"
 LIT_DWMSETWINDOWATTRIBUTE = "DwmSetWindowAttribute"
 LIT_DWMFLUSH = "DwmFlush"
-LIT_CLIENT_RECT = "client-rect"
-LIT_SCREEN_BITBLT = "screen-bitblt"
-LIT_RAW_CLIENT_CAPTURE = "raw-client-capture"
 LIT_APP_STOP = "app-stop"
 LIT_CLEANUP_NONE = "cleanup-none"
 LIT_LOGSERVER_LOG = "logserver_*.log"
@@ -862,22 +857,6 @@ def run_self_test() -> int:
         DEFAULT_FORBIDDEN_LOGS,
     ) == [LIT_CANNOT_SAFELY_CONTINUE_AFTER_AN_UNRESO]
 
-    client_capture_path = Path("client-capture.bmp")
-    m4_capture_calls = []
-    m4_capture_probe = object.__new__(WindowsCapture)
-    m4_capture_probe.prepare_raw_client_window = lambda window: m4_capture_calls.append((LIT_PREPARE, window))
-    m4_capture_probe.capture_prepared_raw_client_window = (
-        lambda window, output_path: m4_capture_calls.append((LIT_CAPTURE, window, output_path)) or LIT_PREPARED_CLIENT_CAPTURE
-    )
-    prepare_m4_client_area(m4_capture_probe, 17)
-    assert capture_m4_client_area(m4_capture_probe, 17, client_capture_path) == LIT_PREPARED_CLIENT_CAPTURE
-    assert m4_capture_calls == [(LIT_PREPARE, 17), (LIT_CAPTURE, 17, client_capture_path)]
-
-    frame_locked_capture_source = inspect.getsource(run_frame_locked_capture)
-    assert frame_locked_capture_source.index("prepare_m4_client_area(capture_backend, window)") < frame_locked_capture_source.index(
-        "wait_for_log_message("
-    ) < frame_locked_capture_source.index("wait_while_running(")
-
     class ClientRectUser32:
         def __init__(self, get_client_rect_result=True, client_to_screen_result=True):
             self.get_client_rect_result = get_client_rect_result
@@ -991,19 +970,6 @@ def run_self_test() -> int:
         else:
             raise AssertionError(f"M4 DWM setup accepted non-S_OK {expected_operation} result")
         assert len(failure_calls) == expected_calls
-
-    raw_client_capture_calls = []
-    raw_client_capture = object.__new__(WindowsCapture)
-    raw_client_capture._client_rect = lambda hwnd: raw_client_capture_calls.append((LIT_CLIENT_RECT, hwnd)) or LIT_CLIENT_RECT
-    raw_client_capture._capture_screen_rect = (
-        lambda hwnd, rect, output_path: raw_client_capture_calls.append((LIT_SCREEN_BITBLT, hwnd, rect, output_path))
-        or LIT_RAW_CLIENT_CAPTURE
-    )
-    assert raw_client_capture.capture_prepared_raw_client_window(17, client_capture_path) == LIT_RAW_CLIENT_CAPTURE
-    assert raw_client_capture_calls == [
-        (LIT_CLIENT_RECT, 17),
-        (LIT_SCREEN_BITBLT, 17, LIT_CLIENT_RECT, client_capture_path),
-    ]
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)

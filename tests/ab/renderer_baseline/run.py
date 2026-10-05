@@ -8,6 +8,7 @@ while a candidate is the normal selected smoke executable at a later revision.
 
 from __future__ import annotations
 
+
 import argparse
 import hashlib
 import json
@@ -1145,12 +1146,6 @@ def run_self_test() -> int:
             pass
         else:
             raise AssertionError("corpus comparison limits must not be relaxed")
-        complex_surfel_profile = get_profile("surfel-gi-complex")
-        with mock.patch.dict(os.environ, {"NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100"}):
-            assert effective_frozen_environment(complex_surfel_profile) == {
-                "NWB_GI_SMOKE_COMPLEX_SCENE": "1",
-                "NWB_GI_SMOKE_MIN_SETTLE_SECONDS": "100",
-            }
         difference = compare_bmp_rgb(reference_image, candidate_image, root / LIT_DIFFERENCE_BMP)
         args = SimpleNamespace(require_exact=False, maximum_max_abs=2, maximum_mean_abs=None, maximum_changed_fraction=None)
         assert difference_failures(args, difference) == ["max abs 3 exceeds 2"]

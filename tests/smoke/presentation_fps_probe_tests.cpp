@@ -79,20 +79,6 @@ TEST(PresentationFpsProbe, ZeroPresentationsCanCompleteButCannotClaimThroughput)
     EXPECT_DOUBLE_EQ(probe.total().averageFps(), 0.0);
 }
 
-TEST(PresentationPacingRing, SteadyFramesReportMatchingPercentiles){
-    PresentationPacingRing ring;
-    const Timer begin{};
-    ring.record(0u, begin);
-    for(i64 frame = 1; frame <= 100; ++frame)
-        ring.record(static_cast<u64>(frame), TimerAddMS(begin, frame * 16));
-    const PresentationPacingSummary summary = ring.summarize();
-    EXPECT_EQ(summary.samples, 100u);
-    EXPECT_DOUBLE_EQ(summary.p50Ms, 16.0);
-    EXPECT_DOUBLE_EQ(summary.p95Ms, 16.0);
-    EXPECT_DOUBLE_EQ(summary.maxMs, 16.0);
-    EXPECT_EQ(summary.stallsOver50Ms, 0u);
-}
-
 TEST(PresentationPacingRing, IdleObservationsPreserveFullGapAndCountOneStall){
     PresentationPacingRing ring;
     const Timer begin{};

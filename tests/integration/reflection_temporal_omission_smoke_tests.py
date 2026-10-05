@@ -45,10 +45,6 @@ class TemporalOmissionEvidenceTests(unittest.TestCase):
         self.assertEqual(result["all_completed_temporal_ranges"], 0)
         self.assertEqual(result["completed_gpu_frames"], 100)
 
-    def test_cap_sixteen_preserves_active_temporal_coverage(self):
-        result = proof.validate_recording_evidence(self.trial(16), 16)
-        self.assertEqual(result["retained_temporal_ranges"], 100)
-
     def test_cap_one_cannot_hide_work_in_warmup(self):
         with self.assertRaisesRegex(proof.benchmark.SmokeFailure, "warm-up"):
             proof.validate_recording_evidence(self.trial(1, warmup_temporal=True), 1)

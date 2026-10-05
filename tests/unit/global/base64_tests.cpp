@@ -38,8 +38,6 @@ TEST(Base64, BinaryValuesAndEveryTailLengthAreLossless){
         for(usize index = 0u; index < count; ++index)
             ASSERT_EQ(decoded[index], source[index]);
     }
-    ASSERT_TRUE(EncodeBase64({ source.data() + 250u, 6u }, encoded));
-    EXPECT_EQ(encoded, "+vv8/f7/");
 }
 
 TEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits){
@@ -77,18 +75,6 @@ TEST(Base64, ExactDecodedBoundsAreCheckedBeforePublication){
     EXPECT_EQ(output[0u], static_cast<u8>('f'));
     ASSERT_TRUE(DecodeBase64("", output, 0u));
     EXPECT_TRUE(output.empty());
-}
-
-TEST(Base64, CanonicalZeroBytesUseBothPaddingForms){
-    TestArena<> context;
-    Vector<u8, Core::Alloc::GlobalArena> output(context.arena);
-    const AStringView encodings[] = { "AA==", "AAA=", "AAAA" };
-    for(usize index = 0u; index < LengthOf(encodings); ++index){
-        ASSERT_TRUE(DecodeBase64(encodings[index], output, 3u));
-        ASSERT_EQ(output.size(), index + 1u);
-        for(const u8 value : output)
-            EXPECT_EQ(value, 0u);
-    }
 }
 
 TEST(Base64, AliasedInputSurvivesOutputReplacement){

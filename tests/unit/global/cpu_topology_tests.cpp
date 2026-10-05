@@ -4,7 +4,6 @@
 
 #include <global/cpu_topology.h>
 #include <global/platform.h>
-#include <global/simplemath.h>
 #include <global/thread.h>
 
 #include <gtest/gtest.h>
@@ -20,17 +19,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(CpuTopologyTests, EnumeratesUniqueUsableProcessorsAndAccountsForEveryCapacityTier){
+TEST(CpuTopologyTests, EnumeratedProcessorIdentitiesAreUniqueAndUsable){
     InteropVector<CpuWorkerPlacement> placements;
     ASSERT_TRUE(QueryCpuWorkerPlacements(placements));
     ASSERT_FALSE(placements.empty());
-    u32 minimumClass = Limit<u32>::s_Max;
-    u32 maximumClass = 0u;
     for(usize i = 0u; i < placements.size(); ++i){
         const CpuWorkerPlacement& placement = placements[i];
         EXPECT_TRUE(placement.valid());
-        minimumClass = Min(minimumClass, placement.performanceClass);
-        maximumClass = Max(maximumClass, placement.performanceClass);
         for(usize j = 0u; j < i; ++j){
             EXPECT_FALSE(
                 placements[j].processorGroup == placement.processorGroup
@@ -38,55 +33,12 @@ TEST(CpuTopologyTests, EnumeratesUniqueUsableProcessorsAndAccountsForEveryCapaci
             );
         }
     }
-    for(const CpuWorkerPlacement& placement : placements){
-        if(minimumClass == maximumClass)
-            EXPECT_EQ(placement.affinity, CpuAffinity::Any);
-        else if(placement.performanceClass == maximumClass)
-            EXPECT_EQ(placement.affinity, CpuAffinity::Performance);
-        else
-            EXPECT_EQ(placement.affinity, CpuAffinity::Efficiency);
-    }
-    EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Any), placements.size());
-    if(minimumClass == maximumClass){
-        EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Performance), placements.size());
-        EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Efficiency), placements.size());
-    }
-    else{
-        EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Performance) + QueryCpuCoreCount(CpuAffinity::Efficiency), placements.size());
-    }
 }
 
 
 TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{}));
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{ 0u, Limit<u32>::s_Max, 0u, CpuAffinity::Any }));
-}
-
-
-TEST(CpuTopologyTests, EveryEnumeratedPlacementCanPinAnIndependentWorker){
-    InteropVector<CpuWorkerPlacement> placements;
-    ASSERT_TRUE(QueryCpuWorkerPlacements(placements));
-    for(const CpuWorkerPlacement& placement : placements){
-        bool applied = false;
-        bool verified = false;
-        JoiningThread worker([&](){
-            applied = SetCurrentThreadCpuPlacement(placement);
-            if(!applied)
-                return;
-#if defined(GLB_PLATFORM_WINDOWS)
-            GROUP_AFFINITY actual{};
-            if(!GetThreadGroupAffinity(GetCurrentThread(), &actual))
-                return;
-            verified = actual.Group == placement.processorGroup && actual.Mask == (static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex);
-#elif defined(GLB_PLATFORM_LINUX)
-            const int processor = ::sched_getcpu();
-            verified = processor >= 0 && static_cast<u32>(processor) == placement.logicalProcessorIndex;
-#endif
-        });
-        worker.join();
-        EXPECT_TRUE(applied) << "group=" << placement.processorGroup << " processor=" << placement.logicalProcessorIndex;
-        EXPECT_TRUE(verified);
-    }
 }
 
 

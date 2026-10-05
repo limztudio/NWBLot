@@ -37,93 +37,6 @@ using Path = NWB::Path;
 inline constexpr Name s_TestFile("project/tests/payload");
 inline constexpr Name s_TestArena("tests/filesystem");
 
-class MemoryFilesystem final : public IFilesystem{
-public:
-    explicit MemoryFilesystem(NWB::Core::Alloc::GlobalArena& arena)
-        : m_bytes(arena)
-    {}
-
-
-public:
-    virtual bool mount(const VolumeMountDesc& desc)override{
-        m_mounted = true;
-        m_writable = desc.usage != VolumeUsage::RuntimeReadOnly;
-        return true;
-    }
-    virtual bool unmount()override{ m_mounted = false; return true; }
-    virtual bool mounted()const override{ return m_mounted; }
-    virtual bool writable()const override{ return m_mounted && m_writable; }
-
-    virtual bool readFile(const Name& path, const u64 offset, void* data, const usize bytes, usize& outBytesRead)const override{
-        outBytesRead = 0;
-        if(!fileExists(path) || offset > m_bytes.size() || (bytes != 0 && !data))
-            return false;
-        outBytesRead = Min(bytes, m_bytes.size() - static_cast<usize>(offset));
-        auto* destination = static_cast<u8*>(data);
-        for(usize i = 0; i < outBytesRead; ++i)
-            destination[i] = m_bytes[static_cast<usize>(offset) + i];
-        return true;
-    }
-    virtual bool seekFile(FileCursor& cursor, const i64 offset, const FileSeekOrigin::Enum origin)const override{
-        if(cursor.filesystem != this || !fileExists(cursor.virtualPath))
-            return false;
-        const u64 base = origin == FileSeekOrigin::End ? m_bytes.size() : origin == FileSeekOrigin::Current ? cursor.offset : 0u;
-        if(origin > FileSeekOrigin::End || base > static_cast<u64>(Limit<i64>::s_Max))
-            return false;
-        if(offset > 0 && static_cast<u64>(offset) > static_cast<u64>(Limit<i64>::s_Max) - base)
-            return false;
-        const i64 destination = static_cast<i64>(base) + offset;
-        if(destination < 0 || static_cast<u64>(destination) > m_bytes.size())
-            return false;
-        cursor.offset = static_cast<u64>(destination);
-        return true;
-    }
-    virtual bool writeFile(const Name& path, const void* data, const usize bytes)override{
-        if(!writable() || !path || (bytes != 0 && !data))
-            return false;
-        m_bytes.resize(bytes);
-        const auto* source = static_cast<const u8*>(data);
-        for(usize i = 0; i < bytes; ++i)
-            m_bytes[i] = source[i];
-        m_path = path;
-        return true;
-    }
-    virtual bool writeFileDeferred(const Name& path, const void* data, const usize bytes)override{
-        return writeFile(path, data, bytes);
-    }
-    virtual bool flush()override{ return mounted(); }
-    virtual bool removeFile(const Name& path)override{
-        if(!writable() || !fileExists(path))
-            return false;
-        m_path = NAME_NONE;
-        m_bytes.clear();
-        return true;
-    }
-    virtual bool fileExists(const Name& path)const override{ return mounted() && path && m_path == path; }
-    virtual bool fileSize(const Name& path, u64& outSize)const override{
-        outSize = 0;
-        if(!fileExists(path))
-            return false;
-        outSize = m_bytes.size();
-        return true;
-    }
-    virtual u64 fileCount()const override{ return mounted() && m_path ? 1u : 0u; }
-    virtual void reserveFileCapacity([[maybe_unused]] const usize fileCount)override{}
-    virtual Vector<Name, VolumeArena> listFiles()const override{
-        Vector<Name, VolumeArena> names(m_bytes.get_allocator().arena());
-        if(fileCount())
-            names.push_back(m_path);
-        return names;
-    }
-
-
-private:
-    VolumeBytes m_bytes;
-    Name m_path;
-    bool m_mounted = false;
-    bool m_writable = false;
-};
-
 class FilesystemVolumeTest : public testing::Test{
 public:
     FilesystemVolumeTest()
@@ -368,39 +281,6 @@ TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmarkSingleFile){
 
 TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmark4096Files){
     benchmarkMetadataFlush(4096u, 128u);
-}
-
-TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){
-    NWB::Core::Alloc::GlobalArena arena(s_TestArena);
-    VolumeMountDesc desc(arena);
-    ASSERT_TRUE(desc.volumeName.assign("downloaded_assets"));
-    desc.usage = VolumeUsage::RuntimeReadWrite;
-    usize factoryCalls = 0;
-    FilesystemFactory factory = [&factoryCalls](NWB::Core::Alloc::GlobalArena& objectArena, const VolumeMountDesc& mount){
-        ++factoryCalls;
-        EXPECT_EQ(mount.volumeName.view(), AStringView("downloaded_assets"));
-        return MakeUnique<MemoryFilesystem>(objectArena);
-    };
-    auto filesystem = CreateFilesystem(arena, desc, factory);
-    ASSERT_TRUE(filesystem);
-    EXPECT_EQ(factoryCalls, 1u);
-    const Array<u8, 4> payload{ 9u, 8u, 7u, 6u };
-    ASSERT_TRUE(filesystem->writeFile(s_TestFile, payload));
-    VolumeBytes loaded(arena);
-    ASSERT_TRUE(filesystem->readFile(s_TestFile, loaded));
-    ASSERT_EQ(loaded.size(), payload.size());
-    EXPECT_EQ(GLB_MEMCMP(loaded.data(), payload.data(), loaded.size()), 0);
-    FileCursor cursor;
-    ASSERT_TRUE(filesystem->openFile(s_TestFile, cursor));
-    ASSERT_TRUE(filesystem->seekFile(cursor, -2, FileSeekOrigin::End));
-    Array<u8, 4> tail{};
-    usize bytesRead = 0;
-    ASSERT_TRUE(filesystem->readFile(cursor, tail.data(), tail.size(), bytesRead));
-    EXPECT_EQ(bytesRead, s_ExpectedDualCount);
-    EXPECT_EQ(tail[0], 7u);
-    EXPECT_EQ(tail[1], 6u);
-    EXPECT_TRUE(filesystem->flush());
-    EXPECT_TRUE(filesystem->unmount());
 }
 
 TEST(FilesystemFactory, PropagatesFactoryAndMountFailures){

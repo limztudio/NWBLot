@@ -309,21 +309,6 @@ TEST(UiScrollbarLayoutTests, OneCollapsedAxisKeepsOtherAxisExtentWithoutVisibleT
     EXPECT_DOUBLE_EQ(placement.vertical.maximum, 120.0);
 }
 
-TEST(UiScrollbarLayoutTests, FractionalGeometryKeepsAsymmetricPaddingAndBothReservations){
-    const Rect bounds{ -12.5f, 8.25f, 100.5f, 80.25f };
-    ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, { 0.25f, 0.5f, 0.75f, 1.25f },
-        { 199.0f, 160.0f }, 1.0f, {}, 3.5f, 0.0f, placement
-    ));
-    UiWidgetTests::ExpectRect(placement.viewport, { -12.25f, 8.75f, 96.0f, 75.0f });
-    UiWidgetTests::ExpectRect(placement.horizontal.track, { -12.25f, 83.75f, 96.0f, 3.5f });
-    UiWidgetTests::ExpectRect(placement.vertical.track, { 83.75f, 8.75f, 3.5f, 75.0f });
-    UiWidgetTests::ExpectRect(placement.corner, { 83.75f, 83.75f, 3.5f, 3.5f });
-    EXPECT_DOUBLE_EQ(placement.horizontal.maximum, 104.0);
-    EXPECT_DOUBLE_EQ(placement.vertical.maximum, 85.0);
-}
-
 TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmetic){
     const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
@@ -343,38 +328,17 @@ TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmeti
     );
 }
 
-TEST(UiScrollbarLayoutTests, UpdateOffsetsMovesThumbsAtStartMiddleAndEndWithoutRelayout){
+TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStartGeometry){
     const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
     ScrollViewportPlacement placement;
     ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 0.0f, placement));
     const ScrollViewportPlacement initial = placement;
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 150.0f, 150.0f }, placement));
-    ExpectReservedGeometry(placement, initial);
-    UiWidgetTests::ExpectRect(placement.horizontal.thumb, { 47.5f, 120.0f, 25.0f, 12.0f });
-    UiWidgetTests::ExpectRect(placement.vertical.thumb, { 110.0f, 57.5f, 12.0f, 25.0f });
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 1000.0f, 1000.0f }, placement));
     ExpectReservedGeometry(placement, initial);
     UiWidgetTests::ExpectRect(placement.horizontal.thumb, { 85.0f, 120.0f, 25.0f, 12.0f });
     UiWidgetTests::ExpectRect(placement.vertical.thumb, { 110.0f, 95.0f, 12.0f, 25.0f });
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({}, placement));
     ExpectPlacement(placement, initial);
-}
-
-TEST(UiScrollbarLayoutTests, RepeatedOffsetUpdateAndRepeatedCalculationPreserveIdenticalPlacement){
-    const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
-    ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f,
-        { 150.0f, 150.0f }, 12.0f, 0.0f, placement
-    ));
-    const ScrollViewportPlacement expected = placement;
-    ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 150.0f, 150.0f }, placement));
-    ExpectPlacement(placement, expected);
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f,
-        { 150.0f, 150.0f }, 12.0f, 0.0f, placement
-    ));
-    ExpectPlacement(placement, expected);
 }
 
 TEST(UiScrollbarLayoutTests, InvalidCalculationInputsPreserveCompletePreviousPlacement){

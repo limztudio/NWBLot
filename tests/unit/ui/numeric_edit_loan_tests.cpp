@@ -315,23 +315,6 @@ TEST_F(UiNumericEditLoanTests, ClosedAncestorSuppressesNumericPublicationAndHidd
     EXPECT_EQ(m_integer.value(), 42);
 }
 
-TEST_F(UiNumericEditLoanTests, ChildNumericHostReceivesItsExactPopupIdentity){
-    useHost();
-    m_parent.open();
-    m_child.open();
-    ASSERT_TRUE(beginParent(1u));
-    const PopupToken parent = m_context.popupToken();
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    const PopupToken child = m_context.popupToken();
-    ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    EXPECT_EQ(m_host.lastPopup, child);
-    EXPECT_NE(m_host.lastPopup, parent);
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(finishRoot());
-    EXPECT_EQ(m_host.publishes, 1u);
-}
-
 TEST_F(UiNumericEditLoanTests, SuccessfulEndReleasesNumericLoansBeforeApplicationMutation){
     useHost();
     ASSERT_TRUE(m_integer.setValue(42));

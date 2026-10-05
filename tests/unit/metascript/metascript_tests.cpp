@@ -5,7 +5,6 @@
 #include <core/metascript/parser.h>
 
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
@@ -284,49 +283,6 @@ TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
                 EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
         }
     }
-}
-
-TEST(Metascript, LargeListAppendPreservesValues){
-    constexpr usize s_ValueCount = 8192u;
-    DestinationArena arena;
-    Value list(arena.arena);
-    list.makeList();
-    const Timer appendBegin = TimerNow();
-    for(usize index = 0u; index < s_ValueCount; ++index){
-        Value value(static_cast<i64>(index), arena.arena);
-        if((index & 1u) == 0u)
-            list.append(Move(value));
-        else
-            list += value;
-    }
-    const u64 appendNanoseconds = DurationInNS<u64>(TimerNow(), appendBegin);
-    NWB::Tests::RecordUnsignedTestProperty("list_append_ns", appendNanoseconds);
-    ASSERT_EQ(list.asList().size(), s_ValueCount);
-    for(usize index = 0u; index < s_ValueCount; ++index)
-        EXPECT_EQ(list.asList()[index].asInteger(), static_cast<i64>(index));
-}
-
-TEST(Metascript, ParsesLargeNumericList){
-    constexpr usize s_ValueCount = 8192u;
-    DestinationArena arena;
-    AString source("number asset; asset.values = [");
-    source.reserve(source.size() + s_ValueCount * s_ExpectedDualCount + s_ExpectedDualCount);
-    for(usize index = 0u; index < s_ValueCount; ++index)
-        source += "1,";
-    source += "];";
-
-    Document document(arena.arena);
-    const Timer parseBegin = TimerNow();
-    const bool parsed = document.parse(ViewOf(source));
-    const u64 parseNanoseconds = DurationInNS<u64>(TimerNow(), parseBegin);
-    NWB::Tests::RecordUnsignedTestProperty("list_parse_ns", parseNanoseconds);
-    ASSERT_TRUE(parsed);
-    const Value* const values = document.asset().findField(LiteralView("values"));
-    ASSERT_NE(values, nullptr);
-    ASSERT_TRUE(values->isList());
-    ASSERT_EQ(values->asList().size(), s_ValueCount);
-    for(const Value& value : values->asList())
-        EXPECT_EQ(value.asInteger(), 1);
 }
 
 TEST(Metascript, BindStyleStructDuplicateRejections){

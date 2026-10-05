@@ -109,7 +109,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(X11ClipboardFixture, IndependentClipboardAndPrimaryUtf8RoundTrip){
+TEST_F(X11ClipboardFixture, WritingPrimarySelectionDoesNotOverwriteClipboardUtf8){
     const AStringView clipboard = "clipboard \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x99\x82";
     const AStringView primary = "primary caf\xc3\xa9";
     ASSERT_TRUE(m_services[0]->capabilities(ClipboardChannel::PrimarySelection).readText);

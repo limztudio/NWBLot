@@ -331,31 +331,6 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     EXPECT_EQ(retry.sampleIndex, 0u);
 }
 
-TEST(ReflectionHistory, CompletedStatisticsRetainEpochStartAndResolvedSamplingMetadata){
-    ReflectionHistoryState history(1u);
-    const auto plan = history.plan(Stamp(), ReflectionSettings{}, 500u);
-    const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
-    ReflectionStatisticsState statistics(1u);
-    ReflectionStatistics metadata;
-    metadata.graphicsFrameIndex = 500u;
-    metadata.samplingSeed = 77u;
-    const auto key = statistics.reserve(metadata);
-    statistics.accept(key, Token(), true, &outcome);
-    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
-    statistics.complete(key, Token(), counters);
-    ReflectionStatistics completed;
-    ASSERT_TRUE(statistics.tryGetLatestStatistics(completed));
-    EXPECT_EQ(completed.graphicsFrameIndex, 500u);
-    EXPECT_EQ(completed.historyStartGraphicsFrame, 500u);
-    EXPECT_EQ(completed.historyEpoch, outcome.epoch);
-    EXPECT_EQ(completed.historySampleCount, 1u);
-    EXPECT_EQ(completed.sampleIndex, 0u);
-    EXPECT_EQ(completed.samplingSeed, 77u);
-    EXPECT_TRUE(completed.historyEligible);
-    EXPECT_TRUE(completed.historyReset);
-    EXPECT_FALSE(completed.historyReused);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

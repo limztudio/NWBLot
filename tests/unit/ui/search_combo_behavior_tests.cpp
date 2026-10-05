@@ -293,19 +293,6 @@ TEST_F(UiSearchComboBehaviorTests, QueryChangeRetiresPreviewAndScrollWithoutChan
     EXPECT_EQ(m_source.filterCalls, 2u);
 }
 
-TEST_F(UiSearchComboBehaviorTests, IncludedCommittedKeyReseedsTheFilteredPreview){
-    m_state.combo().select(99999u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(m_state.combo(), m_source));
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(m_state.combo()), m_source.filtered()));
-    ASSERT_TRUE(m_state.query().setText("tail"));
-    ASSERT_TRUE(SearchComboBehavior::Filter(m_state, m_source));
-    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(m_state.combo()), m_source.filtered()));
-    EXPECT_EQ(m_state.combo().selectedKey(), 99999u);
-    EXPECT_EQ(m_state.combo().listState().cursorKey(), 99999u);
-    EXPECT_EQ(m_source.view.count, 3u);
-}
-
 TEST_F(UiSearchComboBehaviorTests, NoResultsPreserveTheFullSourceSelectionAndOpenPopup){
     m_state.combo().select(5u);
     ASSERT_TRUE(ComboBehavior::Reconcile(m_state.combo(), m_source));

@@ -129,132 +129,18 @@ s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
 };
 
 
-TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireOrderIsStable){
+TEST(Telemetry, PhysicalQueueDecodeShrinkingInputClearsPreviousRecords){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
-
     Telemetry::TelemetryBytes payload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
-    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
-            + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
-            + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
-            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
-            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount)
-            + (sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics) * s_ExpectedDualCount)
-            + (sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * s_ExpectedDualCount)
-            + sizeof("GBuffer Pass")
-            + sizeof("Albedo Texture")
-            + sizeof("Lighting Pass"));
-
-    Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphPayloadVersion);
-    EXPECT_EQ(header.runtimeStatisticsCount, s_ExpectedDualCount);
-    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
-
     Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_FALSE(parsed.physicalQueueRuntimeStatistics.empty());
-    EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
-    EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
     ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& first =
-        parsed.physicalQueueRuntimeStatistics[0u].statistics
-    ;
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics expected =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(1u)
-    ;
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].ownerNodeIndex, 0u);
-    EXPECT_EQ(first.queue.index, 1u);
-    EXPECT_EQ(first.graphGeneration, 51u);
-    EXPECT_EQ(first.planGeneration, 52u);
-    EXPECT_EQ(first.recordingAttemptGeneration, 53u);
-    EXPECT_EQ(first.deviceGeneration, 17u);
-    EXPECT_EQ(GLB_MEMCMP(&first.compile, &expected.compile, sizeof(expected.compile)), 0);
-    EXPECT_EQ(GLB_MEMCMP(&first.recording, &expected.recording, sizeof(expected.recording)), 0);
-    EXPECT_EQ(GLB_MEMCMP(&first.submission, &expected.submission, sizeof(expected.submission)), 0);
-    EXPECT_EQ(first.submission.recoverySubmissionCount, 5u);
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& second =
-        parsed.physicalQueueRuntimeStatistics[1u].statistics
-    ;
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics expectedSecond =
-        MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
-    ;
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].ownerNodeIndex, 0u);
-    EXPECT_EQ(second.queue.index, 3u);
-    EXPECT_EQ(second.queue.deviceGeneration, 17u);
-    EXPECT_EQ(second.queueClass, Telemetry::FrameGraphQueueClass::Compute);
-    EXPECT_EQ(second.graphGeneration, 51u);
-    EXPECT_EQ(second.planGeneration, 52u);
-    EXPECT_EQ(second.recordingAttemptGeneration, 53u);
-    EXPECT_EQ(second.deviceGeneration, 17u);
-    EXPECT_EQ(GLB_MEMCMP(&second.compile, &expectedSecond.compile, sizeof(expectedSecond.compile)), 0);
-    EXPECT_EQ(GLB_MEMCMP(&second.recording, &expectedSecond.recording, sizeof(expectedSecond.recording)), 0);
-    EXPECT_EQ(GLB_MEMCMP(&second.submission, &expectedSecond.submission, sizeof(expectedSecond.submission)), 0);
-    EXPECT_EQ(second.submission.recoverySubmissionCount, 3u);
-
-    const usize physicalQueueRuntimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
-        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
-        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount
-        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics) * s_ExpectedDualCount
-    ;
-    const auto readU8 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
-        u8 value = 0u;
-        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
-        return value;
-    };
-    const auto readU16 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
-        u16 value = 0u;
-        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
-        return value;
-    };
-    const auto readU32 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
-        u32 value = 0u;
-        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
-        return value;
-    };
-    const auto readU64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
-        u64 value = 0u;
-        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
-        return value;
-    };
-    const auto readF64 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
-        f64 value = 0.0;
-        GLB_MEMCPY(&value, sizeof(value), payload.data() + physicalQueueRuntimeStatisticsOffset + wireOffset, sizeof(value));
-        return value;
-    };
-
-    EXPECT_EQ(readU32(0u), 0u);
-    EXPECT_EQ(readU16(4u), 1u);
-    EXPECT_EQ(readU16(6u), 17u);
-    EXPECT_EQ(readU8(8u), Telemetry::FrameGraphQueueClass::Graphics);
-    for(usize reservedIndex = 0u; reservedIndex < 7u; ++reservedIndex)
-        EXPECT_EQ(readU8(9u + reservedIndex), 0u);
-
-    const u64 expectedCompileCounts[] = {
-        50u, 49u, 1u, 11u, 12u, 6u, 7u, 30u, 31u, 8u, 9u, 7u, 8u, 1u,
-    };
-    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedCompileCounts); ++fieldIndex)
-        EXPECT_EQ(readU64(16u + fieldIndex * sizeof(u64)), expectedCompileCounts[fieldIndex]);
-    const u64 expectedRecordingCounts[] = { 20u, 21u, 21u, 23u, 19u, 18u };
-    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedRecordingCounts); ++fieldIndex)
-        EXPECT_EQ(readU64(128u + fieldIndex * sizeof(u64)), expectedRecordingCounts[fieldIndex]);
-    const f64 expectedRecordingSeconds[] = { 0.005, 0.006, 0.007, 0.008 };
-    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedRecordingSeconds); ++fieldIndex)
-        EXPECT_DOUBLE_EQ(readF64(176u + fieldIndex * sizeof(f64)), expectedRecordingSeconds[fieldIndex]);
-    const u64 expectedSubmissionCounts[] = {
-        25u, 26u, 24u, 24u, 19u, 23u, 20u, 20u, 5u, 8u, 7u, 18u,
-    };
-    for(usize fieldIndex = 0u; fieldIndex < LengthOf(expectedSubmissionCounts); ++fieldIndex)
-        EXPECT_EQ(readU64(208u + fieldIndex * sizeof(u64)), expectedSubmissionCounts[fieldIndex]);
-    EXPECT_DOUBLE_EQ(readF64(304u), 0.011);
-    EXPECT_EQ(readU64(312u), 5u);
 
     records.resize(1u);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));

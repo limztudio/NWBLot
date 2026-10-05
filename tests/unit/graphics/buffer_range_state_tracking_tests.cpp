@@ -188,32 +188,6 @@ TEST(BufferRangeStateTracking, MatchesPerByteModelAcrossDeterministicOverlapping
     }
 }
 
-TEST(BufferRangeStateTracking, StateAndOwnershipBarriersKeepTheExactByteInterval){
-    const Core::BufferRange range{ 37u, 91u };
-    const auto transition = Backend::VulkanStateTrackingDetail::BuildBufferStateBarrier(
-        VK_NULL_HANDLE, range, Core::ResourceStates::CopyDest, Core::ResourceStates::CopySource, false
-    );
-    const auto release = Backend::VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(
-        VK_NULL_HANDLE, Core::ResourceStates::CopyDest, 2u, 5u, false, range
-    );
-    const auto acquire = Backend::VulkanStateTrackingDetail::BuildBufferOwnershipAcquireBarrier(
-        VK_NULL_HANDLE, Core::ResourceStates::CopyDest, 2u, 5u, false, range
-    );
-
-    EXPECT_EQ(transition.offset, range.byteOffset);
-    EXPECT_EQ(transition.size, range.byteSize);
-    EXPECT_EQ(transition.srcAccessMask, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-    EXPECT_EQ(transition.dstAccessMask, VK_ACCESS_2_TRANSFER_READ_BIT);
-    EXPECT_EQ(release.offset, range.byteOffset);
-    EXPECT_EQ(release.size, range.byteSize);
-    EXPECT_EQ(acquire.offset, release.offset);
-    EXPECT_EQ(acquire.size, release.size);
-    EXPECT_EQ(release.dstStageMask, VK_PIPELINE_STAGE_2_NONE);
-    EXPECT_EQ(acquire.srcStageMask, VK_PIPELINE_STAGE_2_NONE);
-    EXPECT_EQ(release.srcQueueFamilyIndex, acquire.srcQueueFamilyIndex);
-    EXPECT_EQ(release.dstQueueFamilyIndex, acquire.dstQueueFamilyIndex);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

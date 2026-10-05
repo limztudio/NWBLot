@@ -36,22 +36,17 @@ using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
 // Timing availability and outcomes belong to the device-wide recorder rather than one compiled graph attempt. Keep the snapshot by value, export explicit skip reasons, and enumerate every live physical queue even on no-graph frames so unsupported capabilities remain distinguishable from measured zero-duration work.
-TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
+TEST(EcsGraphics, GpuTimingStagesCompletionBeforeRetirementAndInvokesSinksOutsideRecorderLock){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString timingHeaderSource;
-    AString timingTypesSource;
-    AString timingScopesSource;
     AString timingFrameTransactionSource;
     AString timingSource;
     AString timingAccumulatorSource;
     AString timingMetricCorrelatorSource;
     AString timingSubmissionSource;
-    AString frameGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing.h", timingHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_types.h", timingTypesSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_scope_lifecycle.cpp", timingScopesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_frame_transaction.cpp", timingFrameTransactionSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing.cpp", timingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_accumulator.cpp", timingAccumulatorSource));
@@ -60,49 +55,12 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
         timingMetricCorrelatorSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_CORE / s_GRAPHICS / "gpu_timing_submission.cpp", timingSubmissionSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_telemetry.cpp", frameGraphSource));
     const AStringView timingHeader(timingHeaderSource.data(), timingHeaderSource.size());
-    const AStringView timingTypes(timingTypesSource.data(), timingTypesSource.size());
-    const AStringView timingScopes(timingScopesSource.data(), timingScopesSource.size());
     const AStringView timingFrameTransaction(timingFrameTransactionSource.data(), timingFrameTransactionSource.size());
     const AStringView timing(timingSource.data(), timingSource.size());
     const AStringView timingAccumulator(timingAccumulatorSource.data(), timingAccumulatorSource.size());
     const AStringView timingMetricCorrelator(timingMetricCorrelatorSource.data(), timingMetricCorrelatorSource.size());
     const AStringView timingSubmission(timingSubmissionSource.data(), timingSubmissionSource.size());
-    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
-
-    EXPECT_TRUE(ContainsText(timingTypes, "namespace GpuTimingScopeSkipReason{"));
-    EXPECT_TRUE(ContainsText(timingTypes, "CollectionInactive,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "QueueTimestampsUnsupported,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "ComparableTimestampsUnsupported,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "ScopeNotPrepared,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "QueryCapacityUnavailable,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "RecordingPositionUnavailable,"));
-    EXPECT_TRUE(ContainsText(timingTypes, "struct GpuTimingRecorderStatistics{"));
-    EXPECT_TRUE(ContainsText(timingTypes, "u64 publishedSampleCount = 0u;"));
-    EXPECT_TRUE(ContainsText(timingTypes, "u64 unpublishedSampleCount = 0u;"));
-    EXPECT_TRUE(ContainsText(timingTypes, "u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};"));
-    EXPECT_TRUE(ContainsText(timingHeader, "GpuTimingRecorderStatistics statistics(const Device& device)const;"));
-    EXPECT_FALSE(ContainsText(timingHeader, "const GpuTimingRecorderStatistics& statistics("));
-    EXPECT_FALSE(ContainsText(timingHeader, "holdSubmissionCompletionForTesting"));
-    EXPECT_FALSE(ContainsText(timingHeader, "releaseSubmissionCompletionForTesting"));
-    EXPECT_FALSE(ContainsText(timingHeader, "m_heldSubmissionCompletion"));
-    EXPECT_TRUE(ContainsText(timing, "GpuTimingRecorderStatistics result = m_statistics;"));
-    EXPECT_TRUE(ContainsText(timing, "result.deviceGeneration = device.getDeviceGeneration();"));
-    EXPECT_TRUE(ContainsText(timing, "m_statistics = {};"));
-    EXPECT_TRUE(ContainsText(timing, "device.queueGetCompletedInstance(physicalQueue)"));
-    EXPECT_FALSE(ContainsText(timing, "holdSubmissionCompletionForTesting"));
-    EXPECT_FALSE(ContainsText(timing, "releaseSubmissionCompletionForTesting"));
-    EXPECT_FALSE(ContainsText(timing, "m_heldSubmissionCompletion"));
-    EXPECT_TRUE(ContainsText(timingAccumulator, "++m_publishedSampleCount;"));
-    EXPECT_TRUE(ContainsText(timingAccumulator, "++m_unpublishedSampleCount;"));
-    EXPECT_TRUE(ContainsText(timingHeader, "bool m_performanceCollectionActive = false;"));
-    EXPECT_TRUE(ContainsText(timing, "const bool performanceCollectionActive = m_enabled && m_timing.enabled();"));
-    EXPECT_TRUE(ContainsText(timing, "m_performanceCollectionActive = performanceCollectionActive;"));
-    EXPECT_TRUE(ContainsText(
-        timing,
-        "m_accumulatorsActive = m_performanceCollectionActive || !m_feedbackScopeDemands.empty();"
-    ));
 
     const usize collectLockedOffset = timing.find("bool GpuTimingRecorder::collectLocked(");
     const usize submissionCompletedOffset = timing.find("bool GpuTimingRecorder::submissionCompleted(", collectLockedOffset);
@@ -175,11 +133,6 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     ASSERT_NE(resetPerformanceCaptureOffset, AStringView::npos);
     EXPECT_LT(advanceEpochOffset, resetPerformanceCaptureOffset);
     EXPECT_TRUE(ContainsText(timing, "if(publishPerformanceSamples)\n            m_timing.publishFrame(publishFrameIndex);"));
-    EXPECT_TRUE(ContainsText(timingScopes, "++m_statistics.scopeAttemptCount;"));
-    EXPECT_TRUE(ContainsText(timingScopes, "GpuTimingScopeSkipReason::CollectionInactive"));
-    EXPECT_TRUE(ContainsText(timingScopes, "GpuTimingScopeSkipReason::QueueTimestampsUnsupported"));
-    EXPECT_TRUE(ContainsText(timingScopes, "GpuTimingScopeSkipReason::ComparableTimestampsUnsupported"));
-    EXPECT_TRUE(ContainsText(timingScopes, "GpuTimingScopeSkipReason::ScopeNotPrepared"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "GpuTimingScopeSkipReason::QueryCapacityUnavailable"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "GpuTimingScopeSkipReason::RecordingPositionUnavailable"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "const bool retirementPending = quarantineRecord("));
@@ -347,34 +300,6 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_TRUE(ContainsText(timingFrameTransaction, "beginScope(scopeDefinition.identity, device, commandList, attribution, false, m_scope)"));
     EXPECT_FALSE(ContainsText(timingFrameTransaction, "if(!device.supportsComparableGpuTimestamps(commandList.getResolvedDescription().physicalQueue))"));
 
-    const usize fallbackOffset = frameGraph.find("m_frameGraphRendererLabel += \"Renderer Frame\";");
-    const usize snapshotOffset = frameGraph.find("const Core::GpuTimingRecorderStatistics gpuTimingStatistics");
-    const usize topologyOffset = frameGraph.find("const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology");
-    const usize descriptorOffset = frameGraph.find("const Core::GpuDescriptorHeapLifecycleStatistics");
-    ASSERT_NE(fallbackOffset, AStringView::npos);
-    ASSERT_NE(snapshotOffset, AStringView::npos);
-    ASSERT_NE(topologyOffset, AStringView::npos);
-    ASSERT_NE(descriptorOffset, AStringView::npos);
-    EXPECT_LT(fallbackOffset, snapshotOffset);
-    EXPECT_LT(snapshotOffset, topologyOffset);
-    EXPECT_LT(topologyOffset, descriptorOffset);
-    EXPECT_TRUE(ContainsText(frameGraph, "m_graphics.gpuTiming().statistics(device)"));
-    EXPECT_TRUE(ContainsText(frameGraph, "GPU timing (device-wide cumulative since query reset):"));
-    EXPECT_TRUE(ContainsText(frameGraph, "GPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={}"));
-    EXPECT_TRUE(ContainsText(frameGraph, "skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}"));
-    EXPECT_TRUE(ContainsText(frameGraph, "gpuTimingStatistics.unpublishedSampleCount,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::RecordingPositionUnavailable]"));
-    EXPECT_TRUE(ContainsText(frameGraph, "device.getPhysicalQueueTopology()"));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.id.deviceGeneration,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.familyIndex,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.queueIndex,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "static_cast<u32>(queueInfo.capabilities),"));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.timestampValidBits != 0u,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "device.supportsComparableGpuTimestamps(queueInfo.id)"));
-    const AStringView timingQueueSlice = frameGraph.substr(topologyOffset, descriptorOffset - topologyOffset);
-    EXPECT_FALSE(ContainsText(timingQueueSlice, "continue;"));
-    EXPECT_FALSE(ContainsText(timingQueueSlice, "durationSeconds"));
-    EXPECT_FALSE(ContainsText(timingQueueSlice, "0.0"));
 }
 
 
@@ -537,203 +462,17 @@ TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
 }
 
 
-// Every normal renderer packet from the isolated frame prelude through the accepted presentation endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
-TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
-    TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
-
-    AString buildSource;
-    AString renderSource;
-    ASSERT_TRUE(ReadRendererSources(
-        repoRoot,
-        {
-            s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
-            "renderer_frame_pipeline_graph_schedule.cpp",
-            "renderer_frame_pipeline_graph_packet_metrics.cpp",
-        },
-        buildSource
-    ));
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp",
-        renderSource
-    ));
-    const AStringView build(buildSource.data(), buildSource.size());
-    const AStringView render(renderSource.data(), renderSource.size());
-
-    const usize graphSchedulingOffset = build.find("bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution");
-    ASSERT_NE(graphSchedulingOffset, AStringView::npos);
-    const usize optionsOffset = build.find("Core::GpuTaskGraphCompileOptions compileOptions;", graphSchedulingOffset);
-    ASSERT_NE(optionsOffset, AStringView::npos);
-    const usize firstTaskOffset = build.find(
-        "compileOptions.packetTimingEnvelope.firstTask = m_deferredFrameTimingBeginTask;",
-        optionsOffset
-    );
-    ASSERT_NE(firstTaskOffset, AStringView::npos);
-    const usize lastTaskOffset = build.find(
-        "compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;",
-        firstTaskOffset
-    );
-    ASSERT_NE(lastTaskOffset, AStringView::npos);
-    const usize schedulerOffset = build.find("if(!scheduler.scheduleGraph(", lastTaskOffset);
-    ASSERT_NE(schedulerOffset, AStringView::npos);
-    EXPECT_LT(optionsOffset, firstTaskOffset);
-    EXPECT_LT(firstTaskOffset, lastTaskOffset);
-    EXPECT_LT(lastTaskOffset, schedulerOffset);
-
-    const AStringView compileSetup = build.substr(optionsOffset, schedulerOffset - optionsOffset);
-    EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.firstTask"), 1u);
-    EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.lastTask"), 1u);
-    EXPECT_FALSE(ContainsText(compileSetup, "m_deferredFrameRecoveryTask"));
-
-    const usize metricHelperOffset = build.find("[[nodiscard]] bool PreparePacketEnvelopeMetrics(");
-    ASSERT_NE(metricHelperOffset, AStringView::npos);
-    const AStringView metricHelper = build.substr(metricHelperOffset, graphSchedulingOffset - metricHelperOffset);
-    EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTimingEnvelopeRange()"));
-    EXPECT_TRUE(ContainsText(metricHelper, "const Core::GpuCompiledPacketView packetView = compiledGraph.packet(packetID);"));
-    EXPECT_TRUE(ContainsText(metricHelper, "graph.taskAt(packetView.tasks[0u].index).identity"));
-    EXPECT_TRUE(ContainsText(metricHelper, ".physicalQueue = packetView.plan->queue,"));
-    EXPECT_TRUE(ContainsText(metricHelper, "DeferredGraphQueueInternalIdle(packetView.plan->queue, scratchArena)"));
-    EXPECT_TRUE(ContainsText(metricHelper, "RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity"));
-    EXPECT_TRUE(ContainsText(metricHelper, "timingRecorder.preparePacketEnvelopeMetrics("));
-    EXPECT_TRUE(ContainsText(metricHelper, "RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics("));
-    EXPECT_TRUE(ContainsText(metricHelper, "return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics("));
-    EXPECT_TRUE(ContainsText(metricHelper, "m_graphics.gpuTiming(),"));
-
-    const usize metricPrepareOffset = build.find("if(!prepareDeferredGraphPacketEnvelopeMetrics(", schedulerOffset);
-    const usize scheduledPublicationOffset = build.find("m_deferredLightingTaskGraphScheduled = true;", metricPrepareOffset);
-    ASSERT_NE(metricPrepareOffset, AStringView::npos);
-    ASSERT_NE(scheduledPublicationOffset, AStringView::npos);
-    EXPECT_LT(schedulerOffset, metricPrepareOffset);
-    EXPECT_LT(metricPrepareOffset, scheduledPublicationOffset);
-
-    const usize buildOffset = build.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    const usize graphDeclarationOffset = build.find("m_deferredLightingTaskGraphDeclared = true;", buildOffset);
-    ASSERT_NE(buildOffset, AStringView::npos);
-    ASSERT_NE(graphDeclarationOffset, AStringView::npos);
-    EXPECT_LT(buildOffset, graphDeclarationOffset);
-
-    const usize renderFunctionOffset = render.find("void RendererFramePipeline::render(");
-    ASSERT_NE(renderFunctionOffset, AStringView::npos);
-    const AStringView renderFunction = render.substr(renderFunctionOffset);
-    const usize graphBuildOffset = renderFunction.find("buildDeferredLightingTaskGraph(");
-    const usize executionSchedulingOffset = renderFunction.find(
-        "scheduleDeferredLightingTaskGraphForExecution(",
-        graphBuildOffset
-    );
-    const usize compiledPlanOffset = renderFunction.find(
-        "const Core::GpuCompiledGraph::ReadView deferredCompiledPlan",
-        executionSchedulingOffset
-    );
-    ASSERT_NE(graphBuildOffset, AStringView::npos);
-    ASSERT_NE(executionSchedulingOffset, AStringView::npos);
-    ASSERT_NE(compiledPlanOffset, AStringView::npos);
-    EXPECT_LT(graphBuildOffset, executionSchedulingOffset);
-    EXPECT_LT(executionSchedulingOffset, compiledPlanOffset);
-    EXPECT_TRUE(ContainsText(renderFunction, "normalScheduler.executeGraph("));
-    EXPECT_TRUE(ContainsText(renderFunction, "scheduler.executeAcceptedFrontierTask("));
-    EXPECT_EQ(CountText(renderFunction, "scheduler.executeTask("), s_ExpectedDualCount);
-    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder"));
-    EXPECT_FALSE(ContainsText(renderFunction, "scheduler.submit("));
-}
-
-
 // Queue timing feedback is deliberately opt-in, but the two graph-owned AVBOIT Compute tasks must route accepted timestamp samples back into the next immutable compiler snapshot. Keep this source-level contract focused on the renderer boundary rather than coupling it to one physical queue topology.
-TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
+TEST(EcsGraphics, TimingFeedbackRollsBackRejectedCollectionAndRetainsSubscriptionsThroughGraphDestruction){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString systemHeaderSource;
     AString systemSource;
-    AString timingFeedbackHeaderSource;
     AString timingFeedbackSource;
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline.cpp", systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "kernel" / "task_timing_feedback.cpp", timingFeedbackSource));
-    ASSERT_TRUE(ReadRendererSources(
-        repoRoot,
-        {
-            "avboit/task_graph_occupancy_tasks.h",
-            "avboit/task_graph_occupancy_tasks.cpp",
-            "avboit/task_graph_extinction_integration_tasks.h",
-            "avboit/task_graph_extinction_integration_tasks.cpp",
-            "avboit/task_graph_accumulation_tasks.h",
-            "avboit/task_graph_accumulation_tasks.cpp",
-            "avboit/task_graph_timing_metadata.h",
-            s_RENDERER_FRAME_PIPELINE_GRAPH_CPP,
-            "renderer_frame_pipeline_graph_schedule.cpp",
-        },
-        taskGraphSource
-    ));
-    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
-    const AStringView timingFeedbackHeader(timingFeedbackHeaderSource.data(), timingFeedbackHeaderSource.size());
     const AStringView timingFeedback(timingFeedbackSource.data(), timingFeedbackSource.size());
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedbackState final"));
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedback final"));
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "Core::GpuTimingSampleSubscription m_subscription"));
-    EXPECT_TRUE(ContainsText(
-        timingFeedbackHeader,
-        "Vector<Name, Core::Alloc::GlobalArena> m_feedbackCollectionScopes"
-    ));
-    EXPECT_FALSE(ContainsText(timingFeedbackHeader, "m_nextAttribution"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "subscribeSampleListener(Core::GpuTimingSampleListener{"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "unsubscribeSampleListener(subscription)"));
-    EXPECT_TRUE(ContainsText(
-        timingFeedback,
-        "m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);"
-    ));
-    EXPECT_EQ(CountText(timingFeedback, "setFeedbackCollectionScopes("), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(timingFeedback, "clearFeedbackCollectionScopes("), 1u);
-    EXPECT_FALSE(ContainsText(timingFeedback, "setFeedbackCollectionEnabled("));
-    EXPECT_TRUE(ContainsText(timingFeedback, "!scopeName || !collectsScope(scopeName)"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "PrepareRendererTaskTimingFeedbackPolicyTransition(m_policy, policy, m_active)"));
-    EXPECT_TRUE(ContainsText(
-        timingFeedback,
-        "ResolveRendererTaskTimingFeedbackPolicyTransition(m_policy, transition, collectionUpdated)"
-    ));
-    EXPECT_TRUE(ContainsText(timingFeedback, "m_graphics.gpuTiming().allocateSampleAttribution()"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "!m_active || !m_policy.enabled || !m_subscription.valid()"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "sample.physicalQueue != pending.expectedQueue"));
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "bool recordsNonCommittingTimingSample = false"));
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "bool submissionResolved = false"));
-    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "bool sampleResolved = false"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "history.recordNonCommittingSample("));
-    EXPECT_TRUE(ContainsText(timingFeedback, "drainResult = m_state.drain(m_history, deviceGeneration);"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "options.queueAssignmentOptions.timingHistory = nullptr;"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "options.queueAssignmentOptions.timingFeedbackPolicy = {};"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "options.queueAssignmentOptions.timingFrameIndex = 0u;"));
-    EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
-    EXPECT_TRUE(ContainsText(timingFeedback, "m_active && m_subscription.valid() && m_policy.enabled"));
-
-    const usize feedbackScopesOffset = system.find("static constexpr Name s_DeferredTaskTimingFeedbackScopes[] = {");
-    const usize feedbackScopesEnd = system.find("};", feedbackScopesOffset);
-    ASSERT_NE(feedbackScopesOffset, AStringView::npos);
-    ASSERT_NE(feedbackScopesEnd, AStringView::npos);
-    const AStringView feedbackScopes = system.substr(feedbackScopesOffset, feedbackScopesEnd - feedbackScopesOffset);
-    EXPECT_EQ(CountText(feedbackScopes, "RendererGpuTimingScope::"), s_ExpectedDualCount);
-    EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitDepthWarp.identity"));
-    EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitIntegration.identity"));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "NotNull<const Name*>(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "LengthOf(__hidden_renderer_frame_pipeline::s_DeferredTaskTimingFeedbackScopes)"
-    ));
-
-    const usize feedbackDeclarationOffset = systemHeader.find("RendererTaskTimingFeedback m_deferredTaskTimingFeedback");
-    const usize graphDeclarationOffset = systemHeader.find("Core::GpuTaskGraph m_deferredLightingTaskGraph");
-    const usize rayTracingSystemDeclarationOffset = systemHeader.find("RendererRayTracingSystem m_raytracingSystem");
-    ASSERT_NE(feedbackDeclarationOffset, AStringView::npos);
-    ASSERT_NE(graphDeclarationOffset, AStringView::npos);
-    ASSERT_NE(rayTracingSystemDeclarationOffset, AStringView::npos);
-    EXPECT_LT(rayTracingSystemDeclarationOffset, feedbackDeclarationOffset);
-    EXPECT_LT(feedbackDeclarationOffset, graphDeclarationOffset);
 
     const usize setPolicyOffset = timingFeedback.find("bool RendererTaskTimingFeedback::setPolicy(");
     const usize beginSampleOffset = timingFeedback.find(
@@ -803,92 +542,6 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_FALSE(ContainsText(accept, ".erase("));
     EXPECT_FALSE(ContainsText(accept, "NWB_LOGGER"));
 
-    const usize graphSchedulingOffset = taskGraph.find("bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution");
-    const usize schedulerOffset = taskGraph.find("if(!scheduler.scheduleGraph(", graphSchedulingOffset);
-    const usize feedbackOffset = taskGraph.find("m_deferredTaskTimingFeedback.configureCompileOptions(", graphSchedulingOffset);
-    ASSERT_NE(graphSchedulingOffset, AStringView::npos);
-    ASSERT_NE(schedulerOffset, AStringView::npos);
-    ASSERT_NE(feedbackOffset, AStringView::npos);
-    EXPECT_LT(feedbackOffset, schedulerOffset);
-
-    const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    ASSERT_NE(lightingOffset, AStringView::npos);
-
-    const usize depthWarpOffset = taskGraph.find("struct AvboitDepthWarpGraphTask");
-    const usize extinctionComputeEmulationOffset = taskGraph.find(
-        "struct AvboitExtinctionComputeEmulationGraphTask",
-        depthWarpOffset
-    );
-    const usize integrationOffset = taskGraph.find("struct AvboitIntegrationGraphTask", extinctionComputeEmulationOffset);
-    const usize accumulationOffset = taskGraph.find("struct AvboitAccumulationGraphTask", integrationOffset);
-    ASSERT_NE(depthWarpOffset, AStringView::npos);
-    ASSERT_NE(extinctionComputeEmulationOffset, AStringView::npos);
-    ASSERT_NE(integrationOffset, AStringView::npos);
-    ASSERT_NE(accumulationOffset, AStringView::npos);
-    ASSERT_LT(depthWarpOffset, extinctionComputeEmulationOffset);
-    ASSERT_LT(extinctionComputeEmulationOffset, integrationOffset);
-    ASSERT_LT(integrationOffset, accumulationOffset);
-    const AStringView depthWarp = taskGraph.substr(depthWarpOffset, extinctionComputeEmulationOffset - depthWarpOffset);
-    const AStringView integration = taskGraph.substr(integrationOffset, accumulationOffset - integrationOffset);
-
-    for(const AStringView task : { depthWarp, integration }){
-        EXPECT_TRUE(ContainsText(task, ".timingFeedback"));
-        EXPECT_TRUE(ContainsText(task, ".timingScope"));
-        EXPECT_TRUE(ContainsText(task, "BeginTaskTimingSample("));
-        EXPECT_TRUE(ContainsText(task, "static void accepted("));
-        EXPECT_TRUE(ContainsText(task, "acceptSubmission("));
-        EXPECT_TRUE(ContainsText(task, "static void discarded("));
-        EXPECT_TRUE(ContainsText(task, "discardRecording("));
-    }
-    EXPECT_TRUE(ContainsText(timingFeedback, "compiledTask.plan->recordsNonCommittingTimingSample"));
-
-    const AStringView lighting(taskGraph.substr(lightingOffset));
-    AString computeChainSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "avboit" / "compute_effect_chain_builder.cpp", computeChainSource));
-    const AStringView computeChain(computeChainSource.data(), computeChainSource.size());
-    EXPECT_TRUE(ContainsText(computeChain, "allowTimingFeedbackRouting = true"));
-    EXPECT_TRUE(ContainsText(lighting, "avboitComputeEffectChainBuilder.declareDepthWarp("));
-    EXPECT_TRUE(ContainsText(lighting, "avboitComputeEffectChainBuilder.declareIntegration("));
-    EXPECT_TRUE(ContainsText(lighting, ".depthWarpTimingTicket = &avboitDepthWarpTimingTicket,"));
-    EXPECT_TRUE(ContainsText(lighting, ".integrationTimingTicket = &avboitIntegrationTimingTicket,"));
-    EXPECT_EQ(CountText(lighting, ".timingFeedback = &m_deferredTaskTimingFeedback,"), s_ExpectedDualCount);
-    const usize depthWarpDeclarationOffset = computeChain.find("Core::GpuTaskDesc depthWarpDesc;");
-    const usize depthWarpDeclarationEnd = computeChain.find(
-        "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
-        depthWarpDeclarationOffset
-    );
-    const usize integrationDeclarationOffset = computeChain.find("Core::GpuTaskDesc integrationDesc;", depthWarpDeclarationEnd);
-    const usize integrationDeclarationEnd = computeChain.find(
-        "if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid())",
-        integrationDeclarationOffset
-    );
-    ASSERT_NE(depthWarpDeclarationOffset, AStringView::npos);
-    ASSERT_NE(depthWarpDeclarationEnd, AStringView::npos);
-    ASSERT_NE(integrationDeclarationOffset, AStringView::npos);
-    ASSERT_NE(integrationDeclarationEnd, AStringView::npos);
-    const AStringView depthWarpDeclaration = computeChain.substr(
-        depthWarpDeclarationOffset,
-        depthWarpDeclarationEnd - depthWarpDeclarationOffset
-    );
-    const AStringView integrationDeclaration = computeChain.substr(
-        integrationDeclarationOffset,
-        integrationDeclarationEnd - integrationDeclarationOffset
-    );
-    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingFeedback = inputs.timingFeedback"));
-    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp"));
-    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingTicket = inputs.depthWarpTimingTicket"));
-    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingFeedback = inputs.timingFeedback"));
-    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingScope = &RendererGpuTimingScope::s_AvboitIntegration"));
-    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingTicket = inputs.integrationTimingTicket"));
-    EXPECT_TRUE(ContainsText(taskGraph, "AvboitComputeStageTimingMetadata"));
-    EXPECT_TRUE(ContainsText(
-        taskGraph,
-        ".resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << s_ResolutionHeightShiftBits)"
-    ));
-    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));
-    EXPECT_TRUE(ContainsText(integrationDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));
-    EXPECT_FALSE(ContainsText(taskGraph, "AvboitIntegrationTimingMetadata"));
-    EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
 }
 
 

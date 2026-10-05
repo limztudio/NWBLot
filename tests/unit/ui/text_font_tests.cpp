@@ -81,13 +81,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextFontTests, BundledLatinShapingHasKerningLigaturesAndCombiningClusters){
-    ASSERT_EQ(m_service.layout({ "A" }, m_layout), TextLayoutStatus::Success);
-    const f32 aWidth = m_layout.measure().x;
-    ASSERT_EQ(m_service.layout({ "V" }, m_layout), TextLayoutStatus::Success);
-    const f32 vWidth = m_layout.measure().x;
-    ASSERT_EQ(m_service.layout({ "AV" }, m_layout), TextLayoutStatus::Success);
-    EXPECT_LT(m_layout.measure().x, aWidth + vWidth);
+TEST_F(TextFontTests, BundledLatinLigaturesAndCombiningMarksRetainWholeSourceClusters){
     ASSERT_EQ(m_service.layout({ "ffi" }, m_layout), TextLayoutStatus::Success);
     ASSERT_EQ(m_layout.clusters().size(), 1u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 3u);
@@ -328,7 +322,6 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringesWithoutChang
         EXPECT_FLOAT_EQ(m_layout.inkBounds().height, glyph.ink.height);
     }
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

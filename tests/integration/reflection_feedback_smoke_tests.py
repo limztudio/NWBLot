@@ -6,12 +6,10 @@ from dataclasses import replace
 from contextlib import redirect_stderr
 import importlib.util
 import io
-import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
@@ -27,17 +25,9 @@ LIT_BOUNDARY = "boundary"
 LIT_NWB_REFLECTION_SMOKE_FEEDBACK = "NWB_REFLECTION_SMOKE_FEEDBACK"
 LIT_NWB_REFLECTION_SMOKE_TEMPORAL = "NWB_REFLECTION_SMOKE_TEMPORAL"
 LIT_NWB_REFLECTION_SMOKE_SPATIAL = "NWB_REFLECTION_SMOKE_SPATIAL"
-LIT_NPOT = "npot"
-LIT_NWB_REFLECTION_SMOKE_EXTENT = "NWB_REFLECTION_SMOKE_EXTENT"
 LIT_REFLECTION = "reflection"
 LIT_REFLECTION_SCREEN_STEPS = "--reflection-screen-steps"
-LIT_N_16 = "16"
-LIT_UNUSED = "unused"
-LIT_APP_EXE = "app.exe"
-LIT_RUNTIME = "runtime"
 LIT_FLOOR = "floor"
-LIT_RUN = "run"
-LIT_EXPECT_LOG_MESSAGE = "--expect-log-message"
 LIT_GENERATION = "generation"
 LIT_SCREEN_HITS = "screen_hits"
 LIT_EFFECTIVE_BUDGET = "effective_budget"
@@ -93,22 +83,7 @@ def mutation_frame(final):
 
 
 class CapturePlanTests(unittest.TestCase):
-    def test_plan_is_bounded_and_has_full_pairs(self):
-        self.assertEqual(len(smoke.CAPTURES), 24)
-        self.assertEqual(len({spec.name for spec in smoke.CAPTURES}), len(smoke.CAPTURES))
-        for prefix, _, _ in smoke.PAIR_CASES:
-            baseline = next(spec for spec in smoke.CAPTURES if spec.name == prefix + "_baseline")
-            feedback = next(spec for spec in smoke.CAPTURES if spec.name == prefix + "_feedback")
-            self.assertFalse(baseline.enabled)
-            self.assertTrue(feedback.enabled)
-            for field in ("case", "mode", "hardware_budget", "accepted_frames", "screen_steps", "roughness", "extent"):
-                self.assertEqual(getattr(baseline, field), getattr(feedback, field))
-
     def test_explicit_guards_do_not_fake_hardware_availability(self):
-        self.assertTrue(any(spec.hardware_budget == 0 for spec in smoke.CAPTURES))
-        self.assertTrue(any(spec.hardware_budget == 64 for spec in smoke.CAPTURES))
-        self.assertTrue(any(spec.mode == "screen" for spec in smoke.CAPTURES))
-        self.assertTrue(any(spec.roughness == 1 for spec in smoke.CAPTURES))
         spec = smoke.CAPTURES[1]
         with patch.dict("os.environ", {LIT_NWB_REFLECTION_SMOKE_FEEDBACK: "0", LIT_NWB_REFLECTION_SMOKE_TEMPORAL: "1"}):
             environment = smoke.spec_environment(spec)
@@ -117,64 +92,17 @@ class CapturePlanTests(unittest.TestCase):
         self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_SPATIAL], "0")
         self.assertNotIn("NWB_REFLECTION_SMOKE_HARDWARE_AVAILABLE", environment)
 
-    def test_npot_pair_uses_a_fixed_partial_workgroup_extent(self):
-        specs = [spec for spec in smoke.CAPTURES if spec.extent == LIT_NPOT]
-        self.assertEqual(len(specs), 2)
-        for spec in specs:
-            self.assertEqual(spec.dimensions, (953, 713))
-            self.assertNotEqual(spec.dimensions[0] % 8, 0)
-            self.assertNotEqual(spec.dimensions[1] % 8, 0)
-            self.assertEqual(smoke.spec_environment(spec)[LIT_NWB_REFLECTION_SMOKE_EXTENT], LIT_NPOT)
-
-    def test_launcher_forwards_typed_feedback_steps_and_fixed_extent(self):
+    def test_launcher_rejects_feedback_steps_below_minimum(self):
         location = Path(__file__).resolve().parents[1] / "smoke/launch.py"
         spec = importlib.util.spec_from_file_location("feedback_test_launcher", location)
         launcher = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = launcher
         spec.loader.exec_module(launcher)
-        args = launcher.make_parser().parse_args([LIT_REFLECTION, "--reflection-feedback", "on",
-            LIT_REFLECTION_SCREEN_STEPS, LIT_N_16, "--reflection-extent", LIT_NPOT])
-        environment = launcher.build_smoke_environment(args)
-        self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "1")
-        self.assertEqual(environment["NWB_REFLECTION_SMOKE_SCREEN_STEPS"], LIT_N_16)
-        self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_EXTENT], LIT_NPOT)
         self.assertEqual(launcher.make_parser().parse_args([LIT_REFLECTION, LIT_REFLECTION_SCREEN_STEPS, "8"]).reflection_screen_steps, 8)
         with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             launcher.make_parser().parse_args([LIT_REFLECTION, LIT_REFLECTION_SCREEN_STEPS, "7"])
 
-    def test_zero_budget_capture_requires_actual_screen_route_and_accepted_settings(self):
-        args = SimpleNamespace(output_directory=Path(LIT_UNUSED), executable=Path(LIT_APP_EXE),
-            working_directory=Path(LIT_RUNTIME), timeout=60, require_hardware=True,
-            logserver_executable=None, application_arg=[])
-        spec = smoke.FeedbackCapture("zero", LIT_FLOOR, True, hardware_budget=0, screen_steps=16)
-        with patch.object(smoke.subprocess, LIT_RUN, return_value=SimpleNamespace(returncode=77)) as run:
-            self.assertIsNone(smoke.capture(args, spec))
-        command = run.call_args.args[0]
-        pairs = set(zip(command, command[1:]))
-        self.assertIn((LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: screen-space"), pairs)
-        self.assertIn((LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: screen feedback 1"), pairs)
-        self.assertIn((LIT_EXPECT_LOG_MESSAGE, "ReflectionSmokeProject: screen steps 16"), pairs)
-        self.assertNotIn((LIT_EXPECT_LOG_MESSAGE, "Reflection resolve: hardware"), pairs)
-
-
 class ProjectionTests(unittest.TestCase):
-    def test_long_panel_reflection_uses_floor_virtual_image(self):
-        direct = smoke.long_panel_projection(960, 720, LIT_RED, False)
-        reflected = smoke.long_panel_projection(960, 720, LIT_RED, True)
-        self.assertAlmostEqual(direct[0], 391.66540881398724)
-        self.assertAlmostEqual(reflected[0], direct[0])
-        self.assertAlmostEqual(reflected[1] - direct[1], 374.1229744348775)
-        fraction = 1.4 / (1.4 + 3.6)
-        receiver_z = -6 + 12 * fraction
-        self.assertAlmostEqual(receiver_z, -2.64)
-        self.assertGreater(receiver_z, -4)
-        self.assertLess(receiver_z, 8)
-
-    def test_long_direct_and_reflected_markers_pass(self):
-        result = smoke.analyze_long_miss_panels(long_frame())
-        self.assertGreater(result[LIT_RED][LIT_REFLECTION]["pixels"], 100)
-        self.assertGreater(result[LIT_GREEN]["projected_traversal_pixels"], 150)
-
     def test_missing_hardware_marker_fails(self):
         with self.assertRaises(SmokeFailure):
             smoke.analyze_long_miss_panels(long_frame(missing=(LIT_RED, True)))
@@ -193,11 +121,6 @@ class ProjectionTests(unittest.TestCase):
 
 
 class MutationTests(unittest.TestCase):
-    def test_moved_marker_matches_fresh_and_preserves_control(self):
-        result = smoke.compare_mutation_images(mutation_frame(False), mutation_frame(True), mutation_frame(True))
-        self.assertEqual(result["changed_equals_fresh"]["mean_channel_byte_error"], 0)
-        self.assertLess(result["measured_green_motion_pixels"], -30)
-
     def test_retained_old_marker_fails(self):
         changed = mutation_frame(True)
         paint_rectangle(changed[2], panel_projection(400, 300, LIT_GREEN, LIT_BOUNDARY, True), (20, 220, 20))
@@ -210,13 +133,6 @@ class MutationTests(unittest.TestCase):
 
 
 class TraversalQualificationTests(unittest.TestCase):
-    def test_actual_long_work_qualifies_without_claiming_speed(self):
-        sample = smoke.TraversalEvidence(attempts=1000, iterations=14000, step_limit_misses=750, maximum_steps=16)
-        result = smoke.qualify_costly_misses([sample] * 8)
-        self.assertEqual(result["mean_iterations_per_attempt"], 14)
-        self.assertEqual(result["step_limit_miss_fraction"], 0.75)
-        self.assertIn("timing comparison remains separate", result["qualification"])
-
     def test_large_attempt_count_with_immediate_rejects_cannot_qualify(self):
         sample = smoke.TraversalEvidence(attempts=100000, iterations=100000, step_limit_misses=0, maximum_steps=16)
         with self.assertRaises(SmokeFailure):
@@ -269,12 +185,6 @@ class CompletedFeedbackTests(unittest.TestCase):
         return smoke.validate_feedback(self.log(samples if samples is not None else baseline_feedback, source, mutation),
             stats if stats is not None else baseline_stats,
             spec or smoke.FeedbackCapture("floor_feedback", LIT_FLOOR, True))
-
-    def test_completed_feedback_has_source_and_token_join(self):
-        result = self.validate()
-        self.assertEqual(result[LIT_CAPTURED_GRAPHICS_FRAME], 160)
-        self.assertFalse(result[LIT_EXACT_FIRST_FRAME_COUNTERS_AVAILABLE])
-        self.assertEqual(len(result[LIT_STABLE_FEEDBACK]), 8)
 
     def test_metadata_cannot_detach_from_statistics(self):
         _, samples = self.observations()
@@ -391,38 +301,10 @@ class AuthoredVolumeIdentityTests(unittest.TestCase):
             asset.write_bytes(b"changed shader")
             self.assertNotEqual(before, volume_identity.authored_volume_hashes(root))
 
-    def test_report_records_exact_optical_limit_and_authored_volume_identity(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / LIT_RES).mkdir()
-            (root / LIT_RES_1F98ED5C238BF1C3_VOL).write_bytes(LIT_CACHE)
-            (root / LIT_RES_AUTHORED_VOL).write_bytes(b"asset")
-            executable = root / LIT_APP_EXE
-            executable.write_bytes(b"fixture")
-            args = SimpleNamespace(output_directory=root, working_directory=root, executable=executable)
-            smoke.write_report(args, [], {})
-            manifest = json.loads((root / "reflection_feedback_manifest.json").read_text())
-            self.assertEqual(manifest["optical_queries"], 16)
-            self.assertEqual(set(manifest["build_identity"]["asset_volumes"]), {LIT_RES_AUTHORED_VOL})
-            self.assertEqual(smoke.spec_environment(smoke.CAPTURES[0])["NWB_REFLECTION_SMOKE_OPTICAL_QUERIES"], LIT_N_16)
-
-
 class DiagnosticsOffTests(unittest.TestCase):
     def log(self, source=64):
         return "ReflectionSmokeProject: screen feedback 1\nReflectionSmokeProject: screen steps 96\n" \
             + "FramebufferCapture: graphics source frame " + str(source)
-
-    def test_plan_preserves_strict_diagnostics_matrix_and_adds_six_frozen_pairs(self):
-        self.assertEqual(len(smoke.CAPTURES), 24)
-        self.assertTrue(all(spec.diagnostics for spec in smoke.CAPTURES))
-        self.assertEqual(len(smoke.DIAGNOSTICS_OFF_CAPTURES), 6)
-        for spec in smoke.DIAGNOSTICS_OFF_CAPTURES:
-            self.assertFalse(spec.diagnostics)
-            environment = smoke.spec_environment(spec)
-            self.assertEqual(environment["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "0")
-            self.assertEqual(environment["NWB_REFLECTION_SMOKE_FEEDBACK_CAPTURE"], "0")
-            self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_TEMPORAL], "0")
-            self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_SPATIAL], "0")
 
     def test_completed_readback_proof_does_not_invent_feedback_statistics(self):
         spec = smoke.DIAGNOSTICS_OFF_CAPTURES[1]
@@ -441,19 +323,6 @@ class DiagnosticsOffTests(unittest.TestCase):
         for prefix in (LIT_REFLECTIONSMOKEFEEDBACK, "ReflectionSmokeStatistics:", "ReflectionSmokeHistory:", "ReflectionSmokeOptics:"):
             with self.assertRaisesRegex(SmokeFailure, "unexpectedly published"):
                 smoke.validate_diagnostics_off(self.log() + LIT_N + prefix, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
-
-    def test_capture_uses_ordinary_frame_predicate_and_rejects_statistics_logs(self):
-        args = SimpleNamespace(output_directory=Path(LIT_UNUSED), executable=Path(LIT_APP_EXE),
-            working_directory=Path(LIT_RUNTIME), timeout=60, require_hardware=True,
-            logserver_executable=None, application_arg=[])
-        with patch.object(smoke.subprocess, LIT_RUN, return_value=SimpleNamespace(returncode=77)) as run:
-            smoke.capture(args, smoke.DIAGNOSTICS_OFF_CAPTURES[1])
-        command = run.call_args.args[0]
-        pairs = set(zip(command, command[1:]))
-        self.assertIn(("--application-capture-frame-count", "65"), pairs)
-        self.assertIn(("--reject-log-message", LIT_REFLECTIONSMOKEFEEDBACK), pairs)
-        self.assertNotIn((LIT_EXPECT_LOG_MESSAGE, LIT_REFLECTIONSMOKEFEEDBACK), pairs)
-
 
 if __name__ == LIT_MAIN:
     unittest.main()

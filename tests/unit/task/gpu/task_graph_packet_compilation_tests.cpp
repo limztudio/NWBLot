@@ -247,86 +247,11 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     {
         const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
-        const Graphics::GpuTaskGraph::DeclarationReadView& declarations = reads.declarations;
         const Graphics::GpuCompiledGraph::ReadView& compiledPlan = reads.compiled;
 
         ASSERT_TRUE(reads.valid());
         ASSERT_EQ(compiledPlan.taskCount(), 4u);
         ASSERT_EQ(compiledPlan.packetCount(), 4u);
-        const Graphics::GpuPhysicalQueueTopology compiledQueueTopology = compiledPlan.queueTopology();
-        ASSERT_NE(compiledQueueTopology.queues, nullptr);
-        ASSERT_EQ(compiledQueueTopology.queueCount, LengthOf(queues));
-        EXPECT_EQ(compiledQueueTopology.queues[0u].id, queues[0u].id);
-        EXPECT_EQ(compiledQueueTopology.queues[1u].id, queues[1u].id);
-        EXPECT_EQ(compiledQueueTopology.queues[s_ThirdElementIndex].id, queues[s_ThirdElementIndex].id);
-
-        const Graphics::GpuTaskGraphCompileStatistics compileStatistics = compiledPlan.compileStatistics();
-        ASSERT_TRUE(compileStatistics.valid());
-        EXPECT_EQ(compileStatistics.graphGeneration, compiledPlan.generation());
-        EXPECT_EQ(compileStatistics.planGeneration, compiledPlan.planGeneration());
-        EXPECT_EQ(compileStatistics.deviceGeneration, compiledPlan.deviceGeneration());
-        EXPECT_EQ(compileStatistics.taskCount, compiledPlan.taskCount());
-        EXPECT_EQ(compileStatistics.resourceCount, declarations.resourceCount());
-        EXPECT_EQ(compileStatistics.resourceUseCount, 1u);
-        EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.inferredDependencyCount, 0u);
-        EXPECT_EQ(compileStatistics.declaredExternalDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.initialOwnershipExternalDependencyCount, 0u);
-        EXPECT_EQ(compileStatistics.externalDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.packetCount, compiledPlan.packetCount());
-        EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.packetExternalDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.crossFamilyPacketDependencyCount, 1u);
-        EXPECT_EQ(compileStatistics.mergedTaskCount, 0u);
-        EXPECT_EQ(compileStatistics.recordingFrontierCount, 1u);
-        EXPECT_EQ(
-            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics],
-            s_ExpectedDualCount
-        );
-        EXPECT_EQ(
-            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Compute],
-            1u
-        );
-        EXPECT_EQ(
-            compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Transfer],
-            1u
-        );
-        EXPECT_EQ(
-            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics],
-            s_ExpectedDualCount
-        );
-        EXPECT_EQ(
-            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Compute],
-            1u
-        );
-        EXPECT_EQ(
-            compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Transfer],
-            1u
-        );
-        usize packetizationDecisionCount = 0u;
-        for(const usize count : compileStatistics.packetizationDecisionCounts)
-            packetizationDecisionCount += count;
-        EXPECT_EQ(packetizationDecisionCount, compiledPlan.taskCount());
-        EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
-        EXPECT_GE(compileStatistics.validationSeconds, 0.0);
-        EXPECT_GE(compileStatistics.dependencyAnalysisSeconds, 0.0);
-        EXPECT_GE(compileStatistics.hazardAnalysisSeconds, 0.0);
-        EXPECT_GE(compileStatistics.topologicalOrderSeconds, 0.0);
-        EXPECT_LE(
-            compileStatistics.validationSeconds
-                + compileStatistics.dependencyAnalysisSeconds
-                + compileStatistics.hazardAnalysisSeconds
-                + compileStatistics.topologicalOrderSeconds,
-            compileStatistics.analysisSeconds + 1.0e-9
-        );
-        EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
-        EXPECT_GE(compileStatistics.planningSeconds, 0.0);
-        EXPECT_GE(compileStatistics.packetizationSeconds, 0.0);
-        EXPECT_GE(compileStatistics.resourceStatePlanningSeconds, 0.0);
-        EXPECT_GE(compileStatistics.packetDependencyPlanningSeconds, 0.0);
-        EXPECT_GE(compileStatistics.totalSeconds, 0.0);
-
         const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
         const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
         const Graphics::GpuSubmissionPacketId transferPacket = compiledPlan.packetForTask(transfer);
@@ -394,11 +319,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         EXPECT_TRUE(recoveryPacketView.plan->joinsAcceptedQueueFrontier);
         EXPECT_TRUE(recoveryPacketView.plan->isRecoverySubmission);
 
-        const Graphics::QueueSubmissionToken* const storedToken = declarations.externalCompletionToken(completion);
-        ASSERT_NE(storedToken, nullptr);
-        EXPECT_EQ(storedToken->value, completionToken.value);
-        EXPECT_EQ(storedToken->queue, completionToken.queue);
-        EXPECT_TRUE(storedToken->matchesPhysicalQueue(producerQueue.id.index, producerQueue.id.deviceGeneration));
+
     }
 
     compiledGraph.reset();

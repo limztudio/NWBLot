@@ -371,53 +371,6 @@ TEST(MaterialTextureImport, PromotedCallsRebuildAfterResetAndLeaveTextureOwnersh
     }
 }
 
-TEST(MaterialTextureImport, ExistingTexturesRequireNoStorageBeyondReservedOrderedOutput){
-    struct Workload{
-        usize uniqueTextures;
-        usize requests;
-        usize unrelatedTextures;
-    };
-    const Workload workloads[] = {
-        { 1u, 1u, 0u },
-        { 1u, 4096u, 512u },
-        { 32u, 32u, 0u },
-        { 32u, 4096u, 512u },
-        { 40u, 40u, 0u },
-        { 40u, 4096u, 512u },
-        { 40u, 40u, 512u },
-    };
-    for(usize workloadIndex = 0u; workloadIndex < LengthOf(workloads); ++workloadIndex){
-        const Workload& workload = workloads[workloadIndex];
-        TextureContext context;
-        for(usize index = 0u; index < workload.uniqueTextures + workload.unrelatedTextures; ++index){
-            char indexText[32u] = {};
-            const Name identity = DeriveName(Name("tests/texture_import/scratch_shape"), FormatDecimal(index, indexText));
-            context.textures.push_back(context.makeTexture(identity));
-            ASSERT_TRUE(context.importExisting(context.textures.back(), identity).valid());
-        }
-        TextureVector requests(context.testArena.arena);
-        requests.reserve(workload.requests);
-        for(usize index = 0u; index < workload.requests; ++index)
-            requests.push_back(context.textures[workload.unrelatedTextures + index % workload.uniqueTextures]);
-        Core::Alloc::ScratchArena outputScratch(Name("tests/texture_import/output_scratch"));
-        ResourceVector resources(outputScratch);
-        resources.reserve(requests.size());
-        const ArenaMemoryStats before = outputScratch.memoryStats();
-        ASSERT_EQ(ImportMaterialSampledTextureResources(
-            context.graph, requests.data(), requests.size(), "Material Texture", resources
-        ), SampledTextureImportResult::Success);
-        EXPECT_EQ(resources.size(), requests.size());
-        const ArenaMemoryStats after = outputScratch.memoryStats();
-        EXPECT_EQ(after.allocationCount, before.allocationCount);
-        EXPECT_EQ(after.usedBytes, before.usedBytes);
-        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
-        const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
-        ASSERT_TRUE(view.valid());
-        for(usize index = 0u; index < requests.size(); ++index)
-            EXPECT_EQ(view.textureForResource(resources[index]), requests[index].get());
-    }
-}
 
 static void BenchmarkTextureImports(
     const usize uniqueCount,
@@ -510,6 +463,54 @@ TEST(MaterialTextureImportBenchmark, DISABLED_Missing256){
 
 TEST(MaterialTextureImportBenchmark, DISABLED_Sparse1In4096){
     BenchmarkTextureImports(1u, 1u, 4096u, 32u);
+}
+
+TEST(MaterialTextureImport, ExistingTexturesRequireNoStorageBeyondReservedOrderedOutput){
+    struct Workload{
+        usize uniqueTextures;
+        usize requests;
+        usize unrelatedTextures;
+    };
+    const Workload workloads[] = {
+        { 1u, 1u, 0u },
+        { 1u, 4096u, 512u },
+        { 32u, 32u, 0u },
+        { 32u, 4096u, 512u },
+        { 40u, 40u, 0u },
+        { 40u, 4096u, 512u },
+        { 40u, 40u, 512u },
+    };
+    for(usize workloadIndex = 0u; workloadIndex < LengthOf(workloads); ++workloadIndex){
+        const Workload& workload = workloads[workloadIndex];
+        TextureContext context;
+        for(usize index = 0u; index < workload.uniqueTextures + workload.unrelatedTextures; ++index){
+            char indexText[32u] = {};
+            const Name identity = DeriveName(Name("tests/texture_import/scratch_shape"), FormatDecimal(index, indexText));
+            context.textures.push_back(context.makeTexture(identity));
+            ASSERT_TRUE(context.importExisting(context.textures.back(), identity).valid());
+        }
+        TextureVector requests(context.testArena.arena);
+        requests.reserve(workload.requests);
+        for(usize index = 0u; index < workload.requests; ++index)
+            requests.push_back(context.textures[workload.unrelatedTextures + index % workload.uniqueTextures]);
+        Core::Alloc::ScratchArena outputScratch(Name("tests/texture_import/output_scratch"));
+        ResourceVector resources(outputScratch);
+        resources.reserve(requests.size());
+        const ArenaMemoryStats before = outputScratch.memoryStats();
+        ASSERT_EQ(ImportMaterialSampledTextureResources(
+            context.graph, requests.data(), requests.size(), "Material Texture", resources
+        ), SampledTextureImportResult::Success);
+        EXPECT_EQ(resources.size(), requests.size());
+        const ArenaMemoryStats after = outputScratch.memoryStats();
+        EXPECT_EQ(after.allocationCount, before.allocationCount);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+        const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
+        ASSERT_TRUE(view.valid());
+        for(usize index = 0u; index < requests.size(); ++index)
+            EXPECT_EQ(view.textureForResource(resources[index]), requests[index].get());
+    }
 }
 
 

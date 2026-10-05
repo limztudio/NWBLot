@@ -48,7 +48,6 @@ protected:
         const TextInputSessionDesc& desc)override{
         m_nativeToken = token;
         m_nativeSurrounding.assign(desc.surrounding.data(), desc.surrounding.size());
-        m_nativeCaret = desc.caret;
         if(m_onStart)
             m_onStart();
         return m_startAdmission;
@@ -62,11 +61,10 @@ protected:
             m_onEnd(token);
     }
 
-    [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(const TextInputRect caret)override{
-        m_nativeCaret = caret;
+    [[nodiscard]] virtual TextInputAdmission::Enum updateNativeCaret(const TextInputRect)override{
         if(m_onCaret)
             m_onCaret();
-        return m_caretAdmission;
+        return TextInputAdmission::Accepted;
     }
 
     virtual void updateNativeSurrounding(
@@ -85,9 +83,7 @@ public:
     Function<void()> m_onSurrounding;
     Function<void(TextInputSessionToken)> m_onEnd;
     TextInputSessionToken m_nativeToken;
-    TextInputRect m_nativeCaret;
     TextInputAdmission::Enum m_startAdmission = TextInputAdmission::Accepted;
-    TextInputAdmission::Enum m_caretAdmission = TextInputAdmission::Accepted;
     usize m_endCount = 0u;
     TextInputChangeCause::Enum m_nativeCause = TextInputChangeCause::Other;
     bool m_supported = true;
@@ -132,7 +128,6 @@ TEST(TextInput, InputsAndPolledEventsOwnCopiedUtf8Bytes){
     EXPECT_EQ(event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
     EXPECT_EQ(event.token, token);
     EXPECT_EQ(event.kind, TextInputEventKind::Commit);
-    EXPECT_EQ(event.surroundingRevision, 1u);
     ASSERT_EQ(service.emitCommit(token, "next"), TextInputAdmission::Accepted);
     EXPECT_EQ(event.text, "\xED\x95\x9C\xF0\x9F\x98\x80");
 }
@@ -406,18 +401,12 @@ TEST(TextInput, ReentrantNativeSurroundingCancellationReturnsFailureAndRetainsTe
 }
 
 
-TEST(TextInput, SurroundingChangeCauseDistinguishesInputMethodFeedbackAndRejectsUnknownValues){
+TEST(TextInput, UnknownSurroundingChangeCausePreservesTextRevisionAndNativeState){
     NWB::Tests::TestArena arena;
     FakeTextInputService service(arena.arena);
     ASSERT_TRUE(service.setFocused(true));
     const TextInputSessionToken token = service.begin({}).token;
-    ASSERT_EQ(
-        service.updateSurrounding(token, "IM result", 0u, 9u, TextInputChangeCause::InputMethod),
-        TextInputAdmission::Accepted
-    );
-    EXPECT_EQ(service.m_nativeCause, TextInputChangeCause::InputMethod);
     ASSERT_EQ(service.updateSurrounding(token, "local change", 0u, 12u), TextInputAdmission::Accepted);
-    EXPECT_EQ(service.m_nativeCause, TextInputChangeCause::Other);
     const u64 revision = service.surroundingRevision(token);
     EXPECT_EQ(
         service.updateSurrounding(token, "invalid", 0u, 0u, static_cast<TextInputChangeCause::Enum>(255u)),

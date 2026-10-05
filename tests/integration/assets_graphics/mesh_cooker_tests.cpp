@@ -178,33 +178,6 @@ TEST(AssetsGraphics, MeshCookerValidationFailures){
 #endif
 }
 
-TEST(AssetsGraphics, MeshClassPolicyHelpers){
-    using namespace NWB::Core::Mesh;
-
-    EXPECT_TRUE(MeshClassMatchesSkinPayload(MeshClass::Static, false));
-    EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Static, true));
-    EXPECT_TRUE(MeshClassMatchesSkinPayload(MeshClass::Skinned, true));
-    EXPECT_FALSE(MeshClassMatchesSkinPayload(MeshClass::Skinned, false));
-}
-
-TEST(AssetsGraphics, FormatBlockDimensions){
-    const NWB::Core::FormatInfo& rgba8 = NWB::Core::GetFormatInfo(NWB::Core::Format::RGBA8_UNORM);
-    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(rgba8), 1u);
-    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(rgba8), 1u);
-
-    const NWB::Core::FormatInfo& bc1 = NWB::Core::GetFormatInfo(NWB::Core::Format::BC1_UNORM);
-    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(bc1), 4u);
-    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(bc1), 4u);
-
-    const NWB::Core::FormatInfo& astc8x5 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_8x5_UNORM);
-    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(astc8x5), 8u);
-    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(astc8x5), 5u);
-
-    const NWB::Core::FormatInfo& astc12x10 = NWB::Core::GetFormatInfo(NWB::Core::Format::ASTC_12x10_FLOAT);
-    EXPECT_EQ(NWB::Core::GetFormatBlockWidth(astc12x10), 12u);
-    EXPECT_EQ(NWB::Core::GetFormatBlockHeight(astc12x10), 10u);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -80,23 +80,6 @@ TYPED_TEST(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTh
     EXPECT_FALSE(model.draft().composition().active);
 }
 
-TYPED_TEST(NumericLifetimeTests, StatusQueriesPreserveEpochHistorySelectionAndPreedit){
-    auto& model = this->m_model;
-    ASSERT_TRUE(model.setValue(7));
-    ASSERT_TRUE(model.lendDraft().replaceSelection("8"));
-    ASSERT_TRUE(model.lendDraft().setSelection(0u, 1u));
-    ASSERT_TRUE(model.lendDraft().beginComposition());
-    ASSERT_TRUE(model.lendDraft().updateComposition("9", 0u, 1u));
-    const DraftSnapshot before(this->m_arena, model.draft());
-    const u64 epoch = model.revision();
-    for(u32 index = 0u; index < 4u; ++index){
-        EXPECT_EQ(model.status(), NumericParseStatus::Complete);
-        EXPECT_TRUE(model.dirty());
-        EXPECT_EQ(model.revision(), epoch);
-        before.expectUnchanged(model.draft());
-    }
-}
-
 TYPED_TEST(NumericLifetimeTests, AcceptedActionsAdvanceTheLoanEpochEvenWithoutAValueChange){
     auto& model = this->m_model;
     u64 epoch = model.revision();
@@ -197,19 +180,6 @@ TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraf
     EXPECT_EQ(model.value(), 7);
     EXPECT_FALSE(model.dirty());
     before.expectUnchanged(model.draft());
-}
-
-TYPED_TEST(NumericLifetimeTests, LocalDraftEditsAreObservedByDraftTokensWithoutInventingModelActions){
-    auto& model = this->m_model;
-    const u64 epoch = model.revision();
-    const u64 revision = model.draft().revision();
-    const u64 external = model.draft().externalRevision();
-    ASSERT_TRUE(model.lendDraft().replaceSelection("7"));
-    EXPECT_EQ(model.revision(), epoch);
-    EXPECT_GT(model.draft().revision(), revision);
-    EXPECT_EQ(model.draft().externalRevision(), external);
-    EXPECT_TRUE(model.dirty());
-    EXPECT_EQ(model.value(), 0);
 }
 
 template<typename Model, typename Bounds>

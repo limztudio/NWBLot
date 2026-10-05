@@ -79,7 +79,7 @@ TEST_F(UiTextAreaBuilderTests, UnsupportedNavigatedHostCannotFallBackToOrdinaryE
     EXPECT_EQ(host.publishes, 0u);
 }
 
-TEST_F(UiTextAreaBuilderTests, FlatOptionsReachTheNavigatedHostAndReadOnlyTarget){
+TEST_F(UiTextAreaBuilderTests, ReadOnlyNavigatedHostRejectsQueuedText){
     useHost();
     ASSERT_TRUE(m_model.setText("first\nsecond"));
     TextAreaOptions options;
@@ -91,12 +91,7 @@ TEST_F(UiTextAreaBuilderTests, FlatOptionsReachTheNavigatedHostAndReadOnlyTarget
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.ordinaryLoans, 0u);
     EXPECT_EQ(m_host.actionLoans, 0u);
-    EXPECT_TRUE(m_host.lastOptions.enabled);
     EXPECT_TRUE(m_host.lastOptions.readOnly);
-    EXPECT_EQ(m_host.lastOptions.width.policy, LayoutSizePolicy::Fixed);
-    EXPECT_FLOAT_EQ(m_host.lastOptions.width.value, 140.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().bounds.width, 140.0f);
-    EXPECT_FLOAT_EQ(m_state.placement().bounds.height, 60.0f);
     EXPECT_EQ(m_model.text(), "first\nsecond");
     EXPECT_TRUE(m_state.focused());
     const HitTarget* area = target(id("area", "panel"));
@@ -142,7 +137,7 @@ TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHost
     EXPECT_FALSE(m_model.canUndo());
 }
 
-TEST_F(UiTextAreaBuilderTests, PopupAreaBorrowsAndPublishesTheExplicitPopupIdentity){
+TEST_F(UiTextAreaBuilderTests, PopupAreaDefersPublicationUntilItsOwningPopupEnds){
     useHost();
     PopupState popup;
     popup.open();

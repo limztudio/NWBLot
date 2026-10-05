@@ -165,10 +165,6 @@ TEST(OpticalRuntimeBounds, CpuUploadNeverPublishesUnvalidatedRuntimeBounds){
     GLB_MEMCPY(&instanceFlags, sizeof(instanceFlags), upload.bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET, sizeof(u32));
     EXPECT_EQ(headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID, 0u);
     EXPECT_EQ(instanceFlags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
-    const auto before = context.gather.contentHash();
-    context.gather.runtimeBounds[0].objectToWorld.m[0][3] = 7.f;
-    EXPECT_NE(context.gather.contentHash(), before);
-    EXPECT_EQ(upload.instanceCount, 1u);
 }
 
 

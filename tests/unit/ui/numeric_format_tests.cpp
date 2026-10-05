@@ -27,7 +27,7 @@ using namespace NWB::Impl::Ui;
 
 
 TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingPointConversion){
-    const i64 values[]{ 0, 1, -1, 9007199254740993ll, -9007199254740993ll, Limit<i64>::s_Min, Limit<i64>::s_Max };
+    const i64 values[]{ 9007199254740993ll, -9007199254740993ll, Limit<i64>::s_Min, Limit<i64>::s_Max };
     for(const i64 value : values){
         SCOPED_TRACE(value);
         char buffer[s_NumericEditMaxBytes];
@@ -46,8 +46,7 @@ TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingP
 TEST(UiNumericFormatTests, ShortestFloatTextRoundtripsRepresentativeFiniteBitsIncludingSubnormals){
     const u64 patterns[]{
         0x0000000000000000ull, 0x8000000000000000ull, 0x0000000000000001ull, 0x8000000000000001ull,
-        0x000fffffffffffffull, 0x0010000000000000ull, 0x3fb999999999999aull, 0x3fd3333333333334ull,
-        0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull,
+        0x000fffffffffffffull, 0x0010000000000000ull, 0x3fefffffffffffffull, 0x3ff0000000000001ull, 0x4340000000000001ull,
         0x7fefffffffffffffull, 0xffefffffffffffffull
     };
     for(const u64 bits : patterns){

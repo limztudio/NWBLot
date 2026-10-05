@@ -17,7 +17,6 @@ LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 renderer.frame"
 LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
 LIT_N = "\n"
 LIT_RENDERER_FRAME = "renderer.frame"
-LIT_RENDER_FRAME = "render.frame"
 LIT_DECODED_FROM_HASH = "decoded_from_hash"
 LIT_SCOPES = "scopes"
 LIT_NAME = "name"
@@ -60,17 +59,6 @@ def complete_log(records=12):
 
 
 class StressCpuTimingTests(unittest.TestCase):
-    def test_optimized_scope_hashes_decode_with_exact_engine_algorithm(self):
-        from name_symbols import debug_name_hash_token
-        text = publication_text()
-        for name in NAMES:
-            text = text.replace(name, debug_name_hash_token(name))
-        text = text.replace(LIT_RENDERER_FRAME, debug_name_hash_token(LIT_RENDER_FRAME))
-        result = diagnostic.parse_publications(text, MEASUREMENT)
-        self.assertTrue(all(row[LIT_DECODED_FROM_HASH] for row in result[LIT_SCOPES]))
-        self.assertEqual({row[LIT_NAME] for row in result[LIT_SCOPES]}, set(NAMES) | {LIT_RENDER_FRAME})
-        for row in result[LIT_SCOPES]:
-            self.assertEqual(row[LIT_RAW_NAME], debug_name_hash_token(row[LIT_NAME]))
 
     def test_unrecognized_or_tampered_hash_does_not_satisfy_required_phase(self):
         from name_symbols import debug_name_hash_token

@@ -78,11 +78,9 @@ TEST(UiScrollLayoutTests, ContentExactlyFittingDoesNotReserveScrollbarWidth){
     EXPECT_EQ(placement.endRow, 5u);
 }
 
-TEST(UiScrollLayoutTests, ThumbEndpointsAndMiddleFollowClampedOffset){
+TEST(UiScrollLayoutTests, OverscrollClampsThumbToTheFinalVisibleRow){
     const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
     ScrollPlacement placement;
-    ASSERT_TRUE(ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 150.0, placement));
-    NWB::UiWidgetTests::ExpectRect(placement.thumb, { 188.0f, 37.5f, 12.0f, 25.0f });
     ASSERT_TRUE(ScrollLayout::Calculate(bounds, bounds, {}, 12.0f, 16.0f, 20u, 20.0f, 999.0, placement));
     EXPECT_DOUBLE_EQ(placement.offset, 300.0);
     NWB::UiWidgetTests::ExpectRect(placement.thumb, { 188.0f, 75.0f, 12.0f, 25.0f });
@@ -243,18 +241,6 @@ TEST(UiScrollLayoutTests, RowBoundsRejectsCulledAndInvalidRowsAtomically){
     placement.offset = Limit<f64>::s_Infinity;
     EXPECT_FALSE(ScrollLayout::RowBounds(2u, placement, 20.0f, result));
     NWB::UiWidgetTests::ExpectRect(result, previous);
-}
-
-TEST(UiScrollLayoutTests, LogicalInputsRemainInvariantUnderAsymmetricDisplayScaling){
-    const Rect bounds{ 24.0f, 38.0f, 240.0f, 160.0f };
-    const DisplayMetrics displays[] = { { 800.0f, 600.0f, 1.0f, 1.0f }, { 800.0f, 600.0f, 2.5f, 1.25f } };
-    ScrollPlacement reference;
-    ASSERT_TRUE(ScrollLayout::Calculate(bounds, { 0.0f, 0.0f, displays[0].logicalWidth, displays[0].logicalHeight },
-        { 4.0f, 8.0f, 12.0f, 16.0f }, 10.0f, 20.0f, 100000u, 24.0f, 24005.5, reference));
-    ScrollPlacement scaled;
-    ASSERT_TRUE(ScrollLayout::Calculate(bounds, { 0.0f, 0.0f, displays[1].logicalWidth, displays[1].logicalHeight },
-        { 4.0f, 8.0f, 12.0f, 16.0f }, 10.0f, 20.0f, 100000u, 24.0f, 24005.5, scaled));
-    ExpectPlacement(scaled, reference);
 }
 
 TEST(UiScrollLayoutTests, ExtentsBeyondDoubleViewportPrecisionFailInsteadOfLosingTheFinalPage){

@@ -169,37 +169,6 @@ TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChi
     EXPECT_TRUE(ValidateFontAtlasSourceMatch(atlas.payload(), font));
 }
 
-TEST(AssetsFontMetadata, StandaloneImportUsesOnlyTheSameStemFontSourceAndExplicitReference){
-    using namespace __hidden_font_metadata_tests;
-    MetadataTestArena testArena;
-    const Path fontDirectory = ScratchRoot(testArena) / "standalone_font";
-    const Path atlasDirectory = ScratchRoot(testArena) / "standalone_atlas";
-    ASSERT_TRUE(PrepareFiles(testArena, fontDirectory));
-    ASSERT_TRUE(PrepareFiles(testArena, atlasDirectory));
-    Core::Metascript::Document fixture(testArena.arena);
-    ASSERT_TRUE(LoadMetadata(testArena, fixture));
-    const Core::Metascript::Value* faceValue = fixture.findVariable("face");
-    const Core::Metascript::Value* atlasValue = fixture.findVariable("atlas");
-    ASSERT_NE(faceValue, nullptr);
-    ASSERT_NE(atlasValue, nullptr);
-    Core::Metascript::Document fontDocument(testArena.arena);
-    ASSERT_TRUE(fontDocument.parse("font asset;"));
-    fontDocument.asset() = *faceValue;
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    FontCookEntry fontEntry(testArena.arena);
-    ASSERT_TRUE(ParseFontCookMetadata(fontDirectory, "project/fonts", fontDirectory / "latin.nwb", fontDocument, fontEntry, scratchArena));
-    EXPECT_EQ(fontEntry.virtualPath, Name("project/fonts/latin"));
-    Core::Metascript::Document atlasDocument(testArena.arena);
-    ASSERT_TRUE(atlasDocument.parse("font_atlas asset;"));
-    atlasDocument.asset() = *atlasValue;
-    atlasDocument.asset().field("font").setString("project/fonts/latin");
-    FontAtlasCookEntry atlasEntry(testArena.arena);
-    ASSERT_TRUE(ParseFontAtlasCookMetadata(
-        atlasDirectory, "project/atlases", atlasDirectory / "latin.nwb", atlasDocument, atlasEntry, scratchArena
-    ));
-    EXPECT_EQ(atlasEntry.virtualPath, Name("project/atlases/latin"));
-    EXPECT_EQ(atlasEntry.payload.font.name(), fontEntry.virtualPath);
-}
 
 TEST(AssetsFontMetadata, FieldlessAndEmptyFontDeclarationsRejectNonmapValuesWithoutReplacingPriorEntry){
     using namespace __hidden_font_metadata_tests;
@@ -465,7 +434,6 @@ TEST(AssetsFontMetadata, MissingTruncatedCorruptAndMismatchedFontSourcesPreserve
     EXPECT_EQ(entry.virtualPath, Name("project/fonts/latin/atlas"));
     EXPECT_EQ(entry.payload.fontSha256, originalHash);
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

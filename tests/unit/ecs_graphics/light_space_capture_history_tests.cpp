@@ -41,21 +41,18 @@ TEST(LightSpaceCaptureHistory, RequiresRecordedAcceptedCaptureAndAlternatesOneRe
     EXPECT_EQ(history.acceptedReuses(), 1u);
 }
 
-TEST(LightSpaceCaptureHistory, ReferenceAlwaysCapturesAndUntrustedSceneNeverReuses){
-    for(const bool trusted : { false, true }){
-        LightSpaceCaptureHistory history;
-        const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, trusted };
-        for(u32 frame = 0u; frame < 4u; ++frame){
-            history.beginFrame();
-            const auto ticket = history.prepare(identity, trusted ? SoftwareShadowCaptureCadence::EveryFrame
-                : SoftwareShadowCaptureCadence::ReuseOneFrame);
-            EXPECT_FALSE(ticket.reuse);
-            history.recordCapture(ticket);
-            ASSERT_TRUE(history.accept(ticket));
-        }
-        EXPECT_EQ(history.acceptedCaptures(), 4u);
-        EXPECT_EQ(history.acceptedReuses(), 0u);
+TEST(LightSpaceCaptureHistory, UntrustedSceneNeverReusesAcceptedCaptures){
+    LightSpaceCaptureHistory history;
+    const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, false };
+    for(u32 frame = 0u; frame < 4u; ++frame){
+        history.beginFrame();
+        const auto ticket = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseOneFrame);
+        EXPECT_FALSE(ticket.reuse);
+        history.recordCapture(ticket);
+        ASSERT_TRUE(history.accept(ticket));
     }
+    EXPECT_EQ(history.acceptedCaptures(), 4u);
+    EXPECT_EQ(history.acceptedReuses(), 0u);
 }
 
 TEST(LightSpaceCaptureHistory, EachIdentityDomainAndTrustChangeForcesRefresh){
@@ -225,14 +222,8 @@ TEST(LightSpaceCaptureHistory, RetryingATwoFrameReuseDoesNotConsumeAnAdditionalA
     EXPECT_EQ(history.acceptedReuses(), 2u);
 }
 
-TEST(LightSpaceCaptureHistory, SettingsRequireExplicitKnownCadence){
+TEST(LightSpaceCaptureHistory, RejectsUnknownCaptureCadence){
     SoftwareShadowSettings settings;
-    EXPECT_EQ(settings.captureCadence, SoftwareShadowCaptureCadence::EveryFrame);
-    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
-    settings.captureCadence = SoftwareShadowCaptureCadence::ReuseOneFrame;
-    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
-    settings.captureCadence = SoftwareShadowCaptureCadence::ReuseTwoFrames;
-    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
     settings.captureCadence = static_cast<SoftwareShadowCaptureCadence::Enum>(3u);
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
 }

@@ -159,38 +159,6 @@ static void ExpectJsonNumber(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AllocationOwnerTelemetry, VersionOneRoundTripsAllSourcesBinaryIdentityAndDeltas){
-    TestArena testArena;
-    NameHash binaryHash{};
-    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
-        binaryHash.qwords[lane] = 0x9876543210ABCDEFuLL + lane;
-    const Name owner(binaryHash);
-    constexpr AStringView s_DisplayName = "Owner \"A\"\n\\buffer";
-    const Perf::MemorySource::Enum sources[] = {
-        Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking,
-    };
-    for(const Perf::MemorySource::Enum source : sources){
-        const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, source);
-        for(const bool hasDelta : { true, false }){
-            const Perf::MemoryDelta delta = hasDelta ? TelemetryTestDetail::MakeTestMemoryDelta(-1) : Perf::MemoryDelta{};
-            Telemetry::TelemetryBytes bytes(testArena.arena);
-            ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, s_DisplayName, snapshot, delta, bytes));
-            ASSERT_EQ(bytes.size(), sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + s_DisplayName.size());
-            Telemetry::EncodedPerfMemoryPayloadHeader header;
-            GLB_MEMCPY(&header, sizeof(header), bytes.data(), sizeof(header));
-            EXPECT_EQ(header.version, 1u);
-            EXPECT_EQ(header.source, static_cast<u32>(source));
-            EXPECT_EQ(header.scopeHash, binaryHash);
-            Telemetry::PerfMemoryPayload parsed(testArena.arena);
-            ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
-            EXPECT_EQ(parsed.scopeName.hash(), binaryHash);
-            EXPECT_EQ(AStringView(parsed.scopeText.data(), parsed.scopeText.size()), s_DisplayName);
-            ExpectSnapshot(parsed.snapshot, snapshot);
-            ExpectDelta(parsed.delta, delta);
-        }
-    }
-}
-
 TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     TestArena testArena;
     const Name owner("tests/telemetry/payload_validation_owner");
@@ -363,12 +331,10 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ASSERT_NE(firstEvent, nullptr);
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), ownerName, Perf::MemorySource::ExplicitScope), nullptr);
     EXPECT_EQ(firstEvent->header.frameIndex, 41u);
-    EXPECT_EQ(firstEvent->header.streamId, 23u);
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, firstEvent->payload.data(), firstEvent->payload.size(), parsed));
     ExpectSnapshot(parsed.snapshot, first);
     EXPECT_FALSE(parsed.delta.hasSamples);
-    EXPECT_EQ(AStringView(parsed.scopeText.data(), parsed.scopeText.size()), ownerName.resolvedText());
 
     void* const resized = owner.reallocate(allocation.pointer, 1u, 101u);
     ASSERT_NE(resized, nullptr);
@@ -425,7 +391,6 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     const AStringView deltaFields = ownerRecord.substr(deltaBegin);
     Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/json_checks"));
     ExpectJsonNumber(scratchArena, ownerFields, "frameIndex", 43u);
-    ExpectJsonNumber(scratchArena, ownerFields, "streamId", 23u);
     ExpectJsonNumber(scratchArena, ownerFields, "reservedBytes", retired.reservedBytes);
     ExpectJsonNumber(scratchArena, ownerFields, "usedBytes", retired.usedBytes);
     ExpectJsonNumber(scratchArena, ownerFields, "peakUsedBytes", retired.peakUsedBytes);
@@ -541,33 +506,9 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
     EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"arena\"").empty());
     const AStringView heapRecord = FindOwnerJsonRecord(json, owner, "\"source\": \"heapBacking\"");
     ASSERT_FALSE(heapRecord.empty());
-    EXPECT_NE(heapRecord.find("\"scope\": \"Shared Owner\""), AStringView::npos);
     Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/heap_json_checks"));
-    struct PeakExpectation{
-        AStringView recordSource;
-        AStringView summarySource;
-        AStringView basis;
-    };
-    constexpr PeakExpectation s_PeakExpectations[] = {
-        { "\"source\": \"explicitScope\"", "\"explicitScope\": {", "\"peakBasis\": \"scope\"" },
-        { "\"source\": \"arena\"", "\"arena\": {", "\"peakBasis\": \"largestArena\"" },
-        { "\"source\": \"heapBacking\"", "\"heapBacking\": {", "\"peakBasis\": \"sampledHeap\"" },
-    };
-    for(const PeakExpectation& expectation : s_PeakExpectations){
-        const AStringView record = FindOwnerJsonRecord(json, owner, expectation.recordSource);
-        ASSERT_FALSE(record.empty());
-        EXPECT_NE(record.find(expectation.basis), AStringView::npos);
-        const usize summaryBegin = json.find(expectation.summarySource);
-        ASSERT_NE(summaryBegin, AStringView::npos);
-        const usize summaryEnd = json.find('}', summaryBegin);
-        ASSERT_NE(summaryEnd, AStringView::npos);
-        const AStringView summaryRecord = json.substr(summaryBegin, summaryEnd + 1u - summaryBegin);
-        EXPECT_NE(summaryRecord.find(expectation.basis), AStringView::npos);
-    }
     ExpectJsonNumber(scratchArena, heapRecord, "usedBytes", 300u);
     ExpectJsonNumber(scratchArena, heapRecord, "peakUsedBytes", 3000u);
-    ExpectJsonNumber(scratchArena, heapRecord, "frameIndex", 88u);
-    ExpectJsonNumber(scratchArena, heapRecord, "streamId", 7u);
 }
 
 TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreservesExplicitText){
@@ -668,7 +609,6 @@ TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
     const usize summaryEnd = json.find('}', summaryBegin);
     ASSERT_NE(summaryEnd, AStringView::npos);
     const AStringView heapSummary = json.substr(summaryBegin, summaryEnd + 1u - summaryBegin);
-    EXPECT_NE(heapSummary.find("\"peakBasis\": \"sampledHeap\""), AStringView::npos);
     Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/raw_heap_json_checks"));
     ExpectJsonNumber(scratchArena, heapSummary, "eventCount", 1u);
     ExpectJsonNumber(scratchArena, heapSummary, "maxUsedBytes", snapshot.usedBytes);

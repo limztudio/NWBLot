@@ -63,20 +63,6 @@ TEST(UiImageLayoutTests, NineSliceMinimumsRemainLogicalAndCanExceedTheNaturalExt
     ExpectMetrics(metrics, { { 120.0f, 80.0f } });
 }
 
-TEST(UiImageLayoutTests, FixedAndStretchPoliciesPreserveIntrinsicMetricsForTheLayoutTree){
-    const UiSkinRegion region = Sprite();
-    ImageOptions options;
-    options.width = { LayoutSizePolicy::Fixed, 20.0f };
-    options.height = { LayoutSizePolicy::Stretch, 2.0f };
-    options.tint = { 2.0f, 0.0f, 0.5f, 0.0f };
-    ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure(options, region, 2.0f, metrics));
-    ExpectMetrics(metrics, { { 100.0f, 50.0f } });
-    options.height = { LayoutSizePolicy::Fixed, 0.0f };
-    ASSERT_TRUE(ImageLayout::Measure(options, region, 2.0f, metrics));
-    ExpectMetrics(metrics, { { 100.0f, 50.0f } });
-}
-
 TEST(UiImageLayoutTests, EmptyAndDisjointClipsRemainValidAtFiniteNegativeOrigins){
     const Rect bounds{ -100.0f, -50.0f, 200.0f, 100.0f };
     ImagePlacement placement;

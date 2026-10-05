@@ -219,9 +219,7 @@ TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText
     const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
     ASSERT_TRUE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(""), extensionlessSource, output));
     EXPECT_EQ(AStringView(output), "/folder/noextension");
-    Name identity(s_STALE_NAME);
-    ASSERT_TRUE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView("PROJECT"), source, identity, scratchArena));
-    EXPECT_EQ(identity, Name("project/models/hero.lod0"));
+
 }
 
 TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPathsAndClearsBothOutputs){

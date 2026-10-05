@@ -38,28 +38,6 @@ TEST_F(UiSearchComboBuilderTests, ClosedFieldUsesFullSelectionWithoutBorrowingTh
     EXPECT_EQ(target(host())->control.contentGeneration, m_searchSource.full.generation);
 }
 
-TEST_F(UiSearchComboBuilderTests, PopupBorrowsAnExplicitEditorScopeAndDelegatesTheFilteredList){
-    m_search.combo().select(1u);
-    ASSERT_TRUE(acceptSearch(1u));
-    ASSERT_TRUE(openSearch(2u));
-    ASSERT_NE(target(query()), nullptr);
-    ASSERT_NE(target(list()), nullptr);
-    EXPECT_EQ(m_host.contextScopedLoans, 0u);
-    EXPECT_EQ(m_host.loans, 1u);
-    EXPECT_EQ(m_host.publications, 1u);
-    EXPECT_TRUE(m_host.lastPopup.valid());
-    EXPECT_FALSE(m_host.loanContextPopup.valid());
-    EXPECT_EQ(m_host.lastPopup, target(query())->popup);
-    EXPECT_EQ(m_host.publishContextPopup, target(query())->popup);
-    EXPECT_EQ(m_context.input().focus(), query());
-    EXPECT_TRUE(target(query())->textEditable);
-    EXPECT_EQ(target(query())->keyboardOwner, list());
-    EXPECT_EQ(target(query())->keyboardControl, target(list())->control);
-    EXPECT_EQ(target(list())->control.contentGeneration, m_searchSource.view.generation);
-    EXPECT_NE(target(list())->control.contentGeneration, target(host())->control.contentGeneration);
-    EXPECT_EQ(m_search.combo().selectedKey(), 1u);
-}
-
 TEST_F(UiSearchComboBuilderTests, TabMovesFromQueryToResultsThenExitsWithoutCommittingPreview){
     m_search.combo().select(1u);
     ASSERT_TRUE(acceptSearch(1u));

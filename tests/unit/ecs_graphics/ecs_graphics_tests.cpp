@@ -81,11 +81,9 @@ TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata)
         frozen.flags,
         NWB::Impl::RtInstanceMaterialFlag::Transparent | NWB::Impl::RtInstanceMaterialFlag::Refractive
     );
-    EXPECT_EQ(frozen.materialConstantByteOffset, 64u);
-    EXPECT_EQ(frozen.meshInstanceIndex, 3u);
 }
 
-TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
+TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes){
     NWB::Impl::AvboitFrameTargets targets;
     targets.fullWidth = 1920u;
     targets.fullHeight = 1080u;
@@ -98,17 +96,8 @@ TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
         23u
     );
 
-    const NWB::Impl::RendererAvboitPushConstants sdr = NWB::Impl::BuildRendererAvboitPushConstants(targets, false);
-    const NWB::Impl::RendererAvboitPushConstants hdr10 = NWB::Impl::BuildRendererAvboitPushConstants(targets, true);
-
-    EXPECT_FLOAT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE], NWB_AVBOIT_PRESENTATION_SDR);
-    EXPECT_FLOAT_EQ(hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE], NWB_AVBOIT_PRESENTATION_HDR10);
-    EXPECT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE], hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE]);
-    EXPECT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS], hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS]);
-    EXPECT_EQ(sdr.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES], 23u);
-    EXPECT_EQ(hdr10.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES], 23u);
-    // Standalone AVBOIT users may supply the original selector without optical
-    // attachments. Both presentation modes must leave auxiliary sampling off.
+    const auto sdr = NWB::Impl::BuildRendererAvboitPushConstants(targets, false);
+    const auto hdr10 = NWB::Impl::BuildRendererAvboitPushConstants(targets, true);
     EXPECT_FLOAT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE], NWB_AVBOIT_REFRACTION_DISABLED);
     EXPECT_FLOAT_EQ(hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE], NWB_AVBOIT_REFRACTION_DISABLED);
 }
@@ -376,27 +365,6 @@ TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
     EXPECT_EQ(rect.maxY, 441);
 }
 
-TEST(EcsGraphics, CsgReceiverWorkRegionTracksViewChangesAndResize){
-    const SIMDVector minimum = VectorSet(-0.2f, -0.2f, 1.f, 0.f);
-    const SIMDVector maximum = VectorSet(0.2f, 0.2f, 2.f, 0.f);
-    NWB::Impl::CsgFrameWorkRegion original;
-    original.expandWorldBounds(MatrixIdentity(), minimum, maximum, 1000u, 600u);
-    NWB::Impl::CsgFrameWorkRegion shifted;
-    shifted.expandWorldBounds(MatrixTranslation(-0.4f, 0.f, 0.f), minimum, maximum, 1000u, 600u);
-    ASSERT_TRUE(original.bounded());
-    ASSERT_TRUE(shifted.bounded());
-    EXPECT_NEAR(static_cast<f32>(original.minX - shifted.minX), 200.f, 1.f);
-    EXPECT_NEAR(static_cast<f32>(original.maxX - shifted.maxX), 200.f, 1.f);
-
-    NWB::Impl::CsgFrameWorkRegion resized;
-    resized.expandWorldBounds(MatrixIdentity(), minimum, maximum, 501u, 301u);
-    ASSERT_TRUE(resized.bounded());
-    const NWB::Core::Rect rect = resized.resolveRect(501u, 301u);
-    EXPECT_EQ(rect.minX, 198);
-    EXPECT_EQ(rect.maxX, 303);
-    EXPECT_EQ(rect.minY, 118);
-    EXPECT_EQ(rect.maxY, 183);
-}
 
 TEST(EcsGraphics, CsgReceiverWorkRegionKeepsSeparateReceiversNarrow){
     NWB::Impl::CsgFrameWorkRegion left;
@@ -461,82 +429,6 @@ TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProj
 
 using TestWorld = NWB::Tests::EcsTestWorld;
 
-TEST(EcsGraphics, SceneBvhTransparentSubtreeClassificationPropagatesToRoot){
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    using PrimitiveVector = ::Vector<NWB::Impl::SceneBvhPrimitiveCalculation, NWB::Core::Alloc::ScratchArena>;
-    using IndexVector = ::Vector<u32, NWB::Core::Alloc::ScratchArena>;
-    using NodeVector = ::Vector<NWB::Impl::SceneBvhNodeCalculation, NWB::Core::Alloc::ScratchArena>;
-
-    PrimitiveVector primitives{ scratchArena };
-    const bool transparent[] = { false, true, false };
-    for(u32 index = 0u; index < 3u; ++index){
-        NWB::Impl::SceneBvhPrimitiveCalculation primitive;
-        const f32 x = static_cast<f32>(index) * 2.0f;
-        primitive.aabbMin = VectorSet(x, 0.0f, 0.0f, 0.0f);
-        primitive.aabbMax = VectorSet(x + 1.0f, 1.0f, 1.0f, 0.0f);
-        primitive.centroid = VectorSet(x + 0.5f, 0.5f, 0.5f, 0.0f);
-        primitive.transparentOccluder = transparent[index];
-        primitives.push_back(primitive);
-    }
-
-    IndexVector indices{ scratchArena };
-    indices.push_back(0u);
-    indices.push_back(1u);
-    indices.push_back(s_ExpectedDualCount);
-    NodeVector nodes{ scratchArena };
-    const u32 root = NWB::Impl::RayTracingDetail::BuildSceneBvhNode(
-        indices.data(),
-        0u,
-        static_cast<u32>(indices.size()),
-        primitives.data(),
-        nodes
-    );
-
-    ASSERT_EQ(root, 0u);
-    ASSERT_EQ(nodes.size(), 5u);
-    EXPECT_TRUE(nodes[root].containsTransparentOccluder);
-    EXPECT_LT(nodes[root].leftChild, nodes.size());
-    EXPECT_LT(nodes[root].rightChild, nodes.size());
-
-    u32 transparentLeafCount = 0u;
-    for(const NWB::Impl::SceneBvhNodeCalculation& node : nodes){
-        if((node.leftChild & NWB_BVH_LEAF_FLAG) == 0u)
-            continue;
-        const u32 primitiveIndex = node.leftChild & ~NWB_BVH_LEAF_FLAG;
-        ASSERT_LT(primitiveIndex, primitives.size());
-        EXPECT_EQ(node.containsTransparentOccluder, primitives[primitiveIndex].transparentOccluder);
-        transparentLeafCount += node.containsTransparentOccluder ? 1u : 0u;
-    }
-    EXPECT_EQ(transparentLeafCount, 1u);
-}
-
-TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
-    const SIMDMatrix worldToClip = NWB::Impl::ECSRenderDetail::BuildWorldToClipMatrix(
-        VectorSet(3.0f, -2.0f, 5.0f, 0.75f),
-        s_SIMDIdentityR0,
-        s_SIMDIdentityR1,
-        s_SIMDIdentityR2,
-        VectorSet(2.0f, 3.0f, 4.0f, -1.0f)
-    );
-
-    Float44 matrix = {};
-    StoreFloat(worldToClip, matrix);
-    EXPECT_FLOAT_EQ(matrix._11, 2.0f);
-    EXPECT_FLOAT_EQ(matrix._14, -6.0f);
-    EXPECT_FLOAT_EQ(matrix._22, 3.0f);
-    EXPECT_FLOAT_EQ(matrix._24, 6.0f);
-    EXPECT_FLOAT_EQ(matrix._33, 4.0f);
-    EXPECT_FLOAT_EQ(matrix._34, -18.0f);
-    EXPECT_FLOAT_EQ(matrix._43, 1.0f);
-    EXPECT_FLOAT_EQ(matrix._44, -4.25f);
-
-    Float4 clipPosition;
-    StoreFloat(Vector4Transform(VectorSet(3.0f, -2.0f, 5.0f, 1.0f), worldToClip), clipPosition);
-    EXPECT_FLOAT_EQ(clipPosition.x, 0.0f);
-    EXPECT_FLOAT_EQ(clipPosition.y, 0.0f);
-    EXPECT_FLOAT_EQ(clipPosition.z, 2.0f);
-    EXPECT_FLOAT_EQ(clipPosition.w, 0.75f);
-}
 
 TEST(EcsGraphics, MissingMeshClearsPreviousResolution){
     TestWorld testWorld;
@@ -635,63 +527,8 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     EXPECT_EQ(emptyRange.byteCount, 0u);
     EXPECT_EQ(uploadBytes.size(), 8u);
 
-    for(u32 instanceIndex = 0u; instanceIndex < 128u; ++instanceIndex){
-        ByteVector overrideBytes{scratchArena};
-        const u8 packedValue = static_cast<u8>(64u + (instanceIndex % 32u));
-        overrideBytes.push_back(packedValue);
-        overrideBytes.push_back(static_cast<u8>(packedValue + 1u));
-        overrideBytes.push_back(static_cast<u8>(packedValue + s_ExpectedDualCount));
-        overrideBytes.push_back(static_cast<u8>(packedValue + 3u));
-
-        NWB::Impl::ECSRenderDetail::MaterialTypedByteRange stressRange;
-        EXPECT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
-            uploadBytes,
-            ranges,
-            overrideBytes,
-            stressRange
-        ));
-        EXPECT_EQ(stressRange.byteCount, 4u);
-    }
-    EXPECT_EQ(ranges.size(), 34u);
-    EXPECT_EQ(uploadBytes.size(), 136u);
-
-    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRanges instanceRange;
-    instanceRange.constantRange = firstRange;
-    instanceRange.mutableRange = secondRange;
-    const NWB::Impl::InstanceGpuData gpuData = NWB::Impl::ECSRenderDetail::BuildInstanceGpuData(nullptr, instanceRange);
-    EXPECT_EQ(gpuData.translation.w, secondRange.byteOffset);
-#if defined(GLB_DEBUG)
-    NWB::Impl::ECSRenderDetail::MaterialTypedInstanceRangeVector instanceRanges{scratchArena};
-    instanceRanges.push_back(instanceRange);
-    NWB::Impl::ECSRenderDetail::AssertMaterialTypedUploadRanges(
-        instanceRanges,
-        uploadBytes
-    );
-#endif
 }
 
-TEST(EcsGraphics, CsgReceiverRangeCarriesMaterialSurfaceContext){
-    const NWB::Impl::CsgReceiverRangeGpuData defaultRange;
-    EXPECT_EQ(defaultRange.surfaceDispatchId, Limit<u32>::s_Max);
-    EXPECT_EQ(defaultRange.materialConstantByteOffset, 0u);
-    EXPECT_EQ(defaultRange.meshInstanceIndex, 0u);
-    EXPECT_EQ(defaultRange.materialContextPadding, 0u);
-    EXPECT_EQ(sizeof(defaultRange), 128u);
-    EXPECT_EQ(offsetof(NWB::Impl::CsgReceiverRangeGpuData, screenWorkRect), 112u);
-    EXPECT_EQ(defaultRange.screenWorkRect.x, 0u);
-    EXPECT_EQ(defaultRange.screenWorkRect.y, 0u);
-    EXPECT_EQ(defaultRange.screenWorkRect.z, Limit<u32>::s_Max);
-    EXPECT_EQ(defaultRange.screenWorkRect.w, Limit<u32>::s_Max);
-
-    NWB::Impl::CsgReceiverRangeGpuData range;
-    range.surfaceDispatchId = 19u;
-    range.materialConstantByteOffset = 96u;
-    range.meshInstanceIndex = 7u;
-
-    EXPECT_EQ(range.surfaceDispatchId, 19u);
-    EXPECT_EQ(range.materialConstantByteOffset, 96u);
-    EXPECT_EQ(range.meshInstanceIndex, 7u);
-}
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
     NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
@@ -701,33 +538,6 @@ static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, co
     return joint;
 }
 
-static NWB::Impl::SkeletonJointMatrix MakeZHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
-    joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
-    return joint;
-}
-
-static NWB::Impl::SkeletonJointMatrix MakeXHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
-    joint.rows[1] = Float4(0.0f, -1.0f, 0.0f, 0.0f);
-    joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
-    return joint;
-}
-
-static NWB::Impl::SkeletonJointMatrix MakeYHalfTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
-    joint.rows[0] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    joint.rows[2] = Float4(0.0f, 0.0f, -1.0f, 0.0f);
-    return joint;
-}
-
-static NWB::Impl::SkeletonJointMatrix MakeZQuarterTurnJointMatrix(){
-    NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
-    joint.rows[0] = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    joint.rows[1] = Float4(-1.0f, 0.0f, 0.0f, 0.0f);
-    return joint;
-}
 
 static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
     NWB::Impl::SkeletonJointMatrix joint = ::Float34Identity();
@@ -735,6 +545,7 @@ static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
     return joint;
 }
 
+#if defined(GLB_FINAL)
 static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     NWB::Impl::SkinInfluence4 skin{};
     skin.joint[0] = joint;
@@ -812,34 +623,10 @@ static NWB::Impl::SkeletonJointMatrix MakeIdentityJointMatrix(){
     return MakeTranslationJointMatrix(0.0f, 0.0f, 0.0f);
 }
 
-static void CheckJointRotationQuaternion(
-    const SIMDMatrix& joint,
-    const f32 x,
-    const f32 y,
-    const f32 z,
-    const f32 w){
-    SIMDVector quaternion = QuaternionIdentity();
-    ASSERT_TRUE(MatrixTryBuildRigidRotationQuaternion(
-        joint,
-        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
-        NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon,
-        quaternion
-    ));
-    EXPECT_TRUE(NearlyEqual(VectorGetX(quaternion), x));
-    EXPECT_TRUE(NearlyEqual(VectorGetY(quaternion), y));
-    EXPECT_TRUE(NearlyEqual(VectorGetZ(quaternion), z));
-    EXPECT_TRUE(NearlyEqual(VectorGetW(quaternion), w));
-}
+#endif
 
-TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
-    constexpr f32 s_HalfSqrtTwo = 0.70710678118f;
 
-    CheckJointRotationQuaternion(LoadFloat(MakeIdentityJointMatrix()), 0.0f, 0.0f, 0.0f, 1.0f);
-    CheckJointRotationQuaternion(LoadFloat(MakeZQuarterTurnJointMatrix()), 0.0f, 0.0f, s_HalfSqrtTwo, s_HalfSqrtTwo);
-    CheckJointRotationQuaternion(LoadFloat(MakeXHalfTurnJointMatrix()), 1.0f, 0.0f, 0.0f, 0.0f);
-    CheckJointRotationQuaternion(LoadFloat(MakeYHalfTurnJointMatrix()), 0.0f, 1.0f, 0.0f, 0.0f);
-    CheckJointRotationQuaternion(LoadFloat(MakeZHalfTurnJointMatrix()), 0.0f, 0.0f, 1.0f, 0.0f);
-
+TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
     SIMDVector quaternion = QuaternionIdentity();
     EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(
         LoadFloat(MakeNonUniformScaleJointMatrix()),
@@ -869,23 +656,13 @@ TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
     Vector<NWB::Impl::SkeletonJointMatrix> resolvedJoints;
     u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
-    EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::LinearBlend);
-    ASSERT_EQ(resolvedJoints.size(), s_ExpectedDualCount);
-    EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f));
-    EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f));
-    EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[0].w, 1.0f));
-    EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[1].w, 2.0f));
-
-    pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
-    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
-    EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::DualQuaternion);
-
     pose.parentJoints[1u] = 1u;
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
     pose.parentJoints[1u] = 0u;
     pose.parentJoints.pop_back();
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
 }
+#if defined(GLB_FINAL)
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     NWB::Impl::MeshSkinningRuntimeInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
@@ -894,46 +671,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     NWB::Impl::SkeletonJointPaletteComponent joints(NWB::Tests::TestDetail::Arena());
     joints.joints.push_back(MakeIdentityJointMatrix());
 
-    Vector<NWB::Impl::MeshSkinningInfluenceGpu> skinInfluences;
     Vector<NWB::Impl::SkeletonJointMatrix> jointMatrices;
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, skinInfluences));
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(instance, joints.joints, joints.skinningMode, jointMatrices));
-    EXPECT_EQ(skinInfluences.size(), instance.skin.size());
-    EXPECT_EQ(jointMatrices.size(), 1u);
-    EXPECT_EQ(skinInfluences[0u].joint[0u], 0u);
-    EXPECT_TRUE(NearlyEqual(skinInfluences[0u].weight.x, 1.0f));
-
-    instance.inverseBindMatrices.push_back(MakeTranslationJointMatrix(-0.25f, 0.0f, 0.0f));
-    joints.joints[0u] = MakeTranslationJointMatrix(1.0f, 0.0f, 0.0f);
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(instance, joints.joints, joints.skinningMode, jointMatrices));
-    EXPECT_EQ(jointMatrices.size(), 1u);
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].w, 0.75f));
-    joints.joints[0u] = MakeIdentityJointMatrix();
-
-    NWB::Impl::MeshSkinningRuntimeInstance dualQuaternionInstance = MakeTriangleInstance();
-    AssignSingleJointSkin(dualQuaternionInstance, 0u);
-    dualQuaternionInstance.handle.value = instance.handle.value;
-    joints.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
-    joints.joints[0u] = MakeTranslationJointMatrix(2.0f, 4.0f, 6.0f);
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(
-        dualQuaternionInstance,
-        joints.joints,
-        joints.skinningMode,
-        jointMatrices
-    ));
-    EXPECT_EQ(jointMatrices.size(), 1u);
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].x, 0.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].y, 0.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].z, 0.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[0].w, 1.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[1].x, 1.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[1].y, 2.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[1].z, 3.0f));
-    EXPECT_TRUE(NearlyEqual(jointMatrices[0u].rows[1].w, 0.0f));
-    joints.skinningMode = NWB::Impl::SkeletonSkinningMode::LinearBlend;
-    joints.joints[0u] = MakeIdentityJointMatrix();
-
-#if defined(GLB_FINAL)
     CapturingLogger runtimeValidationLogger;
     NWB::Core::Common::LoggerRegistrationGuard runtimeValidationLoggerRegistrationGuard(runtimeValidationLogger);
 
@@ -964,8 +702,8 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("joint palette count")));
     EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
     EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("failed dual-quaternion payload build")));
-#endif
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

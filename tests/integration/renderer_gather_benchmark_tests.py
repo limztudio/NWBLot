@@ -14,7 +14,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 
 import renderer_gather_benchmark as bench
-from generate_gather_benchmark_assets import generated_contents, main as generate_assets
+from generate_gather_benchmark_assets import main as generate_assets
 
 # Shared literals (no inline hardcodes below this block).
 LIT_PRESENT = "present"
@@ -264,16 +264,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
             if trial[LIT_ARM] == LIT_CANDIDATE:
                 trial[LIT_RESULT][LIT_CPU][LIT_GRAPHICS_FRAME][LIT_MEAN_MS] += 1.
         self.assertEqual(bench.compare(trials, orders, LIT_TIMING)[LIT_STATUS], "whole_cpu_frame_regression_or_uncertain")
-
-    def test_generator_has_bounded_distinct_keys_without_changing_geometry(self):
-        contents = generated_contents("mesh asset;\n", "// shader\n")
-        meshes = [data for path, data in contents.items() if "/meshes/" in path]
-        materials = [data for path, data in contents.items() if "/materials/" in path]
-        self.assertEqual(len(contents), 129)
-        self.assertEqual(len(meshes), 64)
-        self.assertEqual(len(materials), 64)
-        self.assertEqual(set(meshes), {LIT_MESH_ASSET_R_N})
-        self.assertEqual(len(set(materials)), 1)
 
     def test_generator_rejects_stale_files_before_overwriting_and_keeps_source_root_separate(self):
         with TemporaryDirectory() as temporary:

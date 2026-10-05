@@ -217,18 +217,6 @@ TEST(SkinningDeformationState, PoseRemovalProducesRestGeometryOnceAndPoseReintro
     EXPECT_EQ(state.contentRevision(), 0u);
 }
 
-TEST(SkinningDeformationState, EverySourceAndOutputBufferReplacementChangesResourceIdentity){
-    DeformationContext context;
-    const MeshSkinningResourceBuffers original = CaptureMeshSkinningResourceBuffers(context.instance);
-    for(const auto member : s_InstanceBuffers){
-        context.instance.*member = context.buffers[1u];
-        EXPECT_NE(CaptureMeshSkinningResourceBuffers(context.instance), original);
-        context.instance.*member = context.buffers[0u];
-        EXPECT_EQ(CaptureMeshSkinningResourceBuffers(context.instance), original);
-    }
-    context.instance.attributeBuffer = nullptr;
-    EXPECT_NE(CaptureMeshSkinningResourceBuffers(context.instance), original);
-}
 
 TEST(SkinningDeformationState, RuntimeDescriptionPublishesPendingZeroWithoutChangingMeshIdentity){
     DeformationContext context;

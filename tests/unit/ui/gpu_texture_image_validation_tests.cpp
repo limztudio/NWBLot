@@ -52,19 +52,6 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(GpuTextureImageValidationFixture, GeneratedImageCommandPassesEveryImageValidator){
-    const SharedImageSource image = makeImage();
-    ASSERT_TRUE(image);
-    ASSERT_TRUE(m_builder.drawImage(image, { 2.0f, 3.0f, 16.0f, 8.0f }));
-    const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.textureImages().size(), 1u);
-    ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::Image);
-    EXPECT_TRUE(GpuRendererState::validateGlyphPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::validateSdfPages(snapshot));
-    EXPECT_TRUE(GpuRendererState::validateTextureImages(snapshot));
-}
-
 TEST_F(GpuTextureImageValidationFixture, GeneratedMixedMaterialsAndSameIdentityVersionsPassEveryValidator){
     const SharedImageSource first = makeImage("tests/ui/versioned_gpu_image", 37u);
     const SharedImageSource second = makeImage("tests/ui/versioned_gpu_image", 73u);

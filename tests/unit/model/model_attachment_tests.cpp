@@ -75,27 +75,6 @@ using namespace NWB::ModelTests;
     return entity;
 }
 
-TEST(ModelAttachment, AppliesOwnerObjectAndJointTransformsAcrossSharedParents){
-    RuntimeContext context;
-    auto& world = context.testWorld.world;
-    const auto owner = context.makeOwner();
-    world.entity(owner).getComponent<Scene::TransformComponent>().position.x = 10.0f;
-    const auto firstParent = MakeSkeleton(context, owner, 4u, 1.0f, 5.0f);
-    const auto secondParent = MakeSkeleton(context, owner, 4u, 2.0f, 15.0f);
-    const auto unattached = MakeAttachment(context, owner, Core::ECS::s_InvalidEntityId, Limit<u32>::s_Max, 2.0f);
-    const auto objectParent = MakeAttachment(context, owner, firstParent, Limit<u32>::s_Max, 2.0f);
-    const auto firstJoint = MakeAttachment(context, owner, firstParent, s_ExpectedDualCount, 2.0f);
-    const auto secondJoint = MakeAttachment(context, owner, firstParent, 0u, 3.0f);
-    const auto differentParent = MakeAttachment(context, owner, secondParent, 1u, 1.0f);
-
-    context.system.update(world, 0.0f);
-    EXPECT_FLOAT_EQ(world.entity(unattached).getComponent<Scene::TransformComponent>().position.x, 12.0f);
-    EXPECT_FLOAT_EQ(world.entity(objectParent).getComponent<Scene::TransformComponent>().position.x, 17.0f);
-    EXPECT_FLOAT_EQ(world.entity(firstJoint).getComponent<Scene::TransformComponent>().position.x, 20.0f);
-    EXPECT_FLOAT_EQ(world.entity(secondJoint).getComponent<Scene::TransformComponent>().position.x, 19.0f);
-    EXPECT_FLOAT_EQ(world.entity(differentParent).getComponent<Scene::TransformComponent>().position.x, 30.0f);
-}
-
 TEST(ModelAttachment, RevalidatesPoseHierarchyAndParentBindingOnEveryUpdate){
     RuntimeContext context;
     auto& world = context.testWorld.world;

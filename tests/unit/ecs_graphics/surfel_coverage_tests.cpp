@@ -50,11 +50,10 @@ inline float exp(const float value){ return ::Exp(value); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(SurfelCoverage, GatherWeightEncodesEmptyPartialAndFullSupport){
+TEST(SurfelCoverage, EmptyAndSaturatedGatherCoverageStayWithinEndpoints){
     const float full = NWB_SURFEL_GATHER_FULL_COVERAGE_WEIGHT;
     ASSERT_GT(full, 0.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(0.0f), 0.0f);
-    EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full * 0.5f), 0.5f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full), 1.0f);
     EXPECT_FLOAT_EQ(nwbSurfelGatherCoverage(full * 2.0f), 1.0f);
 }

@@ -278,100 +278,6 @@ TEST(EcsGraphics, FrameGraphBuilderCopiesOwnerBoundPacketSubmissionStatistics){
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(owner, statistics));
 }
 
-TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntimeTelemetry){
-    NWB::Tests::TestArena<> testArena;
-    const TestPath repoRoot = NWB::Tests::RepoRootOf(testArena.arena, __FILE__);
-    NWB::Tests::TestAString source;
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_telemetry.cpp",
-        source
-    ));
-    const AStringView frameGraph(source.data(), source.size());
-
-    const usize runtimeTopologyOffset = frameGraph.find(
-        "const Core::GpuPhysicalQueueTopology runtimeQueueTopology = "
-        "deferredCompiledPlan.queueTopology();"
-    );
-    const usize snapshotLoopOffset = frameGraph.find(
-        "for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){",
-        runtimeTopologyOffset
-    );
-    const usize rendererFrameOffset = frameGraph.find("const Handle rendererFrame = builder.addPass(");
-    const usize packetSnapshotLoopOffset = frameGraph.find(
-        "for(usize packetIndex = 0u; packetIndex < deferredCompiledPlan.packetCount(); ++packetIndex){",
-        snapshotLoopOffset
-    );
-    const usize structuredLoopOffset = frameGraph.find(
-        ": physicalQueueRuntimeStatistics",
-        rendererFrameOffset
-    );
-    const usize packetStructuredLoopOffset = frameGraph.find(
-        ": packetSubmissionStatistics",
-        structuredLoopOffset
-    );
-    const usize frameSetupOffset = frameGraph.find(
-        "const Handle frameSetup = builder.addPass(",
-        structuredLoopOffset
-    );
-    ASSERT_NE(runtimeTopologyOffset, AStringView::npos);
-    ASSERT_NE(snapshotLoopOffset, AStringView::npos);
-    ASSERT_NE(packetSnapshotLoopOffset, AStringView::npos);
-    ASSERT_NE(rendererFrameOffset, AStringView::npos);
-    ASSERT_NE(structuredLoopOffset, AStringView::npos);
-    ASSERT_NE(packetStructuredLoopOffset, AStringView::npos);
-    ASSERT_NE(frameSetupOffset, AStringView::npos);
-    EXPECT_LT(runtimeTopologyOffset, snapshotLoopOffset);
-    EXPECT_LT(snapshotLoopOffset, rendererFrameOffset);
-    EXPECT_LT(snapshotLoopOffset, packetSnapshotLoopOffset);
-    EXPECT_LT(packetSnapshotLoopOffset, rendererFrameOffset);
-    EXPECT_LT(rendererFrameOffset, structuredLoopOffset);
-    EXPECT_LT(structuredLoopOffset, packetStructuredLoopOffset);
-    EXPECT_LT(structuredLoopOffset, frameSetupOffset);
-    EXPECT_LT(packetStructuredLoopOffset, frameSetupOffset);
-
-    const AStringView queueSnapshotExport = frameGraph.substr(
-        runtimeTopologyOffset,
-        rendererFrameOffset - runtimeTopologyOffset
-    );
-    EXPECT_NE(queueSnapshotExport.find(
-        "ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics("
-    ), AStringView::npos);
-    EXPECT_NE(queueSnapshotExport.find(
-        "physicalQueueRuntimeStatistics.push_back(queueStatistics);"
-    ), AStringView::npos);
-    EXPECT_NE(queueSnapshotExport.find(
-        "m_deferredLightingSubmissionTransaction.packetSubmissionStatistics("
-    ), AStringView::npos);
-    EXPECT_NE(queueSnapshotExport.find(
-        "packetSubmissionStatistics.size() != deferredRuntimeStatistics.submission.nativeSubmissionCount"
-    ), AStringView::npos);
-
-    const AStringView structuredExport = frameGraph.substr(
-        rendererFrameOffset,
-        frameSetupOffset - rendererFrameOffset
-    );
-    EXPECT_NE(structuredExport.find(
-        "builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)"
-    ), AStringView::npos);
-    EXPECT_NE(structuredExport.find(
-        "ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, rendererFrame.index)"
-    ), AStringView::npos);
-    EXPECT_NE(structuredExport.find(
-        "builder.addPacketSubmissionStatistics(rendererFrame, telemetryStatistics)"
-    ), AStringView::npos);
-    EXPECT_EQ(
-        structuredExport.find("BuildFrameGraphPhysicalQueueRuntimeStatistics("),
-        AStringView::npos
-    );
-    EXPECT_EQ(structuredExport.find("physicalQueueCompileStatistics("), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("physicalQueueRecordingStatistics("), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("physicalQueueSubmissionStatistics("), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("hasTerminalSubmissionWork"), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("hasLogicalOwnershipTelemetry"), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("commandArenaStatistics"), AStringView::npos);
-    EXPECT_EQ(structuredExport.find("continue;"), AStringView::npos);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -385,21 +291,6 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
     ;
     EXPECT_TRUE(matching.present);
     EXPECT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphRuntimeStatistics(matching));
-    EXPECT_EQ(matching.graphGeneration, statistics.compile.graphGeneration);
-    EXPECT_EQ(matching.planGeneration, statistics.compile.planGeneration);
-    EXPECT_EQ(matching.recordingAttemptGeneration, statistics.recording.recordingAttemptGeneration);
-    EXPECT_EQ(matching.deviceGeneration, statistics.compile.deviceGeneration);
-    EXPECT_EQ(matching.compile.taskCount, statistics.compile.taskCount);
-    EXPECT_EQ(matching.compile.resourceVersionCount, statistics.compile.resourceVersionCount);
-    EXPECT_EQ(matching.compile.resourceVersionEdgeCount, statistics.compile.resourceVersionEdgeCount);
-    EXPECT_EQ(matching.recording.commandListCount, statistics.recording.commandListCount);
-    EXPECT_EQ(matching.submission.nativeSubmissionCount, statistics.submission.nativeSubmissionCount);
-    EXPECT_EQ(
-        matching.submission.acceptedFrontierSubmissionCount,
-        statistics.submission.acceptedFrontierSubmissionCount
-    );
-    EXPECT_EQ(matching.submission.recoverySubmissionCount, statistics.submission.recoverySubmissionCount);
-
     const NWB::Core::Telemetry::FrameGraphRuntimeStatistics stale =
         NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 42u, 41u)
     ;

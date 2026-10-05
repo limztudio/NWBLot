@@ -205,7 +205,6 @@ public:
     static constexpr Name s_ShaderScratchArena = Name("tests/integration/assets_graphics/shader");
     static constexpr Name s_ModelFixtureScratchArena = Name("tests/integration/assets_graphics/model_fixture");
     static constexpr Name s_CodecScratchArena = Name("tests/integration/assets_graphics/codec");
-    static constexpr Name s_ProjectCookEntryArena = Name("tests/integration/assets_graphics/project_cook_entry");
     static constexpr AStringView s_MinimalMeshMeta =
     "mesh asset;\n\n"
     NWB_ASSETS_GRAPHICS_TEST_TRIANGLE_POSITIONS
@@ -775,31 +774,6 @@ public:
     asset.transparent = 1;
     asset.two_sided = 0;
     asset.refractive = 0;
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "surface": {
-        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
-        "roughness": "float(0.25)",
-    },
-    "runtime": {
-        "fade_alpha": "float(0.75)",
-    },
-    };
-
-    )NWB_META";
-    static constexpr AStringView s_TwoSidedMaterialMeta = R"NWB_META(material asset;
-
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 1;
-    asset.refractive = 0;
-
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
     asset.shader_variant = "default";
 
     asset.parameters = {
@@ -1506,23 +1480,7 @@ public:
         usize& outLayoutHashOffset,
         usize& outBlockByteCountOffset
     );
-    template<typename AssetT, typename CodecT>
-    static const AssetT& CheckCodecRoundTrip(
-        TestArena& testArena,
-        const AssetT& asset,
-        const CodecT& codec,
-        UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset){
-        EXPECT_TRUE(asset.validatePayload());
 
-        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
-        EXPECT_TRUE(codec.serialize(asset, binary));
-        EXPECT_FALSE(binary.empty());
-
-        EXPECT_TRUE(codec.deserialize(testArena.arena, asset.virtualPath(), binary, outLoadedAsset));
-        EXPECT_NE(outLoadedAsset.get(), nullptr);
-        EXPECT_EQ(outLoadedAsset->assetType(), AssetT::AssetTypeName());
-        return static_cast<const AssetT&>(*outLoadedAsset);
-    }
     static bool EncodeTestMeshletRefs(
         NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
         const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,

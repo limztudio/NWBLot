@@ -208,7 +208,7 @@ TEST(X11FilteredKeyHistory, SessionChangesDoNotRefreshRetiredStampExpirationAndR
     EXPECT_FALSE(history.isForwardedDuplicate(23u, false, 100u, 50u, false, 1001u));
 }
 
-TEST(X11PreeditBuffer, CharacterReplacementProducesUtf8ByteCaret){
+TEST(X11PreeditBuffer, CharacterReplacementSplicesCompleteBmpAndSupplementaryScalars){
     NWB::Tests::TestArena arena;
     X11PreeditBuffer preedit(arena.arena);
     ASSERT_TRUE(preedit.replace(0u, 0u, "A\xED\x95\x9C\xF0\x9F\x98\x80Z", 3u));
@@ -218,7 +218,7 @@ TEST(X11PreeditBuffer, CharacterReplacementProducesUtf8ByteCaret){
     EXPECT_EQ(preedit.caretByte(), 4u);
 }
 
-TEST(X11PreeditBuffer, InsertDeleteAndMoveRetainCharacterOffsets){
+TEST(X11PreeditBuffer, SupplementaryInsertAndDeletionKeepScalarIndexedCaret){
     NWB::Tests::TestArena arena;
     X11PreeditBuffer preedit(arena.arena);
     ASSERT_TRUE(preedit.replace(0u, 0u, "\xED\x95\x9C", 1u));
@@ -281,7 +281,7 @@ TEST(X11PreeditBuffer, BoundedPreeditRejectsGrowthWithoutDiscardingText){
     EXPECT_TRUE(preedit.replace(0u, 1u, "y", 1u));
 }
 
-TEST(WaylandTextInputState, ShortSurroundingKeepsCompleteSelectionAndOffsets){
+TEST(WaylandTextInputState, ShortUtf8ReverseSelectionRetainsScalarByteEndpoints){
     const AStringView text = "A\xED\x95\x9C\xF0\x9F\x98\x80Z";
     const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(text, 8u, 1u);
     ASSERT_TRUE(slice.available);
@@ -520,7 +520,7 @@ TEST(WaylandTextInputState, NegativeCaretEdgesRoundOutwardWithoutWideningExactEd
     EXPECT_EQ(crossed.height, 3);
 }
 
-TEST(WaylandTextInputState, PositiveCaretEdgesAndUnitScaleRemainConsistent){
+TEST(WaylandTextInputState, PositiveOddPixelEdgesRoundOutwardAndZeroScaleUsesPixelBounds){
     const TextInputRect scaled = WaylandTextInputRectForPixels({ 3, 5, 4, 4 }, 2);
     EXPECT_EQ(scaled.x, 1);
     EXPECT_EQ(scaled.y, 2);

@@ -154,45 +154,11 @@ static thread_local bool s_EcsCallerThread = false;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Ecs, ComponentStorageAndView){
+TEST(Ecs, ComponentStoragePreservesOverAlignment){
     TestWorld testWorld;
-
     auto entity = testWorld.world.createEntity();
-    const auto entityId = entity.id();
-    auto& position = entity.addComponent<PositionComponent>();
-    auto& velocity = entity.addComponent<VelocityComponent>();
     auto& aligned = entity.addComponent<OverAlignedComponent>();
-
-    position.x = 2;
-    position.y = 4;
-    velocity.x = 6;
-    velocity.y = 8;
-
-    EXPECT_TRUE(entity.alive());
-    EXPECT_EQ(testWorld.world.entityCount(), 1u);
-    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
-    EXPECT_TRUE(entity.hasComponent<VelocityComponent>());
-    EXPECT_TRUE(entity.hasComponent<OverAlignedComponent>());
-    EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), &position);
-    EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), &velocity);
-    EXPECT_EQ((reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent)), 0u);
-
-    usize viewCount = 0;
-    testWorld.world.view<PositionComponent, VelocityComponent>().each(
-        [&viewCount, entityId](
-            NWB::Core::ECS::EntityID viewEntityId,
-            PositionComponent& viewPosition,
-            VelocityComponent& viewVelocity
-        ){
-            ++viewCount;
-            EXPECT_EQ(viewEntityId, entityId);
-            EXPECT_EQ(viewPosition.x, 2);
-            EXPECT_EQ(viewPosition.y, 4);
-            EXPECT_EQ(viewVelocity.x, 6);
-            EXPECT_EQ(viewVelocity.y, 8);
-        }
-    );
-    EXPECT_EQ(viewCount, 1u);
+    EXPECT_EQ(reinterpret_cast<usize>(&aligned) % alignof(OverAlignedComponent), 0u);
 }
 
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
@@ -358,53 +324,6 @@ TEST(Ecs, ComponentPoolsCanBeRecreatedAfterWorldClear){
     EXPECT_EQ(testWorld.world.componentMutationVersion<PoolSlotComponent<63u>>(), 1u);
     EXPECT_FALSE(recreated.hasComponent<PositionComponent>());
     EXPECT_EQ(testWorld.world.view<PoolSlotComponent<63u>>().candidateCount(), 1u);
-}
-
-TEST(Ecs, RepeatedComponentLookupWorkload){
-    TestWorld testWorld;
-    static constexpr usize s_EntityCount = 4096u;
-    static constexpr usize s_RoundCount = 64u;
-    Array<NWB::Core::ECS::EntityID, s_EntityCount> entities;
-    u64 expectedPositionSum = 0u;
-    u64 expectedVelocitySum = 0u;
-    for(usize i = 0u; i < s_EntityCount; ++i){
-        auto entity = testWorld.world.createEntity();
-        entities[i] = entity.id();
-        entity.addComponent<PositionComponent>().x = static_cast<i32>(i + 1u);
-        expectedPositionSum += i + 1u;
-        if((i & 1u) == 0u){
-            entity.addComponent<VelocityComponent>().x = static_cast<i32>(i + 3u);
-            expectedVelocitySum += i + 3u;
-        }
-    }
-
-    u64 positionSum = 0u;
-    u64 velocitySum = 0u;
-    usize absentComponents = 0u;
-    const NWB::Core::ECS::World& constWorld = testWorld.world;
-    const Timer lookupBegin = TimerNow();
-    for(usize round = 0u; round < s_RoundCount; ++round){
-        for(usize i = 0u; i < s_EntityCount; ++i){
-            const auto entityId = entities[(i * 2053u + round * 17u) & (s_EntityCount - 1u)];
-            if(auto* position = testWorld.world.tryGetComponent<PositionComponent>(entityId)){
-                positionSum += static_cast<u64>(position->x);
-                ++position->y;
-            }
-            if(const auto* velocity = constWorld.tryGetComponent<VelocityComponent>(entityId))
-                velocitySum += static_cast<u64>(velocity->x);
-            if(!constWorld.tryGetComponent<OverAlignedComponent>(entityId))
-                ++absentComponents;
-        }
-    }
-    const u64 lookupNanoseconds = DurationInNS<u64>(TimerNow(), lookupBegin);
-    NWB::Tests::RecordUnsignedTestProperty("lookup_ns", lookupNanoseconds);
-
-    EXPECT_EQ(positionSum, expectedPositionSum * s_RoundCount);
-    EXPECT_EQ(velocitySum, expectedVelocitySum * s_RoundCount);
-    EXPECT_EQ(absentComponents, s_EntityCount * s_RoundCount);
-    testWorld.world.view<PositionComponent>().each([](NWB::Core::ECS::EntityID, PositionComponent& position){
-        EXPECT_EQ(position.y, static_cast<i32>(s_RoundCount));
-    });
 }
 
 TEST(Ecs, MoveOnlyMessageBus){

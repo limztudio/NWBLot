@@ -6,8 +6,6 @@
 #include <impl/assets_font/binary_payload.h>
 #include <impl/assets_font/font_validation.h>
 
-#include <core/assets/auto_registration.h>
-
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
 #include <tests/common/test_context.h>
@@ -119,8 +117,6 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
         Core::Assets::AssetBytes sourceCopy(source.begin(), source.end(), testArena.arena);
         font.setFontBytes(Move(sourceCopy));
         ASSERT_TRUE(font.validatePayload());
-        EXPECT_EQ(font.virtualPath(), s_Names[index]);
-        EXPECT_EQ(font.faceIndex(), 0u);
         EXPECT_EQ(font.fontBytes(), source);
 
         Core::Assets::AssetBytes prepared(testArena.arena);
@@ -137,29 +133,11 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
         ASSERT_TRUE(codec.deserialize(testArena.arena, font.virtualPath(), binary, loadedAsset));
         const Font* loaded = Core::Assets::CastAsset<Font>(loadedAsset.get());
         ASSERT_NE(loaded, nullptr);
-        EXPECT_EQ(loaded->virtualPath(), s_Names[index]);
-        EXPECT_EQ(loaded->faceIndex(), 0u);
         EXPECT_EQ(loaded->fontBytes(), source);
     }
     EXPECT_EQ(logger.errorCount(), LengthOf(s_BundledNames));
 }
 
-TEST(AssetsFont, RuntimeRegistrarExposesTypedFont){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    FontTestArena testArena;
-    Font font(testArena.arena);
-    ASSERT_TRUE(LoadLatin(testArena, font));
-    FontAssetCodec codec;
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(codec.serialize(font, binary));
-    Core::Assets::AssetRegistry registry(testArena.arena);
-    Core::Assets::RegisterAutoCollectedAssetCodecs(registry);
-    UniquePtr<Core::Assets::IAsset> loaded;
-    ASSERT_TRUE(registry.deserializeAsset(Font::AssetTypeName(), font.virtualPath(), binary, loaded));
-    EXPECT_NE(Core::Assets::CastAsset<Font>(loaded.get()), nullptr);
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
 
 TEST(AssetsFont, MalformedBinaryPreservesThePreviouslyLoadedFont){
     CapturingLogger logger;

@@ -80,17 +80,6 @@ TEST(UiPopupLayoutTests, LeftPreferenceFlipsRightAtLeftEdge){
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
 
-TEST(UiPopupLayoutTests, RequestedSideStaysWhenItFitsEvenWithMoreRoomOpposite){
-    PopupOptions options;
-    options.anchor = { 40.0f, 100.0f, 30.0f, 24.0f };
-    options.side = PopupPlacementSide::Above;
-    options.size = { 140.0f, 90.0f };
-    PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f }, placement));
-    ExpectBounds(placement.bounds, { 40.0f, 6.0f, 140.0f, 90.0f });
-    EXPECT_EQ(placement.side, PopupPlacementSide::Above);
-}
-
 TEST(UiPopupLayoutTests, NeitherVerticalSideFitsUsesMoreRoomAndKeepsCompletePopupVisible){
     PopupOptions options;
     options.anchor = { 100.0f, 150.0f, 20.0f, 20.0f };

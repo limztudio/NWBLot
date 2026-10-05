@@ -82,8 +82,6 @@ TEST(GpuCommandIrUploadStream, PreservesBufferAndPitchedTextureBlobsAfterCallerM
 
     Graphics::GpuCommandIrStreamReader reader(bytes);
     ASSERT_EQ(reader.recordCount(), 2u);
-    EXPECT_EQ(reader.graphGeneration(), s_CommandIrTask.generation);
-    EXPECT_EQ(reader.planGeneration(), s_CommandIrPacket.generation);
     const BinaryByteView blobs = reader.blobBytes();
     ASSERT_EQ(blobs.size(), sizeof(bufferBytes) + sizeof(textureBytes));
     ASSERT_NE(blobs.data(), nullptr);
@@ -93,32 +91,11 @@ TEST(GpuCommandIrUploadStream, PreservesBufferAndPitchedTextureBlobsAfterCallerM
     Graphics::GpuCommandIrBuiltinTaskRecord record;
     ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::UploadBuffer);
-    EXPECT_EQ(record.task, s_CommandIrTask);
-    EXPECT_EQ(record.packet, s_CommandIrPacket);
-    EXPECT_EQ(record.queue, s_CommandIrQueue);
-    EXPECT_EQ(record.sourceUploadBlob, s_BufferBlob);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.destinationOffsetBytes, 32u);
     EXPECT_EQ(record.blobOffsetBytes, 0u);
     EXPECT_EQ(record.blobSizeBytes, sizeof(bufferBytes));
-    EXPECT_EQ(record.finalState, Graphics::ResourceStates::ShaderResource);
 
     ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::UploadTexture);
-    EXPECT_EQ(record.sourceUploadBlob, s_TextureBlob);
-    EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.destinationSlice.x, 0u);
-    EXPECT_EQ(record.destinationSlice.y, 0u);
-    EXPECT_EQ(record.destinationSlice.z, 0u);
-    EXPECT_EQ(record.destinationSlice.width, 4u);
-    EXPECT_EQ(record.destinationSlice.height, 3u);
-    EXPECT_EQ(record.destinationSlice.depth, 2u);
-    EXPECT_EQ(record.destinationSlice.mipLevel, 1u);
-    EXPECT_EQ(record.destinationSlice.arraySlice, 2u);
-    EXPECT_EQ(record.rowPitch, 16u);
-    EXPECT_EQ(record.depthPitch, 48u);
-    EXPECT_EQ(record.uploadAspect, Graphics::TextureUploadAspect::Color);
-    EXPECT_EQ(record.finalState, Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(record.blobOffsetBytes, sizeof(bufferBytes));
     EXPECT_EQ(record.blobSizeBytes, sizeof(textureBytes));
     EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);

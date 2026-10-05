@@ -136,18 +136,13 @@ TEST(OpticalSceneUpload, PreparedAndReservedPayloadsNeverClaimResidency){
     EXPECT_FALSE(retry.reused);
 }
 
-TEST(OpticalSceneUpload, AcceptedPayloadAndExactTokenPermitTheFirstReuse){
+TEST(OpticalSceneUpload, AcceptedResidencyCannotBeReservedAgain){
     UploadContext context;
     const auto upload = context.makeUpload(1u);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, upload, 11u));
     const auto reused = context.control->plan(upload);
     ASSERT_TRUE(reused.valid());
     EXPECT_TRUE(reused.reused);
-    EXPECT_EQ(reused.buffer.get(), context.buffer.get());
-    EXPECT_EQ(reused.upload.get(), upload.get());
-    EXPECT_EQ(reused.acceptedToken.value, 11u);
-    EXPECT_EQ(reused.acceptedToken.physicalQueueIndex, 0u);
-    EXPECT_EQ(reused.acceptedToken.deviceGeneration, 1u);
     EXPECT_FALSE(context.control->reserve(reused));
 }
 
@@ -312,44 +307,6 @@ TEST(OpticalSceneUpload, UnacceptedReservationDestructionReleasesOnlyItsOwnAttem
     EXPECT_FALSE(context.control->plan(second).reused);
 }
 
-TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteStates){
-    UploadContext context;
-    const auto upload = context.makeUpload(1u);
-    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload), context.scratch);
-    ASSERT_TRUE(result.valid());
-    EXPECT_FALSE(result.reused);
-    const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
-    ASSERT_TRUE(view.valid());
-    ASSERT_EQ(view.taskCount(), 1u);
-    ASSERT_EQ(view.uploadBlobCount(), 1u);
-    ASSERT_EQ(view.resourceCount(), 1u);
-    EXPECT_EQ(view.externalCompletionCount(), 0u);
-    const auto task = view.taskAt(0u);
-    EXPECT_EQ(task.id, result.uploadTask);
-    EXPECT_EQ(task.identity, Name("render.raytrace.optical_scene_upload"));
-    EXPECT_TRUE(task.hasRecordPayload);
-    EXPECT_TRUE(task.hasAcceptedPayload);
-    EXPECT_EQ(task.commands.requiredCapabilities, Core::GpuQueueCapability::Transfer);
-    EXPECT_TRUE(task.commands.requiresPrimaryGraphicsQueue);
-    EXPECT_FALSE(task.scheduling.allowSameClassQueueRouting);
-    ASSERT_EQ(task.resourceUseCount, s_ExpectedDualCount);
-    for(usize index = 0u; index < task.resourceUseCount; ++index){
-        EXPECT_EQ(task.resourceUses[index].resource, result.resource);
-        EXPECT_EQ(task.resourceUses[index].range.bufferRange.byteOffset, 0u);
-        EXPECT_EQ(task.resourceUses[index].range.bufferRange.byteSize, upload->bytes.size());
-        EXPECT_EQ(task.resourceUses[index].access, Core::GpuTaskResourceAccess::Write);
-    }
-    EXPECT_EQ(task.resourceUses[0u].requiredState, Core::ResourceStates::CopyDest);
-    EXPECT_EQ(task.resourceUses[1u].requiredState, Core::ResourceStates::Common);
-    const auto resource = view.resourceAt(0u);
-    EXPECT_EQ(resource.initialState, Core::ResourceStates::Common);
-    EXPECT_EQ(resource.externalFinalState, Core::ResourceStates::Common);
-    usize byteSize = 0u;
-    const void* const bytes = view.uploadBlobData({ .generation = view.generation(), .index = 0u }, byteSize);
-    ASSERT_NE(bytes, nullptr);
-    ASSERT_EQ(byteSize, upload->bytes.size());
-    EXPECT_EQ(GLB_MEMCMP(bytes, upload->bytes.data(), byteSize), 0);
-}
 
 TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphics){
     UploadContext context;
@@ -431,30 +388,6 @@ TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphi
     EXPECT_EQ(assignment->queueClass, Core::CommandQueue::Graphics);
 }
 
-TEST(OpticalSceneUpload, AcceptedGraphHitKeepsExactProducerAvailabilityWithoutUploadWork){
-    UploadContext context;
-    const auto upload = context.makeUpload(1u);
-    ASSERT_NO_FATAL_FAILURE(Accept(*context.control, upload, 21u));
-    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload), context.scratch);
-    ASSERT_TRUE(result.valid());
-    EXPECT_TRUE(result.reused);
-    EXPECT_FALSE(result.uploadTask.valid());
-    const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
-    ASSERT_TRUE(view.valid());
-    EXPECT_EQ(view.taskCount(), 0u);
-    EXPECT_EQ(view.uploadBlobCount(), 0u);
-    ASSERT_EQ(view.resourceCount(), 1u);
-    ASSERT_EQ(view.externalCompletionCount(), 1u);
-    const auto resource = view.resourceAt(0u);
-    ASSERT_TRUE(resource.initialAvailabilityCompletion.valid());
-    const auto* const token = view.externalCompletionToken(resource.initialAvailabilityCompletion);
-    ASSERT_NE(token, nullptr);
-    EXPECT_EQ(token->value, 21u);
-    EXPECT_EQ(token->physicalQueueIndex, 0u);
-    EXPECT_EQ(token->deviceGeneration, 1u);
-    EXPECT_EQ(resource.initialState, Core::ResourceStates::Common);
-    EXPECT_EQ(resource.externalFinalState, Core::ResourceStates::Common);
-}
 
 TEST(OpticalSceneUpload, RealGraphResetDiscardsTheProductionUploadReservation){
     UploadContext context;

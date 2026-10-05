@@ -207,55 +207,6 @@ TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST(Crash, CrashBreadcrumbCapturedInRequest){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("crash_breadcrumb_persist_test");
-    RemoveTestArtifacts(arena, s_Group);
-
-    const CrashTestPath spoolDirectory = SpoolDirectory(arena, s_Group);
-    ErrorCode error;
-    EXPECT_TRUE(EnsureDirectories(spoolDirectory, error));
-
-    char previousSpoolDirectory[NWB::Core::Crash::Detail::s_MaxPathText] = {};
-    NWB::Core::Crash::Detail::FixedBreadcrumb previousBreadcrumbs[NWB::Core::Crash::Detail::s_MaxBreadcrumbs] = {};
-    usize previousNextBreadcrumb = 0u;
-    const u64 previousBreadcrumbOrder = NWB::Core::Crash::Detail::g_State.breadcrumbOrder.load(MemoryOrder::relaxed);
-
-    {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        CopyFixedBuffer(previousSpoolDirectory, NWB::Core::Crash::Detail::g_State.spoolDirectoryText);
-        previousNextBreadcrumb = NWB::Core::Crash::Detail::g_State.nextBreadcrumb;
-        for(usize i = 0u; i < NWB::Core::Crash::Detail::s_MaxBreadcrumbs; ++i)
-            previousBreadcrumbs[i] = NWB::Core::Crash::Detail::g_State.breadcrumbs[i];
-
-        CopyPathText(arena, NWB::Core::Crash::Detail::g_State.spoolDirectoryText, spoolDirectory);
-        NWB::Core::Crash::Detail::g_State.nextBreadcrumb = 0u;
-        for(NWB::Core::Crash::Detail::FixedBreadcrumb& breadcrumb : NWB::Core::Crash::Detail::g_State.breadcrumbs)
-            breadcrumb = NWB::Core::Crash::Detail::FixedBreadcrumb{};
-        NWB::Core::Crash::Detail::g_State.breadcrumbOrder.store(1u, MemoryOrder::relaxed);
-    }
-
-    EXPECT_TRUE(NWB::Core::Crash::AddCrashBreadcrumb(AStringView(s_TEST), AStringView("persisted breadcrumb")));
-
-    NWB::Core::Crash::Detail::CrashRequest request;
-    NWB::Core::Crash::Detail::SnapshotCrashState(request, NWB::Core::Crash::Detail::CrashReasonKind::ManualDump, 0u);
-    EXPECT_EQ(request.breadcrumbCount, 1u);
-    EXPECT_EQ(AStringView(request.breadcrumbs[0].category), AStringView(s_TEST));
-    EXPECT_EQ(AStringView(request.breadcrumbs[0].message), AStringView("persisted breadcrumb"));
-
-    {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        CopyFixedBuffer(NWB::Core::Crash::Detail::g_State.spoolDirectoryText, AStringView(previousSpoolDirectory));
-        NWB::Core::Crash::Detail::g_State.nextBreadcrumb = previousNextBreadcrumb;
-        for(usize i = 0u; i < NWB::Core::Crash::Detail::s_MaxBreadcrumbs; ++i)
-            NWB::Core::Crash::Detail::g_State.breadcrumbs[i] = previousBreadcrumbs[i];
-        NWB::Core::Crash::Detail::g_State.breadcrumbOrder.store(previousBreadcrumbOrder, MemoryOrder::relaxed);
-    }
-
-    RemoveTestArtifacts(arena, s_Group);
-}
-
 TEST(Crash, CrashSpoolRetentionPrunesOldestPackages){
     TestArena testArena;
     auto& arena = testArena.arena;

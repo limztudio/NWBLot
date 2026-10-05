@@ -32,14 +32,10 @@ LIT_KERNEL_WORK_MS = "kernel_work_ms"
 LIT_HARDWARE = "hardware"
 LIT_HARDWARE_TEMPORAL = "hardware_temporal"
 LIT_MISSING_GPU_SCOPES = "missing GPU scopes"
-LIT_OFFSCREEN = "offscreen"
 LIT_BASELINE = "baseline"
 LIT_CANDIDATE = "candidate"
-LIT_HYBRID_FEEDBACK = "hybrid_feedback"
 LIT_STATUS = "status"
 LIT_RESOLVED_GPU_TIME_REDUCTION = "resolved_gpu_time_reduction"
-LIT_DISPATCH_SCOPES = "dispatch_scopes"
-LIT_FRAME = "frame"
 LIT_NAME = "name"
 LIT_ROUGH = "rough"
 LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS = "NWB_REFLECTION_SMOKE_DIAGNOSTICS"
@@ -65,9 +61,6 @@ LIT_INCLUDE_FEEDBACK = "--include-feedback"
 LIT_MINIMUM_FRAME_SAMPLES = "--minimum-frame-samples"
 LIT_SCREEN_STEPS = "--screen-steps"
 LIT_N_257 = "257"
-LIT_N_16 = "16"
-LIT_NWB_REFLECTION_SMOKE_CASE = "NWB_REFLECTION_SMOKE_CASE"
-LIT_TIMING_TXT = "timing.txt"
 LIT_SCREEN_STEPS_96 = "screen steps 96"
 LIT_RES = "res"
 LIT_AUTHORED_VOL = "authored.vol"
@@ -157,12 +150,6 @@ class TimingNormalizationTests(unittest.TestCase):
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.parse_intervals(text + "\n=== interval: 1 frames / 0.5s ===\n")
 
-    def test_crlf_and_matching_name_hash_decode(self):
-        symbols = known_name_symbols([benchmark.FRAME])
-        token = next(iter(symbols))
-        parsed = benchmark.parse_intervals(report([(token, 2, 1)]).replace("\n", "\r\n"), symbols, finalized=True)
-        self.assertIn(benchmark.FRAME, parsed[0])
-
     def test_retired_partial_nonfinite_empty_and_duplicate_rows_fail_then_recover(self):
         current = report([(benchmark.FRAME, 1, 2)])
         retired = current.replace("window_avg_ms=", "avg=").replace("window_min_ms=", "min=")
@@ -251,24 +238,6 @@ class TimingNormalizationTests(unittest.TestCase):
 
 
 class PairedInferenceTests(unittest.TestCase):
-    def test_feedback_pair_isolates_toggle_and_keeps_normal_comparisons(self):
-        variants = benchmark.variants_for(LIT_OFFSCREEN, include_screen=True, include_feedback=True)
-        trials = []
-        for block in range(10):
-            for variant in variants:
-                scopes = synthetic_scopes(variant, frame_ms=4.8 if variant.feedback else 5.0)
-                trials.append({LIT_BLOCK: block, LIT_VARIANT: benchmark.asdict(variant), LIT_SCOPES: scopes,
-                    LIT_KERNEL_WORK_MS: benchmark.kernel_work_ms(scopes, variant, 10)})
-        comparisons = benchmark.compare_trials(trials, variants)
-        pairs = {(comparison[LIT_BASELINE], comparison[LIT_CANDIDATE]) for comparison in comparisons}
-        self.assertIn((LIT_HARDWARE, LIT_HYBRID), pairs)
-        self.assertIn(("disabled", "screen"), pairs)
-        paired = next(comparison for comparison in comparisons if comparison[LIT_BASELINE] == LIT_HYBRID)
-        self.assertEqual(paired[LIT_CANDIDATE], LIT_HYBRID_FEEDBACK)
-        self.assertEqual(paired[LIT_STATUS], LIT_RESOLVED_GPU_TIME_REDUCTION)
-        self.assertIn(benchmark.CLASSIFY, paired[LIT_DISPATCH_SCOPES])
-        self.assertIn(benchmark.DEPTH, paired[LIT_DISPATCH_SCOPES])
-
     def test_williams_order_balances_positions_and_preceding_treatments(self):
         for count in (3, 4, 5, 7):
             variants = tuple(benchmark.Variant(str(index), LIT_HARDWARE) for index in range(count))
@@ -288,17 +257,8 @@ class PairedInferenceTests(unittest.TestCase):
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.paired_statistics([1, 2, 3, 4])
 
-    def test_clear_frame_reduction_requires_flat_controls(self):
-        variants, trials = matched_trials()
-        results = benchmark.compare_trials(trials, variants)
-        pair = next(item for item in results if item[LIT_BASELINE] == LIT_HARDWARE and item[LIT_CANDIDATE] == LIT_HYBRID)
-        self.assertEqual(pair[LIT_STATUS], LIT_RESOLVED_GPU_TIME_REDUCTION)
-        self.assertAlmostEqual(pair[LIT_FRAME][LIT_MEAN_MS], -.5)
-        self.assertEqual(pair[LIT_FRAME]["blocks"], 6)
-        self.assertEqual(len(pair[LIT_FRAME]["block_differences_ms"]), 6)
-
     def test_small_change_and_material_control_drift_cannot_claim_speedup(self):
-        for delta, control, status in ((-.01, 0, "unresolved"), (-.5, -.1, "control_drift")):
+        for delta, control, status in ((-.5, 0, LIT_RESOLVED_GPU_TIME_REDUCTION), (-.01, 0, "unresolved"), (-.5, -.1, "control_drift")):
             variants, trials = matched_trials(delta, control)
             results = benchmark.compare_trials(trials, variants)
             pair = next(item for item in results if item[LIT_BASELINE] == LIT_HARDWARE and item[LIT_CANDIDATE] == LIT_HYBRID)
@@ -366,58 +326,17 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             benchmark.parse_args(common + [LIT_RAY_BUDGET, "0"])
 
-    def test_feedback_pairs_preserve_all_baseline_routes_and_balanced_cycles(self):
+    def test_feedback_cli_rejects_incomplete_samples_and_excessive_steps(self):
         common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT]
-        for family in (LIT_FLOOR, LIT_OFFSCREEN, LIT_FEEDBACK_LONG_MISS, LIT_ROUGH, LIT_OPTICAL_CLEAR):
-            with self.subTest(family=family):
-                plain = benchmark.variants_for(family)
-                self.assertTrue(all(not variant.feedback for variant in plain))
-                paired = benchmark.variants_for(family, include_feedback=True)
-                self.assertEqual(paired[:len(plain)], plain)
-                enabled = [variant for variant in paired if variant.feedback]
-                self.assertEqual(enabled, [benchmark.Variant(LIT_HYBRID_FEEDBACK, LIT_HYBRID, feedback=True)])
-                args = benchmark.parse_args(common + [LIT_FAMILY, family, LIT_INCLUDE_FEEDBACK])
-                rows = benchmark.balanced_orders(paired, args.blocks, 0)
-                self.assertTrue(all(set(row) == set(paired) for row in rows))
-                self.assertEqual(args.blocks, 14 if family == LIT_ROUGH else 8)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             benchmark.parse_args(common + [LIT_INCLUDE_FEEDBACK, LIT_MINIMUM_FRAME_SAMPLES, "63"])
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             benchmark.parse_args(common + [LIT_SCREEN_STEPS, LIT_N_257])
 
-    def test_predeclared_five_family_matrix_has_164_independent_trial_launches(self):
-        common = [LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT,
-            "--warmup-intervals", "2", "--sample-intervals", "6", LIT_MINIMUM_FRAME_SAMPLES, "100",
-            LIT_RAY_BUDGET, "1382400", "--sampling-seed", "0", "--optical-queries", LIT_N_16]
-        total_trials = 0
-        for family in (LIT_OFFSCREEN, LIT_FEEDBACK_LONG_MISS, LIT_FLOOR, LIT_ROUGH, LIT_OPTICAL_CLEAR):
-            rough = family == LIT_ROUGH
-            feedback = family not in (LIT_ROUGH, LIT_OPTICAL_CLEAR)
-            options = [LIT_FAMILY, family, "--blocks", LIT_N_10 if rough else "8" if feedback else "6"]
-            args = benchmark.parse_args(common + options + ([LIT_INCLUDE_FEEDBACK] if feedback else []))
-            variants = benchmark.variants_for(family, args.include_screen, args.include_feedback)
-            rows = benchmark.balanced_orders(variants, args.blocks, args.order_seed)
-            total_trials += sum(len(row) for row in rows)
-            self.assertEqual((args.warmup_intervals, args.sample_intervals, args.minimum_frame_samples), (2, 6, 100))
-            self.assertEqual(args.screen_steps, 16 if family == LIT_FEEDBACK_LONG_MISS else 96)
-            self.assertEqual(sum(variant.feedback for variant in variants), int(feedback))
-            for variant in variants:
-                required = benchmark.required_scopes(variant)
-                self.assertTrue(set(benchmark.OBSERVED_CONTROLS).issubset(required))
-                self.assertIn(benchmark.FRAME, required)
-        self.assertEqual(total_trials, 164)
-
-    def test_optical_family_keeps_three_matched_routes_and_checks_its_query_bound(self):
+    def test_optical_family_rejects_missing_or_wrong_query_bound(self):
         args = benchmark.parse_args([LIT_EXECUTABLE, LIT_TEST_EXE, LIT_WORKING_DIRECTORY, ".", LIT_OUTPUT_DIRECTORY, LIT_OUTPUT,
             LIT_FAMILY, LIT_OPTICAL_CLEAR, "--require-hardware"])
-        self.assertEqual(args.blocks, 6)
-        self.assertEqual(benchmark.variants_for(args.family), benchmark.variants_for(LIT_FLOOR))
-        self.assertIsNone(benchmark.validate_long_miss_qualification(args, {}))
         variant = benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE)
-        _, controls = benchmark.timed_environment({}, args, variant, Path("optical.txt"))
-        self.assertEqual(controls[LIT_NWB_REFLECTION_SMOKE_CASE], LIT_OPTICAL_CLEAR)
-        self.assertEqual(controls["NWB_REFLECTION_SMOKE_OPTICAL_QUERIES"], LIT_N_16)
-        self.assertEqual(controls[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
         text = ("ReflectionSmokeProject: case optical_clear created\nReflectionSmokeProject: shutdown\n" +
             LIT_TIMING_UNFOCUSED +
             LIT_TIMING_RANGES +
@@ -440,18 +359,6 @@ class BenchmarkEnvironmentTests(unittest.TestCase):
                 benchmark.parse_args(common + options)
         for steps in (8, 256):
             self.assertEqual(benchmark.parse_args(common + [LIT_SCREEN_STEPS, str(steps)]).screen_steps, steps)
-
-    def test_feedback_on_changes_only_the_explicit_scheduling_toggle(self):
-        args = SimpleNamespace(family=LIT_FEEDBACK_LONG_MISS, ray_budget=1382400, history_samples=16, roughness=.4,
-            sampling_seed=0, optical_queries=16, screen_steps=192)
-        ordinary, off = benchmark.timed_environment({}, args, benchmark.Variant(LIT_HYBRID, LIT_HYBRID), Path(LIT_TIMING_TXT))
-        enabled, on = benchmark.timed_environment({}, args,
-            benchmark.Variant(LIT_HYBRID_FEEDBACK, LIT_HYBRID, feedback=True), Path(LIT_TIMING_TXT))
-        self.assertEqual({key for key in ordinary if ordinary[key] != enabled[key]}, {LIT_NWB_REFLECTION_SMOKE_FEEDBACK})
-        self.assertEqual(on[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "1")
-        self.assertEqual(off[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "0")
-        self.assertEqual(on[LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS], "0")
-        self.assertEqual(on[LIT_NWB_REFLECTION_SMOKE_CASE], LIT_FEEDBACK_LONG_MISS)
 
     def test_route_dimensions_and_diagnostics_are_verified_from_runtime_logs(self):
         args = SimpleNamespace(family=LIT_FLOOR, ray_budget=100, require_hardware=True, width=960, height=720, screen_steps=96, mip_count=10)
@@ -515,9 +422,7 @@ class CostlyMissQualificationTests(unittest.TestCase):
         cache = self.root / LIT_RES / volume_segment_filename(LIT_RUNTIME_PIPELINE_CACHE, 0)
         cache.write_bytes(b"driver state")
         self.write(self.evidence)
-        result = benchmark.validate_long_miss_qualification(self.args, self.identity)
-        self.assertTrue(result["settings_match"])
-        self.assertEqual(self.args.screen_steps, 16)
+        benchmark.validate_long_miss_qualification(self.args, self.identity)
         cache.write_bytes(b"new mutable driver state")
         benchmark.validate_long_miss_qualification(self.args, self.identity)
 

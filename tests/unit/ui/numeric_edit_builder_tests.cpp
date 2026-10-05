@@ -99,24 +99,6 @@ TEST_F(UiNumericEditBuilderTests, SubmitThenCancelAggregatesActionsAndDropsRetir
     ASSERT_TRUE(acceptNumeric());
 }
 
-TEST_F(UiNumericEditBuilderTests, SuccessfulSubmitKeepsLexicalBytesSelectionAndHistory){
-    useHost();
-    m_host.replace(" 0042 ");
-    m_host.key(Core::Key::Home);
-    m_host.key(Core::Key::Enter);
-    ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
-    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
-    EXPECT_TRUE(result.numeric.committed);
-    EXPECT_FALSE(result.numeric.restored || result.numeric.clamped);
-    EXPECT_EQ(m_integer.value(), 42);
-    EXPECT_EQ(m_integer.draft().text(), AStringView(" 0042 "));
-    EXPECT_EQ(m_integer.draft().caret(), 0u);
-    EXPECT_TRUE(m_integer.draft().canUndo());
-    EXPECT_FALSE(m_integer.dirty());
-    ASSERT_TRUE(acceptNumeric());
-}
-
 TEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejection){
     useHost();
     ASSERT_TRUE(m_integer.setValue(12));

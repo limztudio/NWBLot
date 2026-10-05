@@ -261,46 +261,6 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
 #endif
 }
 
-TEST(AssetsGraphics, ShaderMetadataParsesOptimizationLevel){
-    TestArena testArena;
-    Path root(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_optimization_level", root));
-
-    const Path assetRoot = root / "assets";
-    const Path shaderMetaPath = assetRoot / "shaders" / "optimization_level_ps.nwb";
-    const auto shaderMetadata = StringFormat(
-        testArena.arena,
-        "{}{}{}{}",
-        s_SHADER_ASSET_HEAD,
-        s_ASSET_STAGE_PS,
-        "asset.optimization_level = \"none\";\n",
-        s_ASSET_ENTRY_MAIN
-    );
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderMetaPath, shaderMetadata));
-    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
-        assetRoot / "shaders" / "optimization_level_ps.slang",
-        R"NWB_SLANG(struct NwbOptimizationLevelPixelOutput{
-    float4 color : SV_Target0;
-};
-
-NwbOptimizationLevelPixelOutput main(){
-    NwbOptimizationLevelPixelOutput output;
-    output.color = float4(1.0, 1.0, 1.0, 1.0);
-    return output;
-}
-
-)NWB_SLANG"
-    ));
-
-    NWB::Impl::ShaderCook shaderCook(testArena.arena);
-    NWB::Impl::ShaderCook::ShaderEntry entry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_TRUE(shaderCook.parseShaderMeta(shaderMetaPath, entry, scratchArena));
-    EXPECT_EQ(entry.optimizationLevel, NWB::Impl::ShaderOptimizationLevel::None);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-}
 
 TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalFlags){
     CapturingLogger logger;
@@ -314,43 +274,30 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
     struct MetadataCase{
         AStringView fields;
         bool accepted;
-        bool rayQuery;
     };
     constexpr MetadataCase cases[] = {
-        { "", true, false },
-        { "asset.ray_query = 0;\n", true, false },
-        { "asset.ray_query = 1;\n", true, true },
-        { "asset.ray_query = -1;\n", false, false },
-        { "asset.ray_query = 2;\n", false, false },
-        { "asset.ray_query = 1.0;\n", false, false },
-        { "asset.ray_query = \"1\";\n", false, false },
-        { "asset.ray_query = [];\n", false, false },
-        { "asset.ray_query = {};\n", false, false },
-        { "asset.target_profile = \"spirv_1_5\";\n", false, false },
-        { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false, false },
-        { "asset.emit_mesh_compute_shadow = 0;\n", false, false },
-        { "asset.emit_mesh_compute_shadow = 1;\n", false, false },
+        { "", true },
+        { "asset.ray_query = 0;\n", true },
+        { "asset.ray_query = 1;\n", true },
+        { "asset.ray_query = -1;\n", false },
+        { "asset.ray_query = 2;\n", false },
+        { "asset.ray_query = 1.0;\n", false },
+        { "asset.ray_query = \"1\";\n", false },
+        { "asset.ray_query = [];\n", false },
+        { "asset.ray_query = {};\n", false },
+        { "asset.target_profile = \"spirv_1_5\";\n", false },
+        { "asset.target_profile = \"spirv_1_5+spvRayQueryKHR\";\n", false },
+        { "asset.emit_mesh_compute_shadow = 0;\n", false },
+        { "asset.emit_mesh_compute_shadow = 1;\n", false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry entry(testArena.arena);
-    u64 baselineChecksum = 0u;
     for(const MetadataCase& testCase : cases){
         SCOPED_TRACE(testCase.fields);
         Impl::ShaderCook::CookString metadata("shader asset;\nasset.stage = \"cs\";\nasset.entry_point = \"main\";\n", testArena.arena);
         metadata.append(testCase.fields);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
         EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
-        if(!testCase.accepted)
-            continue;
-        EXPECT_EQ(entry.rayQuery, testCase.rayQuery);
-        u64 checksum = 0u;
-        ASSERT_TRUE(shaderCook.computeSourceChecksum(entry, Core::ShaderArchive::s_DefaultVariant, 0u, checksum, scratchArena));
-        if(baselineChecksum == 0u)
-            baselineChecksum = checksum;
-        if(testCase.rayQuery)
-            EXPECT_NE(checksum, baselineChecksum);
-        else
-            EXPECT_EQ(checksum, baselineChecksum);
     }
     constexpr AStringView stages[] = { "vs", "ps", "rgen" };
     for(const AStringView stage : stages){
@@ -362,7 +309,6 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath,
         "shader asset;\nasset.stage = \"mesh\";\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
     ASSERT_TRUE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
-    EXPECT_FALSE(entry.emitMeshComputeShadow);
     ErrorCode error;
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }

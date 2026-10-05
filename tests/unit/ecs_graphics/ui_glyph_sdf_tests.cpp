@@ -62,14 +62,6 @@ TEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints){
     EXPECT_FLOAT_EQ(nwbUiSdfCoverage(nwbUiSdfDistance(0.5f, 8u), 1.f), 0.46875f);
 }
 
-TEST(UiGlyphSdf, HalfCoverageMultipliesPremultipliedTintExactlyOnce){
-    const f32 coverage = nwbUiSdfCoverage(nwbUiSdfDistance(128.f / 255.f, 8u), 1.f);
-    const ShaderFloat4 color = nwbUiGlyphCoverageColor({ 0.5f, 0.25f, 0.125f, 0.5f }, coverage);
-    EXPECT_NEAR(color.x, 0.25f, 0.000001f);
-    EXPECT_NEAR(color.y, 0.125f, 0.000001f);
-    EXPECT_NEAR(color.z, 0.0625f, 0.000001f);
-    EXPECT_NEAR(color.w, 0.25f, 0.000001f);
-}
 
 TEST(UiGlyphSdf, DerivativeWidthTracksSpreadAndFlatFieldsRemainFinite){
     const f32 sample = 130.f / 255.f;

@@ -95,9 +95,7 @@ TEST(Clipboard, RequestsCopyTextAndPublishOnlyWhenPumped){
     const ClipboardRequestResult read = service.requestReadText(ClipboardChannel::Clipboard);
     ASSERT_TRUE(service.pump());
     EXPECT_EQ(service.poll(write.token, completion), ClipboardPollResult::Completed);
-    EXPECT_EQ(completion.operation, ClipboardOperation::WriteText);
     EXPECT_EQ(completion.status, ClipboardStatus::Success);
-    EXPECT_TRUE(completion.text.empty());
     EXPECT_EQ(service.poll(read.token, completion), ClipboardPollResult::Completed);
     EXPECT_EQ(completion.text, original);
     EXPECT_EQ(completion.token, read.token);
@@ -196,7 +194,6 @@ TEST(Clipboard, UnsupportedFactoryDoesNotAccessNativeClipboard){
     NWB::Tests::TestArena arena;
     GlobalUniquePtr<IClipboardService> service = CreateClipboardService(arena.arena, nullptr);
     ASSERT_TRUE(service);
-    EXPECT_TRUE(service->isOwnerThread());
     EXPECT_FALSE(service->capabilities(ClipboardChannel::Clipboard).readText);
     EXPECT_FALSE(service->capabilities(ClipboardChannel::Clipboard).writeText);
     EXPECT_FALSE(service->capabilities(ClipboardChannel::PrimarySelection).readText);

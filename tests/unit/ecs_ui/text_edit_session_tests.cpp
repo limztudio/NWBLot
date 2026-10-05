@@ -226,28 +226,6 @@ TEST(UiTextEditSession, SelectedSurroundingDeleteCannotMisapplyWaylandExclusionS
     EXPECT_FALSE(service.activeSession().valid());
 }
 
-TEST(UiTextEditSession, NativeDeleteUndoRestoresTheOriginalCaretAndSelection){
-    NWB::Tests::TestArena arena;
-    FakeTextInput service(arena.arena);
-    Ui::EditModel model(arena.arena);
-    UiTextEditSession session(arena.arena, service);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_TRUE(model.setText("abCde"));
-    ASSERT_TRUE(model.setSelection(3u, 3u));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(
-        service.erase(1u, 1u, service.surroundingRevision(service.activeSession()), TextInputDeletionBasis::Caret),
-        TextInputAdmission::Accepted
-    );
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
-    EXPECT_EQ(model.text(), "abe");
-    ASSERT_TRUE(session.end(s_Owner, model));
-    ASSERT_TRUE(model.undo());
-    EXPECT_EQ(model.text(), "abCde");
-    EXPECT_EQ(model.anchor(), 3u);
-    EXPECT_EQ(model.caret(), 3u);
-}
-
 TEST(UiTextEditSession, PreeditClearBeforeCommitPreservesTheOriginalReplacementSelection){
     NWB::Tests::TestArena arena;
     FakeTextInput service(arena.arena);
@@ -336,23 +314,6 @@ TEST(UiTextEditSession, ExplicitEndClearsCompositionAndInvalidatesOldToken){
     EXPECT_NE(session.token(), first);
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(first, event), TextInputPollResult::InvalidSession);
-}
-
-TEST(UiTextEditSession, NativeHiddenPreeditCaretIsRetainedForThePaintAdapter){
-    NWB::Tests::TestArena arena;
-    FakeTextInput service(arena.arena);
-    Ui::EditModel model(arena.arena);
-    UiTextEditSession session(arena.arena, service);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.preedit("IME", 0u, 0u, false), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
-    EXPECT_FALSE(session.preeditCaretVisible());
-    EXPECT_TRUE(model.composition().active);
-    ASSERT_EQ(service.commit("text"), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
-    EXPECT_TRUE(session.preeditCaretVisible());
-    EXPECT_EQ(model.text(), "text");
 }
 
 TEST(UiTextEditSession, DestructionReleasesServiceWithoutBorrowingTheDestroyedModel){

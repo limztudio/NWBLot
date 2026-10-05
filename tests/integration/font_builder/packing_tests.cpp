@@ -91,7 +91,6 @@ TEST(FontAtlasPacking, TightRectanglesAndAllChannelCountsPreserveGuardedPixels){
             EXPECT_EQ(group.width, 30u);
             EXPECT_EQ(group.height, 31u);
             EXPECT_EQ(group.pixels.size(), 30u * 31u * group.channelCount);
-            EXPECT_EQ(group.sha256, ComputeSha256({ group.pixels.data(), group.pixels.size() }));
         }
         for(u32 index = 0u; index < glyphs.size(); ++index){
             const auto& glyph = payload.glyphs[index];

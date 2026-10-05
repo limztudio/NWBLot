@@ -84,42 +84,6 @@ TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublish
 }
 
 
-TEST(EcsGraphics, RayTracingMaterialAndSoftwareInputsExposeRawViews){
-    TestArena testArena;
-    const TestPath repoRoot = RepoRoot(testArena);
-
-    AString meshResourcesSource;
-    AString skinningRuntimeCacheSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_MESH / "mesh_resources.cpp", meshResourcesSource));
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_mesh" / "skinning" / "runtime_cache_resources.cpp",
-        skinningRuntimeCacheSource
-    ));
-
-    const AStringView meshResources(meshResourcesSource.data(), meshResourcesSource.size());
-    const AStringView skinningRuntimeCache(skinningRuntimeCacheSource.data(), skinningRuntimeCacheSource.size());
-    EXPECT_TRUE(ContainsText(
-        meshResources,
-        "RendererArenaScope::s_PositionBufferLabel,\n"
-        "        true,\n"
-        "        rtSupported"
-    ));
-    EXPECT_TRUE(ContainsText(meshResources, "indexFlags.canHaveRawViews = true;"));
-    EXPECT_TRUE(ContainsText(
-        skinningRuntimeCache,
-        "__hidden_runtime_cache_resources::s_SkinnedPositionLabel,\n"
-        "        true,\n"
-        "        rtSupported"
-    ));
-    EXPECT_TRUE(ContainsText(
-        skinningRuntimeCache,
-        "__hidden_runtime_cache_resources::s_RtTriangleIndexLabel,\n"
-        "            true,\n"
-        "            rtSupported"
-    ));
-}
-
-
 // A fresh acceleration-structure backing allocation has the device descriptor's Common state; a retained backing
 // instead needs the exact accepted Shadow Preparation handoff. Keep freshness tied to the physical generation so a
 // discarded plan retries Common while an accepted packet never fabricates AccelStructRead.

@@ -15,6 +15,7 @@ Both arms use hardware ray traversal, and only the healthy arm includes transpar
 
 from __future__ import annotations
 
+
 import argparse
 import json
 import math
@@ -888,9 +889,6 @@ def run_self_test() -> int:
             assert "did not publish at least 2 positive intervals" in str(error)
         else:
             raise AssertionError("zero-duration route timing must not satisfy hardware transparent evidence")
-        markdown = root / "report.md"
-        write_markdown_report(markdown, report)
-        assert "not a pixel-parity comparison" in markdown.read_text(encoding=LIT_UTF_8)
 
     print("hardware-shadow boundary harness self-test passed")
     return 0

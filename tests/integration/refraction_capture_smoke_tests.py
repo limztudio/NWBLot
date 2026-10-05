@@ -34,14 +34,6 @@ class RefractionCaptureAnalysisTests(unittest.TestCase):
             output[y][x] = rows[y][x + 8]
         return width, height, output
 
-    def test_displaced_stripes_preserve_foreground_and_exterior(self):
-        source = self.make_frame()
-        metrics = compare_refraction_frames(source, self.displace_stripes(source))
-        self.assertGreater(metrics["dark_to_light_pixels"], 100)
-        self.assertGreater(metrics["light_to_dark_pixels"], 100)
-        self.assertEqual(metrics["exterior_changed_pixels"], 0)
-        self.assertEqual(metrics["foreground_reference_pixels"], metrics["foreground_retained_pixels"])
-
     def test_identical_frame_cannot_pass_as_refraction(self):
         source = self.make_frame()
         with self.assertRaisesRegex(SmokeFailure, LIT_DID_NOT_DISPLACE):

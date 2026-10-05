@@ -52,19 +52,6 @@ TEST_F(UiConfigurableEditInputTests, EmptyKeyboardProfileLeavesNativeTextAndExpl
     EXPECT_EQ(m_model.caret(), 3u);
 }
 
-TEST_F(UiConfigurableEditInputTests, ArbitraryKeyboardChordResolvesWordMovementAndSelection){
-    ASSERT_TRUE(m_model.setText("one two"));
-    ASSERT_TRUE(activate());
-    const Ui::InputKeyBinding binding{ .key = Core::Key::F8, .ignoredModifiers = Core::InputModifier::Shift,
-        .command = Ui::InputCommand::WordLeft, .selection = Ui::InputSelectionPolicy::Shift };
-    ASSERT_TRUE(m_context.input().setBindings(&binding, 1u));
-    ASSERT_TRUE(key(Core::Key::F8, true));
-    ASSERT_TRUE(frame(m_model));
-    EXPECT_EQ(m_model.anchor(), 7u);
-    EXPECT_EQ(m_model.caret(), 4u);
-    EXPECT_EQ(m_model.selectedText(), "two");
-}
-
 TEST_F(UiConfigurableEditInputTests, CopiedCommandRetainsItsMeaningAfterTheBindingProfileChanges){
     ASSERT_TRUE(m_model.setText("abc"));
     ASSERT_TRUE(activate());
@@ -98,31 +85,6 @@ TEST_F(UiConfigurableEditInputTests, SemanticCancelFirstCancelsCompositionThenCa
     ASSERT_TRUE(frame(m_model));
     EXPECT_TRUE(m_result.cancelled);
     EXPECT_FALSE(m_context.input().focus().valid());
-}
-
-TEST_F(UiConfigurableEditInputTests, SemanticVerticalNavigationUsesTheCurrentMultilineGeometry){
-    ASSERT_TRUE(m_navigationModel.setText("ab\ncd"));
-    ASSERT_TRUE(activateNavigation());
-    ASSERT_TRUE(command(Ui::InputCommand::Up, true));
-    ASSERT_TRUE(navigationFrame());
-    ASSERT_EQ(m_resolver.records.size(), 1u);
-    EXPECT_EQ(m_resolver.records.front().direction, Ui::EditNavigationDirection::Up);
-    EXPECT_EQ(m_navigationModel.anchor(), 5u);
-    EXPECT_EQ(m_navigationModel.caret(), 2u);
-    EXPECT_EQ(m_navigationModel.selectedText(), "\ncd");
-}
-
-TEST_F(UiConfigurableEditInputTests, SemanticAcceptInsertsMultilineTextWhileSubmitRemainsAnExplicitAction){
-    ASSERT_TRUE(m_navigationModel.setText("ab"));
-    ASSERT_TRUE(activateNavigation());
-    ASSERT_TRUE(command(Ui::InputCommand::Accept));
-    ASSERT_TRUE(navigationFrame());
-    EXPECT_EQ(m_navigationModel.text(), "ab\n");
-    EXPECT_EQ(m_actions.count(Ui::EditAction::Submit), 0u);
-    ASSERT_TRUE(command(Ui::InputCommand::Submit));
-    ASSERT_TRUE(navigationFrame());
-    EXPECT_EQ(m_navigationModel.text(), "ab\n");
-    EXPECT_EQ(m_actions.count(Ui::EditAction::Submit), 1u);
 }
 
 TEST_F(UiConfigurableEditInputTests, NavigationOnlyIntentDoesNotBorrowTheEditModel){

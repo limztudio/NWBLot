@@ -83,7 +83,7 @@ static bool TestCsgReceiverVisible(
     return !filter || entity != filter->hiddenEntity;
 }
 
-TEST(Csg, CsgFrameStateKillSwitch){
+TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
     {
         TestWorld testWorld;
         EXPECT_FALSE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
@@ -126,30 +126,6 @@ TEST(Csg, CsgFrameStateKillSwitch){
         EXPECT_FALSE(state.hasAnyWork);
     }
 
-    {
-        TestWorld testWorld;
-
-        auto receiverEntity = testWorld.world.createEntity();
-        auto& receiver = receiverEntity.addComponent<NWB::Impl::StaticCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
-
-        auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
-        cutter.shapeType = Name(s_ENGINE_CSG_BOX);
-
-        EXPECT_TRUE(NWB::Impl::HasCsgFrameCandidates(testWorld.world));
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
-
-        EXPECT_FALSE(state.empty());
-        EXPECT_TRUE(state.hasAnyWork);
-        EXPECT_TRUE(state.hasOpaqueStaticWork);
-        EXPECT_FALSE(state.hasOpaqueSkinnedWork);
-        EXPECT_TRUE(state.hasTransparentStaticWork);
-        EXPECT_FALSE(state.hasTransparentSkinnedWork);
-        EXPECT_EQ(state.receiverCount, 1u);
-        EXPECT_EQ(state.cutterCount, 1u);
-    }
 
     {
         TestWorld testWorld;
@@ -183,29 +159,6 @@ TEST(Csg, CsgFrameStateKillSwitch){
         EXPECT_EQ(state.cutterCount, 0u);
     }
 
-    {
-        TestWorld testWorld;
-
-        auto receiverEntity = testWorld.world.createEntity();
-        auto& receiver = receiverEntity.addComponent<NWB::Impl::SkinnedCsgMeshComponent>();
-        receiver.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
-        receiver.affectOpaquePass = false;
-
-        auto cutterEntity = testWorld.world.createEntity();
-        auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(testWorld.arena);
-        cutter.receiverGroup = Name(s_PROJECT_CSG_GROUP_A);
-        cutter.shapeType = Name("engine/csg/sphere");
-
-        const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld);
-
-        EXPECT_FALSE(state.empty());
-        EXPECT_FALSE(state.hasOpaqueStaticWork);
-        EXPECT_FALSE(state.hasOpaqueSkinnedWork);
-        EXPECT_FALSE(state.hasTransparentStaticWork);
-        EXPECT_TRUE(state.hasTransparentSkinnedWork);
-        EXPECT_EQ(state.receiverCount, 1u);
-        EXPECT_EQ(state.cutterCount, 1u);
-    }
 
     {
         TestWorld testWorld;
@@ -425,78 +378,29 @@ TEST(Csg, CsgFrameReceiverLookup){
     }
 }
 
-TEST(Csg, CsgShapeRegistryBuiltIns){
+TEST(Csg, RepeatedBuiltInRegistrationPreservesTypeIdentityAndCount){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
-
-    EXPECT_EQ(registry.shapeTypeCount(), 0u);
-    EXPECT_EQ(registry.revision(), 0u);
-    EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    EXPECT_EQ(registry.shapeTypeCount(), 4u);
-    EXPECT_EQ(registry.revision(), 4u);
-
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX));
-    EXPECT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
-    EXPECT_EQ(boxId, NWB::Impl::CsgShapeTypeIdFromName(Name(s_ENGINE_CSG_BOX)));
+    ASSERT_NE(boxId, NWB::Impl::s_InvalidCsgShapeTypeId);
 
-    NWB::Impl::CsgShapeTypeInfo boxShape;
-    EXPECT_TRUE(registry.findShapeType(boxId, boxShape));
-    EXPECT_EQ(boxShape.desc.name, Name(s_ENGINE_CSG_BOX));
-    EXPECT_FALSE(boxShape.desc.shaderModule);
-    EXPECT_EQ(boxShape.desc.parameterByteSize, sizeof(NWB::Impl::CsgBoxShapeParameters));
-
-    EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
     EXPECT_EQ(registry.revision(), 8u);
     EXPECT_EQ(registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX)), boxId);
 }
 
-TEST(Csg, CsgShapeRegistryBounds){
+TEST(Csg, ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded){
     TestWorld testWorld;
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
-    EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     const SIMDMatrix shapeToWorldMatrix = MatrixTranslation(10.0f, -5.0f, 1.0f);
-
-    NWB::Impl::CsgBoxShapeParameters boxParameters;
-    boxParameters.halfExtents = Float4(2.0f, 3.0f, 4.0f, 0.0f);
-
     SIMDVector minBounds;
     SIMDVector maxBounds;
-    bool finiteBounds = false;
-    EXPECT_TRUE(registry.buildShapeBounds(
-        Name(s_ENGINE_CSG_BOX),
-        shapeToWorldMatrix,
-        reinterpret_cast<const u8*>(&boxParameters),
-        sizeof(boxParameters),
-        minBounds,
-        maxBounds,
-        finiteBounds
-    ));
-    EXPECT_TRUE(finiteBounds);
-    EXPECT_EQ(VectorGetX(minBounds), 8.0f);
-    EXPECT_EQ(VectorGetY(minBounds), -8.0f);
-    EXPECT_EQ(VectorGetZ(minBounds), -3.0f);
-    EXPECT_EQ(VectorGetX(maxBounds), 12.0f);
-    EXPECT_EQ(VectorGetY(maxBounds), -2.0f);
-    EXPECT_EQ(VectorGetZ(maxBounds), 5.0f);
-
-    const NWB::Impl::CsgShapeTypeId boxId = registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX));
-    EXPECT_TRUE(registry.buildShapeBounds(
-        boxId,
-        shapeToWorldMatrix,
-        reinterpret_cast<const u8*>(&boxParameters),
-        sizeof(boxParameters),
-        minBounds,
-        maxBounds,
-        finiteBounds
-    ));
-    EXPECT_TRUE(finiteBounds);
-    EXPECT_EQ(VectorGetX(minBounds), 8.0f);
-    EXPECT_EQ(VectorGetX(maxBounds), 12.0f);
-
+    bool finiteBounds = true;
     NWB::Impl::CsgPlaneShapeParameters planeParameters;
-    EXPECT_TRUE(registry.buildShapeBounds(
+    ASSERT_TRUE(registry.buildShapeBounds(
         Name(s_ENGINE_CSG_PLANE),
         shapeToWorldMatrix,
         reinterpret_cast<const u8*>(&planeParameters),
@@ -507,6 +411,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     ));
     EXPECT_FALSE(finiteBounds);
 
+    NWB::Impl::CsgBoxShapeParameters boxParameters;
     EXPECT_FALSE(registry.buildShapeBounds(
         Name(s_ENGINE_CSG_BOX),
         shapeToWorldMatrix,

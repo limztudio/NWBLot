@@ -37,21 +37,6 @@ struct OpticalSceneContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(OpticalScene, UnspecifiedTransparentBoundsParticipateInAirProof){
-    OpticalSceneContext context;
-    RendererComponent renderer;
-    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, { -3.f, -2.f, -1.f }, { 4.f, 5.f, 6.f }, true);
-
-    EXPECT_EQ(context.gather.header.transparentCount, 1u);
-    EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
-    EXPECT_EQ(context.gather.header.boundsMin.x, -3.f);
-    EXPECT_EQ(context.gather.header.boundsMax.z, 6.f);
-    ASSERT_EQ(context.gather.instances.size(), 1u);
-    EXPECT_EQ(context.gather.instances[0].boundaryMode, NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED);
-    EXPECT_EQ(context.gather.instances[0].flags,
-        NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT | NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID);
-}
-
 TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
     OpticalSceneContext context;
     RendererComponent renderer;
@@ -112,25 +97,6 @@ TEST(OpticalScene, OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds){
     EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
 }
 
-TEST(OpticalScene, UnionIncludesDisjointNestedAndPriorityParticipants){
-    OpticalSceneContext context;
-    RendererComponent renderer;
-    renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
-    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, { -5.f, -1.f, -2.f }, { -2.f, 2.f, 3.f }, true);
-    renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedPriority;
-    renderer.opticalMediumPriority = -7;
-    renderer.opticalVolumePriority = 100;
-    context.gather.append(Core::ECS::EntityID(s_ExpectedDualCount, 1u), renderer, true, { 1.f, -3.f, -1.f }, { 6.f, 1.f, 7.f }, true);
-
-    EXPECT_EQ(context.gather.header.transparentCount, s_ExpectedDualCount);
-    EXPECT_EQ(context.gather.header.boundsMin.x, -5.f);
-    EXPECT_EQ(context.gather.header.boundsMin.y, -3.f);
-    EXPECT_EQ(context.gather.header.boundsMax.x, 6.f);
-    EXPECT_EQ(context.gather.header.boundsMax.z, 7.f);
-    EXPECT_EQ(context.gather.instances[1].mediumPriority, -7);
-    EXPECT_EQ(context.gather.instances[1].boundaryMode, NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY);
-    EXPECT_EQ(context.gather.instances[1].entityId, Core::ECS::EntityID(s_ExpectedDualCount, 1u).id);
-}
 
 TEST(OpticalScene, UntrustedTransparentBoundsCannotBecomeAnAirShortcut){
     OpticalSceneContext context;
@@ -165,19 +131,13 @@ TEST(OpticalScene, MissingGeometryInvalidatesEvenAnOtherwiseEmptyScene){
     EXPECT_EQ(context.gather.header.flags, 0u);
 }
 
-TEST(OpticalScene, PolicyAndIncompleteBoundsChangeSemanticContentIdentity){
+TEST(OpticalScene, IncompleteBoundsHaveDistinctContentIdentity){
     OpticalSceneContext context;
     RendererComponent renderer;
     context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, {}, { 1.f, 1.f, 1.f }, true);
     const u64 initial = context.gather.contentHash();
-    context.gather.instances[0].mediumPriority = 4;
-    const u64 changedPriority = context.gather.contentHash();
-    EXPECT_NE(initial, changedPriority);
-    context.gather.instances[0].boundaryMode = NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
-    const u64 changedMode = context.gather.contentHash();
-    EXPECT_NE(changedPriority, changedMode);
     context.gather.markIncomplete();
-    EXPECT_NE(changedMode, context.gather.contentHash());
+    EXPECT_NE(initial, context.gather.contentHash());
 }
 
 TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){

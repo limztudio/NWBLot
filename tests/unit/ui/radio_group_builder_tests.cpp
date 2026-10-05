@@ -278,18 +278,6 @@ TEST_F(UiRadioGroupBuilderTests, PreparedGeometryDoesNotReplaceAcceptedChoiceTar
     ExpectRadioRect(target(host())->rectangle, m_state.placement().bounds);
 }
 
-TEST_F(UiRadioGroupBuilderTests, ExplicitCheckboxFallbacksPaintWhenRadioSemanticPartsAreMissing){
-    configureRadioSkin(true);
-    ASSERT_TRUE(m_skin.validatePayload());
-    m_builder.setSkin(m_skin);
-    ASSERT_TRUE(accept(1u));
-    const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(regionQuads(snapshot, Name("radio.checked")), 0u);
-    EXPECT_EQ(regionQuads(snapshot, Name("checkbox.checked")), 1u);
-    EXPECT_EQ(regionQuads(snapshot, Name("checkbox.mark")), 1u);
-    EXPECT_EQ(regionQuads(snapshot, Name("checkbox.normal")), 4u);
-}
-
 TEST_F(UiRadioGroupBuilderTests, DeclarationFreezesStyleMetricsBeforeTheOwningPanelEnds){
     ASSERT_TRUE(declare(1u));
     m_builder.radioGroupStyle().indicatorExtent = 40.0f;

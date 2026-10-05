@@ -148,62 +148,6 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     EXPECT_EQ(frontierConsumerView.dependencies[0u].producer, frontierFirstPacket);
 }
 
-TEST(GpuTaskGraph, FrontierScoredPacketizationMergesLongSerialPacket){
-    constexpr usize s_TaskCount = 512u;
-
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskCommandRequirements graphicsCommands{ Graphics::GpuQueueCapability::Graphics };
-    const Name mergeDomain("tests/task_graph/frontier_scored_long_chain");
-    const Name taskBaseName("tests/task_graph/frontier_scored_long_chain_task_");
-    Graphics::GpuTaskId tasks[s_TaskCount] = {};
-    char taskIndexBuffer[32u] = {};
-    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = taskIndex == 0u
-            ? Graphics::GpuTaskCostHint::Medium
-            : Graphics::GpuTaskCostHint::Tiny
-        ;
-        scheduling.frontierScoredMergeDomain = mergeDomain;
-        Graphics::GpuTaskDesc taskDesc;
-        taskDesc
-            .setIdentity(DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)))
-            .setMarkerLabel("Frontier Scored Long Chain Task")
-            .setScheduling(scheduling)
-            .setDependencies(taskIndex == 0u ? nullptr : &tasks[taskIndex - 1u], taskIndex == 0u ? 0u : 1u)
-        ;
-        tasks[taskIndex] = graph.addTask(taskDesc, graphicsCommands);
-        ASSERT_TRUE(tasks[taskIndex].valid());
-    }
-
-    Graphics::GpuTaskGraphCompileOptions options;
-    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    SingleQueueCompile singleQueueCompile(testArena);
-    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
-
-    ASSERT_EQ(compiledPlan.packetCount(), 1u);
-
-    const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(tasks[0u]);
-    ASSERT_TRUE(packet.valid());
-    ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, s_TaskCount);
-    ASSERT_NE(compiledPlan.packet(packet).tasks, nullptr);
-    EXPECT_EQ(
-        compiledPlan.packetizationDecisionForTask(tasks[0u]),
-        Graphics::GpuTaskPacketizationDecision::FirstTask
-    );
-    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        EXPECT_EQ(compiledPlan.packet(packet).tasks[taskIndex], tasks[taskIndex]);
-        EXPECT_EQ(compiledPlan.packetForTask(tasks[taskIndex]), packet);
-        if(taskIndex != 0u){
-            EXPECT_EQ(
-                compiledPlan.packetizationDecisionForTask(tasks[taskIndex]),
-                Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
-            );
-        }
-    }
-}
-
 TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

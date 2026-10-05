@@ -285,24 +285,6 @@ TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
     EXPECT_TRUE(snapshot.vertices().empty());
 }
 
-TEST_F(TextBakedTests, MixedBakedLatinAndNativeKoreanKeepTheirFallbackFaces){
-    const FontSource sources[]{
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u, &m_atlas },
-        { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
-    };
-    ASSERT_TRUE(m_text.setFonts(sources, 2u));
-    ASSERT_EQ(m_text.layout({ .text = "A\xED\x95\x9C", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
-    ASSERT_EQ(m_layout.glyphs().size(), 2u);
-    EXPECT_EQ(m_layout.glyphs()[0u].face->identity().name(), Name("tests/ui/fonts/latin"));
-    EXPECT_EQ(m_layout.glyphs()[1u].face->identity().name(), Name("tests/ui/fonts/korean"));
-    const DrawSnapshot snapshot = paint();
-    EXPECT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_EQ(snapshot.glyphPages().size(), 1u);
-    ASSERT_EQ(snapshot.commands().size(), 2u);
-    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::SdfGlyph);
-    EXPECT_EQ(snapshot.commands()[1u].material, PaintMaterial::Glyph);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

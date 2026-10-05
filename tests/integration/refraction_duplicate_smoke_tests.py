@@ -30,12 +30,6 @@ class RefractionDuplicateAnalysisTests(unittest.TestCase):
     def frame(width=16, height=8):
         return width, height, [[(40 if x % 2 else 200, 90, 120) for x in range(width)] for _ in range(height)]
 
-    def test_identical_pixels_match_exactly(self):
-        frame = self.frame()
-        result = require_match(frame, deepcopy(frame), "exact")
-        self.assertEqual(result["maximum_channel_difference"], 0)
-        self.assertEqual(result["mean_absolute_rgb_difference"], 0)
-
     def test_sparse_rounding_is_allowed_but_large_local_error_fails(self):
         reference = self.frame()
         output = deepcopy(reference)

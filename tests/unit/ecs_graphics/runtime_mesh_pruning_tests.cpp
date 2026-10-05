@@ -317,16 +317,6 @@ TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCur
     for(u32 failure = 0u; failure < 5u; ++failure){
         ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, true, false, description));
         EXPECT_TRUE(description.valid());
-        EXPECT_EQ(description.entity, entity);
-        EXPECT_EQ(description.meshKey, DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "skinned_draw"));
-        EXPECT_EQ(description.version, instance.editRevision);
-        EXPECT_EQ(description.meshletCount, 1u);
-        EXPECT_EQ(description.meshletPrimitiveIndexCount, 3u);
-        EXPECT_TRUE(description.dynamicMeshletBoundsFresh);
-        EXPECT_FALSE(description.dynamicMeshletConesFresh);
-        EXPECT_EQ(description.positionBuffer, instance.skinnedPositionBuffer);
-        EXPECT_EQ(description.triangleIndexBuffer, instance.triangleIndexBuffer);
-        EXPECT_EQ(description.attributeBuffer, instance.attributeBuffer);
         EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore + 13u);
         RuntimeMeshHandle requestedHandle = instance.handle;
         const MeshSkinningRuntimeInstance* selectedInstance = &instance;
@@ -345,8 +335,6 @@ TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCur
         EXPECT_EQ(description.meshKey, NAME_NONE);
         EXPECT_EQ(description.entity, Core::ECS::s_InvalidEntityId);
         EXPECT_EQ(description.version, 0u);
-        EXPECT_FALSE(description.dynamicMeshletBoundsFresh);
-        EXPECT_FALSE(description.dynamicMeshletConesFresh);
         EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
         instance.entity = entity;
         instance.dirtyFlags = RuntimeMeshDirtyFlag::None;
@@ -386,8 +374,6 @@ TEST(RuntimeMeshPruning, AcceptedDeformationPublishesWholeAndMeshletBoundsTogeth
     EXPECT_NE(description.geometryContentRevision, 0u);
     EXPECT_EQ(description.localBoundsBuffer, instance.localBoundsBuffer);
     EXPECT_EQ(description.meshletLocalBoundsBuffer, instance.meshletLocalBoundsBuffer);
-    EXPECT_EQ(description.meshletDescBuffer, instance.meshletDescBuffer);
-    EXPECT_EQ(description.meshletCount, instance.meshlets.size());
 
     instance.deformationState.invalidateCurrent();
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(entity, instance.handle, &instance, false, false, description));

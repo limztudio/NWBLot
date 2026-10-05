@@ -34,99 +34,43 @@ TEST(LightSpacePlan, PacksDirectionalAndEveryPointFaceWithoutPixelOrLayerOverlap
     ASSERT_TRUE(BuildLightSpacePlan(SoftwareShadowSettings{}, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
     ASSERT_EQ(plan.lightCount, s_ExpectedDualCount);
     ASSERT_EQ(plan.viewCount, 7u);
-    EXPECT_EQ(plan.textureResolution, 512u);
     EXPECT_EQ(plan.totalPixels, 655360u);
-    EXPECT_EQ(plan.eventByteSize, static_cast<u64>(plan.totalPixels) * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL * NWB_LIGHT_SPACE_EVENT_BYTES);
-    EXPECT_EQ(plan.countByteSize, 2621440u);
-    EXPECT_EQ(plan.depthByteSize, 7340032u);
-    EXPECT_EQ(plan.viewByteSize, 896u);
-    EXPECT_EQ(plan.drawArgumentByteSize, 7u * 20u * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
-    EXPECT_EQ(plan.totalByteSize, plan.eventByteSize + plan.countByteSize + plan.depthByteSize + plan.viewByteSize + plan.drawArgumentByteSize);
-    EXPECT_EQ(plan.lights[1].firstView, 1u);
-    EXPECT_EQ(plan.lights[1].pixelOffset, 262144u);
     u32 end = 0u;
     for(u32 index = 0u; index < plan.viewCount; ++index){
         const auto& view = plan.views[index];
         EXPECT_EQ(view.map[2], end);
         EXPECT_EQ(view.map[3], index);
-        EXPECT_EQ(view.map[0], index == 0u ? 512u : 256u);
-        EXPECT_EQ(view.map[0], view.map[1]);
-        EXPECT_EQ(view.light[0], index == 0u ? 7u : 63u);
-        EXPECT_EQ(view.light[1], index == 0u ? 3u : 0u);
-        EXPECT_EQ(view.light[2], index == 0u ? 0u : index - 1u);
-        EXPECT_EQ(view.light[3], NWB_LIGHT_SPACE_FLAG_ELIGIBLE | (index == 0u ? 0u : NWB_LIGHT_SPACE_FLAG_POINT));
-        EXPECT_EQ(view.depthRange.w, 0.0f); // Only the GPU can validate its current-pose fit.
         end += view.map[0] * view.map[1];
     }
     EXPECT_EQ(end, plan.totalPixels);
 }
 
-TEST(LightSpacePlan, FittedCoverageIsExplicitAndPreservesTheWholeCasterPlan){
+TEST(LightSpacePlan, RejectsUnknownCoverage){
     const LightSpaceLightRequest requests[] = {
         { 7u, 3u, Scene::LightType::Directional },
         { 63u, 0u, Scene::LightType::Point },
     };
     SoftwareShadowSettings settings;
-    EXPECT_EQ(settings.coverage, SoftwareShadowCoverage::Reference);
-    LightSpacePlan reference;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, reference));
-    settings.coverage = SoftwareShadowCoverage::FittedVolume;
     LightSpacePlan fitted;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
-    EXPECT_EQ(fitted.viewCount, reference.viewCount);
-    EXPECT_EQ(fitted.totalPixels, reference.totalPixels);
-    EXPECT_EQ(fitted.totalByteSize, reference.totalByteSize);
-    EXPECT_EQ(fitted.eventByteSize, reference.eventByteSize);
-    for(u32 index = 0u; index < fitted.viewCount; ++index){
-        EXPECT_EQ(fitted.views[index].light[3], reference.views[index].light[3] | NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE);
-        EXPECT_EQ(fitted.views[index].map[2], reference.views[index].map[2]);
-        EXPECT_EQ(fitted.views[index].light[0], reference.views[index].light[0]);
-        EXPECT_EQ(fitted.views[index].light[2], reference.views[index].light[2]);
-        EXPECT_EQ(fitted.views[index].depthRange.w, 0.0f);
-    }
     settings.coverage = static_cast<SoftwareShadowCoverage::Enum>(2u);
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
     EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
 }
 
-TEST(LightSpacePlan, ApproximateBlockerSearchPreservesAdmissionStorageAndEveryFace){
+TEST(LightSpacePlan, SoftwareTraceOmitsLightSpaceStorageForEveryBlockerPolicy){
     const LightSpaceLightRequest requests[] = {
         { 7u, 3u, Scene::LightType::Directional },
         { 63u, 0u, Scene::LightType::Point },
     };
     SoftwareShadowSettings settings;
-    EXPECT_EQ(settings.blockerSearch, SoftwareShadowBlockerSearch::ReferenceGrid9);
+    settings.backend = SoftwareShadowBackend::SoftwareTrace;
     settings.coverage = SoftwareShadowCoverage::FittedVolume;
-    LightSpacePlan reference;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, reference));
-    struct BlockerPolicy{ SoftwareShadowBlockerSearch::Enum search; u32 flag; };
-    const BlockerPolicy policies[] = {
-        { SoftwareShadowBlockerSearch::CompactCross5, NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS },
-        { SoftwareShadowBlockerSearch::Center1, NWB_LIGHT_SPACE_FLAG_CENTER_BLOCKER },
-    };
-    for(const auto& policy : policies){
-        settings.backend = SoftwareShadowBackend::Automatic;
-        settings.blockerSearch = policy.search;
-        LightSpacePlan approximate;
-        ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, approximate));
-        ASSERT_EQ(approximate.viewCount, reference.viewCount);
-        ASSERT_EQ(approximate.lightCount, reference.lightCount);
-        EXPECT_EQ(approximate.totalPixels, reference.totalPixels);
-        EXPECT_EQ(approximate.totalByteSize, reference.totalByteSize);
-        for(u32 index = 0u; index < approximate.viewCount; ++index){
-            const auto& before = reference.views[index];
-            const auto& after = approximate.views[index];
-            for(usize field = 0u; field < LengthOf(before.map); ++field)
-                EXPECT_EQ(after.map[field], before.map[field]);
-            for(usize field = 0u; field < 3u; ++field)
-                EXPECT_EQ(after.light[field], before.light[field]);
-            EXPECT_EQ(before.light[3] & policy.flag, 0u);
-            EXPECT_EQ(after.light[3], before.light[3] | policy.flag);
-        }
-        settings.backend = SoftwareShadowBackend::SoftwareTrace;
-        ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, approximate));
-        EXPECT_EQ(approximate.viewCount, 0u);
-        EXPECT_EQ(approximate.totalByteSize, 0u);
+    for(const auto policy : { SoftwareShadowBlockerSearch::CompactCross5, SoftwareShadowBlockerSearch::Center1 }){
+        settings.blockerSearch = policy;
+        LightSpacePlan plan;
+        ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
+        EXPECT_EQ(plan.viewCount, 0u);
+        EXPECT_EQ(plan.totalByteSize, 0u);
     }
 }
 

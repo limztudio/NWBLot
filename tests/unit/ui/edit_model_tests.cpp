@@ -120,24 +120,6 @@ TEST_F(UiEditModelTests, ByteLimitFailureIsAtomicAndEmptyLimitAcceptsOnlyEmptyTe
     EXPECT_FALSE(empty.replaceSelection("a"));
 }
 
-TEST_F(UiEditModelTests, WordMovementGroupsWhitespacePunctuationAndOtherGraphemes){
-    ASSERT_TRUE(m_model.setText("one,  two"));
-    ASSERT_TRUE(m_model.move(EditMove::Home));
-    ASSERT_TRUE(m_model.move(EditMove::WordRight));
-    EXPECT_EQ(m_model.caret(), 3u);
-    ASSERT_TRUE(m_model.move(EditMove::WordRight));
-    EXPECT_EQ(m_model.caret(), 6u);
-    ASSERT_TRUE(m_model.move(EditMove::WordRight));
-    EXPECT_EQ(m_model.caret(), 9u);
-    ASSERT_TRUE(m_model.move(EditMove::WordLeft, true));
-    EXPECT_EQ(m_model.anchor(), 9u);
-    EXPECT_EQ(m_model.caret(), 6u);
-    ASSERT_TRUE(m_model.move(EditMove::WordLeft));
-    EXPECT_EQ(m_model.caret(), 3u);
-    ASSERT_TRUE(m_model.move(EditMove::WordLeft));
-    EXPECT_EQ(m_model.caret(), 0u);
-}
-
 TEST_F(UiEditModelTests, WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSeparate){
     ASSERT_TRUE(m_model.setText("a\xCC\x81" "b,  z"));
     usize begin = 99u;

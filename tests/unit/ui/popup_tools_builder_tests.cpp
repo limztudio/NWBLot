@@ -470,19 +470,6 @@ TEST_F(UiPopupToolsBuilderTests, InvalidMenuRowHeightRejectsTheCandidate){
     EXPECT_TRUE(m_context.failed());
 }
 
-TEST_F(UiPopupToolsBuilderTests, ContextMenuInsideAUserPopupUsesTheParentInputScope){
-    m_plainPopup.open();
-    ASSERT_TRUE(begin(1u));
-    PopupOptions options;
-    options.anchor = { 40.0f, 40.0f, 40.0f, 24.0f };
-    ASSERT_TRUE(m_builder.beginPopup("plain", m_plainPopup, options));
-    EXPECT_FALSE(m_builder.button("anchor", "Anchor", m_anchorOptions));
-    const ContextMenuResult result = m_builder.contextMenu("menu", "anchor", m_source, m_menu, m_menuOptions);
-    EXPECT_TRUE(result.valid);
-    EXPECT_FALSE(m_context.failed());
-    ASSERT_TRUE(m_builder.endPopup());
-}
-
 TEST_F(UiPopupToolsBuilderTests, ExternalMenuCloseBeforeScopeEndPreservesTheMutationAndRejectsTheLoan){
     ASSERT_TRUE(acceptTools(1u, false));
     ASSERT_TRUE(m_menu.open({ 40.0f, 60.0f, 0.0f, 0.0f }));

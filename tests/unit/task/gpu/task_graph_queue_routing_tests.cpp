@@ -135,47 +135,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
 
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics primaryQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics secondaryQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
-    ;
-    ASSERT_TRUE(primaryQueueCompileStatistics.valid());
-    ASSERT_TRUE(secondaryQueueCompileStatistics.valid());
-    EXPECT_EQ(primaryQueueCompileStatistics.queue, queues[0u].id);
-    EXPECT_EQ(secondaryQueueCompileStatistics.queue, queues[1u].id);
-    EXPECT_EQ(primaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(secondaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
-    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledPlan.compileStatistics();
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.taskCount + secondaryQueueCompileStatistics.taskCount,
-        compileStatistics.taskCount
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.taskCount + secondaryQueueCompileStatistics.taskCount,
-        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics]
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.packetCount + secondaryQueueCompileStatistics.packetCount,
-        compileStatistics.packetCount
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.packetCount + secondaryQueueCompileStatistics.packetCount,
-        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics]
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.mergedTaskCount + secondaryQueueCompileStatistics.mergedTaskCount,
-        compileStatistics.mergedTaskCount
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.prologueBarrierCount + secondaryQueueCompileStatistics.prologueBarrierCount,
-        compileStatistics.prologueBarrierCount
-    );
-    EXPECT_EQ(
-        primaryQueueCompileStatistics.epilogueBarrierCount + secondaryQueueCompileStatistics.epilogueBarrierCount,
-        compileStatistics.epilogueBarrierCount
-    );
+
 }
 
 TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){

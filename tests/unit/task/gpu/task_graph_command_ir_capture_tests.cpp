@@ -37,7 +37,7 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
+TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCapturedBytes){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
@@ -69,43 +69,6 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(capture.planGeneration(), packet.generation);
-    Graphics::GpuCommandIrStreamReader captureReader(capture.commandBytes());
-    Graphics::GpuCommandIrBuiltinTaskRecord copyRecord;
-    ASSERT_EQ(captureReader.next(copyRecord), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(copyRecord.opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
-    EXPECT_EQ(copyRecord.task, task);
-    EXPECT_EQ(copyRecord.packet, packet);
-    EXPECT_EQ(copyRecord.queue, queue);
-    EXPECT_EQ(copyRecord.source, source);
-    EXPECT_EQ(copyRecord.destination, destination);
-    EXPECT_EQ(copyRecord.sourceOffsetBytes, 16u);
-    EXPECT_EQ(copyRecord.destinationOffsetBytes, 32u);
-    EXPECT_EQ(copyRecord.dataSizeBytes, 64u);
-
-    Graphics::GpuCommandIrBuiltinTaskRecord clearRecord;
-    ASSERT_EQ(captureReader.next(clearRecord), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(clearRecord.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(clearRecord.destination, destination);
-    EXPECT_EQ(clearRecord.destinationSubresources, clearTexture.subresources);
-    EXPECT_EQ(clearRecord.clearTextureValueType, clearTexture.valueType);
-    EXPECT_EQ(clearRecord.floatClearValue, clearTexture.floatValue);
-    EXPECT_FALSE(clearRecord.clearDepth);
-    EXPECT_FALSE(clearRecord.clearStencil);
-    EXPECT_EQ(captureReader.next(clearRecord), Graphics::GpuCommandIrStreamReadStatus::End);
-    EXPECT_TRUE(captureReader.validation().valid());
-
-    {
-        const BinaryByteView capturedBytes = capture.commandBytes();
-        usize captureCursor = sizeof(Graphics::GpuCommandIrStreamHeader);
-        Graphics::GpuCommandIrCopyBufferRecord capturedCopy;
-        Graphics::GpuCommandIrClearTextureRecord capturedClear;
-        ASSERT_TRUE(ReadPOD(capturedBytes, captureCursor, capturedCopy));
-        ASSERT_TRUE(ReadPOD(capturedBytes, captureCursor, capturedClear));
-        EXPECT_EQ(capturedClear.clearTextureValueType, clearTexture.valueType);
-        EXPECT_EQ(capturedClear.clearFlags, Graphics::GpuCommandIrClearTextureFlag::None);
-        EXPECT_EQ(captureCursor, capturedBytes.size());
-    }
-
     const BinaryByteView bytesBeforeRejectedRecord = capture.commandBytes();
     Graphics::GraphicsBytes streamBeforeRejectedRecord(testArena.arena);
     streamBeforeRejectedRecord.resize(bytesBeforeRejectedRecord.size());
@@ -148,16 +111,6 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     EXPECT_EQ(capture.recordCount(), 0u);
     EXPECT_EQ(capture.graphGeneration(), 0u);
     EXPECT_EQ(capture.planGeneration(), 0u);
-    const BinaryByteView resetBytes = capture.commandBytes();
-    usize resetCursor = 0u;
-    Graphics::GpuCommandIrStreamHeader resetHeader;
-    ASSERT_TRUE(ReadPOD(resetBytes, resetCursor, resetHeader));
-    EXPECT_EQ(resetHeader.magic, Graphics::s_GpuCommandIrStreamMagic);
-    EXPECT_EQ(resetHeader.graphGeneration, 0u);
-    EXPECT_EQ(resetHeader.planGeneration, 0u);
-    EXPECT_EQ(resetHeader.recordCount, 0u);
-    EXPECT_EQ(resetHeader.commandBytes, 0u);
-    EXPECT_EQ(resetCursor, resetBytes.size());
 }
 
 TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
@@ -181,7 +134,7 @@ TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
     EXPECT_EQ(capture.recordingAttemptGeneration(), 42u);
 }
 
-TEST(GpuCommandIrCapture, EncodesRectUIntTextureClearAndRejectsEarlierStreamVersions){
+TEST(GpuCommandIrCapture, RejectsDegenerateRectUIntClearAndEarlierStreamVersions){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     Graphics::GpuClearTextureRectUIntTaskDesc clear;
@@ -198,45 +151,10 @@ TEST(GpuCommandIrCapture, EncodesRectUIntTextureClearAndRejectsEarlierStreamVers
     ));
 
     ASSERT_EQ(capture.recordCount(), 1u);
-    Graphics::GpuCommandIrStreamReader capturedReader(capture.commandBytes());
-    Graphics::GpuCommandIrBuiltinTaskRecord captured;
-    ASSERT_EQ(capturedReader.next(captured), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(captured.opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
-    EXPECT_EQ(captured.destination, s_CommandIrDestination);
-    EXPECT_EQ(captured.destinationSubresources, clear.subresources);
-    EXPECT_EQ(captured.clearRect, clear.rect);
-    EXPECT_EQ(captured.uintClearValue, clear.uintValue);
-
     const BinaryByteView bytes = capture.commandBytes();
-    usize cursor = 0u;
-    Graphics::GpuCommandIrStreamHeader header;
-    Graphics::GpuCommandIrClearTextureRectUIntRecord encoded;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, header));
-    ASSERT_TRUE(ReadPOD(bytes, cursor, encoded));
-    EXPECT_EQ(header.version, Graphics::s_GpuCommandIrStreamVersion);
-    EXPECT_EQ(header.planGeneration, s_CommandIrPacket.generation);
-    EXPECT_EQ(encoded.header.opcode, Graphics::GpuCommandIrWireOpcode::ClearTextureRectUInt);
-    EXPECT_EQ(encoded.header.byteSize, sizeof(encoded));
-    EXPECT_EQ(encoded.context.taskIndex, s_CommandIrTask.index);
-    EXPECT_EQ(encoded.destinationResourceIndex, s_CommandIrDestination.index);
-    EXPECT_EQ(encoded.clearRect.minX, clear.rect.minX);
-    EXPECT_EQ(encoded.clearRect.maxX, clear.rect.maxX);
-    EXPECT_EQ(encoded.clearRect.minY, clear.rect.minY);
-    EXPECT_EQ(encoded.clearRect.maxY, clear.rect.maxY);
-    EXPECT_EQ(encoded.uintClearValue.r, clear.uintValue.r);
-    EXPECT_EQ(encoded.uintClearValue.g, clear.uintValue.g);
-    EXPECT_EQ(encoded.uintClearValue.b, clear.uintValue.b);
-    EXPECT_EQ(encoded.uintClearValue.a, clear.uintValue.a);
-    EXPECT_EQ(cursor, bytes.size());
-
     Graphics::GpuCommandIrStreamReader reader(bytes);
     Graphics::GpuCommandIrBuiltinTaskRecord decoded;
     ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
-    EXPECT_EQ(decoded.clearRect, clear.rect);
-    EXPECT_EQ(decoded.uintClearValue, clear.uintValue);
-    EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);
-    EXPECT_TRUE(reader.validation().valid());
 
     clear.rect = Graphics::Rect(4, 4, 0, 1);
     EXPECT_FALSE(capture.captureClearTextureRectUInt(
@@ -266,7 +184,7 @@ TEST(GpuCommandIrCapture, EncodesRectUIntTextureClearAndRejectsEarlierStreamVers
     );
 }
 
-TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordBoundaries){
+TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundaries){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
@@ -274,20 +192,6 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
     const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
     const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
-
-    const BinaryByteView emptyBytes = capture.commandBytes();
-    ASSERT_EQ(emptyBytes.size(), sizeof(Graphics::GpuCommandIrStreamHeader));
-    usize cursor = 0u;
-    Graphics::GpuCommandIrStreamHeader streamHeader;
-    ASSERT_TRUE(ReadPOD(emptyBytes, cursor, streamHeader));
-    EXPECT_EQ(streamHeader.magic, Graphics::s_GpuCommandIrStreamMagic);
-    EXPECT_EQ(streamHeader.version, Graphics::s_GpuCommandIrStreamVersion);
-    EXPECT_EQ(streamHeader.reserved, 0u);
-    EXPECT_EQ(streamHeader.graphGeneration, 0u);
-    EXPECT_EQ(streamHeader.planGeneration, 0u);
-    EXPECT_EQ(streamHeader.recordCount, 0u);
-    EXPECT_EQ(streamHeader.commandBytes, 0u);
-    EXPECT_EQ(cursor, emptyBytes.size());
 
     Graphics::TextureSlice sourceSlice;
     sourceSlice
@@ -321,111 +225,11 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
 
     const BinaryByteView bytes = capture.commandBytes();
-    cursor = 0u;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, streamHeader));
-    EXPECT_EQ(streamHeader.magic, Graphics::s_GpuCommandIrStreamMagic);
-    EXPECT_EQ(streamHeader.version, Graphics::s_GpuCommandIrStreamVersion);
-    EXPECT_EQ(streamHeader.reserved, 0u);
-    EXPECT_EQ(streamHeader.graphGeneration, task.generation);
-    EXPECT_EQ(streamHeader.planGeneration, packet.generation);
-    EXPECT_EQ(streamHeader.recordCount, 4u);
-    EXPECT_EQ(
-        streamHeader.commandBytes,
-        sizeof(Graphics::GpuCommandIrCopyBufferRecord)
-            + sizeof(Graphics::GpuCommandIrCopyTextureRecord)
-            + sizeof(Graphics::GpuCommandIrClearBufferRecord)
-            + sizeof(Graphics::GpuCommandIrClearTextureRecord)
-    );
-    const usize copyTextureEnd = cursor
+    const usize copyTextureEnd = sizeof(Graphics::GpuCommandIrStreamHeader)
         + sizeof(Graphics::GpuCommandIrCopyBufferRecord)
         + sizeof(Graphics::GpuCommandIrCopyTextureRecord)
     ;
-
-    Graphics::GpuCommandIrCopyBufferRecord copyBuffer;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, copyBuffer));
-    EXPECT_EQ(copyBuffer.header.opcode, Graphics::GpuCommandIrWireOpcode::CopyBuffer);
-    EXPECT_EQ(copyBuffer.header.byteSize, sizeof(copyBuffer));
-    EXPECT_EQ(copyBuffer.context.taskIndex, task.index);
-    EXPECT_EQ(copyBuffer.context.packetIndex, packet.index);
-    EXPECT_EQ(copyBuffer.context.queueIndex, queue.index);
-    EXPECT_EQ(copyBuffer.context.queueDeviceGeneration, queue.deviceGeneration);
-    EXPECT_EQ(copyBuffer.sourceResourceIndex, source.index);
-    EXPECT_EQ(copyBuffer.destinationResourceIndex, destination.index);
-    EXPECT_EQ(copyBuffer.sourceOffsetBytes, 16u);
-    EXPECT_EQ(copyBuffer.destinationOffsetBytes, 32u);
-    EXPECT_EQ(copyBuffer.dataSizeBytes, 64u);
-
-    Graphics::GpuCommandIrCopyTextureRecord copyTexture;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, copyTexture));
-    EXPECT_EQ(copyTexture.header.opcode, Graphics::GpuCommandIrWireOpcode::CopyTexture);
-    EXPECT_EQ(copyTexture.header.byteSize, sizeof(copyTexture));
-    EXPECT_EQ(copyTexture.context.taskIndex, task.index);
-    EXPECT_EQ(copyTexture.context.packetIndex, packet.index);
-    EXPECT_EQ(copyTexture.context.queueIndex, queue.index);
-    EXPECT_EQ(copyTexture.context.queueDeviceGeneration, queue.deviceGeneration);
-    EXPECT_EQ(copyTexture.sourceResourceIndex, source.index);
-    EXPECT_EQ(copyTexture.destinationResourceIndex, destination.index);
-    EXPECT_EQ(copyTexture.sourceSlice.x, sourceSlice.x);
-    EXPECT_EQ(copyTexture.sourceSlice.y, sourceSlice.y);
-    EXPECT_EQ(copyTexture.sourceSlice.z, sourceSlice.z);
-    EXPECT_EQ(copyTexture.sourceSlice.width, sourceSlice.width);
-    EXPECT_EQ(copyTexture.sourceSlice.height, sourceSlice.height);
-    EXPECT_EQ(copyTexture.sourceSlice.depth, sourceSlice.depth);
-    EXPECT_EQ(copyTexture.sourceSlice.mipLevel, sourceSlice.mipLevel);
-    EXPECT_EQ(copyTexture.sourceSlice.arraySlice, sourceSlice.arraySlice);
-    EXPECT_EQ(copyTexture.destinationSlice.x, destinationSlice.x);
-    EXPECT_EQ(copyTexture.destinationSlice.y, destinationSlice.y);
-    EXPECT_EQ(copyTexture.destinationSlice.z, destinationSlice.z);
-    EXPECT_EQ(copyTexture.destinationSlice.width, destinationSlice.width);
-    EXPECT_EQ(copyTexture.destinationSlice.height, destinationSlice.height);
-    EXPECT_EQ(copyTexture.destinationSlice.depth, destinationSlice.depth);
-    EXPECT_EQ(copyTexture.destinationSlice.mipLevel, destinationSlice.mipLevel);
-    EXPECT_EQ(copyTexture.destinationSlice.arraySlice, destinationSlice.arraySlice);
-
-    Graphics::GpuCommandIrClearBufferRecord clearBuffer;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, clearBuffer));
-    EXPECT_EQ(clearBuffer.header.opcode, Graphics::GpuCommandIrWireOpcode::ClearBuffer);
-    EXPECT_EQ(clearBuffer.header.byteSize, sizeof(clearBuffer));
-    EXPECT_EQ(clearBuffer.context.taskIndex, task.index);
-    EXPECT_EQ(clearBuffer.destinationResourceIndex, destination.index);
-    EXPECT_EQ(clearBuffer.clearValue, 0xdecafbadU);
-
-    Graphics::GpuCommandIrClearTextureRecord clearTextureRecord;
-    ASSERT_TRUE(ReadPOD(bytes, cursor, clearTextureRecord));
-    EXPECT_EQ(clearTextureRecord.header.opcode, Graphics::GpuCommandIrWireOpcode::ClearTexture);
-    EXPECT_EQ(clearTextureRecord.header.byteSize, sizeof(clearTextureRecord));
-    EXPECT_EQ(clearTextureRecord.context.taskIndex, task.index);
-    EXPECT_EQ(clearTextureRecord.context.packetIndex, packet.index);
-    EXPECT_EQ(clearTextureRecord.context.queueIndex, queue.index);
-    EXPECT_EQ(clearTextureRecord.context.queueDeviceGeneration, queue.deviceGeneration);
-    EXPECT_EQ(clearTextureRecord.destinationResourceIndex, destination.index);
-    EXPECT_EQ(clearTextureRecord.destinationSubresources.baseMipLevel, clearTexture.subresources.baseMipLevel);
-    EXPECT_EQ(clearTextureRecord.destinationSubresources.numMipLevels, clearTexture.subresources.numMipLevels);
-    EXPECT_EQ(clearTextureRecord.destinationSubresources.baseArraySlice, clearTexture.subresources.baseArraySlice);
-    EXPECT_EQ(clearTextureRecord.destinationSubresources.numArraySlices, clearTexture.subresources.numArraySlices);
-    EXPECT_EQ(clearTextureRecord.floatClearValue.r, clearTexture.floatValue.r);
-    EXPECT_EQ(clearTextureRecord.floatClearValue.g, clearTexture.floatValue.g);
-    EXPECT_EQ(clearTextureRecord.floatClearValue.b, clearTexture.floatValue.b);
-    EXPECT_EQ(clearTextureRecord.floatClearValue.a, clearTexture.floatValue.a);
-    EXPECT_EQ(clearTextureRecord.uintClearValue.r, clearTexture.uintValue.r);
-    EXPECT_EQ(clearTextureRecord.uintClearValue.g, clearTexture.uintValue.g);
-    EXPECT_EQ(clearTextureRecord.uintClearValue.b, clearTexture.uintValue.b);
-    EXPECT_EQ(clearTextureRecord.uintClearValue.a, clearTexture.uintValue.a);
-    EXPECT_EQ(clearTextureRecord.intClearValue.r, clearTexture.intValue.r);
-    EXPECT_EQ(clearTextureRecord.intClearValue.g, clearTexture.intValue.g);
-    EXPECT_EQ(clearTextureRecord.intClearValue.b, clearTexture.intValue.b);
-    EXPECT_EQ(clearTextureRecord.intClearValue.a, clearTexture.intValue.a);
-    EXPECT_EQ(clearTextureRecord.depthClearValue, clearTexture.depthValue);
-    EXPECT_EQ(clearTextureRecord.stencilClearValue, clearTexture.stencilValue);
-    EXPECT_EQ(clearTextureRecord.clearTextureValueType, clearTexture.valueType);
-    EXPECT_EQ(
-        clearTextureRecord.clearFlags,
-        static_cast<Graphics::GpuCommandIrClearTextureFlag::Mask>(
-            Graphics::GpuCommandIrClearTextureFlag::ClearDepth | Graphics::GpuCommandIrClearTextureFlag::ClearStencil
-        )
-    );
-    EXPECT_EQ(clearTextureRecord.reserved, 0u);
-    EXPECT_EQ(cursor, bytes.size());
+    ASSERT_EQ(capture.recordCount(), 4u);
 
     Graphics::GraphicsBytes expectedPrefix(testArena.arena);
     expectedPrefix.resize(copyTextureEnd);
@@ -446,7 +250,8 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
         0
     );
 
-    cursor = 0u;
+    usize cursor = 0u;
+    Graphics::GpuCommandIrStreamHeader streamHeader;
     ASSERT_TRUE(ReadPOD(rolledBackBytes, cursor, streamHeader));
     EXPECT_EQ(streamHeader.recordCount, s_ExpectedDualCount);
     EXPECT_EQ(

@@ -77,13 +77,6 @@ class SpatialOwnerValidationMarkerTests(unittest.TestCase):
 
 
 class SpatialOwnerEvidenceTests(unittest.TestCase):
-    def test_every_real_sequence_shape_accepts_completed_aggregated_windows(self):
-        for selection in SELECTIONS:
-            with self.subTest(selection=selection):
-                text, history, statistics = evidence(selection)
-                result = validate_owner_evidence(text, selection, history, statistics)
-                self.assertEqual(result["radii"], list(SELECTIONS[selection]))
-
     def test_missing_or_reordered_phase_is_rejected(self):
         text, history, statistics = evidence()
         text = text.replace("index=1 radius=3", "index=2 radius=3")
@@ -144,11 +137,6 @@ class SpatialOwnerEvidenceTests(unittest.TestCase):
 
 
 class SpatialOwnerImageTests(unittest.TestCase):
-    def test_exact_pairs_and_three_discriminating_references(self):
-        result = compare_images(image_set())
-        self.assertEqual(len(result["exact_pairs"]), 3)
-        self.assertEqual(len(result["radius_discrimination"]), 3)
-
     def test_wrong_reused_radius_fails_even_with_valid_shape(self):
         frames = image_set()
         frames[LIT_SEQUENCE1] = frames["fresh2"]

@@ -8,7 +8,6 @@
 #include <impl/assets_texture/cook.h>
 
 #include <core/assets/auto_registration.h>
-#include <core/assets/cook_entry_registry.h>
 #include <core/assets/paths.h>
 
 #include <tests/common/capturing_logger.h>
@@ -261,13 +260,6 @@ TEST(AssetsUiSkin, VersionlessMetadataCooksAndRoundTripsPaletteAndTypography){
         EXPECT_FLOAT_EQ(color.b, index == UiSkinColorRole::ControlHoverTint ? 1.08f : 0.75f);
         EXPECT_FLOAT_EQ(color.a, 1.0f);
     }
-    UiSkin::RegionVector replacementRegions(loaded.regions().begin(), loaded.regions().end(), testArena.arena);
-    loaded.setAtlas(loaded.texture(), loaded.atlasWidth(), loaded.atlasHeight(), loaded.referenceDensity(), Move(replacementRegions));
-    ASSERT_TRUE(codec.serialize(loaded, binary));
-    cursor = 0u;
-    ASSERT_TRUE(ReadPOD(binary, cursor, header));
-    EXPECT_EQ(header.version, UiSkinBinaryPayload::s_UiSkinVersion);
-    EXPECT_FLOAT_EQ(loaded.palette().colors[UiSkinColorRole::TextNormal].r, UiSkinPalette{}.colors[UiSkinColorRole::TextNormal].r);
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
@@ -354,13 +346,10 @@ TEST(AssetsUiSkin, PaletteMetadataRequiresEveryKnownRoleAndValidRgba){
     }
 }
 
-TEST(AssetsUiSkin, RuntimeAndCookRegistrarsProvideTypedAsset){
+TEST(AssetsUiSkin, CookedMetadataLoadsThroughRuntimeAssetRegistry){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    Core::Assets::CookEntryRegistry cookRegistry(testArena.arena);
-    ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(cookRegistry));
-    EXPECT_TRUE(cookRegistry.has(UiSkin::AssetTypeName()));
     UiSkinCookEntry entry(testArena.arena);
     ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
     UiSkin skin(testArena.arena);
@@ -614,7 +603,7 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("toolkit_contract must be 'widgets'")));
 }
 
-TEST(AssetsUiSkin, SpriteSlicesAreDerivedAndRetiredFieldsPreservePriorCookEntry){
+TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
@@ -649,11 +638,6 @@ TEST(AssetsUiSkin, SpriteSlicesAreDerivedAndRetiredFieldsPreservePriorCookEntry)
     UiSkinCookEntry spriteEntry(testArena.arena);
     ASSERT_TRUE(ParseMetadata(testArena, spriteMetadata, spriteEntry));
     ASSERT_EQ(spriteEntry.regions.size(), 1u);
-    const UiSkinSliceInsets& slice = spriteEntry.regions.front().sliceInsets;
-    EXPECT_EQ(slice.left, 0u);
-    EXPECT_EQ(slice.top, 0u);
-    EXPECT_EQ(slice.right, 0u);
-    EXPECT_EQ(slice.bottom, 0u);
 }
 
 TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){

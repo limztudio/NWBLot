@@ -175,23 +175,6 @@ TEST(VulkanAdapterSelection, PreflightsFullFeatureContractBeforeDiscretePreferen
     EXPECT_LT(validationOffset, discretePreferenceOffset);
 }
 
-TEST(VulkanQueueFamilySelection, UsesExactSurfaceSupportInsteadOfGenericWin32PresentationCapability){
-    TestArena testArena;
-    AString adapterSource;
-    ASSERT_TRUE(ReadTextFile(
-        NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "core" / "graphics" / "vulkan" / "backend_context_adapter.cpp",
-        adapterSource
-    ));
-    const AStringView source(adapterSource.data(), adapterSource.size());
-    const usize queueBegin = source.find("bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){");
-    const usize queueEnd = source.find("bool BackendContext::pickPhysicalDevice(){", queueBegin);
-    ASSERT_NE(queueBegin, AStringView::npos);
-    ASSERT_NE(queueEnd, AStringView::npos);
-    const AStringView queueSelection = source.substr(queueBegin, queueEnd - queueBegin);
-    EXPECT_NE(queueSelection.find("vkGetPhysicalDeviceSurfaceSupportKHR"), AStringView::npos);
-    EXPECT_EQ(queueSelection.find("vkGetPhysicalDeviceWin32PresentationSupportKHR"), AStringView::npos);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

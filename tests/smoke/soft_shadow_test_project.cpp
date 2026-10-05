@@ -57,12 +57,9 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SOFT-SHADOW scene: OPAQUE + GLASS `body` casters on one ground plane, lit by warm DIRECTIONAL + RED point + BLUE spot,
-// each with a physical source size (penumbra widens with distance, hardens at contact). Glass tints its shadow. Both spin.
-// A/B levers: NWB_SOFT_SHADOW_TEST_ANGLE = sun angular radius (0.001 hard ref .. 0.05 very soft);
-// NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS = point/spot sphere radius (nearer light softens via asin(radius/dist)).
-// No-RayQuery devices take the SW path (half-res trace -> a-trous -> upsample); HW applies the same cone jitter at full
-// res without denoise. Arrow keys scrub yaw (NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins it); shared materials, fixed-ambient timing.
+// Opaque and glass casters expose contact-to-distant penumbras under directional, point and spot lights.
+// NWB_SOFT_SHADOW_TEST_ANGLE and NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS control softness;
+// NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins yaw for A/B captures.
 static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
 static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
@@ -84,21 +81,20 @@ static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 static constexpr f32 s_DefaultAngularRadius = 0.03f;
 static constexpr f32 s_DefaultSourceRadius = 0.15f;
 
-// Point / spot light params. All three lights (directional + point + spot) are lit AT ONCE, spread so their coloured
-// shadows rake in different directions. Point lights attenuate by distance -> brighter than the directional sun.
+// Different light colors and directions separate their overlapping penumbras.
 static constexpr f32 s_PointLightIntensity = 10.0f;
 static constexpr f32 s_PointLightRange = 14.0f;
 static constexpr f32 s_SpotLightIntensity = 13.0f;
 static constexpr f32 s_SpotLightRange = 16.0f;
-static constexpr f32 s_SpotLightPitch = 1.5f;                        // near-overhead, aimed ~straight down at the caster
+static constexpr f32 s_SpotLightPitch = 1.5f;
 static constexpr f32 s_SpotLightYaw = 0.0f;
 static constexpr f32 s_SpotInnerConeCos = 0.85f;
-static constexpr f32 s_SpotOuterConeCos = 0.55f;                     // WIDE cone so the caster stays lit even if the aim is approximate
+static constexpr f32 s_SpotOuterConeCos = 0.55f;
 
-static constexpr f32 s_SpinSpeed = 0.5f;                             // radians / second, gentle auto-spin until an arrow takes over
-static constexpr f32 s_ManualYawSpeed = 0.6f;                        // radians / second for the arrow-key manual yaw scrub
+static constexpr f32 s_SpinSpeed = 0.5f; // radians/second
+static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
 static constexpr f32 s_TwoPi = 6.2831853f;
-static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp huge stalls so the spin can't jump
+static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -127,8 +123,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    // The directional light's angular radius (radians), read once from NWB_SOFT_SHADOW_TEST_ANGLE (default s_DefaultAngularRadius).
-    // Larger = softer penumbra; clamped to a sane [0, 0.2] rad (0..~11.5deg) so a typo can't blow the penumbra out.
+    // Angular radius is in radians; larger sources soften the penumbra.
     static f32 configuredAngularRadius(){
         static const f32 s_angle = [](){
             f32 parsed = s_DefaultAngularRadius;
@@ -139,9 +134,7 @@ private:
         return s_angle;
     }
 
-    // The point/spot emissive sphere radius (world units), read once from NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS (default
-    // s_DefaultSourceRadius). Larger = softer; clamped to [0, 1]. The penumbra ALSO widens as the light nears the caster
-    // (the source subtends asin(radius/dist)), so moving the light softens it too -- radius is only half the story.
+    // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
     static f32 configuredSourceRadius(){
         static const f32 s_radius = [](){
             f32 parsed = s_DefaultSourceRadius;
@@ -152,8 +145,7 @@ private:
         return s_radius;
     }
 
-    // Diagnostic freeze (read once): NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins the yaw to a fixed radians value so the character
-    // holds one orientation -- two captures then differ only via non-determinism (shimmer), not motion.
+    // Pin yaw for captures that isolate shimmer from motion.
     static f32 frozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
         return s_yaw;
@@ -176,7 +168,7 @@ public:
 
     virtual ~SoftShadowTestSmokeProject()override{
         m_timingRenderPass.stop();
-        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         destroyWorld();
     }
 
@@ -194,8 +186,6 @@ public:
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
-        // Three tinted soft lights at once (warm sun sideways, red point opposite, blue spot overhead); each casts its own
-        // tinted penumbra. Source size drives softness (sun: angularRadius; point/spot: asin(R/dist)); env-tunable.
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DirectionalLightPitch,
@@ -256,8 +246,7 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
-        // The OPAQUE caster: the `body` character with an opaque lambert material, front-RIGHT. Its cast shadow is the grey
-        // reference -- CRISP at the feet (contact) and softening up the body, the physical soft-shadow signature.
+        // The opaque caster provides the contact-hardening reference.
         bool tintApplied = false;
         m_characterOwner = CreateTintedModelEntity(
             *m_world,
@@ -273,9 +262,7 @@ public:
         if(!tintApplied)
             NWB_LOGGER_ERROR(GLB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
 
-        // A GLASS (transparent) `body` caster front-LEFT, beside the opaque one: the same body model with a refractive
-        // material + a coloured tint. Its shadow is the COLORED transparent soft shadow -- the light passing through the
-        // glass is tinted by it, so the cast shadow carries the glass colour AND softens with occluder->receiver distance.
+        // The glass caster must preserve tint while its penumbra widens with receiver distance.
         bool glassTintApplied = false;
         m_glassOwner = CreateTintedModelEntity(
             *m_world,
@@ -283,8 +270,7 @@ public:
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
-            // Glass tint = (kept shadow colour . density): nwbMakeGlassSurface derives renderCoverage +
-            // shadowAbsorptionTint together; Beer-Lambert integrates the mesh chord, so pair tint with thickness.
+            // Coverage and absorption share authored tint/density; Beer-Lambert integrates the actual mesh chord.
             Float4(0.20f, 0.55f, 0.12f, 0.6f),
             Float4(-0.6f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
@@ -357,8 +343,7 @@ public:
         m_fpsProbe.recordFrame(safeDelta);
         if(m_timingEnabled)
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        // Yaw selection: 1) NWB_SOFT_SHADOW_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub
-        // (latches off auto-spin the moment Left/Right is first pressed); 3) auto-spin.
+        // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = frozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCasters();
@@ -368,8 +353,6 @@ public:
         return true;
     }
 
-    // Reflect the current yaw (wrapped to [0, 2pi)) + both soft source sizes (the directional sun angle in deg + the
-    // point/spot radius in world units) in the title bar, so the parameters in effect can be read off at a glance.
     void updateWindowTitle(){
         const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
         const f32 angleDegrees = configuredAngularRadius() * (360.0f / s_TwoPi);

@@ -78,8 +78,7 @@ if(NWB_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# On-demand "nwb_namesym" target: build-mode run -> .namesym sidecars bundled next to this configuration's logserver,
-# which loads them at startup to decode opt/fin client log hashes. No-op inside the build-mode variant itself.
+# nwb_namesym captures workload Name sidecars for opt/fin log decoding; GUI capture runs on demand.
 nwb_add_name_symbol_target()
 nwb_finalize_string_literals()
 

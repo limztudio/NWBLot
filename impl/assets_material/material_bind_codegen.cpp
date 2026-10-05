@@ -608,8 +608,7 @@ static void AppendMaterialBindFieldAccessor(
 }
 
 
-// Resources load from their patched slot, never from the aggregate struct.
-// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
+// Opaque resources load directly from patched constant slots; generated aggregate structs must not copy handles.
 static bool AppendMaterialBindResourceFieldAccessor(
     const AStringView includePath,
     const MaterialLayoutFieldType::Enum fieldType,
@@ -892,7 +891,6 @@ bool BuildMaterialBindIncludeSourceImpl(
     outSource += "\n";
     AppendMaterialBindGeneratedSeparator(outSource, 3u);
 
-    // Reserve once so fragment appends grow in place.
     {
         usize estimatedStructBytes = 0u;
         for(const MaterialBindStruct& bindStruct : entry.structs){

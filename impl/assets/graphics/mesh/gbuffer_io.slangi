@@ -63,7 +63,6 @@ half3 nwbGBufferEncodeNormal(float3 normal){
 // Shading-model id is data-driven (dispatch word high bits; material declares `bxdf`, cook assigns the id).
 // With NWB_MESH_MATERIAL_CONTEXT_PROVIDED the includer serves the accessors from the ray hit; else this file defines them.
 #if defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
-// provided by includer
 #elif NWB_CSG_ENABLED
 uint nwbMeshShadingModelId(){
     return (g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;

@@ -50,8 +50,7 @@ using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The original GI smoke layout is an open-top colored-wall box. The optional A/B layout is a closed black room
-// around the camera and a maze of receivers, with only a small skylight over red and blue bounce patches.
+// The baseline is an open box; the optional A/B maze admits light only through its skylight.
 
 static constexpr GiTestMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr GiTestMeshRef s_BoxMesh{"project/meshes/cube_hard_edges"};
@@ -61,25 +60,21 @@ static constexpr GiTestMaterialRef s_ComplexIndirectMaterial{"project/smoke/gi/m
 static constexpr GiTestMaterialRef s_CoverageProbeMaterial{"project/smoke/gi/materials/coverage_probe"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
-// Box geometry: a 4x4 unit open-top box centered at the origin. Each wall/floor is a scaled plane.
-static constexpr f32 s_BoxHalfExtent = 2.0f;       // half the box's X/Z extent
-static constexpr f32 s_BoxHeight = 2.0f;            // wall height
-static constexpr f32 s_BoxScale = 4.0f;             // plane scale (matches s_BoxHalfExtent * 2)
+static constexpr f32 s_BoxHalfExtent = 2.0f;
+static constexpr f32 s_BoxHeight = 2.0f;
+static constexpr f32 s_BoxScale = 4.0f;
 
-// Camera over the open top at a moderate angle: frames floor bounce + red/blue side walls + far wall (level views
-// occlude; top-down foreshortens).
+// The elevated view exposes floor bounce without wall occlusion or top-down foreshortening.
 static constexpr f32 s_CameraDistance = 7.5f;
 static constexpr f32 s_CameraHeight = 3.6f;
-static constexpr f32 s_CameraPitch = 0.42f;         // pulled back + elevated to frame the whole box interior
+static constexpr f32 s_CameraPitch = 0.42f;
 static constexpr f32 s_ComplexCameraDistance = 4.2f;
 static constexpr f32 s_ComplexCameraHeight = 1.65f;
 static constexpr f32 s_ComplexCameraPitch = 0.12f;
 
-// Directional light: aimed so the RED wall (at +X) is lit but the FLOOR is in shadow. A high pitch (steep angle)
-// lights the wall; the yaw is chosen so the light rakes ACROSS the red wall and its shadow falls on the floor
-// beside it. Warm-white sun tint at full intensity.
-static constexpr f32 s_DirectionalLightPitch = 0.85f;   // steep: lights the wall face, floor partly shadowed
-static constexpr f32 s_DirectionalLightYaw = 0.6f;      // rakes across the +X red wall
+// Light the red wall while shadowing the floor to isolate its indirect bounce.
+static constexpr f32 s_DirectionalLightPitch = 0.85f;
+static constexpr f32 s_DirectionalLightYaw = 0.6f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 static constexpr f32 s_ComplexLightPitch = 1.45f;      // nearly vertical: passes through the small roof aperture
 
@@ -241,15 +236,14 @@ public:
             m_complexSceneEnabled ? s_ComplexLightPitch : s_DirectionalLightPitch,
             m_complexSceneEnabled ? 0.0f : s_DirectionalLightYaw,
             0.0f,
-            Float4(1.00f, 0.96f, 0.88f), // warm white sun
+            Float4(1.00f, 0.96f, 0.88f),
             s_DirectionalLightIntensity
         );
 
         const f32 enclosureScale = m_complexSceneEnabled ? s_BoxHalfExtent : s_BoxScale;
         const f32 wallHeightScale = m_complexSceneEnabled ? s_BoxHeight * 0.5f : s_BoxHeight;
 
-        // The FLOOR: a near-white opaque plane filling the box bottom. This is the receiver of the indirect red
-        // bounce (the floor area in the wall's direct shadow lights up red from the GI).
+        // The white floor reveals colored GI in the wall's direct shadow.
         m_floorEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -257,21 +251,17 @@ public:
             m_complexSceneEnabled ? s_ComplexDiffuseMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.90f, 0.90f, 0.90f, 1.0f),
-            Float4(0.0f, 0.0f, 0.0f, 0.0f),       // at the origin
+            Float4(0.0f, 0.0f, 0.0f, 0.0f),
             Float4(enclosureScale, 1.0f, enclosureScale, 0.0f)
         );
 
-        // The RED wall (+X side): saturated red so its indirect bounce onto the shadowed floor is unmistakable.
-        // Rotated to face inward (-X direction) and positioned at the +X edge of the box.
         m_redWallEntity = createWall(
-            Float4(s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f),  // position at +X edge, half-height up
+            Float4(s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f),
             m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.80f, 0.08f, 0.08f, 1.0f),
             -90.0f, enclosureScale, wallHeightScale
         );
 
-        // The BLUE wall (-X side, opposite the red wall): a saturated blue so its indirect bounce onto the shadowed
-        // floor is a distinct colour from the red wall's. Red bleed on the +X-side floor + blue bleed on the -X-side
-        // floor = an unmistakable colored-GI signal (a constant ambient term cannot produce a red-to-blue gradient).
+        // Opposing red and blue bounce distinguish GI from constant ambient light.
         m_blueWallNegX = createWall(
             Float4(-s_BoxHalfExtent, s_BoxHeight * 0.5f, 0.0f, 0.0f),
             m_complexSceneEnabled ? s_BlackEnclosureTint : Float4(0.08f, 0.08f, 0.80f, 1.0f),
@@ -547,8 +537,7 @@ private:
         return true;
     }
 
-    // Creates a wall plane from the -1..+1 shadow_plane mesh. Horizontal and vertical scale values are half-extents.
-    // The source mesh lies in XZ; the entity rotation stands it up and turns its normal toward the chosen side.
+    // The source plane spans -1..+1 in XZ, so wall scales are half-extents.
     NWB::Core::ECS::EntityID createWall(
         const Float4& position,
         const Float4& colorTint,
@@ -556,11 +545,7 @@ private:
         const f32 width = s_BoxScale,
         const f32 height = s_BoxHeight
     ){
-        // The shadow_plane is a horizontal XZ plane; to make a vertical wall we rotate it 90 degrees about the X
-        // axis (pitch) so it stands up, then apply the per-wall yaw about Y to orient it. The combined rotation
-        // is pitch * yaw (applied as a quaternion). The math API is SIMD (SIMDVector); StoreFloat writes it into
-        // the TransformComponent's Float4 rotation field.
-        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);  // 90deg pitch -> vertical
+        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
         const f32 yawRad = yawDeg * (s_PI / 180.0f);
         const SIMDVector yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
         const SIMDVector wallRotation = QuaternionMultiply(pitchQuat, yawQuat);

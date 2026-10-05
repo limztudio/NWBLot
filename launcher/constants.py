@@ -45,7 +45,6 @@ FILE_API_OBJECTS_KEY = "objects"
 PROFILE_REQUIRED_DEFINES = {
     "NWB_BUILD_LOGSERVER": "ON",
 }
-# Shared literals for launcher body (no inline hardcodes below this block).
 ARCH_X64 = ARCH_X64_LITERAL
 ARCH_ARM64 = ARCH_ARM64_LITERAL
 ARCH_AMD64_ALIAS = "amd64"

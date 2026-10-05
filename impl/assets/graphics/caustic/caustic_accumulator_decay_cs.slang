@@ -13,8 +13,8 @@
 // (1-decay) so static brightness is unchanged while motion smooths. No reprojection warp: cannot ghost. Per RGB layer.
 
 struct NwbCausticAccumulatorDecayPushConstants{
-    uint width;        // accumulator width
-    uint height;       // accumulator height
+    uint width;
+    uint height;
     float decayFactor; // per-frame EMA decay in [0,1)
     uint accumulatorStorageSlot;
 };

@@ -19,7 +19,6 @@ from dataclasses import dataclass, field
 import math
 from pathlib import Path
 
-# Shared literals (no inline hardcodes below this block).
 LIT_N = "\n"
 LIT_MAIN = "__main__"
 LIT_UTF_8 = "utf-8"

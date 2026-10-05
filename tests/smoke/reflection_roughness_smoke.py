@@ -16,7 +16,6 @@ from reflection_roughness_reference import analyze_furnace, analyze_roughness, f
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_SEQUENCE = "sequence"
 LIT_GENERATION = "generation"
 LIT_GRAPHICS_FRAME = "graphics_frame"

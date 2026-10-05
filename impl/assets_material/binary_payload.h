@@ -26,9 +26,10 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9 (added static material resource fixture references)
+inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
-// Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported bits; loadBinary rejects anything outside it.
+// Serialized flags mirror authored booleans; Refractive classifies casters, while optical values stay shader-side.
+// All masks supported bits; loading rejects the rest.
 namespace MaterialFlag{
     static constexpr auto s_MaterialFlagNoneBase = 0u;
     enum Mask : u32{
@@ -81,7 +82,7 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
-// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization initializes the typed asset reference, and the renderer writes the resolved heap slot into constantByteOffset.
+// Deserialization initializes the typed asset reference; runtime patches its resolved heap slot at constantByteOffset.
 struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};

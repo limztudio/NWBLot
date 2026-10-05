@@ -90,7 +90,7 @@ public:
         accumulate(gpuTiming);
 
         if(m_intervalSeconds < s_ReportIntervalSeconds)
-            return; // m_intervalFrames is always >= 1 here (incremented unconditionally above)
+            return;
 
         report(gpuTiming);
         resetInterval();
@@ -136,9 +136,7 @@ private:
             , m_intervalSeconds
         );
 
-        // Optional file sink for bounded profiling A/B: the smoke app is a GUI process with no stdout, and its logger routes
-        // to the logserver's WINDOW, so an automated harness cannot scrape these numbers. When NWB_GPU_TIMING_FILE is set,
-        // ALSO append each interval's per-pass averages there (Name::resolvedText() is the readable scope text in a dbg build).
+        // GUI logging is not scrapeable; the optional file sink exposes per-pass A/B timings.
         OutputFileStream timingFile;
         OpenTimingFile(timingFile);
         if(timingFile.is_open()){

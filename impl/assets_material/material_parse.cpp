@@ -76,7 +76,6 @@ bool ValidateMaterialCookInterfaces(
             return false;
         }
 
-        // Build the Name key the bind lookup needs.
         const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){

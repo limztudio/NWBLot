@@ -18,9 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred lighting is now a screen-space compute dispatch. The target dimensions define the exact pixel domain; the
-// full-resolution G-buffer is point sampled, so use its texel coordinate directly. This avoids implicit texture
-// sampling in Compute, which would otherwise require compute-derivative Vulkan features.
+// Direct G-buffer texel loads match target dimensions and avoid compute-derivative feature requirements.
 [numthreads(NWB_DEFERRED_LIGHTING_GROUP_SIZE, NWB_DEFERRED_LIGHTING_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;

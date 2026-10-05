@@ -54,16 +54,11 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../common/math.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
-// helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
-// surfaceDispatchId -- the SAME dispatch the SW caustic kernel + the shadow trace evaluate, so a glass's
-// optical params (ior / transmission) agree across all three.
+// Caustics and shadows share per-hit surface dispatch, keeping IOR and transmission equal.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
-// The fixed-point splat conversion (nwbCausticFluxToFixedPoint) the deposit shares with the SW path. NOT the full
-// transport (caustic_trace.slangi) -- only the raygen needs the bounce loop, so the closest-hit/miss stay free of
-// the backend hook + TraceRay.
+// Closest-hit/miss need only splat conversion; the transport hook and TraceRay stay in raygen.
 #include "splat_constants.slangi"
 #include "light_pick.slangi"
 
@@ -128,9 +123,7 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticHwView(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-triangle-corner attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the
-// shadow trace's nwbSwShadowLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
-// interpolates the SAME inputs into the per-hit surface dispatch.
+// Per-corner attributes use the shared 16-byte normal/uv0 ABI, matching software and shadow surface inputs.
 NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is non-uniform across the ray wave: NwbHeapRawBuffer() tags NonUniformResourceIndex per Load.
     // One Load4 covers the 16-byte record (packed normal .xy, uv0 .zw); mirrors the SW producer.

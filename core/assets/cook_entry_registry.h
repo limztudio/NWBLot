@@ -522,7 +522,6 @@ public:
 #define NWB_DEFINE_COOK_ENTRY_REGISTRAR(registrarVariable, registerFunction) \
     Core::Assets::CookEntryAutoRegistrar registrarVariable(&registerFunction)
 
-// Shared single-entry cook registration shape: one document parser plus one asset builder.
 template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline bool RegisterSingleDocumentCookEntry(
     CookEntryRegistry& registry,
@@ -541,7 +540,6 @@ template<typename EntryT, typename AssetT, typename CodecT>
     );
 }
 
-// Shared cook registration shape: one document parser, one asset_bunch value parser, plus one asset builder.
 template<typename EntryT, typename AssetT, typename CodecT>
 [[nodiscard]] inline bool RegisterDocumentValueCookEntry(
     CookEntryRegistry& registry,
@@ -561,13 +559,11 @@ template<typename EntryT, typename AssetT, typename CodecT>
     );
 }
 
-// Shared pass-through asset builder: forwards the parsed cook entry to the domain build function.
 template<typename EntryT, typename AssetT, typename BuildFunction>
 [[nodiscard]] inline bool ForwardCookBuild(EntryT& entry, AssetT& outAsset, BuildFunction buildAsset){
     return buildAsset(entry, outAsset);
 }
 
-// Shared asset builder with a scratch arena: forwards the parsed cook entry plus scratch to the domain build function.
 template<typename EntryT, typename AssetT, typename ScratchT, typename BuildFunction>
 [[nodiscard]] inline bool ForwardCookBuildWithScratch(EntryT& entry, AssetT& outAsset, ScratchT& scratch, BuildFunction buildAsset){
     return buildAsset(entry, outAsset, scratch);

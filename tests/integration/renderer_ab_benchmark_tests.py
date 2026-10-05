@@ -19,7 +19,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_ab_benchmark as benchmark
 from smoke_volume_identity import volume_segment_filename
 
-# Shared literals (no inline hardcodes below this block).
 LIT_TOTAL_MS = "total_ms"
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_REPORTS = "reports"

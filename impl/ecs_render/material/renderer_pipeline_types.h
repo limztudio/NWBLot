@@ -164,13 +164,9 @@ struct MaterialSurfaceInfo{
     Core::GraphicsString shaderVariant;
     Core::Assets::AssetRef<Shader> pixelShader;
     Core::Assets::AssetRef<Shader> meshShader;
-    // The cook-generated per-material AVBOIT accumulate pixel shader (transparent-pass twin of pixelShader),
-    // valid for a surface-authored transparent material; the transparent draw binds it. It is invalid for an
-    // opaque material. A missing shader on a transparent material is a cook/runtime contract failure.
+    // Transparent surface materials require this cook-generated AVBOIT accumulation shader; opaque materials carry none.
     Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
-    // The occupancy/extinction twins, bound for those AVBOIT passes so all three read the material's SAME
-    // shader-decided surface.renderCoverage. They are valid for a surface-authored transparent material and invalid
-    // for an opaque material. A missing shader on a transparent material is a cook/runtime contract failure.
+    // Occupancy/extinction must evaluate the same surface.renderCoverage and follow the same presence contract.
     Core::Assets::AssetRef<Shader> avboitOccupancyPixelShader;
     Core::Assets::AssetRef<Shader> avboitExtinctionPixelShader;
     u64 typedLayoutHash = 0u;
@@ -190,9 +186,7 @@ struct MaterialSurfaceInfo{
     bool csgCapSurfaceDispatchUnavailableLogged = false;
     bool resourceReferencesResolved = false;
     bool resourceFixturesResolved = false;
-    // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
-    // occluder record reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
-    // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.
+    // Refractive classifies RT casters; NwbMeshSurface owns IOR and shadow absorption values.
     bool transparent = false;
     bool twoSided = false;
     bool refractive = false;

@@ -17,9 +17,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Push Constants
-
-
 void CommandList::setPushConstants(const void* data, usize byteSize){
     if(!publicCommandStateAccessible())
         return;
@@ -106,9 +103,6 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Cooperative Vector
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){

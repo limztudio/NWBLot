@@ -911,7 +911,6 @@ public:
         return task;
     }
 
-    // Shared invalid-payload rejection for builtin add paths. CopyBuffer plus CopyTexture plus ResolveTexture share this discard band and differ only in their region validation plus payload fill.
     template<typename TaskT>
     GpuTaskId rejectInvalidBuiltinPayload(
         ProvisionalPayloadOwner<typename TaskT::Payload>& payload
@@ -925,7 +924,6 @@ public:
         return {};
     }
 
-    // Shared append plus publish-or-discard epilogue for builtin add paths that validate regions before appending. CopyBuffer plus CopyTexture plus ResolveTexture plus clear plus upload tasks share this tail and differ only in their region validation plus payload fill plus resolved queue requirements.
     template<typename TaskT>
     [[nodiscard]] GpuTaskId appendBuiltinTaskWithinMutation(
         const GpuTaskDesc& resolvedDesc,
@@ -1059,7 +1057,6 @@ private:
         bool& outRecordThunkInvoked
     )const;
 
-    // Shared packet-guard prologue: validate the plan access plus packet id, then resolve the packet view with tasks.
     [[nodiscard]] static bool resolvePacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -1075,7 +1072,6 @@ private:
         return outPacketView.valid();
     }
 
-    // Shared recording-claim guard: resolve the packet view and authenticate the caller's lease for that packet.
     [[nodiscard]] static bool resolveLeasedPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -1093,8 +1089,6 @@ private:
         return true;
     }
 
-    // Shared recording-attempt guard: resolve the packet view for a fresh claim when the attempt is live and the
-    // output lease is still empty.
     [[nodiscard]] static bool resolveAttemptPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -1112,9 +1106,7 @@ private:
         return true;
     }
 
-    // Shared discard epilogue for packet-abandon paths: mark every task Discarded and clear its claim generations
-    // plus thunk state. The caller owns teardown/binding validation, lease reset, and claim release. Task fields
-    // are mutable so this runs under the lifecycle lock from const methods.
+    // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
     void discardPacketTasksWithinLock(
         const GpuSubmissionPacket& packetPlan,
         const GpuTaskId* const tasks

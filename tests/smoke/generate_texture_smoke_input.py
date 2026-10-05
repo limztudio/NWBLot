@@ -11,16 +11,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_MAIN = "__main__"
 
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
-    # Make red the dominant reflected colour while retaining distinct green and blue texels.  A balanced checker
-    # averages to near-grey over a diffuse sphere, which makes a perfectly valid colored indirect bounce invisible on
-    # the white receiver.  This intentionally biased source is therefore a better end-to-end texture + GI fixture:
-    # its receiver-side spill must be red, while the minority green/blue texels still prove that real UV sampling is
-    # taking place rather than a constant-color fallback.
+    # Red-biased texels make indirect bounce measurable on white; green/blue still verify UV sampling.
     palette = (
         (244, 42, 42),
         (244, 42, 42),

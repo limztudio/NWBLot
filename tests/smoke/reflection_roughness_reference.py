@@ -6,7 +6,6 @@ import math
 
 from reflection_smoke import SmokeFailure, validate_frame
 
-# Shared literals (no inline hardcodes below this block).
 LIT_ENERGY = "energy"
 LIT_CENTROID = "centroid"
 LIT_SPREAD = "spread"

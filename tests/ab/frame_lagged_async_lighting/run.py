@@ -39,7 +39,6 @@ from window_capture_smoke import (  # noqa: E402
     terminate_process,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_LAGGED_LIGHTING_HISTORY_CAPTURE_SKIPPE = "lagged lighting-history capture skipped because its source state was unavailable"
 LIT_BOOTSTRAP = "bootstrap"
 LIT_ACTIVE_HISTORY = "active history"

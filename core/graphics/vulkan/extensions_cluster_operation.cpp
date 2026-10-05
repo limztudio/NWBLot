@@ -17,9 +17,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cluster Acceleration Structure
-
-
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
     constexpr TStringView s_OperationName = GLB_TEXT("execute cluster acceleration operation");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))

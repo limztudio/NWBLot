@@ -23,7 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{ // beginner: Publishes SIMD lanes into Float# storage via createFromMatrix core.
+inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{
     createFromMatrix(*this, projection, rightHandedCoordinates);
 }
 
@@ -58,7 +58,7 @@ inline void SIMDCALL BoundingFrustum::transformFrustumValue(SIMDVector frustumOr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept{ // beginner: Loads frustum once, Stores frustum once.
+inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept{
     SIMDVector originVector{};
     SIMDVector orientationVector{};
     transformFrustumValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, matrix, originVector, orientationVector, outFrustum.rightSlope, outFrustum.leftSlope, outFrustum.topSlope, outFrustum.bottomSlope, outFrustum.nearPlane, outFrustum.farPlane);
@@ -94,7 +94,7 @@ inline void SIMDCALL BoundingFrustum::transform(
     const f32 scale,
     const SIMDVector rotation,
     const SIMDVector translation
-)const noexcept{ // beginner: Loads frustum once, Stores frustum once.
+)const noexcept{
     SIMDVector originVector{};
     SIMDVector orientationVector{};
     transformFrustumValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, scale, rotation, translation, originVector, orientationVector, outFrustum.rightSlope, outFrustum.leftSlope, outFrustum.topSlope, outFrustum.bottomSlope, outFrustum.nearPlane, outFrustum.farPlane);
@@ -124,7 +124,7 @@ inline void SIMDCALL BoundingFrustum::cornersValue(SIMDVector frustumOrigin, SIM
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // beginner: Loads frustum once, Streams corners out.
+inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
     GLB_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
     cornersValue(
@@ -160,7 +160,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingFrustum::contains(const SIMDVector point)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingFrustum::contains(const SIMDVector point)const noexcept{
     return containsPointValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, point);
 }
 
@@ -183,7 +183,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return containsTriangleValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, v0, v1, v2);
 }
 
@@ -201,7 +201,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingSphere& sphere)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingSphere& sphere)const noexcept{
     return containsSphereValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(sphere.centerRadius));
 }
 
@@ -221,7 +221,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingBox& box)const noexcept{
     return containsBoxValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents));
 }
 
@@ -241,7 +241,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingOrientedBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingOrientedBox& box)const noexcept{
     return containsOrientedBoxValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
@@ -289,7 +289,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingFrustum& frustum)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingFrustum::contains(const BoundingFrustum& frustum)const noexcept{
     return containsFrustumValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane);
 }
 
@@ -307,7 +307,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingSphere& sphere)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingSphere& sphere)const noexcept{
     return intersectsSphereValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(sphere.centerRadius));
 }
 
@@ -325,7 +325,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingBox& box)const noexcept{
     return intersectsBoxValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents));
 }
 
@@ -343,7 +343,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingOrientedBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingOrientedBox& box)const noexcept{
     return intersectsOrientedBoxValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
@@ -390,7 +390,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingFrustum& frustum)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingFrustum::intersects(const BoundingFrustum& frustum)const noexcept{
     return intersectsFrustumValues(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane);
 }
 
@@ -427,7 +427,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum SIMDCALL BoundingFrustum::intersects(const SIMDVector plane)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline PlaneIntersectionType::Enum SIMDCALL BoundingFrustum::intersects(const SIMDVector plane)const noexcept{
     return intersectsPlaneValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane);
 }
 
@@ -472,7 +472,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
     const SIMDVector rayOrigin,
     const SIMDVector direction,
     f32& outDistance
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return intersectsRayValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, rayOrigin, direction, outDistance);
 }
 
@@ -498,12 +498,12 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
     SIMDVector plane3,
     SIMDVector plane4,
     SIMDVector plane5
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return containedByValue(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
 
-inline void BoundingFrustum::getPlanes( // beginner: Loads frustum once, publishes SIMD planes to caller lanes.
+inline void BoundingFrustum::getPlanes(
     SIMDVector* nearPlaneOut,
     SIMDVector* farPlaneOut,
     SIMDVector* rightPlaneOut,
@@ -531,7 +531,7 @@ inline void BoundingFrustum::getPlanes( // beginner: Loads frustum once, publish
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SIMDCALL BoundingFrustum::createFromMatrix( // beginner: Reads SIMDMatrix lanes, publishes Float# slopes/planes.
+inline void SIMDCALL BoundingFrustum::createFromMatrix(
     BoundingFrustum& outFrustum,
     const SIMDMatrix& projection,
     const bool rightHandedCoordinates

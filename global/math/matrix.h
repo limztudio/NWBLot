@@ -830,8 +830,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationAxis(SIMDVector axis, f32 angle)noe
 }
 
 GLB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation(SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
-    // world = T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis
-    // Rotation-scaled basis plus one translation column; skips identity multiplies.
+    // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVector origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
     const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
     const SIMDVector translationColumn = VectorAdd(translation, VectorSubtract(origin, Vector3TransformNormal(origin, rotation)));

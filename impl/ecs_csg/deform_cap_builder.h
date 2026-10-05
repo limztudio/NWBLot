@@ -17,9 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Seam-safe, attribute-aware cap handling for deformable CSG rebuilds.
-
-
 // Owns cut boundary loop collection, deterministic ordering, and fan fills with one cap orientation rule, so preview and commit caps always agree.
 struct CsgDeformCutLoopEdge{
     u32 first = 0u;

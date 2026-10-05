@@ -66,11 +66,10 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// STRESS: twenty spinning bind-pose bodies (ten glass + ten opaque) in two rows inside the GI box; sweeping occluders
-// exercise TLAS updates + opaque/transparent shadows across two lights. Reuses body + transparent_multi assets.
+// Spinning opaque/glass crowds exercise TLAS updates and overlapping shadows inside the GI box.
 static constexpr StressModelRef s_Model{"project/characters/body/model"};
-static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"}; // glass
-static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"}; // opaque lambert
+static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr StressMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
@@ -79,35 +78,34 @@ static constexpr u32 s_DefaultCharactersPerClass = 10u;
 static constexpr u32 s_ComparisonCharactersPerClass = 5u;
 static constexpr u32 s_CharacterTintCount = 5u;
 static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight so neighbours' shadows overlap
-static constexpr f32 s_TransparentRowZ = -0.55f;                      // even index -> front of the zigzag
-static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag
+static constexpr f32 s_TransparentRowZ = -0.55f;
+static constexpr f32 s_OpaqueRowZ = 0.55f;
 static constexpr f32 s_CharacterLift = 0.0f;
 
-// GI Cornell box around the crowd (blue/red/green walls + ceiling, open behind the camera) so colored bounce lands
-// on characters + floor. Reuses ground mesh + material + colour_tint.
-static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);                    // x: side walls at +-4 (just outside the +-3.24 character spread); y: +Z back wall at +4.5; open -Z front at -4.5 (camera looks in through the open front)
-static constexpr f32 s_BoxHeight = 4.0f;                   // wall height / ceiling y (point light at 2.6 stays inside)
-static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;    // floor spans the box depth (+-4.5) so it meets the side + back walls
+// The open-front colored box exposes indirect bounce on the crowd and floor.
+static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f); // x: side half-width; y: depth half-width. The -Z front stays open.
+static constexpr f32 s_BoxHeight = 4.0f;
+static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;
 
 static constexpr f32 s_ComparisonCameraDistance = 4.8f;
 static constexpr f32 s_ComparisonCameraHeight = 1.8f;
 static constexpr f32 s_ComparisonCameraPitch = 0.2f;
 static constexpr f32 s_CameraDistance = 7.2f;
 static constexpr f32 s_CameraHeight = 2.7f;
-static constexpr f32 s_CameraPitch = 0.25f;                           // tilt down a touch more to read the ground shadows
+static constexpr f32 s_CameraPitch = 0.25f;
 
 static constexpr f32 s_DirectionalLightPitch = 0.9f;
 static constexpr f32 s_DirectionalLightYaw = 0.65f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 
 static constexpr f32 s_PointLightHeight = 2.6f;
-static constexpr f32 s_PointLightIntensity = 9.0f;                   // point lights attenuate by distance, so brighter
+static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.8f;                             // radians / second
-static constexpr f32 s_ManualYawSpeed = 0.6f;                        // radians / second for the arrow-key manual yaw scrub
+static constexpr f32 s_SpinSpeed = 0.8f; // radians/second
+static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
 static constexpr f32 s_TwoPi = 6.2831853f;
-static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp huge stalls so the spin can't jump
+static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -212,8 +210,7 @@ private:
     }
 
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
-        // Comparison coordinates stay byte-for-byte equivalent to the old zigzag. The full workload retains unit
-        // body scale, .72 spacing within each row and a half-column stagger between the glass and opaque rows.
+        // Comparison mode pins the zigzag layout; the full crowd uses staggered material rows.
         const bool transparentMaterialClass = (index % 2u) == 0u;
         const bool transparent = !hardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
@@ -243,16 +240,12 @@ private:
         return entity;
     }
 
-    // A coloured wall: a scaled ground plane stood VERTICAL (90deg pitch) then yawed to face inward, mirroring the GI-test
-    // box builder. `spanScale` is the wall's horizontal length (X for the -Z wall, Z for the side walls); the height is
-    // s_BoxHeight. Reuses the opaque ground material + the per-instance colour tint (no new assets).
+    // The XZ source plane spans -1..+1, so wall scales are half-extents.
     [[nodiscard]] NWB::Core::ECS::EntityID createWall(const Float4& position, const Float4& colorTint, const f32 yawDeg, const f32 spanScale){
-        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);   // stand the plane up (vertical)
+        const SIMDVector pitchQuat = QuaternionRotationRollPitchYaw(s_PIDIV2, 0.0f, 0.0f);
         const f32 yawRad = yawDeg * (s_PI / 180.0f);
         const SIMDVector yawQuat = QuaternionRotationRollPitchYaw(0.0f, yawRad, 0.0f);
-        // QuaternionMultiply(A, B) applies B FIRST then A, so pass (yaw, pitch) to stand the plane up (pitch) THEN orient
-        // it (yaw). Passing (pitch, yaw) yaws the still-flat plane first, which leaves the +-X walls facing the camera
-        // (spanning X) instead of facing inward (spanning Z) -- the 90-degrees-off "backdrop" look.
+        // QuaternionMultiply applies its right operand first: pitch before yaw keeps side walls facing inward.
         const SIMDVector wallRotation = QuaternionMultiply(yawQuat, pitchQuat);
 
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
@@ -272,10 +265,9 @@ private:
         return entity;
     }
 
-    // The ceiling: a scaled ground plane at the box top, FLIPPED (180deg pitch) so its lit face points DOWN into the box,
-    // bouncing indirect fill onto the crowd. Covers the full box footprint (2*halfX by 2*halfZ).
+    // Face the ceiling downward so it bounces light into the crowd.
     [[nodiscard]] NWB::Core::ECS::EntityID createCeiling(const Float4& colorTint){
-        const SIMDVector ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);   // face -Y (down into the box)
+        const SIMDVector ceilingRotation = QuaternionRotationRollPitchYaw(s_PI, 0.0f, 0.0f);
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -412,7 +404,7 @@ public:
     {}
 
     virtual ~StressTestSmokeProject()override{
-        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         m_timingRenderPass.stop();
         destroyWorld();
     }
@@ -453,9 +445,7 @@ public:
             );
         }
 
-        // Arrow keys (Left/Right) scrub the crowd yaw by hand; the live angle shows in the title bar so the exact angle a
-        // flicker appears at can be read off and reproduced via NWB_STRESS_TEST_SPIN_ANGLE. addHandlerToBack gives this
-        // scrubber first crack at the arrow keys; it consumes only Left/Right.
+        // Handle Left/Right first; the title reports yaw for reproducible captures.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
         const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
@@ -501,12 +491,10 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
-        // GI box: three coloured walls + a ceiling around the crowd (see the s_BoxHalf* notes). Distinct saturated hues so
-        // each wall's indirect bounce reads as a different colour on the floor + characters; the ceiling is a warm fill.
-        m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalf.y); // +X red
-        m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalf.y); // -X blue
-        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalf.x); // +Z green (far back wall, faces -Z toward the crowd)
-        m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));                                                                             // warm off-white ceiling
+        m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalf.y);
+        m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalf.y);
+        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalf.x);
+        m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));
 
         const u32 characterCount = m_charactersPerClass * 2u;
         m_characterOwners.reserve(characterCount);
@@ -627,8 +615,7 @@ public:
         if(!samplePresentationFps())
             return false;
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
-        // Yaw selection: 1) NWB_STRESS_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
-        // auto-spin the moment Left/Right is first pressed, so the crowd can be parked on a precise angle); 3) auto-spin.
+        // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = frozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();

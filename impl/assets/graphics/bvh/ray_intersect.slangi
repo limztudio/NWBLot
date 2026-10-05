@@ -73,10 +73,8 @@ bool nwbBvhRayAabbT(
     return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
 }
 
-// Shared inner-node step for the software mesh/scene traversals. Intersects both children against the current
-// closest range and selects the near child to descend inline plus the far child to defer. Returns false when both
-// children miss so the caller pops the next stack entry. The stack push stays caller-side because mesh and scene
-// traversals use different stack capacities.
+// Descend into the nearer child and defer the farther one; false means both miss.
+// Callers own stack pushes because mesh and scene capacities differ.
 bool nwbBvhPickNearChild(
     const float3 origin,
     const float3 invDir,

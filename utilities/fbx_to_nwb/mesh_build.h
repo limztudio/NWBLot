@@ -23,9 +23,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// FBX corner conversion and triangulated mesh assembly.
-
-
 class FbxMeshBuild final : NoCopy{
 public:
     [[nodiscard]] static SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f);

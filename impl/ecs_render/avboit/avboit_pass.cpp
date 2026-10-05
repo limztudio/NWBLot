@@ -454,7 +454,6 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
-    // This thunk holds only the native dispatch.
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(
@@ -484,7 +483,6 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
-    // This thunk holds only the native dispatch.
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(

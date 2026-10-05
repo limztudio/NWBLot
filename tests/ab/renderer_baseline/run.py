@@ -50,7 +50,6 @@ from window_capture_smoke import (  # noqa: E402
     wait_for_log_message,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_GIT = "git"
 LIT_UNAVAILABLE = "unavailable"
 LIT_FRAME_LOCKED = "frame-locked"

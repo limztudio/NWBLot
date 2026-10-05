@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import struct
 
-# Shared literals (no inline hardcodes below this block).
 LIT_NESTED = "nested"
 LIT_OPTICAL_TIR = "optical_tir"
 LIT_SINGLE = "single"

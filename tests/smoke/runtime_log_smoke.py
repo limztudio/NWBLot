@@ -22,7 +22,6 @@ from window_capture_smoke import (  # noqa: E402
     write_status,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_APPEND = "append"
 LIT_OFF = "off"
 LIT_MAIN = "__main__"

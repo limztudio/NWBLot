@@ -14,7 +14,7 @@
 #define NWB_GI_HIT_SHADOW_RAYS 1
 #endif
 
-// Software scene and mesh traversal capacities; unchanged by the heap-binding migration.
+// Software scene and mesh traversal capacities.
 #define NWB_GI_SW_MESH_STACK_SIZE 32
 #define NWB_GI_SW_SCENE_STACK_SIZE 64
 

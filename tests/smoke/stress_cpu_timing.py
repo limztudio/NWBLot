@@ -10,7 +10,6 @@ from name_symbols import known_name_symbols
 
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_GRAPHICS_FRAME = "graphics.frame"
 LIT_GRAPHICS_PREPARE_RESOURCES = "graphics.prepare_resources"
 LIT_GRAPHICS_RENDER_PASSES = "graphics.render_passes"

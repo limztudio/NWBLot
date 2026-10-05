@@ -119,7 +119,7 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     return QuaternionRotationRollPitchYaw(time * 0.35f, time + phase, time * 0.18f);
 }
 
-static void ApplyCubeRotation( // beginner: Stores rotation lane into ECS transform storage once.
+static void ApplyCubeRotation(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
     const SIMDVector rotation

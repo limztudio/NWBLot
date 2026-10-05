@@ -339,8 +339,8 @@ void AppendFrameGraphRuntimeStatisticsDot(
         out += ", runtime_packet_submission_count=\"unknown\"";
 }
 
-// Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
-// capture, stable identity, and opaque producer-owned flag byte. A timing stream need not match the graph stream.
+// Join timing by exact frame and scope Name; retain every graph, stable identity, and opaque producer flag.
+// Timing and graph streams may differ.
 void AppendTimedGraphDot(
     TelemetryArena& arena,
     const FrameGraphReportRecord& record,

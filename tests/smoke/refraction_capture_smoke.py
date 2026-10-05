@@ -10,7 +10,6 @@ import sys
 
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows, write_bmp_24
 
-# Shared literals (no inline hardcodes below this block).
 LIT_N = "\n"
 LIT_EXECUTABLE = "--executable"
 LIT_WORKING_DIRECTORY = "--working-directory"

@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Project deferred lighting BXDF: a cel / toon model -- per-light N.L quantized into hard bands, hard shadow
-// edges, flat ambient, no tonemap. Deliberately, obviously different from the lambert model so per-material
-// BXDF dispatch is visible at a glance. Pulled into the cook-generated deferred lighting dispatch module,
-// which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's unique entry name. The deferred lighting framework
-// (NwbBxdfSurface, the scene light list, the shadow accessor) is already in scope.
+// Hard bands, hard shadows and flat ambient make per-material BXDF dispatch visible.
+// The cook supplies a unique NWB_DEFERRED_BXDF_FUNCTION; deferred lighting types and accessors are in scope.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
     const half3 ambientFloor = half3(0.22h, 0.24h, 0.30h);

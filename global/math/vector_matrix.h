@@ -153,7 +153,7 @@ GLB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, cons
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-GLB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl( // beginner: streams storage through pure-SIMD transform lanes; Loads/Stores live only in this loop.
+GLB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
     OutputT* outputStream,
     usize outputStride,
     const InputT* inputStream,

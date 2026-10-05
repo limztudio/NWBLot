@@ -10,7 +10,6 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_temporal_omission_smoke as proof
 
-# Shared literals (no inline hardcodes below this block).
 LIT_N = "\n"
 LIT_SCOPES = "scopes"
 LIT_REFLECTIONSMOKEPROJECT_HARDWARE_UNAVAI = "ReflectionSmokeProject: hardware unavailable\n"

@@ -159,7 +159,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     return lightEntity.id();
 }
 
-SceneLight BuildDefaultSceneLight(const SIMDVector forward){ // beginner: Packs pure-SIMD direction core into SceneLight storage once.
+SceneLight BuildDefaultSceneLight(const SIMDVector forward){
     SceneLight light;
     StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), light.direction);
     StoreFloat(s_SIMDOne, light.colorIntensity);
@@ -167,7 +167,7 @@ SceneLight BuildDefaultSceneLight(const SIMDVector forward){ // beginner: Packs 
     return light;
 }
 
-bool TryBuildSceneLight( // beginner: Validates SIMD lanes, Stores SceneLight payload once.
+bool TryBuildSceneLight(
     const SIMDVector position,
     const SIMDVector rotation,
     const SIMDVector colorIntensity,
@@ -238,7 +238,7 @@ bool TryBuildSceneLight( // beginner: Validates SIMD lanes, Stores SceneLight pa
     }
 }
 
-usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward, SceneLight* outLights, const usize maxLights){ // beginner: Loads ECS component storage once per light into TryBuildSceneLight core.
+usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward, SceneLight* outLights, const usize maxLights){
     if(maxLights == 0u)
         return 0u;
 

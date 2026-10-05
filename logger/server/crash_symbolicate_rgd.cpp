@@ -34,8 +34,7 @@ inline constexpr AStringView s_ReportDetailPrefix = "detail=";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// RGD decodes an in-package '.rgd' capture in-process through the vendored backend (no subprocess or external
-// install). Best-effort like Aftermath: runs only when present, appends its own section, never fails ingest.
+// Decode in-package RGD captures with the vendored backend; failure never aborts ingest.
 void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirectory, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     static_cast<void>(config);
 

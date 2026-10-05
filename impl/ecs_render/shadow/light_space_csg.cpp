@@ -66,7 +66,7 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.dynamicBounds.reserve(capacity);
 }
 
-void AppendLightSpaceCsgReceiver( // beginner: Loads snapshot storage once into AabbTests core, Stores GPU payloads once.
+void AppendLightSpaceCsgReceiver(
     LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent,
     const SIMDMatrix& objectToWorld, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
     if(!state.gathering)

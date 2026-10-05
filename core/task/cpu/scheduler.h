@@ -255,7 +255,7 @@ private:
         CpuAffinity::Enum affinity
     )const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
-    // Shared DFS prologue for locked graph searches: roll the visit generation on wrap and clear the stack. Callers push their own roots and visit filters afterwards.
+    // Callers provide roots and visit filters after starting the locked search.
     void beginLockedSearch()noexcept{
         if(++m_searchGeneration == 0u){
             for(u64& visit : m_searchVisits)

@@ -15,12 +15,13 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #include "bounding_shape_decls.h"
 #include "bounding_corners.h"
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 inline void SIMDCALL BoundingBox::transformBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents)noexcept{
     SIMDVector corners[s_CornerCount];
@@ -53,7 +54,7 @@ inline void SIMDCALL BoundingBox::transformBoxValue(SIMDVector boxCenter, SIMDVe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SIMDCALL BoundingBox::transform(BoundingBox& outBox, const SIMDMatrix& matrix)const noexcept{ // beginner: Loads box storage once, Stores box once.
+inline void SIMDCALL BoundingBox::transform(BoundingBox& outBox, const SIMDMatrix& matrix)const noexcept{
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     transformBoxValue(LoadFloat(center), LoadFloat(extents), matrix, centerVector, extentsVector);
@@ -70,7 +71,7 @@ inline void SIMDCALL BoundingBox::transform(
     const f32 scale,
     const SIMDVector rotation,
     const SIMDVector translation
-)const noexcept{ // beginner: Loads box storage once, Stores box once.
+)const noexcept{
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     transformBoxValue(LoadFloat(center), LoadFloat(extents), scale, rotation, translation, centerVector, extentsVector);
@@ -90,7 +91,7 @@ inline void SIMDCALL BoundingBox::cornersValue(SIMDVector boxCenter, SIMDVector 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner: Loads box once, Streams corners out.
+inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
     GLB_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
     cornersValue(LoadFloat(center), LoadFloat(extents), cornerVectors);
@@ -113,7 +114,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingBox::contains(const SIMDVector point)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingBox::contains(const SIMDVector point)const noexcept{
     return containsPointValue(LoadFloat(center), LoadFloat(extents), point);
 }
 
@@ -139,7 +140,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return containsTriangleValue(LoadFloat(center), LoadFloat(extents), v0, v1, v2);
 }
 
@@ -166,7 +167,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingSphere& sphere)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingSphere& sphere)const noexcept{
     return containsSphereValues(LoadFloat(center), LoadFloat(extents), LoadFloat(sphere.centerRadius));
 }
 
@@ -192,7 +193,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingBox& box)const noexcept{
     return containsBoxValues(LoadFloat(center), LoadFloat(extents), LoadFloat(box.center), LoadFloat(box.extents));
 }
 
@@ -215,7 +216,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingOrientedBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingOrientedBox& box)const noexcept{
     return containsOrientedBoxValues(LoadFloat(center), LoadFloat(extents), LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
@@ -250,7 +251,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingFrustum& frustum)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline ContainmentType::Enum BoundingBox::contains(const BoundingFrustum& frustum)const noexcept{
     return containsFrustumValues(LoadFloat(center), LoadFloat(extents), LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane);
 }
 
@@ -258,7 +259,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingBox::intersects(const BoundingSphere& sphere)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingBox::intersects(const BoundingSphere& sphere)const noexcept{
     return sphere.intersectsBoxValues(LoadFloat(sphere.centerRadius), LoadFloat(center), LoadFloat(extents));
 }
 
@@ -280,7 +281,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingBox::intersects(const BoundingBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingBox::intersects(const BoundingBox& box)const noexcept{
     return intersectsBoxValues(LoadFloat(center), LoadFloat(extents), LoadFloat(box.center), LoadFloat(box.extents));
 }
 
@@ -303,7 +304,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingBox::intersects(const BoundingOrientedBox& box)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingBox::intersects(const BoundingOrientedBox& box)const noexcept{
     return intersectsOrientedBoxValues(LoadFloat(center), LoadFloat(extents), LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation));
 }
 
@@ -311,7 +312,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BoundingBox::intersects(const BoundingFrustum& frustum)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline bool BoundingBox::intersects(const BoundingFrustum& frustum)const noexcept{
     return frustum.intersectsBoxValues(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, LoadFloat(center), LoadFloat(extents));
 }
 
@@ -334,7 +335,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return intersectsTriangleValue(LoadFloat(center), LoadFloat(extents), v0, v1, v2);
 }
 
@@ -357,7 +358,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum SIMDCALL BoundingBox::intersects(const SIMDVector plane)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+[[nodiscard]] inline PlaneIntersectionType::Enum SIMDCALL BoundingBox::intersects(const SIMDVector plane)const noexcept{
     return intersectsPlaneValue(LoadFloat(center), LoadFloat(extents), plane);
 }
 
@@ -380,7 +381,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
     SIMDVector origin,
     SIMDVector direction,
     f32& outDistance
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return intersectsRayValue(LoadFloat(center), LoadFloat(extents), origin, direction, outDistance);
 }
 
@@ -406,7 +407,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{ // beginner
     SIMDVector plane3,
     SIMDVector plane4,
     SIMDVector plane5
-)const noexcept{ // beginner: Loads member storage once into pure-SIMD core.
+)const noexcept{
     return containedByValue(LoadFloat(center), LoadFloat(extents), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
@@ -428,7 +429,7 @@ inline void SIMDCALL BoundingBox::mergeBoxValues(SIMDVector boxCenter0, SIMDVect
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept{ // beginner: Loads boxes once, Stores box once.
+inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept{
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     mergeBoxValues(LoadFloat(box0.center), LoadFloat(box0.extents), LoadFloat(box1.center), LoadFloat(box1.extents), centerVector, extentsVector);
@@ -440,7 +441,7 @@ inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& bo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingBox::createFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{ // beginner: Loads sphere storage once, Stores box once.
+inline void BoundingBox::createFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     StoreFloat(VectorSetW(CollisionDetail::SphereCenter(sphereValue), 0.0f), outBox.center);
     StoreFloat(VectorSetW(CollisionDetail::SphereRadius(sphereValue), 0.0f), outBox.extents);
@@ -450,7 +451,7 @@ inline void BoundingBox::createFromSphere(BoundingBox& outBox, const BoundingSph
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SIMDCALL BoundingBox::createFromPoints(BoundingBox& outBox, const SIMDVector point0, const SIMDVector point1)noexcept{ // beginner: Stores box once from SIMD lanes.
+inline void SIMDCALL BoundingBox::createFromPoints(BoundingBox& outBox, const SIMDVector point0, const SIMDVector point1)noexcept{
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(VectorMin(point0, point1), VectorMax(point0, point1), centerVector, extentsVector);
@@ -462,7 +463,7 @@ inline void SIMDCALL BoundingBox::createFromPoints(BoundingBox& outBox, const SI
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingBox::createFromPoints( // beginner: streams point storage, Stores box once.
+inline void BoundingBox::createFromPoints(
     BoundingBox& outBox,
     const usize count,
     const Float3U* points,

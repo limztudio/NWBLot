@@ -356,8 +356,7 @@ private:
             const Timer currentTime = TimerNow();
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self->m_lastUpdateTime);
             if(elapsedSeconds < updateIntervalSeconds){
-                // Ordinary updates are interval-bound. Sleep until the next deadline instead of consuming a core
-                // repeatedly polling the timer; the existing cadence still bounds message and shutdown latency.
+                // Sleep until the next update deadline; the cadence bounds message and shutdown latency.
                 const f32 remainingSeconds = updateIntervalSeconds - elapsedSeconds;
                 static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
                 static constexpr u32 s_MinSleepMilliseconds = 1u;

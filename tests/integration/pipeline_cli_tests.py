@@ -12,7 +12,6 @@ from unittest import mock
 
 from skin_dependency_cli_tests import run_skin_dependency_tests
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DEPENDENCY_COMPUTER = "--dependency-computer"
 LIT_ASSET_BUILDER = "--asset-builder"
 LIT_ASSET_GATHERER = "--asset-gatherer"

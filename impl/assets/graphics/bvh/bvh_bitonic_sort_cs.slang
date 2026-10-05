@@ -67,7 +67,6 @@ void main(
     const uint mode = g_NwbBvhBitonicSortPushConstants.mode;
 
     if(mode == NWB_BVH_SORT_MODE_GLOBAL){
-        // Inter-tile global-memory compare/swap.
         const uint index = dispatchThreadID.x;
         const uint partner = index ^ g_NwbBvhBitonicSortPushConstants.compareDistance;
         if(partner <= index)
@@ -89,7 +88,6 @@ void main(
         return;
     }
 
-    // Tile-local modes use groupshared storage.
     const uint tileBase = groupID.x * NWB_BVH_SORT_GROUP_SIZE;
     const uint local = groupThreadID.x;
     const uint global = tileBase + local;
@@ -114,7 +112,6 @@ void main(
         }
     }
     else{
-        // Finish the post-global tile-local merge tail.
         const uint sequenceSize = g_NwbBvhBitonicSortPushConstants.sequenceSize;
         const bool ascending = (global & sequenceSize) == 0u;
         [unroll]

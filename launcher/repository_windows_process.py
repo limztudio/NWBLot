@@ -146,7 +146,7 @@ class WindowsProcessApi:
         return int(exit_code.value)
 
     def close_process(self, handle: WindowsProcessHandle) -> None:
-        # Handle release is terminal cleanup. It must never replace a more useful query/wait/termination failure.
+        # Cleanup must not replace a query, wait, or termination failure.
         self._kernel32.CloseHandle(handle.native_handle)
 
     def _bind_functions(self) -> None:

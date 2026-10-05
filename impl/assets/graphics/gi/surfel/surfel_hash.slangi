@@ -19,7 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Integer cell coordinate of a world position for the given cell size.
 int3 nwbSurfelCellCoord(const float3 worldPosition, const float cellSize){
     return int3(floor(worldPosition / max(cellSize, NWB_SURFEL_HASH_CELL_SIZE_MIN)));
 }

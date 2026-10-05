@@ -38,14 +38,13 @@ using CandidatePointer = NotNull<const Candidate*>;
         || !VectorIsFinite(scaleVec, VectorComponentMask::s_XYZ)
     )
         return false;
-    // SIMD lanes own the zero/nonzero classification; scalar lane compares stay out of the validity path.
     const bool scaleNonzero = (VectorMoveMask(VectorEqual(scaleVec, VectorZero())) & VectorComponentMask::s_XYZ) == 0u;
     const bool rotationNonzero = (VectorMoveMask(VectorNotEqual(rotationVec, VectorZero())) & VectorComponentMask::s_XYZW) != 0u;
     return scaleNonzero && rotationNonzero
     ;
 }
 
-[[nodiscard]] bool ValidCandidate(const Candidate& candidate){ // beginner: Loads candidate storage once, validates on lanes.
+[[nodiscard]] bool ValidCandidate(const Candidate& candidate){
     if(!candidate.entity.valid() || !candidate.mesh.valid() || !candidate.material.valid())
         return false;
     if(candidate.mutableTypedByteCount != 0u && !candidate.mutableTypedBytes)
@@ -68,11 +67,10 @@ struct CandidateHasher{
         return hash;
     }
 
-    usize operator()(const CandidatePointer candidate)const{ // beginner: Loads transform storage once, folds lanes into the hash.
+    usize operator()(const CandidatePointer candidate)const{
         usize hash = Hasher<Name>{}(candidate->mesh.name());
         HashCombine(hash, candidate->material.name());
         HashCombine(hash, candidate->group);
-        // SIMD loads own the lane gathers feeding the scalar hash folds.
         hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
         if(candidate->group == NAME_NONE){
             HashCombine(hash, candidate->boundaryMode);
@@ -91,8 +89,7 @@ struct CandidateEqual{
             && Vector3Equal(lhsScale, rhsScale);
     }
 
-    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{ // beginner: Loads both transforms once, compares on lanes.
-        // SIMD lane compares own the transform equality; scalar lane compares stay out of the dedup path.
+    bool operator()(const CandidatePointer lhs, const CandidatePointer rhs)const{
         if(
             lhs->mesh != rhs->mesh || lhs->material != rhs->material || lhs->group != rhs->group
             || !equalTransformLanes(LoadFloat(lhs->position), LoadFloat(lhs->rotation), LoadFloat(lhs->scale), LoadFloat(rhs->position), LoadFloat(rhs->rotation), LoadFloat(rhs->scale))
@@ -188,7 +185,6 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.mutableTypedBytes = mutableBytes->data();
         candidate.mutableTypedByteCount = mutableBytes->size();
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
-            // SIMD lanes own the aligned transform copies; scalar lane extraction stays out of the gather path.
             StoreFloat(LoadFloat(transformPtr->position), candidate.position);
             StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);
             StoreFloat(LoadFloat(transformPtr->scale), candidate.scale);

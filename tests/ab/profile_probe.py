@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-# Shared literals (no inline hardcodes below this block).
 LIT_UTF_8 = "utf-8"
 
 

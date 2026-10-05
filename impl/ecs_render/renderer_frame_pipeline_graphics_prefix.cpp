@@ -233,9 +233,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     immutableUploadScheduling.mergeWithPrevious = true;
 
 
-    // G-buffer color/depth clears are render-pass load operations in GbufferGraphTask, so their tile contents never
-    // leave attachment storage solely for a transfer clear. G-buffer timing owns that fused work. Deferred-clear
-    // timing now measures only opaque color, which remains a graph-owned UAV clear before its Compute handoff.
+    // G-buffer load clears stay in attachment storage and G-buffer timing.
+    // Deferred-clear timing covers the opaque-color UAV clear before its Compute handoff.
     Core::GpuTaskSchedulingHint clearScheduling;
     clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     clearScheduling.forceSubmissionBoundary = false;
@@ -424,9 +423,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // consumes the five prior-stage aliases and publishes removed-interval images, then Sample consumes those
     // outputs. Their native thunks consume graph-owned StorageImage state without staging target transitions.
 
-    // The clear is intentionally keyed to the semantic opaque-CSG frame flag, rather than the later native
-    // readiness checks. This preserves the old defensive clear timing while making its two actual CopyDest writes
-    // and the following UAV handoff visible to the graph.
+    // The semantic opaque-CSG flag admits this clear before native readiness checks.
+    // The graph owns both CopyDest writes and their following UAV handoff.
     OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(
         m_deferredLightingTaskGraph
     );
@@ -1424,8 +1422,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             opaqueCsgIntervalSampleComputeEmulationPayload.materialSystem = &m_materialSystem;
             opaqueCsgIntervalSampleComputeEmulationPayload.csgResources = csgResources;
             opaqueCsgIntervalSampleComputeEmulationPayload.targets = &deferredTargets;
-            // Producer and sample share the semantic CSG interval-sample submission/ticket; the timer opens here
-            // and closes after the raster half, exactly preserving the former local material timing scope.
+            // Producer and sample share one CSG interval-sample ticket, spanning compute through the raster half.
             opaqueCsgIntervalSampleComputeEmulationPayload.timingTicket =
                 timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample);
             opaqueCsgIntervalSampleComputeEmulationPayload.meshViewSetupReady =

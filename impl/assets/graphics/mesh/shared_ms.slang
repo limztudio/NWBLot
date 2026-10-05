@@ -6,10 +6,7 @@
 #define NWB_MESH_EMULATION_INDEXED_OUTPUT (!NWB_CSG_ENABLED)
 #endif
 
-// The single engine-owned mesh shader, shared by every material. It is pure geometry: meshlet decode,
-// skinning/transform, culling, raster emit -- none of which is material-specific. It outputs the mesh's own
-// source vertex color verbatim; a material's color/albedo is applied per-pixel in its surface hook (which
-// reads the typed .bind material constants), so this shader needs no material interface.
+// Shared geometry stages need no material interface; surface hooks apply typed material color per pixel.
 #include "mesh/authoring.slangi"
 
 

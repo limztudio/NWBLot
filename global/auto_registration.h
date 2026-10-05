@@ -63,9 +63,6 @@ inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory){
     queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
 }
 
-// Shared auto-collection runner: snapshot the registration queue into the caller's scratch vector, reject null
-// functions, run each function against the context, and report failures through the caller's log callbacks.
-// Both cook-entry registration and volume preparation share this shape with different function/context/queue types.
 template<typename QueueT, typename ContextT, typename FunctionVectorT, typename LogNullT, typename LogFailureT>
 [[nodiscard]] inline bool RunAutoCollectedFunctions(
     QueueT& queue,

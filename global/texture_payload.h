@@ -13,7 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared texture-asset payload contract. Both the texture asset implementation domain and the standalone `utilities/tex_conv` converter consume these payload layouts, so the single source of truth lives in the neutral `global/` domain instead of `impl/`.
+// Texture payload ABI shared by the asset cooker, runtime loader, and tex_conv.
 
 
 namespace TextureDimension{
@@ -40,7 +40,7 @@ namespace TexturePayloadFormat{
     static constexpr u8 s_TexturePayloadFormatUastcLdr4x4Base = 0u;
     enum Enum : u8{
         UastcLdr4x4 = s_TexturePayloadFormatUastcLdr4x4Base,
-        // UASTC HDR uses the standard ASTC HDR 4x4 block bitstream. It is RGB-only in the current Basis encoder
+        // RGB-only ASTC HDR 4x4 bitstream in the Basis encoder.
         UastcHdr4x4,
     };
 };
@@ -85,10 +85,6 @@ namespace TextureAlphaMode{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This is the single source of truth for texture-asset payload contracts. The converter emits these layouts
-// the cooker, runtime codec, and loader validate or consume them, so format constants and mip arithmetic cannot drift.
-
-
 namespace TextureFormat{
 
 
@@ -110,8 +106,7 @@ inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
 inline constexpr u32 s_UastcBytesPerBlock = 16u;
 inline constexpr u32 s_TextureCubeFaceCount = 6u;
-// HDR alpha transport reserves the fully opaque UNORM8 value for the explicit opaque mode.
-// Constant-alpha payloads therefore carry the inclusive [0, 254] range and never alias the opaque-mode sentinel.
+// UNORM8 255 is reserved for opaque mode; constant-alpha payloads use [0, 254].
 inline constexpr u32 s_OpaqueAlphaUnorm8 = 255u;
 inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
 

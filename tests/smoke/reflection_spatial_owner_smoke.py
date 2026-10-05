@@ -15,7 +15,6 @@ from reflection_roughness_reference import mirror_cells
 from smoke_volume_identity import file_identity
 from window_capture_smoke import SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_PHASE = "Phase"
 LIT_INDEX = "index"
 LIT_RADIUS = "radius"

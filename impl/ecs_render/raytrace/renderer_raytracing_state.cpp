@@ -219,9 +219,7 @@ void RendererRayTracingState::invalidateResources(){
     // Accumulator target is recreated on invalidation; re-seed the EMA.
     m_causticAccumulatorInitialized = false;
     m_causticTemporalReuseFrameCount = 0u;
-    // Reset the SW temporal phase so the sequence restarts deterministically.
     m_swCausticFrameIndex = 0u;
-    // Reset the HW temporal phase likewise.
     m_hwCausticFrameIndex = 0u;
     // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
     m_surfelSpawnBindingLayout.reset();

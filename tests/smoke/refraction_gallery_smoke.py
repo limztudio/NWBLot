@@ -16,7 +16,6 @@ from window_capture_smoke import (
     SKIP_EXIT_CODE, SmokeFailure, analyze_rgb_rows, read_bmp_24_rows,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_SINGLE = "single"
 LIT_GEOMETRY = "geometry"
 LIT_AUTOMATIC = "automatic"

@@ -132,7 +132,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
 
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         meshResources.blasBuildPending = false;
-        // The accepted Shadow Preparation state handoff now owns this generation's native final state.
+        // Accepted Shadow Preparation publishes this generation's native final state.
         meshResources.blasBackingFresh = false;
         meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
         meshResources.blasBuildAccepted = true;

@@ -162,9 +162,6 @@ void CommandList::clearTextureBoxInt(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Color clear implementation
-
-
 void CommandList::clearColorTexture(
     Texture& texture,
     TextureSubresourceSet subresources,

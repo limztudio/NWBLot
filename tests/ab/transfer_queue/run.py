@@ -29,7 +29,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from profile_probe import ProfileFailure, capture_vulkan_summary, parse_result  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_ROUTE = "--route"
 LIT_RESOURCE = "--resource"
 LIT_ADAPTER_INDEX = "--adapter-index"

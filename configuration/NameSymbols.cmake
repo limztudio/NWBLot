@@ -8,9 +8,8 @@ function(nwb_configure_name_symbols)
     add_compile_definitions(NWB_BUILDMODE=1 GLB_BUILD_SYMBOLS=1)
 endfunction()
 
-# Build and run an isolated NWB_BUILDMODE variant, then copy its Name sidecars into the release output.
-# Run on demand because GUI capture needs a display:
-#   cmake --build <release-build-dir> --config <cfg> --target nwb_namesym
+# Capture Name sidecars on demand; GUI workloads need a display.
+# cmake --build <release-build-dir> --config <cfg> --target nwb_namesym
 function(nwb_add_name_symbol_target)
     # The capture build must not recursively create another capture target.
     if(NWB_BUILDMODE)
@@ -43,7 +42,7 @@ function(nwb_add_name_symbol_target)
     set(_namesym_buildmode_bin_dir "${PROJECT_SOURCE_DIR}/__exec/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym/$<CONFIG>")
     set(_namesym_release_dest "${NWB_OUTPUT_ROOT}/$<CONFIG>")
 
-    # A headless cook captures pipeline and asset names using a separate output/cache tree.
+    # Isolate headless pipeline/asset capture from release output and caches.
     set(_namesym_cook_out "${_namesym_build_dir}/namesym_cook/res")
     set(_namesym_cook_cache "${PROJECT_SOURCE_DIR}/__build_obj/c/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym")
     set(_namesym_cook_run "${PROJECT_SOURCE_DIR}/pipeline/launch.py|||--skip-build|||--tool-directory|||${_namesym_buildmode_bin_dir}|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")

@@ -162,9 +162,6 @@ using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Graphics allocator
-
-
 class GraphicsAllocator : NoCopy{
 public:
     explicit GraphicsAllocator(Alloc::GlobalArena& objectArena);

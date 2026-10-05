@@ -46,7 +46,7 @@ SIMDVector CsgDeformWallBuilder::UpAxisVec(){
 }
 
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
-    // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise; the complement runs on lanes too.
+    // Preserve first*blend + second*(1-blend) operation order.
     const SIMDVector blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
     const SIMDVector otherVec = VectorSubtract(s_SIMDOne, blendVec);
     const SIMDVector firstPosition = LoadFloat(first.position);
@@ -77,7 +77,6 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
         StoreFloat(normalized, vertex.normal);
     }
     else{
-        // SIMD lanes own the fallback store; per-lane scalar writes stay out of the normalize path.
         StoreFloat(VectorSelect(LoadFloat(vertex.normal), CsgDeformWallBuilder::UpAxisVec(), s_SIMDMask3), vertex.normal);
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
@@ -113,7 +112,7 @@ bool CsgDeformWallBuilder::SplitEdgeVertex(
     const f32 denominator = firstDistance - secondDistance;
     if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
         return false;
-    // firstWeight lands on second when secondDistance is zero; abs/divide/saturate all run on SIMD lanes.
+    // A zero secondDistance selects the second endpoint.
     const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(
         CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
     ));

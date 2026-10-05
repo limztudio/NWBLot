@@ -12,7 +12,6 @@ import sys
 from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, compare_frames
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_REFERENCE_GRID9 = "reference_grid9"
 LIT_BOXES = "boxes"
 LIT_EVERY_FRAME = "every_frame"

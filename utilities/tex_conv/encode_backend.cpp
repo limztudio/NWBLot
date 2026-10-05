@@ -79,8 +79,7 @@ void ResetPayload(
     return true;
 }
 
-// Appends one raw mip in the on-disk canonical order: plane 0 through planeCount-1. Basis emits source-major slices,
-// so this deliberately uses m_source_file_index rather than the physical backend ordering.
+// Basis slices are source-major; m_source_file_index restores on-disk plane order.
 
 
 [[nodiscard]] bool AppendCanonicalMip(

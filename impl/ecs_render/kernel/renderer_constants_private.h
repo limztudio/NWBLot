@@ -55,9 +55,7 @@ inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::T
 inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
 inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.f, 1.f, 1.f, 1.f);
 
-// Shared float-texture clear tail for the shadow-visibility all-lit and surfel-irradiance record callbacks:
-// capture the clear for command-IR replay, then issue the native clear. The caller owns destination lookup,
-// render-pass gating, and clearDesc construction.
+// Capture the clear before native recording; callers own destination lookup and render-pass gating.
 [[nodiscard]] bool RecordFloatTextureClear(
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,

@@ -11,7 +11,6 @@ import stress_cpu_timing as diagnostic
 import stress_timing_smoke as smoke
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_WINDOW_80_560_100_580_30 = "window 80 560 100 580 30"
 LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 renderer.frame"
 LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 580 560 579 570 572 3 0.009 0.003 0.003 0.003"

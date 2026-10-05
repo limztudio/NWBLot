@@ -222,7 +222,6 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         }
         GroupMemoryBarrierWithGroupSync();
 
-        // Skip all-zero tiles.
         if(s_NwbCausticResolveTileActive == 0u){
             return float4(0.0, 0.0, 0.0, 1.0);
         }
@@ -257,7 +256,6 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
     }
 #endif
 
-    // Large dilations access textures directly.
     if(!inBounds)
         return float4(0.0, 0.0, 0.0, 1.0);
     if(!nwbCausticResolveValidAtHalf(texel)){
@@ -303,7 +301,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint stage = NWB_CAUSTIC_RESOLVE_COMPILED_STAGE;
 #endif
 
-    // Edge-aware upsample to the full-resolution irradiance buffer.
     if(stage == NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)

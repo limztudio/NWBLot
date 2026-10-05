@@ -71,8 +71,7 @@ function(nwb_apply_debug_symbols target)
 endfunction()
 
 function(nwb_configure_optimization)
-    # Optimization belongs to the build configuration, not to an engine-target helper. Keeping it on the root
-    # directory makes every compiled C/C++ target, including vendored source libraries, inherit the same policy.
+    # Root-directory optimization applies to every C/C++ target, including vendor libraries.
     if(NWB_COMPILER_FRONTEND_MSVC)
         add_compile_options(
             $<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<CONFIG:dbg>>:/Od>
@@ -155,9 +154,8 @@ function(nwb_apply_codegen target)
             -Wall
             -Wextra
             $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-            # Crash callstack capture unwinds via .eh_frame (glibc backtrace), so asynchronous unwind tables must
-            # exist in every config: a fault can interrupt mid-instruction, and final builds omit the frame
-            # pointer so the unwinder cannot rely on a frame-pointer chain.
+            # Crash unwinding needs asynchronous .eh_frame tables for faults between instructions,
+            # including fin builds that omit frame pointers.
             -fasynchronous-unwind-tables
             $<$<CONFIG:dbg>:-g>
             $<$<CONFIG:dbg>:-fno-omit-frame-pointer>

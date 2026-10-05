@@ -15,7 +15,6 @@ import sys
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_OFFSCREEN = "offscreen"
 LIT_MOVED = "moved"
 LIT_OPAQUE_GLASS = "opaque_glass"

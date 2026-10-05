@@ -13,11 +13,9 @@ if(TARGET rgd_backend)
 endif()
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
-    # Object-cache paths contain long content hashes. Keep this root compact so Windows
-    # builds remain below the legacy MAX_PATH limit.
+    # Keep cache roots short enough for Windows MAX_PATH, including content hashes.
     set(_nwb_smoke_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
 
-    # Capture points sample the early, mid, and late states of animated smoke scenes.
     set(_nwb_smoke_capture_early_settle_seconds "0.75")
     set(_nwb_smoke_capture_mid_settle_seconds "2.0")
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
@@ -147,8 +145,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
 
-        # Opt-in target-hardware smoke. It intentionally shares the transparent-multi scene and cooked assets, but
-        # turns on frame-lagged lighting at startup and exposes an F1 transition back to normal current-frame lighting.
+        # F1 exercises frame-lagged lighting teardown and re-bootstrap on the shared scene.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
         target_sources(nwb_frame_lagged_async_lighting_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
@@ -618,9 +615,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         unset(_nwb_transparent_multi_asset_inputs)
 
         if(TARGET nwb_tex_conv)
-            # The texture smoke deliberately generates its PNG and .tex pair under the per-config runtime root. That
-            # keeps its source data deterministic, exercises tex_conv in the normal asset-cooking flow, and avoids
-            # committing opaque generated UASTC blocks to the repository.
+            # Generate deterministic PNG/.tex fixtures per configuration to exercise tex_conv during cooking.
             set(_nwb_texture_smoke_runtime_root "${CMAKE_BINARY_DIR}/Testing/texture_smoke_runtime/$<CONFIG>")
             set(_nwb_texture_smoke_generated_asset_root "${_nwb_texture_smoke_runtime_root}/generated_project/assets")
             set(_nwb_texture_smoke_generated_texture_directory "${_nwb_texture_smoke_generated_asset_root}/textures")
@@ -1058,10 +1053,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             TIMEOUT ${_nwb_skinning_culling_benchmark_ctest_timeout_seconds}
         )
 
-        # Skinned-glass caustic validation: a SKINNED refractor whose skeleton pose deforms every frame, over an opaque
-        # ground under one light. Validates the per-frame skinned-normal repack (repack_normals_cs / dispatchRepackNormals)
-        # -- the RT shadow + caustic must bend on the LIVE deformed normals. Reuses the benchmark's cooked assets (same
-        # impl/assets + tests/smoke/assets cook; the body.nwb model + the new engine repack shader).
+        # Shadows and caustics must follow live deformed normals rather than bind pose.
         nwb_declare_executable(nwb_skinned_caustic_smoke)
         target_sources(nwb_skinned_caustic_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/skinned_caustic_project.cpp"
@@ -1105,10 +1097,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--reject-log-message" "failed to resolve shader"
         )
 
-        # Load-time STRESS scene: twenty spinning skinned `body` characters (10 transparent + 10 opaque) inside a coloured
-        # open-front GI box, under a directional + a point light. Reuses the benchmark's cooked assets (body model +
-        # transparent_multi glass/ground materials); exercises per-frame scene updates and hardware opaque/transparent shadows across two
-        # shadowed lights.
+        # The crowd stresses scene updates and opaque/transparent shadows across two lights.
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
@@ -1255,10 +1244,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             ENVIRONMENT "NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE=1;NWB_STRESS_TEST_SPIN_ANGLE=0.6"
         )
 
-        # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
-        # assets; the synchronous baseline explicitly disables the default async-lane request. The runner under
-        # tests/ab/async_shadow_m4/ validates that the normal request resolves to a distinct queue rather than
-        # accepting the Graphics queue route as an async result.
+        # Both M4 arms share assets; the runner requires a distinct Compute queue for the async arm.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
@@ -1306,8 +1292,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
         add_dependencies(nwb_async_shadow_m4_async_benchmark nwb_skinning_culling_benchmark_assets)
 
-        # FLICKER-REPRO scene: opaque and glass `body` characters on an opaque ground plane under directional + point
-        # lights, arrow-key-spun. Reuses the benchmark's cooked assets (body model + ground material).
         nwb_declare_executable(nwb_flicker_test_smoke)
         target_sources(nwb_flicker_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/flicker_test_project.cpp"
@@ -1333,9 +1317,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             ENVIRONMENT "NWB_FLICKER_TEST_SPIN_ANGLE=0.6"
         )
 
-        # Dedicated SOFT-SHADOW scene: opaque and glass `body` characters on an opaque ground plane under directional,
-        # point, and spot lights with physical source sizes. It exercises their tinted penumbras, with arrow-key yaw
-        # control for a crawl check. Reuses the benchmark's cooked assets (body model + ground material).
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"

@@ -19,6 +19,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Separate major file sections with the 128-slash separator and optional section comments.
   - Keep exactly two blank lines before and after every file-scope separator line, including banner-adjacent separators (after the banner separator, before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
   - Keep comments on one line when the full sentence still scans easily; do not hard-wrap a short comment into two lines.
+  - Use comments for non-obvious intent, contracts, ownership, lifetimes, layouts, numerical assumptions, or external API constraints. Remove code narration, redundant headings, tutorial annotations, and obsolete change history; compact repeated explanations.
+  - Preserve required banners, license notices, machine-readable/tooling directives, and comments that identify regression scenarios.
 - String literals that embed the file separator for bounds searches must use exactly the same 128-slash run; do not lengthen or shorten the literal.
 - Designated initializers must follow struct declaration order (e.g. `GpuTimingSample`: `sourceFrameIndex`, then `scopeName`, then `attribution`, then `comparableRange`, then `physicalQueue`, then `published`).
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.

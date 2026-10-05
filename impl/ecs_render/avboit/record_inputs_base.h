@@ -28,7 +28,6 @@ struct DeferredFrameTargets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared AVBOIT record inputs core. Occupancy, extinction, and accumulation share these fields and differ only in their effect-specific targets, tasks, timing slots, and upload flags.
 struct AvboitRecordInputsBase{
     DeferredFrameTargets* targets = nullptr;
     Core::GpuGraphResourceId albedo;
@@ -74,7 +73,7 @@ struct AvboitRecordInputsBase{
         static_cast<void>(arena);
     }
 
-    // Shared generated-geometry reuse guard for the occupancy/extinction/accumulation record builders. Reused geometry requires the regular emulation plan and forbids the CSG/shared plans.
+    // Reuse requires the regular emulation plan and excludes CSG/shared plans.
     [[nodiscard]] bool generatedGeometryReusePlansValid()const noexcept{
         const bool generatedGeometryReused = reusedGeometryProducer.valid();
         if(

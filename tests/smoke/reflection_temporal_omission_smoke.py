@@ -16,7 +16,6 @@ import tempfile
 import reflection_benchmark as benchmark
 from renderer_ab_benchmark import binary_identity, runtime_identity
 
-# Shared literals (no inline hardcodes below this block).
 LIT_VARIANT = "variant"
 LIT_UTF_8 = "utf-8"
 LIT_REPORTS = "reports"

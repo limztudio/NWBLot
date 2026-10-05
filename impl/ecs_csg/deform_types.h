@@ -20,10 +20,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared POD and deterministic thresholds for deformable CSG editing.
-
-
-// Preview and commit observe one epsilon, one edge-cache rule, and one cap orientation rule through these constants, so viability always agrees.
 inline constexpr f32 s_DefaultDistanceEpsilon = 0.00001f;
 inline constexpr Float4 s_DefaultShapeParameter = Float4(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -113,7 +109,7 @@ static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Single source of truth for rebuild thresholds. Every domain class shares these so preview and commit observe identical epsilon, capacity, and seam rules.
+// Shared epsilon, capacity and seam thresholds keep preview and commit viability equal.
 inline constexpr f32 s_MinEpsilon = 0.0000001f;
 inline constexpr f32 s_SplitDenominatorEpsilon = 0.0000001f;
 inline constexpr f32 s_NormalizeEpsilon = 0.000001f;

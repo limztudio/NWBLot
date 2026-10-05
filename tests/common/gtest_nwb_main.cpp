@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared gtest entry: common init once, then all registered cases. Own entry point (not gtest_main) for startup.
-
-
 #include <cstdlib>
 #include <gtest/gtest.h>
 
@@ -88,8 +85,7 @@ static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
 
     int googleTestArgc = static_cast<int>(argc);
     ::testing::InitGoogleTest(&googleTestArgc, argv);
-    // Common initialization starts worker threads before individual suites run.  Re-exec death tests so GoogleTest
-    // never forks that live threaded runtime; v1.18 diagnoses the unsafe fast-style fork and can skip its death body.
+    // Re-exec death tests because common initialization starts workers before suites run.
     GTEST_FLAG_SET(death_test_style, __hidden_gtest_nwb_main::s_ThreadsafeDeathTestStyle.data());
     return RUN_ALL_TESTS();
 }

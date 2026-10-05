@@ -49,8 +49,7 @@ struct MeshSkinInfluenceEqual{
     }
 };
 
-// Keep imported joint matrices in the project's unaligned affine storage type so the importer can cross the
-// persistent-storage/SIMD boundary through LoadFloat()/StoreFloat() without rebuilding rows by hand.
+// Unaligned affine storage crosses the importer's persistent/SIMD boundary through LoadFloat()/StoreFloat().
 using JointMatrix = Float34U;
 static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixElementCount);
 static_assert(alignof(JointMatrix) == alignof(f32));

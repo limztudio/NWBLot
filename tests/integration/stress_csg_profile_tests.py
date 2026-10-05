@@ -11,7 +11,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke  # noqa: E402
 from stress_timing_smoke_tests import shadow_record, valid_log  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_N = "\n"
 LIT_NONE = "none"
 LIT_NWB_STRESS_CSG_PROFILE = "NWB_STRESS_CSG_PROFILE"

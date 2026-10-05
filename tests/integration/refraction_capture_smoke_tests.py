@@ -10,7 +10,6 @@ from refraction_capture_smoke import (  # noqa: E402
     FOREGROUND_REGION, GLASS_REGION, SmokeFailure, compare_refraction_frames, region_pixels,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DID_NOT_DISPLACE = "did not displace"
 LIT_MAIN = "__main__"
 

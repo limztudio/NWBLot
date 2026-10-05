@@ -5,7 +5,6 @@ import re
 
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_HALF = "half"
 
 

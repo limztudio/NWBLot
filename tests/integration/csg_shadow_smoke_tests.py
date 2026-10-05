@@ -15,7 +15,6 @@ from csg_shadow_reference import (  # noqa: E402
 from csg_shadow_smoke import capture_environment, parse_args  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DIRECTIONAL = "directional"
 LIT_CAMERA_SHIFT = "camera_shift"
 LIT_POINT = "point"

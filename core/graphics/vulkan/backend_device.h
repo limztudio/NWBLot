@@ -29,9 +29,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Device Implementation
-
-
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend DeviceHandle CreateDevice(const DeviceDesc& desc);
     friend class ::NWB::Core::GpuTaskScheduler;

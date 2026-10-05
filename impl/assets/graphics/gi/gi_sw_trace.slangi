@@ -72,8 +72,6 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Heap-selected SW scene records
-
 // The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers.
 // This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
 #pragma warning(push)

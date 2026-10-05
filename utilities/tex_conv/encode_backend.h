@@ -67,7 +67,6 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 [[nodiscard]] bool EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource, TexturePayload& outPayload);
 [[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims);
 [[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd);
-// Shared plane-loader policies: LDR decodes 8-bit images, HDR decodes float images.
 struct LdrPlaneLoader{
     using Plane = basisu::image;
     static constexpr TStringView s_DecodeFailureLabel = GLB_TEXT("tex_conv: failed to decode input image '{}'.");
@@ -118,7 +117,6 @@ template<typename PlaneLoader, typename PlaneVector>
     }
     return true;
 }
-// Shared volume-mip prologue: derive the next-level dims from the source planes and size the output planes.
 template<typename PlaneVector>
 [[nodiscard]] bool PrepareVolumeMipTargets(
     const PlaneVector& sourcePlanes,

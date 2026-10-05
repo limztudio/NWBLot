@@ -73,7 +73,6 @@ public:
     [[nodiscard]] const Name& virtualPath()const{ return m_virtualPath; }
 
 public:
-    // Shared "virtual path is empty" guard used by loadBinary/validatePayload/serialize entry points.
     [[nodiscard]] bool checkVirtualPath(const TStringView failureContext)const{
         if(virtualPath())
             return true;
@@ -107,7 +106,6 @@ protected:
     {}
 };
 
-// Shared checked downcast for typed assets: verifies the stored asset type before casting.
 template<typename AssetT>
 [[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset){
     if(!asset || asset->assetType() != AssetT::AssetTypeName())

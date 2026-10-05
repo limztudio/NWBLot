@@ -22,7 +22,6 @@ from window_capture_smoke import (
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_OPAQUE = "opaque"
 LIT_HYBRID = "hybrid"
 LIT_RUNTIME = "runtime"

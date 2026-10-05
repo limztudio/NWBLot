@@ -245,9 +245,6 @@ void CommandList::copyTexture(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Staging texture transfer preparation
-
-
 bool CommandList::validateStagingTextureCopyResources(
     StagingTexture& stagingTexture,
     Texture& texture,

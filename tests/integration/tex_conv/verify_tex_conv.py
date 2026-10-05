@@ -13,7 +13,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "common"))
 
 from png_fixture import write_png_rows  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_ASCII = "ascii"
 LIT_X00 = b"\x00"
 LIT_COMPRESSION = "compression"

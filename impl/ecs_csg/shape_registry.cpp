@@ -200,7 +200,7 @@ template<typename ParameterT>
     return ValidPlaneParameters(normalDistance);
 }
 
-[[nodiscard]] bool PlaneBounds( // beginner: Loads parameter storage once into pure-SIMD PlaneBoundsCore.
+[[nodiscard]] bool PlaneBounds(
     const SIMDMatrix& shapeToWorld,
     const u8* parameterBytes,
     const usize parameterByteSize,

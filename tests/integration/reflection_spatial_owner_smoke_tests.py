@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from reflection_spatial_owner_smoke import (GPU_DEBUG_MARKERS, SELECTIONS, compare_images, records, validate_gpu_debug, validate_owner_evidence)
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_SEQUENCE1 = "sequence1"
 LIT_N = "\n"
 LIT_FRESH = "fresh"

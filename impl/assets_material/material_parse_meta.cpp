@@ -640,9 +640,7 @@ bool ParseMaterialMeta(
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Material meta"))
         return false;
 
-    // Derive the material's virtual path as readable text (stored verbatim; the cook builds generated-shader file
-    // paths / identities from it, and the framework dedups by the Name it hashes to via ToCookEntryName). Validate
-    // it forms a valid Name before storing.
+    // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
     ScratchString derivedVirtualPath(scratchArena);
     if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, derivedVirtualPath))
         return false;

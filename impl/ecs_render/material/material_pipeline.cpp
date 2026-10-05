@@ -474,7 +474,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
-        // The unchanged shared mesh_compute program remains the material-independent generated-geometry fallback.
+        // The shared mesh_compute program is independent of authored materials.
         resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
             && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
             && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant

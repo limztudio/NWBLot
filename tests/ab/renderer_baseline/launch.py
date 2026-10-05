@@ -24,7 +24,6 @@ sys.path.insert(0, str(REPO))
 import launcher as ROOT_LAUNCHER  # noqa: E402
 from profiles import get_profile, profile_names  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_ON = "ON"
 LIT_COZTER = ".cozter"
 LIT_OUT = "out"

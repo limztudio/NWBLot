@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Dict, Iterable
 
-# Shared literals (no inline hardcodes below this block).
 LIT_UTF_8 = "utf-8"
 
 

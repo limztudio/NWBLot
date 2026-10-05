@@ -375,9 +375,6 @@ bool BackendContext::pickPhysicalDevice(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Adapter enumeration
-
-
 bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
     VkResult res = VK_SUCCESS;
 

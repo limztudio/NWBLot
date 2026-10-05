@@ -593,7 +593,6 @@ Device::Device(const DeviceDesc& desc)
     }
 
 
-    // Initialize required global descriptor-buffer segments.
     if(descriptorBufferStartupReady){
         if(!m_descriptorBufferManager.initialize()){
             NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Required descriptor-buffer manager initialization failed."));

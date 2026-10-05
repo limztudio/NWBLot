@@ -13,7 +13,6 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import compiler_statistics_diagnostic as diagnostic
 
-# Shared literals (no inline hardcodes below this block).
 LIT_TYPE = "type"
 LIT_SCHEMA = "schema"
 LIT_CAPACITY = "capacity"

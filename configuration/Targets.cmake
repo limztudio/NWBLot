@@ -55,7 +55,7 @@ endfunction()
 function(nwb_target_link_libraries_whole_archive target)
     foreach(library IN LISTS ARGN)
         target_link_libraries(${target} PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,${library}>")
-        # Transitive links can also name this archive normally; keep every occurrence whole-archive on this consumer.
+        # Force whole-archive even when a transitive link names this library normally.
         set_property(TARGET ${target} PROPERTY "LINK_LIBRARY_OVERRIDE_${library}" WHOLE_ARCHIVE)
     endforeach()
 endfunction()

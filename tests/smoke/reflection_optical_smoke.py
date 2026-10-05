@@ -17,7 +17,6 @@ from reflection_smoke import capture_environment, parse_statistics, validate_fra
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DUPLICATE_IDENTICAL = "duplicate_identical"
 LIT_DUPLICATE_GROUP = "duplicate_group"
 LIT_DUPLICATE_REVERSE = "duplicate_reverse"

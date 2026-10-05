@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Transparent smoke surface hook fragment. Demonstrates a per-material color transform expressed as a hook (not
-// a compile-time variant): the base color is square-root transformed and warm-tinted. The cook wraps it with the
-// engine pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader.
 #include "smoke_material_color.slangi"
 
 
@@ -17,16 +14,8 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const half4 tinted = half4(surface.base_color * runtime.color_tint);
     const half3 baseColor = nwbSmokeMaterialVertexColor(tinted.rgb);
-    // ONE authored transparency, two consistent consumers: `density` (the tint's ALPHA channel) = how solid the glass
-    // is, and `tint` (the tint RGB) = the colour its shadow keeps when solid. nwbMakeGlassSurface seeds BOTH from them
-    // -- renderCoverage (the AVBOIT opacity all three passes read) = density, and shadowAbsorptionTint =
-    // lerp(white, tint, density) -- so a solid glass is opaque on screen AND casts a matching coloured shadow. A bright
-    // tint means a light glass and a faint shadow; pick a DARKER/more-saturated tint for a darker shadow. The ENGINE
-    // still integrates the shadow over the true entry->exit volume path (per-crossing Fresnel from refractionIor +
-    // signed Beer-Lambert), since only the trace sees both faces. To DELIBERATELY decouple the look from the shadow,
-    // set result.renderCoverage after this call --
-    // a visible, intentional exception. The base color stays the rasterized appearance (the G-buffer discards the
-    // optical params + coverage).
+    // Raster coverage and optical absorption share tint/density; tracing applies Fresnel and Beer-Lambert
+    // across the actual volume thickness.
     return nwbMakeGlassSurface(baseColor, inNormal, NWB_SURFACE_IOR_GLASS, tinted.rgb, tinted.a);
 }
 

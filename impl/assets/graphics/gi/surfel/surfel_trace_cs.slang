@@ -2,9 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel trace with the software BVH backend. The shared surfel body is in surfel_trace_common.slangi.
-
-
 #include "../gi_sw_trace.slangi"
 #include "surfel_trace_common.slangi"
 

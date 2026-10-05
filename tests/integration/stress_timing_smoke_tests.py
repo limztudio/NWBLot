@@ -13,7 +13,6 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
 
-# Shared literals (no inline hardcodes below this block).
 LIT_QUARTER = "quarter"
 LIT_REFERENCE_THREE = "reference_three"
 LIT_AUTOMATIC = "automatic"

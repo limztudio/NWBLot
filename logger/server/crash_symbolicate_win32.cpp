@@ -409,8 +409,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
     outReport += "\n[callstack]\n";
 
-    // Prefer the client-captured backtrace (reliable in-process unwind) resolved against the dump's module
-    // map; only fall back to a server-side StackWalk64 when the client shipped no frames.
+    // Resolve client frames against the dump's module map; unwind server-side only when no frames were supplied.
     if(AppendClientCallstack(arena, symbolProcess, packageDirectory, outReport)){
         s_CurrentDumpMemoryReader = nullptr;
         SymCleanup(symbolProcess);

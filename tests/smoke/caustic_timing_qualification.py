@@ -19,7 +19,6 @@ from types import SimpleNamespace
 from smoke_volume_identity import file_identity
 from window_capture_smoke import STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, read_bmp_24_rows, validate_expected_log_text
 
-# Shared literals (no inline hardcodes below this block).
 LIT_GPUDBG = "--gpudbg"
 LIT_GPUDBG_2 = "--gpudbg="
 LIT_POPULATED = "populated"

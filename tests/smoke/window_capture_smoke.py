@@ -14,7 +14,6 @@ import sys
 import tempfile
 import time
 
-# Shared literals (no inline hardcodes below this block).
 LIT_N_127_0_0_1 = "127.0.0.1"
 LIT_RB = "rb"
 LIT_UTF_8 = "utf-8"
@@ -262,10 +261,7 @@ def create_windows_user32():
 
 
 def request_windows_graceful_exit(pid):
-    # Post WM_CLOSE to every top-level window the process owns. This drives the app's normal shutdown
-    # (WM_CLOSE -> DestroyWindow -> WM_DESTROY -> PostQuitMessage -> message loop returns -> main returns), so its
-    # graceful-exit work runs -- notably the NWB_BUILDMODE Name-symbol sidecar write (WriteDefaultFile), which a hard
-    # TerminateProcess would skip. Returns True if at least one window was signalled.
+    # WM_CLOSE runs normal shutdown and writes name-symbol sidecars; forced termination skips it.
     user32 = create_windows_user32()
     wm_close = 0x0010
     targets = []
@@ -285,9 +281,7 @@ def request_windows_graceful_exit(pid):
 
 
 def request_linux_graceful_exit(window_handle):
-    # Run the shared X11 helper instead of importing it: importing the helper opens libX11 eagerly, while the capture
-    # smoke must still be able to fall back to SIGTERM when no X server or libX11 is available. The helper locates the
-    # exact captured top-level window and posts WM_DELETE_WINDOW, which reaches the app's normal shutdown path.
+    # Run the helper separately so missing X11 libraries cannot prevent fallback termination.
     if window_handle is None:
         return False
 
@@ -1943,9 +1937,7 @@ def launch_logserver(args, executable, env):
         log_pattern = standalone_log_pattern(executable)
         return None, None, log_directory, snapshot_log_files(log_directory, log_pattern), log_pattern
 
-    # The process runs from the test runtime directory, so resolve an explicitly supplied relative path before Popen
-    # changes cwd. CTest supplies an absolute path, while direct smoke-script users commonly supply a repository-relative
-    # path.
+    # Resolve relative executable paths before Popen changes to the runtime directory.
     logserver = Path(args.logserver_executable).resolve() if args.logserver_executable else executable_sibling(executable, LIT_LOGSERVER)
     if not logserver:
         write_status("INFO: logserver executable was not found; using standalone loader logs")

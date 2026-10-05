@@ -22,7 +22,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     add_test(NAME nwb_csg_shadow_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke_tests.py"
     )
-    # Keep the existing CTest name stable while its process-and-file capture coverage lives with integration tests.
     add_test(
         NAME nwb_testbed_window_capture_unit
         COMMAND

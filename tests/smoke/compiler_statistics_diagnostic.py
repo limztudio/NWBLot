@@ -10,7 +10,6 @@ import sys
 import renderer_gather_benchmark as gather
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_GRAPH_GENERATION = "graph_generation"
 LIT_PLAN_GENERATION = "plan_generation"
 LIT_DEVICE_GENERATION = "device_generation"

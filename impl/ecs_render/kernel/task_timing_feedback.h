@@ -172,8 +172,7 @@ private:
 
 namespace ECSRenderDetail{
 
-// Shared task-record prologue: open a timing sample for the current task when feedback plus scope are present.
-// The caller owns the recording scope plus dispatch and resets the attribution when dispatch skips recording.
+// Callers own the recording scope and clear attribution when dispatch records nothing.
 [[nodiscard]] Core::GpuTimingSampleAttribution BeginTaskTimingSample(
     RendererTaskTimingFeedback* timingFeedback,
     const Core::GpuTimingScopeDefinition* timingScope,

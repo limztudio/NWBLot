@@ -26,7 +26,6 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred BXDF dispatch.
 static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
@@ -134,8 +133,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
         return false;
 
-    // Build a dense id -> bxdf-source table from the (already assigned) materials. Each unique bxdf appears at
-    // exactly one id; materials sharing a bxdf share the slot.
+    // Each assigned BXDF id maps to one source; materials sharing that source share the slot.
     u32 maxId = 0u;
     bool anyBxdf = false;
     for(const MaterialCookEntry& entry : materialEntries){
@@ -227,7 +225,6 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surface dispatch (per-material surface id + generated dispatch module)
 static constexpr AStringView s_ShadowSurfaceFunctionMacro = "nwbMaterialSurface";
 static constexpr AStringView s_ShadowSurfaceModelPrefix = "nwbShadowSurfaceModel";
 static constexpr AStringView s_ShadowSurfaceWrapperPrefix = "nwbShadowSurfaceWrapper";
@@ -477,10 +474,8 @@ bool EmitShadowSurfaceDispatchModuleImpl(
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow surface dispatch"))
         return false;
 
-    // Build a dense surfaceDispatchId -> (surface source, .bind interface) table from the (already
-    // assigned) materials. Each unique surface appears at exactly one id; materials sharing a surface share the
-    // slot. The interface is carried alongside because the surface hook reads its typed `.bind` accessors by
-    // fixed name -- materials sharing a surface therefore share the interface.
+    // Each surface id maps to one source and .bind interface; shared surfaces require the same interface
+    // because their hooks use fixed accessor names.
     u32 maxId = 0u;
     bool anySurface = false;
     for(const MaterialCookEntry& entry : materialEntries){

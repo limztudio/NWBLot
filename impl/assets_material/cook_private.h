@@ -122,8 +122,6 @@ template<typename ArenaT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared material metadata, validation, and generated-source helpers.
-
 bool ResolveMaterialBindDependencyInterface(
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,

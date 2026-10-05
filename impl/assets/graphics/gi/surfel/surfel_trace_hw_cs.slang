@@ -7,7 +7,6 @@
 #endif
 #define NWB_BINDLESS_TLAS 1
 
-// Surfel trace with the hardware RayQuery backend. The shared surfel body is in surfel_trace_common.slangi.
 
 
 #include "../gi_hw_trace.slangi"

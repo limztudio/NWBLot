@@ -441,8 +441,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
-        // Deferred lighting now samples every G-buffer attachment from AsyncCompute after the Graphics AVBOIT
-        // packet. Keep the color attachment concurrent just like normal/world/depth.
+        // AsyncCompute lighting samples every G-buffer attachment after Graphics AVBOIT; keep their sharing concurrent.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_albedo")
         .setClearValue(ECSRenderDetail::s_ClearColor)

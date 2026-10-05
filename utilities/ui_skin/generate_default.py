@@ -67,7 +67,7 @@ ICONS = [
     ("white", "white"),
 ]
 
-# Linear RGB and straight alpha, in UiSkinColorRole order. These are the current engine palette defaults.
+# Linear RGB and straight alpha, in UiSkinColorRole order.
 COLOR_ROLES = [
     {"name": "text.normal", "rgba": [0.92, 0.94, 0.98, 1.0]},
     {"name": "text.disabled", "rgba": [0.48, 0.50, 0.55, 1.0]},
@@ -166,7 +166,7 @@ def generate(directory: Path) -> None:
     png += png_chunk(b"IHDR", struct.pack(">IIBBBBB", ATLAS_SIZE, ATLAS_SIZE, 8, 6, 0, 0, 0))
     png += png_chunk(b"IDAT", zlib.compress(rows, 9)) + png_chunk(b"IEND", b"")
     (directory / "source.png").write_bytes(png)
-    # Semantic aliases reuse artwork; they never allocate another tile or texture.
+    # Semantic aliases share atlas artwork.
     parts = {region["name"]: region for region in regions}
     for name, source in (("list.background", "edit.normal"), ("list.row.normal", "button.normal"),
         ("list.row.disabled", "button.disabled"), ("scroll.track", "panel.normal"), ("scroll.thumb", "button.normal"),

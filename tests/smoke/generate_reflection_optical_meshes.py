@@ -6,7 +6,6 @@ from pathlib import Path
 
 from generate_refraction_gallery_meshes import Mesh, serialize, validate
 
-# Shared literals (no inline hardcodes below this block).
 LIT_MAIN = "__main__"
 LIT_UTF_8 = "utf-8"
 LIT_STORE_TRUE = "store_true"

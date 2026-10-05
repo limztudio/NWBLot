@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bindings 4 and 6 stay for archived variants; active consumers use the global heap.
+// Scene bindings retain their ABI positions; active consumers use the global heap.
 #define NWB_SCENE_SHADING_DEFAULT_SET 0
 #define NWB_SCENE_SHADING_DEFAULT_BINDING 4
 

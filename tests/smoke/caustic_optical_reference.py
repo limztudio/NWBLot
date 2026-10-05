@@ -11,7 +11,6 @@ import re
 
 from reflection_optical_reference import add, cross, dot, half, normalized, scale
 
-# Shared literals (no inline hardcodes below this block).
 LIT_UTF_8 = "utf-8"
 
 

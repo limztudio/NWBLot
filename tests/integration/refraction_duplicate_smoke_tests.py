@@ -14,7 +14,6 @@ from refraction_duplicate_smoke import (  # noqa: E402
 )
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DOES_NOT_MATCH = "does not match"
 LIT_NOT_DISTINGUISHABLE = "not distinguishable"
 LIT_AUTOMATIC = "automatic"

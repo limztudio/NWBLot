@@ -161,8 +161,11 @@ TEST(VulkanAdapterSelection, PreflightsFullFeatureContractBeforeDiscretePreferen
     ));
     const AStringView source(adapterSource.data(), adapterSource.size());
     const usize pickBegin = source.find("bool BackendContext::pickPhysicalDevice(){");
-    const usize pickEnd = source.find("// Adapter enumeration", pickBegin);
     ASSERT_NE(pickBegin, AStringView::npos);
+    const usize pickEnd = source.find(
+        "bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){",
+        pickBegin
+    );
     ASSERT_NE(pickEnd, AStringView::npos);
     const AStringView pick = source.substr(pickBegin, pickEnd - pickBegin);
     const usize queryOffset = pick.find("VulkanDetail::QueryPhysicalDeviceFeatureSupport(");

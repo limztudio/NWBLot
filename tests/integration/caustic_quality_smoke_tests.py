@@ -12,7 +12,6 @@ import caustic_quality_smoke as quality
 import caustic_optical_smoke as optical
 import stress_timing_smoke as stress
 
-# Shared literals (no inline hardcodes below this block).
 LIT_HARDWARE = "hardware"
 LIT_N = "\n"
 LIT_EXECUTABLE = "--executable"

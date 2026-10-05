@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surface hook fragment. Defines this material's nwbMaterialSurface(); the cook wraps it with the engine
-// pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader. Modulates a
-// procedural UV checker by the material's base color.
+// The cook combines this hook with engine pixel authoring and the material's typed .bind.
 #include "material_color.slangi"
 
 

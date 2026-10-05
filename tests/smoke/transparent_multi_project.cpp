@@ -72,16 +72,13 @@ static constexpr f32 s_DefaultDirectionalLightPitch = 0.9f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
-// Manual arrow-key scrub speed (radians/second). Slow enough that a brief tap nudges the yaw finely, while holding a
-// key still sweeps a full turn in a few seconds -- enough control to park on the exact angle an artifact appears at.
+// Manual yaw speed is in radians/second.
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr TransparentMeshRef s_TransparentShapeMesh{"project/meshes/caustic_sphere"};
 static constexpr f32 s_CausticSphereScale = 0.70f;
 #else
-// Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
-// + cone have smooth curved silhouettes while the octahedron is faceted, giving the transparent-shadow test a mix of
-// curved and hard-edged tinted occlusion without enabling the additive caustic photon pass.
+// Curved and faceted refractors exercise tinted occlusion with caustics disabled.
 static constexpr TransparentMeshRef s_TransparentLeftMesh{"project/meshes/cylinder"};
 static constexpr TransparentMeshRef s_TransparentCenterMesh{"project/meshes/octahedron"};
 static constexpr TransparentMeshRef s_TransparentRightMesh{"project/meshes/cone"};
@@ -201,8 +198,7 @@ public:
     return Float4(0.68f, s_CameraTargetY, 0.04f, 0.0f);
 }
 
-// Two static-scale OPAQUE occluders, interleaved between the transparent shapes; they orbit with the same scene
-// rotation so their HARD (hardware) shadows sweep across -- and overlap -- the colored transparent shadows.
+// Opaque occluders orbit through colored shadows to exercise their multiplicative combination.
 [[nodiscard]] static Float4 OpaqueLeftShapeBasePosition(){
     return Float4(-0.34f, s_CameraTargetY, 0.30f, 0.0f);
 }
@@ -219,7 +215,7 @@ public:
     return Vector3Rotate(basePosition, sceneRotation);
 }
 
-static void ApplyTransparentSceneTransform( // beginner: Runs pure-SIMD rotate/normalize core, Stores ECS transform once.
+static void ApplyTransparentSceneTransform(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID entity,
     const SIMDVector basePosition,
@@ -240,7 +236,7 @@ static void ApplyTransparentSceneTransform( // beginner: Runs pure-SIMD rotate/n
     return QuaternionRotationRollPitchYaw(time * 0.32f, time, time * 0.16f);
 }
 
-static void ApplyTransparentCsgSceneTransform( // beginner: Runs pure-SIMD scene core, Stores ECS/cutter storage once.
+static void ApplyTransparentCsgSceneTransform(
     NWB::Core::ECS::World& world,
     const NWB::Core::ECS::EntityID receiverEntity,
     const NWB::Core::ECS::EntityID cutterEntity,
@@ -447,7 +443,7 @@ public:
 
     virtual ~TransparentMultiSmokeProject()override{
         m_timingRenderPass.stop();
-        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
         removeFrameLaggedAsyncLightingUnfocusedPass();
@@ -458,8 +454,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        // Opt into per-pass GPU timing: flips the GPU-timing double gate (perf-session sink + graphics query
-        // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
+        // Enable both the timing sink and graphics recorder for per-pass observations.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         bool causticTiming = false;
@@ -544,9 +539,7 @@ public:
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        // Single STATIC glass sphere centered above the ground. A sphere lens CONVERGES the directional light into a
-        // focused caustic on the receiver (a faceted tetrahedron only deviates light), and a static scene lets the
-        // temporal accumulator average the jittered photon splat into a smooth crescent instead of a grid of dots.
+        // A static sphere lens lets temporal photon accumulation converge without motion artifacts.
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -604,7 +597,7 @@ public:
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentCenterMesh, // octahedron mesh, OPAQUE ground material
+            s_TransparentCenterMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.66f, 0.66f, 0.70f, 1.0f),
@@ -614,7 +607,7 @@ public:
         const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentRightMesh, // cone mesh, OPAQUE ground material
+            s_TransparentRightMesh,
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.68f, 0.62f, 1.0f),
@@ -629,9 +622,7 @@ public:
             && opaqueLeftEntity.valid() && opaqueRightEntity.valid();
 #endif
 
-        // Opaque ground-plane receiver beneath the transparent shape(s). The colored transmittance each transparent
-        // shape casts toward the directional light lands here as a tinted shadow; caustic-focused builds opt in to the
-        // additive photon pass and land that result here too.
+        // The ground receives tinted shadows and, in caustic builds, additive photon irradiance.
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -639,7 +630,7 @@ public:
             s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-            Float4(1.0f, 1.0f, 1.0f, 1.0f),    // sphere money-shot keeps the original light ground (the validated look)
+            Float4(1.0f, 1.0f, 1.0f, 1.0f), // Light ground preserves the caustic baseline.
 #else
             Float4(0.08f, 0.08f, 0.08f, 1.0f), // dark ground keeps the overlapping colored transparent shadows readable
 #endif
@@ -741,9 +732,7 @@ public:
         return true;
     }
 
-    // Diagnostic override (read once): NWB_TRANSPARENT_MULTI_SPIN_SPEED replaces the compile-time rotation speed, so a
-    // verification harness can sweep static (0) / slow / fast spin from a single build (e.g. to A/B the caustic motion-
-    // vector reprojection across a rotation). Unset / unparseable keeps s_TransparentSceneRotationSpeed.
+    // Vary spin speed from one build to compare caustic motion-vector reprojection.
     static f32 effectiveRotationSpeed(){
         static const f32 s_speed = [](){
             f32 parsed = 0.0f;
@@ -754,8 +743,7 @@ public:
         return s_speed;
     }
 
-    // Diagnostic override (read once): NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins the scene rotation to a fixed yaw (radians)
-    // for deterministic frame-exact A/B captures. Returns a non-finite sentinel when unset so the normal spin runs.
+    // Pin yaw for deterministic captures; an unset override leaves normal spin active.
     static f32 effectiveFrozenAngle(){
         static const f32 s_angle = [](){
             f32 parsed = 0.0f;
@@ -785,9 +773,6 @@ private:
         ApplyTransparentSceneTransform(*m_world, m_centerShape, LoadFloat(TransparentCenterShapeBasePosition()), sceneRotation, QuaternionIdentity());
 #endif
         ApplyTransparentSceneTransform(*m_world, m_rightShape, LoadFloat(TransparentRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
-        // Opaque occluders orbit with the same scene rotation (no-op when invalid, e.g. the caustic-sphere build); their
-        // hard hardware shadows sweep across the colored transparent shadows so the multiplicative combine is exercised
-        // continuously, not just at one static overlap.
         ApplyTransparentSceneTransform(*m_world, m_opaqueLeftShape, LoadFloat(OpaqueLeftShapeBasePosition()), sceneRotation, QuaternionIdentity());
         ApplyTransparentSceneTransform(*m_world, m_opaqueRightShape, LoadFloat(OpaqueRightShapeBasePosition()), sceneRotation, QuaternionIdentity());
     }

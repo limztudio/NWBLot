@@ -37,7 +37,7 @@ struct DeferredFrameTargets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared AVBOIT alias-free plus CSG compute-emulation record core. Occupancy, extinction, and accumulation run the same guard plus materialize plus split-timing plus draw ladder and differ only in which timing slot, timing scope, pipeline pass, and AVBOIT framebuffer they target.
+// Pass traits select timing, pipeline and framebuffer for the common alias-free/CSG record sequence.
 struct AvboitComputeEmulationRecordTrait{
     const Core::GpuTimingScopeDefinition* timingScope = nullptr;
     MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
@@ -119,7 +119,6 @@ struct AvboitSharedComputeEmulationRecordTrait{
     const AvboitSharedComputeEmulationRecordTrait& trait
 );
 
-// Shared compute-emulation record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the inputs fill and differ only in their payload timing member plus record trait.
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
     const PayloadT& payload,
@@ -150,7 +149,6 @@ template<typename PayloadT>
     return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
 
-// Shared raster-pass record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the guard plus snapshot materialize plus effect dispatch sequence and differ only in their payload members plus effect dispatch callable.
 template<typename PayloadT, typename DispatchFn>
 [[nodiscard]] inline bool RecordAvboitRasterPassFromPayload(
     const PayloadT& payload,
@@ -198,8 +196,6 @@ template<typename PayloadT, typename DispatchFn>
     return true;
 }
 
-// Shared shared-phase record core for AVBOIT effect tasks.
-// Occupancy, extinction, and accumulation share the inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
     const PayloadT& payload,

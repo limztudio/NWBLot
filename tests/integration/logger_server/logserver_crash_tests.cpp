@@ -214,10 +214,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 }
 #endif
 
-// CaptureRecoverableErrorForCrashObservation is used by RecoverableErrorDiagnosticProducesObservableLoggerReport
-// on Windows AND Linux, so it must live OUTSIDE the Linux-only block above (it only uses cross-platform
-// CaptureDiagnosticEvent). Guard it with that test's own platform condition so it is not defined-but-unused on
-// Android (where the test is compiled out).
+// Shared by Windows and Linux; match the test guard to avoid an unused Android helper.
 #if defined(GLB_PLATFORM_WINDOWS) || (defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID))
 NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message){
     CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -705,9 +702,7 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
 
     CrashTestText archive(arena);
     BeginArchiveWithManifest(arena, archive, "gpu-detective-test", s_WINDOWS, s_CRASH, "windows_exception", 0xC0000005u);
-    // A non-RDF blob exercises the in-process Radeon GPU Detective decoder end to end: it must reject the garbage
-    // gracefully, with no crash or exception escaping the boundary, and surface a decode failure rather than aborting
-    // the surrounding crash ingest.
+    // Malformed RGD input must report decode failure without aborting crash ingest.
     AppendArchiveFile(archive, CrashNames::s_GpuDetectiveCaptureFileName, "not a valid radeon gpu detective capture\n");
 
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);

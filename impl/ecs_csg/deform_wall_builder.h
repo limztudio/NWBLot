@@ -17,9 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Seam-safe, attribute-aware wall handling for deformable CSG rebuilds.
-
-
 // Owns zero-crossing splits with the shared edge cache (never welds source verts) and interpolated attributes, emitting the kept split triangles.
 class CsgDeformWallBuilder final : NoCopy{
 public:
@@ -29,7 +26,7 @@ public:
     [[nodiscard]] static SIMDVector KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec);
     [[nodiscard]] static SIMDVector TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec);
     [[nodiscard]] static SIMDVector UpAxisVec();
-    // Beginner boundaries: the only places that Load/Store deform storage; math stays on the cores above.
+    // Storage conversion stays at these boundaries; the cores use SIMD lanes.
     [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight);
     [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex);
     [[nodiscard]] static bool SplitEdgeVertex(

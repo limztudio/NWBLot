@@ -51,7 +51,6 @@ void ClearRuntimeSymbols();
 
 [[nodiscard]] bool WriteDefaultFile();
 
-// Number of symbols currently available to the resolver.
 [[nodiscard]] usize EntryCount();
 // Serializes the registry using the current `.namesym` document format.
 void Serialize(AString<Alloc::GlobalArena>& outText);

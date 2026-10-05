@@ -25,7 +25,6 @@ namespace TextureCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared metadata readers cross the fields/mips/meta translation units.
 using Core::Metascript::Value;
 using Core::Metascript::FindField;
 using TextureFormat::ComputeCompleteMipCount;

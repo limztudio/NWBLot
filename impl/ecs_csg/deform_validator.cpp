@@ -25,7 +25,6 @@ bool CsgDeformValidator::FiniteFloat(const f32 value){
 }
 
 bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex){
-    // SIMD lanes own every vector-attribute check; the scalar helper stays for lone floats only.
     return VectorIsFinite(LoadFloat(vertex.position), VectorComponentMask::s_XYZ)
         && VectorIsFinite(LoadFloat(vertex.normal), VectorComponentMask::s_XYZW)
         && VectorIsFinite(LoadFloat(vertex.tangent), VectorComponentMask::s_XYZW)
@@ -35,7 +34,6 @@ bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex){
 }
 
 f32 CsgDeformValidator::SaturateFloat(const f32 value){
-    // SIMD clamp keeps the scalar weight on vector lanes (min/max, no branches).
     return VectorGetX(VectorSaturate(VectorReplicate(value)));
 }
 

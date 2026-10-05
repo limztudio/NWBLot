@@ -168,8 +168,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         "Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease"
     ), 1u);
 
-    // The admission-time smoke suites were retired with the scheduler centralization; assert the lease
-    // lifetime bridge directly on the heap sources instead of deleted smoke files.
+    // Check the lease lifetime bridge on the owning heap sources.
     EXPECT_TRUE(ContainsText(heap, "GpuDescriptorHeap::PendingRecordingLease GpuDescriptorHeap::acquirePendingRecordingLease(){"));
     EXPECT_TRUE(ContainsText(heapRetirement, "void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{"));
     EXPECT_TRUE(ContainsText(

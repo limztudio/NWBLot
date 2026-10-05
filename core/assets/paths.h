@@ -420,8 +420,6 @@ template<typename MetadataValue>
     );
 }
 
-// Shared cooker-side metadata readers: consistent missing/type/nonempty validation for string, name,
-// and typed-reference fields before a cooker consumes them.
 template<typename MetadataValue>
 [[nodiscard]] inline bool ReadMetadataStringField(
     const Path& nwbFilePath,
@@ -737,7 +735,6 @@ template<typename CookEntryT>
     return false;
 }
 
-// Shared "asset payload must be a map" guard used by every .nwb metadata parser entry point.
 template<typename MetadataValue>
 [[nodiscard]] inline bool CheckMetadataAssetMap(
     const Path& nwbFilePath,
@@ -775,7 +772,6 @@ template<typename MetadataDocument, typename MetadataValue>
     return asset;
 }
 
-// Shared named-enum metadata reader: one string-field read plus a table lookup, with a field-specific error tail.
 template<typename NamedEnumT>
 using NamedEnumCase = ::NamedEnumCase<NamedEnumT>;
 

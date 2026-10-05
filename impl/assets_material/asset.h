@@ -166,7 +166,7 @@ namespace MaterialResourceSource{
 }
 
 
-// Material-authored fixture catalog (not a general image pipeline): names cooked into MaterialResourceReference, resolved to heap descriptors. Contract shared by cook/loading/renderer.
+// Material-authored fixture names resolve to heap descriptors through the shared cook/load/render contract.
 namespace MaterialResourceFixture{
     inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
     inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
@@ -419,7 +419,6 @@ struct MaterialResourceReference{
     u32 constantByteOffset = 0u;
 };
 
-// Shared typed-reference asset assignment for the bind and runtime paths: route the resource name into the matching typed asset reference for the declared kind. Returns false for an unhandled kind.
 [[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(
     MaterialResourceReference& reference,
     const MaterialResourceKind::Enum resourceKind,

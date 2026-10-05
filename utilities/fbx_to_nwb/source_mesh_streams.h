@@ -21,9 +21,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Source stream state and interning for FBX mesh import.
-
-
 inline constexpr StringView s_SourcePositionLabel = "position";
 inline constexpr StringView s_SourceNormalLabel = "normal";
 inline constexpr StringView s_SourceTangentLabel = "tangent";
@@ -65,7 +62,7 @@ struct PositionKeyEqual{
     }
 };
 
-// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams
+// SIMD calculation scratch; serialized normals stay in SourceMesh's Float/Vec streams.
 struct alignas(Float4) PositionNormalCalculation{
     SIMDVector value = {};
 };

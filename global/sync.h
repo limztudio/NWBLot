@@ -158,19 +158,14 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//! Class that implements exponential backoff.
 class AtomicBackOff{
 private:
-    //! Time delay, in units of "pause" instructions.
-    /** Should be equal to approximately the number of "pause" instructions
-      that take the same time as an context switch. Must be a power of two.*/
+    // Power-of-two pause threshold approximating a context switch.
     static constexpr i32 s_LoopsBeforeYield = 16;
 
 
 public:
-    // In many cases, an object of this type is initialized eagerly on hot path,
-    // as in for(AtomicBackOff backoff; ; backoff.pause()) { /*loop body*/ }
-    // For this reason, the construction cost must be very small!
+    // Default construction must stay cheap for hot spin loops.
     AtomicBackOff()noexcept
         : m_count(1)
         {}
@@ -179,24 +174,21 @@ public:
         : m_count(1)
         { pause(); }
 
-    //! No Copy
     AtomicBackOff(const AtomicBackOff&) = delete;
     AtomicBackOff& operator=(const AtomicBackOff&) = delete;
 
 public:
-    //! Pause for a while.
     void pause()noexcept{
         if(m_count <= s_LoopsBeforeYield){
             MachinePause(m_count);
             m_count <<= 1;
         }
         else{
-            // Pause is so long that we might as well yield CPU to scheduler.
             YieldThread();
         }
     }
 
-    //! Pause for a few times and return false if saturated.
+    // Returns false once the pause threshold saturates.
     bool boundedPause()noexcept{
         MachinePause(m_count);
         if(m_count < s_LoopsBeforeYield){
@@ -219,11 +211,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-//! Stripped down version of spin_mutex.
-/** Instances of MallocMutex must be declared in memory that is zero-initialized.
-    There are no constructors.  This is a feature that lets it be
-    used in situations where the mutex might be used while file-scope constructors
-    are running. */
+// Requires zero-initialized storage; no constructor permits use during static initialization.
 class MallocMutex : NoCopy{
 public:
     void lock()noexcept{

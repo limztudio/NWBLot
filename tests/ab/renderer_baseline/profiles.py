@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
-# Shared literals (no inline hardcodes below this block).
 LIT_TESTING = "Testing"
 LIT_SMOKE_RUNTIME = "smoke_runtime"
 LIT_NWB_TRANSPARENT_MULTI_SPIN_ANGLE = "NWB_TRANSPARENT_MULTI_SPIN_ANGLE"

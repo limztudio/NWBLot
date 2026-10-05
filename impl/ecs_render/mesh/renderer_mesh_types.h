@@ -85,8 +85,8 @@ struct MeshResources : public RuntimeMeshBuffers{
     u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0;
     u32 meshletPrimitiveIndexCount = 0;
-    u32 blasRefitsSinceRebuild = 0u;    // refit count since the last full BLAS rebuild (runtime meshes)
-    u32 swBvhRefitsSinceRebuild = 0u;   // refit count since the last full software BVH rebuild (runtime meshes)
+    u32 blasRefitsSinceRebuild = 0u;
+    u32 swBvhRefitsSinceRebuild = 0u;
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;

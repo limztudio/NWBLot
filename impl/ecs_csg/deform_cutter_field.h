@@ -17,9 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cutter field evaluation for deformable CSG rebuilds.
-
-
 // Owns cutter classification and per-vertex signed distances with the shared epsilon snap, so walls and caps observe identical distances in preview and commit.
 namespace CsgDeformShapeKind{
     enum Enum : u8{

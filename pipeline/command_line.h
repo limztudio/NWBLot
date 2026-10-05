@@ -58,7 +58,7 @@ struct PipelineOptions{
     {}
 };
 
-// The parsed option values and their CLI bindings stay alive through the terminal entry's help/error handler.
+// Retain parsed values and CLI bindings through the terminal entry's help/error handler.
 class PipelineCommandLine final : NoCopy{
 public:
     explicit PipelineCommandLine(PipelineTool::Enum inTool);
@@ -70,7 +70,6 @@ public:
     [[nodiscard]] int exit(const CLI::ParseError& error)const;
 
 public:
-    // Shared RunPipelineTool wrapper: parse options, then invoke the tool body inside the terminal entry.
     template<typename ToolBody>
     [[nodiscard]] int run(const int argc, char** argv, PipelineOptions& options, ToolBody&& body){
         return ::InvokeTerminalEntry<CLI::ParseError>([&](){

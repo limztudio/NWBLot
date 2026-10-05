@@ -83,9 +83,6 @@ bool BackendContext::createWindowSurface(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Swap chain management
-
-
 bool BackendContext::prepareSwapChainImageRevocation(){
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(

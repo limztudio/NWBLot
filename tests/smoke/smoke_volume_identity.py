@@ -3,7 +3,6 @@
 
 import hashlib
 
-# Shared literals (no inline hardcodes below this block).
 LIT_RES = "res"
 LIT_SHA256 = "sha256"
 LIT_UTF_8 = "utf-8"

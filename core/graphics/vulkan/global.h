@@ -53,10 +53,10 @@ inline constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1
 inline constexpr StringView s_AppName = "NWB";
 
 // Device memory and upload defaults.
-inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB
-inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024; // 16 MB
-inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024; // 256 MB
-inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024; // 16 MB
+inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024;
+inline constexpr u64 s_DefaultScratchChunkSize = 16 * 1024 * 1024;
+inline constexpr u64 s_ScratchMemoryLimit = 256 * 1024 * 1024;
+inline constexpr u64 s_LargeBufferThreshold = 16 * 1024 * 1024;
 inline constexpr u64 s_BufferAlignmentBytes = 4;
 inline constexpr u64 s_BufferAlignmentMask = s_BufferAlignmentBytes - 1u;
 inline constexpr usize s_SpirvWordAlignmentBytes = sizeof(u32);
@@ -65,7 +65,7 @@ inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 
 // Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
 // not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
-inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u; // 64 KB
+inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u;
 inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // aggregate cap across all queues and fault sections
 inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker truncation so one deep label cannot blow the budget
 inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // report.details capacity; keeps peak use under the arena (no reallocs)

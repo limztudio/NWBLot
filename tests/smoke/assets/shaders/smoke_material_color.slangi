@@ -15,8 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Color helpers a smoke material's surface hook may apply. The transparent material applies the transform + tint;
-// the solid materials use the base color directly.
 half3 nwbSmokeMaterialApplyColorTransform(half3 color){
     return sqrt(max(color, half3(0.0h)));
 }

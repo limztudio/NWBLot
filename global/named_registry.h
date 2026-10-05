@@ -55,7 +55,7 @@ template<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Memory and Timing recorders use these scope-resolution helpers for generation-stamped records. Centralizing them keeps the lookup contract single-sourced.
+// Generation-stamped scope lookup shared by memory and timing recorders.
 
 
 template<

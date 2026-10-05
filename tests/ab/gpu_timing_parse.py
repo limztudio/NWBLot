@@ -13,7 +13,6 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence
 from name_symbols import known_name_symbols
 from window_capture_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
 NAME_SYMBOLS_HEADER = "nwb_namesym_v1"

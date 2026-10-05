@@ -20,7 +20,6 @@ from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, read_bmp_24_rows
 from smoke_volume_identity import authored_volume_hashes, file_identity
 
-# Shared literals (no inline hardcodes below this block).
 LIT_HYBRID = "hybrid"
 LIT_NPOT = "npot"
 LIT_OFFSCREEN = "offscreen"

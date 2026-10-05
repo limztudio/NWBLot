@@ -15,9 +15,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Frame management
-
-
 BeginFrameResult BackendContext::beginFrame(){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     BeginFrameResult result;

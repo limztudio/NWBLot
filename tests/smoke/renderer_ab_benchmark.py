@@ -33,7 +33,6 @@ from window_capture_smoke import (
     validate_expected_log_text, write_status,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_RENDER_OPAQUE_REGULAR = "render.opaque_regular"
 LIT_RENDER_SHADOW_VISIBILITY = "render.shadow_visibility"
 LIT_RENDER_DEFERRED_LIGHTING = "render.deferred_lighting"

@@ -18,7 +18,6 @@ import reflection_feedback_smoke as smoke
 import smoke_volume_identity as volume_identity
 from reflection_smoke import SmokeFailure, panel_projection
 
-# Shared literals (no inline hardcodes below this block).
 LIT_RED = "red"
 LIT_GREEN = "green"
 LIT_BOUNDARY = "boundary"

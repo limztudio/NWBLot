@@ -812,7 +812,7 @@ private:
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
     )noexcept;
-    // Shared unwind prologue for the scheduler exception finalizer and the transaction rejection scope: return true when closing already resolved, wait out in-flight recording claims otherwise. Returns false when the caller must terminate on an inconsistent claim state.
+    // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
     [[nodiscard]] static bool waitForSubmissionExceptionClosing(
         GpuGraphSubmissionTransaction& transaction,
         GpuTaskGraph& graph,

@@ -54,8 +54,7 @@ using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// FLICKER-REPRO: spinning opaque + glass bodies on a ground plane; sweeping shadows expose flicker. Arrows scrub yaw
-// (title shows the angle; NWB_FLICKER_TEST_SPIN_ANGLE pins it). Reuses body + ground assets.
+// Spinning opaque/glass bodies expose shadow flicker; arrows scrub yaw and the title reports it.
 static constexpr FlickerModelRef s_Model{"project/characters/body/model"};
 static constexpr FlickerMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr FlickerMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
@@ -63,9 +62,9 @@ static constexpr FlickerMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;
-static constexpr f32 s_CharacterSpacingX = 0.22f;                    // small lateral offset so both read; they stand close
-static constexpr f32 s_TransparentFrontZ = -0.32f;                  // glass female IN FRONT (toward the camera)
-static constexpr f32 s_OpaqueBackZ = 0.32f;                         // opaque female behind, so the glass shadow overlaps it
+static constexpr f32 s_CharacterSpacingX = 0.22f;
+static constexpr f32 s_TransparentFrontZ = -0.32f;
+static constexpr f32 s_OpaqueBackZ = 0.32f;
 
 static constexpr f32 s_CameraDistance = 3.8f;
 static constexpr f32 s_CameraHeight = 1.6f;
@@ -75,16 +74,15 @@ static constexpr f32 s_DirectionalLightPitch = 0.9f;
 static constexpr f32 s_DirectionalLightYaw = 0.65f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 
-// Second shadowed light: a point light (the flicker appears specifically on the POINT-light shadow, whose ray direction
-// varies per pixel + has a finite tMax, unlike the directional light's constant direction / infinite tMax).
+// The repro targets point-light shadows: per-pixel directions and finite ray lengths.
 static constexpr f32 s_PointLightHeight = 2.6f;
-static constexpr f32 s_PointLightIntensity = 9.0f;                   // point lights attenuate by distance, so brighter
+static constexpr f32 s_PointLightIntensity = 9.0f;
 static constexpr f32 s_PointLightRange = 16.0f;
 
-static constexpr f32 s_SpinSpeed = 0.5f;                             // radians / second, gentle auto-spin until an arrow takes over
-static constexpr f32 s_ManualYawSpeed = 0.6f;                        // radians / second for the arrow-key manual yaw scrub
+static constexpr f32 s_SpinSpeed = 0.5f; // radians/second
+static constexpr f32 s_ManualYawSpeed = 0.6f; // radians/second
 static constexpr f32 s_TwoPi = 6.2831853f;
-static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp huge stalls so the spin can't jump
+static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,8 +101,7 @@ private:
         DestroySmokeSkinnedRenderWorld(m_context, m_world);
     }
 
-    // Diagnostic freeze (read once): NWB_FLICKER_TEST_SPIN_ANGLE pins the yaw to a fixed radians value so the character
-    // holds one orientation -- two captures then differ only via non-determinism (a flicker/race), not motion.
+    // Pin yaw for A/B captures that isolate flicker from motion.
     static f32 frozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
         return s_yaw;
@@ -127,16 +124,14 @@ public:
     {}
 
     virtual ~FlickerTestSmokeProject()override{
-        m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+        m_context.input.removeHandler(m_arrowYawInput); // Backstop for skipped onShutdown; the dispatcher outlives this project.
         destroyWorld();
     }
 
 
 public:
     virtual bool onStartup()override{
-        // Arrow keys (Left/Right) scrub the character yaw by hand; the live angle shows in the title bar so the exact angle a
-        // flicker appears at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. addHandlerToBack gives this
-        // scrubber first crack at the arrow keys; it consumes only Left/Right.
+        // Handle Left/Right before other input handlers; the title reports reproducible yaw.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
@@ -156,10 +151,7 @@ public:
             s_PointLightIntensity,
             s_PointLightRange
         );
-        // Caustics are the CONFIRMED source of the spinning-glass flicker. Kept ON by default (so the flicker reproduces
-        // and a fix can be A/B'd); NWB_FLICKER_TEST_NO_CAUSTICS=1 opts both lights out (LightComponent::enableCaustics =
-        // false) -> the refractive glass female casts NO caustic irradiance (black-cleared additive no-op), the flicker-
-        // free reference.
+        // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
         static const bool s_disableCaustics = [](){
             NWB::Core::Alloc::GlobalArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
             SmokeEnvironmentString value(arena);
@@ -183,7 +175,7 @@ public:
             Float4(s_GroundScale, 1.0f, s_GroundScale, 0.0f)
         );
 
-        // Opaque character (left) + transparent glass character (right), side by side so their shadows overlap as they spin.
+        // Overlapping opaque and glass shadows exercise their combined response.
         bool opaqueTintApplied = false;
         m_opaqueOwner = CreateTintedModelEntity(
             *m_world,
@@ -203,7 +195,7 @@ public:
             s_Model,
             s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,
-            Float4(0.72f, 0.86f, 1.00f, 0.42f), // glass tint, sub-1 alpha
+            Float4(0.72f, 0.86f, 1.00f, 0.42f),
             Float4(s_CharacterSpacingX, 0.0f, s_TransparentFrontZ, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
             transparentTintApplied
@@ -233,8 +225,7 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
-        // Yaw selection: 1) NWB_FLICKER_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
-        // auto-spin the moment Left/Right is first pressed, so the character can be parked on a precise angle); 3) auto-spin.
+        // Yaw priority: fixed override, manual scrub, then automatic spin.
         const f32 frozen = frozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();

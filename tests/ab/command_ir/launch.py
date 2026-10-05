@@ -24,7 +24,6 @@ sys.path.insert(0, str(REPO))
 
 import launcher as ROOT_LAUNCHER  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_EXECUTABLE = "--executable"
 LIT_OUTPUT_DIR = "--output-dir"
 LIT_ADAPTER_INDEX = "--adapter-index"

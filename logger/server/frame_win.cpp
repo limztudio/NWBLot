@@ -245,10 +245,8 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 ScopedLock lock(s_ListMutex);
                 count = s_Store ? s_Store->messages.size() : 0u;
             }
-            // Re-add the items OUTSIDE the lock. Each LB_ADDSTRING re-enters WM_MEASUREITEM on this same UI thread,
-            // which locks s_ListMutex; holding it here would self-deadlock (Futex is non-recursive). The owner-draw
-            // handlers index the store by itemID, so the LB_ADDSTRING item data is unused -- re-adding `count` empty
-            // items just re-triggers the per-item measure over the (unchanged) store.
+            // Re-add outside s_ListMutex: LB_ADDSTRING re-enters WM_MEASUREITEM, which takes the same non-recursive lock.
+            // Handlers read the store by itemID; empty item data only triggers remeasurement.
             SendMessage(s_ListHwnd, WM_SETREDRAW, FALSE, 0);
             SendMessage(s_ListHwnd, LB_RESETCONTENT, 0, 0);
             for(usize i = 0u; i < count; ++i)
@@ -383,9 +381,8 @@ Frame::Frame(void* inst){
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 Frame::~Frame(){
-    // Destroy the window first (stops UI-thread WinProc access to the store), then release the store
-    // while the allocator runtime is still alive. Clearing s_Frame/s_Store under the lock makes any
-    // concurrent Frame::print from a worker thread that has not yet been stopped a safe no-op.
+    // Destroy the window before its store, while the allocator runtime is alive.
+    // Clear s_Frame/s_Store under s_ListMutex so late worker prints become no-ops.
     cleanup();
 
     FrameDetail::s_Frame = nullptr;
@@ -455,8 +452,7 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
 
-        // The store is released in ~Frame() while worker threads may still be draining; ignore late prints
-        // rather than resurrect a torn-down store.
+        // Worker threads may still drain after store teardown; ignore late prints.
         if(!FrameDetail::s_Store)
             return;
 
@@ -465,9 +461,8 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
         listHwnd = FrameDetail::s_ListHwnd;
     }
 
-    // CRITICAL: SendMessage runs OUTSIDE s_ListMutex. LB_ADDSTRING synchronously re-enters the UI thread's draw handlers
-    // (which lock the mutex); holding it across would deadlock worker-against-UI on the first log line. Store indexed by
-    // itemID, so item data is unused and the single worker is race-free.
+    // SendMessage must run outside s_ListMutex: LB_ADDSTRING re-enters UI draw handlers that take the lock.
+    // Handlers index by itemID; item data is unused and the single worker serializes appends.
     if(!listHwnd)
         return;
 

@@ -225,7 +225,7 @@ private:
         );
     }
 
-    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{ // beginner: Loads bind-pose storage up the parent chain, folds on matrix lanes.
+    [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
         const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
@@ -257,7 +257,6 @@ private:
             return fallback;
         }
 
-        // Accumulate the anchor bone's model-space bind transform by walking up the parent chain.
         SIMDMatrix boneToModel = LoadFloat(skeleton->joints()[anchorIndex].localBindPose);
         for(
             u32 parentIndex = skeleton->joints()[anchorIndex].parentIndex;
@@ -303,7 +302,7 @@ private:
         m_cutter = entity.id();
     }
 
-    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVector receiverRotation){ // beginner: Stores rotation lane into ECS transform storage once.
+    void updateReceiverRotation(const NWB::Core::ECS::EntityID entity, const SIMDVector receiverRotation){
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(!transform)
             return;

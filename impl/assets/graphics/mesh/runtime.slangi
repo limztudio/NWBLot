@@ -207,10 +207,8 @@ uint nwbMeshletCount(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_MESHLET_COUNT];
 }
 
-// When NWB_MESH_MATERIAL_CONTEXT_PROVIDED is defined the includer (the shadow trace's material-context header)
-// supplies nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset() from per-invocation globals it set from
-// the ray hit; this mesh runtime then defines neither (the rasterizer never defines the macro, so its
-// definitions below are byte-for-byte unchanged).
+// A ray-hit context provider supplies per-invocation instance and material-offset accessors.
+// Raster paths use the definitions below.
 #if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
@@ -345,8 +343,7 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Skipped when a material-context provider owns nwbMeshLoadInstance() (NWB_MESH_MATERIAL_CONTEXT_PROVIDED);
-// rasterizer path unchanged.
+// A material-context provider owns nwbMeshLoadInstance() when enabled.
 #if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 
 

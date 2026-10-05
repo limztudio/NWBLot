@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # limztudio@gmail.com
-#
-# Build and run the isolated NWB_BUILDMODE variant, then copy Name sidecars to the release output.
-# Invoked by nwb_namesym or directly. Coverage includes only names reached by the workloads;
-# GUI captures use CTest and need a display, while headless tools run directly.
+# Only Names reached by workloads are captured. GUI captures need a display; headless tools run directly.
 
 import argparse
 import glob
@@ -92,8 +89,7 @@ def resolve_cmake_command():
 
 
 def resolve_ctest_command():
-    # Resolve ctest beside cmake. Relative paths are checked when launched from source-dir,
-    # not against this script's build-directory working directory.
+    # ctest shares CMake's directory; relative paths are evaluated from source-dir.
     cmake_command = resolve_cmake_command()
     if cmake_command == [CMAKE_DEFAULT]:
         return [CTEST_DEFAULT]
@@ -160,7 +156,7 @@ def configure_and_build(arguments):
 
 
 def clean_stale_sidecars(arguments):
-    # Clear persistent sidecars so collection cannot mistake output from an interrupted run for current output.
+    # Discard interrupted-run sidecars before collecting fresh output.
     removed = 0
     for old in glob.glob(os.path.join(arguments.buildmode_bin_dir, SIDECAR_GLOB)):
         try:
@@ -176,7 +172,7 @@ def run_workloads(arguments):
     for directory in arguments.mkdir:
         os.makedirs(directory, exist_ok=True)
 
-    # Failed workloads may still write useful sidecars; collect_sidecars checks the fresh output.
+    # Failed workloads can still write useful sidecars.
     for spec in arguments.run:
         parts = spec.split(RUN_SPEC_SEPARATOR)
         if not parts or not parts[0]:
@@ -193,7 +189,7 @@ def run_workloads(arguments):
         if run_command(command + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
             log(MSG_RUN_NONZERO.format(parts[0]))
 
-    # GUI workloads must exit gracefully; a hard kill prevents the sidecar write.
+    # Graceful GUI exits are required to write sidecars.
     ctest = resolve_ctest_command()
     for regex in arguments.ctest_regex:
         rc = run_command(
@@ -237,7 +233,7 @@ def main(argv):
     if not configure_and_build(arguments):
         return 1
 
-    # Only clear when we will actually regenerate sidecars; a pure collect (no workloads) must keep what is there.
+    # Collection without workloads must preserve existing sidecars.
     if arguments.run or arguments.ctest_regex:
         clean_stale_sidecars(arguments)
 

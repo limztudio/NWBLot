@@ -5,7 +5,6 @@ import pathlib
 import subprocess
 import tempfile
 
-# Shared literals (no inline hardcodes below this block).
 LIT_APPEND = "append"
 LIT_HELP = "--help"
 LIT_NWB_ASSET_PIPELINE = "NWB asset pipeline"

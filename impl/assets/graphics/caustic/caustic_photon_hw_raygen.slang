@@ -9,9 +9,7 @@
 
 #include "caustic_hw_common.slangi"
 #include "../raytrace/constants.h"
-// The shared transport: the photon struct, the emission aim, the per-photon stratified hash jitter, the iterative bounce loop. It declares
-// the backend hook nwbCausticTraceClosest, defined below over a single TraceRay per segment. Pulled in ONLY here
-// (not the closest-hit/miss) so the hook + TraceRay live solely in the raygen, keeping recursion at 1.
+// Only raygen includes the bounce loop and backend hook, keeping TraceRay recursion at one.
 #include "caustic_trace.slangi"
 
 

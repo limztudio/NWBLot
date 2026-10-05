@@ -12,7 +12,6 @@ from reflection_roughness_reference import analyze_furnace, analyze_roughness, i
 from reflection_roughness_smoke import CaptureSpec, HISTORY_FIELDS, compare_convergence, compare_deformation, compare_exact_scene, compare_sampling_seeds, high_frequency_energy, parse_history, spec_environment, validate_history
 from reflection_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_SEQUENCE = "sequence"
 LIT_GENERATION = "generation"
 LIT_STATIC = "static"

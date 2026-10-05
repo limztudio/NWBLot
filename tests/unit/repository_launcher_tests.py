@@ -18,7 +18,6 @@ sys.path.insert(0, str(ROOT))
 import launcher  # noqa: E402
 from launcher import repository_windows_process  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_OPEN = "open"
 LIT_CLOSE = "close"
 LIT_WAIT = "wait"

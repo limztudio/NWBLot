@@ -5,7 +5,6 @@
 #pragma once
 
 
-// Mesh skinning subsystem aggregation: system.
 #include "system.h"
 
 

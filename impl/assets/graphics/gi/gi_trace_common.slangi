@@ -56,7 +56,6 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     half3 irradiance = half3(0.0h, 0.0h, 0.0h);
 
     const float3 normal = hit.normal;
-    // Face-forward the normal against the ray (the ray could hit a back face -- use the face the ray sees).
     const float3 facingNormal = dot(normal, rayDir) < 0.0 ? normal : -normal;
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
@@ -106,7 +105,6 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     }
 #endif
 
-    // Apply the authored material-surface base colour (the bounce's diffuse reflectance).
     irradiance *= hit.albedo;
     return irradiance;
 }

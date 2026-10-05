@@ -27,7 +27,6 @@ from window_capture_smoke import (  # noqa: E402
     validate_expected_log_messages,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_UNIT = "unit"
 LIT_CAPTURE_RESULT_FROM_RGB_ROWS = "capture_result_from_rgb_rows"
 LIT_CAPTURE = "capture"

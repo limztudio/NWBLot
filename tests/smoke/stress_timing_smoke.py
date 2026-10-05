@@ -23,7 +23,6 @@ from window_capture_smoke import (
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text, write_status,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_REFERENCE_THREE = "reference_three"
 LIT_TEMPORAL_ONE = "temporal_one"
 LIT_QUARTER = "quarter"

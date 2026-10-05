@@ -1111,9 +1111,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setDependencies(foldDependencies, LengthOf(foldDependencies))
             .setResourceUses(transparentFoldResourceUses.data(), transparentFoldResourceUses.size())
         ;
-        // This terminal ID deliberately replaces the opaque producer and transparent trace as the effect/output
-        // owner. Existing caustics, lighting, state-handoff, recovery, and acceptance paths therefore observe the
-        // fully folded visibility.
+        // The terminal fold owns effect completion, so lighting, recovery and acceptance observe fully folded visibility.
         m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
             m_deferredLightingTaskGraph,
             foldDesc,

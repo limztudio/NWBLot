@@ -43,9 +43,7 @@ inline constexpr AStringView s_AftermathGetJsonFailedReport = "status=decode_fai
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Aftermath ships only as a runtime shared library with a C decoder API (no CLI tool). This decode is best-effort:
-// it runs only when a dump is present and the runtime resolves, and never fails the surrounding ingest. Dynamic
-// loading keeps the logserver running on hosts without the NVIDIA runtime.
+// Decode available dumps through the optional Aftermath runtime; failure never aborts ingest.
 #if defined(NWB_WITH_AFTERMATH)
 
 
@@ -58,8 +56,6 @@ inline constexpr usize s_AftermathMaxJsonBytes = 8u * 1024u * 1024u; // decoded 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves decoder entry points from the dynamically loaded runtime. No import-lib link, so a missing runtime
-// just leaves the dump undecoded; the library frees on scope exit.
 struct AftermathDecoder{
     SharedLibrary library;
     PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder createDecoder = nullptr;
@@ -152,8 +148,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
         return;
     }
 
-    // GetJSON writes a null-terminated string occupying 'jsonSize' bytes (text + terminator); take the text
-    // only, bounded so a large shader/warp dump cannot blow the report budget.
+    // jsonSize includes the terminator; omit it and cap shader/warp text to the report budget.
     usize jsonLength = jsonSize > 0u ? static_cast<usize>(jsonSize) - 1u : 0u;
     if(jsonLength > s_AftermathMaxJsonBytes)
         jsonLength = s_AftermathMaxJsonBytes;

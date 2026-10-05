@@ -89,7 +89,6 @@ public:
 
 
 public:
-    // Shared Load() prologue for typed GPU-resource loaders: rejects empty refs and already-valid resources.
     template<typename TAsset, typename TResource>
     [[nodiscard]] static bool CheckLoaderEnter(
         const AssetRef<TAsset>& assetRef,
@@ -104,7 +103,6 @@ public:
         return !resource.valid();
     }
 
-    // Shared loadSync + asset-type check used by typed asset loaders. Returns the typed asset on success.
     template<typename AssetT>
     [[nodiscard]] const AssetT* loadTypedSync(
         const Name& virtualPath,

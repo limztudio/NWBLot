@@ -61,7 +61,6 @@ static constexpr AStringView s_MaterialConstantAttribute = "material_constant";
 static constexpr AStringView s_MaterialMutableAttribute = "material_mutable";
 static constexpr AStringView s_DefaultAttribute = "default";
 
-// Shared binder and source-parser attribute.
 static constexpr AStringView s_FixtureAttribute = "fixture";
 
 static constexpr AStringView s_BindFieldTypeTexture2D = "texture2d";
@@ -70,8 +69,6 @@ static constexpr AStringView s_BindFieldTypeSampler = "sampler";
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Shared binder, source-parser, and typed-layout helpers.
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
 

@@ -5,7 +5,6 @@
 #pragma once
 
 
-// Custom UI ECS integration: callbacks and the independent GPU layer.
 #include "components.h"
 #include "layer_system.h"
 

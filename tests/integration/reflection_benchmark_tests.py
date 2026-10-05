@@ -18,7 +18,6 @@ from gpu_timing_parse import NAME_SYMBOLS_HEADER
 from name_symbols import known_name_symbols
 from smoke_volume_identity import volume_segment_filename
 
-# Shared literals (no inline hardcodes below this block).
 LIT_GPU_SAMPLES = "gpu_samples"
 LIT_TIMING_UNFOCUSED = "ReflectionSmokeProject: timing render unfocused 1\n"
 LIT_TIMING_RANGES = "ReflectionSmokeProject: timing in-flight ranges 32\n"

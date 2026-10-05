@@ -60,7 +60,6 @@ from window_capture_smoke import (  # noqa: E402
     validate_capture_result,
 )
 
-# Shared literals (no inline hardcodes below this block).
 LIT_RENDER_SHADOW_VISIBILITY = "render.shadow_visibility"
 LIT_STRESSTESTSMOKEPROJECT_ENABLED_HEALTHY = "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"
 LIT_STRESSTESTSMOKEPROJECT_RAYQUERY_CAPABL = "StressTestSmokeProject: RayQuery-capable hardware shadow route available"

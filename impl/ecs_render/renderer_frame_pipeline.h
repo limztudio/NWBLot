@@ -510,8 +510,7 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityAllLitClearTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
-    // Both hardware and software caustics use this typed black-output clear. The selected producer must share its
-    // packet so the established effects timing and acceptance endpoint remains unchanged.
+    // The HW/SW caustic producer shares this clear's packet to preserve timing and acceptance.
     Core::GpuTaskId m_deferredCausticIrradianceClearTask;
     // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the selected caustic producer; that producer commits initialization only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
@@ -530,7 +529,7 @@ private:
     Core::GpuTaskId m_deferredCausticResolveFifthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
     bool m_deferredCausticProducerDispatched = false;
-    // Surfel GI setup: typed clears + optional persistent-init prefix; lifecycle publishes after all four clears accept. All surfel stages share one effects packet (compiler owns handoffs, endpoint unchanged).
+    // Surfel lifecycle publishes after all four clears accept; stages share one effects packet with compiler-owned handoffs.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
     Core::GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
     Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;

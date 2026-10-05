@@ -6,7 +6,6 @@ import hashlib
 import json
 from pathlib import Path
 
-# Shared literals (no inline hardcodes below this block).
 LIT_R_N = "\r\n"
 LIT_N = "\n"
 LIT_UTF_8 = "utf-8"

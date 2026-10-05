@@ -17,9 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Input validation for deformable CSG rebuilds.
-
-
 // Owns finiteness, topology, and option checks so preview and commit share one classifier before any cutter, wall, or cap work runs.
 class CsgDeformValidator final : NoCopy{
 public:

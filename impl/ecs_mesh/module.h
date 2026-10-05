@@ -5,7 +5,6 @@
 #pragma once
 
 
-// Mesh subsystem aggregation: system.
 #include "system.h"
 
 

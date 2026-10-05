@@ -192,7 +192,7 @@ template<typename Plan>
     return result;
 }
 
-// Interval producer wrote these aliases; graph lowers the same-UAV handoff. Shared by the occupancy/extinction/accumulation record builders for both raster and compute-emulation use vectors.
+// The interval producer wrote these aliases; the graph lowers their same-UAV handoff.
 template<typename UseVector>
 inline void AppendCsgRemovedIntervalUses(
     UseVector& resourceUses,

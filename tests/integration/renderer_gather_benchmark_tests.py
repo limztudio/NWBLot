@@ -16,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import renderer_gather_benchmark as bench
 from generate_gather_benchmark_assets import main as generate_assets
 
-# Shared literals (no inline hardcodes below this block).
 LIT_PRESENT = "present"
 LIT_HISTORICAL_ARENA_PEAK = "historical_arena_peak"
 LIT_ALLOCATIONS = "allocations"

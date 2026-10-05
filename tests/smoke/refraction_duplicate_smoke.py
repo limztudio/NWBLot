@@ -11,7 +11,6 @@ import sys
 from refraction_gallery_smoke import CASES, COMMON_LIMIT, VARIANT_LABELS, capture, parse_selection, write_gallery
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
-# Shared literals (no inline hardcodes below this block).
 LIT_DUPLICATE_SINGLE_COOL = "duplicate_single_cool"
 LIT_DUPLICATE_SINGLE_WARM = "duplicate_single_warm"
 LIT_DUPLICATE_SINGLE_COOL_TINTED = "duplicate_single_cool_tinted"

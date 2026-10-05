@@ -15,14 +15,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Clamps a material's computed surface color to the displayable [0,1] range. A material that wants a color
-// transform applies it directly in its surface hook (the engine has no compile-time color variant).
+// Material color transforms belong in each surface hook.
 half3 nwbMaterialVertexColor(half3 color){
     return clamp(color, half3(0.0h), half3(1.0h));
 }
 
-// Every Testbed surface reads the same typed constant/mutable color pair before applying its own geometry or UV
-// modulation. Keep that binding sequence in one helper so each surface preserves the generated material ABI.
+// Read the shared typed constant/mutable color pair before surface-specific modulation.
 half3 nwbMaterialSurfaceBaseColor(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);

@@ -46,7 +46,7 @@ static constexpr f32 s_DefaultDirectionalLightRoll = 0.0f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 1.0f;
 static constexpr Float4 s_DefaultDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
-// Orbit the camera to the +Z side and yaw 180 degrees so it faces back along -Z onto the model's front.
+// Face the model's front from +Z.
 static constexpr f32 s_CameraStartYaw = s_PI;
 static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
 static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
@@ -68,7 +68,6 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
-    // Branchless selection on SIMD lanes: replicate the integer mask onto every lane, then pick the lane value.
     const SIMDVector positiveLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(positive ? 0xFFFFFFFFu : 0u));
     const SIMDVector negativeLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(negative ? 0xFFFFFFFFu : 0u));
     return VectorGetX(VectorSubtract(positiveLane, negativeLane));
@@ -155,7 +154,6 @@ static void ResolveFlyCameraInput(
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
     const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
     if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
-        // Boost select and speed*delta both run on lanes; the scalar multiply is superseded by speedLanes/speedDeltaLanes.
         const SIMDVector boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
         const SIMDVector speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
         const SIMDVector speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));

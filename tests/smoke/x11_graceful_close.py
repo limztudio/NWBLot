@@ -12,7 +12,6 @@ import ctypes
 import ctypes.util
 import sys
 
-# Shared literals (no inline hardcodes below this block).
 LIT_ERROR_INVALID_X11_WINDOW_ID = "error: invalid X11 window ID '{v}'"
 LIT_MAIN = "__main__"
 
@@ -23,8 +22,7 @@ Window = ctypes.c_ulong
 Atom = ctypes.c_ulong
 Bool = ctypes.c_int
 
-# Critical: XOpenDisplay/XInternAtom return pointers/atoms that are 64-bit; ctypes defaults restype to c_int (32-bit),
-# which silently truncates the display pointer and crashes on first use. Bind them up front.
+# Explicit result types prevent ctypes from truncating 64-bit pointers and atoms.
 XLib.XOpenDisplay.restype = DisplayP
 XLib.XOpenDisplay.argtypes = [ctypes.c_char_p]
 XLib.XCloseDisplay.argtypes = [DisplayP]
@@ -52,11 +50,7 @@ def send_wm_delete(disp, win):
     if not protocols or not delete_window:
         return False
     XLib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
-    # Deliver directly to the window with NoEventMask (0): on a bare X server (no window manager, e.g. Xwayland headless
-    # or a capture rig) the ClientMessage reaches the client's event queue only this way. Sending with the redirect mask
-    # instead routes it to a WM that does not exist here, so the app never sees it. One queued WM_DELETE_WINDOW is
-    # sufficient even when the app is sleeping; retrying after it starts teardown races XDestroyWindow and makes libX11
-    # report BadWindow, which previously turned a successful graceful shutdown into an erroneous fallback to SIGTERM.
+    # NoEventMask delivers directly even without a window manager. Send once: a retry can race window destruction.
     ev = XClientMessageEvent()
     ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
     ev.type = 33  # ClientMessage

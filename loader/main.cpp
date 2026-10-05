@@ -498,8 +498,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    // Install local crash capture before CLI parsing, logging, or graphics initialization.
-    // Configure upload settings after CLI parsing and logger startup.
+    // Capture early startup failures; configure uploads after CLI and logger setup.
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);

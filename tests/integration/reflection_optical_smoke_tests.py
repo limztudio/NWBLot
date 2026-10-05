@@ -18,7 +18,6 @@ import caustic_optical_smoke as caustic
 import caustic_optical_reference as caustic_reference
 from reflection_smoke import SmokeFailure
 
-# Shared literals (no inline hardcodes below this block).
 LIT_OPTICAL_CLEAR = "optical_clear"
 LIT_CROSSINGS = "crossings"
 LIT_REASON = "reason"

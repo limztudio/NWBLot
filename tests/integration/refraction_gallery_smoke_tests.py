@@ -15,7 +15,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from refraction_gallery_smoke import CASES, VARIANTS, capture_environment, frame_difference, parse_selection, write_gallery  # noqa: E402
 from window_capture_smoke import write_bmp_24  # noqa: E402
 
-# Shared literals (no inline hardcodes below this block).
 LIT_CASES = "cases"
 LIT_NESTED = "nested"
 LIT_NWB_REFRACTION_SMOKE_CASE = "NWB_REFRACTION_SMOKE_CASE"

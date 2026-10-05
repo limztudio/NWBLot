@@ -38,7 +38,7 @@ bool nwbLightSpaceInterpolateBarycentrics(
     if(!all(isfinite(areas)) || !isfinite(denominator) || denominator == 0.0)
         return false;
     const float2 bary = areas.yz / denominator;
-    // The old capture stores two unit-corner varyings; its shade reconstructs the first weight this same way.
+    // Capture stores two unit-corner varyings; shading reconstructs the first weight the same way.
     weights = float3(1.0 - bary.x - bary.y, bary);
     const float interpolatedW = dot(weights, float3(clip0.w, clip1.w, clip2.w));
     // Coverage belongs to rasterization. Fixed-subpixel coverage can extrapolate the unsnapped vertex varyings slightly.

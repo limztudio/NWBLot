@@ -144,9 +144,6 @@ typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Descriptor writes
-
-
 struct DescriptorWriteItem{
     static constexpr usize s_ByteSize = 40u;
 
@@ -154,9 +151,7 @@ struct DescriptorWriteItem{
 
     u32 slot;
 
-    // Specifies the index in a binding array.
-    // Must be less than the 'size' property of the matching BindingLayoutItem.
-    // Specifies the index into the descriptor array generated for an HLSL resource array.
+    // Descriptor-array index; must be less than the matching BindingLayoutItem's size.
     u32 arrayElement;
 
     ResourceType::Enum type          : 8;
@@ -174,8 +169,7 @@ struct DescriptorWriteItem{
     static_assert(sizeof(TextureSubresourceSet) == TextureSubresourceSet::s_ByteSize, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
     static_assert(sizeof(BufferRange) == BufferRange::s_ByteSize, "sizeof(BufferRange) is supposed to be 16 bytes");
 
-    // Default constructor that doesn't initialize anything for performance:
-    // DescriptorWriteItem's are stored in large statically sized arrays.
+    // Intentionally uninitialized to avoid clearing large descriptor arrays.
     DescriptorWriteItem(){}
 
     constexpr DescriptorWriteItem& setArrayElement(u32 value){ arrayElement = value; return *this; }

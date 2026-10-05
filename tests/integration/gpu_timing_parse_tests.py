@@ -9,7 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests" / "smoke"))
 sys.path.insert(0, str(ROOT / "tests" / "ab"))
-from gpu_timing_parse import parse_timing_file, SmokeFailure
+from gpu_timing_parse import NAME_SYMBOLS_HEADER, load_name_symbols, parse_timing_file, SmokeFailure
 
 INTERVAL = "=== interval: 20 frames / 0.5s ===\n"
 CURRENT_ROW = "  frame_hash: window_avg_ms=4 window_min_ms=3 window_max_ms=5 published_windows=20 total_ms=80 gpu_samples=40 sample_avg_ms=2\n"
@@ -26,6 +26,28 @@ class GpuTimingParseTests(unittest.TestCase):
     def parse(self, text, offset=0):
         self.path.write_bytes(text.encode("utf-8"))
         return parse_timing_file(self.path, SYMBOLS, offset)
+
+    def test_unsupported_name_symbol_document_cannot_import_rows_then_current_input_recovers(self):
+        row = "sidecar_hash\t0\tsidecar.scope\n"
+        current = NAME_SYMBOLS_HEADER + "\tproducer\truntime\n" + row
+        unsupported = (
+            "", row, "\n" + current,
+            "nwb_namesym_v0\n" + row,
+            "nwb_namesym_v2\n" + row,
+            "nwb_namesym_v10\n" + row,
+            NAME_SYMBOLS_HEADER + "_suffix\n" + row,
+            "unknown\n" + current,
+        )
+        for text in unsupported:
+            with self.subTest(document=text):
+                self.path.write_text(text, encoding="utf-8")
+                with self.assertRaisesRegex(SmokeFailure, "requires current nwb_namesym_v1 header"):
+                    load_name_symbols(self.path, ())
+                self.path.write_text(current, encoding="utf-8")
+                self.assertEqual(load_name_symbols(self.path, ()), {"sidecar_hash": "sidecar.scope"})
+
+        self.path.write_text(NAME_SYMBOLS_HEADER + "\n", encoding="utf-8")
+        self.assertEqual(load_name_symbols(self.path, ()), {})
 
     def test_retired_or_partial_rows_fail_alone_and_among_current_intervals_then_recover(self):
         partial = CURRENT_ROW.split(" total_ms=")[0] + "\n"

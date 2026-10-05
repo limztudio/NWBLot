@@ -66,7 +66,7 @@ struct GraphTimingKeyHasher{
     usize operator()(const GraphTimingKey& key)const noexcept;
 };
 
-using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualTo<GraphTimingKey>, TelemetryArena>;
+using GraphTimingMap = HashMap<GraphTimingKey, f64, TelemetryArena, GraphTimingKeyHasher, EqualTo<GraphTimingKey>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

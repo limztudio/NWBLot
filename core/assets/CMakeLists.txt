@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_assets)
+global_declare_static_library(nwb_assets)
 target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/auto_registration.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/registry.cpp"
@@ -18,7 +18,7 @@ target_sources(nwb_assets PRIVATE
 target_link_libraries(nwb_assets PUBLIC nwb_common)
 
 if(NWB_BUILD_PIPELINE)
-    nwb_declare_static_library(nwb_assets_cook)
+    global_declare_static_library(nwb_assets_cook)
     target_sources(nwb_assets_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/input_list.h"
         "${CMAKE_CURRENT_LIST_DIR}/input_list.cpp"

@@ -374,11 +374,11 @@ bool GpuTaskGraphCompiler::analyze(
         usize rawEdge = 0u;
         usize firstInferredEdge = Limit<usize>::s_Max;
     };
-    HashMap<u64, DependencyPairIndices, GpuTaskDependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> dependencyPairs(
+    HashMap<u64, DependencyPairIndices, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> dependencyPairs(
         0, GpuTaskDependencyPairHasher(), EqualTo<u64>(), scratchArena
     );
     Vector<usize, Alloc::ScratchArena> nextInferredEdges(scratchArena);
-    HashSet<usize, InferredDependencyHasher, InferredDependencyEqual, Alloc::ScratchArena> inferredEdgeIndices(
+    HashSet<usize, Alloc::ScratchArena, InferredDependencyHasher, InferredDependencyEqual> inferredEdgeIndices(
         0u,
         InferredDependencyHasher{ &outAnalysis.m_inferredEdges },
         InferredDependencyEqual{ &outAnalysis.m_inferredEdges },

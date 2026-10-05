@@ -81,7 +81,7 @@ private:
         }
     };
 
-    using GlyphIndex = HashMap<GlyphKey, usize, GlyphKeyHasher, GlyphKeyEqualTo, Core::Alloc::GlobalArena>;
+    using GlyphIndex = HashMap<GlyphKey, usize, Core::Alloc::GlobalArena, GlyphKeyHasher, GlyphKeyEqualTo>;
 
 
 public:

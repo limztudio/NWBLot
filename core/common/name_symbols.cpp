@@ -191,8 +191,6 @@ public:
     [[nodiscard]] bool loadLine(const AStringView line){
         if(line.empty())
             return false;
-        if(StartsWith(line, AStringView(NameSymbols::s_FileHeader)))
-            return true;
 
         const usize hashEnd = line.find(s_NamesymRecordSeparator);
         if(hashEnd == AStringView::npos)
@@ -350,8 +348,28 @@ void ClearRuntimeSymbols(){
     __hidden_common_name_symbols::Registry().clear();
 }
 
-bool LoadLine(const AStringView line){
-    return __hidden_common_name_symbols::Registry().loadLine(line);
+bool LoadFromMemory(const AStringView text){
+    const usize headerEnd = text.find('\n');
+    AStringView header = text.substr(0u, headerEnd);
+    if(!header.empty() && header.back() == '\r')
+        header.remove_suffix(1u);
+    if(header.substr(0u, header.find('\t')) != s_FileHeader)
+        return false;
+
+    __hidden_common_name_symbols::RuntimeRegistry& registry = __hidden_common_name_symbols::Registry();
+    usize lineBegin = headerEnd == AStringView::npos ? text.size() : headerEnd + 1u;
+    while(lineBegin < text.size()){
+        const usize lineEnd = text.find('\n', lineBegin);
+        const usize recordEnd = lineEnd == AStringView::npos ? text.size() : lineEnd;
+        AStringView line = text.substr(lineBegin, recordEnd - lineBegin);
+        if(!line.empty() && line.back() == '\r')
+            line.remove_suffix(1u);
+        lineBegin = lineEnd == AStringView::npos ? text.size() : lineEnd + 1u;
+        if(!registry.loadLine(line))
+            continue;
+    }
+
+    return true;
 }
 
 bool WriteDefaultFile(){

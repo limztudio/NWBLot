@@ -7,7 +7,7 @@
 
 #include <impl/assets_font/font_validation.h>
 #include <global/sha256.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 #include FT_MODULE_H
 #include FT_DRIVER_H

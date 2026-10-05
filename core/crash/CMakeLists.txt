@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_crash)
+global_declare_static_library(nwb_crash)
 set(NWB_CRASH_HANDLER_OUTPUT_NAME "crash_handler")
 target_compile_definitions(nwb_crash PRIVATE NWB_CRASH_HANDLER_EXECUTABLE_NAME="${NWB_CRASH_HANDLER_OUTPUT_NAME}")
 target_sources(nwb_crash PRIVATE
@@ -23,7 +23,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android
 endif()
 target_link_libraries(nwb_crash PUBLIC nwb_alloc)
 
-nwb_declare_static_library(nwb_crash_package)
+global_declare_static_library(nwb_crash_package)
 target_sources(nwb_crash_package PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/handler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/package.cpp"

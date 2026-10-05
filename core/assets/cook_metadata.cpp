@@ -199,7 +199,7 @@ bool DiscoverFilesWithExtension(
 ){
     CookArena& cookArena = outFiles.get_allocator().arena();
     ErrorCode errorCode;
-    HashSet<u64, Hasher<u64>, EqualTo<u64>, ScratchArena> seenPathHashes(
+    HashSet<u64, ScratchArena, Hasher<u64>, EqualTo<u64>> seenPathHashes(
         0,
         Hasher<u64>(),
         EqualTo<u64>(),

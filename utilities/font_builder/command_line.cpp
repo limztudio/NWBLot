@@ -5,7 +5,7 @@
 #include "bake.h"
 
 #include <global/terminal_entry.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 #include <CLI.hpp>
 

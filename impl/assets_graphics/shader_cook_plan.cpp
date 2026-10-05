@@ -38,8 +38,8 @@ namespace __hidden_shader_cook_plan{
 using namespace AssetsGraphicsCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
-using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
-using DependencyPathScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+using IncludeDirectoryScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
+using DependencyPathScratchSet = HashSet<ScratchString, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -375,14 +375,14 @@ bool PrepareShaderEntriesForCook(
 
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{
         0,
-        PreparedShaderKeyHasher(),
-        EqualTo<PreparedShaderKey>(),
+        ShaderStageKeyHasher(),
+        EqualTo<ShaderStageKey>(),
         scratchArena
     };
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet avboitClipShaderKeys{
         0,
-        PreparedShaderKeyHasher(),
-        EqualTo<PreparedShaderKey>(),
+        ShaderStageKeyHasher(),
+        EqualTo<ShaderStageKey>(),
         scratchArena
     };
     AssetsGraphicsCsgShaderVariants::CollectMaterialClipShaderKeys(materialEntries, materialClipShaderKeys);

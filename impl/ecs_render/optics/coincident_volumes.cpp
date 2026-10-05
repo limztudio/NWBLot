@@ -207,7 +207,7 @@ void RendererOpticalVolumeSelection::select(
         return;
 
     using namespace __hidden_coincident_volumes;
-    using RepresentativeMap = HashMap<CandidatePointer, CandidatePointer, CandidateHasher, CandidateEqual, Core::Alloc::ScratchArena>;
+    using RepresentativeMap = HashMap<CandidatePointer, CandidatePointer, Core::Alloc::ScratchArena, CandidateHasher, CandidateEqual>;
     RepresentativeMap representatives(0u, CandidateHasher{}, CandidateEqual{}, scratchArena);
     representatives.reserve(candidateCount);
     // Inspect membership each frame; components may change without structural mutation.

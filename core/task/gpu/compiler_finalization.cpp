@@ -66,9 +66,7 @@ namespace GpuTaskGraphCompilerDetail{
     ;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
     using namespace __hidden_gpu_task_graph_finalization;
-    using TerminalDependencyIndex = HashSet<
-        GpuPacketDependency, TerminalPacketDependencyHasher, TerminalPacketDependencyEqual, Alloc::ScratchArena
-    >;
+    using TerminalDependencyIndex = HashSet<GpuPacketDependency, Alloc::ScratchArena, TerminalPacketDependencyHasher, TerminalPacketDependencyEqual>;
     Optional<TerminalDependencyIndex> indexedTerminalDependencies;
     const auto appendTerminalFinalizationDependency = [&](const GpuPacketDependency& dependency){
         constexpr usize s_InlineTerminalDependencyCount = 8u;

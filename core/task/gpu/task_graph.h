@@ -784,12 +784,8 @@ private:
 
 private:
     using ImportIdentityIndex = HashMap<NameHash, u32, GraphicsArena>;
-    using ResourcePointerIndex = HashMap<
-        ResourcePointerKey, u32, ResourcePointerHasher, ResourcePointerEqual, GraphicsArena
-    >;
-    using PipelinePointerIndex = HashMap<
-        PipelinePointerKey, u32, PipelinePointerHasher, PipelinePointerEqual, GraphicsArena
-    >;
+    using ResourcePointerIndex = HashMap<ResourcePointerKey, u32, GraphicsArena, ResourcePointerHasher, ResourcePointerEqual>;
+    using PipelinePointerIndex = HashMap<PipelinePointerKey, u32, GraphicsArena, PipelinePointerHasher, PipelinePointerEqual>;
 
 
 private:

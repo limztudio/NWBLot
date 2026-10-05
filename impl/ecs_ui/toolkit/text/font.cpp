@@ -4,7 +4,7 @@
 
 #include "font.h"
 
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H

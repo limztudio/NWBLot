@@ -32,10 +32,10 @@ template<typename T>
 using MaterialCookVector = Vector<T, MaterialCookArena>;
 
 template<typename T, typename V>
-using MaterialCookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, MaterialCookArena>;
+using MaterialCookMap = HashMap<T, V, MaterialCookArena, Hasher<T>, EqualTo<T>>;
 
 template<typename T>
-using MaterialCookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, MaterialCookArena>;
+using MaterialCookHashSet = HashSet<T, MaterialCookArena, Hasher<T>, EqualTo<T>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

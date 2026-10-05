@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_perf)
+global_declare_static_library(nwb_perf)
 target_sources(nwb_perf PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_profile.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_profile.h"

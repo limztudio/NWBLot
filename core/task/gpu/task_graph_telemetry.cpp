@@ -380,7 +380,7 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
     }
     for(const GpuTaskExternalDependencyEdge& edge : analysis.externalDependencies())
         builder.addEdge(completionNodes[edge.completion.index], taskNodes[edge.consumer.index], Telemetry::FrameGraphEdgeKind::DependsOn);
-    HashMap<u64, u8, GpuTaskDependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> inferredFlags(
+    HashMap<u64, u8, Alloc::ScratchArena, GpuTaskDependencyPairHasher, EqualTo<u64>> inferredFlags(
         0u,
         GpuTaskDependencyPairHasher{},
         EqualTo<u64>{},

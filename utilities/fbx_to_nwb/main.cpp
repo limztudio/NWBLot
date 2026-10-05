@@ -7,7 +7,7 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <global/cpu_topology.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,7 +36,7 @@ int Run(const int argc, char** argv){
         GLB_TCERR << s_LoggerInitFailureText << GLB_TEXT("\n");
         return s_FbxToNwbEntryFailure;
     }
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = coreCount > s_MinParallelCoreCount ? coreCount - s_MinParallelCoreCount : s_NoWorkerThreads;

@@ -7,7 +7,7 @@
 #include "prepared_font.h"
 
 #include <global/blocking_io.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 #if defined(GLB_PLATFORM_LINUX)
 #include <fcntl.h>

@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_benchmark as benchmark
+from gpu_timing_parse import NAME_SYMBOLS_HEADER
 from name_symbols import known_name_symbols
 from smoke_volume_identity import volume_segment_filename
 
@@ -91,6 +92,7 @@ LIT_ORIGINAL = "original"
 LIT_STOPPED_BEFORE_LAUNCH = "stopped before launch"
 LIT_WRITE_STATUS = "write_status"
 LIT_BACKEND_CLOSE_FAILED = "backend close failed"
+LIT_BACKEND_DISCOVERY_FAILED = "backend discovery failed"
 LIT_BUILD_LAUNCH_ENVIRONMENT = "build_launch_environment"
 LIT_RUNTIME_ASSET_IDENTITY = "runtime_asset_identity"
 LIT_CREATE_CAPTURE_BACKEND = "create_capture_backend"
@@ -524,7 +526,7 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             (resources / LIT_AUTHORED_VOL).write_bytes(b"immutable assets")
             namesym = root / "app.namesym"
             token = next(iter(known_name_symbols([benchmark.FRAME])))
-            namesym.write_text(f"{token}\t0\t{benchmark.FRAME}\n", encoding=LIT_UTF_8)
+            namesym.write_text(f"{NAME_SYMBOLS_HEADER}\n{token}\t0\t{benchmark.FRAME}\n", encoding=LIT_UTF_8)
             args = benchmark.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(root),
                 LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT), "--namesym", str(namesym), LIT_FAMILY, LIT_OPTICAL_CLEAR])
             with patch.object(benchmark, "run_trial", side_effect=benchmark.SmokeFailure(LIT_STOPPED_BEFORE_LAUNCH)), \
@@ -565,6 +567,29 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             directory = args.output_directory / LIT_BLOCK_00_00_HARDWARE
             self.assertEqual((directory / "runtime.log").read_text(encoding=LIT_UTF_8), LIT_ORIGINAL_LOG)
             self.assertIn(LIT_BACKEND_CLOSE_FAILED, (directory / "cleanup_error.txt").read_text(encoding=LIT_UTF_8))
+
+    def test_unmapped_window_backend_type_error_propagates_without_old_signature_retry(self):
+        with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:
+            root = Path(temporary)
+            args = benchmark.parse_args([LIT_EXECUTABLE, str(root / LIT_APP_EXE), LIT_WORKING_DIRECTORY, str(root),
+                LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT)])
+            runtime, logserver, backend = Mock(), Mock(), Mock()
+            backend.wait_for_window.return_value = None
+            backend.find_window_for_pid.side_effect = TypeError(LIT_BACKEND_DISCOVERY_FAILED)
+            stack.enter_context(patch.object(benchmark, LIT_BUILD_LAUNCH_ENVIRONMENT, return_value={}))
+            stack.enter_context(patch.object(benchmark, LIT_RUNTIME_ASSET_IDENTITY, return_value=[]))
+            stack.enter_context(patch.object(benchmark, LIT_CREATE_CAPTURE_BACKEND, return_value=backend))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 1, root, {}, LIT_LOGS)))
+            stack.enter_context(patch.object(benchmark, LIT_LAUNCH_TESTBED, return_value=runtime))
+            stop = stack.enter_context(patch.object(benchmark, LIT_TERMINATE_PROCESS, return_value=(0, "")))
+            stack.enter_context(patch.object(benchmark, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, return_value=LIT_ORIGINAL_LOG))
+            with self.assertRaisesRegex(TypeError, LIT_BACKEND_DISCOVERY_FAILED):
+                benchmark.run_trial(args, benchmark.Variant(LIT_HARDWARE, LIT_HARDWARE), 0, 0, {}, {})
+            backend.find_window_for_pid.assert_called_once_with(runtime.pid, None, require_mapped=False)
+            backend.focus_window.assert_not_called()
+            backend.close.assert_called_once()
+            stop.assert_any_call(runtime, benchmark.LIT_REFLECTION_BENCHMARK, None)
+            self.assertFalse((args.output_directory / LIT_BLOCK_00_00_HARDWARE / "summary.json").exists())
 
     def test_empty_completed_timing_reports_explain_absent_gpu_samples(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:

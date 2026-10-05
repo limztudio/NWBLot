@@ -156,7 +156,7 @@ struct CsgDeformEdgeSplitKeyHash{
     [[nodiscard]] usize operator()(const u64 key)const noexcept{ return static_cast<usize>(key ^ (key >> s_EdgeHashShift)); }
 };
 
-using CsgDeformEdgeSplitMap = HashMap<u64, u32, CsgDeformEdgeSplitKeyHash, EqualTo<u64>, Core::Alloc::ScratchArena>;
+using CsgDeformEdgeSplitMap = HashMap<u64, u32, Core::Alloc::ScratchArena, CsgDeformEdgeSplitKeyHash, EqualTo<u64>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

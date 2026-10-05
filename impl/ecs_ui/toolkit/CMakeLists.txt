@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_ui)
+global_declare_static_library(nwb_ui)
 target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/id.h"
     "${CMAKE_CURRENT_LIST_DIR}/id.cpp"

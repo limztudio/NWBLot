@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_gpu_task)
+global_declare_static_library(nwb_gpu_task)
 target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.h"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_capture.cpp"

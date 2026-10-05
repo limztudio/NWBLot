@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_graphics)
+global_declare_static_library(nwb_graphics)
 target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/profile_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"

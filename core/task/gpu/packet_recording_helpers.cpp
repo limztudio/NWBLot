@@ -51,7 +51,7 @@ bool PrepareCompiledTimingQueries(
     if(!timingRecorder)
         return false;
 
-    HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Alloc::ScratchArena> scopeOccurrences(
+    HashMap<Name, u32, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> scopeOccurrences(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),

@@ -45,7 +45,7 @@ using GpuTimingSinkSampleVector = Vector<GpuTimingSinkSample, Alloc::ScratchAren
 // Callers serialize access so query-pool synchronization remains with the recorder that feeds completed ranges.
 class GpuTimingMetricCorrelator final : NoCopy{
 private:
-    using PacketEnvelopeScopeIndex = HashMap<Name, usize, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using PacketEnvelopeScopeIndex = HashMap<Name, usize, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
 
 private:

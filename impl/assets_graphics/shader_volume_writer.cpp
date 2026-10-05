@@ -184,13 +184,7 @@ static bool GetVariantBytecode(
             return true;
     }
 
-    HashMap<
-        AStringView,
-        AStringView,
-        Hasher<AStringView>,
-        EqualTo<AStringView>,
-        ScratchArena
-    > mergedDefines(
+    HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(
         0,
         Hasher<AStringView>(),
         EqualTo<AStringView>(),

@@ -120,7 +120,7 @@ private:
 };
 
 
-using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>;
+using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
 
 // Rejection preserves the successfully collected prefix.

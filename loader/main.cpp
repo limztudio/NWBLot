@@ -17,7 +17,7 @@
 #include <global/filesystem.h>
 
 #include <core/common/command_line.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 #include <core/common/module.h>
 #include <core/crash/module.h>
 #include <core/frame/module.h>
@@ -469,7 +469,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
             return __hidden_loader::s_LoaderExitFailure;
-        NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+        NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Loader: using standalone log output"));
         if(crashReportingInstalled)
             __hidden_loader::ConfigureCrashReporting(options);
@@ -482,7 +482,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
     NWB::Log::Client logger;
     if(!logger.init(AStringView(options.logAddress.data(), options.logAddress.size())))
         return __hidden_loader::s_LoaderExitFailure;
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress));
     if(crashReportingInstalled)
         __hidden_loader::ConfigureCrashReporting(options);

@@ -149,5 +149,46 @@ TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){
 #endif
 
 
+TEST(NameSymbolDecodeTests, RejectsNoncurrentDocumentHeaderBeforePublishingSymbols){
+    namespace NameSymbols = NWB::Core::Common::NameSymbols;
+    NameSymbols::InstallRuntimeRegistry();
+    NameSymbols::ClearRuntimeSymbols();
+    NWB::Core::Alloc::GlobalArena arena("Tests/NameSymbols/DocumentAdmission");
+    const Name retained(AStringView("admission/retained"));
+    const NameHash incomingHash = ComputeNameHash("admission/incoming");
+    char incomingToken[NameSymbols::s_DebugHashTextLength + 1u] = {};
+    NameDetail::HashToDebugString(incomingHash, incomingToken, sizeof(incomingToken));
+    AString<NWB::Core::Alloc::GlobalArena> record(arena);
+    StringAppendFormat(record, "{}\truntime\tAdmission/Incoming\n", incomingToken);
+    const usize retainedCount = NameSymbols::EntryCount();
+    constexpr Array<AStringView, 6u> s_RejectedHeaders = {
+        "",
+        "nwb_namesym_v0\tproducer=runtime\n",
+        "nwb_namesym_v2\tproducer=runtime\n",
+        "nwb_namesym_v10\tproducer=runtime\n",
+        "nwb_namesym_v1_suffix\tproducer=runtime\n",
+        "\n",
+    };
+    char resolvedText[NameSymbols::s_MaxResolvedTextLength] = {};
+    for(const AStringView header : s_RejectedHeaders){
+        AString<NWB::Core::Alloc::GlobalArena> document(arena);
+        document.append(header).append(record);
+        EXPECT_FALSE(NameSymbols::LoadFromMemory(AStringView(document.data(), document.size())));
+        EXPECT_EQ(NameSymbols::EntryCount(), retainedCount);
+        EXPECT_TRUE(NameSymbols::Resolve(retained.hash(), resolvedText, sizeof(resolvedText)));
+        EXPECT_EQ(AStringView(resolvedText), "admission/retained");
+        EXPECT_FALSE(NameSymbols::Resolve(incomingHash, resolvedText, sizeof(resolvedText)));
+    }
+
+    AString<NWB::Core::Alloc::GlobalArena> currentDocument(arena);
+    currentDocument.append(NameSymbols::s_FileHeader).append("\tproducer=runtime\r\n").append(record);
+    ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(currentDocument.data(), currentDocument.size())));
+    EXPECT_TRUE(NameSymbols::Resolve(retained.hash(), resolvedText, sizeof(resolvedText)));
+    ASSERT_TRUE(NameSymbols::Resolve(incomingHash, resolvedText, sizeof(resolvedText)));
+    EXPECT_EQ(AStringView(resolvedText), "admission/incoming");
+    NameSymbols::ClearRuntimeSymbols();
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

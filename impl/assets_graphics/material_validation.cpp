@@ -77,21 +77,15 @@ bool ValidateMaterials(
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
     ScratchArena& scratchArena
 ){
-    HashMap<
-        PreparedShaderKey,
-        const PreparedShaderEntry*,
-        PreparedShaderKeyHasher,
-        EqualTo<PreparedShaderKey>,
-        ScratchArena
-    > preparedShaderLookup(
+    HashMap<ShaderStageKey, const PreparedShaderEntry*, ScratchArena, ShaderStageKeyHasher, EqualTo<ShaderStageKey>> preparedShaderLookup(
         0,
-        PreparedShaderKeyHasher(),
-        EqualTo<PreparedShaderKey>(),
+        ShaderStageKeyHasher(),
+        EqualTo<ShaderStageKey>(),
         scratchArena
     );
     preparedShaderLookup.reserve(preparedEntries.size());
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
-        const PreparedShaderKey shaderKey{
+        const ShaderStageKey shaderKey{
             ToName(preparedEntry.entry.name),
             ToName(preparedEntry.entry.archiveStage.view())
         };
@@ -111,7 +105,7 @@ bool ValidateMaterials(
         for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
             hasShaderStage = true;
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-            const PreparedShaderKey shaderLookupKey{ shaderAsset.name(), stageName };
+            const ShaderStageKey shaderLookupKey{ shaderAsset.name(), stageName };
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
             if(foundShader == preparedShaderLookup.end()){
                 NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'")

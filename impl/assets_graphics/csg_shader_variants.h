@@ -32,12 +32,7 @@ namespace AssetsGraphicsCsgShaderVariants{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShaderStageKeySet = HashSet<
-    AssetsGraphicsCookDetail::ShaderStageKey,
-    AssetsGraphicsCookDetail::ShaderStageKeyHasher,
-    EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>,
-    Core::Alloc::ScratchArena
->;
+using ShaderStageKeySet = HashSet<AssetsGraphicsCookDetail::ShaderStageKey, Core::Alloc::ScratchArena, AssetsGraphicsCookDetail::ShaderStageKeyHasher, EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -52,7 +52,7 @@ private:
             return *lhs == *rhs;
         }
     };
-    using NameIndex = HashSet<NameReference, NameReferenceHash, NameReferenceEqual, Core::Alloc::ScratchArena>;
+    using NameIndex = HashSet<NameReference, Core::Alloc::ScratchArena, NameReferenceHash, NameReferenceEqual>;
 
 
 private:

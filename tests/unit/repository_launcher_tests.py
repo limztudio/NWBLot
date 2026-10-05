@@ -1004,6 +1004,20 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
         self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False))
 
+    def test_unmatched_single_configuration_cannot_supply_the_selected_executable(self):
+        codemodel_path = self.reply / LIT_METADATA_CODEMODEL
+        for other_config in (LIT_DBG, LIT_RELEASE, launcher.EMPTY_STRING):
+            with self.subTest(configuration=other_config):
+                self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
+                codemodel = json.loads(codemodel_path.read_text(encoding=LIT_UTF_8))
+                codemodel[launcher.FILE_API_CONFIGURATIONS_KEY][0][launcher.FILE_API_NAME_KEY] = other_config
+                codemodel_path.write_text(json.dumps(codemodel), encoding=LIT_UTF_8)
+                with self.assertRaisesRegex(SystemExit, "CMake File API metadata is required"):
+                    launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, LIT_PREVIEW_EXECUTABLE, False)
+
+        self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [self.actual])
+        self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
+
     def test_executable_metadata_without_artifact_or_with_library_type_is_rejected(self):
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [])
         with self.assertRaisesRegex(SystemExit, "has no executable artifact"):

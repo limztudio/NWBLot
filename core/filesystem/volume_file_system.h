@@ -36,7 +36,7 @@ private:
 
     using SegmentPathVector = Vector<Path, Alloc::GlobalArena>;
 
-    using FileMap = HashMap<Name, FileRecord, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using FileMap = HashMap<Name, FileRecord, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:

@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_frame)
+global_declare_static_library(nwb_frame)
 target_sources(nwb_frame PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"

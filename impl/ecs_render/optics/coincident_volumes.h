@@ -78,7 +78,7 @@ public:
 
 
 private:
-    HashSet<Core::ECS::EntityID, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_suppressed;
+    HashSet<Core::ECS::EntityID, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_suppressed;
 };
 
 

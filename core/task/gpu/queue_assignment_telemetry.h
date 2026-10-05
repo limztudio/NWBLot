@@ -43,7 +43,7 @@ struct GpuTaskQueueAssignmentTelemetry{
 
 class GpuTaskGraphQueueAssignmentTelemetryTracker final : NoCopy{
 private:
-    using AcceptedQueueHistory = HashMap<Name, GpuPhysicalQueueId, Hasher<Name>, EqualTo<Name>, GraphicsArena>;
+    using AcceptedQueueHistory = HashMap<Name, GpuPhysicalQueueId, GraphicsArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:

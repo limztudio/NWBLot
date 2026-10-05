@@ -39,7 +39,7 @@ private:
 
 
 private:
-    HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshes;
+    HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_meshes;
     Core::BufferHandle m_meshViewBuffer;
     ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;
     u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};

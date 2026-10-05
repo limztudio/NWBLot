@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_ecs_csg)
+global_declare_static_library(nwb_ecs_csg)
 target_sources(nwb_ecs_csg PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deform_edit.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deform_validator.cpp"

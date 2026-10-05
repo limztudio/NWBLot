@@ -269,8 +269,6 @@ class CmakeSettings:
         codemodel = _facade.read_json(reply_dir / codemodel_file)
         configurations = codemodel.get(FILE_API_CONFIGURATIONS_KEY, [])
         configuration = next((entry for entry in configurations if entry.get(FILE_API_NAME_KEY) == config), None)
-        if configuration is None and len(configurations) == 1:
-            configuration = configurations[0]
         if configuration is None:
             return None
 

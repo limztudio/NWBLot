@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_assets_texture)
+global_declare_static_library(nwb_assets_texture)
 target_sources(nwb_assets_texture PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
@@ -6,7 +6,7 @@ target_sources(nwb_assets_texture PRIVATE
 )
 target_link_libraries(nwb_assets_texture PUBLIC nwb_assets)
 
-nwb_declare_static_library(nwb_assets_texture_loader)
+global_declare_static_library(nwb_assets_texture_loader)
 target_sources(nwb_assets_texture_loader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/loader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/loader.h"
@@ -23,7 +23,7 @@ target_link_libraries(nwb_assets_texture_loader PRIVATE
 )
 
 if(NWB_BUILD_PIPELINE)
-    nwb_declare_static_library(nwb_assets_texture_cook)
+    global_declare_static_library(nwb_assets_texture_cook)
     target_sources(nwb_assets_texture_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
@@ -41,7 +41,7 @@ if(NWB_BUILD_PIPELINE)
     )
     target_compile_definitions(nwb_assets_texture_cook PRIVATE NWB_COOK=1)
 
-    nwb_declare_static_library(nwb_assets_texture_volume_entry)
+    global_declare_static_library(nwb_assets_texture_volume_entry)
     target_sources(nwb_assets_texture_volume_entry PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
     )

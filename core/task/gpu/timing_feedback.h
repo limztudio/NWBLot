@@ -151,8 +151,8 @@ struct AssignmentEqual{
     }
 };
 
-using RouteIndex = HashMap<RouteKey, usize, RouteHash, RouteEqual, GraphicsArena>;
-using AssignmentIndex = HashMap<AssignmentKey, usize, AssignmentHash, AssignmentEqual, GraphicsArena>;
+using RouteIndex = HashMap<RouteKey, usize, GraphicsArena, RouteHash, RouteEqual>;
+using AssignmentIndex = HashMap<AssignmentKey, usize, GraphicsArena, AssignmentHash, AssignmentEqual>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

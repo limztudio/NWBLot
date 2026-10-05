@@ -51,12 +51,7 @@ struct GraphicsVolumeMetadata{
     MaterialBindEntryVector materialBindEntries;
     CsgShapeEntryVector csgShapeEntries;
     AssetsGraphicsCookDetail::PreparedShaderPlan preparedPlan;
-    HashSet<
-        AssetsGraphicsCookDetail::PreparedShaderKey,
-        AssetsGraphicsCookDetail::PreparedShaderKeyHasher,
-        EqualTo<AssetsGraphicsCookDetail::PreparedShaderKey>,
-        ShaderCook::CookArena
-    > seenShaderIdentityKeys;
+    HashSet<AssetsGraphicsCookDetail::ShaderStageKey, ShaderCook::CookArena, AssetsGraphicsCookDetail::ShaderStageKeyHasher, EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>> seenShaderIdentityKeys;
 
     explicit GraphicsVolumeMetadata(ShaderCook::CookArena& arena)
         : shaderCook(arena)
@@ -67,8 +62,8 @@ struct GraphicsVolumeMetadata{
         , preparedPlan(arena)
         , seenShaderIdentityKeys(
             0,
-            AssetsGraphicsCookDetail::PreparedShaderKeyHasher(),
-            EqualTo<AssetsGraphicsCookDetail::PreparedShaderKey>(),
+            AssetsGraphicsCookDetail::ShaderStageKeyHasher(),
+            EqualTo<AssetsGraphicsCookDetail::ShaderStageKey>(),
             arena
         )
     {}
@@ -91,7 +86,7 @@ static bool AppendUniqueShaderEntry(
     if(shaderEntry.name.empty())
         return true;
 
-    const AssetsGraphicsCookDetail::PreparedShaderKey shaderIdentityKey{
+    const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{
         ToName(shaderEntry.name),
         ToName(shaderEntry.archiveStage.view())
     };
@@ -422,7 +417,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
-        const AssetsGraphicsCookDetail::PreparedShaderKey shaderIdentityKey{
+        const AssetsGraphicsCookDetail::ShaderStageKey shaderIdentityKey{
             ToName(pixelShaderEntry.name),
             ToName(pixelShaderEntry.archiveStage.view())
         };

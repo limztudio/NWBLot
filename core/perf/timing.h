@@ -101,7 +101,7 @@ private:
 
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;
     using ScopeVector = Vector<ScopeRecordPtr, Alloc::GlobalArena>;
-    using ScopeMap = HashMap<Name, TimingScopeId, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using ScopeMap = HashMap<Name, TimingScopeId, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:

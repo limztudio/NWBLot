@@ -44,7 +44,7 @@ private:
         Key key;
         bool found;
     };
-    using Index = HashMap<Key, bool, KeyHash, KeyEqual, Core::Alloc::ScratchArena>;
+    using Index = HashMap<Key, bool, Core::Alloc::ScratchArena, KeyHash, KeyEqual>;
 
 
 private:

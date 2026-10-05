@@ -8,7 +8,7 @@
 #include <core/assets/bunch/cook.h>
 #include <core/common/application_entry.h>
 
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 #include <global/filesystem.h>
 
@@ -117,7 +117,7 @@ int Run(const int argc, char** argv){
         GLB_TCERR << s_LoggerInitFailureText << GLB_TEXT("\n");
         return s_EntryFailure;
     }
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
     if(argc != 3){
         NWB_LOGGER_ERROR(GLB_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
         return s_EntryFailure;

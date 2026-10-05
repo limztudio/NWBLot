@@ -56,7 +56,7 @@ template<typename T>
 using MVector = Vector<T, MetaArena>;
 
 template<typename V>
-using MStringMap = HashMap<MString, V, MStringHash, MStringEqual, MetaArena>;
+using MStringMap = HashMap<MString, V, MetaArena, MStringHash, MStringEqual>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

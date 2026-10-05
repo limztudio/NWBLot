@@ -522,7 +522,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     Vector<VkDescriptorSetLayoutBinding, Alloc::ScratchArena> bindings{scratchArena};
     bindings.reserve(desc.registerSpaces.size());
-    HashSet<u32, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena> registerSpaceSlots(
+    HashSet<u32, Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> registerSpaceSlots(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),

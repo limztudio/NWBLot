@@ -522,7 +522,7 @@ Declare packaging dependencies explicitly. The dependency tool keeps pass-throug
 
 | Atlas information | Purpose and rules |
 | --- | --- |
-| Schema version and texture reference | Identify the contract and the existing texture asset; track texture changes as asset dependencies. |
+| Texture reference | Identify the existing texture asset; track texture changes as asset dependencies. |
 | Atlas extent and reference pixel density | Validate coordinates against the actual texture and convert artwork dimensions into logical layout units. |
 | Named regions | Top-left origin pixel rectangles `(x, y, width, height)` with a fixed UV convention; names identify appearances such as `button.normal`, `edit.focused`, `checkbox.checked`, and `combo.arrow`. UVs are derived by the asset/runtime layer. |
 | Draw mode and slice insets | Support a simple sprite and nine-slice stretch for resizable panels/buttons/edit boxes. Validate left+right and top+bottom against region bounds. Preserve corner sizes; define the minimum control size and behavior below it. Tiling is a later optional mode. |

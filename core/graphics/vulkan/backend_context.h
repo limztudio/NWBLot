@@ -36,8 +36,8 @@ private:
         [[nodiscard]] bool operator()(const AStringView lhs, const AStringView rhs)const noexcept{ return lhs == rhs; }
     };
 
-    using ExtensionStringSet = HashSet<GraphicsString, ExtensionNameHasher, ExtensionNameEqualTo, GraphicsArena>;
-    using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, ExtensionNameHasher, ExtensionNameEqualTo, GraphicsArena>;
+    using ExtensionStringSet = HashSet<GraphicsString, GraphicsArena, ExtensionNameHasher, ExtensionNameEqualTo>;
+    using DeviceExtensionMap = HashMap<GraphicsString, DeviceExtensionFeature::Enum, GraphicsArena, ExtensionNameHasher, ExtensionNameEqualTo>;
 
     using ExtEntry = DeviceExtensionEntry;
 

@@ -107,7 +107,7 @@ private:
         u32 writtenCount = 0u;
     };
 
-    using CutterRangeMap = HashMap<Name, CutterRangeEntry, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+    using CutterRangeMap = HashMap<Name, CutterRangeEntry, Core::Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>>;
     using CutterRefVector = Vector<CsgFrameCutterRef, Core::Alloc::ScratchArena>;
 
 

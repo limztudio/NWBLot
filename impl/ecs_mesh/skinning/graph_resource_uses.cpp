@@ -54,7 +54,7 @@ struct ResourceUseEntry{
 // Inline storage covers one plan's roles; larger sets index unique identities only.
 template<usize InlineCapacity>
 struct ResourceUseCollector : NoCopy{
-    using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, ResourceHash, EqualTo<Core::GpuGraphResourceId>, Core::Alloc::ScratchArena>;
+    using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, Core::Alloc::ScratchArena, ResourceHash, EqualTo<Core::GpuGraphResourceId>>;
 
     Core::Alloc::ScratchArena& m_scratchArena;
     ResourceUseEntry m_inline[InlineCapacity] = {};

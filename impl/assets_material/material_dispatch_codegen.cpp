@@ -253,21 +253,9 @@ static Path BuildShadowSurfaceIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ShadowSurfaceBindEntryLookup = HashMap<
-    Name,
-    const MaterialBindEntry*,
-    Hasher<Name>,
-    EqualTo<Name>,
-    ScratchArena
->;
+using ShadowSurfaceBindEntryLookup = HashMap<Name, const MaterialBindEntry*, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
-using ShadowSurfaceBindNamespaceLookup = HashMap<
-    Name,
-    u32,
-    Hasher<Name>,
-    EqualTo<Name>,
-    ScratchArena
->;
+using ShadowSurfaceBindNamespaceLookup = HashMap<Name, u32, ScratchArena, Hasher<Name>, EqualTo<Name>>;
 
 using ShadowSurfaceBindAliasVector = Vector<ScratchString, ScratchArena>;
 

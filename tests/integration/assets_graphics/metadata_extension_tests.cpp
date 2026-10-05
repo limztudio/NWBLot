@@ -413,7 +413,7 @@ TEST(MetadataExtensionOwnership, InsertionUnwindDestroysThePendingErasedOwner){
     ExtensionState state;
     bool fail = false;
     {
-        HashMap<Name, ParsedMetadataExtension, ThrowingExtensionHasher, EqualTo<Name>, AssetArena> values(0u, ThrowingExtensionHasher{ MakeNotNull(&fail) }, EqualTo<Name>{}, mapArena);
+        HashMap<Name, ParsedMetadataExtension, AssetArena, ThrowingExtensionHasher, EqualTo<Name>> values(0u, ThrowingExtensionHasher{ MakeNotNull(&fail) }, EqualTo<Name>{}, mapArena);
         values.reserve(4u);
         const u64 mapBaseline = mapArena.memoryStats().usedBytes;
         fail = true;

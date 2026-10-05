@@ -42,7 +42,7 @@ private:
         [[nodiscard]] usize operator()(const StateClaim& claim)const;
     };
 
-    using StateClaims = HashSet<StateClaim, StateClaimHash, EqualTo<StateClaim>, Core::Alloc::GlobalArena>;
+    using StateClaims = HashSet<StateClaim, Core::Alloc::GlobalArena, StateClaimHash, EqualTo<StateClaim>>;
 
 
 private:

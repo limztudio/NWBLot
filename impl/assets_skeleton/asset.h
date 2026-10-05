@@ -54,7 +54,7 @@ public:
     using JointVector = Core::Assets::AssetVector<SkeletonJoint>;
     using JointChildRangeVector = Core::Assets::AssetVector<SkeletonJointChildRange>;
     using JointChildIndexVector = Core::Assets::AssetVector<u32>;
-    using JointIndexMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Assets::AssetArena>;
+    using JointIndexMap = HashMap<Name, u32, Core::Assets::AssetArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:

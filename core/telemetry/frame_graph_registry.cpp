@@ -22,7 +22,7 @@ namespace __hidden_frame_graph_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using FrameGraphNodeIndexLookup = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
+using FrameGraphNodeIndexLookup = HashMap<Name, u32, TelemetryArena, Hasher<Name>, EqualTo<Name>>;
 
 static void ResolvePendingNameEdges(
     TelemetryArena& arena,

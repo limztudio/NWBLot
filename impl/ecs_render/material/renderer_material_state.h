@@ -34,8 +34,8 @@ class RendererMaterialSystem;
 
 // Material asset caches retain descriptor owners for patched heap slots.
 struct RendererMaterialResourceState{
-    HashMap<Name, UniquePtr<TextureGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> textureAssetCache;
-    HashMap<Name, UniquePtr<SamplerGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> samplerAssetCache;
+    HashMap<Name, UniquePtr<TextureGpuResource>, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> textureAssetCache;
+    HashMap<Name, UniquePtr<SamplerGpuResource>, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> samplerAssetCache;
 
     explicit RendererMaterialResourceState(Core::Alloc::GlobalArena& arena)
         : textureAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
@@ -81,12 +81,12 @@ private:
     Core::ShaderHandle m_objectGeometryDecodeShader;
     Core::ComputePipelineHandle m_objectGeometryDecodePipeline;
     Core::InputLayoutHandle m_objectGeometryInputLayout;
-    HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
+    HashMap<Name, MaterialSurfaceInfo, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
     RendererMaterialResourceFixtureState m_resourceFixtures;
-    HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
-    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instanceMutableCache;
-    HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;
+    HashMap<MaterialPipelineKey, MaterialPipelineResources, Core::Alloc::GlobalArena, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo> m_pipelines;
+    HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_instanceMutableCache;
+    HashMap<Name, RenderPath::Enum, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_loggedMaterialPaths;
     usize m_instanceBufferCapacity = 0u;
     usize m_materialTypedBufferCapacity = 0u;
     u64 m_instanceMutableCacheComponentMutationVersion = 0u;

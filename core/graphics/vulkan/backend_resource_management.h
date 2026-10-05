@@ -49,7 +49,7 @@ public:
     [[nodiscard]] bool isDescriptorBufferCompatible()const{ return m_descriptorBufferCompatible; }
     [[nodiscard]] u32 getDescriptorBufferSetSizeBytes()const{ return m_descriptorBufferSetSizeBytes; }
     [[nodiscard]] DescriptorBufferSegmentKind::Enum getDescriptorBufferSegmentKind()const{ return m_descriptorBufferSegmentKind; }
-    [[nodiscard]] const HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena>& getDescriptorBufferBindingOffsets()const{ return m_descriptorBufferBindingOffsets; }
+    [[nodiscard]] const HashMap<u32, u32, Alloc::GlobalArena, Hasher<u32>, EqualTo<u32>>& getDescriptorBufferBindingOffsets()const{ return m_descriptorBufferBindingOffsets; }
 
 
 private:
@@ -64,7 +64,7 @@ private:
     DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
     bool m_isBindless = false;
     bool m_descriptorBufferCompatible = false;
-    HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorBufferBindingOffsets;
+    HashMap<u32, u32, Alloc::GlobalArena, Hasher<u32>, EqualTo<u32>> m_descriptorBufferBindingOffsets;
 
     const VulkanContext& m_context;
 };
@@ -220,34 +220,10 @@ private:
         bool enableBarriers = true;
     };
 
-    using PermanentTextureStateMap = HashMap<
-        Texture*,
-        PermanentTextureStateValue,
-        Hasher<Texture*>,
-        EqualTo<Texture*>,
-        Alloc::GlobalArena
-    >;
-    using PermanentBufferStateMap = HashMap<
-        Buffer*,
-        PermanentBufferStateValue,
-        Hasher<Buffer*>,
-        EqualTo<Buffer*>,
-        Alloc::GlobalArena
-    >;
-    using BufferUavBarrierPolicyMap = HashMap<
-        Buffer*,
-        BufferUavBarrierPolicyValue,
-        Hasher<Buffer*>,
-        EqualTo<Buffer*>,
-        Alloc::GlobalArena
-    >;
-    using TextureUavBarrierPolicyMap = HashMap<
-        Texture*,
-        TextureUavBarrierPolicyValue,
-        Hasher<Texture*>,
-        EqualTo<Texture*>,
-        Alloc::GlobalArena
-    >;
+    using PermanentTextureStateMap = HashMap<Texture*, PermanentTextureStateValue, Alloc::GlobalArena, Hasher<Texture*>, EqualTo<Texture*>>;
+    using PermanentBufferStateMap = HashMap<Buffer*, PermanentBufferStateValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
+    using BufferUavBarrierPolicyMap = HashMap<Buffer*, BufferUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>>;
+    using TextureUavBarrierPolicyMap = HashMap<Texture*, TextureUavBarrierPolicyValue, Alloc::GlobalArena, Hasher<Texture*>, EqualTo<Texture*>>;
 
 
 public:
@@ -302,8 +278,8 @@ private:
     PermanentBufferStateMap m_permanentBufferStates;
     Vector<Texture*, Alloc::GlobalArena> m_attemptPermanentTextures;
     Vector<Buffer*, Alloc::GlobalArena> m_attemptPermanentBuffers;
-    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
-    HashMap<Buffer*, BufferRangeStates, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
+    HashMap<TextureSubresourceStateKey, ResourceStates::Mask, Alloc::GlobalArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo> m_textureStates;
+    HashMap<Buffer*, BufferRangeStates, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>> m_bufferStates;
     TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
 

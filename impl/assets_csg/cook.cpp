@@ -400,7 +400,7 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
 
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), &ShapeNameLess);
 
-    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>, CookArena>;
+    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, CookArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
     CookArena& cookArena = csgShapeEntries.get_allocator().arena();
     ShapeIdNameMap shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), cookArena);
     shapeIdNames.reserve(csgShapeEntries.size());
@@ -452,7 +452,7 @@ bool EmitCsgShapeModuleIncludes(
         return WriteEmptyDefaultModuleInclude(outIncludeRoot);
     }
 
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> seenShapeNames(
+    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> seenShapeNames(
         0,
         Hasher<NameHash>(),
         EqualTo<NameHash>(),
@@ -466,7 +466,7 @@ bool EmitCsgShapeModuleIncludes(
         }
     }
 
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> validatedModules(
+    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> validatedModules(
         0,
         Hasher<NameHash>(),
         EqualTo<NameHash>(),
@@ -474,7 +474,7 @@ bool EmitCsgShapeModuleIncludes(
     );
     validatedModules.reserve(csgShapeEntries.size());
 
-    using GeneratedIncludeOwnerMap = HashMap<ScratchString, Name, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+    using GeneratedIncludeOwnerMap = HashMap<ScratchString, Name, ScratchArena, Hasher<ScratchString>, EqualTo<ScratchString>>;
     GeneratedIncludeOwnerMap generatedIncludeOwners(0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena);
     generatedIncludeOwners.reserve(csgShapeEntries.size());
 
@@ -517,7 +517,7 @@ bool EmitCsgShapeModuleIncludes(
     if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
         return false;
 
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> emittedModules(
+    HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> emittedModules(
         0,
         Hasher<NameHash>(),
         EqualTo<NameHash>(),

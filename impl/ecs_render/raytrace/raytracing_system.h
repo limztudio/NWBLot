@@ -249,11 +249,11 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool& outBackendReady,
-        bool sceneTlasBuildGraphOwned = false,
-        bool meshBlasBuildsGraphOwned = false,
-        bool meshBlasGeometryBuildInputStatesGraphOwned = false,
-        bool meshSwBvhBuildsGraphOwned = false,
-        bool preparedMeshSwBvhBuildsRecordedByGraph = false
+        bool sceneTlasBuildGraphOwned,
+        bool meshBlasBuildsGraphOwned,
+        bool meshBlasGeometryBuildInputStatesGraphOwned,
+        bool meshSwBvhBuildsGraphOwned,
+        bool preparedMeshSwBvhBuildsRecordedByGraph
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept;

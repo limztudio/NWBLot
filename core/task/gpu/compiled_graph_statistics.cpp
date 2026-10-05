@@ -228,21 +228,10 @@ void GpuCompiledGraph::buildPlanStatistics(
     if(m_ownershipTransfers.empty())
         return;
 
-    HashSet<
-        OwnershipTransferKey,
-        OwnershipTransferSignatureHasher,
-        OwnershipTransferSignatureEqual,
-        Alloc::ScratchArena
-    > signatures(
+    HashSet<OwnershipTransferKey, Alloc::ScratchArena, OwnershipTransferSignatureHasher, OwnershipTransferSignatureEqual> signatures(
         0u, OwnershipTransferSignatureHasher(), OwnershipTransferSignatureEqual(), scratchArena
     );
-    HashMap<
-        GpuGraphResourceId,
-        OwnershipResourceStatistics,
-        OwnershipResourceHasher,
-        EqualTo<GpuGraphResourceId>,
-        Alloc::ScratchArena
-    > resources(
+    HashMap<GpuGraphResourceId, OwnershipResourceStatistics, Alloc::ScratchArena, OwnershipResourceHasher, EqualTo<GpuGraphResourceId>> resources(
         0u, OwnershipResourceHasher(), EqualTo<GpuGraphResourceId>(), scratchArena
     );
     signatures.reserve(m_ownershipTransfers.size());

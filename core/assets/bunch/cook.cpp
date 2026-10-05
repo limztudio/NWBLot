@@ -36,7 +36,7 @@ using namespace AssetsBunchCook;
 namespace Metascript = Core::Metascript;
 inline constexpr Name s_AssetBunchTypeName("asset_bunch");
 using ScratchString = AString<ScratchArena>;
-using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena>;
+using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -51,7 +51,7 @@ template<typename T>
 using CookVector = MaterialCookVector<T>;
 
 template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, ScratchArena>;
+using ScratchHashSet = HashSet<T, ScratchArena, Hasher<T>, EqualTo<T>>;
 
 template<typename T>
 using CookHashSet = MaterialCookHashSet<T>;

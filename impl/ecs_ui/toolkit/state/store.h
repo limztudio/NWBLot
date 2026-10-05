@@ -41,7 +41,7 @@ struct WidgetState{
 // Retain identity and typed lifetime; application values stay in the host model and are never copied into draw snapshots.
 class WidgetStateStore final : NoCopy{
 private:
-    using StateIndex = HashMap<u64, usize, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena>;
+    using StateIndex = HashMap<u64, usize, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
 
 
 private:

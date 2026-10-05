@@ -84,7 +84,7 @@ namespace RendererTaskGraphDetail{
             });
             return equal;
         };
-        using MeshSourceSet = HashSet<MeshSourceRef, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>, Core::Alloc::ScratchArena>;
+        using MeshSourceSet = HashSet<MeshSourceRef, Core::Alloc::ScratchArena, RemoveConst_T<decltype(hashSources)>, RemoveConst_T<decltype(equalSources)>>;
         Optional<MeshSourceSet> meshSources;
         if(drawItemCount > 1u)
             meshSources.emplace(AddSize(drawItemCount, drawItemCount), hashSources, equalSources, scratchArena);
@@ -115,7 +115,7 @@ namespace RendererTaskGraphDetail{
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     sourceBuffers.reserve(sourceBufferCapacity);
     {
-        HashSet<Core::Buffer*, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>, Core::Alloc::ScratchArena> sourceBufferIdentities(
+        HashSet<Core::Buffer*, Core::Alloc::ScratchArena, Hasher<Core::Buffer*>, EqualTo<Core::Buffer*>> sourceBufferIdentities(
             AddSize(sourceBufferCapacity, sourceBufferCapacity), Hasher<Core::Buffer*>(), EqualTo<Core::Buffer*>(), scratchArena
         );
         for(const MeshSourceRef& mesh : uniqueMeshes){

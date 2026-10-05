@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_assets_shader)
+global_declare_static_library(nwb_assets_shader)
 target_sources(nwb_assets_shader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
@@ -16,7 +16,7 @@ target_link_libraries(nwb_assets_shader_loader INTERFACE
 )
 
 if(NWB_BUILD_PIPELINE)
-    nwb_declare_static_library(nwb_assets_shader_cook)
+    global_declare_static_library(nwb_assets_shader_cook)
     target_sources(nwb_assets_shader_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/codec.cpp"

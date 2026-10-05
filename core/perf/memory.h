@@ -144,7 +144,7 @@ private:
 
     using ScopeRecordPtr = GlobalUniquePtr<ScopeRecord>;
     using ScopeVector = Vector<ScopeRecordPtr, Alloc::GlobalArena>;
-    using ScopeMap = HashMap<ScopeKey, MemoryScopeId, ScopeKeyHash, ScopeKeyEqual, Alloc::GlobalArena>;
+    using ScopeMap = HashMap<ScopeKey, MemoryScopeId, Alloc::GlobalArena, ScopeKeyHash, ScopeKeyEqual>;
 
 
 public:

@@ -97,8 +97,8 @@ static_assert(IsTriviallyCopyable_V<CsgCapsuleShapeParameters>, "CsgCapsuleShape
 class CsgShapeRegistry final : NoCopy{
 private:
     using ShapeVector = Vector<CsgShapeTypeInfo, Core::Alloc::GlobalArena>;
-    using ShapeIdMap = HashMap<Name, CsgShapeTypeId, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>;
-    using ShapeIndexMap = HashMap<CsgShapeTypeId, usize, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>, Core::Alloc::GlobalArena>;
+    using ShapeIdMap = HashMap<Name, CsgShapeTypeId, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
+    using ShapeIndexMap = HashMap<CsgShapeTypeId, usize, Core::Alloc::GlobalArena, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>>;
 
 
 public:

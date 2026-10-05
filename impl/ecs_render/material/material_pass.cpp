@@ -342,13 +342,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ;
     materialTypedBytes.reserve(materialTypedByteReserve);
 
-    using MaterialTypedByteRangeMap = HashMap<
-        __hidden_material_pass::MaterialTypedByteRangeKey,
-        __hidden_material_pass::MaterialTypedByteRangeCache,
-        __hidden_material_pass::MaterialTypedByteRangeKeyHasher,
-        EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>,
-        Core::Alloc::ScratchArena
-    >;
+    using MaterialTypedByteRangeMap = HashMap<__hidden_material_pass::MaterialTypedByteRangeKey, __hidden_material_pass::MaterialTypedByteRangeCache, Core::Alloc::ScratchArena, __hidden_material_pass::MaterialTypedByteRangeKeyHasher, EqualTo<__hidden_material_pass::MaterialTypedByteRangeKey>>;
     MaterialTypedByteRangeMap materialTypedRangeCache(
         0,
         __hidden_material_pass::MaterialTypedByteRangeKeyHasher(),

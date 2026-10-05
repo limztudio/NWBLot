@@ -16,6 +16,7 @@ from window_capture_smoke import SmokeFailure
 # Shared literals (no inline hardcodes below this block).
 LIT_UTF_8 = "utf-8"
 LIT_REPLACE = "replace"
+NAME_SYMBOLS_HEADER = "nwb_namesym_v1"
 
 
 NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
@@ -52,7 +53,11 @@ def load_name_symbols(
     if not path.is_file():
         raise SmokeFailure(missing_file_message.format(path=path))
 
-    for raw_line in path.read_text(encoding=LIT_UTF_8, errors=LIT_REPLACE).splitlines():
+    lines = iter(path.read_text(encoding=LIT_UTF_8, errors=LIT_REPLACE).splitlines())
+    if next(lines, "").split("\t", 1)[0] != NAME_SYMBOLS_HEADER:
+        raise SmokeFailure(f"name-symbol sidecar requires current {NAME_SYMBOLS_HEADER} header: {path}")
+
+    for raw_line in lines:
         fields = raw_line.split("\t")
         if len(fields) >= 3 and fields[2]:
             decoded[fields[0]] = fields[2]

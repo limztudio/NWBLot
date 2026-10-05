@@ -99,8 +99,8 @@ private:
 private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
-    HashMap<u64, Buffer*, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena> m_bufferNativeIdentities;
-    HashMap<VkImage, Texture*, Hasher<VkImage>, EqualTo<VkImage>, Alloc::GlobalArena> m_textureNativeIdentities;
+    HashMap<u64, Buffer*, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_bufferNativeIdentities;
+    HashMap<VkImage, Texture*, Alloc::GlobalArena, Hasher<VkImage>, EqualTo<VkImage>> m_textureNativeIdentities;
     mutable Futex m_bufferNativeIdentityMutex;
     mutable Futex m_textureNativeIdentityMutex;
 };
@@ -520,7 +520,7 @@ private:
     VulkanDetail::HeapBindingRange m_heapBindingRange;
     Futex m_memoryBindingMutex;
 
-    HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
+    HashMap<TextureViewKey, VkImageView, Alloc::GlobalArena, TextureViewKeyHasher, EqualTo<TextureViewKey>> m_views;
     Futex m_viewsMutex;
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
@@ -693,7 +693,7 @@ public:
 
 private:
     Vector<u32, Alloc::GlobalArena> m_spirvWords;
-    HashMap<ShaderLibraryKey, Handle<Shader>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
+    HashMap<ShaderLibraryKey, Handle<Shader>, GraphicsArena, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>> m_shaders;
 
     const VulkanContext& m_context;
 };

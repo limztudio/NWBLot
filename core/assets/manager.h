@@ -66,7 +66,7 @@ private:
         Name virtualPath = NAME_NONE;
     };
 
-    using RequestMap = HashMap<u64, RequestRecord, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena>;
+    using RequestMap = HashMap<u64, RequestRecord, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
 
 
 public:

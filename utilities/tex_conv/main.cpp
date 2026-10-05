@@ -6,7 +6,7 @@
 
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
-#include <logger/client/logger.h>
+#include <logger/client/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,7 +29,7 @@ int Run(const int argc, char** argv){
         GLB_TCERR << s_LoggerInitFailureText << GLB_TEXT("\n");
         return s_TexConvEntryFailure;
     }
-    NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
 
     return NWB::TexConv::Run(argc, argv);
 }

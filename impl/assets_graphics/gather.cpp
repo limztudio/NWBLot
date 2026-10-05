@@ -71,7 +71,7 @@ bool MergeGatheredGraphicsAsset(
         return false;
     }
 
-    HashMap<NameHash, usize, Hasher<NameHash>, EqualTo<NameHash>, Core::Alloc::ScratchArena> recordIndices(scratchArena);
+    HashMap<NameHash, usize, Core::Alloc::ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> recordIndices(scratchArena);
     recordIndices.reserve(records.size() + incomingRecords.size());
     records.reserve(records.size() + incomingRecords.size());
     for(usize i = 0u; i < records.size(); ++i){

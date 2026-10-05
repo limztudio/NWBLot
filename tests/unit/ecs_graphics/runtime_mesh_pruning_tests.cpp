@@ -30,7 +30,7 @@ namespace __hidden_runtime_mesh_pruning_tests{
 
 using namespace NWB;
 using namespace NWB::Impl;
-using ResourceMap = HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>;
+using ResourceMap = HashMap<Name, MeshResources, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 using EntityVector = Vector<Core::ECS::EntityID, Core::Alloc::GlobalArena>;
 using NameVector = Vector<Name, Core::Alloc::GlobalArena>;
 

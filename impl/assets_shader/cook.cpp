@@ -62,7 +62,7 @@ using ScratchString = AString<Alloc::ScratchArena>;
 template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena>;
 template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena>;
+using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
 static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";

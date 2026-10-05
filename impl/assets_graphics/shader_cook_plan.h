@@ -45,8 +45,6 @@ using ScratchString = Core::Assets::ScratchString;
 using VirtualPathHashSet = Core::Assets::CookEntryPathHashSet;
 using IncludeMetadataMap = CookMap<CookString, ShaderCook::IncludeEntry>;
 using ShaderEntryVector = CookVector<ShaderCook::ShaderEntry>;
-using PreparedShaderKey = ShaderStageKey;
-using PreparedShaderKeyHasher = ShaderStageKeyHasher;
 
 struct PreparedShaderEntry{
     ShaderCook::ShaderEntry entry;

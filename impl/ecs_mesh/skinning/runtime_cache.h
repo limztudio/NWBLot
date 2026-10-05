@@ -117,9 +117,9 @@ private:
     Core::GraphicsRuntime& m_graphics;
     Core::Assets::AssetManager& m_assetManager;
 
-    HashMap<Name, MeshSkinningSource, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_sources;
-    HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instances;
-    HashMap<u64, Core::ECS::EntityID, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_handleToEntity;
+    HashMap<Name, MeshSkinningSource, Core::Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>> m_sources;
+    HashMap<Core::ECS::EntityID, MeshSkinningRuntimeInstance, Core::Alloc::GlobalArena, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>> m_instances;
+    HashMap<u64, Core::ECS::EntityID, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_handleToEntity;
     u64 m_nextHandleValue = 1u;
 };
 

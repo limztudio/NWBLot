@@ -434,11 +434,8 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         # An unmapped window still carries the PID needed for graceful WM_DELETE
         # teardown, which the app requires for its normal exit path.
         handle = backend.wait_for_window(runtime.pid, min(args.timeout, 5.0))
-        if handle is None and hasattr(backend, "find_window_for_pid"):
-            try:
-                handle = backend.find_window_for_pid(runtime.pid, None, require_mapped=False)
-            except TypeError:
-                handle = backend.find_window_for_pid(runtime.pid, None)
+        if handle is None:
+            handle = backend.find_window_for_pid(runtime.pid, None, require_mapped=False)
         if handle:
             try:
                 backend.focus_window(handle)

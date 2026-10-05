@@ -39,6 +39,7 @@ inline constexpr usize s_ConnectionInitialBufferCapacity = 256u;
 inline constexpr usize s_BytesPerMebibyte = 1024u * 1024u;
 inline constexpr usize s_MaxLogMessageUploadMebibytes = 1u;
 inline constexpr usize s_MaxCrashPackageUploadMebibytes = 128u;
+inline constexpr AStringView s_UnsupportedNameSymbolUploadPath = "/namesym";
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
 
@@ -53,7 +54,6 @@ namespace ConnectionUploadKind{
         LogMessage,
         Crash,
         Telemetry,
-        NameSymbol,
     };
 };
 
@@ -139,8 +139,6 @@ static void DestroyConnectionInfo(ConnectionInfo*& info, void*& connectionContex
 
 inline constexpr usize s_MaxTelemetryUploadMebibytes = 64u;
 inline constexpr usize s_MaxTelemetryUploadBytes = s_MaxTelemetryUploadMebibytes * s_BytesPerMebibyte;
-inline constexpr usize s_MaxNameSymbolUploadMebibytes = 16u;
-inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibytes * s_BytesPerMebibyte;
 
 [[nodiscard]] static usize UploadSizeLimit(const ConnectionUploadKind::Enum uploadKind)noexcept{
     switch(uploadKind){
@@ -148,8 +146,6 @@ inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibyt
         return s_MaxCrashPackageUploadBytes;
     case ConnectionUploadKind::Telemetry:
         return s_MaxTelemetryUploadBytes;
-    case ConnectionUploadKind::NameSymbol:
-        return s_MaxNameSymbolUploadBytes;
     case ConnectionUploadKind::LogMessage:
     default:
         return s_MaxLogMessageUploadBytes;
@@ -350,16 +346,16 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
     auto& connectionContext = *connectionContextPtr;
 
     const AStringView urlView(url);
+    if(urlView == __hidden_logger_server::s_UnsupportedNameSymbolUploadPath)
+        return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_NOT_FOUND);
+
     const bool isCrashUpload = urlView == Core::Crash::PackageNames::s_CrashUploadEndpoint;
     const bool isTelemetryUpload = urlView == s_TelemetryUploadEndpoint;
-    const bool isNameSymbolUpload = urlView == s_NameSymbolUploadEndpoint;
     const auto uploadKind = isCrashUpload
         ? __hidden_logger_server::ConnectionUploadKind::Crash
         : isTelemetryUpload
             ? __hidden_logger_server::ConnectionUploadKind::Telemetry
-            : isNameSymbolUpload
-                ? __hidden_logger_server::ConnectionUploadKind::NameSymbol
-                : __hidden_logger_server::ConnectionUploadKind::LogMessage
+            : __hidden_logger_server::ConnectionUploadKind::LogMessage
     ;
 
     if(!connectionContext){
@@ -444,14 +440,6 @@ MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connecti
             thisPtr->m_telemetryIngestConfig
         );
         thisPtr->enqueue(Move(result.message), result.type);
-    }
-    else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::NameSymbol){
-        // Ingest a remote client's uploaded symbol table into the server registry so DecodeHashTokens can rewrite
-        // that client's debug-hash tokens back to readable names. Silent: symbol pushes are routine, not log-worthy.
-        const AStringView nameSymbolBody(reinterpret_cast<const char*>(info->buffer), info->size);
-        if(!Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, GLB_TEXT("Received an empty or malformed name-symbol upload"), Type::Warning);
-        }
     }
     else{
         MessageType message = MakeMessageType(thisPtr->arena());

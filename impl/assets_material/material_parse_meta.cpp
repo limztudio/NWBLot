@@ -107,7 +107,7 @@ static bool ParseVariantField(
         return true;
     }
 
-    using ScratchDefineCombo = HashMap<AStringView, AStringView, Hasher<AStringView>, EqualTo<AStringView>, ScratchArena>;
+    using ScratchDefineCombo = HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>>;
     ScratchDefineCombo assignments(
         0,
         Hasher<AStringView>(),

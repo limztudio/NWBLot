@@ -35,9 +35,9 @@ using CookString = AString<CookArena>;
 template<typename T>
 using CookVector = Vector<T, CookArena>;
 template<typename T, typename V>
-using CookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, CookArena>;
+using CookMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
 template<typename T>
-using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookArena>;
+using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 using ScratchArena = Core::Alloc::ScratchArena;
 using ScratchString = AString<ScratchArena>;
 using CookEntryPathHashSet = CookHashSet<NameHash>;

@@ -303,7 +303,7 @@ private:
     ShaderPathResolveCallback m_shaderPathResolver;
     MeshSkinningRuntimeCache m_runtimeMeshCache;
 
-    HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
+    HashMap<u64, RuntimeResources, Core::Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>> m_runtimeResources;
     // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
     Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDispatchPlans;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;

@@ -30,7 +30,6 @@ namespace NameSymbols{
 
 
 inline constexpr usize s_MaxResolvedTextLength = 1024u;
-inline constexpr AStringView s_FileName = "namesym";
 inline constexpr TStringView s_FileExtension = GLB_TEXT(".namesym");
 inline constexpr AStringView s_FileHeader = "nwb_namesym_v1";
 inline constexpr usize s_DebugHashTextLength = NameDetail::s_DebugHashTextLength;
@@ -50,34 +49,15 @@ void InstallRuntimeRegistry();
 void UninstallRuntimeRegistry();
 void ClearRuntimeSymbols();
 
-[[nodiscard]] bool LoadLine(AStringView line);
 [[nodiscard]] bool WriteDefaultFile();
 
-// Symbol count; cheap grew-since-upload gate for cross-process upload.
+// Number of symbols currently available to the resolver.
 [[nodiscard]] usize EntryCount();
-// Serializes the registry to `.namesym` text for the wire push to a log server.
+// Serializes the registry using the current `.namesym` document format.
 void Serialize(AString<Alloc::GlobalArena>& outText);
 
-// Ingests a `.namesym` document; file and wire differ only in byte source.
-[[nodiscard]] inline bool LoadFromMemory(const AStringView text){
-    bool loadedAny = false;
-    usize lineBegin = 0u;
-    while(lineBegin < text.size()){
-        usize lineEnd = lineBegin;
-        while(lineEnd < text.size() && text[lineEnd] != '\n')
-            ++lineEnd;
-
-        AStringView line(text.data() + lineBegin, lineEnd - lineBegin);
-        if(!line.empty() && line.back() == '\r')
-            line.remove_suffix(1u);
-        if(LoadLine(line))
-            loadedAny = true;
-
-        lineBegin = lineEnd < text.size() ? lineEnd + 1u : lineEnd;
-    }
-
-    return loadedAny;
-}
+// Admits only the current document header before importing symbol records.
+[[nodiscard]] bool LoadFromMemory(AStringView text);
 
 template<typename ArenaT>
 [[nodiscard]] inline bool LoadFile(const ::Path<ArenaT>& path){
@@ -94,7 +74,7 @@ template<typename ArenaT>
     if(!::GetExecutableDirectory(executableDirectory))
         return false;
 
-    bool loadedAny = LoadFile(executableDirectory / s_FileName);
+    bool loadedAny = false;
 
     ErrorCode error;
     ::DirectoryIterator directory(executableDirectory, error);

@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_ui_gpu)
+global_declare_static_library(nwb_ui_gpu)
 target_sources(nwb_ui_gpu PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_internal.h"

@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_ecs)
+global_declare_static_library(nwb_ecs)
 target_sources(nwb_ecs PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/profile_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/entity_id.cpp"

@@ -31,13 +31,7 @@ namespace __hidden_rt_swbvh{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MeshBufferSlotLookup = HashMap<
-    const Core::Buffer*,
-    u32,
-    Hasher<const Core::Buffer*>,
-    EqualTo<const Core::Buffer*>,
-    Core::Alloc::ScratchArena
->;
+using MeshBufferSlotLookup = HashMap<const Core::Buffer*, u32, Core::Alloc::ScratchArena, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>>;
 
 
 // Hash semantic scene inputs, not padded object representations.

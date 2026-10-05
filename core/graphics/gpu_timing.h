@@ -222,7 +222,7 @@ private:
     };
 
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
-    using AccumulatorMap = HashMap<Name, AccumulatorPtr, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using AccumulatorMap = HashMap<Name, AccumulatorPtr, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
     using SampleListenerRecord = RefCounter<SampleListenerRecordData>;
     using SampleListenerRecordPtr = RefCountPtr<
         SampleListenerRecord,

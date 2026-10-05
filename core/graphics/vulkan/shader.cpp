@@ -356,7 +356,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     };
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_InputLayoutArena);
-    HashMap<u32, VertexBindingBuildInfo, Hasher<u32>, EqualTo<u32>, Alloc::ScratchArena> bindingInfos(
+    HashMap<u32, VertexBindingBuildInfo, Alloc::ScratchArena, Hasher<u32>, EqualTo<u32>> bindingInfos(
         0,
         Hasher<u32>(),
         EqualTo<u32>(),

@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_pipeline_asset_gatherer)
+global_declare_static_library(nwb_pipeline_asset_gatherer)
 target_sources(nwb_pipeline_asset_gatherer PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gather.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gather.h"

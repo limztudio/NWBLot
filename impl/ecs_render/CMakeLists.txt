@@ -9,7 +9,7 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
     nwb_ecs
 )
 
-nwb_declare_static_library(nwb_ecs_render)
+global_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.h"

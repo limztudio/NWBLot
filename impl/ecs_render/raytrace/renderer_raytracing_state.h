@@ -42,13 +42,7 @@ struct RtMeshHeapHandleCacheEntry{
     bool seenThisFrame = false;
 };
 
-using RtMeshHeapHandleCache = HashMap<
-    const Core::Buffer*,
-    RtMeshHeapHandleCacheEntry,
-    Hasher<const Core::Buffer*>,
-    EqualTo<const Core::Buffer*>,
-    Core::Alloc::GlobalArena
->;
+using RtMeshHeapHandleCache = HashMap<const Core::Buffer*, RtMeshHeapHandleCacheEntry, Core::Alloc::GlobalArena, Hasher<const Core::Buffer*>, EqualTo<const Core::Buffer*>>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -109,7 +109,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     if(!sourcesValid)
         return false;
 
-    HashMap<Name, u8, Hasher<Name>, EqualTo<Name>, Alloc::ScratchArena> taskNames(
+    HashMap<Name, u8, Alloc::ScratchArena, Hasher<Name>, EqualTo<Name>> taskNames(
         0,
         Hasher<Name>(),
         EqualTo<Name>(),

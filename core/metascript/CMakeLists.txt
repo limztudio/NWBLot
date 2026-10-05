@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_metascript)
+global_declare_static_library(nwb_metascript)
 target_sources(nwb_metascript PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/value.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lexer.cpp"

@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 
 class AssetRegistry final : NoCopy{
 private:
-    using CodecMap = HashMap<Name, UniquePtr<IAssetCodec>, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+    using CodecMap = HashMap<Name, UniquePtr<IAssetCodec>, Alloc::GlobalArena, Hasher<Name>, EqualTo<Name>>;
 
 
 public:

@@ -27,7 +27,6 @@ using MessageQueue = ParallelQueue<MessageType, LogArena>;
 using LogBytes = Vector<u8, LogArena>;
 
 inline constexpr StringView s_TelemetryUploadEndpoint = "/telemetry";
-inline constexpr StringView s_NameSymbolUploadEndpoint = "/namesym";
 inline constexpr i32 s_LocalTimeYearBase = 1900;
 inline constexpr i32 s_LocalTimeMonthBase = 1;
 

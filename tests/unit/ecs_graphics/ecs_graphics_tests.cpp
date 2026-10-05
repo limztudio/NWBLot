@@ -452,13 +452,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
     using MaterialTypedByteContentKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
-    using RangeMap = ::HashMap<
-        MaterialTypedByteContentKey,
-        NWB::Impl::ECSRenderDetail::MaterialTypedByteRange,
-        NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher,
-        ::EqualTo<MaterialTypedByteContentKey>,
-        NWB::Core::Alloc::ScratchArena
-    >;
+    using RangeMap = ::HashMap<MaterialTypedByteContentKey, NWB::Impl::ECSRenderDetail::MaterialTypedByteRange, NWB::Core::Alloc::ScratchArena, NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher, ::EqualTo<MaterialTypedByteContentKey>>;
 
     ByteVector uploadBytes{scratchArena};
     RangeMap ranges(

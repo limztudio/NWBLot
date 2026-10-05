@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_pipeline_command_line)
+global_declare_static_library(nwb_pipeline_command_line)
 target_sources(nwb_pipeline_command_line PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/command_line.h"

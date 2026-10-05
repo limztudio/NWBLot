@@ -1,4 +1,4 @@
-nwb_declare_static_library(nwb_ecs_model)
+global_declare_static_library(nwb_ecs_model)
 target_sources(nwb_ecs_model PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/components.h"

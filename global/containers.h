@@ -82,123 +82,17 @@ constexpr auto Tie(Args&... args){ return std::tie(args...); }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ContainerDetail{
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+using ParallelHashSet = tbb::concurrent_unordered_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T, typename First, typename Second, typename Third>
-struct HashSetSelector{
-private:
-    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
-
-    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
-    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
-    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
-    using Allocator = ArenaAllocatorFor_T<T, Resource>;
-
-public:
-    using Type = tsl::robin_set<T, Hash, Equal, Allocator>;
-};
-
-template<typename T, typename First>
-struct HashSetSelector<T, First, void, void>{
-private:
-    using Allocator = ArenaAllocatorFor_T<T, First>;
-
-public:
-    using Type = tsl::robin_set<T, Hasher<T>, EqualTo<T>, Allocator>;
-};
-
-template<typename T, typename V, typename First, typename Second, typename Third>
-struct HashMapSelector{
-private:
-    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
-
-    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
-    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
-    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
-    using Value = Pair<T, V>;
-    using Allocator = ArenaAllocatorFor_T<Value, Resource>;
-
-public:
-    using Type = tsl::robin_map<T, V, Hash, Equal, Allocator>;
-};
-
-template<typename T, typename V, typename First>
-struct HashMapSelector<T, V, First, void, void>{
-private:
-    using Value = Pair<T, V>;
-    using Allocator = ArenaAllocatorFor_T<Value, First>;
-
-public:
-    using Type = tsl::robin_map<T, V, Hasher<T>, EqualTo<T>, Allocator>;
-};
-
-template<typename T, typename First, typename Second, typename Third>
-struct ParallelHashSetSelector{
-private:
-    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
-
-    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
-    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
-    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
-    using Allocator = ArenaAllocatorFor_T<T, Resource>;
-
-public:
-    using Type = tbb::concurrent_unordered_set<T, Hash, Equal, Allocator>;
-};
-
-template<typename T, typename First>
-struct ParallelHashSetSelector<T, First, void, void>{
-private:
-    using Allocator = ArenaAllocatorFor_T<T, First>;
-
-public:
-    using Type = tbb::concurrent_unordered_set<T, Hasher<T>, EqualTo<T>, Allocator>;
-};
-
-template<typename T, typename V, typename First, typename Second, typename Third>
-struct ParallelHashMapSelector{
-private:
-    static constexpr bool s_FirstIsResource = ArenaResourceLike<First>;
-
-    using Resource = Conditional_T<s_FirstIsResource, First, Third>;
-    using Hash = Conditional_T<s_FirstIsResource, Second, First>;
-    using Equal = Conditional_T<s_FirstIsResource, Third, Second>;
-    using Value = typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type;
-    using Allocator = ArenaAllocatorFor_T<Value, Resource>;
-
-public:
-    using Type = tbb::concurrent_unordered_map<T, V, Hash, Equal, Allocator>;
-};
-
-template<typename T, typename V, typename First>
-struct ParallelHashMapSelector<T, V, First, void, void>{
-private:
-    using Value = typename tbb::concurrent_unordered_map<T, V, Hasher<T>, EqualTo<T>>::value_type;
-    using Allocator = ArenaAllocatorFor_T<Value, First>;
-
-public:
-    using Type = tbb::concurrent_unordered_map<T, V, Hasher<T>, EqualTo<T>, Allocator>;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename T, typename First, typename Second = void, typename Third = void>
-using ParallelHashSet = typename ContainerDetail::ParallelHashSetSelector<T, First, Second, Third>::Type;
-
-template<typename T, typename V, typename First, typename Second = void, typename Third = void>
-using ParallelHashMap = typename ContainerDetail::ParallelHashMapSelector<T, V, First, Second, Third>::Type;
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+using ParallelHashMap = tbb::concurrent_unordered_map<
+    T,
+    V,
+    Hash,
+    Equal,
+    ContainerDetail::ArenaAllocatorFor_T<typename tbb::concurrent_unordered_map<T, V, Hash, Equal>::value_type, ArenaT>
+>;
 
 template<typename T, typename ArenaT>
 using ParallelVector = tbb::concurrent_vector<T, ContainerDetail::ArenaCacheAlignedAllocatorFor_T<T, ArenaT>>;
@@ -213,11 +107,11 @@ using ParallelBlockQueue = tbb::concurrent_bounded_queue<T, ContainerDetail::Are
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T, typename First, typename Second = void, typename Third = void>
-using HashSet = typename ContainerDetail::HashSetSelector<T, First, Second, Third>::Type;
+template<typename T, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+using HashSet = tsl::robin_set<T, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
-template<typename T, typename V, typename First, typename Second = void, typename Third = void>
-using HashMap = typename ContainerDetail::HashMapSelector<T, V, First, Second, Third>::Type;
+template<typename T, typename V, typename ArenaT, typename Hash = Hasher<T>, typename Equal = EqualTo<T>>
+using HashMap = tsl::robin_map<T, V, Hash, Equal, ContainerDetail::ArenaAllocatorFor_T<Pair<T, V>, ArenaT>>;
 
 template<
     typename K,

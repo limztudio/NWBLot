@@ -83,13 +83,7 @@ struct MaterialTypedByteContentKeyHasher{
 
 // Dedup map for mutable typed ranges; identical blocks share one range.
 // Used by the material draw pass and the shadow occluder packing alike.
-using MaterialTypedByteContentRangeMap = HashMap<
-    MaterialTypedByteContentKey,
-    MaterialTypedByteRange,
-    MaterialTypedByteContentKeyHasher,
-    EqualTo<MaterialTypedByteContentKey>,
-    Core::Alloc::ScratchArena
->;
+using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, EqualTo<MaterialTypedByteContentKey>>;
 
 [[nodiscard]] inline bool TryBuildMaterialTypedByteAppendRange(
     const usize currentByteCount,

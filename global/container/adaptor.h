@@ -326,12 +326,6 @@ inline bool operator!=(const ArenaCacheAlignedAllocator<T, ArenaT>& lhs, const A
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-concept ArenaResourceLike = requires(T& arena, void* pointer, usize align, usize size){
-    arena.allocate(align, size);
-    arena.deallocate(pointer, align, size);
-};
-
 template<typename T, typename ArenaT>
 using ArenaAllocatorFor_T = ArenaAllocator<T, ArenaT>;
 

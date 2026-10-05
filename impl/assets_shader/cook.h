@@ -49,10 +49,10 @@ public:
     using CookVector = Vector<T, CookArena>;
 
     template<typename T, typename V>
-    using CookMap = HashMap<T, V, Hasher<T>, EqualTo<T>, CookArena>;
+    using CookMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
 
     template<typename T>
-    using CookHashSet = HashSet<T, Hasher<T>, EqualTo<T>, CookArena>;
+    using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 
     struct ShaderMacroDefinition{
         AStringView name;

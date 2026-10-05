@@ -601,8 +601,8 @@ private:
 
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
-    HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
-    HashMap<Buffer*, Vector<BufferOwnershipRelease, Alloc::GlobalArena>, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
+    HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, Alloc::GlobalArena, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo> m_textureOwnershipReleaseDestinations;
+    HashMap<Buffer*, Vector<BufferOwnershipRelease, Alloc::GlobalArena>, Alloc::GlobalArena, Hasher<Buffer*>, EqualTo<Buffer*>> m_bufferOwnershipReleaseDestinations;
 };
 
 

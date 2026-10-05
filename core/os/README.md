@@ -1,6 +1,6 @@
 # Native UI services
 
-`Frame` owns `IClipboardService`; UI/ECS clients borrow it after startup and keep only request tokens. Clipboard requests copy their input, preserve FIFO ordering, complete through `poll`, and can be cancelled without borrowing client buffers. All native work and completion polling belong to the Frame event thread. Up to 32 requests and 16 MiB of UTF-8 text are admitted. Text contains no embedded NUL and must be valid UTF-8; an empty string is supported.
+`Frame` owns `IClipboardService`; UI/ECS clients borrow it after startup and keep only request tokens. Clipboard requests copy their input, preserve FIFO ordering, complete through `poll`, and can be cancelled without borrowing client buffers. All native work and completion polling belong to the Frame event thread. Up to 32 requests and 16 MiB of UTF-8 text are admitted. Text contains no embedded NUL and must be valid UTF-8; an empty string is supported. Clipboard and text-input admission share the `utf8_text_internal.h` decoder in `Utf8TextDetail`, which rejects NUL, overlong forms, surrogates, and out-of-range scalars before either queue copies its bytes.
 
 Win32 uses `CF_UNICODETEXT`, normalizes native CRLF to LF for reads, and makes clipboard write ownership explicit through movable global memory. The clipboard channel is supported; primary selection is reported unsupported.
 

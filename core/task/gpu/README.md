@@ -65,7 +65,7 @@ The launcher builds and runs the target; the test executable writes the XML repo
 
 The XML properties record elapsed CPU nanoseconds and, where applicable, scratch memory and allocation counts. Run several samples and compare matching graph shapes and build configurations. Some analysis fixtures report the total for multiple repetitions; use their `repetitions` or `call_count` property when comparing per-operation cost. Benchmarks have correctness assertions and no wall-clock thresholds. They measure the CPU pipeline; native GPU frame performance requires a representative rendering workload.
 
-The partial-DAG benchmarks in `task_graph_queue_partial_dag_tests.cpp` cover a single dependency, disjoint and reversed pairs, contiguous and interleaved 32-task chains, connected branches, dense layers, two dense components, fan-in/out stars, and merged pairs, with controls through 16,384 tasks. These complement the independent-task and serial-chain placement controls.
+The partial-DAG benchmarks in `tests/unit/task/gpu/task_graph_queue_partial_dag_tests.cpp` cover a single dependency, disjoint and reversed pairs, contiguous and interleaved 32-task chains, connected branches, dense layers, two dense components, fan-in/out stars, and merged pairs, with controls through 16,384 tasks. These complement the independent-task and serial-chain placement controls.
 
 On 2026-10-01, the first completed optimization pass (`68e139e12`) compared Linux x64 Optimize against the preserved original scheduler using three counterbalanced epochs and 66 raw samples per design/shape on AMD BC-250, with no concurrent builds or heavy tests. Graph declaration and dependency analysis were outside the timed assignment call:
 

@@ -70,8 +70,22 @@ void CommandBufferResourceReferences::retainResource(GraphicsResource& resource)
 }
 
 void CommandBufferResourceReferences::retainBuffer(Buffer& buffer){
-    retainResource(buffer);
-    trackRetainedBuffer(buffer);
+    using namespace __hidden_command_buffer_resource_references;
+    if(!m_membership){
+        retainResource(buffer);
+        trackRetainedBuffer(buffer);
+        return;
+    }
+
+    u8& membership = m_membership->try_emplace(&buffer, 0u).first.value();
+    if((membership & s_Owned) == 0u){
+        m_resources.emplace_back(&buffer, Handle<GraphicsResource>::deleter_type(&m_arena));
+        membership |= s_Owned;
+    }
+    if((membership & s_Buffer) == 0u){
+        m_buffers.push_back(&buffer);
+        membership |= s_Buffer;
+    }
 }
 
 void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
@@ -97,19 +111,28 @@ void CommandBufferResourceReferences::trackRetainedBuffer(Buffer& buffer){
 
 void CommandBufferResourceReferences::appendBufferStateCommit(Buffer& buffer){
     using namespace __hidden_command_buffer_resource_references;
-    retainBuffer(buffer);
     if(!m_membership){
-        for(const RetainedBufferStateCommit& commit : m_bufferStateCommits){
-            if(commit.buffer == &buffer)
-                return;
+        retainResource(buffer);
+        trackRetainedBuffer(buffer);
+        if(!m_membership){
+            for(const RetainedBufferStateCommit& commit : m_bufferStateCommits){
+                if(commit.buffer == &buffer)
+                    return;
+            }
+            m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
+            return;
         }
-        m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
-        return;
     }
 
-    const auto found = m_membership->find(&buffer);
-    GLB_ASSERT(found != m_membership->end());
-    u8& membership = found.value();
+    u8& membership = m_membership->try_emplace(&buffer, 0u).first.value();
+    if((membership & s_Owned) == 0u){
+        m_resources.emplace_back(&buffer, Handle<GraphicsResource>::deleter_type(&m_arena));
+        membership |= s_Owned;
+    }
+    if((membership & s_Buffer) == 0u){
+        m_buffers.push_back(&buffer);
+        membership |= s_Buffer;
+    }
     if((membership & s_BufferStateCommit) != 0u)
         return;
     m_bufferStateCommits.push_back(RetainedBufferStateCommit{ .buffer = &buffer });
@@ -130,8 +153,22 @@ void CommandBufferResourceReferences::discardBufferStateCommits()noexcept{
 }
 
 void CommandBufferResourceReferences::retainTexture(Texture& texture){
-    retainResource(texture);
-    trackRetainedTexture(texture);
+    using namespace __hidden_command_buffer_resource_references;
+    if(!m_membership){
+        retainResource(texture);
+        trackRetainedTexture(texture);
+        return;
+    }
+
+    u8& membership = m_membership->try_emplace(&texture, 0u).first.value();
+    if((membership & s_Owned) == 0u){
+        m_resources.emplace_back(&texture, Handle<GraphicsResource>::deleter_type(&m_arena));
+        membership |= s_Owned;
+    }
+    if((membership & s_Texture) == 0u){
+        m_textures.push_back(&texture);
+        membership |= s_Texture;
+    }
 }
 
 void CommandBufferResourceReferences::trackRetainedTexture(Texture& texture){

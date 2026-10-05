@@ -1,6 +1,6 @@
-# Project-wide optimization audit — September 27, 2026
+# Project-wide optimization audit
 
-This pass extends the earlier graphics audit to project-owned engine foundations, ECS/content, assets and pipeline tools, diagnostics, platform/runtime code, build configuration and tests. Baseline `9c0c9279b`; final qualification commit `59793fc15`. Changes follow `.helper/standard.md` and retain owning-module boundaries.
+The September 27, 2026 pass extends the earlier graphics audit to project-owned engine foundations, ECS/content, assets and pipeline tools, diagnostics, platform/runtime code, build configuration and tests. Baseline `9c0c9279b`; final qualification commit `59793fc15`. Changes follow `.helper/standard.md` and retain owning-module boundaries.
 
 ## Accepted steps
 
@@ -61,3 +61,55 @@ The local runner and raw identity/timing evidence are under `__artifacts/project
 Independent domain reviews and a final combined diff review found no further demonstrated small, safe change within the inspected paths. Public APIs are not classified as stale solely because this repository has few callers. Vendor implementations were not rewritten or upgraded. Linux/other OS paths received source review, not execution on this Windows host.
 
 Larger candidates remain profiling work: CSG cap topology traversal needs representative workloads and ordering/failure qualification; removing X11's synchronous window query requires Linux resize/map/visibility testing; asynchronous logger copies establish ownership and need an explicit lifetime redesign before removal. No speculative cache or behavior change was added to claim that every possible optimization has been exhausted.
+
+## October 5, 2026 — repeated CPU work and transient material storage
+
+This pass starts from `bb3e1bd62ad22eec8c58c7f9a49fcfcca3b53513`. Repository-wide inventory and pattern searches were followed by focused ownership, lifetime, ordering, allocation, and call-site review across foundations, graphics, ECS/rendering, UI, platform code, assets, tooling, and launch/build paths. The inventory records 2,218 tracked first-party source, shader, script, configuration, and asset paths. This is broad triage with focused semantic review, rather than a claim that every function was read line by line. Vendor code was excluded from optimization edits.
+
+Four changes were accepted:
+
+- Command-buffer resource retention combines owning, typed, and pending buffer-state membership checks into one lookup on the existing indexed path. The small-list path, first-seen ordering, reference ownership, promotion threshold, and retained capacity stay intact.
+- Descriptor retirement advances one completed heap-use prefix for the locked completion snapshot. Increasing admission IDs and order-preserving compaction allow later retired slots to reuse this work. Queue queries, unknown-queue handling, deferred release, and final heap-use compaction retain their contracts.
+- Material typed-byte deduplication probes with a borrowed span and hash. Hits avoid constructing an owning scratch key; misses still retain owned bytes. Copying the key before upload-vector growth also preserves source spans that alias that vector. Hash collisions are resolved by length and exact byte comparison.
+- UI root collection retains roots at each existing native boundary, but sorts them only immediately before painting. The ascending paint-order/entity-ID comparator and popup/modal routing remain unchanged. Input-only collection avoids an unnecessary sort without adding storage.
+
+### CPU measurements and tradeoffs
+
+Measurements use Windows ARM64 Opt binaries on this host, with serial alternating ABBA/BAAB process rounds and no concurrent native builds or tests. The original and measured candidate executables, every sample XML, and the unchanged benchmark body are retained. Values below are medians across 50 samples per side for resource references and 30 per side for material lookup. The project steady-clock timer measures elapsed time around these CPU operations; this is not a process CPU-cycle measurement. These results do not attribute a whole-frame FPS or process RSS improvement.
+
+| Workload | Measured operations | Before elapsed time | After elapsed time | Elapsed time change |
+| --- | --- | ---: | ---: | ---: |
+| Large repeated resource recording | 1,024 buffers, 256 textures, 8 repetitions | 227.95 µs | 137.40 µs | 39.72% lower |
+| Small repeated resource recording | 4 buffers, 1 texture, 256 repetitions | 13.80 µs | 14.10 µs | 2.17% higher |
+| Repeated 32-byte material value | 262,144 lookup hits | 9.547 ms | 6.584 ms | 31.03% lower |
+| Repeated 512-byte material value | 65,536 lookup hits | 30.360 ms | 30.033 ms | 1.08% lower |
+| Repeated 4,096-byte material value | 16,384 lookup hits | 59.781 ms | 58.890 ms | 1.49% lower |
+| Unique 32-byte material values | 4,096 misses | 0.223 ms | 0.253 ms | 13.61% higher |
+| Unique 512-byte material values | 4,096 misses | 1.981 ms | 2.079 ms | 4.94% higher |
+| Unique 4,096-byte material values | 4,096 misses | 15.315 ms | 15.087 ms | 1.49% lower |
+
+Material measurements exclude setup, reserve, and warmup. Unique workloads contain 256 distinct values in each of 16 fresh maps. Repeated workloads seed one owned value before timing. The small resource difference is 0.30 µs across the entire 256-repetition batch. The approximately 1% material differences are small relative to sample variability; the clear benefit is repeated small values and avoiding transient allocation/copy work. All-unique small-value CPU cost remains a tradeoff, so this is not a universal speedup.
+
+Repeated material probes go from one allocation/free pair per hit to zero. Scratch peak falls by the value size: 32, 512, or 4,096 bytes in these fixtures. Reserved scratch falls from 3,072 to 2,048 bytes for repeated 512-byte values and from 17,408 to 9,216 bytes for repeated 4,096-byte values; the 32-byte fixture retains its 2,048-byte reservation. These are local arena metrics. The original temporary keys were promptly reclaimed, so the saving is not proportional to the total hit count. Owned keys and upload storage remain; unique-value allocation and memory metrics are unchanged. Resource-reference peak and retained memory are also unchanged.
+
+The descriptor change is qualified with an independent logical model, rather than a native timing claim: 1,382,137 exhaustive cases, 20,000 seeded randomized cases, boundary scenarios, and 96 operation-count controls preserve eligibility, freeing order, resource release, and heap-use removal. With 1,024 completed uses and 256 retired slots, retirement completion checks fall from 262,144 to 1,024. Final compaction still performs its own 1,024 checks. The UI change removes one root sort per input-only collection; no isolated UI timing result is claimed.
+
+### Qualification and reproduction
+
+The selected 40-target Windows ARM64 Opt build passed through the launcher. The final selected runtime/integration gate passed all 74 entries in one serial run, with zero skips. Three material regressions exercise allocation-free repeated hits, equal-hash/equal-length distinct bytes with retained ownership, and aliased upload input across growth and mutation. The disabled benchmarks are explicit performance workloads, outside ordinary unit correctness coverage.
+
+The runtime gate admitted 185 fresh captures and 16 complete application logs, with no unexpected warning, error, assertion, crash, or Vulkan validation diagnostic. Fifteen of those application launches activated GPU validation. An additional Opt Testbed window-capture launch with GPU validation also passed, including actual validation-layer/debug-messenger activation and normal shutdown. Image review covers the 27 existing baseline fixtures, the 158 popup/nested-popup checkpoints in default and alternate skins, and the additional Testbed validation capture. Of the 27 baseline frames, 24 are RGB-identical; Testbed scene deltas outside lower window corners are at most six channel levels, and the two resize-frame differences are confined to lower corners. UI regions, geometry, clipping, skin changes, popup chronology, and all four direct/replay framebuffer pairs remain correct; the latter pairs are RGB-identical.
+
+All eight changed C++ files pass UTF-8 without BOM, CRLF, separator, exact EOF, and unnamed-namespace checks. A constant used only by a Final-only skeleton regression is localized to that branch to remove an Opt unused-variable warning; this leaves the measured benchmark body and production helper unchanged. After this cleanup, the affected graphics target rebuilt without compiler diagnostics and its suite passed again in both Opt and Final. The 74-entry Opt run and these targeted reruns are separate qualifications; no full Final runtime gate is claimed.
+
+Build the affected native targets through the launcher:
+
+```powershell
+python -m launcher build nwb_ecs_graphics_tests nwb_graphics_resource_tests nwb_ui_layer_smoke testbed --arch arm64 --config opt --configure always --jobs 6
+```
+
+Run `CommandBufferResourceReferences.DISABLED_Benchmark*` in `graphics_resource_tests.exe` and `MaterialTypedDedupBenchmark.*` in `ecs_graphics_tests.exe` with `--gtest_also_run_disabled_tests` and `--gtest_filter=...`. Compare original and candidate binaries in alternating serial rounds; do not time them alongside a build or application smoke. Local evidence is under `__cmake/verification_optimization/`, including paired samples, model results, source inventories/reviews, build logs, CTest XML/full output, immutable runtime snapshots, and visual review reports. Other platforms received source review; native execution and CPU results in this pass apply to this Windows ARM64 host.
+
+### Remaining opportunities
+
+Further optimization should start with representative profiles: reuse the command initial-state indices that are already sorted, gather caustic typed data directly rather than copying intermediate blocks, reuse one asset-volume compaction buffer, and measure UI root-membership indexing against its retained-memory cost. Source review also found potential scheduler, telemetry, diagnostics, container, and X11 text-input work, but those changes need workload, concurrency, lifetime, or platform evidence before implementation. No speculative cache or ownership shortcut was introduced to exhaust the list.

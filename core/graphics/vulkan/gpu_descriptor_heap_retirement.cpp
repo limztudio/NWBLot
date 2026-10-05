@@ -280,18 +280,25 @@ void GpuDescriptorHeap::collectRetired(){
         return false;
     };
 
+    // Admission IDs increase and compaction preserves order; one completed prefix applies to this locked completion snapshot.
+    usize completedHeapUsePrefix = 0u;
+    u64 firstIncompleteHeapUseID = 0u;
+    bool hasIncompleteHeapUse = false;
     usize keptRetired = 0u;
     for(usize retiredIndex = 0u; retiredIndex < m_retiredCount; ++retiredIndex){
         const RetiredSlot& retired = m_retired[retiredIndex];
-        bool canRetire = true;
-        for(const HeapUse& heapUse : m_heapUses){
+        while(!hasIncompleteHeapUse && completedHeapUsePrefix < m_heapUses.size()){
+            const HeapUse& heapUse = m_heapUses[completedHeapUsePrefix];
             if(heapUse.id > retired.lastRequiredHeapUseID)
-                continue;
+                break;
             if(!heapUseComplete(heapUse)){
-                canRetire = false;
+                firstIncompleteHeapUseID = heapUse.id;
+                hasIncompleteHeapUse = true;
                 break;
             }
+            ++completedHeapUsePrefix;
         }
+        const bool canRetire = !hasIncompleteHeapUse || firstIncompleteHeapUseID > retired.lastRequiredHeapUseID;
 
         if(canRetire){
             SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());

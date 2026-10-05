@@ -35,18 +35,14 @@
 #include <global/binary.h>
 #include <global/compile.h>
 #include <global/limit.h>
+#include <global/span.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_ecs_graphics_tests{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr u32 s_ExpectedDualCount = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -448,80 +444,247 @@ TEST(EcsGraphics, MissingMeshClearsPreviousResolution){
     EXPECT_FALSE(resolvedMesh.valid());
 }
 
-TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+TEST(EcsGraphics, MaterialTypedByteRangeRepeatedHitsAvoidScratchAllocations){
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
-    using MaterialTypedByteContentKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
-    using RangeMap = ::HashMap<MaterialTypedByteContentKey, NWB::Impl::ECSRenderDetail::MaterialTypedByteRange, NWB::Core::Alloc::ScratchArena, NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher, ::EqualTo<MaterialTypedByteContentKey>>;
+    using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
+    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
 
-    ByteVector uploadBytes{scratchArena};
-    RangeMap ranges(
-        0,
-        NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
-        ::EqualTo<MaterialTypedByteContentKey>(),
-        scratchArena
-    );
+    NWB::Core::Alloc::ScratchArena sourceScratch(Name("tests/material_typed_dedup/hit_sources"));
+    ByteVector sourceBytes(sourceScratch);
+    sourceBytes.resize(4096u);
+    for(usize index = 0u; index < sourceBytes.size(); ++index)
+        sourceBytes[index] = static_cast<u8>((index * 31u) & 255u);
 
-    ByteVector firstBytes{scratchArena};
-    firstBytes.push_back(1u);
-    firstBytes.push_back(s_ExpectedDualCount);
-    firstBytes.push_back(3u);
-    firstBytes.push_back(4u);
+    const Array<usize, 2> byteCounts = {512u, 4096u};
+    for(const usize byteCount : byteCounts){
+        NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+        ByteVector uploadBytes(scratchArena);
+        uploadBytes.reserve(byteCount);
+        RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
+        ranges.reserve(1u);
+        const Span<const u8> bytes(sourceBytes.data(), byteCount);
+        ByteRange firstRange;
+        ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes, firstRange));
+        for(usize warmup = 0u; warmup < 64u; ++warmup){
+            ByteRange range;
+            ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes, range));
+        }
 
-    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange firstRange;
-    EXPECT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
-        uploadBytes,
-        ranges,
-        firstBytes,
-        firstRange
-    ));
-    EXPECT_EQ(firstRange.byteOffset, 0u);
-    EXPECT_EQ(firstRange.byteCount, 4u);
-    EXPECT_EQ(uploadBytes.size(), 4u);
-
-    ByteVector duplicateBytes{scratchArena};
-    duplicateBytes.assign(firstBytes.begin(), firstBytes.end());
-    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange duplicateRange;
-    EXPECT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
-        uploadBytes,
-        ranges,
-        duplicateBytes,
-        duplicateRange
-    ));
-    EXPECT_EQ(duplicateRange.byteOffset, firstRange.byteOffset);
-    EXPECT_EQ(duplicateRange.byteCount, firstRange.byteCount);
-    EXPECT_EQ(uploadBytes.size(), 4u);
-
-    ByteVector secondBytes{scratchArena};
-    secondBytes.push_back(1u);
-    secondBytes.push_back(s_ExpectedDualCount);
-    secondBytes.push_back(3u);
-    secondBytes.push_back(5u);
-    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange secondRange;
-    EXPECT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
-        uploadBytes,
-        ranges,
-        secondBytes,
-        secondRange
-    ));
-    EXPECT_EQ(secondRange.byteOffset, 4u);
-    EXPECT_EQ(secondRange.byteCount, 4u);
-    EXPECT_EQ(uploadBytes.size(), 8u);
-    EXPECT_EQ(ranges.size(), s_ExpectedDualCount);
-
-    ByteVector emptyBytes{scratchArena};
-    NWB::Impl::ECSRenderDetail::MaterialTypedByteRange emptyRange;
-    EXPECT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
-        uploadBytes,
-        ranges,
-        emptyBytes,
-        emptyRange
-    ));
-    EXPECT_EQ(emptyRange.byteOffset, 0u);
-    EXPECT_EQ(emptyRange.byteCount, 0u);
-    EXPECT_EQ(uploadBytes.size(), 8u);
-
+        const ArenaMemoryStats before = scratchArena.memoryStats();
+        for(usize lookup = 0u; lookup < 256u; ++lookup){
+            ByteRange range;
+            ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes, range));
+            EXPECT_EQ(range.byteOffset, firstRange.byteOffset);
+            EXPECT_EQ(range.byteCount, firstRange.byteCount);
+        }
+        const Span<const u8> emptyBytes;
+        ByteRange emptyRange{4u, 4u};
+        ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, emptyBytes, emptyRange));
+        const ArenaMemoryStats after = scratchArena.memoryStats();
+        EXPECT_EQ(after.allocationCount, before.allocationCount);
+        EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+        EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+        EXPECT_EQ(after.usedBytes, before.usedBytes);
+        EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+        EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+        EXPECT_EQ(emptyRange.byteOffset, 0u);
+        EXPECT_EQ(emptyRange.byteCount, 0u);
+        EXPECT_EQ(uploadBytes.size(), byteCount);
+        EXPECT_EQ(ranges.size(), 1u);
+    }
 }
+
+TEST(EcsGraphics, MaterialTypedByteRangeHashCollisionRetainsOwnedBytes){
+    using ByteKey = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentKey;
+    using ByteLookup = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentLookup;
+    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+    using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
+
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
+    ranges.reserve(2u);
+    constexpr u64 s_CollisionHash = 41u;
+    const Array<u8, 4> originalFirstBytes = {1u, 2u, 3u, 4u};
+    const Array<u8, 4> secondBytes = {1u, 2u, 3u, 5u};
+    {
+        Array<u8, 4> firstBytes = originalFirstBytes;
+        const ByteLookup lookup{s_CollisionHash, Span<const u8>(firstBytes.data(), firstBytes.size())};
+        ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, lookup), ByteRange{0u, 4u}).second);
+        firstBytes.fill(0u);
+    }
+
+    // Equal hash and length must still distinguish content; the first source has already expired.
+    const ByteLookup firstLookup{s_CollisionHash, Span<const u8>(originalFirstBytes.data(), originalFirstBytes.size())};
+    const ByteLookup secondLookup{s_CollisionHash, Span<const u8>(secondBytes.data(), secondBytes.size())};
+    const auto firstFound = ranges.find(firstLookup);
+    ASSERT_NE(firstFound, ranges.end());
+    EXPECT_EQ(firstFound.value().byteOffset, 0u);
+    EXPECT_EQ(ranges.find(secondLookup), ranges.end());
+    ASSERT_TRUE(ranges.emplace(ByteKey(scratchArena, secondLookup), ByteRange{4u, 4u}).second);
+    const auto secondFound = ranges.find(secondLookup);
+    ASSERT_NE(secondFound, ranges.end());
+    EXPECT_EQ(secondFound.value().byteOffset, 4u);
+    EXPECT_EQ(ranges.size(), 2u);
+}
+
+TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
+    using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
+    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+    using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
+
+    NWB::Core::Alloc::ScratchArena sourceScratch(Name("tests/material_typed_dedup/alias_source"));
+    ByteVector expectedBytes(sourceScratch);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    ByteVector uploadBytes(scratchArena);
+    uploadBytes.reserve(32u);
+    uploadBytes.resize(uploadBytes.capacity());
+    for(usize index = 0u; index < uploadBytes.size(); ++index)
+        uploadBytes[index] = static_cast<u8>((index * 31u) & 255u);
+    expectedBytes.assign(uploadBytes.begin(), uploadBytes.end());
+    const usize initialCapacity = uploadBytes.capacity();
+    const Span<const u8> aliasedBytes(uploadBytes.data(), uploadBytes.size());
+    RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratchArena);
+    ranges.reserve(1u);
+    ByteRange appendedRange;
+    ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, aliasedBytes, appendedRange));
+    ASSERT_GT(uploadBytes.capacity(), initialCapacity);
+    ASSERT_EQ(appendedRange.byteCount, expectedBytes.size());
+    ASSERT_EQ(uploadBytes.size(), expectedBytes.size() * 2u);
+    EXPECT_EQ(GLB_MEMCMP(uploadBytes.data() + appendedRange.byteOffset, expectedBytes.data(), expectedBytes.size()), 0);
+
+    // Mutating the original upload bytes cannot change the retained dedup key.
+    for(usize index = 0u; index < expectedBytes.size(); ++index)
+        uploadBytes[index] ^= 255u;
+    const usize uploadByteCount = uploadBytes.size();
+    ByteRange foundRange;
+    ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, expectedBytes, foundRange));
+    EXPECT_EQ(foundRange.byteOffset, appendedRange.byteOffset);
+    EXPECT_EQ(foundRange.byteCount, appendedRange.byteCount);
+    EXPECT_EQ(uploadBytes.size(), uploadByteCount);
+    EXPECT_EQ(ranges.size(), 1u);
+}
+
+
+static void BenchmarkMaterialTypedRanges(
+    const usize byteCount,
+    const usize valueCount,
+    const usize lookupCount,
+    const usize iterations,
+    const bool repeatedHits){
+    using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
+    using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
+    using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
+
+    NWB::Core::Alloc::ScratchArena setupScratch(Name("tests/material_typed_dedup/benchmark_setup"));
+    ByteVector sourceBytes(setupScratch);
+    sourceBytes.resize(byteCount * valueCount);
+    for(usize valueIndex = 0u; valueIndex < valueCount; ++valueIndex){
+        const usize offset = valueIndex * byteCount;
+        for(usize byteIndex = 0u; byteIndex < byteCount; ++byteIndex)
+            sourceBytes[offset + byteIndex] = static_cast<u8>((byteIndex * 31u + valueIndex) & 255u);
+        const u64 identity = valueIndex;
+        GLB_MEMCPY(sourceBytes.data() + offset, byteCount, &identity, sizeof(identity));
+    }
+
+    u64 elapsed = 0u;
+    u64 allocations = 0u;
+    u64 reallocations = 0u;
+    u64 deallocations = 0u;
+    u64 scratchPeak = 0u;
+    u64 scratchPeakDelta = 0u;
+    u64 scratchReserved = 0u;
+    u64 scratchUsedBefore = 0u;
+    u64 scratchUsedAfter = 0u;
+    u64 observedOffsets = 0u;
+    for(usize iteration = 0u; iteration < iterations; ++iteration){
+        NWB::Core::Alloc::ScratchArena scratch(Name("tests/material_typed_dedup/benchmark_operation"));
+        ByteVector uploadBytes(scratch);
+        uploadBytes.reserve(byteCount * valueCount);
+        RangeMap ranges(0u, RangeMap::hasher(), RangeMap::key_equal(), scratch);
+        ranges.reserve(valueCount);
+        if(repeatedHits){
+            // Warm the table and scratch backing before measuring duplicate probes.
+            const Span<const u8> bytes(sourceBytes.data(), byteCount);
+            for(usize warmup = 0u; warmup < 64u; ++warmup){
+                ByteRange range;
+                ASSERT_TRUE(NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes, range));
+            }
+        }
+
+        const ArenaMemoryStats before = scratch.memoryStats();
+        const Timer begin = TimerNow();
+        bool success = true;
+        for(usize lookup = 0u; lookup < lookupCount; ++lookup){
+            const usize sourceIndex = repeatedHits ? 0u : lookup;
+            const Span<const u8> bytes(sourceBytes.data() + sourceIndex * byteCount, byteCount);
+            ByteRange range;
+            if(!NWB::Impl::ECSRenderDetail::FindOrAppendMaterialTypedByteRange(uploadBytes, ranges, bytes, range)){
+                success = false;
+                break;
+            }
+            observedOffsets += range.byteOffset;
+        }
+        elapsed += DurationInNS<u64>(TimerNow(), begin);
+        const ArenaMemoryStats after = scratch.memoryStats();
+        ASSERT_TRUE(success);
+        EXPECT_EQ(ranges.size(), valueCount);
+        EXPECT_EQ(uploadBytes.size(), byteCount * valueCount);
+        if(repeatedHits)
+            EXPECT_EQ(after.usedBytes, before.usedBytes);
+        allocations += after.allocationCount - before.allocationCount;
+        reallocations += after.reallocationCount - before.reallocationCount;
+        deallocations += after.deallocationCount - before.deallocationCount;
+        scratchPeak = Max(scratchPeak, after.peakUsedBytes);
+        scratchPeakDelta = Max(scratchPeakDelta, after.peakUsedBytes - before.peakUsedBytes);
+        scratchReserved = Max(scratchReserved, after.reservedBytes);
+        scratchUsedBefore = Max(scratchUsedBefore, before.usedBytes);
+        scratchUsedAfter = Max(scratchUsedAfter, after.usedBytes);
+    }
+    const u64 expectedOffsets = repeatedHits ? 0u : byteCount * valueCount * (valueCount - 1u) / 2u * iterations;
+    EXPECT_EQ(observedOffsets, expectedOffsets);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_ns", elapsed);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_byte_count", byteCount);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_value_count", valueCount);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_lookup_count", lookupCount * iterations);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_iterations", iterations);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_repeated_hits", repeatedHits ? 1u : 0u);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_allocations", allocations);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_reallocations", reallocations);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_deallocations", deallocations);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_scratch_peak_bytes", scratchPeak);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_scratch_peak_delta_bytes", scratchPeakDelta);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_scratch_reserved_bytes", scratchReserved);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_scratch_used_before_bytes", scratchUsedBefore);
+    NWB::Tests::RecordUnsignedTestProperty("material_typed_dedup_scratch_used_after_bytes", scratchUsedAfter);
+}
+
+// Opt in with --gtest_also_run_disabled_tests and a MaterialTypedDedupBenchmark.* filter.
+TEST(MaterialTypedDedupBenchmark, DISABLED_Repeated32Bytes){
+    BenchmarkMaterialTypedRanges(32u, 1u, 262144u, 1u, true);
+}
+
+TEST(MaterialTypedDedupBenchmark, DISABLED_Repeated512Bytes){
+    BenchmarkMaterialTypedRanges(512u, 1u, 65536u, 1u, true);
+}
+
+TEST(MaterialTypedDedupBenchmark, DISABLED_Repeated4096Bytes){
+    BenchmarkMaterialTypedRanges(4096u, 1u, 16384u, 1u, true);
+}
+
+TEST(MaterialTypedDedupBenchmark, DISABLED_Unique32Bytes){
+    BenchmarkMaterialTypedRanges(32u, 256u, 256u, 16u, false);
+}
+
+TEST(MaterialTypedDedupBenchmark, DISABLED_Unique512Bytes){
+    BenchmarkMaterialTypedRanges(512u, 256u, 256u, 16u, false);
+}
+
+TEST(MaterialTypedDedupBenchmark, DISABLED_Unique4096Bytes){
+    BenchmarkMaterialTypedRanges(4096u, 256u, 256u, 16u, false);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static NWB::Impl::SkeletonJointMatrix MakeTranslationJointMatrix(const f32 x, const f32 y, const f32 z){
@@ -658,6 +821,8 @@ TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
 }
 #if defined(GLB_FINAL)
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
+    constexpr u32 s_ExpectedDualCount = 2u;
+
     NWB::Impl::MeshSkinningRuntimeInstance instance = MakeTriangleInstance();
     AssignSingleJointSkin(instance, 0u);
     instance.handle.value = 517u;

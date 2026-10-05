@@ -69,6 +69,9 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     m_ui.setDeltaSeconds(frameDelta);
     m_ui.setPointerBusy(m_pressedButtons != 0u);
     UiPaintContext context{ m_world, m_clipboard, m_textInput, m_paint, m_text, m_display, m_ui, Core::ECS::s_InvalidEntityId, frameDelta };
+    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs){
+        return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
+    });
     for(const auto& root : m_liveRoots){
         UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
         if(!component || !component->visible || !component->paint)
@@ -119,9 +122,6 @@ bool UiLayerSystem::collectRoots(){
         m_rootIdentities.push_back({ entity.id, 1u });
     });
     m_context.retainRoots(m_rootIdentities.data(), m_rootIdentities.size());
-    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs){
-        return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
-    });
     return !overflow;
 }
 

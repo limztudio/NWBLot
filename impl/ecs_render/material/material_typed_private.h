@@ -16,6 +16,7 @@
 #include <global/compile.h>
 #include <global/containers.h>
 #include <global/hash_utils.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,20 +51,57 @@ struct MaterialTypedByteAppendRange{
     usize alignedByteEnd = 0u;
 };
 
+struct MaterialTypedByteContentLookup{
+    u64 byteHash = 0u;
+    Span<const u8> bytes;
+};
+
 struct MaterialTypedByteContentKey{
     u64 byteHash = 0u;
     Vector<u8, Core::Alloc::ScratchArena> bytes;
 
-    template<typename MaterialTypedByteVector>
-    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteVector& typedBytes)
-        : byteHash(ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()))
+    MaterialTypedByteContentKey(Core::Alloc::ScratchArena& arena, const MaterialTypedByteContentLookup& lookup)
+        : byteHash(lookup.byteHash)
         , bytes(arena)
     {
-        bytes.reserve(typedBytes.size());
-        bytes.assign(typedBytes.begin(), typedBytes.end());
+        if(!lookup.bytes.empty()){
+            bytes.reserve(lookup.bytes.size());
+            bytes.assign(lookup.bytes.begin(), lookup.bytes.end());
+        }
+    }
+};
+
+inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs){
+    if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
+        return false;
+    if(lhs.bytes.empty())
+        return true;
+
+    return GLB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
+}
+
+struct MaterialTypedByteContentKeyHasher{
+    usize operator()(const MaterialTypedByteContentKey& key)const{
+        usize seed = Hasher<u64>{}(key.byteHash);
+        ::HashCombine(seed, key.bytes.size());
+        return seed;
     }
 
-    friend bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs){
+    usize operator()(const MaterialTypedByteContentLookup& lookup)const{
+        usize seed = Hasher<u64>{}(lookup.byteHash);
+        ::HashCombine(seed, lookup.bytes.size());
+        return seed;
+    }
+};
+
+struct MaterialTypedByteContentKeyEqual{
+    using is_transparent = void;
+
+    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentKey& rhs)const{
+        return lhs == rhs;
+    }
+
+    bool operator()(const MaterialTypedByteContentKey& lhs, const MaterialTypedByteContentLookup& rhs)const{
         if(lhs.byteHash != rhs.byteHash || lhs.bytes.size() != rhs.bytes.size())
             return false;
         if(lhs.bytes.empty())
@@ -73,17 +111,9 @@ struct MaterialTypedByteContentKey{
     }
 };
 
-struct MaterialTypedByteContentKeyHasher{
-    usize operator()(const MaterialTypedByteContentKey& key)const{
-        usize seed = Hasher<u64>{}(key.byteHash);
-        ::HashCombine(seed, key.bytes.size());
-        return seed;
-    }
-};
-
 // Dedup map for mutable typed ranges; identical blocks share one range.
 // Used by the material draw pass and the shadow occluder packing alike.
-using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, EqualTo<MaterialTypedByteContentKey>>;
+using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, MaterialTypedByteContentKeyEqual>;
 
 [[nodiscard]] inline bool TryBuildMaterialTypedByteAppendRange(
     const usize currentByteCount,
@@ -168,17 +198,26 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
     if(typedBytes.empty())
         return true;
 
-    MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), typedBytes);
-    const auto foundRange = rangeMap.find(rangeKey);
+    const MaterialTypedByteContentLookup lookup{
+        ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), Span<const u8>(typedBytes.data(), typedBytes.size())
+    };
+    const auto foundRange = rangeMap.find(lookup);
     if(foundRange != rangeMap.end()){
         outRange = foundRange.value();
         return true;
     }
 
-    if(!AppendMaterialTypedByteRange(materialTypedBytes, typedBytes, outRange))
+    // Copy before growing the upload vector: typedBytes may alias its existing storage.
+    MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), lookup);
+    const Span<const u8> ownedBytes(rangeKey.bytes.data(), rangeKey.bytes.size());
+    if(!AppendMaterialTypedByteRange(materialTypedBytes, ownedBytes, outRange))
         return false;
 
-    rangeMap.emplace(Move(rangeKey), outRange);
+    const auto insertedRange = rangeMap.emplace(Move(rangeKey), outRange);
+    if(!insertedRange.second){
+        GLB_ASSERT_MSG(false, GLB_TEXT("RendererSystem: material typed range insertion duplicated a missing key"));
+        return false;
+    }
     return true;
 }
 

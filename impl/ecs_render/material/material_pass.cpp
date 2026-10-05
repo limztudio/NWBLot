@@ -353,8 +353,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
     ECSRenderDetail::MaterialTypedByteContentRangeMap mutableMaterialTypedRanges(
         0,
-        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
-        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(),
         materialTypedBytes.get_allocator().arena()
     );
     mutableMaterialTypedRanges.reserve(rendererCapacity);

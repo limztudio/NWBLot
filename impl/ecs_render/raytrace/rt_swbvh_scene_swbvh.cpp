@@ -52,8 +52,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     Vector<PreparedSceneSwBvhMesh, Core::Alloc::ScratchArena> preparedMeshes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
         0,
-        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
-        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(),
         scratchArena
     );
     instances.reserve(candidateCount);

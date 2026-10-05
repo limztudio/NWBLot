@@ -47,8 +47,8 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
         0,
-        ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
-        EqualTo<ECSRenderDetail::MaterialTypedByteContentKey>(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::hasher(),
+        ECSRenderDetail::MaterialTypedByteContentRangeMap::key_equal(),
         scratchArena
     );
     instances.reserve(candidateCount);

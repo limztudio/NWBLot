@@ -59,7 +59,7 @@ class TextAreaRun:
         self.checkpoint(stage, focus=1, anchor=self.snapshot["caret"], preferred_valid=0, preferred_bits=0)
 
     def checkpoint(self, name, *, text=None, anchor=None, caret=None, extent=None, extra=None,
-        minimum_selection_lines=0, settle=0.25, allow_offscreen_caret=False, **changes):
+        minimum_selection_lines=0, settle=0.25, allow_offscreen_caret=False, wait_for_settle=False, **changes):
         if text is not None:
             if anchor is None or caret is None:
                 raise ValueError("text checkpoints require exact UTF-8 anchor and caret positions")
@@ -76,6 +76,8 @@ class TextAreaRun:
         path = self.args.output_directory / f"{len(self.stages):02}_{name}.bmp"
         stage_deadline = min(self.deadline, time.monotonic() + 10.0)
         report = None
+        entry_sequence = self.snapshot["sequence"] if self.snapshot is not None else -1
+        settled = not wait_for_settle
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during TextArea capture")
             self.native.maintain_pointer()
@@ -86,6 +88,13 @@ class TextAreaRun:
                 continue
             if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 440.0:
                 raise SmokeSkip("the TextArea fixture needs a logical client of at least 640x440")
+            if not settled:
+                if snapshot["sequence"] <= entry_sequence:
+                    # The viewport click only lands after the next published marker
+                    # sequence; pre-toggle logs describe the old viewport geometry.
+                    time.sleep(0.1)
+                    continue
+                settled = True
             def capture_frame():
                 if self.native.windows:
                     self.backend.capture_prepared_raw_client_window(self.handle, path)
@@ -104,7 +113,16 @@ class TextAreaRun:
                 probe = failed[0]
                 column, row = probe["position"]
                 sample = (column, max(0, row - 1), min(report["extent"][1], row + 2), probe["expected"], probe["tolerance"])
-                wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
+                try:
+                    wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
+                except SmokeFailure:
+                    # The 1s blink phase can be unobservable under full-suite GPU load;
+                    # retry a fresh capture instead of failing the gate outright.
+                    time.sleep(0.1)
+                    continue
+                refreshed = snapshot_from_logs(collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern))
+                if refreshed is not None and refreshed["sequence"] >= snapshot["sequence"]:
+                    snapshot = refreshed
                 report = capture_frame()
             if report["passed"]:
                 self.snapshot = snapshot
@@ -351,7 +369,7 @@ class TextAreaRun:
         self.checkpoint("long_document_reveals_caret_on_both_axes", text=LONG_DOCUMENT, anchor=1039, caret=1039,
             long_document=1, extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
         self.controller("viewport")
-        self.checkpoint("smaller_viewport_reveals_caret", compact=1,
+        self.checkpoint("smaller_viewport_reveals_caret", compact=1, wait_for_settle=True,
             extra=lambda state: state["scroll"][0] > 0.0 and state["scroll"][1] > 0.0)
         self.scrolling_gates()
         self.focus("small_viewport_focus_precedes_home")

@@ -59,6 +59,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - For engine public/module-facing enums, use the namespace-enum pattern (`namespace X { enum Enum : u8 { ... }; };`) and do not use `enum class`.
 - Handle aliases follow `<Type>Handle` naming.
 - C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks. Class member functions, including static member functions, use `lowerCamelCase`.
+- Exception: keep `checked_cast` in `snake_case` to align with the C++ cast names.
 - Global and class static variables start with `s_Uppercase`; function-local static variables retain the `s_` prefix.
 - Macros owned by `global/` use the `GLB_` prefix. Keep `NWB_` for project-owned namespace, graphics configuration, logger, and shader macros.
 - Preserve project scalar aliases, template parameter conventions, required standard-library customization/iterator names, and external API/entry-point spellings. Project-owned methods that merely resemble standard APIs follow the project method convention.
@@ -252,7 +253,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - If a helper needs `Core::Alloc::ScratchArena`, take the scratch arena from the caller instead of constructing a local arena inside the helper.
   Put the actual scratch arena at the first owning caller for that operation and thread it through lower helpers so repeated helper calls reuse the same arena allocation.
 - Prefer explicit casts (`static_cast`) over C-style casts.
-- Use `CheckedCast` for pointer downcasts in internal engine code.
+- Use `checked_cast` for pointer downcasts in internal engine code.
 - `[[nodiscard]]` is used on important query/accessor return values.
 - Const correctness is expected, though both `const T&` and `T const&` forms appear.
 - `auto` is allowed, but always spell out qualifiers and reference/pointer intent (`const`, `&`, `*`, `&&`) explicitly when applicable.

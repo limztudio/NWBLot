@@ -33,8 +33,8 @@ public:
 
 
 template<typename T, typename U>
-inline T CheckedCast(U u){
-    static_assert(!IsSame<T, U>::value, "Unnecessary CheckedCast");
+inline T checked_cast(U u){
+    static_assert(!IsSame<T, U>::value, "Unnecessary checked_cast");
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);

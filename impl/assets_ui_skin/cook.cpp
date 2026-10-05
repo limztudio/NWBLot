@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 bool UiSkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, GLB_TEXT("UiSkinAssetCodec::serialize")))
         return false;
-    const UiSkin& skin = *CheckedCast<const UiSkin*>(&asset);
+    const UiSkin& skin = *checked_cast<const UiSkin*>(&asset);
     if(!skin.validatePayload())
         return false;
 

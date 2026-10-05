@@ -60,13 +60,13 @@ bool DecodeWin32FallbackCharInput(ITextInputService& service, const u32 unit, u3
     codePoint = 0u;
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
-    return CheckedCast<Win32TextInputService*>(&service)->decodeFallbackCharInput(unit, codePoint);
+    return checked_cast<Win32TextInputService*>(&service)->decodeFallbackCharInput(unit, codePoint);
 }
 
 bool ResetWin32FallbackCharInput(ITextInputService& service){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
-    return CheckedCast<Win32TextInputService*>(&service)->resetFallbackCharInput();
+    return checked_cast<Win32TextInputService*>(&service)->resetFallbackCharInput();
 }
 
 

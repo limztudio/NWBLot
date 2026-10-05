@@ -247,7 +247,7 @@ private:
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
-                    return CheckedCast<MessageChannel<T>*>(channel.get());
+                    return checked_cast<MessageChannel<T>*>(channel.get());
             }
         }
 
@@ -257,7 +257,7 @@ private:
 
         auto& slot = m_channels[typeId];
         if(slot)
-            return CheckedCast<MessageChannel<T>*>(slot.get());
+            return checked_cast<MessageChannel<T>*>(slot.get());
 
         auto channel = MakeGlobalUnique<MessageChannel<T>>(m_arena, m_arena);
         auto* raw = channel.get();
@@ -281,7 +281,7 @@ private:
         const auto& channel = m_channels[typeId];
         if(!channel)
             return nullptr;
-        return CheckedCast<const MessageChannel<T>*>(channel.get());
+        return checked_cast<const MessageChannel<T>*>(channel.get());
     }
 
 

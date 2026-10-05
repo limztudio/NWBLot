@@ -128,7 +128,7 @@ bool DispatchWin32TextInputMessage(
     const isize lParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
-    return CheckedCast<Win32TextInputService*>(&service)->handleMessage(message, wParam, lParam);
+    return checked_cast<Win32TextInputService*>(&service)->handleMessage(message, wParam, lParam);
 }
 
 

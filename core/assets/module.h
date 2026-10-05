@@ -110,7 +110,7 @@ template<typename AssetT>
 [[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset){
     if(!asset || asset->assetType() != AssetT::assetTypeName())
         return nullptr;
-    return CheckedCast<const AssetT*>(asset);
+    return checked_cast<const AssetT*>(asset);
 }
 
 

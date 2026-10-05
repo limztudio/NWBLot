@@ -148,7 +148,7 @@ public:
         for(auto& system : m_systems){
             if(system.typeId != systemTypeId)
                 continue;
-            return CheckedCast<T*>(system.system.get());
+            return checked_cast<T*>(system.system.get());
         }
         return nullptr;
     }
@@ -205,7 +205,7 @@ private:
         const auto typeId = ComponentType<T>();
         if(typeId >= m_pools.size())
             return nullptr;
-        return CheckedCast<ComponentPool<T>*>(m_pools[typeId].get());
+        return checked_cast<ComponentPool<T>*>(m_pools[typeId].get());
     }
 
     template<typename T>
@@ -213,7 +213,7 @@ private:
         const auto typeId = ComponentType<T>();
         if(typeId >= m_pools.size())
             return nullptr;
-        return CheckedCast<const ComponentPool<T>*>(m_pools[typeId].get());
+        return checked_cast<const ComponentPool<T>*>(m_pools[typeId].get());
     }
 
     template<typename T>
@@ -225,7 +225,7 @@ private:
         auto& pool = m_pools[typeId];
         if(!pool)
             pool = MakeGlobalUnique<ComponentPool<T>>(m_arena, m_arena);
-        return *CheckedCast<ComponentPool<T>*>(pool.get());
+        return *checked_cast<ComponentPool<T>*>(pool.get());
     }
     template<typename T>
     ComponentPool<T>& requirePool(){

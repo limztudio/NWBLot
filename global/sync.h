@@ -169,7 +169,7 @@ public:
     AtomicBackOff()noexcept
         : m_count(1)
         {}
-    // This constructor pauses immediately; do not use on hot paths!
+    // This constructor pauses immediately; do not use on hot paths.
     AtomicBackOff(bool)noexcept
         : m_count(1)
         { pause(); }

@@ -316,7 +316,7 @@ namespace GpuTaskGraphCompilerDetail{
                 precedingPacketAllowsMerge = precedingPacketMatchesScoredMergeDomain;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
-                // A score is useful only for an actual immediate serial chain. Never use packet coalescing to
+                // A score applies only to an actual immediate serial chain. Never use packet coalescing to
                 // manufacture an order between unrelated work, and keep Medium/Large work independently
                 // accept/recoverable unless its owner deliberately asks for an explicit merge.
                 const GpuTaskId precedingTask = compiledPlan.packetTasks[

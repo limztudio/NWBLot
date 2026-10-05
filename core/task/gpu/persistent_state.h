@@ -75,8 +75,8 @@ public:
     [[nodiscard]] usize retainedTextureCount()const noexcept{ return m_textures.size(); }
     [[nodiscard]] usize retainedBufferCount()const noexcept{ return m_buffers.size(); }
 
-    // Replaces the accepted cache with `source` filtered to the supplied live imported resources.  This is useful
-    // when resource pruning removes a runtime generation that the prior snapshot referenced.
+    // Replaces the accepted cache with `source` filtered to the supplied live imported resources for resource
+    // pruning that removes a runtime generation the prior snapshot referenced.
     [[nodiscard]] bool replaceResourceSubset(
         const CommandListResourceStateHandoff& source,
         const TextureHandle* textures,

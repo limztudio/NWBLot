@@ -199,7 +199,7 @@ private:
 
 // GpuCrashTracker tracks all Device-level constructs needed when reporting a GPU crash.
 // It resolves a last-executed marker payload hash back to the original nested marker string.
-// There should be one GpuCrashTracker per Device.
+// There is one GpuCrashTracker per Device.
 // Its concurrent map is append-only: exact paths reuse IDs, while published strings never move or disappear.
 class GpuCrashTracker : NoCopy{
     friend class GpuCrashMarkerTracker;

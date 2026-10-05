@@ -183,7 +183,7 @@ public:
     void setPipelineCacheDirectory(const Path& directory);
     bool setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
-    // new frame. This is useful when an external capture must sample the last completed temporal frame exactly.
+    // new frame, so an external capture can sample the last completed temporal frame exactly.
     void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
     bool runFrame();
     // A render pass uses this when an accepted cross-queue release cannot be recovered safely. The current graphics

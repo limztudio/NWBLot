@@ -954,7 +954,7 @@ public:
         return task;
     }
 
-    // This form is useful for abstract resources and conservative bindless hazard domains during the metadata-only phase.
+    // This form covers abstract resources and conservative bindless hazard domains during the metadata-only phase.
     // Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
     [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);

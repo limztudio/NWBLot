@@ -145,7 +145,7 @@ inline u32 ResolveSceneLights(
 
     // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to
     // the most important lights this frame (slot index -> params.z; lights that miss out keep -1 and stay
-    // fully lit). A simple K-pass selection over <= NWB_SCENE_MAX_LIGHTS lights is trivially cheap.
+    // fully lit). Selection over <= NWB_SCENE_MAX_LIGHTS lights stays cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(
         world,

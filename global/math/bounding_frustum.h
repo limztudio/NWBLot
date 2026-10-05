@@ -15,12 +15,13 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #include "bounding_shape_decls.h"
 #include "bounding_corners.h"
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{ // beginner: Publishes SIMD lanes into Float# storage via createFromMatrix core.
     createFromMatrix(*this, projection, rightHandedCoordinates);
@@ -193,18 +194,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{ // begi
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingFrustum::containsSphereValues(const SIMDVector frustumOrigin, const SIMDVector frustumOrientation, const f32 rightSlopeValue, const f32 leftSlopeValue, const f32 topSlopeValue, const f32 bottomSlopeValue, const f32 nearPlaneValue, const f32 farPlaneValue, const SIMDVector sphereValue)const noexcept{
     SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(frustumOrigin, frustumOrientation, rightSlopeValue, leftSlopeValue, topSlopeValue, bottomSlopeValue, nearPlaneValue, farPlaneValue, planes);
-    const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
-    SIMDVector anyIntersecting = VectorFalseInt();
-    for(const SIMDVector plane : planes){
-        SIMDVector outside{};
-        SIMDVector inside{};
-        CollisionDetail::FastIntersectSpherePlane(centerVector, sphereRadius, plane, outside, inside);
-        if(CollisionDetail::Vector4AllTrue(outside))
-            return ContainmentType::Disjoint;
-        anyIntersecting = VectorOrInt(anyIntersecting, VectorEqualInt(inside, VectorFalseInt()));
-    }
-    return CollisionDetail::Vector4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
+    return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
 

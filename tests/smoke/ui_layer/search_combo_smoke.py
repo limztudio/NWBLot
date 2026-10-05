@@ -8,7 +8,9 @@ import sys
 import time
 
 from search_combo_native import SearchComboNativeInput
-from search_combo_probe import center, observe_search_combo, snapshot_from_logs, text_hash
+from combo_probe_common import center
+from edit_probe import text_hash
+from search_combo_probe import SEARCH_COMBO_PROBE
 from window_smoke import parse_args
 from window_capture_smoke import (
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
@@ -38,7 +40,7 @@ class SearchComboRun:
 
     def query_expectation(self, value, anchor=None, caret=None):
         length = len(value.encode("utf-8"))
-        self.expected.update({"query_bytes": length, "query_hash": text_hash(value),
+        self.expected.update({"query_bytes": length, "query_hash": text_hash(value) & 0xFFFFFF,
             "query_anchor": length if anchor is None else anchor, "query_caret": length if caret is None else caret})
 
     def logs(self):
@@ -67,14 +69,14 @@ class SearchComboRun:
         report = None
         while time.monotonic() < stage_deadline:
             ensure_process_running(self.process, "during searchable combo UI capture")
-            snapshot = snapshot_from_logs(self.logs())
+            snapshot = SEARCH_COMBO_PROBE.snapshot(self.logs())
             if snapshot is None:
                 time.sleep(0.1)
                 continue
             if snapshot["logical_extent"][0] < 600.0 or snapshot["logical_extent"][1] < 430.0:
                 raise SmokeSkip("the combo fixture needs a logical client of at least 600x430")
             self.backend.capture_client_window(self.handle, path)
-            report = observe_search_combo(read_bmp_24_rows(path), snapshot, self.expected,
+            report = SEARCH_COMBO_PROBE.observe(read_bmp_24_rows(path), snapshot, self.expected,
                 extent=extent, skin=self.args.skin, extra=extra)
             if report["passed"]:
                 self.snapshot = snapshot

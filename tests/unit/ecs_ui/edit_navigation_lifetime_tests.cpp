@@ -40,7 +40,7 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     m_host.collectNative();
     ASSERT_TRUE(navigationFrame());
     ASSERT_TRUE(m_navigationModel.composition().active);
-    UiEditModelSnapshot preedit(m_arena);
+    Ui::EditModelSnapshot preedit(m_arena);
     preedit.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     m_resolver.records.clear();
@@ -60,8 +60,8 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     ASSERT_TRUE(navigationFrame());
     EXPECT_FALSE(m_navigationModel.composition().active);
     EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
-    EXPECT_EQ(m_navigationModel.revision(), preedit.revision);
-    EXPECT_EQ(m_navigationModel.externalRevision(), preedit.externalRevision);
+    EXPECT_EQ(m_navigationModel.revision(), preedit.m_expectedRevision);
+    EXPECT_EQ(m_navigationModel.externalRevision(), preedit.m_expectedExternalRevision);
     EXPECT_EQ(m_navigationModel.anchor(), 10u);
     EXPECT_EQ(m_navigationModel.caret(), 10u);
     EXPECT_FALSE(m_navigationModel.canUndo());
@@ -104,7 +104,7 @@ TEST_F(UiEditNavigationLifetimeTests, ReadOnlyAllowsVerticalSelectionWithoutNati
 
 TEST_F(UiEditNavigationLifetimeTests, DisableDiscardsQueuedNavigationAndResetsOnlyTheLentState){
     ASSERT_TRUE(seedPreferredColumn());
-    UiEditModelSnapshot before(m_arena);
+    Ui::EditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
@@ -137,7 +137,7 @@ TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPosit
     ASSERT_TRUE(seedPreferredColumn());
     ASSERT_TRUE(m_navigation.setPreferredX(40.0f));
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
-    UiEditModelSnapshot before(m_arena);
+    Ui::EditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
     ASSERT_TRUE(key(Core::Key::Up));
     ASSERT_TRUE(focusOther());
@@ -150,8 +150,8 @@ TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPosit
     EXPECT_TRUE(m_result.blurred);
     EXPECT_TRUE(m_result.focused);
     EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
-    EXPECT_EQ(m_navigationModel.revision(), before.revision);
-    EXPECT_EQ(m_navigationModel.externalRevision(), before.externalRevision);
+    EXPECT_EQ(m_navigationModel.revision(), before.m_expectedRevision);
+    EXPECT_EQ(m_navigationModel.externalRevision(), before.m_expectedExternalRevision);
     EXPECT_EQ(m_navigationModel.anchor(), 8u);
     EXPECT_EQ(m_navigationModel.caret(), 8u);
     EXPECT_FALSE(m_navigationModel.canUndo());
@@ -208,7 +208,7 @@ TEST_F(UiEditNavigationLifetimeTests, BlurPreservesDraftBeforeFreshFocusEpochNav
 
 TEST_F(UiEditNavigationLifetimeTests, OrdinaryCancelRetiresPreferredColumnWhilePreservingTheDraft){
     ASSERT_TRUE(seedPreferredColumn());
-    UiEditModelSnapshot before(m_arena);
+    Ui::EditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
@@ -267,7 +267,7 @@ TEST_F(UiEditNavigationLifetimeTests, OldEpochCancelPreservesDraftAndLaterRefocu
 
 TEST_F(UiEditNavigationLifetimeTests, OmissionLeavesCallerStateExactUntilRedeclarationAbandonsOwnership){
     ASSERT_TRUE(seedPreferredColumn());
-    UiEditModelSnapshot before(m_arena);
+    Ui::EditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const u64 declaration = m_widget.declarationGeneration;
@@ -297,7 +297,7 @@ TEST_F(UiEditNavigationLifetimeTests, OmissionLeavesCallerStateExactUntilRedecla
 
 TEST_F(UiEditNavigationLifetimeTests, HostResetCannotTouchUnlentDraftOrPreferredColumn){
     ASSERT_TRUE(seedPreferredColumn());
-    UiEditModelSnapshot before(m_arena);
+    Ui::EditModelSnapshot before(m_arena);
     before.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot preferred = m_navigation.snapshot();
     const TextInputSessionToken oldSession = m_textInput.activeSession();
@@ -319,7 +319,7 @@ TEST_F(UiEditNavigationLifetimeTests, HostResetCannotTouchUnlentDraftOrPreferred
 
 TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNavigationOwnership){
     ASSERT_TRUE(seedPreferredColumn());
-    UiEditModelSnapshot original(m_arena);
+    Ui::EditModelSnapshot original(m_arena);
     original.capture(m_navigationModel);
     const Ui::EditNavigationSnapshot originalPreferred = m_navigation.snapshot();
     Ui::EditModel replacement(m_arena, {}, Ui::EditTextMode::Multiline);
@@ -328,7 +328,7 @@ TEST_F(UiEditNavigationLifetimeTests, RebindingResetsOnlyTheNewlyLentModelAndNav
     Ui::EditNavigationState replacementNavigation;
     ASSERT_TRUE(replacementNavigation.setPreferredX(70.0f));
     const Ui::EditNavigationSnapshot replacementPreferred = replacementNavigation.snapshot();
-    UiEditModelSnapshot replacementBefore(m_arena);
+    Ui::EditModelSnapshot replacementBefore(m_arena);
     replacementBefore.capture(replacement);
     ASSERT_TRUE(key(Core::Key::Down));
     EXPECT_TRUE(m_navigation.matches(originalPreferred));

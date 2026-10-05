@@ -3,6 +3,7 @@
 
 
 #include "command_ir_raster.h"
+#include "command_ir_internal.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,16 +20,6 @@ namespace __hidden_gpu_command_ir_raster_reader{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
-    return opcode == GpuCommandIrWireOpcode::SetGraphicsState
-        || opcode == GpuCommandIrWireOpcode::BindGraphicsHeap
-        || opcode == GpuCommandIrWireOpcode::SetPushConstants
-        || opcode == GpuCommandIrWireOpcode::Draw
-        || opcode == GpuCommandIrWireOpcode::DrawIndexed
-        || opcode == GpuCommandIrWireOpcode::EndRenderPass
-    ;
-}
 
 [[nodiscard]] static GpuCommandIrWireOpcode::Enum BuiltinWireOpcode(const GpuCommandIrOpcode::Enum opcode)noexcept{
     switch(opcode){
@@ -62,15 +53,6 @@ namespace __hidden_gpu_command_ir_raster_reader{
     return true;
 }
 
-[[nodiscard]] static bool ValidViewport(const Viewport& viewport)noexcept{
-    return IsFinite(viewport.minX) && IsFinite(viewport.maxX)
-        && IsFinite(viewport.minY) && IsFinite(viewport.maxY)
-        && IsFinite(viewport.minZ) && IsFinite(viewport.maxZ)
-        && viewport.minX < viewport.maxX && viewport.minY < viewport.maxY
-        && viewport.minZ < viewport.maxZ && viewport.minZ >= 0.f && viewport.maxZ <= 1.f
-    ;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -100,7 +82,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(GpuCommandIrDe
         fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
         return GpuCommandIrStreamReadStatus::Error;
     }
-    if(!__hidden_gpu_command_ir_raster_reader::IsRasterOpcode(header.opcode)){
+    if(!GpuCommandIrDetail::IsRasterOpcode(header.opcode)){
         GpuCommandIrBuiltinTaskRecord builtin;
         const GpuCommandIrStreamReadStatus::Enum status = next(builtin);
         if(status == GpuCommandIrStreamReadStatus::Record){
@@ -178,7 +160,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(GpuCommandIrDe
         raster.blobSizeBytes = record.blobSizeBytes;
         if(record.indexResourceIndex != Limit<u32>::s_Max)
             raster.indexResource = { m_graphGeneration, record.indexResourceIndex };
-        valid = __hidden_gpu_command_ir_raster_reader::ValidViewport(raster.viewport)
+        valid = GpuCommandIrDetail::IsRasterViewportValid(raster.viewport)
             && IsFinite(raster.blendConstantColor.r) && IsFinite(raster.blendConstantColor.g)
             && IsFinite(raster.blendConstantColor.b) && IsFinite(raster.blendConstantColor.a)
             && (!raster.hasScissor || (raster.scissor.minX < raster.scissor.maxX && raster.scissor.minY < raster.scissor.maxY))

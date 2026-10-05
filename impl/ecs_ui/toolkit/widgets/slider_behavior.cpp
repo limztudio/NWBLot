@@ -4,6 +4,8 @@
 
 #include "slider.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -33,21 +35,10 @@ namespace __hidden_ui_slider_behavior{
     ;
 }
 
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-        && (rectangle.width == 0.0f || rectangle.x + rectangle.width > rectangle.x)
-        && (rectangle.height == 0.0f || rectangle.y + rectangle.height > rectangle.y)
-    ;
-}
-
 [[nodiscard]] static bool ValidPlacement(const SliderPlacement& placement){
     return
-        ValidRect(placement.bounds) && ValidRect(placement.clip) && ValidRect(placement.travelBounds)
-        && ValidRect(placement.track) && ValidRect(placement.centerTravel) && ValidRect(placement.thumb)
+        IsPreciseUiRect(placement.bounds) && IsPreciseUiRect(placement.clip) && IsPreciseUiRect(placement.travelBounds)
+        && IsPreciseUiRect(placement.track) && IsPreciseUiRect(placement.centerTravel) && IsPreciseUiRect(placement.thumb)
         && IsFinite(placement.thumbExtent.x) && placement.thumbExtent.x >= 0.0f
         && IsFinite(placement.thumbExtent.y) && placement.thumbExtent.y >= 0.0f
         && placement.thumbExtent.x == placement.thumb.width && placement.thumbExtent.y == placement.thumb.height
@@ -79,7 +70,7 @@ namespace __hidden_ui_slider_behavior{
         gesture.id.valid() && gesture.updateSequence != 0u && gesture.state <= PointerGestureState::Completed
         && IsFinite(gesture.origin.x) && IsFinite(gesture.origin.y)
         && IsFinite(gesture.position.x) && IsFinite(gesture.position.y)
-        && ValidRect(gesture.targetRectangle) && ValidRect(gesture.referenceRectangle)
+        && IsPreciseUiRect(gesture.targetRectangle) && IsPreciseUiRect(gesture.referenceRectangle)
     ;
 }
 

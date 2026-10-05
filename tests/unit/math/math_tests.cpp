@@ -36,6 +36,28 @@ TEST(Math, CenteredOrthographicProjectionPreservesNegativeZeroTranslation){
     EXPECT_TRUE(SignBit(VectorGetW(projection.v[1])));
 }
 
+TEST(Math, FrustumSphereTangencyAndZeroRadiusKeepContainmentBoundary){
+    BoundingFrustum frustum;
+    frustum.nearPlane = 1.0f;
+    frustum.farPlane = 10.0f;
+    frustum.rightSlope = 1.0f;
+    frustum.leftSlope = -1.0f;
+    frustum.topSlope = 1.0f;
+    frustum.bottomSlope = -1.0f;
+    SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
+    CollisionDetail::FrustumPlanes(LoadFloat(frustum.origin), LoadFloat(frustum.orientation), frustum.rightSlope, frustum.leftSlope, frustum.topSlope, frustum.bottomSlope, frustum.nearPlane, frustum.farPlane, planes);
+    const Array<f32, 6u> centers = { 0.5f, 0.25f, 1.5f, 9.5f, 10.5f, 1.0f };
+    const Array<ContainmentType::Enum, 6u> expected = {
+        ContainmentType::Intersects, ContainmentType::Disjoint, ContainmentType::Contains,
+        ContainmentType::Contains, ContainmentType::Intersects, ContainmentType::Contains,
+    };
+    for(usize index = 0u; index < centers.size(); ++index){
+        const BoundingSphere sphere(Float3U(0.0f, 0.0f, centers[index]), index == centers.size() - 1u ? 0.0f : 0.5f);
+        EXPECT_EQ(frustum.contains(sphere), expected[index]) << index;
+        EXPECT_EQ(sphere.containedBy(planes[0], planes[1], planes[2], planes[3], planes[4], planes[5]), expected[index]) << index;
+    }
+}
+
 TEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero){
     const f32 infinity = Limit<f32>::s_Infinity;
     EXPECT_TRUE(NearlyEqual4(

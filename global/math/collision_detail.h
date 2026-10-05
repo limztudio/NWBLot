@@ -212,6 +212,21 @@ GLB_INLINE void FastIntersectSpherePlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
+[[nodiscard]] GLB_INLINE ContainmentType::Enum SIMDCALL ContainmentFromSpherePlaneTests(const SIMDVector sphereValue, const SIMDVector (&planes)[s_FrustumPlaneCount])noexcept{
+    const SIMDVector centerVector = SphereCenter(sphereValue);
+    const SIMDVector sphereRadius = SphereRadius(sphereValue);
+    SIMDVector anyIntersecting = VectorFalseInt();
+    for(const SIMDVector plane : planes){
+        SIMDVector outside{};
+        SIMDVector inside{};
+        FastIntersectSpherePlane(centerVector, sphereRadius, plane, outside, inside);
+        if(Vector4AllTrue(outside))
+            return ContainmentType::Disjoint;
+        anyIntersecting = VectorOrInt(anyIntersecting, VectorEqualInt(inside, VectorFalseInt()));
+    }
+    return Vector4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
+}
+
 GLB_INLINE void FastIntersectAxisAlignedBoxPlane(
     const SIMDVector center,
     const SIMDVector extents,

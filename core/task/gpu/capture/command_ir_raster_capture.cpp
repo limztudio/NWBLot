@@ -3,6 +3,7 @@
 
 
 #include "command_ir_raster.h"
+#include "command_ir_internal.h"
 
 #include <core/graphics/backend_selection/backend.h>
 
@@ -77,15 +78,6 @@ static void InitializeRecord(
 
 [[nodiscard]] static GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
     return { rect.minX, rect.maxX, rect.minY, rect.maxY };
-}
-
-[[nodiscard]] static bool ValidViewport(const Viewport& viewport)noexcept{
-    return IsFinite(viewport.minX) && IsFinite(viewport.maxX)
-        && IsFinite(viewport.minY) && IsFinite(viewport.maxY)
-        && IsFinite(viewport.minZ) && IsFinite(viewport.maxZ)
-        && viewport.minX < viewport.maxX && viewport.minY < viewport.maxY
-        && viewport.minZ < viewport.maxZ && viewport.minZ >= 0.f && viewport.maxZ <= 1.f
-    ;
 }
 
 
@@ -252,7 +244,7 @@ bool GpuCommandIrCapture::captureSetGraphicsState(
     if(
         !state.pipeline.valid() || state.pipeline.generation != task.generation
         || !state.colorAttachment.valid() || state.colorAttachment.generation != task.generation
-        || !__hidden_gpu_command_ir_raster_capture::ValidViewport(state.viewport)
+        || !GpuCommandIrDetail::IsRasterViewportValid(state.viewport)
         || (state.hasScissor && (state.scissor.maxX <= state.scissor.minX || state.scissor.maxY <= state.scissor.minY))
         || state.vertexBuffers.size() > s_MaxVertexAttributes
         || (state.indexResource.valid() && state.indexResource.generation != task.generation)

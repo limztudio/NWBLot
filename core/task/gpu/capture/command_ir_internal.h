@@ -60,7 +60,27 @@ struct RasterReplayState{
     bool pushConstantsSet = false;
 };
 
-[[nodiscard]] bool IsRasterOpcode(GpuCommandIrWireOpcode::Enum opcode)noexcept;
+[[nodiscard]] inline bool IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
+    return
+        opcode == GpuCommandIrWireOpcode::SetGraphicsState
+        || opcode == GpuCommandIrWireOpcode::BindGraphicsHeap
+        || opcode == GpuCommandIrWireOpcode::SetPushConstants
+        || opcode == GpuCommandIrWireOpcode::Draw
+        || opcode == GpuCommandIrWireOpcode::DrawIndexed
+        || opcode == GpuCommandIrWireOpcode::EndRenderPass
+    ;
+}
+
+[[nodiscard]] inline bool IsRasterViewportValid(const Viewport& viewport)noexcept{
+    return
+        IsFinite(viewport.minX) && IsFinite(viewport.maxX)
+        && IsFinite(viewport.minY) && IsFinite(viewport.maxY)
+        && IsFinite(viewport.minZ) && IsFinite(viewport.maxZ)
+        && viewport.minX < viewport.maxX && viewport.minY < viewport.maxY
+        && viewport.minZ < viewport.maxZ && viewport.minZ >= 0.f && viewport.maxZ <= 1.f
+    ;
+}
+
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateRasterGraphOperation(
     const GpuCommandIrRasterTaskRecord& record,
     const GpuTaskGraphDeclarationReadView& graph,

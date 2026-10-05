@@ -36,6 +36,13 @@ struct GlyphPageBinding{
     u32 height = 0u;
 };
 
+[[nodiscard]] inline bool SameGlyphPageKey(const GlyphPageBinding& first, const GlyphPageBinding& second){
+    return
+        first.font == second.font && first.fontGeneration == second.fontGeneration
+        && first.atlasIdentity == second.atlasIdentity && first.index == second.index
+    ;
+}
+
 [[nodiscard]] bool operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcept;
 
 

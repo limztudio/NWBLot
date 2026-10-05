@@ -58,6 +58,7 @@ struct VolumeMipDims{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::job_pool& jobPool, basist::basis_tex_format format, bool srgb);
 void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb);
 [[nodiscard]] bool ValidateBackendOutput(const basisu::basisu_backend_output& backendOutput, const basist::basis_tex_format expectedFormat);
 [[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload);
@@ -121,14 +122,11 @@ template<typename PlaneLoader, typename PlaneVector>
 template<typename PlaneVector>
 [[nodiscard]] bool PrepareVolumeMipTargets(
     const PlaneVector& sourcePlanes,
-    const u32 sourceWidth,
-    const u32 sourceHeight,
     PlaneVector& outPlanes,
-    VolumeMipDims& outDims
-){
-    if(sourcePlanes.empty())
+    VolumeMipDims& outDims){
+    if(sourcePlanes.empty() || sourcePlanes.size() > Limit<u32>::s_Max)
         return false;
-    if(!ComputeVolumeMipDims(sourceWidth, sourceHeight, static_cast<u32>(sourcePlanes.size()), outDims))
+    if(!ComputeVolumeMipDims(sourcePlanes.front().get_width(), sourcePlanes.front().get_height(), static_cast<u32>(sourcePlanes.size()), outDims))
         return false;
     outPlanes.clear();
     outPlanes.resize(outDims.targetDepth);

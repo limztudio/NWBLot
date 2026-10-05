@@ -186,6 +186,41 @@ struct GpuFrameSlot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
+[[nodiscard]] GLB_INLINE bool ResolvePaintPushConstants(
+    const GpuFrameData& frame,
+    const DrawCommand& draw,
+    GpuPaintPushConstants& push){
+    push.material = static_cast<u32>(draw.material);
+    push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
+    if(draw.material == PaintMaterial::Skin)
+        push.textureSlot = frame.m_skin->m_texture.sampledImageHeapHandle.slot();
+    else if(draw.material == PaintMaterial::Glyph){
+        if(draw.glyphPageIndex >= frame.m_glyphPages.size())
+            return false;
+        push.textureSlot = frame.m_glyphPages[draw.glyphPageIndex]->m_sampledImage.slot();
+    }
+    else if(draw.material == PaintMaterial::SdfGlyph){
+        if(draw.sdfPageIndex >= frame.m_sdfPages.size())
+            return false;
+        const auto& page = frame.m_sdfPages[draw.sdfPageIndex];
+        push.textureSlot = page->m_sampledImage.slot();
+        push.sdfChannel = draw.sdfChannel;
+        push.sdfSpreadPixels = page->m_page->binding().spreadPixels;
+        push.sdfDistanceEncoding = page->m_page->binding().distanceEncoding;
+    }
+    else if(draw.material == PaintMaterial::Image){
+        if(draw.textureImageIndex >= frame.m_textureImages.size())
+            return false;
+        push.textureSlot = frame.m_textureImages[draw.textureImageIndex]->m_texture.sampledImageHeapHandle.slot();
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct GpuRasterTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, false };
     struct Payload{

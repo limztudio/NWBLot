@@ -144,8 +144,7 @@ private:
 
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
-    parameters.set_format_mode(basist::basis_tex_format::cUASTC_LDR_4x4);
-    parameters.set_srgb_options(srgb);
+    EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_LDR_4x4, srgb);
     parameters.m_tex_type = dimension == TextureDimension::TextureCube
         ? basist::cBASISTexTypeCubemapArray
         : basist::cBASISTexType2D
@@ -167,12 +166,6 @@ private:
     parameters.m_mip_gen = true;
     parameters.m_mip_smallest_dimension = 1u;
     parameters.m_mip_wrapping = false;
-    parameters.m_status_output = false;
-    parameters.m_compute_stats = false;
-    parameters.m_print_stats = false;
-    parameters.m_write_output_basis_or_ktx2_files = false;
-    parameters.m_create_ktx2_file = false;
-    parameters.m_pJob_pool = &jobPool;
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
@@ -278,13 +271,7 @@ private:
     ImagePlanes& outPlanes
 ){
     EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::PrepareVolumeMipTargets(
-        sourcePlanes,
-        sourcePlanes.front().get_width(),
-        sourcePlanes.front().get_height(),
-        outPlanes,
-        mipDims
-    ))
+    if(!EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes, outPlanes, mipDims))
         return false;
     const u32 sourceDepth = mipDims.sourceDepth;
     const u32 targetWidth = mipDims.targetWidth;
@@ -367,18 +354,11 @@ private:
 
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
-    parameters.set_format_mode(basist::basis_tex_format::cUASTC_LDR_4x4);
-    parameters.set_srgb_options(srgb);
+    EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_LDR_4x4, srgb);
     parameters.m_read_source_images = false;
     parameters.m_tex_type = basist::cBASISTexTypeVolume;
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
-    parameters.m_status_output = false;
-    parameters.m_compute_stats = false;
-    parameters.m_print_stats = false;
-    parameters.m_write_output_basis_or_ktx2_files = false;
-    parameters.m_create_ktx2_file = false;
-    parameters.m_pJob_pool = &jobPool;
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){

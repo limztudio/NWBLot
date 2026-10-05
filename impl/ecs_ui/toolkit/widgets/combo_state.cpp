@@ -4,7 +4,7 @@
 
 #include "combo.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,13 +22,7 @@ namespace __hidden_ui_combo_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,22 +35,22 @@ namespace __hidden_ui_combo_state{
 
 
 ComboState::ComboState()
-    : m_inputGeneration(__hidden_ui_combo_state::NextIdentity())
+    : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity))
 {}
 
 void ComboState::select(const u64 key){
-    m_inputGeneration = __hidden_ui_combo_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     m_selectedKey = key;
     ComboBehavior::Close(*this);
 }
 
 void ComboState::open(){
-    m_inputGeneration = __hidden_ui_combo_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     ComboBehavior::Open(*this);
 }
 
 void ComboState::close(){
-    m_inputGeneration = __hidden_ui_combo_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     ComboBehavior::Close(*this);
 }
 

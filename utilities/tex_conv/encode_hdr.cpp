@@ -187,13 +187,7 @@ namespace EncodeBackendDetail{
 
 [[nodiscard]] bool GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes, HdrImagePlanes& outPlanes){
     EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::PrepareVolumeMipTargets(
-        sourcePlanes,
-        sourcePlanes.front().get_width(),
-        sourcePlanes.front().get_height(),
-        outPlanes,
-        mipDims
-    ))
+    if(!EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes, outPlanes, mipDims))
         return false;
     const u32 sourceDepth = mipDims.sourceDepth;
     const u32 targetWidth = mipDims.targetWidth;
@@ -342,18 +336,11 @@ namespace EncodeBackendDetail{
     const u32 height = planes.front().get_height();
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
-    parameters.set_format_mode(basist::basis_tex_format::cUASTC_HDR_4x4);
-    parameters.set_srgb_options(false);
+    EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_HDR_4x4, false);
     parameters.m_read_source_images = false;
     parameters.m_tex_type = textureType;
     parameters.m_source_images_hdr = planes;
     parameters.m_mip_gen = false;
-    parameters.m_status_output = false;
-    parameters.m_compute_stats = false;
-    parameters.m_print_stats = false;
-    parameters.m_write_output_basis_or_ktx2_files = false;
-    parameters.m_create_ktx2_file = false;
-    parameters.m_pJob_pool = &jobPool;
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
@@ -406,18 +393,11 @@ namespace EncodeBackendDetail{
 
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
-    parameters.set_format_mode(basist::basis_tex_format::cUASTC_LDR_4x4);
-    parameters.set_srgb_options(false);
+    EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_LDR_4x4, false);
     parameters.m_read_source_images = false;
     parameters.m_tex_type = textureType;
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
-    parameters.m_status_output = false;
-    parameters.m_compute_stats = false;
-    parameters.m_print_stats = false;
-    parameters.m_write_output_basis_or_ktx2_files = false;
-    parameters.m_create_ktx2_file = false;
-    parameters.m_pJob_pool = &jobPool;
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){

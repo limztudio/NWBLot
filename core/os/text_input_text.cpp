@@ -3,6 +3,7 @@
 
 
 #include "text_input_text.h"
+#include "utf8_text_internal.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,65 +15,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_text_input_text{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool DecodeCodePoint(const AStringView text, usize& offset){
-    const u8 first = static_cast<u8>(text[offset]);
-    ++offset;
-    if(first < 0x80u)
-        return first != 0u;
-    usize continuation = 0u;
-    u32 minimum = 0u;
-    u32 codePoint = 0u;
-    if(first >= 0xc2u && first <= 0xdfu){
-        continuation = 1u;
-        minimum = 0x80u;
-        codePoint = first & 0x1fu;
-    }
-    else if(first >= 0xe0u && first <= 0xefu){
-        continuation = 2u;
-        minimum = 0x800u;
-        codePoint = first & 0x0fu;
-    }
-    else if(first >= 0xf0u && first <= 0xf4u){
-        continuation = 3u;
-        minimum = 0x10000u;
-        codePoint = first & 0x07u;
-    }
-    else
-        return false;
-    if(continuation > text.size() - offset)
-        return false;
-    for(usize index = 0u; index < continuation; ++index){
-        const u8 byte = static_cast<u8>(text[offset]);
-        if((byte & 0xc0u) != 0x80u)
-            return false;
-        codePoint = (codePoint << 6u) | (byte & 0x3fu);
-        ++offset;
-    }
-    return codePoint >= minimum && codePoint <= 0x10ffffu && (codePoint < 0xd800u || codePoint > 0xdfffu);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usize maxBytes){
     if(text.size() > maxBytes)
         return TextInputAdmission::TooLarge;
     usize offset = 0u;
     while(offset < text.size()){
-        if(!__hidden_text_input_text::DecodeCodePoint(text, offset))
+        u32 codePoint = 0u;
+        if(!Utf8TextDetail::DecodeCodePoint(text, offset, codePoint))
             return TextInputAdmission::InvalidText;
     }
     return TextInputAdmission::Accepted;

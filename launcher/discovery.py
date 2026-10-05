@@ -42,6 +42,17 @@ class LauncherDiscovery:
     """Repository launcher discovery and router dispatch."""
 
     @staticmethod
+    def _register_launcher(launchers: Dict[str, RepoLauncher], launcher: RepoLauncher) -> None:
+        command = launcher.command
+        existing = launchers.get(command)
+        if existing is not None:
+            raise SystemExit(
+                MSG_DUPLICATE_COMMAND.format(command=command, existing=existing, launcher=launcher)
+                + MSG_DISAMBIGUATE
+            )
+        launchers[command] = launcher
+
+    @staticmethod
     def launch_command_from_directory(script: Path) -> str:
         return script.parent.name.lower().replace(LAUNCH_COMMAND_NAME_UNDERSCORE, LAUNCH_COMMAND_NAME_HYPHEN)
 
@@ -71,13 +82,7 @@ class LauncherDiscovery:
 
             command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
             launcher = _facade.RepoLauncher(command, script.relative_to(root))
-            existing = launchers.get(command)
-            if existing is not None:
-                raise SystemExit(
-                    MSG_DUPLICATE_COMMAND.format(command=command, existing=existing, launcher=launcher)
-                    + MSG_DISAMBIGUATE
-                )
-            launchers[command] = launcher
+            LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 
@@ -121,13 +126,7 @@ class LauncherDiscovery:
 
             command = _facade.validate_launch_command(_facade.launch_command_from_directory(script), script)
             launcher = _facade.RepoLauncher(command, script.relative_to(root), _facade.launcher_route(search_path, script, root))
-            existing = launchers.get(command)
-            if existing is not None:
-                raise SystemExit(
-                    MSG_DUPLICATE_COMMAND.format(command=command, existing=existing, launcher=launcher)
-                    + MSG_DISAMBIGUATE
-                )
-            launchers[command] = launcher
+            LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 
@@ -138,14 +137,8 @@ class LauncherDiscovery:
         launchers: Dict[str, RepoLauncher] = {}
 
         for search_root in LAUNCHER_SEARCH_ROOTS:
-            for command, launcher in _facade.discover_leaf_launchers(search_root, root).items():
-                existing = launchers.get(command)
-                if existing is not None:
-                    raise SystemExit(
-                        MSG_DUPLICATE_COMMAND.format(command=command, existing=existing, launcher=launcher)
-                        + MSG_DISAMBIGUATE
-                    )
-                launchers[command] = launcher
+            for launcher in _facade.discover_leaf_launchers(search_root, root).values():
+                LauncherDiscovery._register_launcher(launchers, launcher)
 
         return dict(sorted(launchers.items()))
 

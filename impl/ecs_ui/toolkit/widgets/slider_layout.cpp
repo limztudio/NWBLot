@@ -7,6 +7,8 @@
 #include "slider.h"
 #include "slider_style.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -25,34 +27,9 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-        && (rectangle.width == 0.0f || rectangle.x + rectangle.width > rectangle.x)
-        && (rectangle.height == 0.0f || rectangle.y + rectangle.height > rectangle.y)
-    ;
-}
-
-[[nodiscard]] static bool ValidPadding(const Insets& padding){
-    return
-        IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-    ;
-}
-
-[[nodiscard]] static bool ValidColor(const Color& color){
-    return
-        IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f
-        && IsFinite(color.b) && color.b >= 0.0f && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f
-    ;
-}
-
 [[nodiscard]] static bool ValidMetrics(const SliderMetrics& metrics){
     if(
-        !ValidPadding(metrics.padding) || !IsFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
+        !IsValidUiPadding(metrics.padding) || !IsFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
         || !IsFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
         || !IsFinite(metrics.trackHeight) || metrics.trackHeight <= 0.0f
         || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
@@ -79,7 +56,7 @@ namespace __hidden_ui_slider_layout{
         return false;
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(
-        !ValidRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
+        !IsPreciseUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
         || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
     )
         return false;
@@ -108,11 +85,11 @@ namespace __hidden_ui_slider_layout{
 bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out){
     using namespace __hidden_ui_slider_layout;
     if(
-        !SliderBehavior::Validate(options) || !ValidPadding(style.padding)
+        !SliderBehavior::Validate(options) || !IsValidUiPadding(style.padding)
         || !IsFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
         || !IsFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
         || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
-        || !ValidColor(style.hoverTint) || !ValidColor(style.pressedTint) || !ValidColor(style.disabledTint)
+        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
         return false;
     SliderMetrics candidate;
@@ -139,7 +116,7 @@ bool SliderLayout::Place(
     SliderPlacement& out){
     using namespace __hidden_ui_slider_layout;
     if(
-        !ValidRect(bounds) || !ValidRect(clip) || !ValidMetrics(metrics)
+        !IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics)
         || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0
     )
         return false;

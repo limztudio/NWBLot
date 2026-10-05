@@ -23,22 +23,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UiEditModelSnapshot{
-    AString<Core::Alloc::GlobalArena> text;
-    AString<Core::Alloc::GlobalArena> preedit;
-    Ui::EditCompositionView composition;
-    usize anchor = 0u;
-    usize caret = 0u;
-    u64 revision = 0u;
-    u64 externalRevision = 0u;
-    u64 compositionGeneration = 0u;
-    u64 selectionGeneration = 0u;
-
-    explicit UiEditModelSnapshot(Core::Alloc::GlobalArena& arena) : text(arena), preedit(arena){}
-    void capture(const Ui::EditModel& model);
-    [[nodiscard]] bool matches(const Ui::EditModel& model)const;
-};
-
 struct UiEditBoxGeometry{
     Ui::PopupToken popup;
     Ui::EditBoxPlacement placement;
@@ -71,7 +55,7 @@ private:
         Ui::WidgetState widget;
         UiTextEditOwner owner;
         Ui::PopupToken popup;
-        UiEditModelSnapshot expected;
+        Ui::EditModelSnapshot expected;
         UiEditBoxGeometry candidate;
         UiEditBoxGeometry displayed;
         u64 seen = 0u;
@@ -189,7 +173,7 @@ private:
     UiEditClickTracker m_clickTracker;
     Ui::PaintVector<Entry> m_entries;
     Ui::PaintVector<Event> m_events;
-    UiEditModelSnapshot m_nativePublished;
+    Ui::EditModelSnapshot m_nativePublished;
     UiTextEditOwner m_clipboardOwner;
     UiTextEditOwner m_primaryOwner;
     Ui::DisplayMetrics m_display;

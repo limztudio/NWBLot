@@ -6,6 +6,8 @@
 
 #include "atlas.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -23,15 +25,6 @@ namespace __hidden_ui_glyph_visibility{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
-}
 
 [[nodiscard]] static bool ValidLocation(const PlacedGlyph& glyph, const Point& topLeft){
     return IsFinite(glyph.position.x) && IsFinite(glyph.position.y) && IsFinite(topLeft.x) && IsFinite(topLeft.y);
@@ -52,7 +45,7 @@ namespace __hidden_ui_glyph_visibility{
     )
         return false;
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(!ValidRect(candidate))
+    if(!IsValidUiRect(candidate))
         return false;
     out = candidate;
     return true;
@@ -69,7 +62,7 @@ namespace __hidden_ui_glyph_visibility{
         || !IsFinite(top) || top < -Limit<f32>::s_Max || top > Limit<f32>::s_Max
         || !IsFinite(right) || right < left || right > Limit<f32>::s_Max
         || !IsFinite(bottom) || bottom < top || bottom > Limit<f32>::s_Max
-        || right - left > Limit<f32>::s_Max || bottom - top > Limit<f32>::s_Max || !ValidRect(clip)
+        || right - left > Limit<f32>::s_Max || bottom - top > Limit<f32>::s_Max || !IsValidUiRect(clip)
     )
         return TextGlyphIntersection::Invalid;
     if(
@@ -114,7 +107,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !IsFinite(physicalSize)
-        || physicalSize < 1.0f || physicalSize > 4096.0f || !ValidRect(clip)
+        || physicalSize < 1.0f || physicalSize > 4096.0f || !IsValidUiRect(clip)
         || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
         return TextGlyphIntersection::Invalid;
@@ -126,7 +119,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
             return TextGlyphIntersection::Invalid;
         return intersect(rectangle, clip);
     }
-    if(!ValidRect(glyph.ink) || (glyph.coverage.known && !ValidRect(glyph.coverage.ink)))
+    if(!IsValidUiRect(glyph.ink) || (glyph.coverage.known && !IsValidUiRect(glyph.coverage.ink)))
         return TextGlyphIntersection::Invalid;
     const Rect& ink = glyph.coverage.known ? glyph.coverage.ink : glyph.ink;
     if(glyph.coverage.known && (ink.width <= 0.0f || ink.height <= 0.0f))
@@ -195,7 +188,7 @@ bool TextGlyphVisibility::coverageRectangle(
     const Point pixelScale){
     using namespace __hidden_ui_glyph_visibility;
     if(
-        !ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !ValidRect(record.pixels)
+        !ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !IsValidUiRect(record.pixels)
         || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
         return false;
@@ -219,7 +212,7 @@ bool TextGlyphVisibility::coverageRectangle(
 
 TextGlyphIntersection::Enum TextGlyphVisibility::intersect(const Rect& rectangle, const Rect& clip){
     using namespace __hidden_ui_glyph_visibility;
-    if(!ValidRect(rectangle) || !ValidRect(clip))
+    if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
         return TextGlyphIntersection::Invalid;
     return IntersectBounds(
         rectangle.x,

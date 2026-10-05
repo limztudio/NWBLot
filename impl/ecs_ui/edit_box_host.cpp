@@ -17,34 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void UiEditModelSnapshot::capture(const Ui::EditModel& model){
-    text.assign(model.text().data(), model.text().size());
-    anchor = model.anchor();
-    caret = model.caret();
-    revision = model.revision();
-    externalRevision = model.externalRevision();
-    compositionGeneration = model.compositionGeneration();
-    selectionGeneration = model.selectionGeneration();
-    composition = model.composition();
-    preedit.assign(composition.text.data(), composition.text.size());
-    composition.text = {};
-}
-
-bool UiEditModelSnapshot::matches(const Ui::EditModel& model)const{
-    const auto current = model.composition();
-    return
-        text == model.text() && revision == model.revision() && externalRevision == model.externalRevision()
-        && compositionGeneration == model.compositionGeneration() && selectionGeneration == model.selectionGeneration()
-        && anchor == model.anchor() && caret == model.caret() && preedit == current.text
-        && composition.active == current.active && composition.anchor == current.anchor && composition.caret == current.caret
-        && composition.replacementStart == current.replacementStart && composition.replacementEnd == current.replacementEnd
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context,
     Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
     : m_arena(arena)
@@ -80,8 +52,8 @@ bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView
     candidate.textMode = view.textMode();
     candidate.options = options;
     candidate.generation = m_generation;
-    candidate.revision = entry->expected.revision;
-    candidate.externalRevision = entry->expected.externalRevision;
+    candidate.revision = entry->expected.m_expectedRevision;
+    candidate.externalRevision = entry->expected.m_expectedExternalRevision;
     candidate.modelGeneration = entry->owner.modelGeneration;
     entry->candidate = Move(candidate);
     return true;

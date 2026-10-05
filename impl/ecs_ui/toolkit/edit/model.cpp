@@ -6,7 +6,7 @@
 #include "grapheme.h"
 #include "multiline_text.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,13 +32,11 @@ static constexpr usize s_MaxHistoryBytes = 16777216u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static EditLimits BoundedLimits(const EditLimits& limits){
     return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords),
@@ -57,7 +55,7 @@ static EditLimits BoundedLimits(const EditLimits& limits){
 
 EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, const EditTextMode::Enum mode)
     : m_arena(arena)
-    , m_instanceGeneration(__hidden_ui_edit_model::NextIdentity())
+    , m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_edit_model::s_NextIdentity))
     , m_limits(__hidden_ui_edit_model::BoundedLimits(limits))
     , m_textMode(mode)
     , m_text(arena)

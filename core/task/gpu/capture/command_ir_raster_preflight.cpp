@@ -150,20 +150,6 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsRasterOpcode(const GpuCommandIrWireOpcode::Enum opcode)noexcept{
-    switch(opcode){
-    case GpuCommandIrWireOpcode::SetGraphicsState:
-    case GpuCommandIrWireOpcode::BindGraphicsHeap:
-    case GpuCommandIrWireOpcode::SetPushConstants:
-    case GpuCommandIrWireOpcode::Draw:
-    case GpuCommandIrWireOpcode::DrawIndexed:
-    case GpuCommandIrWireOpcode::EndRenderPass:
-        return true;
-    default:
-        return false;
-    }
-}
-
 GpuCommandIrReplayError::Enum ValidateRasterBuiltinBoundary(
     const GpuTaskId&,
     const RasterReplayState& state

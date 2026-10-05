@@ -4,7 +4,7 @@
 
 #include "radio_group.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,13 +22,7 @@ namespace __hidden_ui_radio_group_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,8 +35,8 @@ namespace __hidden_ui_radio_group_state{
 
 
 RadioGroupState::RadioGroupState()
-    : m_instanceGeneration(__hidden_ui_radio_group_state::NextIdentity())
-    , m_inputGeneration(__hidden_ui_radio_group_state::NextIdentity())
+    : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity))
+    , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity))
 {}
 
 RadioGroupSnapshot RadioGroupState::snapshot()const{
@@ -55,14 +49,14 @@ bool RadioGroupState::matches(const RadioGroupSnapshot& value)const{
 
 void RadioGroupState::select(const u64 key){
     advanceRevision();
-    m_inputGeneration = __hidden_ui_radio_group_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity);
     m_selected = key;
     m_cursor = key;
 }
 
 void RadioGroupState::reset(){
     advanceRevision();
-    m_inputGeneration = __hidden_ui_radio_group_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity);
     m_selected = 0u;
     m_cursor = 0u;
     m_sourceGeneration = 0u;

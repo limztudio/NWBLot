@@ -24,6 +24,42 @@ namespace __hidden_frame_graph_validators{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename StatisticsT>
+[[nodiscard]] static bool SubmissionCountsAreValid(const StatisticsT& statistics)noexcept{
+    const auto& compile = statistics.compile;
+    const auto& recording = statistics.recording;
+    const auto& submission = statistics.submission;
+    if(
+        submission.acceptedPacketCount > compile.packetCount
+        || submission.acceptedTaskCount > compile.taskCount
+    )
+        return false;
+    if(
+        submission.rejectedPacketCount > compile.packetCount - submission.acceptedPacketCount
+        || submission.rejectedTaskCount > compile.taskCount - submission.acceptedTaskCount
+        || submission.acceptedPacketCount > submission.acceptedTaskCount
+        || submission.rejectedPacketCount > submission.rejectedTaskCount
+        || submission.nativeSubmissionCount > submission.acceptedPacketCount
+        || submission.rejectedSubmissionCount > submission.rejectedPacketCount
+        || submission.acceptedFrontierSubmissionCount > submission.nativeSubmissionCount
+        || submission.recoverySubmissionCount > submission.acceptedFrontierSubmissionCount
+        || submission.nativeSubmissionCount > recording.packetCount
+        || submission.nativeSubmissionCount > submission.nativeCommandListCount
+        || submission.nativeCommandListCount > recording.commandListCount
+        || submission.sameQueueWaitElisionCount > submission.plannedWaitTokenCount
+    )
+        return false;
+
+    u64 remainingWaitTokenCount = submission.plannedWaitTokenCount - submission.sameQueueWaitElisionCount;
+    if(submission.mergedTimelineWaitCount > remainingWaitTokenCount)
+        return false;
+    remainingWaitTokenCount -= submission.mergedTimelineWaitCount;
+    if(submission.timelineWaitCount != remainingWaitTokenCount)
+        return false;
+
+    return true;
+}
+
 [[nodiscard]] static i32 QueueAssignmentScoreTotal(const FrameGraphQueueAssignmentScore& score)noexcept{
     const i64 total = static_cast<i64>(score.overlap)
         - static_cast<i64>(score.queueLoad)
@@ -228,33 +264,7 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
     )
         return false;
 
-    const FrameGraphSubmissionRuntimeStatistics& submission = statistics.submission;
-    if(
-        submission.acceptedPacketCount > compile.packetCount
-        || submission.acceptedTaskCount > compile.taskCount
-    )
-        return false;
-    if(
-        submission.rejectedPacketCount > compile.packetCount - submission.acceptedPacketCount
-        || submission.rejectedTaskCount > compile.taskCount - submission.acceptedTaskCount
-        || submission.acceptedPacketCount > submission.acceptedTaskCount
-        || submission.rejectedPacketCount > submission.rejectedTaskCount
-        || submission.nativeSubmissionCount > submission.acceptedPacketCount
-        || submission.rejectedSubmissionCount > submission.rejectedPacketCount
-        || submission.acceptedFrontierSubmissionCount > submission.nativeSubmissionCount
-        || submission.recoverySubmissionCount > submission.acceptedFrontierSubmissionCount
-        || submission.nativeSubmissionCount > recording.packetCount
-        || submission.nativeSubmissionCount > submission.nativeCommandListCount
-        || submission.nativeCommandListCount > recording.commandListCount
-        || submission.sameQueueWaitElisionCount > submission.plannedWaitTokenCount
-    )
-        return false;
-
-    u64 remainingWaitTokenCount = submission.plannedWaitTokenCount - submission.sameQueueWaitElisionCount;
-    if(submission.mergedTimelineWaitCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= submission.mergedTimelineWaitCount;
-    if(submission.timelineWaitCount != remainingWaitTokenCount)
+    if(!__hidden_frame_graph_validators::SubmissionCountsAreValid(statistics))
         return false;
 
     const f64 durations[] = {
@@ -364,25 +374,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
         return false;
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
-    if(
-        submission.acceptedPacketCount > compile.packetCount
-        || submission.acceptedTaskCount > compile.taskCount
-    )
-        return false;
-    if(
-        submission.rejectedPacketCount > compile.packetCount - submission.acceptedPacketCount
-        || submission.rejectedTaskCount > compile.taskCount - submission.acceptedTaskCount
-        || submission.acceptedPacketCount > submission.acceptedTaskCount
-        || submission.rejectedPacketCount > submission.rejectedTaskCount
-        || submission.nativeSubmissionCount > submission.acceptedPacketCount
-        || submission.rejectedSubmissionCount > submission.rejectedPacketCount
-        || submission.acceptedFrontierSubmissionCount > submission.nativeSubmissionCount
-        || submission.recoverySubmissionCount > submission.acceptedFrontierSubmissionCount
-        || submission.nativeSubmissionCount > recording.packetCount
-        || submission.nativeSubmissionCount > submission.nativeCommandListCount
-        || submission.nativeCommandListCount > recording.commandListCount
-        || submission.sameQueueWaitElisionCount > submission.plannedWaitTokenCount
-    )
+    if(!__hidden_frame_graph_validators::SubmissionCountsAreValid(statistics))
         return false;
 
     const u64 acceptedMergedTaskCount = submission.acceptedTaskCount - submission.acceptedPacketCount;
@@ -409,13 +401,6 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
             || submission.submissionSeconds != 0.0
         )
     )
-        return false;
-
-    u64 remainingWaitTokenCount = submission.plannedWaitTokenCount - submission.sameQueueWaitElisionCount;
-    if(submission.mergedTimelineWaitCount > remainingWaitTokenCount)
-        return false;
-    remainingWaitTokenCount -= submission.mergedTimelineWaitCount;
-    if(submission.timelineWaitCount != remainingWaitTokenCount)
         return false;
 
     const f64 durations[] = {

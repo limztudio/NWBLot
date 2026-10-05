@@ -5,7 +5,7 @@
 #include "scroll.h"
 
 #include <global/simplemath.h>
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,13 +23,11 @@ namespace __hidden_ui_scroll_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static bool ValidRange(const f64 contentHeight, const f64 viewportHeight){
     return
@@ -49,7 +47,7 @@ namespace __hidden_ui_scroll_state{
 
 
 ScrollState::ScrollState()
-    : m_instanceGeneration(__hidden_ui_scroll_state::NextIdentity())
+    : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_scroll_state::s_NextIdentity))
 {}
 
 bool ScrollState::setOffset(const f64 offset){

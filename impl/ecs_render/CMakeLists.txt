@@ -177,6 +177,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_graph_resource_utils.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/compute_emulation_output_index.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/generated_geometry_state.h"
+    "${CMAKE_CURRENT_LIST_DIR}/material/generated_geometry_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_compute_emulation_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_opaque_compute_emulation_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_opaque_compute_tasks.cpp"

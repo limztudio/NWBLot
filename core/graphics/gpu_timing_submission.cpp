@@ -60,6 +60,41 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<class ExecutionQueue>
+GLB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(
+    Device& device,
+    CommandList* const* commandLists,
+    const usize commandListCount,
+    const ExecutionQueue& executionQueue,
+    const QueueSubmissionDesc& submitDesc){
+    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
+    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
+        return {};
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        discardPreparedSubmission();
+        return {};
+    }
+    PreparedSubmissionUnwindScope submissionUnwind(*this);
+    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
+    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
+        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
+
+    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
+    if(!waitTokens.empty())
+        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
+    const QueueSubmissionToken token = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
+    const bool resolved = resolveSubmission(token);
+    submissionUnwind.release();
+    if(!resolved)
+        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
+    return token;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)noexcept
     : m_ticket(ticket)
     , m_activated(m_ticket.activateOnCurrentThread(m_previousTicket))
@@ -96,28 +131,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
-    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
-        return {};
-    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        discardPreparedSubmission();
-        return {};
-    }
-    PreparedSubmissionUnwindScope submissionUnwind(*this);
-    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
-    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
-        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
-
-    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
-    if(!waitTokens.empty())
-        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
-    const QueueSubmissionToken token = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
-    const bool resolved = resolveSubmission(token);
-    submissionUnwind.release();
-    if(!resolved)
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
-    return token;
+    return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
 }
 
 QueueSubmissionToken GpuTimingSubmissionTicket::submit(
@@ -127,28 +141,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     const GpuPhysicalQueueId& executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
-    if(!prepareSubmission(commandLists, commandListCount, waitTokens))
-        return {};
-    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        discardPreparedSubmission();
-        return {};
-    }
-    PreparedSubmissionUnwindScope submissionUnwind(*this);
-    waitTokens.reserve(waitTokens.size() + submitDesc.waitTokenCount);
-    for(usize waitTokenIndex = 0u; waitTokenIndex < submitDesc.waitTokenCount; ++waitTokenIndex)
-        waitTokens.push_back(submitDesc.waitTokens[waitTokenIndex]);
-
-    QueueSubmissionDesc mergedSubmitDesc = submitDesc;
-    if(!waitTokens.empty())
-        mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
-    const QueueSubmissionToken token = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
-    const bool resolved = resolveSubmission(token);
-    submissionUnwind.release();
-    if(!resolved)
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
-    return token;
+    return submitToQueue(device, commandLists, commandListCount, executionQueue, submitDesc);
 }
 
 void GpuTimingSubmissionTicket::discard(){

@@ -5,7 +5,7 @@
 #include "slider.h"
 
 #include <global/simplemath.h>
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,13 +23,7 @@ namespace __hidden_ui_slider_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,8 +50,8 @@ bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs){
 
 
 SliderState::SliderState()
-    : m_instanceGeneration(__hidden_ui_slider_state::NextIdentity())
-    , m_inputGeneration(__hidden_ui_slider_state::NextIdentity())
+    : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
+    , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
 {}
 
 ControlToken SliderState::controlToken()const{
@@ -84,7 +78,7 @@ bool SliderState::setValue(const f64 value){
     if(!IsFinite(value))
         return false;
     advanceRevision();
-    m_inputGeneration = __hidden_ui_slider_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity);
     m_value = value;
     m_press = {};
     m_pressMoved = false;
@@ -94,7 +88,7 @@ bool SliderState::setValue(const f64 value){
 void SliderState::reset(){
     advanceRevision();
     advanceAdmission();
-    m_inputGeneration = __hidden_ui_slider_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity);
     m_value = 0.0;
     m_minimum = 0.0;
     m_maximum = 1.0;

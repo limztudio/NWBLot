@@ -7,6 +7,8 @@
 #include "radio_group.h"
 #include "radio_group_style.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -25,36 +27,9 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
-}
-
-[[nodiscard]] static bool ValidPoint(const Point& point){
-    return IsFinite(point.x) && point.x >= 0.0f && IsFinite(point.y) && point.y >= 0.0f;
-}
-
-[[nodiscard]] static bool ValidPadding(const Insets& padding){
-    return
-        IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-    ;
-}
-
-[[nodiscard]] static bool ValidColor(const Color& color){
-    return
-        IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f
-        && IsFinite(color.b) && color.b >= 0.0f && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f
-    ;
-}
-
 [[nodiscard]] static bool ValidMetrics(const RadioGroupMetrics& metrics){
     if(
-        metrics.count > s_RadioGroupMaxChoices || !ValidPadding(metrics.padding) || !ValidPoint(metrics.contentSize)
+        metrics.count > s_RadioGroupMaxChoices || !IsValidUiPadding(metrics.padding) || !IsValidUiExtent(metrics.contentSize)
         || !IsFinite(metrics.rowHeight) || metrics.rowHeight < s_RadioGroupMinimumRowHeight
         || !IsFinite(metrics.indicatorExtent) || metrics.indicatorExtent <= 0.0f || metrics.indicatorExtent > metrics.rowHeight
         || !IsFinite(metrics.gap) || metrics.gap < 0.0f || !IsFinite(metrics.rowGap) || metrics.rowGap < 0.0f
@@ -84,7 +59,7 @@ namespace __hidden_ui_radio_group_layout{
         return false;
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(
-        !ValidRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
+        !IsValidUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
         || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
     )
         return false;
@@ -118,14 +93,14 @@ bool RadioGroupLayout::Measure(
     RadioGroupMetrics& out){
     using namespace __hidden_ui_radio_group_layout;
     if(
-        count > s_RadioGroupMaxChoices || !ValidPoint(maximumLabel) || !ValidPadding(style.padding)
+        count > s_RadioGroupMaxChoices || !IsValidUiExtent(maximumLabel) || !IsValidUiPadding(style.padding)
         || !IsFinite(options.rowHeight) || options.rowHeight < s_RadioGroupMinimumRowHeight
         || options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
         || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value <= 0.0f)
         || !IsFinite(style.indicatorExtent) || style.indicatorExtent <= 0.0f || !IsFinite(style.gap) || style.gap < 0.0f
         || !IsFinite(style.rowGap) || style.rowGap < 0.0f
         || !IsFinite(style.markInset) || style.markInset < 0.0f || style.markInset > 0.5f
-        || !ValidColor(style.hoverTint) || !ValidColor(style.pressedTint) || !ValidColor(style.disabledTint)
+        || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
         return false;
     RadioGroupMetrics candidate;
@@ -156,7 +131,7 @@ bool RadioGroupLayout::Place(
     const RadioGroupMetrics& metrics,
     RadioGroupPlacement& out){
     using namespace __hidden_ui_radio_group_layout;
-    if(!ValidRect(bounds) || !ValidRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
+    if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
         return false;
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;

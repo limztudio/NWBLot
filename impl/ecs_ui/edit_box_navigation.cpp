@@ -29,7 +29,7 @@ bool UiEditBoxHost::applyNavigation(Ui::EditModel& model, const Event& event, Na
             && event.navigationViewportHeight == 0.0f)
     )
         return false;
-    UiEditModelSnapshot expected(m_arena);
+    Ui::EditModelSnapshot expected(m_arena);
     expected.capture(model);
     const u64 modelGeneration = model.instanceGeneration();
     const Ui::EditNavigationSnapshot preferred = navigation.state.snapshot();
@@ -43,7 +43,7 @@ bool UiEditBoxHost::applyNavigation(Ui::EditModel& model, const Event& event, Na
     const auto boundary = LowerBound(boundaries.begin(), boundaries.end(), target.committedByte);
     if(boundary == boundaries.end() || *boundary != target.committedByte)
         return false;
-    if(!model.setSelection(event.command.extend ? expected.anchor : target.committedByte, target.committedByte))
+    if(!model.setSelection(event.command.extend ? expected.m_expectedAnchor : target.committedByte, target.committedByte))
         return false;
     if(!navigation.state.setPreferredX(target.preferredX))
         TerminateInvariant();

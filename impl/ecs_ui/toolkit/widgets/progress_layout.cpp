@@ -7,6 +7,8 @@
 #include "progress.h"
 #include "progress_style.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -25,10 +27,6 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidPoint(const Point& point){
-    return IsFinite(point.x) && point.x >= 0.0f && IsFinite(point.y) && point.y >= 0.0f;
-}
-
 [[nodiscard]] static bool ValidPadding(const Insets& padding){
     return
         IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
@@ -38,28 +36,8 @@ namespace __hidden_ui_progress_layout{
     ;
 }
 
-[[nodiscard]] static bool ValidColor(const Color& color){
-    return
-        IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f
-        && IsFinite(color.b) && color.b >= 0.0f && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f
-    ;
-}
-
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && static_cast<f64>(rectangle.x) + rectangle.width <= Limit<f32>::s_Max
-        && static_cast<f64>(rectangle.y) + rectangle.height <= Limit<f32>::s_Max
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-        && (rectangle.width == 0.0f || rectangle.x + rectangle.width > rectangle.x)
-        && (rectangle.height == 0.0f || rectangle.y + rectangle.height > rectangle.y)
-    ;
-}
-
 [[nodiscard]] static bool ValidMetrics(const ProgressMetrics& metrics){
-    if(!ValidPadding(metrics.padding) || !ValidPoint(metrics.fillMinimum) || !ValidPoint(metrics.contentSize))
+    if(!ValidPadding(metrics.padding) || !IsValidUiExtent(metrics.fillMinimum) || !IsValidUiExtent(metrics.contentSize))
         return false;
     const f64 width = static_cast<f64>(metrics.padding.left) + metrics.padding.right + metrics.fillMinimum.x;
     const f64 height = static_cast<f64>(metrics.padding.top) + metrics.padding.bottom + metrics.fillMinimum.y;
@@ -113,7 +91,7 @@ namespace __hidden_ui_progress_layout{
         candidate.width = 0.0f;
     if(candidate.height > 0.0f && candidate.y + candidate.height <= candidate.y)
         candidate.height = 0.0f;
-    if(!ValidRect(candidate))
+    if(!IsBoundedUiRect(candidate))
         return false;
     out = candidate;
     return true;
@@ -149,7 +127,7 @@ bool ProgressLayout::Measure(
         options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
         || (options.width.policy == LayoutSizePolicy::Stretch && options.width.value == 0.0f)
         || !IsFinite(options.height) || options.height < 0.0f || !ValidPadding(style.padding)
-        || !ValidColor(style.trackTint) || !ValidColor(style.fillTint) || !IsFinite(density) || density <= 0.0f
+        || !IsValidUiColor(style.trackTint) || !IsValidUiColor(style.fillTint) || !IsFinite(density) || density <= 0.0f
     )
         return false;
     Point trackMinimum;
@@ -184,7 +162,7 @@ bool ProgressLayout::Place(
     const f64 fraction,
     ProgressPlacement& out){
     using namespace __hidden_ui_progress_layout;
-    if(!ValidRect(bounds) || !ValidRect(clip) || !ValidMetrics(metrics) || !IsFinite(fraction))
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(fraction))
         return false;
     ProgressPlacement candidate;
     candidate.bounds = bounds;

@@ -44,11 +44,11 @@ void UiEditBoxHost::collectNative(){
         event.focusGeneration = entry && entry->owner == event.owner ? entry->focusGeneration : 0u;
         event.kind = UiEditBoxEventKind::Native;
         event.surroundingRevision = m_session.surroundingRevision();
-        event.surroundingModelRevision = m_nativePublished.revision;
-        event.surroundingSelectionGeneration = m_nativePublished.selectionGeneration;
-        event.geometryExternalRevision = m_nativePublished.externalRevision;
-        event.surroundingAnchor = m_nativePublished.anchor;
-        event.surroundingCaret = m_nativePublished.caret;
+        event.surroundingModelRevision = m_nativePublished.m_expectedRevision;
+        event.surroundingSelectionGeneration = m_nativePublished.m_expectedSelectionGeneration;
+        event.geometryExternalRevision = m_nativePublished.m_expectedExternalRevision;
+        event.surroundingAnchor = m_nativePublished.m_expectedAnchor;
+        event.surroundingCaret = m_nativePublished.m_expectedCaret;
         if(!append(Move(event)))
             return;
     }

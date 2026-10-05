@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/generated_geometry_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -307,25 +308,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     }
 
     [[nodiscard]] bool matches()const{
-        if(
-            !captured
-            || outputBuffers.size() != drawItems.size()
-            || outputLayouts.size() != drawItems.size()
-            || outputHeapSlots.size() != drawItems.size()
-        )
-            return false;
-        for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
-            const MaterialPassMeshResourceSnapshot& mesh = drawItems[drawIndex].meshResources;
-            if(
-                !mesh.emulationVertexBuffer
-                || !mesh.emulationVertexHeapHandle.valid()
-                || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
-                || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
-                || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
-            )
-                return false;
-        }
-        return true;
+        return MatchesRetainedGeneratedGeometryOutputs(captured, drawItems, outputBuffers, outputLayouts, outputHeapSlots);
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{

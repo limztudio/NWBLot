@@ -24,17 +24,10 @@ namespace __hidden_ui_gpu_glyphs{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SamePageKey(const GlyphPageBinding& first, const GlyphPageBinding& second){
-    return
-        first.font == second.font && first.fontGeneration == second.fontGeneration
-        && first.atlasIdentity == second.atlasIdentity && first.index == second.index
-    ;
-}
-
 [[nodiscard]] static bool SamePageVersion(const GlyphPage& first, const GlyphPage& second){
     const GlyphPageBinding& a = first.binding();
     const GlyphPageBinding& b = second.binding();
-    if(!SamePageKey(a, b) || a.generation != b.generation || a.width != b.width || a.height != b.height)
+    if(!SameGlyphPageKey(a, b) || a.generation != b.generation || a.width != b.width || a.height != b.height)
         return false;
     if(&first == &second)
         return true;
@@ -106,7 +99,7 @@ bool GpuRendererState::validateGlyphPages(const DrawSnapshot& snapshot){
         if(!__hidden_ui_gpu_glyphs::ValidPage(pages[index]))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
-            if(__hidden_ui_gpu_glyphs::SamePageKey(pages[index]->binding(), pages[previous]->binding()))
+            if(SameGlyphPageKey(pages[index]->binding(), pages[previous]->binding()))
                 return false;
         }
     }
@@ -136,7 +129,7 @@ GpuVersion<GpuGlyphVersion> GpuRendererState::prepareGlyphPage(const SharedGlyph
     usize replaceIndex = m_glyphCache.size();
     for(usize index = 0u; index < m_glyphCache.size(); ++index){
         const auto& existing = m_glyphCache[index];
-        if(!__hidden_ui_gpu_glyphs::SamePageKey(existing->m_page->binding(), page->binding()))
+        if(!SameGlyphPageKey(existing->m_page->binding(), page->binding()))
             continue;
         replaceIndex = index;
         if(existing->m_page->binding().generation != page->binding().generation)

@@ -15,21 +15,6 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace __hidden_ui_image_paint{
-[[nodiscard]] static bool SameGlyphKey(const GlyphPageBinding& first, const GlyphPageBinding& second){
-    return
-        first.font == second.font && first.fontGeneration == second.fontGeneration
-        && first.atlasIdentity == second.atlasIdentity && first.index == second.index
-    ;
-}
-
-[[nodiscard]] static bool SameSdfKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second){
-    return
-        first.font == second.font
-        && first.fontGeneration == second.fontGeneration && first.atlasIdentity == second.atlasIdentity
-        && first.generation == second.generation && first.index == second.index
-    ;
-}
-
 [[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second){
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
@@ -60,7 +45,7 @@ bool PaintBuilder::prepareImages(
         const GlyphPageBinding& binding = glyphPages[candidate]->binding();
         bool found = false;
         for(const SharedGlyphPage& existing : m_snapshot.m_glyphPages){
-            if(__hidden_ui_image_paint::SameGlyphKey(binding, existing->binding())){
+            if(SameGlyphPageKey(binding, existing->binding())){
                 if(binding.width != existing->binding().width || binding.height != existing->binding().height)
                     return false;
                 found = true;
@@ -68,7 +53,7 @@ bool PaintBuilder::prepareImages(
             }
         }
         for(usize previous = 0u; previous < candidate; ++previous){
-            if(__hidden_ui_image_paint::SameGlyphKey(binding, glyphPages[previous]->binding())){
+            if(SameGlyphPageKey(binding, glyphPages[previous]->binding())){
                 const GlyphPageBinding& previousBinding = glyphPages[previous]->binding();
                 if(binding.width != previousBinding.width || binding.height != previousBinding.height)
                     return false;
@@ -86,7 +71,7 @@ bool PaintBuilder::prepareImages(
         const SdfAtlasPageBinding& binding = sdfPages[candidate]->binding();
         bool found = false;
         for(const SharedSdfAtlasPage& existing : m_snapshot.m_sdfPages){
-            if(__hidden_ui_image_paint::SameSdfKey(binding, existing->binding())){
+            if(SameSdfAtlasPageKey(binding, existing->binding())){
                 if(!(binding == existing->binding()))
                     return false;
                 found = true;
@@ -94,7 +79,7 @@ bool PaintBuilder::prepareImages(
             }
         }
         for(usize previous = 0u; previous < candidate; ++previous){
-            if(__hidden_ui_image_paint::SameSdfKey(binding, sdfPages[previous]->binding())){
+            if(SameSdfAtlasPageKey(binding, sdfPages[previous]->binding())){
                 if(!(binding == sdfPages[previous]->binding()))
                     return false;
                 found = true;
@@ -135,7 +120,7 @@ bool PaintBuilder::prepareImages(
     for(usize candidate = 0u; candidate < glyphCount; ++candidate){
         SharedGlyphPage* existing = nullptr;
         for(SharedGlyphPage& bound : m_snapshot.m_glyphPages){
-            if(__hidden_ui_image_paint::SameGlyphKey(bound->binding(), glyphPages[candidate]->binding())){
+            if(SameGlyphPageKey(bound->binding(), glyphPages[candidate]->binding())){
                 existing = &bound;
                 break;
             }
@@ -148,7 +133,7 @@ bool PaintBuilder::prepareImages(
     for(usize candidate = 0u; candidate < sdfCount; ++candidate){
         bool found = false;
         for(const SharedSdfAtlasPage& bound : m_snapshot.m_sdfPages){
-            if(__hidden_ui_image_paint::SameSdfKey(bound->binding(), sdfPages[candidate]->binding())){
+            if(SameSdfAtlasPageKey(bound->binding(), sdfPages[candidate]->binding())){
                 found = true;
                 break;
             }

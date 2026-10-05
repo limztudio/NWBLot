@@ -452,6 +452,17 @@ private:
         ScopePublicationState state = ScopePublicationState::Reserved;
     };
 
+private:
+    template<class ExecutionQueue>
+    [[nodiscard]] GLB_INLINE QueueSubmissionToken submitToQueue(
+        Device& device,
+        CommandList* const* commandLists,
+        usize commandListCount,
+        const ExecutionQueue& executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
+
+
 public:
     class RecordingScope final : NoCopy{
     public:

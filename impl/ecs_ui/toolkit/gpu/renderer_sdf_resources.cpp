@@ -26,13 +26,6 @@ namespace __hidden_ui_gpu_sdf{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SamePageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second){
-    return
-        first.font == second.font && first.fontGeneration == second.fontGeneration
-        && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index
-    ;
-}
-
 [[nodiscard]] static bool ValidPage(const SharedSdfAtlasPage& page){
     if(!page)
         return false;
@@ -97,7 +90,7 @@ bool GpuRendererState::validateSdfPages(const DrawSnapshot& snapshot){
         if(!__hidden_ui_gpu_sdf::ValidPage(pages[index]))
             return false;
         for(usize previous = 0u; previous < index; ++previous){
-            if(__hidden_ui_gpu_sdf::SamePageKey(pages[index]->binding(), pages[previous]->binding()))
+            if(SameSdfAtlasPageKey(pages[index]->binding(), pages[previous]->binding()))
                 return false;
         }
     }
@@ -114,7 +107,7 @@ bool GpuRendererState::validateSdfPages(const DrawSnapshot& snapshot){
 GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfAtlasPage& page){
     for(usize index = 0u; index < m_sdfCache.size(); ++index){
         const auto& existing = m_sdfCache[index];
-        if(!__hidden_ui_gpu_sdf::SamePageKey(existing->m_page->binding(), page->binding()))
+        if(!SameSdfAtlasPageKey(existing->m_page->binding(), page->binding()))
             continue;
         if(!(existing->m_page->binding() == page->binding()))
             return {};

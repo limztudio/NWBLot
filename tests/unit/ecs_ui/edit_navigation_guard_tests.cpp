@@ -52,7 +52,7 @@ protected:
         ASSERT_TRUE(m_navigation.setPreferredX(50.0f));
         const u64 displayed = m_context.input().layoutGeneration();
         const usize targets = m_context.input().targets().size();
-        UiEditModelSnapshot callbackModel(m_arena);
+        Ui::EditModelSnapshot callbackModel(m_arena);
         Ui::EditNavigationSnapshot callbackNavigation;
         usize callbacks = 0u;
         bool mutationAccepted = false;

@@ -6,6 +6,8 @@
 
 #include "image.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -31,26 +33,6 @@ namespace __hidden_ui_image_layout{
     ;
 }
 
-[[nodiscard]] static bool ValidColor(const Color& color){
-    return
-        IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f
-        && IsFinite(color.b) && color.b >= 0.0f && IsFinite(color.a) && color.a >= 0.0f && color.a <= 1.0f
-    ;
-}
-
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && static_cast<f64>(rectangle.x) + rectangle.width <= Limit<f32>::s_Max
-        && static_cast<f64>(rectangle.y) + rectangle.height <= Limit<f32>::s_Max
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-        && (rectangle.width == 0.0f || rectangle.x + rectangle.width > rectangle.x)
-        && (rectangle.height == 0.0f || rectangle.y + rectangle.height > rectangle.y)
-    ;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,7 +50,7 @@ bool ImageLayout::Measure(
     ImageMetrics& out){
     using namespace __hidden_ui_image_layout;
     if(
-        !ValidSize(options.width) || !ValidSize(options.height) || !ValidColor(options.tint)
+        !ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint)
         || !IsFinite(density) || density <= 0.0f || region.rectangle.width == 0u || region.rectangle.height == 0u
         || !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
         || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
@@ -99,7 +81,7 @@ bool ImageLayout::Measure(
 
 bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out){
     using namespace __hidden_ui_image_layout;
-    if(!ValidSize(options.width) || !ValidSize(options.height) || !ValidColor(options.tint))
+    if(!ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint))
         return false;
     const Texture& texture = source.texture();
     // The immutable source factory admitted its complete static 2D payload before this per-frame measurement.
@@ -110,7 +92,7 @@ bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source
 
 bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& out){
     using namespace __hidden_ui_image_layout;
-    if(!ValidRect(bounds) || !ValidRect(clip))
+    if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
         return false;
     const f64 left = Max(static_cast<f64>(bounds.x), static_cast<f64>(clip.x));
     const f64 top = Max(static_cast<f64>(bounds.y), static_cast<f64>(clip.y));
@@ -127,7 +109,7 @@ bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& ou
         candidate.clip.width = 0.0f;
     if(candidate.clip.height > 0.0f && candidate.clip.y + candidate.clip.height <= candidate.clip.y)
         candidate.clip.height = 0.0f;
-    if(!ValidRect(candidate.clip))
+    if(!IsBoundedUiRect(candidate.clip))
         return false;
     out = candidate;
     return true;

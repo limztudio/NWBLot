@@ -18,6 +18,7 @@ global_declare_static_library(global_foundation)
 target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/base64.h"
     "${CMAKE_CURRENT_LIST_DIR}/allocation_size.h"
+    "${CMAKE_CURRENT_LIST_DIR}/atomic_identity.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_memory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_memory.h"

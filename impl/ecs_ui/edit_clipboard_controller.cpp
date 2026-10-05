@@ -22,8 +22,7 @@ NWB_IMPL_BEGIN
 UiEditClipboardController::UiEditClipboardController(Core::Alloc::GlobalArena& arena, Core::IClipboardService& service)
     : m_service(service)
     , m_completion(arena)
-    , m_expectedText(arena)
-    , m_expectedPreedit(arena)
+    , m_expectedModel(arena)
     , m_insertText(arena)
 {}
 
@@ -67,7 +66,7 @@ UiEditClipboardResult UiEditClipboardController::request(
     m_owner = owner;
     m_channel = channel;
     m_action = action;
-    captureModel(model);
+    m_expectedModel.capture(model);
     return { UiEditClipboardStatus::Pending };
 }
 
@@ -76,7 +75,7 @@ UiEditClipboardResult UiEditClipboardController::drain(const UiTextEditOwner& ow
         return { UiEditClipboardStatus::WrongThread };
     if(!m_token.valid())
         return {};
-    if(!(m_owner == owner) || !matchesModel(model)){
+    if(!(m_owner == owner) || !m_expectedModel.matches(model)){
         const auto status = m_owner == owner ? UiEditClipboardStatus::StaleModel : UiEditClipboardStatus::StaleOwner;
         return { cancel() ? status : UiEditClipboardStatus::NativeFailure };
     }
@@ -110,42 +109,12 @@ bool UiEditClipboardController::cancel(){
 }
 
 
-bool UiEditClipboardController::matchesModel(const Ui::EditModel& model)const{
-    const auto composition = model.composition();
-    return
-        model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision
-        && model.selectionGeneration() == m_expectedSelectionGeneration
-        && model.compositionGeneration() == m_expectedCompositionGeneration
-        && model.text() == AStringView(m_expectedText)
-        && model.anchor() == m_expectedAnchor && model.caret() == m_expectedCaret
-        && composition.active == m_expectedComposition.active && composition.text == AStringView(m_expectedPreedit)
-        && composition.anchor == m_expectedComposition.anchor && composition.caret == m_expectedComposition.caret
-        && composition.replacementStart == m_expectedComposition.replacementStart
-        && composition.replacementEnd == m_expectedComposition.replacementEnd
-    ;
-}
-
-void UiEditClipboardController::captureModel(const Ui::EditModel& model){
-    m_expectedText.assign(model.text().data(), model.text().size());
-    m_expectedAnchor = model.anchor();
-    m_expectedCaret = model.caret();
-    m_expectedRevision = model.revision();
-    m_expectedExternalRevision = model.externalRevision();
-    m_expectedSelectionGeneration = model.selectionGeneration();
-    m_expectedCompositionGeneration = model.compositionGeneration();
-    m_expectedComposition = model.composition();
-    m_expectedPreedit.assign(m_expectedComposition.text.data(), m_expectedComposition.text.size());
-    m_expectedComposition.text = {};
-}
-
 void UiEditClipboardController::clearRequest(){
     m_token = {};
     m_owner = {};
     m_action = Ui::EditClipboardAction::None;
-    m_expectedText.clear();
-    m_expectedPreedit.clear();
+    m_expectedModel.clear();
     m_insertText.clear();
-    m_expectedComposition = {};
 }
 
 UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& model, const bool readOnly){

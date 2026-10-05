@@ -37,7 +37,7 @@ Core::TextInputAdmission::Enum UiTextEditSession::adoptLocal(
         if(publish != Core::TextInputAdmission::Accepted)
             return publish;
     }
-    captureModel(model);
+    m_expectedModel.capture(model);
     return Core::TextInputAdmission::Accepted;
 }
 

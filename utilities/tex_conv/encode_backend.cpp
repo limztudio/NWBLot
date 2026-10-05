@@ -24,6 +24,21 @@ namespace EncodeBackendDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void ConfigureCompressor(
+    basisu::basis_compressor_params& parameters,
+    basisu::job_pool& jobPool,
+    const basist::basis_tex_format format,
+    const bool srgb){
+    parameters.set_format_mode(format);
+    parameters.set_srgb_options(srgb);
+    parameters.m_status_output = false;
+    parameters.m_compute_stats = false;
+    parameters.m_print_stats = false;
+    parameters.m_write_output_basis_or_ktx2_files = false;
+    parameters.m_create_ktx2_file = false;
+    parameters.m_pJob_pool = &jobPool;
+}
+
 void ResetPayload(
     TexturePayload& outPayload,
     const TextureDimension::Enum dimension,

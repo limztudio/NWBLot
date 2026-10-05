@@ -15,12 +15,13 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 #include "bounding_shape_decls.h"
 #include "bounding_corners.h"
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 inline void SIMDCALL BoundingSphere::transform(BoundingSphere& outSphere, const SIMDMatrix& matrix)const noexcept{ // beginner: Loads storage once, Stores result once.
     StoreFloat(transformSphereValue(LoadFloat(centerRadius), matrix), outSphere.centerRadius);
@@ -349,18 +350,7 @@ inline void SIMDCALL BoundingSphere::transform(
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingSphere::containedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept{
     const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
-    const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
-    SIMDVector anyIntersecting = VectorFalseInt();
-    for(const SIMDVector plane : planes){
-        SIMDVector outside{};
-        SIMDVector inside{};
-        CollisionDetail::FastIntersectSpherePlane(centerVector, sphereRadius, plane, outside, inside);
-        if(CollisionDetail::Vector4AllTrue(outside))
-            return ContainmentType::Disjoint;
-        anyIntersecting = VectorOrInt(anyIntersecting, VectorEqualInt(inside, VectorFalseInt()));
-    }
-    return CollisionDetail::Vector4AllTrue(anyIntersecting) ? ContainmentType::Intersects : ContainmentType::Contains;
+    return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
 
 

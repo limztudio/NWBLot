@@ -7,7 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_ui/toolkit/id.h>
-#include <impl/ecs_ui/toolkit/edit/model.h>
+#include <impl/ecs_ui/toolkit/edit/model_snapshot.h>
 
 #include <core/os/text_input.h>
 
@@ -89,14 +89,12 @@ public:
     [[nodiscard]] bool preeditCaretVisible()const{ return m_preeditCaretVisible; }
     [[nodiscard]] u64 surroundingRevision()const{ return m_token.valid() ? m_surroundingRevision : 0u; }
     [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const{
-        return m_token.valid() && m_owner == owner && matchesModel(model) && matchesPublishedModel(model);
+        return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && matchesPublishedModel(model);
     }
 
 
 private:
-    [[nodiscard]] bool matchesModel(const Ui::EditModel& model)const;
     [[nodiscard]] bool matchesPublishedModel(const Ui::EditModel& model)const;
-    void captureModel(const Ui::EditModel& model);
     [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(
         const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod
     );
@@ -107,20 +105,12 @@ private:
 private:
     Core::ITextInputService& m_service;
     Core::TextInputEvent m_event;
-    AString<Core::Alloc::GlobalArena> m_expectedText;
-    AString<Core::Alloc::GlobalArena> m_expectedPreedit;
+    Ui::EditModelSnapshot m_expectedModel;
     AString<Core::Alloc::GlobalArena> m_publishedText;
     UiTextEditOwner m_owner;
     Core::TextInputSessionToken m_token;
-    Ui::EditCompositionView m_expectedComposition;
-    usize m_expectedAnchor = 0u;
-    usize m_expectedCaret = 0u;
     usize m_publishedAnchor = 0u;
     usize m_publishedCaret = 0u;
-    u64 m_expectedRevision = 0u;
-    u64 m_expectedExternalRevision = 0u;
-    u64 m_expectedSelectionGeneration = 0u;
-    u64 m_expectedCompositionGeneration = 0u;
     u64 m_publishedModelRevision = 0u;
     u64 m_publishedExternalRevision = 0u;
     u64 m_publishedSelectionGeneration = 0u;

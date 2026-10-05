@@ -4,6 +4,8 @@
 
 #include "scrollbar.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -22,26 +24,6 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
-}
-
-[[nodiscard]] static bool ValidPoint(const Point& point){
-    return IsFinite(point.x) && point.x >= 0.0f && IsFinite(point.y) && point.y >= 0.0f;
-}
-
-[[nodiscard]] static bool ValidPadding(const Insets& padding){
-    return
-        IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-    ;
-}
-
 [[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
@@ -51,7 +33,7 @@ namespace __hidden_ui_scrollbar{
     )
         return false;
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(!ValidRect(candidate))
+    if(!IsValidUiRect(candidate))
         return false;
     out = candidate;
     return true;
@@ -67,7 +49,7 @@ namespace __hidden_ui_scrollbar{
 
 [[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis){
     if(
-        !ValidRect(bar.track) || !ValidRect(bar.thumb)
+        !IsValidUiRect(bar.track) || !IsValidUiRect(bar.thumb)
         || !IsFinite(bar.contentExtent) || bar.contentExtent < 0.0
         || !IsFinite(bar.viewportExtent) || bar.viewportExtent < 0.0
         || !IsFinite(bar.maximum) || bar.maximum != Max(0.0, bar.contentExtent - bar.viewportExtent)
@@ -175,8 +157,8 @@ bool ScrollbarLayout::Calculate(
     ScrollViewportPlacement& out){
     using namespace __hidden_ui_scrollbar;
     if(
-        !ValidRect(bounds) || !ValidRect(clip) || !ValidPadding(padding)
-        || !ValidPoint(contentMeasure) || !ValidPoint(previousScroll)
+        !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
+        || !IsValidUiExtent(contentMeasure) || !IsValidUiExtent(previousScroll)
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
         || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
     )
@@ -248,7 +230,7 @@ bool ScrollbarLayout::Calculate(
 bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out){
     using namespace __hidden_ui_scrollbar;
     if(
-        !ValidPoint(scroll) || !ValidRect(out.viewport) || !ValidRect(out.contentClip) || !ValidRect(out.corner)
+        !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)
         || out.horizontal.viewportExtent != static_cast<f64>(out.viewport.width)
         || out.vertical.viewportExtent != static_cast<f64>(out.viewport.height)
         || !ValidBar(out.horizontal, ScrollAxis::Horizontal) || !ValidBar(out.vertical, ScrollAxis::Vertical)

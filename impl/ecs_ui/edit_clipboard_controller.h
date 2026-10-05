@@ -55,8 +55,6 @@ public:
 
 
 private:
-    [[nodiscard]] bool matchesModel(const Ui::EditModel& model)const;
-    void captureModel(const Ui::EditModel& model);
     void clearRequest();
     [[nodiscard]] UiEditClipboardResult applyCompletion(Ui::EditModel& model, bool readOnly);
 
@@ -64,20 +62,12 @@ private:
 private:
     Core::IClipboardService& m_service;
     Core::ClipboardCompletion m_completion;
-    AString<Core::Alloc::GlobalArena> m_expectedText;
-    AString<Core::Alloc::GlobalArena> m_expectedPreedit;
+    Ui::EditModelSnapshot m_expectedModel;
     AString<Core::Alloc::GlobalArena> m_insertText;
     UiTextEditOwner m_owner;
     Core::ClipboardRequestToken m_token;
     Core::ClipboardChannel::Enum m_channel = Core::ClipboardChannel::Clipboard;
     Ui::EditClipboardAction::Enum m_action = Ui::EditClipboardAction::None;
-    Ui::EditCompositionView m_expectedComposition;
-    usize m_expectedAnchor = 0u;
-    usize m_expectedCaret = 0u;
-    u64 m_expectedRevision = 0u;
-    u64 m_expectedExternalRevision = 0u;
-    u64 m_expectedSelectionGeneration = 0u;
-    u64 m_expectedCompositionGeneration = 0u;
 };
 
 

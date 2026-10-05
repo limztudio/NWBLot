@@ -5,7 +5,7 @@
 #include "tooltip.h"
 
 #include <global/simplemath.h>
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,13 +23,11 @@ namespace __hidden_ui_tooltip{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[nodiscard]] static bool ValidOptions(const TooltipOptions& options){
     return
@@ -57,7 +55,7 @@ namespace __hidden_ui_tooltip{
 
 
 TooltipState::TooltipState()
-    : m_instanceGeneration(__hidden_ui_tooltip::NextIdentity())
+    : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_tooltip::s_NextIdentity))
 {}
 
 void TooltipState::reset(){

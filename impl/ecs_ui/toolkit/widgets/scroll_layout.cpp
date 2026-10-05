@@ -4,6 +4,8 @@
 
 #include "scroll.h"
 
+#include <impl/ecs_ui/toolkit/layout/validation.h>
+
 #include <global/simplemath.h>
 
 
@@ -21,22 +23,6 @@ namespace __hidden_ui_scroll_layout{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
-    return
-        IsFinite(rectangle.x) && IsFinite(rectangle.y)
-        && IsFinite(rectangle.width) && rectangle.width >= 0.0f
-        && IsFinite(rectangle.height) && rectangle.height >= 0.0f
-        && IsFinite(rectangle.x + rectangle.width) && IsFinite(rectangle.y + rectangle.height)
-    ;
-}
-
-[[nodiscard]] static bool ValidPadding(const Insets& padding){
-    return
-        IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
-        && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
-    ;
-}
 
 [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs){
     const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
@@ -79,7 +65,7 @@ bool ScrollLayout::Calculate(
     ScrollPlacement& placement){
     using namespace __hidden_ui_scroll_layout;
     if(
-        !ValidRect(bounds) || !ValidRect(inheritedClip) || !ValidPadding(padding)
+        !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)
         || !IsFinite(scrollbarWidth) || scrollbarWidth < 0.0f
         || !IsFinite(minimumThumb) || minimumThumb < 0.0f
         || !IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(offset) || offset < 0.0
@@ -102,7 +88,7 @@ bool ScrollLayout::Calculate(
     const f64 barWidth = candidate.maxOffset > 0.0 ? Min(static_cast<f64>(scrollbarWidth), availableWidth) : 0.0;
     candidate.viewport = { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(availableWidth - barWidth),
         static_cast<f32>(availableHeight) };
-    if(!ValidRect(candidate.viewport))
+    if(!IsValidUiRect(candidate.viewport))
         return false;
     candidate.contentClip = Intersect(candidate.viewport, inheritedClip);
     candidate.scrollbarVisible = barWidth > 0.0 && availableHeight > 0.0;
@@ -113,7 +99,7 @@ bool ScrollLayout::Calculate(
         const f64 thumbHeight = Clamp(proportionalHeight, Min(static_cast<f64>(minimumThumb), availableHeight), availableHeight);
         const f64 thumbY = y + (availableHeight - thumbHeight) * (candidate.offset / candidate.maxOffset);
         candidate.thumb = { candidate.track.x, static_cast<f32>(thumbY), candidate.track.width, static_cast<f32>(thumbHeight) };
-        if(!ValidRect(candidate.track) || !ValidRect(candidate.thumb))
+        if(!IsValidUiRect(candidate.track) || !IsValidUiRect(candidate.thumb))
             return false;
     }
     if(candidate.contentClip.width > 0.0f && candidate.contentClip.height > 0.0f && rowCount > 0u){
@@ -131,7 +117,7 @@ bool ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, 
     using namespace __hidden_ui_scroll_layout;
     if(
         index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount
-        || !ValidRect(placement.viewport) || !IsFinite(placement.offset) || placement.offset < 0.0
+        || !IsValidUiRect(placement.viewport) || !IsFinite(placement.offset) || placement.offset < 0.0
         || !IsFinite(rowHeight) || rowHeight <= 0.0f
     )
         return false;
@@ -139,7 +125,7 @@ bool ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, 
     if(!IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max)
         return false;
     const Rect candidate{ placement.viewport.x, static_cast<f32>(y), placement.viewport.width, rowHeight };
-    if(!ValidRect(candidate))
+    if(!IsValidUiRect(candidate))
         return false;
     rectangle = candidate;
     return true;

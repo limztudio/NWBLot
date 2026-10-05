@@ -4,7 +4,7 @@
 
 #include "list.h"
 
-#include <global/termination.h>
+#include <global/atomic_identity.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,13 +22,7 @@ namespace __hidden_ui_list_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u64 NextIdentity(){
-    static Atomic<u64> s_NextIdentity{ 1u };
-    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    if(identity == 0u || identity == Limit<u64>::s_Max)
-        TerminateInvariant();
-    return identity;
-}
+static Atomic<u64> s_NextIdentity{ 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,11 +35,11 @@ namespace __hidden_ui_list_state{
 
 
 ListState::ListState()
-    : m_inputGeneration(__hidden_ui_list_state::NextIdentity())
+    : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity))
 {}
 
 void ListState::select(const u64 key){
-    m_inputGeneration = __hidden_ui_list_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity);
     m_selected = key;
     m_cursor = key;
     m_ensureCursor = key != 0u;
@@ -54,7 +48,7 @@ void ListState::select(const u64 key){
 bool ListState::scrollTo(const f64 offset){
     if(!m_scroll.setOffset(offset))
         return false;
-    m_inputGeneration = __hidden_ui_list_state::NextIdentity();
+    m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity);
     m_ensureCursor = false;
     return true;
 }

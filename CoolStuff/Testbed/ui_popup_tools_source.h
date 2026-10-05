@@ -5,22 +5,22 @@
 #pragma once
 
 
-#include <impl/ecs_ui/toolkit/widgets/list.h>
+#include "ui_immutable_list_source.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiPopupToolsSource final : public NWB::Impl::Ui::IListDataSource, NoCopy{
+class TestbedUiPopupToolsSource final : public TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>{
+    friend class TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>;
+
+
+private:
+    static constexpr Array<StringView, 5u> s_Labels{ "Inspect selection", "Duplicate", "Delete (disabled)", "Rename", "Reset view" };
+
+
 public:
-    virtual u64 instanceGeneration()const override{ return 1u; }
-    virtual u64 revision()const override{ return 1u; }
-    virtual u64 rowCount()const override{ return 5u; }
-    virtual u64 key(u64 index)const override{ return index < rowCount() ? index + 1u : 0u; }
-    virtual bool indexOf(u64 key, u64& index)const override;
-    virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
-    virtual StringView text(u64 index)const override;
-    virtual bool enabled(u64 index)const override{ return index < rowCount() && key(index) != 3u; }
+    using TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>::TestbedUiImmutableListSource;
 };
 
 

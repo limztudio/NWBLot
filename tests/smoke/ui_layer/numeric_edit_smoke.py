@@ -9,6 +9,7 @@ import time
 
 from numeric_edit_native import NumericEditNativeInput
 from numeric_edit_probe import center, draft_fields, float_bits, integer_bits, observe_numeric_edit, snapshot_from_logs, text_hash
+from caret_capture import wait_for_caret_phase
 from window_smoke import parse_args
 from window_capture_smoke import (
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
@@ -79,6 +80,11 @@ class NumericEditRun:
                 continue
             if snapshot["logical_extent"][0] < 640.0 or snapshot["logical_extent"][1] < 400.0:
                 raise SmokeSkip("the numeric editor fixture needs a logical client of at least 640x400")
+            if not self.native.windows and self._caret_probe_sample(snapshot) is not None:
+                # Full-frame processing can alias the 1s caret blink cycle; reuse the
+                # exact oracle sample only when every other gate already matches.
+                sample = self._caret_probe_sample(snapshot)
+                wait_for_caret_phase(self.backend, self.handle, self.process, [sample], stage_deadline)
             if self.native.windows:
                 self.backend.capture_prepared_raw_client_window(self.handle, path)
             else:
@@ -98,6 +104,25 @@ class NumericEditRun:
             "observation": report}
         self.write_report(False)
         raise SmokeFailure(f"numeric edit displayed-state gate '{name}' failed: {self.failure_report}")
+
+    def _caret_probe_sample(self, snapshot):
+        from interaction_smoke import linear_rgb_bytes
+        width, height = self.backend.client_size(self.handle)
+        scale_x, scale_y = snapshot["scale"]
+        color = linear_rgb_bytes((0.95, 0.97, 1.0))
+        for field, prefix in (("integer", "i"), ("float", "f"), ("clipboard", "clipboard")):
+            if not snapshot.get(f"{prefix}_focus") or snapshot.get(f"{prefix}_anchor") != snapshot.get(f"{prefix}_caret"):
+                continue
+            if field != "clipboard" and (not snapshot.get("enabled") or snapshot.get("readonly")):
+                continue
+            kx, ky, kw, kh = snapshot["rectangles"][f"{field}_caret"]
+            cx, cy, cw, ch = snapshot["rectangles"][f"{field}_content"]
+            if not (cx - 0.75 <= kx and kx + kw <= cx + cw + 0.75 and cy - 0.75 <= ky and ky + kh <= cy + ch + 0.75):
+                continue
+            column, row = round(kx * scale_x), round((min(ky + kh, cy + ch) - 0.75) * scale_y)
+            if 0 <= column < width and 0 <= row < height:
+                return (column, max(0, row - 1), min(height, row + 2), color, 5)
+        return None
 
     def require_clipboard(self, text):
         deadline, observed = min(self.deadline, time.monotonic() + 5.0), None

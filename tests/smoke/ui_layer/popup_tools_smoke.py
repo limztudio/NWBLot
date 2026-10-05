@@ -117,6 +117,10 @@ class PopupToolsRun:
         self.native.button(True, *anchor)
         self.checkpoint("held_primary_suppresses_tooltip", tooltip=0, sentinel_focused=0)
         self.native.button(False, *anchor)
+        # Park the pointer off the anchor before the gate: the 1.0s hover delay
+        # would otherwise reshow the tooltip mid-capture under load, while the
+        # activation itself only depends on the press/release sequence.
+        self.hover("counter")
         self.checkpoint("primary_release_activates_anchor", anchor_clicks=1)
         self.hover("counter")
         self.native.tap("Menu")
@@ -182,6 +186,9 @@ class PopupToolsRun:
         self.hover("counter")
         self.checkpoint("enable_restores_attachment", enabled=1)
         self.click("anchor")
+        # Same hover-delay race as the first activation: park off the anchor so
+        # the 1.0s tooltip cannot reshow during the 10s capture window.
+        self.hover("counter")
         self.checkpoint("fresh_primary_focuses_enabled_anchor", anchor_clicks=2)
         self.hover("counter")
         self.native.tap("Menu")

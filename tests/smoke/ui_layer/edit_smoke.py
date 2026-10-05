@@ -267,6 +267,12 @@ def run(args, *, run_type=EditRun, input_bindings=False):
         "NWB_UI_LAYER_LIST": "0", "NWB_UI_LAYER_LIST_SKIN": "0"})
     if platform.system() == "Linux":
         environment["NWB_LINUX_BACKEND"] = "x11"
+        # Synthetic XSendEvent keycodes resolve through XIM; a host input method
+        # would commit the printable text even when the configured binding owns
+        # and suppresses the physical sequence, so qualify with XIM disabled.
+        environment["XMODIFIERS"] = ""
+        environment["GTK_IM_MODULE"] = "simple"
+        environment["QT_IM_MODULE"] = "simple"
     for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
         "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "NWB_GPU_TIMING_FILE"):
         environment.pop(variable, None)
